@@ -4,7 +4,7 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 
 export default defineConfig(({ command }) => ({
-  base: command === 'build' ? '/p3com/' : '/',
+  base: process.env.BASE_URL || '/',
   plugins: [dyadComponentTagger(), react()],
   resolve: {
     alias: {
