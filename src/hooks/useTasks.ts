@@ -232,10 +232,21 @@ const updateCategory = (taskId: string, category: Category | undefined) => {
   persistTasks();
 };
 
-const updateTitle = (taskId: string, title: string) => {
-  updateTaskInTasks(taskId, (t) => ({ ...t, title: title.trim() }));
-  persistTasks();
-};
+  const updateTitle = React.useCallback((id: string, title: string) => {
+    let parentIdToReturn: string | null = null;
+    setTasks((prev) => {
+      const newTasks = prev.map((task) => {
+        if (task.id === id) {
+          parentIdToReturn = task.parentId || null; // Capture parentId before update
+          return { ...task, title };
+        }
+        return task;
+      });
+      eventBus.publish("tasksChanged");
+      return newTasks;
+    });
+    return parentIdToReturn; // Return the parentId
+  }, []);
 
 const updateTaskTimer = (taskId: string, startTime: number, endTime: number) => {
   updateTaskInTasks(taskId, (t) => ({
