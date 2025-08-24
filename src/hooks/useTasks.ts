@@ -258,16 +258,16 @@ const updateCategory = (taskId: string, category: Category | undefined) => {
     return parentIdToReturn; // Return the parentId
   }, []);
 
+  const updateTaskTimer = React.useCallback((taskId: string, startTime: number, endTime: number) => {
+    updateTaskInTasks(taskId, (t) => ({
+      ...t,
+      timer: [...(t.timer || []), { startTime, endTime }]
+    }));
+    persistTasks();
+  }, []);
+
   return {
     tasks,
-
-const updateTaskTimer = (taskId: string, startTime: number, endTime: number) => {
-  updateTaskInTasks(taskId, (t) => ({
-    ...t,
-    timer: [...(t.timer || []), { startTime, endTime }]
-  }));
-  persistTasks();
-};
 
 const deleteTask = (taskId: string) => {
   const map = byId(tasks);
