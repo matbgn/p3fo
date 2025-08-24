@@ -99,7 +99,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({ filters, setFilt
           showUrgent: false,
           showImpact: false,
           showMajorIncident: false,
-          status: ["Backlog", "Ready", "WIP", "Blocked", "Dropped"],
+          status: ["Backlog", "Ready", "WIP", "Blocked"],
           showDone: false,
           searchText: ""
         })}

@@ -48,7 +48,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
     showUrgent: false,
     showImpact: false,
     showMajorIncident: false,
-    status: ["Backlog", "Ready", "WIP", "Blocked", "Dropped"], // All non-Done statuses by default
+    status: ["Backlog", "Ready", "WIP", "Blocked"], // All non-Done, non-Dropped statuses by default
     showDone: false, // Done tasks are hidden by default (negative filter)
     searchText: ""
   });
