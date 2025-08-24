@@ -295,6 +295,68 @@ const updateCategory = (taskId: string, category: Category | undefined) => {
     persistTasks();
   }, []);
 
+  const duplicateTaskStructure = React.useCallback((taskId: string) => {
+    const map = byId(tasks);
+    const originalTask = map[taskId];
+    if (!originalTask) return null;
+
+    // Create a mapping of old IDs to new IDs
+    const idMap = new Map<string, string>();
+    
+    // Recursive function to duplicate a task and its children
+    const duplicateTask = (task: Task, newParentId: string | null): Task => {
+      // Generate new ID for this task
+      const newId = crypto.randomUUID();
+      idMap.set(task.id, newId);
+      
+      // Create the duplicated task
+      const duplicatedTask: Task = {
+        ...task,
+        id: newId,
+        parentId: newParentId,
+        children: [], // Will be populated later
+        title: `${task.title} (Copy)`,
+        createdAt: Date.now(),
+      };
+      
+      // Duplicate children if they exist
+      if (task.children && task.children.length > 0) {
+        const duplicatedChildren: string[] = [];
+        task.children.forEach(childId => {
+          const childTask = map[childId];
+          if (childTask) {
+            const duplicatedChild = duplicateTask(childTask, newId);
+            duplicatedChildren.push(duplicatedChild.id);
+            tasks = [...tasks, duplicatedChild];
+          }
+        });
+        duplicatedTask.children = duplicatedChildren;
+      }
+      
+      return duplicatedTask;
+    };
+    
+    // Start duplication process
+    const duplicatedTask = duplicateTask(originalTask, originalTask.parentId);
+    tasks = [...tasks, duplicatedTask];
+    
+    // Update parent's children array if the duplicated task has a parent
+    if (originalTask.parentId) {
+      tasks = tasks.map(t => {
+        if (t.id === originalTask.parentId) {
+          return {
+            ...t,
+            children: [...(t.children || []), duplicatedTask.id]
+          };
+        }
+        return t;
+      });
+    }
+    
+    persistTasks();
+    return duplicatedTask.id;
+  }, []);
+
   const clearAllTasks = React.useCallback(() => {
     tasks = [];
     persistTasks();
@@ -402,6 +464,7 @@ const updateCategory = (taskId: string, category: Category | undefined) => {
     updateDifficulty,
     updateTitle,
     deleteTask,
+    duplicateTaskStructure,
     updateTaskTimer,
     clearAllTasks,
     importTasks,

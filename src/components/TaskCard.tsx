@@ -187,6 +187,7 @@ interface TaskCardProps {
   updateCategory: (id: string, category: Category) => void;
   updateTitle: (id: string, title: string) => void;
   deleteTask: (id: string) => void;
+  duplicateTaskStructure: (id: string) => void;
   toggleUrgent: (id: string) => void;
   toggleImpact: (id: string) => void;
   toggleMajorIncident: (id: string) => void;
@@ -210,6 +211,7 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
     updateCategory,
     updateTitle,
     deleteTask,
+    duplicateTaskStructure,
     toggleUrgent,
     toggleImpact,
     toggleMajorIncident,
@@ -498,6 +500,20 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
             <Button
               size="sm"
               variant="ghost"
+              className="h-6 w-6 p-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                duplicateTaskStructure(task.id);
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+              </svg>
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
               className="h-6 w-6 p-0 hover:text-red-500"
               onClick={(e) => {
                 e.stopPropagation();
@@ -510,6 +526,20 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
         )}
         {task.parentId && (
           <div className="flex gap-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 w-6 p-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                duplicateTaskStructure(task.id);
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+              </svg>
+            </Button>
             <Button
               size="sm"
               variant="ghost"

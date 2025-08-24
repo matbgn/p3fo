@@ -63,6 +63,7 @@ const Column: React.FC<{
             updateDifficulty={onUpdateDifficulty}
             updateTitle={onUpdateTitle}
             deleteTask={onDelete}
+            duplicateTaskStructure={duplicateTaskStructure}
             toggleDone={() => {}}
             toggleTimer={() => {}}
             isTriageBoard={true}
@@ -154,6 +155,7 @@ const Column: React.FC<{
                     updateDifficulty={onUpdateDifficulty}
                     updateTitle={onUpdateTitle}
                     deleteTask={onDelete}
+                    duplicateTaskStructure={duplicateTaskStructure}
                     toggleDone={() => {}}
                     toggleTimer={() => {}}
                     isTriageBoard={true}
@@ -171,7 +173,7 @@ const Column: React.FC<{
 };
 
 const TriageBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ onFocusOnTask }) => {
-  const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateCategory, updateTitle, deleteTask, reparent } = useTasks();
+  const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateCategory, updateTitle, deleteTask, duplicateTaskStructure, reparent } = useTasks();
   const [filters, setFilters] = React.useState<Filters>({
     showUrgent: false,
     showImpact: false,
