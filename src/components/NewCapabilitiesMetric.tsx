@@ -35,7 +35,7 @@ const NewCapabilitiesMetric: React.FC = () => {
   return (
     <Card className={`h-32 ${getCardClass()}`}>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">Time spent on New Capabilities</CardTitle>
+        <CardTitle className="text-sm font-medium">Time spent on High Impact work</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">
