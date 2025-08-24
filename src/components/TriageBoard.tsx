@@ -30,11 +30,12 @@ const Column: React.FC<{
   onUpdateCategory: (id: string, category: Category) => void;
   onUpdateTitle: (id: string, title: string) => void;
   onDelete: (id: string) => void;
+  duplicateTaskStructure: (taskId: string) => string | null;
   openParents: Record<string, boolean>;
   onToggleParent: (id: string, toggleAll?: boolean) => void;
   onReparent: (id: string, parentId: string | null) => void;
   onFocusOnTask?: (taskId: string) => void;
-}> = ({ title, cards, tasks, onDropTask, onChangeStatus, onUpdateCategory, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onUpdateDifficulty, onUpdateTitle, onDelete, openParents, onToggleParent, onReparent, onFocusOnTask }) => {
+}> = ({ title, cards, tasks, onDropTask, onChangeStatus, onUpdateCategory, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onUpdateDifficulty, onUpdateTitle, onDelete, duplicateTaskStructure, openParents, onToggleParent, onReparent, onFocusOnTask }) => {
   // Build render blocks: either a single ParentCard/ChildCard or a group block for open parent children
   type Block =
     | { type: "single"; node: React.ReactNode; key: string }
@@ -349,6 +350,7 @@ const TriageBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
             onUpdateDifficulty={updateDifficulty}
             onUpdateTitle={updateTitle}
             onDelete={deleteTask}
+            duplicateTaskStructure={duplicateTaskStructure}
             openParents={openParents}
             onToggleParent={toggleParent}
             onReparent={reparent}
