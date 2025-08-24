@@ -363,6 +363,8 @@ const updateCategory = (taskId: string, category: Category | undefined) => {
         timer[timer.length - 1] = { ...lastEntry, endTime: Date.now() };
       } else { // If not running, start a new one
         timer.push({ startTime: Date.now(), endTime: 0 });
+        // Automatically set status to WIP when timer starts
+        return { ...task, timer: timer, triageStatus: "WIP" };
       }
       return { ...task, timer: timer };
     });
