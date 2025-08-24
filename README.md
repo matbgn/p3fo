@@ -1,4 +1,4 @@
-# P3Com (“P-com”) – short for Plan, Program, Project, and Communicate
+# P3Fo (“P-Fo”) – short for Plan, Program, Project, and Focus on what matters
 
 A productivity tool to organize your goals with results in mind
 

@@ -26,7 +26,7 @@ const Index: React.FC = () => {
           <div className="flex items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-                P3Com - Plan, programm, project and communicate
+                P3Fo - Plan, Program, Project, and Focus on what matters
               </h1>
               <p className="mt-2 text-muted-foreground">
                 Organize your goals with results in mind
