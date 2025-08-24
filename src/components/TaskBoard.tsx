@@ -166,7 +166,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
     handleActivate(colIndex, newId);
   };
 
-  // Sync triage status with done when changed via dropdown
+  // Sync kanban status with done when changed via dropdown
   const handleChangeStatus = React.useCallback(
     (taskId: string, status: TriageStatus) => {
       updateStatus(taskId, status);

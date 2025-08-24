@@ -1,16 +1,17 @@
 import React from "react";
 import TaskBoard from "@/components/TaskBoard";
-import TriageBoard from "@/components/TriageBoard";
+import KanbanBoard from "@/components/KanbanBoard";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { ViewSwitcher } from "@/components/ViewSwitcher";
 import { Timetable } from "@/components/Timetable";
+import ProgramView from "@/components/ProgramView";
 import SettingsPage from "./SettingsPage";
 import MetricsPage from "./MetricsPage";
 import QoLIndexSurveyPage from "./QoLIndexSurveyPage";
 
 const Index: React.FC = () => {
   const [view, setView] = React.useState<
-    "focus" | "triage" | "timetable" | "settings" | "metrics" | "qol-survey"
+    "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "qol-survey"
   >("focus");
   const [focusedTaskId, setFocusedTaskId] = React.useState<string | null>(null);
 
@@ -42,10 +43,12 @@ const Index: React.FC = () => {
       <main className="px-12 py-8">
         {view === "focus" ? (
           <TaskBoard focusedTaskId={focusedTaskId} />
-        ) : view === "triage" ? (
-          <TriageBoard onFocusOnTask={handleFocusOnTask} />
+        ) : view === "kanban" ? (
+          <KanbanBoard onFocusOnTask={handleFocusOnTask} />
         ) : view === "timetable" ? (
           <Timetable onJumpToTask={handleFocusOnTask} />
+        ) : view === "program" ? (
+          <ProgramView onJumpToTask={handleFocusOnTask} />
         ) : view === "metrics" ? (
           <MetricsPage />
         ) : view === "qol-survey" ? (

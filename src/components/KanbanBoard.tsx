@@ -173,7 +173,7 @@ const Column: React.FC<{
   );
 };
 
-const TriageBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ onFocusOnTask }) => {
+const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ onFocusOnTask }) => {
   const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateCategory, updateTitle, deleteTask, duplicateTaskStructure, reparent } = useTasks();
   const [filters, setFilters] = React.useState<Filters>({
     showUrgent: false,
@@ -297,7 +297,7 @@ const TriageBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
       });
     }
 
-    return acc;
+    return acc;  
   }, [topTasks, map, tasks]); // Added tasks as dependency to ensure re-render when tasks change
 
   // Quick add
@@ -362,4 +362,4 @@ const TriageBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
   );
 };
 
-export default TriageBoard;
+export default KanbanBoard;

@@ -1,22 +1,51 @@
-import React from "react";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import React from 'react';
+import { Button } from './ui/button';
+import { 
+  ListChecks,
+  Calendar,
+  BarChart3,
+  Settings,
+  GanttChart,
+  Smile,
+  LayoutDashboard,
+} from 'lucide-react';
 
-type View = "focus" | "triage" | "timetable" | "settings" | "metrics" | "qol-survey";
+interface ViewSwitcherProps {
+  value: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "qol-survey";
+  onChange: (view: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "qol-survey") => void;
+}
 
-export const ViewSwitcher: React.FC<{
-  value: View;
-  onChange: (v: View) => void;
-}> = ({ value, onChange }) => {
+interface ViewOption {
+  id: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "qol-survey";
+  label: string;
+  icon: React.ReactNode;
+}
+
+export function ViewSwitcher({ value, onChange }: ViewSwitcherProps) {
+  const views: ViewOption[] = [
+    { id: 'program', label: 'Program', icon: <Calendar className="w-4 h-4" /> },
+    { id: 'kanban', label: 'Project', icon: <LayoutDashboard className="w-4 h-4" /> },
+    { id: 'focus', label: 'Focus', icon: <ListChecks className="w-4 h-4" /> },
+    { id: 'timetable', label: 'Timetable', icon: <GanttChart className="w-4 h-4" /> },
+    { id: 'qol-survey', label: 'QLI', icon: <Smile className="w-4 h-4" /> },
+    { id: 'metrics', label: 'Metrics', icon: <BarChart3 className="w-4 h-4" /> },
+    { id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" /> },
+  ];
+
   return (
-    <Tabs value={value} onValueChange={(v) => onChange(v as View)}>
-      <TabsList>
-        <TabsTrigger value="triage">Projects</TabsTrigger>
-        <TabsTrigger value="focus">Focus</TabsTrigger>
-        <TabsTrigger value="timetable">Timetable</TabsTrigger>
-        <TabsTrigger value="qol-survey">QLI</TabsTrigger>
-        <TabsTrigger value="metrics">Metrics</TabsTrigger>
-        <TabsTrigger value="settings">Settings</TabsTrigger>
-      </TabsList>
-    </Tabs>
+    <div className="flex space-x-1 p-1 bg-gray-100 rounded-lg">
+      {views.map((view) => (
+        <Button
+          key={view.id}
+          variant={value === view.id ? 'default' : 'ghost'}
+          size="sm"
+          className="flex items-center gap-2"
+          onClick={() => onChange(view.id)}
+        >
+          {view.icon}
+          {view.label}
+        </Button>
+      ))}
+    </div>
   );
-};
+}
