@@ -5,7 +5,7 @@ import {
   Calendar,
   BarChart3,
   Settings,
-  GanttChart,
+  History,
   Smile,
   LayoutDashboard,
 } from 'lucide-react';
@@ -26,7 +26,7 @@ export function ViewSwitcher({ value, onChange }: ViewSwitcherProps) {
     { id: 'program', label: 'Program', icon: <Calendar className="w-4 h-4" /> },
     { id: 'kanban', label: 'Project', icon: <LayoutDashboard className="w-4 h-4" /> },
     { id: 'focus', label: 'Focus', icon: <ListChecks className="w-4 h-4" /> },
-    { id: 'timetable', label: 'Timetable', icon: <GanttChart className="w-4 h-4" /> },
+    { id: 'timetable', label: 'Timetable', icon: <History className="w-4 h-4" /> },
     { id: 'qol-survey', label: 'QLI', icon: <Smile className="w-4 h-4" /> },
     { id: 'metrics', label: 'Metrics', icon: <BarChart3 className="w-4 h-4" /> },
     { id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" /> },
