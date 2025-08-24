@@ -44,6 +44,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
   const map = React.useMemo(() => byId(tasks), [tasks]);
 
   const [path, setPath] = React.useState<string[]>([]);
+  const [highlightedTaskId, setHighlightedTaskId] = React.useState<string | null>(null);
   const [filters, setFilters] = React.useState<Filters>({
     showUrgent: false,
     showImpact: false,
@@ -113,6 +114,26 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
 
   const columns: Column[] = React.useMemo(() => {
     const cols: Column[] = [];
+
+    // Global search for subtasks
+    if (filters.searchText?.trim()) {
+      const allSearchableTasks = tasks.flatMap(task => {
+        // Include parent tasks and their children for search
+        return [{ id: task.id, title: task.title }];
+      });
+
+      const searchResults = aStarTextSearch(filters.searchText, allSearchableTasks);
+      const matchingTaskIds = new Set(searchResults.filter(r => r.score >= 0.001).map(r => r.taskId));
+
+      const searchResultTasks = tasks.filter(task => matchingTaskIds.has(task.id));
+
+      cols.push({
+        parentId: "search-results", // Unique ID for search results column
+        items: searchResultTasks.sort(sortTasks),
+        activeId: null, // No active task in search results column
+      });
+    }
+
     const rootItems = tasks.filter((t) => !t.parentId).sort(sortTasks);
     cols.push({ parentId: null, items: rootItems, activeId: path[0] });
 
@@ -130,12 +151,13 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
       });
     });
     return cols;
-  }, [tasks, map, path]);
+  }, [tasks, map, path, filters.searchText]);
 
   const handleActivate = (colIndex: number, id: string) => {
     const newPath = path.slice(0, colIndex);
     newPath[colIndex] = id;
     setPath(newPath);
+    setHighlightedTaskId(null); // Clear highlighted task on normal activation
   };
 
   const handleAdd = (colIndex: number, title: string) => {
@@ -267,8 +289,20 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
               <Card className="w-72 shrink-0 overflow-hidden">
                 <div className="flex items-center justify-between px-3 py-2 border-b">
                   <div className="flex items-center gap-2 text-sm font-medium">
-                    {i === 0 ? <FolderTree className="h-4 w-4 text-muted-foreground" /> : <CornerDownRight className="h-4 w-4 text-muted-foreground" />}
-                    <span>{i === 0 ? "Top tasks" : (map[col.parentId!]?.title || "Subtasks")}</span>
+                    {col.parentId === "search-results" ? (
+                      <Filter className="h-4 w-4 text-muted-foreground" />
+                    ) : i === 0 ? (
+                      <FolderTree className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <CornerDownRight className="h-4 w-4 text-muted-foreground" />
+                    )}
+                    <span>
+                      {col.parentId === "search-results"
+                        ? "Results"
+                        : i === 0
+                        ? "Top tasks"
+                        : map[col.parentId!]?.title || "Subtasks"}
+                    </span>
                   </div>
                   <Button size="sm" variant="secondary" onClick={() => handleAdd(i, "New task")}>
                     <Printer className="h-4 w-4 mr-1" />
@@ -316,12 +350,15 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                   }}
                 >
                   {(() => {
-                    // Apply text search filter using A* algorithm to all items first
+                    // Apply text search filter only if this is the search results column
                     let filteredItems = col.items;
-                    if (filters.searchText?.trim()) {
-                      const searchResults = aStarTextSearch(filters.searchText, col.items.map(task => ({ id: task.id, title: task.title })));
-                      const matchingTaskIds = new Set(searchResults.filter(r => r.score >= 0.001).map(r => r.taskId));
-                      filteredItems = col.items.filter(task => matchingTaskIds.has(task.id));
+                    if (col.parentId === "search-results" && filters.searchText?.trim()) {
+                      // The items in this column are already pre-filtered by the global search
+                      // No need to re-apply aStarTextSearch here, just use the items as is.
+                    } else if (col.parentId !== "search-results" && filters.searchText?.trim()) {
+                      // If it's not the search results column, and there's a search text,
+                      // we should not show any items in the regular columns.
+                      filteredItems = [];
                     }
                     
                     // Apply all other filters
@@ -399,8 +436,24 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                           key={t.id}
                           task={t}
                           tasks={tasks}
-                          onActivate={() => handleActivate(i, t.id)}
+                          onActivate={() => {
+                            if (col.parentId === "search-results") {
+                              // Clear search, set path to reveal ancestry, and highlight
+                              setFilters(prev => ({ ...prev, searchText: "" }));
+                              const newPath: string[] = [];
+                              let current: Task | undefined = t;
+                              while (current) {
+                                newPath.unshift(current.id);
+                                current = current.parentId ? map[current.parentId] : undefined;
+                              }
+                              setPath(newPath);
+                              setHighlightedTaskId(t.id); // Highlight the clicked task
+                            } else {
+                              handleActivate(i, t.id);
+                            }
+                          }}
                           isActive={t.id === col.activeId}
+                          isHighlighted={t.id === highlightedTaskId}
                           updateStatus={handleChangeStatus}
                           updateDifficulty={updateDifficulty}
                           updateCategory={updateCategory}

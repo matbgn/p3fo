@@ -196,6 +196,7 @@ interface TaskCardProps {
   reparent: (id: string, parentId: string | null) => void;
   onActivate?: (id: string) => void;
   isActive?: boolean;
+  isHighlighted?: boolean; // Added for search result highlighting
   isTriageBoard?: boolean;
   open?: boolean;
   onToggleOpen?: (id: string, toggleAll?: boolean) => void;
@@ -220,6 +221,7 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
     reparent,
     onActivate,
     isActive,
+    isHighlighted,
     isTriageBoard,
     open,
     onToggleOpen,
@@ -272,7 +274,7 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
     <div
       ref={ref}
       onClick={() => onActivate?.(task.id)}
-      className={`w-full px-3 py-2 rounded-md border transition bg-card hover:bg-accent/40 ${isActive ? "ring-2 ring-orange-500 bg-orange-50 dark:bg-orange-950/30" : ""}`}
+      className={`w-full px-3 py-2 rounded-md border transition bg-card hover:bg-accent/40 ${isActive ? "ring-2 ring-orange-500 bg-orange-50 dark:bg-orange-950/30" : ""} ${isHighlighted ? "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950/30" : ""}`}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData("text/task-id", task.id);
