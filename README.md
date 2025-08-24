@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="public/P3Fo_Logo.svg" alt="P3Fo Logo" width="200" />
+</div>
+
 # P3Fo (“P-Fo”) – short for Plan, Program, Project, and Focus on what matters
 
 A productivity tool to organize your goals with results in mind
