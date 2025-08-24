@@ -32,3 +32,5 @@ sketch
 
 
 # End of https://mrkandreev.name/snippets/gitignore-generator/#yarn,react,vite,npm,pnpm
+
+dist/

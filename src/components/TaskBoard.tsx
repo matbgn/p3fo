@@ -401,7 +401,22 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                           updateStatus={handleChangeStatus}
                           updateDifficulty={updateDifficulty}
                           updateCategory={updateCategory}
-                          updateTitle={updateTitle}
+                          updateTitle={(id, title) => {
+                            const parentId = updateTitle(id, title); // Call useTasks' updateTitle
+                            if (parentId) {
+                              // If the updated task had a parent, re-activate the parent's path
+                              const parentTask = map[parentId];
+                              if (parentTask) {
+                                const newPath: string[] = [];
+                                let current: Task | undefined = parentTask;
+                                while (current) {
+                                  newPath.unshift(current.id);
+                                  current = current.parentId ? map[current.parentId] : undefined;
+                                }
+                                setPath(newPath); // Set path to parent's path
+                              }
+                            }
+                          }}
                           deleteTask={deleteTask}
                           toggleUrgent={toggleUrgent}
                           toggleImpact={toggleImpact}
