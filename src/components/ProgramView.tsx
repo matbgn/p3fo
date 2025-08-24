@@ -34,11 +34,22 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
     reparent,
   } = useTasks();
 
-  const parentTasks = tasks.filter(task => task.children && task.children.length > 0);
+  const parentTasks = tasks.filter(
+    task =>
+      task.children &&
+      task.children.length > 0 &&
+      task.triageStatus !== 'Done' &&
+      task.triageStatus !== 'Dropped'
+  );
   const tasksWithoutTerminationDate = parentTasks.filter(task => !task.terminationDate);
 
   const events = parentTasks
-    .filter(task => task.terminationDate)
+    .filter(
+      task =>
+        task.terminationDate &&
+        task.triageStatus !== 'Done' &&
+        task.triageStatus !== 'Dropped'
+    )
     .map(task => ({
       title: task.title,
       start: new Date(task.createdAt),
