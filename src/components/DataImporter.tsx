@@ -19,9 +19,27 @@ const DataImporter: React.FC = () => {
       reader.onload = (e) => {
         if (e.target?.result) {
           try {
-            const importedTasks = JSON.parse(e.target.result as string);
-            importTasks(importedTasks);
-            alert('Tasks imported successfully!');
+            const importedData = JSON.parse(e.target.result as string);
+
+            if (Array.isArray(importedData)) {
+              // Old format: just an array of tasks
+              importTasks(importedData);
+            } else if (importedData.tasks) {
+              // New format
+              importTasks(importedData.tasks);
+              if (importedData.qolSurveyResponse) {
+                localStorage.setItem('qolSurveyResponse', JSON.stringify(importedData.qolSurveyResponse));
+              }
+              if (importedData.settings) {
+                for (const [key, value] of Object.entries(importedData.settings)) {
+                  if (value) {
+                    localStorage.setItem(key, value as string);
+                  }
+                }
+              }
+            }
+            
+            alert('Data imported successfully!');
           } catch (error) {
             alert('Error importing tasks. Please check the file format.');
           }

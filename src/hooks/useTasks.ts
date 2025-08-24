@@ -366,6 +366,7 @@ const updateTerminationDate = (taskId: string, terminationDate: number | undefin
 
   const clearAllTasks = React.useCallback(() => {
     tasks = [];
+    localStorage.removeItem('qolSurveyResponse');
     persistTasks();
   }, []);
 

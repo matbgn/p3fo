@@ -198,8 +198,8 @@ const SettingsPage: React.FC = () => {
             Export, import, or clear all tasks and timer data from the application.
           </p>
           <div className="flex space-x-2 mt-2">
-            <DataExporter />
             <DataImporter />
+            <DataExporter />
             <Button variant="destructive" onClick={handleClearData}>
               Clear All Data
             </Button>
