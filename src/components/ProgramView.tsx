@@ -61,11 +61,11 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
   return (
     <ResizablePanelGroup direction="vertical" className="min-h-[800px]">
       <ResizablePanel defaultSize={70}>
-        <Card className="h-full">
+        <Card className="h-full min-h-0">
           <CardHeader>
             <CardTitle>Program Calendar</CardTitle>
           </CardHeader>
-          <CardContent className="overflow-y-auto">
+          <CardContent className="h-full overflow-y-auto">
             <Calendar
               localizer={localizer}
               events={events}
