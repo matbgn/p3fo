@@ -13,6 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon, Trash2, Pencil, ArrowRight } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Temporal } from '@js-temporal/polyfill';
 import { useNavigate } from "react-router-dom";
 import { TaskTag } from "./TaskTag";
@@ -279,6 +280,9 @@ export const Timetable: React.FC<{
   const [selectedCategories, setSelectedCategories] = useState<Category[]>([]);
   const [dateRange, setDateRange] = useState<{ start?: Date; end?: Date }>({});
   const [predefinedRange, setPredefinedRange] = useState<string | null>(null);
+  const [showUrgent, setShowUrgent] = useState(false);
+  const [showImpact, setShowImpact] = useState(false);
+  const [showMajorIncident, setShowMajorIncident] = useState(false);
 
   // Get date range based on predefined selection
   const getDateRange = () => {
@@ -369,18 +373,78 @@ export const Timetable: React.FC<{
     }
   };
 
-  // Filter tasks by category
+  // Filter tasks by category, urgency, impact, and major incident
   const filteredTasks = tasks.filter((task) => {
-    // If no categories are selected, show all tasks
-    if (selectedCategories.length === 0) return true;
-    
-    // If task has a category, check if it's in the selected categories
-    if (task.category) {
-      return selectedCategories.includes(task.category);
+    // Category filter
+    if (selectedCategories.length > 0) {
+      if (task.category) {
+        if (!selectedCategories.includes(task.category)) return false;
+      } else {
+        if (!selectedCategories.includes("Uncategorized" as any)) return false;
+      }
     }
-    
-    // If task has no category, check if "Uncategorized" is selected
-    return selectedCategories.includes("Uncategorized" as any);
+
+    // Urgent filter
+    if (showUrgent) {
+      let currentTaskForUrgent = task;
+      let foundUrgentAncestor = false;
+      while (currentTaskForUrgent) {
+        if (currentTaskForUrgent.urgent) {
+          foundUrgentAncestor = true;
+          break;
+        }
+        if (currentTaskForUrgent.parentId) {
+          currentTaskForUrgent = taskMap[currentTaskForUrgent.parentId];
+        } else {
+          break;
+        }
+      }
+      if (!foundUrgentAncestor) {
+        return false;
+      }
+    }
+
+    // Impact filter
+    if (showImpact) {
+      let currentTaskForImpact = task;
+      let foundImpactAncestor = false;
+      while (currentTaskForImpact) {
+        if (currentTaskForImpact.impact) {
+          foundImpactAncestor = true;
+          break;
+        }
+        if (currentTaskForImpact.parentId) {
+          currentTaskForImpact = taskMap[currentTaskForImpact.parentId];
+        } else {
+          break;
+        }
+      }
+      if (!foundImpactAncestor) {
+        return false;
+      }
+    }
+
+    // Major Incident filter
+    if (showMajorIncident) {
+      let currentTaskForMajorIncident = task;
+      let foundMajorIncidentAncestor = false;
+      while (currentTaskForMajorIncident) {
+        if (currentTaskForMajorIncident.majorIncident) {
+          foundMajorIncidentAncestor = true;
+          break;
+        }
+        if (currentTaskForMajorIncident.parentId) {
+          currentTaskForMajorIncident = taskMap[currentTaskForMajorIncident.parentId];
+        } else {
+          break;
+        }
+      }
+      if (!foundMajorIncidentAncestor) {
+        return false;
+      }
+    }
+
+    return true;
   });
 
   // Get all timer entries with task information
@@ -582,10 +646,39 @@ export const Timetable: React.FC<{
               onClick={() => {
                 setDateRange({});
                 setPredefinedRange(null);
+                setShowUrgent(false);
+                setShowImpact(false);
+                setShowMajorIncident(false);
               }}
             >
               Clear
             </Button>
+          </div>
+        </div>
+
+        <div className="flex flex-col space-y-2">
+          <label className="text-sm font-medium">Criticity</label>
+          <div className="flex flex-wrap gap-2">
+            <Checkbox
+              id="show-urgent"
+              checked={showUrgent}
+              onCheckedChange={(checked) => setShowUrgent(!!checked)}
+            />
+            <label htmlFor="show-urgent" className="text-sm font-medium">Urgent</label>
+
+            <Checkbox
+              id="show-impact"
+              checked={showImpact}
+              onCheckedChange={(checked) => setShowImpact(!!checked)}
+            />
+            <label htmlFor="show-impact" className="text-sm font-medium">High Impact</label>
+
+            <Checkbox
+              id="show-major-incident"
+              checked={showMajorIncident}
+              onCheckedChange={(checked) => setShowMajorIncident(!!checked)}
+            />
+            <label htmlFor="show-major-incident" className="text-sm font-medium">Major Incident</label>
           </div>
         </div>
       </div>
