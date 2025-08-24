@@ -82,11 +82,37 @@ export const calculateTimeSpentOnNewCapabilities = (
   // Calculate total time for all recent tasks
   const totalTime = calculateTotalTimeForTasks(tasks, recentTaskIds);
   
-  // Filter for high impact tasks (new capabilities)
+  // Filter for high impact tasks (new capabilities) and their subtasks
   const newCapabilitiesTasks = recentTasks.filter(task => task.impact === true);
-  const newCapabilitiesTaskIds = newCapabilitiesTasks.map(task => task.id);
   
-  // Calculate time for new capabilities tasks
+  // Get all subtask IDs for high impact tasks
+  const getAllSubtaskIds = (taskIds: string[]): string[] => {
+    const result: string[] = [];
+    const queue = [...taskIds];
+    
+    while (queue.length > 0) {
+      const currentTaskId = queue.shift()!;
+      const currentTask = tasks.find(t => t.id === currentTaskId);
+      
+      if (currentTask && currentTask.children && currentTask.children.length > 0) {
+        result.push(...currentTask.children);
+        queue.push(...currentTask.children);
+      }
+    }
+    
+    return result;
+  };
+  
+  // Get IDs of high impact tasks
+  const highImpactTaskIds = newCapabilitiesTasks.map(task => task.id);
+  
+  // Get all subtask IDs of high impact tasks
+  const subtaskIds = getAllSubtaskIds(highImpactTaskIds);
+  
+  // Combine high impact task IDs with their subtask IDs
+  const newCapabilitiesTaskIds = [...highImpactTaskIds, ...subtaskIds];
+  
+  // Calculate time for new capabilities tasks (including subtasks)
   const newCapabilitiesTime = calculateTotalTimeForTasks(tasks, newCapabilitiesTaskIds);
   
   // Calculate percentage
