@@ -232,21 +232,34 @@ const updateCategory = (taskId: string, category: Category | undefined) => {
   persistTasks();
 };
 
+  export function useTasks() {
+  const [_, setForceRender] = React.useState({});
+
+  React.useEffect(() => {
+    const onTasksChanged = () => {
+      setForceRender({});
+    };
+    eventBus.subscribe("tasksChanged", onTasksChanged);
+    return () => {
+      eventBus.unsubscribe("tasksChanged", onTasksChanged);
+    };
+  }, []);
+
   const updateTitle = React.useCallback((id: string, title: string) => {
     let parentIdToReturn: string | null = null;
-    setTasks((prev) => {
-      const newTasks = prev.map((task) => {
-        if (task.id === id) {
-          parentIdToReturn = task.parentId || null; // Capture parentId before update
-          return { ...task, title };
-        }
-        return task;
-      });
-      eventBus.publish("tasksChanged");
-      return newTasks;
+    tasks = tasks.map((task) => {
+      if (task.id === id) {
+        parentIdToReturn = task.parentId || null; // Capture parentId before update
+        return { ...task, title };
+      }
+      return task;
     });
+    persistTasks(); // This will publish "tasksChanged" event
     return parentIdToReturn; // Return the parentId
   }, []);
+
+  return {
+    tasks,
 
 const updateTaskTimer = (taskId: string, startTime: number, endTime: number) => {
   updateTaskInTasks(taskId, (t) => ({
