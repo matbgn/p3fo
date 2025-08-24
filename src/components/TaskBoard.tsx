@@ -40,7 +40,7 @@ type Column = {
 };
 
 const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId }) => {
-  const { tasks, createTask, reparent, updateStatus, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateTitle, deleteTask, toggleDone, updateTaskTimer, toggleTimer, updateTimeEntry, updateCategory } = useTasks();
+  const { tasks, createTask, reparent, updateStatus, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateTitle, deleteTask, duplicateTaskStructure, toggleDone, updateTaskTimer, toggleTimer, updateTimeEntry, updateCategory } = useTasks();
   const map = React.useMemo(() => byId(tasks), [tasks]);
 
   const [path, setPath] = React.useState<string[]>([]);
@@ -421,6 +421,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                             }
                           }}
                           deleteTask={deleteTask}
+                          duplicateTaskStructure={duplicateTaskStructure}
                           toggleUrgent={toggleUrgent}
                           toggleImpact={toggleImpact}
                           toggleMajorIncident={toggleMajorIncident}
