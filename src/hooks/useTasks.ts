@@ -266,141 +266,125 @@ const updateCategory = (taskId: string, category: Category | undefined) => {
     persistTasks();
   }, []);
 
-  return {
-    tasks,
+  const deleteTask = React.useCallback((taskId: string) => {
+    const map = byId(tasks);
+    const taskToDelete = map[taskId];
+    if (!taskToDelete) return;
 
-const deleteTask = (taskId: string) => {
-  const map = byId(tasks);
-  const taskToDelete = map[taskId];
-  if (!taskToDelete) return;
+    const childrenIds = new Set<string>();
+    const getChildren = (id: string) => {
+      childrenIds.add(id);
+      const t = map[id];
+      if (t?.children) {
+        t.children.forEach(getChildren);
+      }
+    };
+    getChildren(taskId);
 
-  const childrenIds = new Set<string>();
-  const getChildren = (id: string) => {
-    childrenIds.add(id);
-    const t = map[id];
-    if (t?.children) {
-      t.children.forEach(getChildren);
+    tasks = tasks.filter((t) => !childrenIds.has(t.id));
+
+    if (taskToDelete.parentId) {
+      tasks = tasks.map(t => {
+        if (t.id === taskToDelete.parentId) {
+          return { ...t, children: (t.children || []).filter(id => id !== taskId) };
+        }
+        return t;
+      });
     }
+
+    persistTasks();
+  }, []);
+
+  const clearAllTasks = React.useCallback(() => {
+    tasks = [];
+    persistTasks();
+  }, []);
+
+  const importTasks = React.useCallback((importedTasks: Task[]) => {
+    tasks = importedTasks;
+    persistTasks();
+  }, []);
+
+  const calculateTotalTime = (taskId: string, taskArray: Task[]) => {
+    const taskMap = byId(taskArray);
+    const task = taskMap[taskId];
+
+    if (!task) return 0;
+
+    let totalTime = (task.timer || []).reduce((acc, entry) => {
+      if (entry.endTime) {
+        return acc + (entry.endTime - entry.startTime);
+      }
+      return acc;
+    }, 0);
+
+    if (task.children && task.children.length > 0) {
+      totalTime = task.children.reduce((acc, childId) => acc + calculateTotalTime(childId, taskArray), 0);
+    }
+
+    return totalTime;
   };
-  getChildren(taskId);
 
-  tasks = tasks.filter((t) => !childrenIds.has(t.id));
+  const calculateTotalDifficulty = (taskId: string, taskArray: Task[]) => {
+    const taskMap = byId(taskArray);
+    const task = taskMap[taskId];
 
-  if (taskToDelete.parentId) {
+    if (!task) return 0;
+
+    if (task.children && task.children.length > 0) {
+      return task.children.reduce((acc, childId) => acc + calculateTotalDifficulty(childId, taskArray), 0);
+    }
+
+    return task.difficulty || 0;
+  };
+
+  const toggleTimer = React.useCallback((taskId: string) => {
+    // First, stop any other running timers
     tasks = tasks.map(t => {
-      if (t.id === taskToDelete.parentId) {
-        return { ...t, children: (t.children || []).filter(id => id !== taskId) };
+      if (t.id !== taskId && t.timer && t.timer.length > 0) {
+        const lastEntry = t.timer[t.timer.length - 1];
+        if (lastEntry && lastEntry.endTime === 0) {
+          return {
+            ...t,
+            timer: t.timer.map((entry, index) =>
+              index === t.timer!.length - 1 ? { ...entry, endTime: Date.now() } : entry
+            )
+          };
+        }
       }
       return t;
     });
-  }
 
-  persistTasks();
-};
-
-const clearAllTasks = () => {
-  tasks = [];
-  persistTasks();
-};
-
-const importTasks = (importedTasks: Task[]) => {
-  tasks = importedTasks;
-  persistTasks();
-};
-
-const calculateTotalTime = (taskId: string, taskArray: Task[]) => {
-  const taskMap = byId(taskArray);
-  const task = taskMap[taskId];
-
-  if (!task) return 0;
-
-  let totalTime = (task.timer || []).reduce((acc, entry) => {
-    if (entry.endTime) {
-      return acc + (entry.endTime - entry.startTime);
-    }
-    return acc;
-  }, 0);
-
-  if (task.children && task.children.length > 0) {
-    totalTime = task.children.reduce((acc, childId) => acc + calculateTotalTime(childId, taskArray), 0);
-  }
-
-  return totalTime;
-};
-
-const calculateTotalDifficulty = (taskId: string, taskArray: Task[]) => {
-  const taskMap = byId(taskArray);
-  const task = taskMap[taskId];
-
-  if (!task) return 0;
-
-  if (task.children && task.children.length > 0) {
-    return task.children.reduce((acc, childId) => acc + calculateTotalDifficulty(childId, taskArray), 0);
-  }
-
-  return task.difficulty || 0;
-};
-
-const toggleTimer = (taskId: string) => {
-  // First, stop any other running timers
-  tasks = tasks.map(t => {
-    if (t.id !== taskId && t.timer && t.timer.length > 0) {
-      const lastEntry = t.timer[t.timer.length - 1];
-      if (lastEntry && lastEntry.endTime === 0) {
-        return {
-          ...t,
-          timer: t.timer.map((entry, index) =>
-            index === t.timer!.length - 1 ? { ...entry, endTime: Date.now() } : entry
-          )
-        };
+    // Now toggle the requested timer
+    updateTaskInTasks(taskId, (task) => {
+      const timer = [...(task.timer || [])];
+      const lastEntry = timer[timer.length - 1];
+      if (lastEntry && lastEntry.endTime === 0) { // If currently running, stop it
+        timer[timer.length - 1] = { ...lastEntry, endTime: Date.now() };
+      } else { // If not running, start a new one
+        timer.push({ startTime: Date.now(), endTime: 0 });
       }
-    }
-    return t;
-  });
+      return { ...task, timer: timer };
+    });
 
-  // Now toggle the requested timer
-  updateTaskInTasks(taskId, (task) => {
-    const timer = [...(task.timer || [])];
-    const lastEntry = timer[timer.length - 1];
-    if (lastEntry && lastEntry.endTime === 0) { // If currently running, stop it
-      timer[timer.length - 1] = { ...lastEntry, endTime: Date.now() };
-    } else { // If not running, start a new one
-      timer.push({ startTime: Date.now(), endTime: 0 });
-    }
-    return { ...task, timer: timer };
-  });
+    persistTasks();
+    eventBus.publish("timerToggled", taskId);
+  }, []);
 
-  persistTasks();
-  eventBus.publish("timerToggled", taskId);
-};
+  const updateTimeEntry = React.useCallback((taskId: string, entryIndex: number, newEntry: { startTime: number; endTime: number }) => {
+    updateTaskInTasks(taskId, (t) => ({
+      ...t,
+      timer: (t.timer || []).map((entry, i) => i === entryIndex ? newEntry : entry)
+    }));
+    persistTasks();
+  }, []);
 
-const updateTimeEntry = (taskId: string, entryIndex: number, newEntry: { startTime: number; endTime: number }) => {
-  updateTaskInTasks(taskId, (t) => ({
-    ...t,
-    timer: (t.timer || []).map((entry, i) => i === entryIndex ? newEntry : entry)
-  }));
-  persistTasks();
-};
-
-const deleteTimeEntry = (taskId: string, entryIndex: number) => {
-  updateTaskInTasks(taskId, (t) => ({
-    ...t,
-    timer: (t.timer || []).filter((_, i) => i !== entryIndex)
-  }));
-  persistTasks();
-};
-
-export function useTasks() {
-  const [_, setForceRender] = React.useState({});
-
-  React.useEffect(() => {
-    const onTasksChanged = () => {
-      setForceRender({});
-    };
-    eventBus.subscribe("tasksChanged", onTasksChanged);
-    return () => {
-      eventBus.unsubscribe("tasksChanged", onTasksChanged);
-    };
+  const deleteTimeEntry = React.useCallback((taskId: string, entryIndex: number) => {
+    updateTaskInTasks(taskId, (t) => ({
+      ...t,
+      timer: (t.timer || []).filter((_, i) => i !== entryIndex)
+    }));
+    persistTasks();
   }, []);
 
   return {
