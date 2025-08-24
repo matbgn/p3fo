@@ -223,7 +223,13 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
     <div className="w-full">
       <div className="mb-4 flex flex-wrap items-center gap-4">
         <div className="flex flex-wrap items-center gap-4 border rounded-lg p-3">
-          <FilterControls filters={filters} setFilters={setFilters} includeDoneFilter={true} />
+          <FilterControls 
+            filters={filters} 
+            setFilters={setFilters} 
+            defaultFilters={{
+              status: ["Backlog", "Ready", "WIP", "Blocked"]
+            }}
+          />
           {/* Vertical separator */}
           <div className="h-6 border-l border-gray-300 mx-2"></div>
 
@@ -332,7 +338,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                         // 4. Apply status filter (multiselect) for non-Done tasks ONLY
                         // This filter should NOT apply to tasks that are 'done'.
                         if (!task.done) {
-                          // If filters.status is empty, it means "show all non-Done statuses", so this filter doesn't exclude anything.
+                          // If filters.status is empty, it means "show nothing", so hide all non-Done tasks.
                           // If filters.status is not empty, then check if the task's triageStatus is included.
                           if (filters.status.length > 0) {
                             if (!filters.status.includes(task.triageStatus)) {
@@ -369,18 +375,15 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                         return false;
                       }
 
-                      // 5. Apply status filter (multiselect) for non-Done tasks ONLY
-                      // This filter should NOT apply to tasks that are 'done'.
-                      if (!task.done) {
-                        // If filters.status is empty, it means "show all non-Done statuses", so this filter doesn't exclude anything.
-                        // If filters.status is not empty, then check if the task's triageStatus is included.
-                        if (filters.status.length > 0) {
-                          if (!filters.status.includes(task.triageStatus)) {
-                            return false;
-                          }
-                        } else {
+                      // 5. Apply status filter (multiselect) for all tasks
+                      // If filters.status is empty, it means "show nothing", so hide all tasks.
+                      // If filters.status is not empty, then check if the task's triageStatus is included.
+                      if (filters.status.length > 0) {
+                        if (!filters.status.includes(task.triageStatus)) {
                           return false;
                         }
+                      } else {
+                        return false;
                       }
 
                       // If we reach here, the task passes all active filters.

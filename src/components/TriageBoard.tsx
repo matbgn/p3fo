@@ -176,7 +176,7 @@ const TriageBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
     showUrgent: false,
     showImpact: false,
     showMajorIncident: false,
-    status: ["Backlog", "Ready", "WIP", "Blocked", "Dropped"],
+    status: ["Backlog", "Ready", "WIP", "Blocked", "Done", "Dropped"], // All statuses selected by default
     searchText: ""
   });
   const map = React.useMemo(() => byId(tasks), [tasks]);
@@ -322,7 +322,13 @@ const TriageBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
       </div>
 
       <div className="flex flex-wrap items-center gap-4 border rounded-lg p-3 mb-4">
-        <FilterControls filters={filters} setFilters={setFilters} />
+        <FilterControls 
+          filters={filters} 
+          setFilters={setFilters} 
+          defaultFilters={{
+            status: ["Backlog", "Ready", "WIP", "Blocked", "Done", "Dropped"]
+          }}
+        />
       </div>
  
        <div className="flex gap-4 pb-4">

@@ -19,9 +19,37 @@ interface FilterControlsProps {
   filters: Filters;
   setFilters: React.Dispatch<React.SetStateAction<Filters>>;
   includeDoneFilter?: boolean;
+  defaultFilters?: Partial<Filters>;
 }
 
-export const FilterControls: React.FC<FilterControlsProps> = ({ filters, setFilters, includeDoneFilter }) => {
+export const FilterControls: React.FC<FilterControlsProps> = ({ 
+  filters, 
+  setFilters, 
+  includeDoneFilter,
+  defaultFilters 
+}) => {
+  const getResetFilters = (): Filters => {
+    // Default reset filters (previous behavior)
+    const baseResetFilters: Filters = {
+      showUrgent: false,
+      showImpact: false,
+      showMajorIncident: false,
+      status: [],
+      showDone: false,
+      searchText: ""
+    };
+    
+    // If defaultFilters is provided, use it to override the base reset filters
+    if (defaultFilters) {
+      return {
+        ...baseResetFilters,
+        ...defaultFilters
+      };
+    }
+    
+    return baseResetFilters;
+  };
+
   return (
     <React.Fragment>
       <div className="flex items-center space-x-2">
@@ -68,6 +96,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({ filters, setFilt
             { value: "Ready", label: "Ready" },
             { value: "WIP", label: "WIP" },
             { value: "Blocked", label: "Blocked" },
+            { value: "Done", label: "Done" },
             { value: "Dropped", label: "Dropped" }
           ]}
           selected={filters.status}
@@ -84,25 +113,13 @@ export const FilterControls: React.FC<FilterControlsProps> = ({ filters, setFilt
             checked={!!filters.showDone}
             onCheckedChange={(checked) => setFilters(f => ({ ...f, showDone: !!checked }))}
           />
-          <Label
-            htmlFor="show-done"
-            className={filters.showDone ? "" : "line-through"}
-          >
-            Done
-          </Label>
+          <Label htmlFor="show-done">Done</Label>
         </div>
       )}
       <Button
         variant="outline"
         size="sm"
-        onClick={() => setFilters({
-          showUrgent: false,
-          showImpact: false,
-          showMajorIncident: false,
-          status: ["Backlog", "Ready", "WIP", "Blocked"],
-          showDone: false,
-          searchText: ""
-        })}
+        onClick={() => setFilters(getResetFilters())}
       >
         Clear
       </Button>
