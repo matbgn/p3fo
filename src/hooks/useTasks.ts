@@ -45,6 +45,7 @@ export type Task = {
   difficulty?: 0.5 | 1 | 2 | 3 | 5 | 8; // Added difficulty property
   timer?: { startTime: number; endTime: number }[];
   category?: Category;
+  terminationDate?: number;
 };
 
 const STORAGE_KEY = "dyad_task_board_v1";
@@ -142,6 +143,7 @@ const createTask = (title: string, parentId: string | null) => {
     difficulty: 1,
     timer: [],
     category: undefined,
+    terminationDate: undefined,
   };
   tasks = [...tasks, t];
 
@@ -229,6 +231,11 @@ const updateDifficulty = (taskId: string, difficulty: 0.5 | 1 | 2 | 3 | 5 | 8) =
 
 const updateCategory = (taskId: string, category: Category | undefined) => {
   updateTaskInTasks(taskId, (t) => ({ ...t, category: category }));
+  persistTasks();
+};
+
+const updateTerminationDate = (taskId: string, terminationDate: number | undefined) => {
+  updateTaskInTasks(taskId, (t) => ({ ...t, terminationDate: terminationDate }));
   persistTasks();
 };
 
@@ -473,6 +480,7 @@ const updateCategory = (taskId: string, category: Category | undefined) => {
     toggleTimer,
     updateTimeEntry,
     deleteTimeEntry,
+    updateTerminationDate,
   };
 }
 

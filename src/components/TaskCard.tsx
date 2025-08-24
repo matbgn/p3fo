@@ -301,7 +301,7 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
             task={task}
             totalTime={hasSubtasks ? totalTime : undefined}
             onClick={() => {
-              if (isTriageBoard && onFocusOnTask) {
+              if (onFocusOnTask) {
                 onFocusOnTask(task.id);
               }
             }}

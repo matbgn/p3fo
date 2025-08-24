@@ -48,7 +48,7 @@ const Index: React.FC = () => {
         ) : view === "timetable" ? (
           <Timetable onJumpToTask={handleFocusOnTask} />
         ) : view === "program" ? (
-          <ProgramView onJumpToTask={handleFocusOnTask} />
+          <ProgramView onFocusOnTask={handleFocusOnTask} />
         ) : view === "metrics" ? (
           <MetricsPage />
         ) : view === "qol-survey" ? (
