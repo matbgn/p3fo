@@ -129,7 +129,7 @@ const SettingsPage: React.FC = () => {
             
             <div>
               <label className="block text-sm font-medium mb-1">
-                Failure Rate Goal
+                Failure Rate Goal (Incident on Deliver)
               </label>
               <div className="flex items-center space-x-2">
                 <Input

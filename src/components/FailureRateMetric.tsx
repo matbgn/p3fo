@@ -39,7 +39,7 @@ const FailureRateMetric: React.FC = () => {
   return (
     <Card className={`h-32 ${getCardClass()}`}>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">Failure Rate</CardTitle>
+        <CardTitle className="text-sm font-medium">Failure Rate (Incident on Deliver)</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">
