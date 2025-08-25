@@ -86,7 +86,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
           checked={filters.showMajorIncident}
           onCheckedChange={(checked) => setFilters(f => ({ ...f, showMajorIncident: !!checked }))}
         />
-        <Label htmlFor="show-major-incident">Major Incident</Label>
+        <Label htmlFor="show-major-incident">Incident on Deliver</Label>
       </div>
 
       <div className="flex items-center space-x-2">

@@ -424,7 +424,7 @@ export const Timetable: React.FC<{
       }
     }
 
-    // Major Incident filter
+    // Incident on Deliver filter
     if (showMajorIncident) {
       let currentTaskForMajorIncident = task;
       let foundMajorIncidentAncestor = false;
@@ -678,7 +678,7 @@ export const Timetable: React.FC<{
               checked={showMajorIncident}
               onCheckedChange={(checked) => setShowMajorIncident(!!checked)}
             />
-            <label htmlFor="show-major-incident" className="text-sm font-medium">Major Incident</label>
+            <label htmlFor="show-major-incident" className="text-sm font-medium">Incident on Deliver</label>
           </div>
         </div>
       </div>

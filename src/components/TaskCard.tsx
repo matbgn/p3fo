@@ -448,7 +448,7 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
             }}
           >
             <Flame className="h-3 w-3 mr-1" />
-            Major Incident
+            Incident on Deliver
           </Badge>
         )}
       </div>
