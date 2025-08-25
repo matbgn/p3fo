@@ -192,22 +192,42 @@ const reparent = (taskId: string, newParentId: string | null) => {
   persistTasks();
 };
 
-const toggleDone = (taskId: string) => {
-  updateTaskInTasks(taskId, (t) => {
-    const newStatus = t.triageStatus === "Done" ? "Ready" : "Done";
-    return { ...t, triageStatus: newStatus };
-  });
-  persistTasks();
-};
-
 const updateStatus = (taskId: string, status: TriageStatus) => {
+  const taskMap = byId(tasks);
+  const task = taskMap[taskId];
+  if (!task) return;
+
+  const tasksToUpdate = new Set<string>([taskId]);
+
+  if (status === 'Done') {
+    const getAllChildren = (id: string) => {
+      const currentTask = taskMap[id];
+      if (currentTask?.children) {
+        currentTask.children.forEach(childId => {
+          tasksToUpdate.add(childId);
+          getAllChildren(childId);
+        });
+      }
+    };
+    getAllChildren(taskId);
+  }
+
   tasks = tasks.map(t => {
-    if (t.id === taskId) {
+    if (tasksToUpdate.has(t.id)) {
       return { ...t, triageStatus: status };
     }
     return t;
   });
+
   persistTasks();
+};
+
+const toggleDone = (taskId: string) => {
+  const task = tasks.find(t => t.id === taskId);
+  if (task) {
+    const newStatus = task.triageStatus === "Done" ? "Ready" : "Done";
+    updateStatus(taskId, newStatus);
+  }
 };
 
 const toggleUrgent = (taskId: string) => {

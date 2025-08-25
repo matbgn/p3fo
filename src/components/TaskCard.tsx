@@ -191,7 +191,7 @@ interface TaskCardProps {
   toggleUrgent: (id: string) => void;
   toggleImpact: (id: string) => void;
   toggleMajorIncident: (id: string) => void;
-  toggleDone: (id: Task) => void;
+  toggleDone: (task: Task) => void;
   toggleTimer: (id: string) => void;
   reparent: (id: string, parentId: string | null) => void;
   onActivate?: (id: string) => void;
@@ -243,10 +243,9 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
 
   const handleToggleDoneSmart = React.useCallback(
     (task: Task) => {
-      const willBeDone = task.triageStatus === "Done";
-      updateStatus(task.id, willBeDone ? "Ready" : "Done");
+      toggleDone(task);
     },
-    [updateStatus],
+    [toggleDone],
   );
 
   // Listen for openTimeSheet events from the timetable

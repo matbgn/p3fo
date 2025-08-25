@@ -350,13 +350,16 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                       // For subtasks, we want them to be visible when their parent task matches the filters
                       // Subtasks themselves don't have tags, so we only apply status filtering to them
                       if (task.parentId) {
-                        // 1. Handle 'Done' tasks first and independently
-                        // If task is done, hide it.
-                        if (task.triageStatus === "Done") {
+                        // For subtasks, we only apply the status filter.
+                        if (filters.status.length > 0) {
+                          if (!filters.status.includes(task.triageStatus)) {
+                            return false;
+                          }
+                        } else {
+                          // If no statuses are selected, hide all tasks.
                           return false;
                         }
-                                             
-                        // Subtasks pass all other filters by default since they don't have tags
+                        // Subtasks pass all other filters (urgent, impact, etc.)
                         return true;
                       }
                       
@@ -442,6 +445,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                           toggleImpact={toggleImpact}
                           toggleMajorIncident={toggleMajorIncident}
                           toggleTimer={toggleTimer}
+                          toggleDone={(task) => toggleDone(task.id)}
                           reparent={reparent}
                         />
                       ))
