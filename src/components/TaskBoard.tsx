@@ -12,8 +12,8 @@ import { byId, TaskCard } from "./TaskCard";
 
 const sortTasks = (a: Task, b: Task) => {
   // 1. Done tasks at the bottom
-  if (a.done && !b.done) return 1;
-  if (!a.done && b.done) return -1;
+  if (a.triageStatus === "Done" && b.triageStatus !== "Done") return 1;
+  if (a.triageStatus !== "Done" && b.triageStatus === "Done") return -1;
 
   // 2. Blocked tasks
   const aIsBlocked = a.triageStatus === 'Blocked';
@@ -50,7 +50,6 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
     showImpact: false,
     showMajorIncident: false,
     status: ["Backlog", "Ready", "WIP", "Blocked"], // All non-Done, non-Dropped statuses by default
-    showDone: false, // Done tasks are hidden by default (negative filter)
     searchText: ""
   });
   const cardRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
@@ -172,21 +171,6 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
       updateStatus(taskId, status);
     },
     [updateStatus],
-  );
-
-  // Checkbox behavior:
-  // - If checking (was not done): set done=true and triageStatus="Done".
-  // - If unchecking (was done): set done=false and triageStatus="WIP".
-  const handleToggleDoneSmart = React.useCallback(
-    (task: Task) => {
-      const willBeDone = !task.done;
-      if (willBeDone) {
-        toggleDone(task.id);
-      } else {
-        toggleDone(task.id);
-      }
-    },
-    [toggleDone],
   );
 
   // Thread drawing
@@ -367,36 +351,15 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                       // Subtasks themselves don't have tags, so we only apply status filtering to them
                       if (task.parentId) {
                         // 1. Handle 'Done' tasks first and independently
-                        // If showDone is false and task is done, hide it.
-                        if (!filters.showDone && task.done) {
+                        // If task is done, hide it.
+                        if (task.triageStatus === "Done") {
                           return false;
                         }
-                        
-                        // 4. Apply status filter (multiselect) for non-Done tasks ONLY
-                        // This filter should NOT apply to tasks that are 'done'.
-                        if (!task.done) {
-                          // If filters.status is empty, it means "show nothing", so hide all non-Done tasks.
-                          // If filters.status is not empty, then check if the task's triageStatus is included.
-                          if (filters.status.length > 0) {
-                            if (!filters.status.includes(task.triageStatus)) {
-                              return false;
-                            }
-                          } else {
-                            return false;
-                          }
-                        }
-                        
+                                             
                         // Subtasks pass all other filters by default since they don't have tags
                         return true;
                       }
                       
-                      // For top-level tasks, apply all filters normally
-                      // 1. Handle 'Done' tasks first and independently
-                      // If showDone is false and task is done, hide it.
-                      if (!filters.showDone && task.done) {
-                        return false;
-                      }
-                      // If task is done and showDone is true, it passes the 'done' filter.
                       // 2. Apply urgent filter (applies to all tasks that passed the done filter)
                       if (filters.showUrgent && !task.urgent) {
                         return false;
@@ -478,7 +441,6 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                           toggleUrgent={toggleUrgent}
                           toggleImpact={toggleImpact}
                           toggleMajorIncident={toggleMajorIncident}
-                          toggleDone={handleToggleDoneSmart}
                           toggleTimer={toggleTimer}
                           reparent={reparent}
                         />

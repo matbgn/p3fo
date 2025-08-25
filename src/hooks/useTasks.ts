@@ -34,7 +34,6 @@ export type Category =
 export type Task = {
   id: string;
   title: string;
-  done?: boolean;
   parentId?: string | null;
   children?: string[];
   createdAt: number;
@@ -136,7 +135,6 @@ const createTask = (title: string, parentId: string | null) => {
     createdAt: Date.now(),
     parentId,
     children: [],
-    done: false,
     triageStatus: "Backlog",
     urgent: false,
     impact: false,
@@ -195,14 +193,17 @@ const reparent = (taskId: string, newParentId: string | null) => {
 };
 
 const toggleDone = (taskId: string) => {
-  updateTaskInTasks(taskId, (t) => ({ ...t, done: !t.done }));
+  updateTaskInTasks(taskId, (t) => {
+    const newStatus = t.triageStatus === "Done" ? "Ready" : "Done";
+    return { ...t, triageStatus: newStatus };
+  });
   persistTasks();
 };
 
 const updateStatus = (taskId: string, status: TriageStatus) => {
   tasks = tasks.map(t => {
     if (t.id === taskId) {
-      return { ...t, triageStatus: status, done: status === "Done" };
+      return { ...t, triageStatus: status };
     }
     return t;
   });
@@ -484,4 +485,3 @@ const updateTerminationDate = (taskId: string, terminationDate: number | undefin
     updateTerminationDate,
   };
 }
-

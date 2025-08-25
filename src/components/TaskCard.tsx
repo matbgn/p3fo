@@ -243,8 +243,8 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
 
   const handleToggleDoneSmart = React.useCallback(
     (task: Task) => {
-      const willBeDone = !task.done;
-      updateStatus(task.id, willBeDone ? "Done" : "Ready");
+      const willBeDone = task.triageStatus === "Done";
+      updateStatus(task.id, willBeDone ? "Ready" : "Done");
     },
     [updateStatus],
   );
@@ -395,20 +395,20 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
         {hasSubtasks ? (
           <Folder className="h-4 w-4 text-muted-foreground" />
         ) : (
-          <input
-            type="checkbox"
-            className="h-4 w-4 accent-orange-500"
-            checked={!!task.done}
-            onChange={(e) => {
-              e.stopPropagation();
-              handleToggleDoneSmart(task);
-            }}
-            onClick={(e) => e.stopPropagation()}
-          />
+        <input
+          type="checkbox"
+          className="h-4 w-4 accent-orange-500"
+          checked={task.triageStatus === "Done"}
+          onChange={(e) => {
+            e.stopPropagation();
+            handleToggleDoneSmart(task);
+          }}
+          onClick={(e) => e.stopPropagation()}
+        />
         )}
         <EditableTitle
           title={task.title}
-          done={task.done}
+          done={task.triageStatus === "Done"}
           onUpdateTitle={(title) => updateTitle(task.id, title)}
         />
       </div>
