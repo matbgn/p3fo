@@ -14,6 +14,9 @@ const sortTasks = (a: Task, b: Task) => {
   // 1. Done tasks at the bottom
   if (a.triageStatus === "Done" && b.triageStatus !== "Done") return 1;
   if (a.triageStatus !== "Done" && b.triageStatus === "Done") return -1;
+  if (a.triageStatus === "Done" && b.triageStatus === "Done") {
+    return (b.terminationDate ?? b.createdAt) - (a.terminationDate ?? a.createdAt);
+  }
 
   // 2. Blocked tasks
   const aIsBlocked = a.triageStatus === 'Blocked';

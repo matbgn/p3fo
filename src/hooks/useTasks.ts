@@ -217,7 +217,11 @@ const updateStatus = (taskId: string, status: TriageStatus) => {
 
   tasks = tasks.map(t => {
     if (tasksToUpdate.has(t.id)) {
-      return { ...t, triageStatus: status };
+      return {
+        ...t,
+        triageStatus: status,
+        terminationDate: status === 'Done' ? Date.now() : undefined
+      };
     }
     return t;
   });

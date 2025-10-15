@@ -289,6 +289,11 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
     // Order: parents first, then children by recency
     for (const s of STATUSES) {
       acc[s] = acc[s].sort((a, b) => {
+        if (s === 'Done') {
+          const aTermination = a.task.terminationDate ?? a.task.createdAt;
+          const bTermination = b.task.terminationDate ?? b.task.createdAt;
+          return bTermination - aTermination;
+        }
         const at = a.kind === "parent" ? 0 : 1;
         const bt = b.kind === "parent" ? 0 : 1;
         if (at !== bt) return at - bt;
