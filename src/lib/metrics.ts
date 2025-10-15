@@ -5,7 +5,7 @@ export const getCompletedHighImpactTasks = (tasks: Task[], weeks: number = 4): T
   const cutoffDate = Date.now() - (weeks * 7 * 24 * 60 * 60 * 1000);
   
   return tasks.filter(task => 
-    task.done && 
+    task.triageStatus === 'Done' &&
     task.impact === true && 
     task.createdAt >= cutoffDate
   );

@@ -8,7 +8,7 @@ if (typeof crypto.randomUUID !== 'function') {
       const r = Math.random() * 16 | 0;
       const v = c === 'x' ? r : (r & 0x3 | 0x8);
       return v.toString(16);
-    });
+    }) as `${string}-${string}-${string}-${string}-${string}`;
   };
 }
 
@@ -61,15 +61,18 @@ const loadTasks = () => {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (raw) {
     try {
-      const parsed: Task[] = JSON.parse(raw).map((t: any) => ({
-        ...t,
-        triageStatus: (t.triageStatus as TriageStatus) || "Backlog",
-        urgent: t.urgent || false,
-        impact: t.impact || false,
-        majorIncident: t.majorIncident || false,
-        difficulty: t.difficulty || 1,
-        category: t.category || undefined,
-      }));
+      const parsed: Task[] = JSON.parse(raw).map((t: any) => {
+        const { done, ...rest } = t;
+        return {
+          ...rest,
+          triageStatus: (t.triageStatus as TriageStatus) || "Backlog",
+          urgent: t.urgent || false,
+          impact: t.impact || false,
+          majorIncident: t.majorIncident || false,
+          difficulty: t.difficulty || 1,
+          category: t.category || undefined,
+        };
+      });
       tasks = parsed;
     } catch (error) {
       console.error("Error parsing tasks from localStorage:", error);
