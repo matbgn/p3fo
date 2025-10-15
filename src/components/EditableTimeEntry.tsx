@@ -1,0 +1,239 @@
+import React, { useState } from 'react';
+import { Temporal } from '@js-temporal/polyfill';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { TableRow, TableCell } from "@/components/ui/table";
+import { Trash2, Pencil, ArrowRight } from "lucide-react";
+import { TaskTag } from "./TaskTag";
+
+// Helper function to convert Unix timestamp to Europe/Zurich time string
+export const formatTimeWithTemporal = (ms: number): string => {
+  if (ms <= 0) return 'Invalid Date';
+  
+  try {
+    const instant = Temporal.Instant.fromEpochMilliseconds(ms);
+    const zurich = instant.toZonedDateTimeISO('Europe/Zurich');
+    const dateString = zurich.toPlainDate().toString(); // YYYY-MM-DD
+    const timeString = zurich.toPlainTime().toString({ smallestUnit: 'second' }); // HH:MM:SS
+
+    // Get timezone abbreviation
+    const timeZoneAbbr = zurich.toLocaleString('en-US', { timeZoneName: 'short' }).split(' ').pop();
+
+    return `${dateString} ${timeString} ${timeZoneAbbr}`;
+  } catch (error) {
+    console.error('Error formatting time:', error);
+    return 'Invalid Date';
+  }
+};
+
+// Helper function to format duration
+export const formatDuration = (ms: number) => {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    return `${String(hours).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+};
+
+// Helper function to convert Unix timestamp to Temporal.Instant in Europe/Zurich
+const timestampToZurichInstant = (timestamp: number): Temporal.Instant => {
+  return Temporal.Instant.fromEpochMilliseconds(timestamp);
+};
+
+// Helper function to convert Temporal.Instant to Europe/Zurich PlainDateTime
+const instantToZurichPlainDateTime = (instant: Temporal.Instant): Temporal.PlainDateTime => {
+  const zurich = instant.toZonedDateTimeISO('Europe/Zurich');
+  return zurich.toPlainDateTime();
+};
+
+// Helper function to convert Europe/Zurich PlainDateTime to Unix timestamp
+const zurichPlainDateTimeToTimestamp = (plainDateTime: Temporal.PlainDateTime): number => {
+  const zurich = plainDateTime.toZonedDateTime('Europe/Zurich');
+  return zurich.epochMilliseconds;
+};
+
+// Editable time entry component
+export const EditableTimeEntry: React.FC<{
+  entry: {
+    taskId: string;
+    taskTitle: string;
+    taskCategory: string | undefined;
+    taskParentId: string | undefined;
+    index: number;
+    startTime: number;
+    endTime: number;
+  };
+  taskMap: Record<string, any>;
+  onUpdate: (taskId: string, entryIndex: number, entry: { startTime: number; endTime: number }) => void;
+  onDelete: (taskId: string, entryIndex: number) => void;
+  onJumpToTask?: (taskId: string) => void;
+  children?: React.ReactNode;
+}> = ({ entry, taskMap, onUpdate, onDelete, onJumpToTask, children }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editStartTime, setEditStartTime] = useState('');
+  const [editEndTime, setEditEndTime] = useState('');
+  
+  const startInstant = timestampToZurichInstant(entry.startTime);
+  const startPlainDateTime = instantToZurichPlainDateTime(startInstant);
+  
+  const endInstant = entry.endTime > 0 
+    ? timestampToZurichInstant(entry.endTime) 
+    : null;
+  const endPlainDateTime = endInstant 
+    ? instantToZurichPlainDateTime(endInstant) 
+    : null;
+
+  // Calculate duration
+  const duration = entry.endTime > 0 
+    ? entry.endTime - entry.startTime 
+    : Date.now() - entry.startTime;
+
+  const handleEdit = () => {
+    setEditStartTime(startPlainDateTime.toString({ smallestUnit: 'second' }).slice(0, 19));
+    setEditEndTime(endPlainDateTime ? endPlainDateTime.toString({ smallestUnit: 'second' }).slice(0, 19) : '');
+    setIsEditing(true);
+  };
+
+  // Handle double-click to enter edit mode
+  const handleDoubleClick = () => {
+    handleEdit();
+  };
+
+  const handleSave = () => {
+    try {
+      const [startDatePart, startTimePart] = editStartTime.split('T');
+      const [startYear, startMonth, startDay] = startDatePart.split('-').map(Number);
+      const [startHour, startMinute, startSecond] = startTimePart.split(':').map(Number);
+      
+      const startPlainDateTime = Temporal.PlainDateTime.from({
+        year: startYear, month: startMonth, day: startDay, 
+        hour: startHour, minute: startMinute, second: startSecond
+      });
+      
+      const newStartTime = zurichPlainDateTimeToTimestamp(startPlainDateTime);
+      
+      let newEndTime = 0;
+      if (editEndTime) {
+        const [endDatePart, endTimePart] = editEndTime.split('T');
+        const [endYear, endMonth, endDay] = endDatePart.split('-').map(Number);
+        const [endHour, endMinute, endSecond] = endTimePart.split(':').map(Number);
+        
+        const endPlainDateTime = Temporal.PlainDateTime.from({
+          year: endYear, month: endMonth, day: endDay, 
+          hour: endHour, minute: endMinute, second: endSecond
+        });
+        
+        newEndTime = zurichPlainDateTimeToTimestamp(endPlainDateTime);
+      }
+      
+      onUpdate(entry.taskId, entry.index, { startTime: newStartTime, endTime: newEndTime });
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Error updating time entry:', error);
+    }
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+  };
+
+  const handleDelete = () => {
+    onDelete(entry.taskId, entry.index);
+  };
+
+  if (isEditing) {
+    return (
+      <TableRow>
+        <TableCell>{entry.taskTitle}</TableCell>
+        <TableCell>{entry.taskCategory || "Uncategorized"}</TableCell>
+        <TableCell>
+          <Input
+            type="datetime-local"
+            step="1"
+            value={editStartTime}
+            onChange={(e) => setEditStartTime(e.target.value)}
+          />
+        </TableCell>
+        <TableCell>
+          <Input
+            type="datetime-local"
+            step="1"
+            value={editEndTime}
+            onChange={(e) => setEditEndTime(e.target.value)}
+          />
+        </TableCell>
+        <TableCell className="flex gap-2">
+          <Button size="sm" onClick={handleSave}>Save</Button>
+          <Button size="sm" variant="outline" onClick={handleCancel}>Cancel</Button>
+        </TableCell>
+      </TableRow>
+    );
+  }
+
+  const task = taskMap[entry.taskId];
+  let indentLevel = 0;
+  let current = taskMap[entry.taskId];
+  const topParentId = entry.taskParentId || entry.taskId;
+  
+  while (current && current.id !== topParentId) {
+    if (current.parentId) {
+      indentLevel++;
+      current = taskMap[current.parentId];
+    } else {
+      break;
+    }
+  }
+
+  return (
+    <TableRow 
+      className="hover:bg-muted/50"
+      onDoubleClick={handleDoubleClick}
+    >
+      <TableCell style={{ paddingLeft: indentLevel > 0 ? `${Math.min(8 + indentLevel * 4, 20)}px` : undefined }}>
+        <div className="flex items-center gap-2">
+          {indentLevel > 0 && <span className="text-muted-foreground">↳ </span>}
+          {entry.taskTitle}
+          <TaskTag
+            impact={task?.impact}
+            urgent={task?.urgent}
+            majorIncident={task?.majorIncident}
+          />
+        </div>
+        {children}
+      </TableCell>
+      <TableCell>{entry.taskCategory || "Uncategorized"}</TableCell>
+      <TableCell>{formatTimeWithTemporal(entry.startTime)}</TableCell>
+      <TableCell>{entry.endTime > 0 ? formatTimeWithTemporal(entry.endTime) : 'Running'}</TableCell>
+      <TableCell className="flex items-center justify-between">
+        <span>{formatDuration(duration)}</span>
+        <div className="flex gap-1">
+          {onJumpToTask && (
+            <Button 
+              size="sm" 
+              variant="outline" 
+              className="h-6 w-6 p-0"
+              onClick={() => onJumpToTask(entry.taskId)}
+            >
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          )}
+          <Button 
+            size="sm" 
+            variant="outline" 
+            className="h-6 w-6 p-0"
+            onClick={handleEdit}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button 
+            size="sm" 
+            variant="destructive" 
+            className="h-6 w-6 p-0"
+            onClick={handleDelete}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+};

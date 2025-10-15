@@ -12,11 +12,16 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { Calendar as CalendarIcon, Trash2, Pencil, ArrowRight } from "lucide-react";
+import { Calendar as CalendarIcon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Temporal } from '@js-temporal/polyfill';
 import { useNavigate } from "react-router-dom";
 import { TaskTag } from "./TaskTag";
+import { ChronologicalView } from "./ChronologicalView";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { EditableTimeEntry, formatDuration } from "./EditableTimeEntry";
+
+type TimetableView = "categorical" | "chronological";
 
 const PREDEFINED_RANGES = [
   { label: "Today", value: "today" },
@@ -28,247 +33,12 @@ const PREDEFINED_RANGES = [
   { label: "Year to Date", value: "ytd" },
 ];
 
-// Helper function to convert Unix timestamp to Europe/Zurich time string
-const formatTimeWithTemporal = (ms: number): string => {
-  if (ms <= 0) return 'Invalid Date';
-  
-  try {
-    // Create an Instant from the timestamp
-    const instant = Temporal.Instant.fromEpochMilliseconds(ms);
-    // Convert to Zurich timezone
-    const zurich = instant.toZonedDateTimeISO('Europe/Zurich');
-    // Format as YYYY-MM-DD HH:MM:SS TZ HH:MM:SS
-    const dateString = zurich.toLocaleString('sv-SE'); // YYYY-MM-DD
-    const timeString = zurich.toPlainTime().toString({ smallestUnit: 'second' }); // HH:MM:SS
-    // Get timezone abbreviation
-    const timeZoneParts = zurich.toLocaleString('en-US', { timeZoneName: 'short' }).split(' ');
-    const timeZoneString = timeZoneParts.length > 1 ? timeZoneParts[timeZoneParts.length - 1] : 'CET';
-    return `${dateString} ${timeString} ${timeZoneString} ${timeString}`;
-  } catch (error) {
-    console.error('Error formatting time:', error);
-    return 'Invalid Date';
-  }
-};
-
-// Helper function to convert Unix timestamp to Temporal.Instant in Europe/Zurich
-const timestampToZurichInstant = (timestamp: number): Temporal.Instant => {
-  return Temporal.Instant.fromEpochMilliseconds(timestamp);
-};
-
-// Helper function to convert Temporal.Instant to Europe/Zurich PlainDateTime
-const instantToZurichPlainDateTime = (instant: Temporal.Instant): Temporal.PlainDateTime => {
-  const zurich = instant.toZonedDateTimeISO('Europe/Zurich');
-  return zurich.toPlainDateTime();
-};
-
-// Helper function to convert Europe/Zurich PlainDateTime to Unix timestamp
-const zurichPlainDateTimeToTimestamp = (plainDateTime: Temporal.PlainDateTime): number => {
-  const zurich = plainDateTime.toZonedDateTime('Europe/Zurich');
-  return zurich.epochMilliseconds;
-};
-
-// Editable time entry component
-const EditableTimeEntry: React.FC<{
-  entry: {
-    taskId: string;
-    taskTitle: string;
-    taskCategory: string | undefined;
-    taskParentId: string | undefined;
-    index: number;
-    startTime: number;
-    endTime: number;
-  };
-  taskMap: Record<string, any>;
-  onUpdate: (taskId: string, entryIndex: number, entry: { startTime: number; endTime: number }) => void;
-  onDelete: (taskId: string, entryIndex: number) => void;
-  onJumpToTask?: (taskId: string) => void;
-}> = ({ entry, taskMap, onUpdate, onDelete, onJumpToTask }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editStartTime, setEditStartTime] = useState('');
-  const [editEndTime, setEditEndTime] = useState('');
-  
-  const startInstant = timestampToZurichInstant(entry.startTime);
-  const startPlainDateTime = instantToZurichPlainDateTime(startInstant);
-  
-  const endInstant = entry.endTime > 0 
-    ? timestampToZurichInstant(entry.endTime) 
-    : null;
-  const endPlainDateTime = endInstant 
-    ? instantToZurichPlainDateTime(endInstant) 
-    : null;
-
-  // Calculate duration
-  const duration = entry.endTime > 0 
-    ? entry.endTime - entry.startTime 
-    : Date.now() - entry.startTime;
-
-  const formatDuration = (ms: number) => {
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    return `${String(hours).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
-  };
-
-  const handleEdit = () => {
-    setEditStartTime(startPlainDateTime.toString({ smallestUnit: 'second' }).slice(0, 19));
-    setEditEndTime(endPlainDateTime ? endPlainDateTime.toString({ smallestUnit: 'second' }).slice(0, 19) : '');
-    setIsEditing(true);
-  };
-
-  // Handle double-click to enter edit mode
-  const handleDoubleClick = () => {
-    handleEdit();
-  };
-
-  const handleSave = () => {
-    try {
-      // Parse start time
-      const [startDatePart, startTimePart] = editStartTime.split('T');
-      const [startYear, startMonth, startDay] = startDatePart.split('-').map(Number);
-      const [startHour, startMinute, startSecond] = startTimePart.split(':').map(Number);
-      
-      // Create a PlainDateTime in Zurich timezone
-      const startPlainDateTime = Temporal.PlainDateTime.from({
-        year: startYear, month: startMonth, day: startDay, 
-        hour: startHour, minute: startMinute, second: startSecond
-      });
-      
-      const newStartTime = zurichPlainDateTimeToTimestamp(startPlainDateTime);
-      
-      let newEndTime = 0;
-      if (editEndTime) {
-        // Parse end time
-        const [endDatePart, endTimePart] = editEndTime.split('T');
-        const [endYear, endMonth, endDay] = endDatePart.split('-').map(Number);
-        const [endHour, endMinute, endSecond] = endTimePart.split(':').map(Number);
-        
-        // Create a PlainDateTime in Zurich timezone
-        const endPlainDateTime = Temporal.PlainDateTime.from({
-          year: endYear, month: endMonth, day: endDay, 
-          hour: endHour, minute: endMinute, second: endSecond
-        });
-        
-        newEndTime = zurichPlainDateTimeToTimestamp(endPlainDateTime);
-      }
-      
-      onUpdate(entry.taskId, entry.index, { startTime: newStartTime, endTime: newEndTime });
-      setIsEditing(false);
-    } catch (error) {
-      console.error('Error updating time entry:', error);
-    }
-  };
-
-  const handleCancel = () => {
-    setIsEditing(false);
-  };
-
-  const handleDelete = () => {
-    onDelete(entry.taskId, entry.index);
-  };
-
-  if (isEditing) {
-    return (
-      <TableRow>
-        <TableCell>{entry.taskTitle}</TableCell>
-        <TableCell>{entry.taskCategory || "Uncategorized"}</TableCell>
-        <TableCell>
-          <Input
-            type="datetime-local"
-            step="1"
-            value={editStartTime}
-            onChange={(e) => setEditStartTime(e.target.value)}
-          />
-        </TableCell>
-        <TableCell>
-          <Input
-            type="datetime-local"
-            step="1"
-            value={editEndTime}
-            onChange={(e) => setEditEndTime(e.target.value)}
-          />
-        </TableCell>
-        <TableCell className="flex gap-2">
-          <Button size="sm" onClick={handleSave}>Save</Button>
-          <Button size="sm" variant="outline" onClick={handleCancel}>Cancel</Button>
-        </TableCell>
-      </TableRow>
-    );
-  }
-
-  // Calculate indent level for nested tasks
-  const task = taskMap[entry.taskId];
-  let indentLevel = 0;
-  let current = taskMap[entry.taskId];
-  const topParentId = entry.taskParentId || entry.taskId;
-  
-  while (current && current.id !== topParentId) {
-    if (current.parentId) {
-      indentLevel++;
-      current = taskMap[current.parentId];
-    } else {
-      break;
-    }
-  }
-
-  return (
-    <TableRow 
-      className="hover:bg-muted/50"
-      onDoubleClick={handleDoubleClick}
-    >
-      <TableCell style={{ paddingLeft: indentLevel > 0 ? `${Math.min(8 + indentLevel * 4, 20)}px` : undefined }}>
-        <div className="flex items-center gap-2">
-          {indentLevel > 0 && <span className="text-muted-foreground">↳ </span>}
-          {entry.taskTitle}
-          <TaskTag 
-            impact={task?.impact} 
-            urgent={task?.urgent} 
-            majorIncident={task?.majorIncident} 
-          />
-        </div>
-      </TableCell>
-      <TableCell>{entry.taskCategory || "Uncategorized"}</TableCell>
-      <TableCell>{formatTimeWithTemporal(entry.startTime)}</TableCell>
-      <TableCell>{entry.endTime > 0 ? formatTimeWithTemporal(entry.endTime) : 'Running'}</TableCell>
-      <TableCell className="flex items-center justify-between">
-        <span>{formatDuration(duration)}</span>
-        <div className="flex gap-1">
-          {onJumpToTask && (
-            <Button 
-              size="sm" 
-              variant="outline" 
-              className="h-6 w-6 p-0"
-              onClick={() => onJumpToTask(entry.taskId)}
-            >
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          )}
-          <Button 
-            size="sm" 
-            variant="outline" 
-            className="h-6 w-6 p-0"
-            onClick={handleEdit}
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
-          <Button 
-            size="sm" 
-            variant="destructive" 
-            className="h-6 w-6 p-0"
-            onClick={handleDelete}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      </TableCell>
-    </TableRow>
-  );
-};
-
 export const Timetable: React.FC<{
   onJumpToTask?: (taskId: string) => void;
 }> = ({ onJumpToTask }) => {
   const navigate = useNavigate();
   const { tasks, updateTimeEntry, deleteTimeEntry } = useTasks();
+  const [view, setView] = useState<TimetableView>("categorical");
 
   // Create a map of task IDs to task objects for easy lookup
   const taskMap = React.useMemo(() => {
@@ -541,7 +311,17 @@ export const Timetable: React.FC<{
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Timetable</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Timetable</h1>
+        <ToggleGroup type="single" value={view} onValueChange={(value) => setView(value as TimetableView)} aria-label="Timetable View">
+          <ToggleGroupItem value="categorical" aria-label="Categorical View">
+            Categorical
+          </ToggleGroupItem>
+          <ToggleGroupItem value="chronological" aria-label="Chronological View">
+            Chronological
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
       
       {/* Filters */}
       <div className="flex flex-wrap gap-4 items-end">
@@ -711,107 +491,120 @@ export const Timetable: React.FC<{
       {/* Detailed timetable */}
       <div className="mt-6">
         <h2 className="text-lg font-semibold mb-2">Detailed Timetable</h2>
-        {timerEntries.length === 0 ? (
-          <p>No timer data matches the selected filters.</p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Task</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Start Time</TableHead>
-                <TableHead>End Time</TableHead>
-                <TableHead>Duration</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {Object.entries(entriesByTopParentTask).map(([topParentId, entries]) => {
-                // Calculate grand total for this top parent task group
-                const groupTotal = entries.reduce((acc, entry) => 
-                  acc + (entry.endTime > 0 ? entry.endTime - entry.startTime : Date.now() - entry.startTime), 0);
-                
-                // Get top parent task info
-                const topParentTask = taskMap[topParentId];
-                
-                // Group entries by their immediate parent for proper nesting
-                const entriesByImmediateParent = entries.reduce((acc, entry) => {
-                  // The immediate parent for grouping is either the task's actual parent, or the task itself if it's a top-level task in this group
-                  const immediateParentId = entry.taskParentId || entry.taskId;
-                  
-                  if (!acc[immediateParentId]) {
-                    acc[immediateParentId] = [];
-                  }
-                  acc[immediateParentId].push(entry);
-                  return acc;
-                }, {} as Record<string, typeof entries>);
-                
-                return (
-                  <React.Fragment key={topParentId}>
-                    {/* Top parent task row with grand total */}
-                    <TableRow className="bg-muted">
-                      <TableCell className="font-bold">
-                        <div className="flex items-center gap-2">
-                          {topParentTask?.title || "Unknown Task"} (Grand Total)
-                          <TaskTag 
-                            impact={topParentTask?.impact} 
-                            urgent={topParentTask?.urgent} 
-                            majorIncident={topParentTask?.majorIncident} 
-                          />
-                        </div>
-                      </TableCell>
-                      <TableCell colSpan={3}></TableCell>
-                      <TableCell className="font-bold">{formatDuration(groupTotal)}</TableCell>
-                    </TableRow>
+        {view === 'categorical' && (
+          <div>
+            {timerEntries.length === 0 ? (
+              <p>No timer data matches the selected filters.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Task</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Start Time</TableHead>
+                    <TableHead>End Time</TableHead>
+                    <TableHead>Duration</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Object.entries(entriesByTopParentTask).map(([topParentId, entries]) => {
+                    // Calculate grand total for this top parent task group
+                    const groupTotal = entries.reduce((acc, entry) =>
+                      acc + (entry.endTime > 0 ? entry.endTime - entry.startTime : Date.now() - entry.startTime), 0);
                     
-                    {/* Individual entries grouped by immediate parent */}
-                    {Object.entries(entriesByImmediateParent).map(([parentId, parentEntries]) => {
-                      // If this is not the top parent, show it as a subtask group
-                      const parentTask = taskMap[parentId];
-                      const isSubtaskGroup = parentId !== topParentId;
+                    // Get top parent task info
+                    const topParentTask = taskMap[topParentId];
+                    
+                    // Group entries by their immediate parent for proper nesting
+                    const entriesByImmediateParent = entries.reduce((acc, entry) => {
+                      // The immediate parent for grouping is either the task's actual parent, or the task itself if it's a top-level task in this group
+                      const immediateParentId = entry.taskParentId || entry.taskId;
                       
-                      return (
-                        <React.Fragment key={parentId}>
-                          {/* Subtask group header */}
-                          {isSubtaskGroup && parentTask && (
-                            <TableRow className="bg-secondary/50">
-                              <TableCell className="pl-6 font-medium">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-muted-foreground">↳ </span>
-                                  {parentTask.title}
-                                  <TaskTag 
-                                    impact={parentTask.impact} 
-                                    urgent={parentTask.urgent} 
-                                    majorIncident={parentTask.majorIncident} 
-                                  />
-                                </div>
-                              </TableCell>
-                              <TableCell colSpan={3}></TableCell>
-                              <TableCell className="font-medium">
-                                {formatDuration(parentEntries.reduce((acc, entry) => 
-                                  acc + (entry.endTime > 0 ? entry.endTime - entry.startTime : Date.now() - entry.startTime), 0))}
-                              </TableCell>
-                            </TableRow>
-                          )}
+                      if (!acc[immediateParentId]) {
+                        acc[immediateParentId] = [];
+                      }
+                      acc[immediateParentId].push(entry);
+                      return acc;
+                    }, {} as Record<string, typeof entries>);
+                    
+                    return (
+                      <React.Fragment key={topParentId}>
+                        {/* Top parent task row with grand total */}
+                        <TableRow className="bg-muted">
+                          <TableCell className="font-bold">
+                            <div className="flex items-center gap-2">
+                              {topParentTask?.title || "Unknown Task"} (Grand Total)
+                              <TaskTag
+                                impact={topParentTask?.impact}
+                                urgent={topParentTask?.urgent}
+                                majorIncident={topParentTask?.majorIncident}
+                              />
+                            </div>
+                          </TableCell>
+                          <TableCell colSpan={3}></TableCell>
+                          <TableCell className="font-bold">{formatDuration(groupTotal)}</TableCell>
+                        </TableRow>
+                        
+                        {/* Individual entries grouped by immediate parent */}
+                        {Object.entries(entriesByImmediateParent).map(([parentId, parentEntries]) => {
+                          // If this is not the top parent, show it as a subtask group
+                          const parentTask = taskMap[parentId];
+                          const isSubtaskGroup = parentId !== topParentId;
                           
-                          {/* Individual entries */}
-                          {parentEntries.map((entry) => (
-                            <EditableTimeEntry
-                              key={`${entry.taskId}-${entry.index}`}
-                              entry={entry}
-                              taskMap={taskMap}
-                              onUpdate={updateTimeEntry}
-                              onDelete={deleteTimeEntry}
-                              onJumpToTask={onJumpToTask}
-                            />
-                          ))}
-                        </React.Fragment>
-                      );
-                    })}
-                  </React.Fragment>
-                );
-              })}
-            </TableBody>
-          </Table>
+                          return (
+                            <React.Fragment key={parentId}>
+                              {/* Subtask group header */}
+                              {isSubtaskGroup && parentTask && (
+                                <TableRow className="bg-secondary/50">
+                                  <TableCell className="pl-6 font-medium">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-muted-foreground">↳ </span>
+                                      {parentTask.title}
+                                      <TaskTag
+                                        impact={parentTask.impact}
+                                        urgent={parentTask.urgent}
+                                        majorIncident={parentTask.majorIncident}
+                                      />
+                                    </div>
+                                  </TableCell>
+                                  <TableCell colSpan={3}></TableCell>
+                                  <TableCell className="font-medium">
+                                    {formatDuration(parentEntries.reduce((acc, entry) =>
+                                      acc + (entry.endTime > 0 ? entry.endTime - entry.startTime : Date.now() - entry.startTime), 0))}
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                              
+                              {/* Individual entries */}
+                              {parentEntries.map((entry) => (
+                                <EditableTimeEntry
+                                  key={`${entry.taskId}-${entry.index}`}
+                                  entry={entry}
+                                  taskMap={taskMap}
+                                  onUpdate={updateTimeEntry}
+                                  onDelete={deleteTimeEntry}
+                                  onJumpToTask={onJumpToTask}
+                                />
+                              ))}
+                            </React.Fragment>
+                          );
+                        })}
+                      </React.Fragment>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        )}
+        {view === 'chronological' && (
+          <ChronologicalView
+            timerEntries={timerEntries}
+            taskMap={taskMap}
+            onUpdate={updateTimeEntry}
+            onDelete={deleteTimeEntry}
+            onJumpToTask={onJumpToTask}
+          />
         )}
       </div>
     </div>
