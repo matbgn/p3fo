@@ -4,16 +4,16 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 
 const surveyQuestions = [
-  "Documentation",
+  "Documentation & access to information",
   "Deep work/focus time",
   "Automation processes",
-  "Change confidence",
+  "Change confidence (Impact & Effectiveness)",
   "Incident responses",
-  "Local tool experience",
+  "Local tools experience",
   "Planning processes",
   "Cross-team dependencies",
-  "Ease of deliver",
-  "Knowledge/Code maintainability",
+  "Ease of Delivery (difficulty to implement change)",
+  "Maintainability of delivered assets",
 ];
 
 const satisfactionLevels = [
