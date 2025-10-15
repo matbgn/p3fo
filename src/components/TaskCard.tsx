@@ -2,7 +2,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { GripVertical, Folder, AlertTriangle, CircleDot, Trash2, Clock2, Play, Pause, ChevronDown, ChevronRight, Flame } from "lucide-react";
+import { GripVertical, Folder, AlertTriangle, CircleDot, Trash2, Clock2, Play, Pause, ChevronDown, ChevronRight, Flame, FileText } from "lucide-react";
 import { TaskStatusSelect } from "./TaskStatusSelect";
 import { useTasks, Task, Category, TriageStatus } from "@/hooks/useTasks";
 import { Badge } from "@/components/ui/badge";
@@ -186,6 +186,7 @@ interface TaskCardProps {
   updateDifficulty: (id: string, difficulty: 0.5 | 1 | 2 | 3 | 5 | 8) => void;
   updateCategory: (id: string, category: Category) => void;
   updateTitle: (id: string, title: string) => void;
+  updateComment: (id: string, comment: string) => void;
   deleteTask: (id: string) => void;
   duplicateTaskStructure: (id: string) => void;
   toggleUrgent: (id: string) => void;
@@ -226,10 +227,18 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
     open,
     onToggleOpen,
     onFocusOnTask,
+    updateComment,
   },
   ref
 ) => {
   const [isTimeSheetOpen, setIsTimeSheetOpen] = React.useState(false);
+  const [isCommentModalOpen, setIsCommentModalOpen] = React.useState(false);
+  const [commentText, setCommentText] = React.useState(task.comment || "");
+
+  React.useEffect(() => {
+    setCommentText(task.comment || "");
+  }, [task.comment]);
+
   const { calculateTotalTime, calculateTotalDifficulty } = useTasks();
   const hasSubtasks = task.children && task.children.length > 0;
   const canHaveTimer = !hasSubtasks; // Only tasks without children can have timers
@@ -373,6 +382,53 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
                 </DialogHeader>
                 <div className="flex-grow overflow-y-auto px-6 pb-6">
                   <TimeSheet taskId={task.id} />
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={isCommentModalOpen} onOpenChange={setIsCommentModalOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 w-6 p-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsCommentModalOpen(true);
+                  }}
+                >
+                  <FileText className={`h-4 w-4 ${task.comment ? "text-blue-500" : "text-gray-400"}`} />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md" aria-describedby={undefined}>
+                <DialogHeader>
+                  <DialogTitle>Edit Comment - {task.title}</DialogTitle>
+                  <DialogDescription className="sr-only">
+                    Edit comment for task: {task.title}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <label htmlFor="comment" className="sr-only">Comment</label>
+                    <textarea
+                      id="comment"
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      placeholder="Add a comment..."
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      updateComment(task.id, commentText);
+                      setIsCommentModalOpen(false);
+                    }}
+                  >
+                    Save Comment
+                  </Button>
                 </div>
               </DialogContent>
             </Dialog>
