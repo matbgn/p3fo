@@ -5,6 +5,9 @@ import { Input } from "@/components/ui/input";
 import { TableRow, TableCell } from "@/components/ui/table";
 import { Trash2, Pencil, ArrowRight } from "lucide-react";
 import { TaskTag } from "./TaskTag";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { CATEGORIES } from "../data/categories";
+import { Category } from "@/hooks/useTasks";
 
 // Helper function to convert Unix timestamp to Europe/Zurich time string
 export const formatTimeWithTemporal = (ms: number): string => {
@@ -63,14 +66,16 @@ export const EditableTimeEntry: React.FC<{
     endTime: number;
   };
   taskMap: Record<string, any>;
-  onUpdate: (taskId: string, entryIndex: number, entry: { startTime: number; endTime: number }) => void;
+  onUpdateTimeEntry: (taskId: string, entryIndex: number, entry: { startTime: number; endTime: number }) => void;
+  onUpdateTaskCategory: (taskId: string, category: string | undefined) => void;
   onDelete: (taskId: string, entryIndex: number) => void;
   onJumpToTask?: (taskId: string) => void;
   children?: React.ReactNode;
-}> = ({ entry, taskMap, onUpdate, onDelete, onJumpToTask, children }) => {
+}> = ({ entry, taskMap, onUpdateTimeEntry, onUpdateTaskCategory, onDelete, onJumpToTask, children }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editStartTime, setEditStartTime] = useState('');
   const [editEndTime, setEditEndTime] = useState('');
+  const [editTaskCategory, setEditTaskCategory] = useState<string>("Uncategorized");
   
   const startInstant = timestampToZurichInstant(entry.startTime);
   const startPlainDateTime = instantToZurichPlainDateTime(startInstant);
@@ -90,6 +95,7 @@ export const EditableTimeEntry: React.FC<{
   const handleEdit = () => {
     setEditStartTime(startPlainDateTime.toString({ smallestUnit: 'second' }).slice(0, 19));
     setEditEndTime(endPlainDateTime ? endPlainDateTime.toString({ smallestUnit: 'second' }).slice(0, 19) : '');
+    setEditTaskCategory(entry.taskCategory || "Uncategorized");
     setIsEditing(true);
   };
 
@@ -125,7 +131,8 @@ export const EditableTimeEntry: React.FC<{
         newEndTime = zurichPlainDateTimeToTimestamp(endPlainDateTime);
       }
       
-      onUpdate(entry.taskId, entry.index, { startTime: newStartTime, endTime: newEndTime });
+      onUpdateTimeEntry(entry.taskId, entry.index, { startTime: newStartTime, endTime: newEndTime });
+      onUpdateTaskCategory(entry.taskId, editTaskCategory === "Uncategorized" ? undefined : editTaskCategory);
       setIsEditing(false);
     } catch (error) {
       console.error('Error updating time entry:', error);
@@ -144,7 +151,21 @@ export const EditableTimeEntry: React.FC<{
     return (
       <TableRow>
         <TableCell>{entry.taskTitle}</TableCell>
-        <TableCell>{entry.taskCategory || "Uncategorized"}</TableCell>
+        <TableCell>
+          <Select onValueChange={(value) => setEditTaskCategory(value)} value={editTaskCategory}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Select a category" />
+            </SelectTrigger>
+            <SelectContent>
+              {CATEGORIES.map((category) => (
+                <SelectItem key={category} value={category}>
+                  {category}
+                </SelectItem>
+              ))}
+              <SelectItem value="Uncategorized">Uncategorized</SelectItem>
+            </SelectContent>
+          </Select>
+        </TableCell>
         <TableCell>
           <Input
             type="datetime-local"

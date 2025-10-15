@@ -39,7 +39,7 @@ export const Timetable: React.FC<{
   onJumpToTask?: (taskId: string) => void;
 }> = ({ onJumpToTask }) => {
   const navigate = useNavigate();
-  const { tasks, updateTimeEntry, deleteTimeEntry } = useTasks();
+  const { tasks, updateTimeEntry, deleteTimeEntry, updateCategory } = useTasks();
   const { settings } = useSettings();
   const [view, setView] = useState<TimetableView>("categorical");
   const [timeChunk, setTimeChunk] = useState<TimeChunk>("all");
@@ -628,7 +628,8 @@ export const Timetable: React.FC<{
                                   key={`${entry.taskId}-${entry.index}`}
                                   entry={entry}
                                   taskMap={taskMap}
-                                  onUpdate={updateTimeEntry}
+                                  onUpdateTimeEntry={updateTimeEntry}
+                                  onUpdateTaskCategory={updateCategory}
                                   onDelete={deleteTimeEntry}
                                   onJumpToTask={onJumpToTask}
                                 />
