@@ -53,7 +53,8 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
     showImpact: false,
     showMajorIncident: false,
     status: ["Backlog", "Ready", "WIP", "Blocked"], // All non-Done, non-Dropped statuses by default
-    searchText: ""
+    searchText: "",
+    difficulty: []
   });
   const cardRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -378,6 +379,11 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
 
                       // 4. Apply major incident filter (applies to all tasks that passed the previous filters)
                       if (filters.showMajorIncident && !task.majorIncident) {
+                        return false;
+                      }
+
+                      // Apply difficulty filter
+                      if (filters.difficulty.length > 0 && !filters.difficulty.includes(task.difficulty)) {
                         return false;
                       }
 

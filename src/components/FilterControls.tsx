@@ -13,6 +13,7 @@ export type Filters = {
   status: TriageStatus[];
   showDone?: boolean;
   searchText?: string;
+  difficulty: number[];
 };
 
 interface FilterControlsProps {
@@ -36,7 +37,8 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
       showMajorIncident: false,
       status: [],
       showDone: false,
-      searchText: ""
+      searchText: "",
+      difficulty: []
     };
     
     // If defaultFilters is provided, use it to override the base reset filters
@@ -116,6 +118,23 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
           <Label htmlFor="show-done">Done</Label>
         </div>
       )}
+      <div className="flex items-center space-x-2">
+        <MultiSelect
+          options={[
+            { value: "0.5", label: "0.5" },
+            { value: "1", label: "1" },
+            { value: "2", label: "2" },
+            { value: "3", label: "3" },
+            { value: "5", label: "5" },
+            { value: "8", label: "8" }
+          ]}
+          selected={filters.difficulty.map(String)}
+          onChange={(selected) => setFilters(f => ({ ...f, difficulty: selected.map(Number) }))}
+          placeholder="Select difficulty..."
+          className="w-40"
+        />
+        <Label>Difficulty</Label>
+      </div>
       <Button
         variant="outline"
         size="sm"

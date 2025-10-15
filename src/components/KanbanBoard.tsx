@@ -181,7 +181,8 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
     showImpact: false,
     showMajorIncident: false,
     status: ["Backlog", "Ready", "WIP", "Blocked", "Done", "Dropped"], // All statuses selected by default
-    searchText: ""
+    searchText: "",
+    difficulty: []
   });
   const map = React.useMemo(() => byId(tasks), [tasks]);
   const topTasks = React.useMemo(() => {
@@ -197,6 +198,9 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
     if (filters.showUrgent) filtered = filtered.filter(t => t.urgent);
     if (filters.showImpact) filtered = filtered.filter(t => t.impact);
     if (filters.showMajorIncident) filtered = filtered.filter(t => t.majorIncident);
+    if (filters.difficulty.length > 0) {
+      filtered = filtered.filter(t => filters.difficulty.includes(t.difficulty));
+    }
     if (filters.status.length > 0) {
       filtered = filtered.filter(t => filters.status.includes(t.triageStatus));
     } else {
