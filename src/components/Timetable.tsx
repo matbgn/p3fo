@@ -20,8 +20,10 @@ import { TaskTag } from "./TaskTag";
 import { ChronologicalView } from "./ChronologicalView";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { EditableTimeEntry, formatDuration } from "./EditableTimeEntry";
+import { useSettings } from "@/hooks/useSettings";
 
 type TimetableView = "categorical" | "chronological";
+type TimeChunk = "all" | "am" | "pm";
 
 const PREDEFINED_RANGES = [
   { label: "Today", value: "today" },
@@ -38,7 +40,9 @@ export const Timetable: React.FC<{
 }> = ({ onJumpToTask }) => {
   const navigate = useNavigate();
   const { tasks, updateTimeEntry, deleteTimeEntry } = useTasks();
+  const { settings } = useSettings();
   const [view, setView] = useState<TimetableView>("categorical");
+  const [timeChunk, setTimeChunk] = useState<TimeChunk>("all");
 
   // Create a map of task IDs to task objects for easy lookup
   const taskMap = React.useMemo(() => {
@@ -54,74 +58,100 @@ export const Timetable: React.FC<{
   const [showImpact, setShowImpact] = useState(false);
   const [showMajorIncident, setShowMajorIncident] = useState(false);
 
-  // Get date range based on predefined selection
+  // Helper to determine if the current range is a single day
+  const isSingleDayRange = React.useCallback(() => {
+    // If a predefined range is selected, check if it's 'today' or 'yesterday'
+    if (predefinedRange === 'today' || predefinedRange === 'yesterday') {
+      return true;
+    }
+    // If a custom range is selected, check if start and end dates are the same day
+    if (dateRange.start && dateRange.end) {
+      const start = new Date(dateRange.start);
+      const end = new Date(dateRange.end);
+      // Normalize dates to midnight for comparison
+      start.setHours(0, 0, 0, 0);
+      end.setHours(0, 0, 0, 0);
+      return start.getTime() === end.getTime();
+    }
+    return false;
+  }, [dateRange, predefinedRange]);
+
+  // Effect to reset timeChunk if the date range is no longer a single day
+  React.useEffect(() => {
+    if (!isSingleDayRange() && timeChunk !== "all") {
+      setTimeChunk("all");
+    }
+  }, [isSingleDayRange, timeChunk]);
+ 
+  // Get date range based on predefined selection or custom selection
   const getDateRange = () => {
     // Get current time in Zurich timezone
     const zurichNow = Temporal.Now.zonedDateTimeISO('Europe/Zurich');
-    const today = Temporal.PlainDate.from({
+    const todayPlainDate = Temporal.PlainDate.from({
       year: zurichNow.year,
       month: zurichNow.month,
       day: zurichNow.day
-    }).toZonedDateTime('Europe/Zurich');
+    });
+    const todayZoned = todayPlainDate.toZonedDateTime('Europe/Zurich');
     
     switch (predefinedRange) {
       case "today": {
-        const endOfDay = today.add({ days: 1 }).subtract({ nanoseconds: 1 });
-        return { 
-          start: new Date(today.epochMilliseconds), 
-          end: new Date(endOfDay.epochMilliseconds) 
+        const endOfDay = todayZoned.add({ days: 1 }).subtract({ nanoseconds: 1 });
+        return {
+          start: new Date(todayZoned.epochMilliseconds),
+          end: new Date(endOfDay.epochMilliseconds)
         };
       }
       case "yesterday": {
-        const yesterday = today.subtract({ days: 1 });
-        const endOfYesterday = yesterday.add({ days: 1 }).subtract({ nanoseconds: 1 });
-        return { 
-          start: new Date(yesterday.epochMilliseconds), 
-          end: new Date(endOfYesterday.epochMilliseconds) 
+        const yesterdayZoned = todayPlainDate.subtract({ days: 1 }).toZonedDateTime('Europe/Zurich');
+        const endOfYesterday = yesterdayZoned.add({ days: 1 }).subtract({ nanoseconds: 1 });
+        return {
+          start: new Date(yesterdayZoned.epochMilliseconds),
+          end: new Date(endOfYesterday.epochMilliseconds)
         };
       }
       case "thisWeek": {
         // Get start of week (Sunday)
-        const daysToSubtract = today.dayOfWeek === 7 ? 0 : today.dayOfWeek;
-        const startOfWeek = today.subtract({ days: daysToSubtract }).with({
+        const daysToSubtract = todayZoned.dayOfWeek === 7 ? 0 : todayZoned.dayOfWeek;
+        const startOfWeek = todayZoned.subtract({ days: daysToSubtract }).with({
           hour: 0, minute: 0, second: 0, millisecond: 0, microsecond: 0, nanosecond: 0
         });
         const endOfWeek = startOfWeek.add({ days: 6 }).with({
           hour: 23, minute: 59, second: 59, millisecond: 999
         });
-        return { 
-          start: new Date(startOfWeek.epochMilliseconds), 
-          end: new Date(endOfWeek.epochMilliseconds) 
+        return {
+          start: new Date(startOfWeek.epochMilliseconds),
+          end: new Date(endOfWeek.epochMilliseconds)
         };
       }
       case "lastWeek": {
         // Get start of last week
-        const daysToSubtract = today.dayOfWeek === 7 ? 7 : (today.dayOfWeek + 7);
-        const startOfLastWeek = today.subtract({ days: daysToSubtract }).with({
+        const daysToSubtract = todayZoned.dayOfWeek === 7 ? 7 : (todayZoned.dayOfWeek + 7);
+        const startOfLastWeek = todayZoned.subtract({ days: daysToSubtract }).with({
           hour: 0, minute: 0, second: 0, millisecond: 0, microsecond: 0, nanosecond: 0
         });
         const endOfLastWeek = startOfLastWeek.add({ days: 6 }).with({
           hour: 23, minute: 59, second: 59, millisecond: 999
         });
-        return { 
-          start: new Date(startOfLastWeek.epochMilliseconds), 
-          end: new Date(endOfLastWeek.epochMilliseconds) 
+        return {
+          start: new Date(startOfLastWeek.epochMilliseconds),
+          end: new Date(endOfLastWeek.epochMilliseconds)
         };
       }
       case "thisMonth": {
-        const startOfMonth = today.with({
+        const startOfMonth = todayZoned.with({
           day: 1, hour: 0, minute: 0, second: 0, millisecond: 0, microsecond: 0, nanosecond: 0
         });
         const endOfMonth = startOfMonth.add({ months: 1 }).subtract({ days: 1 }).with({
           hour: 23, minute: 59, second: 59, millisecond: 999
         });
-        return { 
-          start: new Date(startOfMonth.epochMilliseconds), 
-          end: new Date(endOfMonth.epochMilliseconds) 
+        return {
+          start: new Date(startOfMonth.epochMilliseconds),
+          end: new Date(endOfMonth.epochMilliseconds)
         };
       }
       case "lastMonth": {
-        const startOfThisMonth = today.with({ day: 1, hour: 0, minute: 0, second: 0, millisecond: 0, microsecond: 0, nanosecond: 0 });
+        const startOfThisMonth = todayZoned.with({ day: 1, hour: 0, minute: 0, second: 0, millisecond: 0, microsecond: 0, nanosecond: 0 });
         const startOfLastMonth = startOfThisMonth.subtract({ months: 1 });
         const endOfLastMonth = startOfThisMonth.subtract({ days: 1 }).with({ hour: 23, minute: 59, second: 59, millisecond: 999 });
         return {
@@ -130,19 +160,23 @@ export const Timetable: React.FC<{
         };
       }
       case "ytd": {
-        const startOfYear = today.with({
+        const startOfYear = todayZoned.with({
           month: 1, day: 1, hour: 0, minute: 0, second: 0, millisecond: 0, microsecond: 0, nanosecond: 0
         });
         return {
           start: new Date(startOfYear.epochMilliseconds),
-          end: new Date(today.epochMilliseconds)
+          end: new Date(todayZoned.epochMilliseconds)
         };
       }
       default:
-        return { start: dateRange.start, end: dateRange.end };
+        // Ensure start and end are always Date objects for consistency
+        return {
+          start: dateRange.start ? new Date(dateRange.start) : undefined,
+          end: dateRange.end ? new Date(dateRange.end) : undefined
+        };
     }
   };
-
+ 
   // Filter tasks by category, urgency, impact, and major incident
   const filteredTasks = tasks.filter((task) => {
     // Category filter
@@ -153,7 +187,7 @@ export const Timetable: React.FC<{
         if (!selectedCategories.includes("Uncategorized" as any)) return false;
       }
     }
-
+ 
     // Urgent filter
     if (showUrgent) {
       let currentTaskForUrgent = task;
@@ -173,7 +207,7 @@ export const Timetable: React.FC<{
         return false;
       }
     }
-
+ 
     // Impact filter
     if (showImpact) {
       let currentTaskForImpact = task;
@@ -193,7 +227,7 @@ export const Timetable: React.FC<{
         return false;
       }
     }
-
+ 
     // Incident on Delivery filter
     if (showMajorIncident) {
       let currentTaskForMajorIncident = task;
@@ -213,10 +247,10 @@ export const Timetable: React.FC<{
         return false;
       }
     }
-
+ 
     return true;
   });
-
+ 
   // Get all timer entries with task information
   const timerEntries = filteredTasks
     .filter((task) => task.timer && task.timer.length > 0)
@@ -231,49 +265,42 @@ export const Timetable: React.FC<{
       })) || []
     )
     .filter((entry) => {
-      // Filter by date range
+      // Date range filter
       const range = getDateRange();
-      
-      // If no date range is selected, show all entries
-      if (!range.start && !range.end) {
-        return true;
+      if (range.start || range.end) {
+        const entryStartZurich = Temporal.Instant.fromEpochMilliseconds(entry.startTime).toZonedDateTimeISO('Europe/Zurich');
+        const entryEndZurich = entry.endTime > 0 ? Temporal.Instant.fromEpochMilliseconds(entry.endTime).toZonedDateTimeISO('Europe/Zurich') : Temporal.Now.zonedDateTimeISO('Europe/Zurich');
+        const rangeStartZurich = range.start ? Temporal.Instant.fromEpochMilliseconds(range.start.getTime()).toZonedDateTimeISO('Europe/Zurich') : null;
+        const rangeEndZurich = range.end ? Temporal.Instant.fromEpochMilliseconds(range.end.getTime()).toZonedDateTimeISO('Europe/Zurich') : null;
+        if (rangeStartZurich && entryEndZurich.epochNanoseconds < rangeStartZurich.epochNanoseconds) return false;
+        if (rangeEndZurich && entryStartZurich.epochNanoseconds > rangeEndZurich.epochNanoseconds) return false;
       }
-      
-      // Convert entry times to Zurich timezone for comparison
-      const entryStartZurich = Temporal.Instant.fromEpochMilliseconds(entry.startTime)
-        .toZonedDateTimeISO('Europe/Zurich');
-      const entryEndZurich = entry.endTime > 0 
-        ? Temporal.Instant.fromEpochMilliseconds(entry.endTime).toZonedDateTimeISO('Europe/Zurich')
-        : Temporal.Now.zonedDateTimeISO('Europe/Zurich');
-      
-      // Convert range times to Zurich timezone for comparison
-      const rangeStartZurich = range.start 
-        ? Temporal.Instant.fromEpochMilliseconds(range.start.getTime()).toZonedDateTimeISO('Europe/Zurich')
-        : null;
-      const rangeEndZurich = range.end 
-        ? Temporal.Instant.fromEpochMilliseconds(range.end.getTime()).toZonedDateTimeISO('Europe/Zurich')
-        : null;
-      
-      // Check if the timer entry overlaps with the selected date range
-      if (rangeStartZurich && entryEndZurich.epochNanoseconds < rangeStartZurich.epochNanoseconds) {
-        return false;
+ 
+      // Time chunk filter
+      if (isSingleDayRange() && timeChunk !== "all") {
+        const [splitHour, splitMinute] = settings.splitTime.split(':').map(Number);
+        const entryStart = Temporal.Instant.fromEpochMilliseconds(entry.startTime).toZonedDateTimeISO('Europe/Zurich');
+        
+        if (timeChunk === "am") {
+          if (entryStart.hour >= splitHour) return false;
+        } else if (timeChunk === "pm") {
+          if (entryStart.hour < splitHour) return false;
+        }
       }
-      if (rangeEndZurich && entryStartZurich.epochNanoseconds > rangeEndZurich.epochNanoseconds) {
-        return false;
-      }
+ 
       return true;
     });
-
+ 
   const formatDuration = (ms: number) => {
     const seconds = Math.floor(ms / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
     return `${String(hours).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
   };
-
+ 
   // Calculate total time spent
   const totalTime = timerEntries.reduce((acc, entry) => acc + (entry.endTime > 0 ? entry.endTime - entry.startTime : Date.now() - entry.startTime), 0);
-
+ 
   // Group entries by category for summary
   const entriesByCategory = timerEntries.reduce((acc, entry) => {
     const category = entry.taskCategory || "Uncategorized";
@@ -283,12 +310,12 @@ export const Timetable: React.FC<{
     acc[category].push(entry);
     return acc;
   }, {} as Record<string, typeof timerEntries>);
-
+ 
   const categoryTotals = Object.entries(entriesByCategory).map(([category, entries]) => ({
     category,
     totalTime: entries.reduce((acc, entry) => acc + (entry.endTime > 0 ? entry.endTime - entry.startTime : Date.now() - entry.startTime), 0),
   }));
-
+ 
   // Group entries by top-level parent task for detailed view
   const entriesByTopParentTask = timerEntries.reduce((acc, entry) => {
     // Find the top-level parent task
@@ -307,8 +334,8 @@ export const Timetable: React.FC<{
     acc[topLevelParentId].push(entry);
     return acc;
   }, {} as Record<string, typeof timerEntries>);
-
-
+ 
+ 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -325,37 +352,6 @@ export const Timetable: React.FC<{
       
       {/* Filters */}
       <div className="flex flex-wrap gap-4 items-end">
-        <div className="flex flex-col space-y-2">
-          <label className="text-sm font-medium">Categories</label>
-          <div className="flex flex-wrap gap-2">
-            <CategorySelect
-              value="none"
-              onChange={(category) => {
-                if (category && category !== "none" && !selectedCategories.includes(category)) {
-                  setSelectedCategories([...selectedCategories, category]);
-                } else if (category === "none" && !selectedCategories.includes("Uncategorized" as any)) {
-                  // Handle "No category" selection
-                  setSelectedCategories([...selectedCategories, "Uncategorized" as any]);
-                }
-              }}
-              className="w-48"
-            />
-            <div className="flex flex-wrap gap-1">
-              {selectedCategories.map((category) => (
-                <div key={category} className="bg-secondary rounded-md px-2 py-1 text-sm flex items-center">
-                  {category}
-                  <button
-                    onClick={() => setSelectedCategories(selectedCategories.filter((c) => c !== category))}
-                    className="ml-1 text-muted-foreground hover:text-foreground"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-        
         <div className="flex flex-col space-y-2">
           <label className="text-sm font-medium">Date Range</label>
           <div className="flex gap-2">
@@ -406,6 +402,23 @@ export const Timetable: React.FC<{
             </Popover>
           </div>
         </div>
+
+        {isSingleDayRange() && (
+          <div className="flex flex-col space-y-2">
+            <label className="text-sm font-medium">Time Chunk</label>
+            <ToggleGroup type="single" value={timeChunk} onValueChange={(value) => setTimeChunk(value as TimeChunk)} aria-label="Time Chunk">
+              <ToggleGroupItem value="all" aria-label="All Day">
+                All
+              </ToggleGroupItem>
+              <ToggleGroupItem value="am" aria-label="AM (before {settings.splitTime})">
+                AM
+              </ToggleGroupItem>
+              <ToggleGroupItem value="pm" aria-label="PM (after {settings.splitTime})">
+                PM
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+        )}
         
         <div className="flex flex-col space-y-2">
           <label className="text-sm font-medium">Predefined Ranges</label>
@@ -420,22 +433,40 @@ export const Timetable: React.FC<{
                 {range.label}
               </Button>
             ))}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setDateRange({});
-                setPredefinedRange(null);
-                setShowUrgent(false);
-                setShowImpact(false);
-                setShowMajorIncident(false);
-              }}
-            >
-              Clear
-            </Button>
           </div>
         </div>
-
+ 
+        <div className="flex flex-col space-y-2">
+          <label className="text-sm font-medium">Categories</label>
+          <div className="flex flex-wrap gap-2">
+            <CategorySelect
+              value="none"
+              onChange={(category) => {
+                if (category && category !== "none" && !selectedCategories.includes(category)) {
+                  setSelectedCategories([...selectedCategories, category]);
+                } else if (category === "none" && !selectedCategories.includes("Uncategorized" as any)) {
+                  // Handle "No category" selection
+                  setSelectedCategories([...selectedCategories, "Uncategorized" as any]);
+                }
+              }}
+              className="w-48"
+            />
+            <div className="flex flex-wrap gap-1">
+              {selectedCategories.map((category) => (
+                <div key={category} className="bg-secondary rounded-md px-2 py-1 text-sm flex items-center">
+                  {category}
+                  <button
+                    onClick={() => setSelectedCategories(selectedCategories.filter((c) => c !== category))}
+                    className="ml-1 text-muted-foreground hover:text-foreground"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        
         <div className="flex flex-col space-y-2">
           <label className="text-sm font-medium">Criticity</label>
           <div className="flex flex-wrap gap-2">
@@ -445,14 +476,14 @@ export const Timetable: React.FC<{
               onCheckedChange={(checked) => setShowUrgent(!!checked)}
             />
             <label htmlFor="show-urgent" className="text-sm font-medium">Urgent</label>
-
+ 
             <Checkbox
               id="show-impact"
               checked={showImpact}
               onCheckedChange={(checked) => setShowImpact(!!checked)}
             />
             <label htmlFor="show-impact" className="text-sm font-medium">High Impact</label>
-
+ 
             <Checkbox
               id="show-major-incident"
               checked={showMajorIncident}
@@ -461,6 +492,22 @@ export const Timetable: React.FC<{
             <label htmlFor="show-major-incident" className="text-sm font-medium">Incident on Delivery</label>
           </div>
         </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setDateRange({});
+            setPredefinedRange(null);
+            setSelectedCategories([]);
+            setShowUrgent(false);
+            setShowImpact(false);
+            setShowMajorIncident(false);
+            setTimeChunk("all");
+          }}
+        >
+          Clear All Filters
+        </Button>
       </div>
       
       {/* Summary by category */}
