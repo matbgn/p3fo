@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import TaskBoard from "@/components/TaskBoard";
 import KanbanBoard from "@/components/KanbanBoard";
 import { MadeWithDyad } from "@/components/made-with-dyad";
@@ -8,6 +8,8 @@ import ProgramView from "@/components/ProgramView";
 import SettingsPage from "./SettingsPage";
 import MetricsPage from "./MetricsPage";
 import QoLIndexSurveyPage from "./QoLIndexSurveyPage";
+import { addReminder } from "@/utils/reminders";
+import { Button } from "@/components/ui/button";
 
 const Index: React.FC = () => {
   const [view, setView] = React.useState<
@@ -19,6 +21,15 @@ const Index: React.FC = () => {
     setView("focus");
     setFocusedTaskId(taskId);
   }, []);
+
+  useEffect(() => {
+    addReminder({
+      title: "Welcome to P3Fo!",
+      description: "Don't forget to set up your first task.",
+      persistent: true,
+    });
+  }, []);
+
 
   return (
     <div className="min-h-screen bg-background">

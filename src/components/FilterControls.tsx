@@ -92,6 +92,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
       </div>
 
       <div className="flex items-center space-x-2">
+        <Label>Status:</Label>
         <MultiSelect
           options={[
             { value: "Backlog", label: "Backlog" },
@@ -106,7 +107,6 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
           placeholder="Select status..."
           className="w-40"
         />
-        <Label>Status</Label>
       </div>
       {includeDoneFilter && (
         <div className="flex items-center space-x-2">
@@ -119,6 +119,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
         </div>
       )}
       <div className="flex items-center space-x-2">
+        <Label>Difficulty:</Label>
         <MultiSelect
           options={[
             { value: "0.5", label: "0.5" },
@@ -133,7 +134,6 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
           placeholder="Select difficulty..."
           className="w-40"
         />
-        <Label>Difficulty</Label>
       </div>
       <Button
         variant="outline"

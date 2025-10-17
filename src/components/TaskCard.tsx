@@ -2,7 +2,8 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { GripVertical, Folder, AlertTriangle, CircleDot, Trash2, Clock2, Play, Pause, ChevronDown, ChevronRight, Flame, FileText, CalendarIcon } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { GripVertical, Folder, AlertTriangle, CircleDot, Trash2, Clock2, Play, Pause, ChevronDown, ChevronRight, Flame, FileText, BellRing, CalendarIcon } from "lucide-react";
 import { TaskStatusSelect } from "./TaskStatusSelect";
 import { useTasks, Task, Category, TriageStatus } from "@/hooks/useTasks";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +29,8 @@ import { CategorySelect } from "./CategorySelect";
 import { Temporal } from '@js-temporal/polyfill';
 import { formatDuration, timestampToZurichInstant, instantToZurichPlainDateTime, zurichPlainDateTimeToTimestamp, cn } from '@/lib/utils';
 import { format } from "date-fns";
+import { addReminder } from "@/utils/reminders";
+import { useReminderStore } from "@/hooks/useReminders";
 
 const LiveTimeBadge: React.FC<{ task: Task; totalTime?: number; onClick?: () => void }> = React.memo(({ task, totalTime, onClick }) => {
   const [runningTime, setRunningTime] = React.useState(0);
@@ -243,6 +246,9 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
   const [commentText, setCommentText] = React.useState(task.comment || "");
   const [durationValue, setDurationValue] = React.useState(task.durationInMinutes || "");
   const [isDatePickerOpen, setIsDatePickerOpen] = React.useState(false);
+  const [offsetMinutes, setOffsetMinutes] = React.useState(0); // Default to 0 minutes offset
+  const [isDateTimeBlockOpen, setIsDateTimeBlockOpen] = React.useState(false); // New state for date/time block
+  const { scheduledReminders, updateScheduledReminderTriggerDate, dismissReminder } = useReminderStore();
 
   React.useEffect(() => {
     setCommentText(task.comment || "");
@@ -251,6 +257,18 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
   React.useEffect(() => {
     setDurationValue(task.durationInMinutes ?? "");
   }, [task.durationInMinutes]);
+
+  // Effect to update the local offsetMinutes state based on existing scheduled reminder
+  React.useEffect(() => {
+    const existingReminder = scheduledReminders.find(
+      (r) => r.taskId === task.id && r.originalTriggerDate === new Date(task.terminationDate || 0).toISOString(),
+    );
+    if (existingReminder?.offsetMinutes !== undefined) {
+      setOffsetMinutes(existingReminder.offsetMinutes);
+    } else {
+      setOffsetMinutes(-1); // "No reminder"
+    }
+  }, [task.id, task.terminationDate, scheduledReminders]);
 
   const { calculateTotalTime, calculateTotalDifficulty } = useTasks();
   const hasSubtasks = task.children && task.children.length > 0;
@@ -400,85 +418,57 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
                 </div>
               </DialogContent>
             </Dialog>
-
-            <Dialog open={isCommentModalOpen} onOpenChange={setIsCommentModalOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 w-6 p-0"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsCommentModalOpen(true);
-                  }}
-                >
-                  <FileText className={`h-4 w-4 ${task.comment ? "text-blue-500" : "text-gray-400"}`} />
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md" aria-describedby={undefined}>
-                <DialogHeader>
-                  <DialogTitle>Edit Comment - {task.title}</DialogTitle>
-                  <DialogDescription className="sr-only">
-                    Edit comment for task: {task.title}
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid gap-2">
-                    <label htmlFor="comment" className="sr-only">Comment</label>
-                    <textarea
-                      id="comment"
-                      value={commentText}
-                      onChange={(e) => setCommentText(e.target.value)}
-                      className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      placeholder="Add a comment..."
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end">
-                  <Button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      updateComment(task.id, commentText);
-                      setIsCommentModalOpen(false);
-                    }}
-                  >
-                    Save Comment
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+          </div>
+        )}
+        {!task.parentId && !isTriageBoard && (
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 w-6 p-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsDateTimeBlockOpen(!isDateTimeBlockOpen);
+              }}
+            >
+              <CalendarIcon className={`h-4 w-4 ${((!hasSubtasks && (task.terminationDate || task.durationInMinutes)) || isDateTimeBlockOpen) ? "text-blue-500" : "text-gray-400"}`} />
+            </Button>
           </div>
         )}
       </div>
-      {!task.parentId && (
+      {isDateTimeBlockOpen && !task.parentId && (
         <div className="flex flex-col gap-2 mb-2">
-          <Input
-            type="datetime-local"
-            step="1"
-            value={task.terminationDate ? instantToZurichPlainDateTime(timestampToZurichInstant(task.terminationDate)).toString({ smallestUnit: 'second' }).slice(0, 19) : ''}
-            onChange={(e) => {
-              if (e.target.value) {
-                try {
-                  const [datePart, timePart] = e.target.value.split('T');
-                  const [year, month, day] = datePart.split('-').map(Number);
-                  const [hour, minute, second] = timePart.split(':').map(Number);
+          <div className="flex items-center gap-2">
+            <Input
+              type="datetime-local"
+              step="1"
+              value={task.terminationDate ? instantToZurichPlainDateTime(timestampToZurichInstant(task.terminationDate)).toString({ smallestUnit: 'second' }).slice(0, 19) : ''}
+              onChange={(e) => {
+                if (e.target.value) {
+                  try {
+                    const [datePart, timePart] = e.target.value.split('T');
+                    const [year, month, day] = datePart.split('-').map(Number);
+                    const [hour, minute, second] = timePart.split(':').map(Number);
 
-                  const newPlainDateTime = Temporal.PlainDateTime.from({
-                    year, month, day, hour, minute, second
-                  });
+                    const newPlainDateTime = Temporal.PlainDateTime.from({
+                      year, month, day, hour, minute, second
+                    });
 
-                  const newTimestamp = zurichPlainDateTimeToTimestamp(newPlainDateTime);
-                  updateTerminationDate(task.id, newTimestamp);
-                } catch (error) {
-                  console.error('Invalid date input:', error);
+                    const newTimestamp = zurichPlainDateTimeToTimestamp(newPlainDateTime);
+                    updateTerminationDate(task.id, newTimestamp);
+                    updateScheduledReminderTriggerDate(task.id, new Date(newTimestamp).toISOString(), offsetMinutes);
+                  } catch (error) {
+                    console.error('Invalid date input:', error);
+                  }
+                } else {
+                  updateTerminationDate(task.id, undefined);
+                  updateScheduledReminderTriggerDate(task.id, undefined, offsetMinutes);
                 }
-              } else {
-                updateTerminationDate(task.id, undefined);
-              }
-            }}
-            className="flex-1 h-7 px-2 py-1 text-xs"
-            onClick={(e) => e.stopPropagation()}
-          />
+              }}
+              className="flex-1 h-7 px-2 py-1 text-xs"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
           <div style={{ display: "flex", alignItems: "center" }} className={`ml-1 gap-2 text-xs flex-1 cursor-pointer select-none`}>
             Planed duration :
             <Input
@@ -494,21 +484,58 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
               className="w-24 h-7 px-2 py-1 text-xs text-center"
               onClick={(e) => e.stopPropagation()}
             />
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 w-6 p-0"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <BellRing className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-40 p-0">
+                <Select
+                  value={offsetMinutes.toString()}
+                  onValueChange={(value) => {
+                    const newOffset = parseInt(value);
+                    setOffsetMinutes(newOffset);
+                    if (newOffset === -1) { // "No reminder" selected
+                      dismissReminder(task.id); // Dismiss any existing reminder for this task
+                      setOffsetMinutes(-1); // Reset local state to "No reminder"
+                    } else if (task.terminationDate) {
+                      addReminder({
+                        title: `Task Reminder: ${task.title}`,
+                        description: `This task is due on ${format(new Date(task.terminationDate), "PPP p")}`,
+                        persistent: true,
+                        triggerDate: new Date(task.terminationDate).toISOString(),
+                        taskId: task.id,
+                        offsetMinutes: newOffset,
+                      });
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-7 w-full text-xs">
+                    <SelectValue placeholder="Set Reminder" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="-1">No reminder</SelectItem>
+                    <SelectItem value="0">On time</SelectItem>
+                    <SelectItem value="15">15 min before</SelectItem>
+                    <SelectItem value="60">1 hour before</SelectItem>
+                    <SelectItem value="120">2 hours before</SelectItem>
+                    <SelectItem value="1440">1 day before</SelectItem>
+                    <SelectItem value="10080">1 week before</SelectItem>
+                  </SelectContent>
+                </Select>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
       )}
       <div className="flex items-center gap-2">
         <GripVertical className="h-4 w-4 text-muted-foreground" />
-        {isTriageBoard && hasSubtasks && onToggleOpen && (
-          <button
-            className="inline-flex items-center text-xs px-2 py-1 rounded-md border hover:bg-accent/60 transition"
-            onClick={() => onToggleOpen(task.id, true)}
-            aria-pressed={open}
-          >
-            {open ? <ChevronDown className="h-4 w-4 mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
-            Subtasks
-          </button>
-        )}
         {hasSubtasks ? (
           <Folder className="h-4 w-4 text-muted-foreground" />
         ) : (
@@ -528,7 +555,65 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
           done={task.triageStatus === "Done"}
           onUpdateTitle={(title) => updateTitle(task.id, title)}
         />
+        <Dialog open={isCommentModalOpen} onOpenChange={setIsCommentModalOpen}>
+          <DialogTrigger asChild>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 w-6 p-0 shrink-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsCommentModalOpen(true);
+              }}
+            >
+              <FileText className={`h-4 w-4 ${task.comment ? "text-blue-500" : "text-gray-400"}`} />
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md" aria-describedby={undefined}>
+            <DialogHeader>
+              <DialogTitle>Edit Comment - {task.title}</DialogTitle>
+              <DialogDescription className="sr-only">
+                Edit comment for task: {task.title}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <label htmlFor="comment" className="sr-only">Comment</label>
+                <textarea
+                  id="comment"
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  placeholder="Add a comment..."
+                />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updateComment(task.id, commentText);
+                  setIsCommentModalOpen(false);
+                }}
+              >
+                Save Comment
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
+      {isTriageBoard && hasSubtasks && onToggleOpen && (
+        <div className="flex items-center gap-2 mt-2">
+          <button
+            className="inline-flex items-center text-xs px-2 py-1 rounded-md border hover:bg-accent/60 transition"
+            onClick={() => onToggleOpen(task.id, true)}
+            aria-pressed={open}
+          >
+            {open ? <ChevronDown className="h-4 w-4 mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
+            Subtasks
+          </button>
+        </div>
+      )}
       <div className="mt-2 flex flex-wrap gap-1">
         {task.urgent && !task.parentId && (
           <Badge
