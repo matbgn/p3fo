@@ -46,6 +46,7 @@ export type Task = {
   category?: Category;
   terminationDate?: number;
   comment?: string;
+  durationInMinutes?: number;
 };
 
 const STORAGE_KEY = "dyad_task_board_v1";
@@ -73,6 +74,7 @@ const loadTasks = () => {
           difficulty: t.difficulty || 1,
           category: t.category || undefined,
           comment: t.comment || undefined,
+          durationInMinutes: t.durationInMinutes || undefined,
         };
       });
       tasks = parsed;
@@ -148,6 +150,7 @@ const createTask = (title: string, parentId: string | null) => {
     category: undefined,
     terminationDate: undefined,
     comment: undefined,
+    durationInMinutes: undefined,
   };
   tasks = [...tasks, t];
 
@@ -515,6 +518,10 @@ const updateTerminationDate = (taskId: string, terminationDate: number | undefin
     updateTerminationDate,
     updateComment: React.useCallback((taskId: string, comment: string) => {
       updateTaskInTasks(taskId, (t) => ({ ...t, comment: comment }));
+      persistTasks();
+    }, []),
+    updateDurationInMinutes: React.useCallback((taskId: string, durationInMinutes: number | undefined) => {
+      updateTaskInTasks(taskId, (t) => ({ ...t, durationInMinutes: durationInMinutes }));
       persistTasks();
     }, []),
   };

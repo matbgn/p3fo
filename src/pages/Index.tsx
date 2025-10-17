@@ -57,10 +57,6 @@ const Index: React.FC = () => {
           <SettingsPage />
         )}
       </main>
-
-      <footer className="container mx-auto px-4 py-6">
-        <MadeWithDyad />
-      </footer>
     </div>
   );
 };

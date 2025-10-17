@@ -36,7 +36,10 @@ const Column: React.FC<{
   onToggleParent: (id: string, toggleAll?: boolean) => void;
   onReparent: (id: string, parentId: string | null) => void;
   onFocusOnTask?: (taskId: string) => void;
-}> = ({ title, cards, tasks, onDropTask, onChangeStatus, onUpdateCategory, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onToggleDone, onUpdateDifficulty, onUpdateTitle, onDelete, duplicateTaskStructure, openParents, onToggleParent, onReparent, onFocusOnTask }) => {
+  updateTerminationDate: (id: string, terminationDate: number | undefined) => void;
+  updateDurationInMinutes: (id: string, durationInMinutes: number | undefined) => void;
+  updateComment: (id: string, comment: string) => void;
+}> = ({ title, cards, tasks, onDropTask, onChangeStatus, onUpdateCategory, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onToggleDone, onUpdateDifficulty, onUpdateTitle, onDelete, duplicateTaskStructure, openParents, onToggleParent, onReparent, onFocusOnTask, updateTerminationDate, updateDurationInMinutes, updateComment }) => {
   // Build render blocks: either a single ParentCard/ChildCard or a group block for open parent children
   type Block =
     | { type: "single"; node: React.ReactNode; key: string }
@@ -71,6 +74,9 @@ const Column: React.FC<{
             isTriageBoard={true}
             reparent={onReparent}
             onFocusOnTask={onFocusOnTask}
+            updateTerminationDate={updateTerminationDate}
+            updateDurationInMinutes={updateDurationInMinutes}
+            updateComment={updateComment}
           />
         ),
       });
@@ -163,6 +169,9 @@ const Column: React.FC<{
                     isTriageBoard={true}
                     reparent={onReparent}
                     onFocusOnTask={onFocusOnTask}
+                    updateTerminationDate={updateTerminationDate}
+                    updateDurationInMinutes={updateDurationInMinutes}
+                    updateComment={updateComment}
                   />
                 ))}
               </div>
@@ -175,7 +184,7 @@ const Column: React.FC<{
 };
 
 const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ onFocusOnTask }) => {
-  const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateCategory, updateTitle, deleteTask, duplicateTaskStructure, reparent, toggleDone } = useTasks();
+  const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateCategory, updateTitle, deleteTask, duplicateTaskStructure, reparent, toggleDone, updateTerminationDate, updateDurationInMinutes, updateComment } = useTasks();
   const [filters, setFilters] = React.useState<Filters>({
     showUrgent: false,
     showImpact: false,
@@ -366,6 +375,9 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
             onToggleParent={toggleParent}
             onReparent={reparent}
             onFocusOnTask={onFocusOnTask}
+            updateTerminationDate={updateTerminationDate}
+            updateDurationInMinutes={updateDurationInMinutes}
+            updateComment={updateComment}
           />
         ))}
       </div>

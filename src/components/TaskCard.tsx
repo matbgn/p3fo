@@ -2,7 +2,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { GripVertical, Folder, AlertTriangle, CircleDot, Trash2, Clock2, Play, Pause, ChevronDown, ChevronRight, Flame, FileText } from "lucide-react";
+import { GripVertical, Folder, AlertTriangle, CircleDot, Trash2, Clock2, Play, Pause, ChevronDown, ChevronRight, Flame, FileText, CalendarIcon } from "lucide-react";
 import { TaskStatusSelect } from "./TaskStatusSelect";
 import { useTasks, Task, Category, TriageStatus } from "@/hooks/useTasks";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +26,8 @@ import {
 } from "@/components/ui/select";
 import { CategorySelect } from "./CategorySelect";
 import { Temporal } from '@js-temporal/polyfill';
-import { formatDuration } from '@/lib/utils'; // Import formatDuration
+import { formatDuration, timestampToZurichInstant, instantToZurichPlainDateTime, zurichPlainDateTimeToTimestamp, cn } from '@/lib/utils';
+import { format } from "date-fns";
 
 const LiveTimeBadge: React.FC<{ task: Task; totalTime?: number; onClick?: () => void }> = React.memo(({ task, totalTime, onClick }) => {
   const [runningTime, setRunningTime] = React.useState(0);
@@ -135,10 +136,12 @@ const EditableTitle: React.FC<{
 
   return (
     <span
-      className={`text-sm flex-1 ${done ? "line-through text-muted-foreground" : ""} cursor-pointer select-none`}
+      className={`text-md flex-1 ${done ? "line-through text-muted-foreground" : ""} cursor-pointer select-none`}
       onDoubleClick={handleDoubleClick}
     >
-      {title}
+      <b>
+        {title}
+      </b>
     </span>
   );
 };
@@ -187,6 +190,8 @@ interface TaskCardProps {
   updateCategory: (id: string, category: Category) => void;
   updateTitle: (id: string, title: string) => void;
   updateComment: (id: string, comment: string) => void;
+  updateTerminationDate: (id: string, terminationDate: number | undefined) => void;
+  updateDurationInMinutes: (id: string, durationInMinutes: number | undefined) => void;
   deleteTask: (id: string) => void;
   duplicateTaskStructure: (id: string) => void;
   toggleUrgent: (id: string) => void;
@@ -228,16 +233,24 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
     onToggleOpen,
     onFocusOnTask,
     updateComment,
+    updateTerminationDate,
+    updateDurationInMinutes,
   },
   ref
 ) => {
   const [isTimeSheetOpen, setIsTimeSheetOpen] = React.useState(false);
   const [isCommentModalOpen, setIsCommentModalOpen] = React.useState(false);
   const [commentText, setCommentText] = React.useState(task.comment || "");
+  const [durationValue, setDurationValue] = React.useState(task.durationInMinutes || "");
+  const [isDatePickerOpen, setIsDatePickerOpen] = React.useState(false);
 
   React.useEffect(() => {
     setCommentText(task.comment || "");
   }, [task.comment]);
+
+  React.useEffect(() => {
+    setDurationValue(task.durationInMinutes ?? "");
+  }, [task.durationInMinutes]);
 
   const { calculateTotalTime, calculateTotalDifficulty } = useTasks();
   const hasSubtasks = task.children && task.children.length > 0;
@@ -305,15 +318,17 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
         className="flex justify-between items-center mb-2"
       >
         <div className="flex justify-start gap-1">
-          <LiveTimeBadge
-            task={task}
-            totalTime={hasSubtasks ? totalTime : undefined}
-            onClick={() => {
-              if (onFocusOnTask) {
-                onFocusOnTask(task.id);
-              }
-            }}
-          />
+          <div className="flex gap-1 items-center">
+            <LiveTimeBadge
+              task={task}
+              totalTime={hasSubtasks ? totalTime : undefined}
+              onClick={() => {
+                if (onFocusOnTask) {
+                  onFocusOnTask(task.id);
+                }
+              }}
+            />
+          </div>
           <div className="text-muted-foreground">/</div>
           {hasSubtasks ? (
             <DifficultyBadge difficulty={totalDifficulty} />
@@ -435,6 +450,53 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
           </div>
         )}
       </div>
+      {!task.parentId && (
+        <div className="flex flex-col gap-2 mb-2">
+          <Input
+            type="datetime-local"
+            step="1"
+            value={task.terminationDate ? instantToZurichPlainDateTime(timestampToZurichInstant(task.terminationDate)).toString({ smallestUnit: 'second' }).slice(0, 19) : ''}
+            onChange={(e) => {
+              if (e.target.value) {
+                try {
+                  const [datePart, timePart] = e.target.value.split('T');
+                  const [year, month, day] = datePart.split('-').map(Number);
+                  const [hour, minute, second] = timePart.split(':').map(Number);
+
+                  const newPlainDateTime = Temporal.PlainDateTime.from({
+                    year, month, day, hour, minute, second
+                  });
+
+                  const newTimestamp = zurichPlainDateTimeToTimestamp(newPlainDateTime);
+                  updateTerminationDate(task.id, newTimestamp);
+                } catch (error) {
+                  console.error('Invalid date input:', error);
+                }
+              } else {
+                updateTerminationDate(task.id, undefined);
+              }
+            }}
+            className="flex-1 h-7 px-2 py-1 text-xs"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <div style={{ display: "flex", alignItems: "center" }} className={`ml-1 gap-2 text-xs flex-1 cursor-pointer select-none`}>
+            Planed duration :
+            <Input
+              type="number"
+              placeholder="min."
+              min="0"
+              value={durationValue}
+              onChange={(e) => setDurationValue(e.target.value)}
+              onBlur={(e) => {
+                const duration = parseInt(e.target.value);
+                updateDurationInMinutes(task.id, isNaN(duration) ? undefined : duration);
+              }}
+              className="w-24 h-7 px-2 py-1 text-xs text-center"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
       <div className="flex items-center gap-2">
         <GripVertical className="h-4 w-4 text-muted-foreground" />
         {isTriageBoard && hasSubtasks && onToggleOpen && (
@@ -450,16 +512,16 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
         {hasSubtasks ? (
           <Folder className="h-4 w-4 text-muted-foreground" />
         ) : (
-        <input
-          type="checkbox"
-          className="h-4 w-4 accent-orange-500"
-          checked={task.triageStatus === "Done"}
-          onChange={(e) => {
-            e.stopPropagation();
-            handleToggleDoneSmart(task);
-          }}
-          onClick={(e) => e.stopPropagation()}
-        />
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-orange-500"
+            checked={task.triageStatus === "Done"}
+            onChange={(e) => {
+              e.stopPropagation();
+              handleToggleDoneSmart(task);
+            }}
+            onClick={(e) => e.stopPropagation()}
+          />
         )}
         <EditableTitle
           title={task.title}
