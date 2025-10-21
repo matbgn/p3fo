@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { AlertTriangle, CircleDot, Flame } from 'lucide-react';
 
 const localizer = momentLocalizer(moment);
 
@@ -138,6 +139,34 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
                   const endTime = local.format(end, 'HH:mm', culture);
                   return `${startTime} - ${endTime}`;
                 },
+              }}
+              eventPropGetter={(event) => ({
+                style: {
+                  backgroundColor: event.resource.urgent ? '#dc2626' :
+                                  event.resource.impact ? '#ca8a04' :
+                                  event.resource.majorIncident ? '#991b1b' : '#3b82f6',
+                  borderColor: 'transparent',
+                  borderRadius: '4px',
+                  color: 'white',
+                }
+              })}
+              components={{
+                event: ({ event }) => (
+                  <div className="p-1 text-xs">
+                    <div className="font-semibold truncate">{event.title}</div>
+                    <div className="flex gap-1 mt-1">
+                      {event.resource.urgent && (
+                        <AlertTriangle className="h-3 w-3 text-red-300" />
+                      )}
+                      {event.resource.impact && (
+                        <CircleDot className="h-3 w-3 text-yellow-300" />
+                      )}
+                      {event.resource.majorIncident && (
+                        <Flame className="h-3 w-3 text-red-200" />
+                      )}
+                    </div>
+                  </div>
+                )
               }}
             />
           </CardContent>
