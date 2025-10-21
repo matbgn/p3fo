@@ -1,25 +1,21 @@
 import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTasks } from "@/hooks/useTasks";
+import { useSettings } from "@/hooks/useSettings";
 import { calculateTimeSpentOnNewCapabilities } from "@/lib/metrics";
-
-// Default settings
-const DEFAULT_WEEKS_COMPUTATION = 4;
 
 const NewCapabilitiesMetric: React.FC = () => {
   const { tasks } = useTasks();
+  const { settings } = useSettings();
   
-  // Get settings from localStorage or use defaults
-  const weeksComputation = parseInt(
-    localStorage.getItem("weeksComputation") || DEFAULT_WEEKS_COMPUTATION.toString()
-  );
+  // Get settings from the context
+  const weeksComputation = parseInt(settings.weeksComputation || "4");
+  const goal = parseFloat(settings.newCapabilitiesGoal || "57.98");
   
   const { percentage } = calculateTimeSpentOnNewCapabilities(tasks, weeksComputation);
   
   // Format percentage
   const formattedPercentage = percentage.toFixed(1);
-  
-  const goal = parseFloat(localStorage.getItem("newCapabilitiesGoal") || "57.98");
   
   const getCardClass = () => {
     if (percentage >= goal) {
@@ -35,7 +31,7 @@ const NewCapabilitiesMetric: React.FC = () => {
   return (
     <Card className={`h-32 ${getCardClass()}`}>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">Time spent on High Impact work</CardTitle>
+        <CardTitle className="text-sm font-medium">Time spent overall on High Impact work</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">

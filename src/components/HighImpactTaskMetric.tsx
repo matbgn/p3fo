@@ -1,28 +1,17 @@
 import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTasks } from "@/hooks/useTasks";
+import { useSettings } from "@/hooks/useSettings";
 import { calculateHighImpactTaskFrequency, getCompletedHighImpactTasks } from "@/lib/metrics";
-
-// Default settings
-const DEFAULT_WORKLOAD_PERCENTAGE = 0.6;
-const DEFAULT_WEEKS_COMPUTATION = 4;
-const DEFAULT_HIGH_IMPACT_TASK_GOAL = 3.63;
 
 const HighImpactTaskMetric: React.FC = () => {
   const { tasks } = useTasks();
+  const { settings } = useSettings();
   
-  // Get settings from localStorage or use defaults
-  const workloadPercentage = parseFloat(
-    localStorage.getItem("userWorkloadPercentage") || DEFAULT_WORKLOAD_PERCENTAGE.toString()
-  );
-  
-  const weeksComputation = parseInt(
-    localStorage.getItem("weeksComputation") || DEFAULT_WEEKS_COMPUTATION.toString()
-  );
-  
-  const highImpactTaskGoal = parseFloat(
-    localStorage.getItem("highImpactTaskGoal") || DEFAULT_HIGH_IMPACT_TASK_GOAL.toString()
-  );
+  // Get settings from the context
+  const workloadPercentage = parseFloat(settings.userWorkloadPercentage || "60") / 100;
+  const weeksComputation = parseInt(settings.weeksComputation || "4");
+  const highImpactTaskGoal = parseFloat(settings.highImpactTaskGoal || "3.63");
   
   const completedTasks = getCompletedHighImpactTasks(tasks, weeksComputation);
   const frequency = calculateHighImpactTaskFrequency(tasks, weeksComputation, workloadPercentage);
@@ -44,7 +33,7 @@ const HighImpactTaskMetric: React.FC = () => {
   return (
     <Card className={`h-32 ${getCardClass()}`}>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">High Impact Task Achievement per EFT</CardTitle>
+        <CardTitle className="text-sm font-medium">High Impact Task Achievement / EFT / week </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">

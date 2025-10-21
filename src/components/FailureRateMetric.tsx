@@ -1,23 +1,16 @@
 import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTasks } from "@/hooks/useTasks";
+import { useSettings } from "@/hooks/useSettings";
 import { calculateFailureRate } from "@/lib/metrics";
-
-// Default settings
-const DEFAULT_WEEKS_COMPUTATION = 4;
-const DEFAULT_FAILURE_RATE_GOAL = 5;
 
 const FailureRateMetric: React.FC = () => {
   const { tasks } = useTasks();
+  const { settings } = useSettings();
   
-  // Get settings from localStorage or use defaults
-  const weeksComputation = parseInt(
-    localStorage.getItem("weeksComputation") || DEFAULT_WEEKS_COMPUTATION.toString()
-  );
-  
-  const failureRateGoal = parseFloat(
-    localStorage.getItem("failureRateGoal") || DEFAULT_FAILURE_RATE_GOAL.toString()
-  );
+  // Get settings from the context
+  const weeksComputation = parseInt(settings.weeksComputation || "4");
+  const failureRateGoal = parseFloat(settings.failureRateGoal || "5");
   
   const failureRate = calculateFailureRate(tasks, weeksComputation);
   
@@ -39,7 +32,7 @@ const FailureRateMetric: React.FC = () => {
   return (
     <Card className={`h-32 ${getCardClass()}`}>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">Failure Rate (Incident on Delivery)</CardTitle>
+        <CardTitle className="text-sm font-medium">Failure Rate overall (Incident on Delivery)</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">

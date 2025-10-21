@@ -1,17 +1,14 @@
 import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQLI } from "@/hooks/useQLI";
+import { useSettings } from "@/hooks/useSettings";
 
 const QualityOfLifeIndexMetric: React.FC = () => {
   const { data, loading, error } = useQLI();
-  const [goal, setGoal] = React.useState<number>(60);
+  const { settings } = useSettings();
 
-  React.useEffect(() => {
-    const savedGoal = localStorage.getItem('qliGoal');
-    if (savedGoal) {
-      setGoal(parseFloat(savedGoal));
-    }
-  }, []);
+  // Get goal from settings context
+  const goal = parseFloat(settings.qliGoal || "60");
 
   const getCardClass = () => {
     if (loading || error || !data) {

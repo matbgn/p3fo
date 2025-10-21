@@ -23,27 +23,38 @@ export const getMajorIncidents = (tasks: Task[], weeks: number = 4): Task[] => {
 
 // Calculate high impact task achievement frequency
 export const calculateHighImpactTaskFrequency = (
-  tasks: Task[], 
-  weeks: number = 4, 
+  tasks: Task[],
+  weeks: number = 4,
   workloadPercentage: number = 0.6
 ): number => {
-  const completedTasks = getCompletedHighImpactTasks(tasks, weeks);
-    
-  // Return frequency as completed tasks per expected tasks
-  return workloadPercentage > 0 ? completedTasks.length / (workloadPercentage * weeks) : 0;
+  const completedHighImpactTasks = getCompletedHighImpactTasks(tasks, weeks);
+  
+  if (weeks === 0) {
+    return 0;
+  }
+  
+  // Returns the frequency of completed high-impact tasks per week.
+  return completedHighImpactTasks.length / weeks;
 };
 
-// Calculate failure rate (major incidents / completed high impact tasks)
+// Calculate failure rate (major incidents / all tasks in the period)
 export const calculateFailureRate = (
   tasks: Task[],
   weeks: number = 4
 ): number => {
-  const majorIncidents = getMajorIncidents(tasks, weeks);
-  const completedHighImpactTasks = getCompletedHighImpactTasks(tasks, weeks);
+  const cutoffDate = Date.now() - (weeks * 7 * 24 * 60 * 60 * 1000);
   
-  // Return failure rate as percentage
-  return completedHighImpactTasks.length > 0 
-    ? (majorIncidents.length / completedHighImpactTasks.length) * 100 
+  // Get all tasks in the period (regardless of status)
+  const allTasksInPeriod = tasks.filter(task =>
+    task.createdAt >= cutoffDate
+  );
+  
+  // Get major incidents in the period
+  const majorIncidents = getMajorIncidents(tasks, weeks);
+  
+  // Return failure rate as percentage of all tasks that had incidents
+  return allTasksInPeriod.length > 0
+    ? (majorIncidents.length / allTasksInPeriod.length) * 100
     : 0;
 };
 
