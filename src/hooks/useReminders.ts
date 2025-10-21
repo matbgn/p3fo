@@ -25,6 +25,7 @@ type ReminderStore = {
   updateScheduledReminderTriggerDate: (taskId: string, newTriggerDate: string | undefined, offsetMinutes: number) => void;
   checkAndTriggerReminders: () => void;
   snoozeReminder: (id: string, durationMinutes: number) => void;
+  setScheduledReminders: (reminders: Reminder[]) => void;
 };
 
 export const useReminderStore = create<ReminderStore>((set, get) => ({
@@ -32,11 +33,38 @@ export const useReminderStore = create<ReminderStore>((set, get) => ({
   scheduledReminders: [],
   unreadCount: 0,
   addReminder: (newReminder) => {
+    // Check if a reminder with the same taskId and originalTriggerDate already exists
+    const existingReminder = get().scheduledReminders.find(
+      r => r.taskId === newReminder.taskId &&
+           r.originalTriggerDate === newReminder.triggerDate
+    );
+    
+    if (existingReminder) {
+      // If it exists, update it instead of creating a new one
+      get().updateScheduledReminderTriggerDate(
+        newReminder.taskId!,
+        newReminder.triggerDate,
+        newReminder.offsetMinutes || 0
+      );
+      return;
+    }
+    
     if (newReminder.triggerDate) {
       get().addScheduledReminder(newReminder);
       return;
     }
     set((state) => {
+      // Check if a similar reminder already exists to prevent duplicates
+      const isDuplicate = state.reminders.some(
+        r => r.taskId === newReminder.taskId &&
+             r.title === newReminder.title &&
+             r.description === newReminder.description
+      );
+      
+      if (isDuplicate) {
+        return state; // Don't add duplicate
+      }
+      
       const reminderWithId = { ...newReminder, id: crypto.randomUUID(), read: false };
       const updatedReminders = [reminderWithId, ...state.reminders];
       return {
@@ -47,6 +75,16 @@ export const useReminderStore = create<ReminderStore>((set, get) => ({
   },
   addScheduledReminder: (newReminder) =>
     set((state) => {
+      // Check if a similar scheduled reminder already exists to prevent duplicates
+      const isDuplicate = state.scheduledReminders.some(
+        r => r.taskId === newReminder.taskId &&
+             r.originalTriggerDate === newReminder.triggerDate
+      );
+      
+      if (isDuplicate) {
+        return state; // Don't add duplicate
+      }
+      
       const reminderWithId = { ...newReminder, id: crypto.randomUUID(), read: false };
       const updatedScheduledReminders = [reminderWithId, ...state.scheduledReminders];
       return {
@@ -64,7 +102,7 @@ export const useReminderStore = create<ReminderStore>((set, get) => ({
 
           const originalTrigger = new Date(newTriggerDate);
           const calculatedTriggerDate = new Date(originalTrigger.getTime() - offsetMinutes * 60 * 1000).toISOString();
-          
+
           return {
             ...reminder,
             triggerDate: calculatedTriggerDate,
@@ -109,25 +147,38 @@ export const useReminderStore = create<ReminderStore>((set, get) => ({
       const toTrigger: Reminder[] = [];
       const remainingScheduled = state.scheduledReminders.filter((reminder) => {
         if (reminder.triggerDate && new Date(reminder.triggerDate) <= now) {
-          toTrigger.push({ ...reminder, read: false });
-          return false;
+          // Check if this reminder is already in the active reminders to prevent duplicates
+          const isAlreadyActive = state.reminders.some(
+            r => r.taskId === reminder.taskId &&
+                 r.originalTriggerDate === reminder.originalTriggerDate
+          );
+          
+          if (!isAlreadyActive) {
+            toTrigger.push({ ...reminder, read: false });
+          }
+          
+          // Don't remove task-specific reminders, so they can be re-evaluated
+          return !!reminder.taskId;
         }
         return true;
       });
 
       if (toTrigger.length > 0) {
-        const updatedReminders = [...toTrigger, ...state.reminders];
+        // Deduplicate reminders before adding them
+        const deduplicatedToTrigger = toTrigger.filter(
+          (reminder, index, self) =>
+            index === self.findIndex(r => r.taskId === reminder.taskId &&
+                                         r.originalTriggerDate === reminder.originalTriggerDate)
+        );
+        
+        const updatedReminders = [...deduplicatedToTrigger, ...state.reminders];
         return {
           reminders: updatedReminders,
-          // Do not remove triggered reminders from scheduledReminders if they are task-specific
-          // This allows them to be re-triggered if the task's terminationDate changes.
-          scheduledReminders: state.scheduledReminders.filter(
-            (sr) => !toTrigger.some((tt) => tt.id === sr.id && tt.taskId),
-          ),
+          scheduledReminders: remainingScheduled,
           unreadCount: updatedReminders.filter((r) => !r.read).length,
         };
       }
-      return state; // No changes if no reminders triggered
+      return state;
     });
   },
   snoozeReminder: (id, durationMinutes) =>
@@ -147,12 +198,52 @@ export const useReminderStore = create<ReminderStore>((set, get) => ({
 
       // Remove from current reminders and add to scheduled
       const updatedReminders = state.reminders.filter((r) => r.id !== id);
-      const updatedScheduledReminders = [...state.scheduledReminders, updatedSnoozedReminder];
+      
+      // Check if a similar scheduled reminder already exists to prevent duplicates
+      const isDuplicate = state.scheduledReminders.some(
+        r => r.taskId === updatedSnoozedReminder.taskId &&
+             r.originalTriggerDate === updatedSnoozedReminder.originalTriggerDate
+      );
+      
+      let updatedScheduledReminders;
+      if (isDuplicate) {
+        // Update existing reminder instead of adding a new one
+        updatedScheduledReminders = state.scheduledReminders.map(r =>
+          r.taskId === updatedSnoozedReminder.taskId &&
+          r.originalTriggerDate === updatedSnoozedReminder.originalTriggerDate
+            ? updatedSnoozedReminder
+            : r
+        );
+      } else {
+        updatedScheduledReminders = [...state.scheduledReminders, updatedSnoozedReminder];
+      }
 
       return {
         reminders: updatedReminders,
         scheduledReminders: updatedScheduledReminders,
         unreadCount: updatedReminders.filter((r) => !r.read).length,
+      };
+    }),
+  setScheduledReminders: (reminders) => set(() => ({ scheduledReminders: reminders })),
+  cleanupDuplicateReminders: () =>
+    set((state) => {
+      // Deduplicate scheduledReminders based on ID
+      const deduplicatedReminders = state.scheduledReminders.filter(
+        (reminder, index, self) =>
+          index === self.findIndex(r => r.id === reminder.id)
+      );
+      
+      // Deduplicate active reminders based on taskId and originalTriggerDate
+      const deduplicatedActiveReminders = state.reminders.filter(
+        (reminder, index, self) =>
+          index === self.findIndex(r => r.taskId === reminder.taskId &&
+                                       r.originalTriggerDate === reminder.originalTriggerDate)
+      );
+      
+      return {
+        scheduledReminders: deduplicatedReminders,
+        reminders: deduplicatedActiveReminders,
+        unreadCount: deduplicatedActiveReminders.filter(r => !r.read).length
       };
     }),
 }));

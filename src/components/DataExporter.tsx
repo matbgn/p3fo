@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTasks } from '@/hooks/useTasks';
 import { Button } from '@/components/ui/button';
+import { useReminderStore } from '@/hooks/useReminders';
 
 const DataExporter: React.FC = () => {
   const { tasks } = useTasks();
@@ -17,6 +18,7 @@ const DataExporter: React.FC = () => {
 
     const exportData = {
       tasks,
+      scheduledReminders: useReminderStore.getState().scheduledReminders,
       qolSurveyResponse: JSON.parse(localStorage.getItem('qolSurveyResponse') || '{}'),
       settings: settingsToExport,
     };

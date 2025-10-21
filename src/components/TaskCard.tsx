@@ -246,8 +246,9 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
   const [commentText, setCommentText] = React.useState(task.comment || "");
   const [durationValue, setDurationValue] = React.useState(task.durationInMinutes || "");
   const [isDatePickerOpen, setIsDatePickerOpen] = React.useState(false);
-  const [offsetMinutes, setOffsetMinutes] = React.useState(0); // Default to 0 minutes offset
+  const [offsetMinutes, setOffsetMinutes] = React.useState(-1); // Default to -1 (No reminder)
   const [isDateTimeBlockOpen, setIsDateTimeBlockOpen] = React.useState(false); // New state for date/time block
+  const [isReminderActive, setIsReminderActive] = React.useState(false); // New state for reminder active status
   const { scheduledReminders, updateScheduledReminderTriggerDate, dismissReminder } = useReminderStore();
 
   React.useEffect(() => {
@@ -265,10 +266,20 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
     );
     if (existingReminder?.offsetMinutes !== undefined) {
       setOffsetMinutes(existingReminder.offsetMinutes);
+      setIsReminderActive(true); // Set to true if a reminder exists
     } else {
       setOffsetMinutes(-1); // "No reminder"
+      setIsReminderActive(false); // Set to false if no reminder exists
     }
   }, [task.id, task.terminationDate, scheduledReminders]);
+
+  React.useEffect(() => {
+    // Check if there's any active reminder for the current task
+    const activeReminder = scheduledReminders.some(
+      (r) => r.taskId === task.id && r.triggerDate && new Date(r.triggerDate) > new Date()
+    );
+    setIsReminderActive(activeReminder);
+  }, [task.id, scheduledReminders]);
 
   const { calculateTotalTime, calculateTotalDifficulty } = useTasks();
   const hasSubtasks = task.children && task.children.length > 0;
@@ -420,7 +431,7 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
             </Dialog>
           </div>
         )}
-        {!task.parentId && !isTriageBoard && (
+        {!task.parentId && (
           <div className="flex items-center gap-2">
             <Button
               size="sm"
@@ -492,7 +503,7 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
                   className="h-6 w-6 p-0"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <BellRing className="h-4 w-4" />
+                  <BellRing className={`h-4 w-4 ${isReminderActive ? "text-blue-500" : "text-gray-400"}`} />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-40 p-0">
@@ -503,16 +514,28 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
                     setOffsetMinutes(newOffset);
                     if (newOffset === -1) { // "No reminder" selected
                       dismissReminder(task.id); // Dismiss any existing reminder for this task
-                      setOffsetMinutes(-1); // Reset local state to "No reminder"
+                      setIsReminderActive(false); // Set reminder to inactive
                     } else if (task.terminationDate) {
-                      addReminder({
-                        title: `Task Reminder: ${task.title}`,
-                        description: `This task is due on ${format(new Date(task.terminationDate), "PPP p")}`,
-                        persistent: true,
-                        triggerDate: new Date(task.terminationDate).toISOString(),
-                        taskId: task.id,
-                        offsetMinutes: newOffset,
-                      });
+                      // Check if a reminder with the same taskId and originalTriggerDate already exists
+                      const existingReminder = scheduledReminders.find(
+                        r => r.taskId === task.id &&
+                             r.originalTriggerDate === new Date(task.terminationDate || 0).toISOString()
+                      );
+                      
+                      if (existingReminder) {
+                        // If it exists, update it instead of creating a new one
+                        updateScheduledReminderTriggerDate(task.id, new Date(task.terminationDate).toISOString(), newOffset);
+                      } else {
+                        addReminder({
+                          title: `Task Reminder: ${task.title}`,
+                          description: `This task is due on ${format(new Date(task.terminationDate), "PPP p")}`,
+                          persistent: true,
+                          triggerDate: new Date(task.terminationDate).toISOString(),
+                          taskId: task.id,
+                          offsetMinutes: newOffset,
+                        });
+                      }
+                      setIsReminderActive(true); // Set reminder to active
                     }
                   }}
                 >
