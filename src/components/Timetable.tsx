@@ -395,7 +395,12 @@ export const Timetable: React.FC<{
                 <Calendar
                   mode="single"
                   selected={dateRange.end}
-                  onSelect={(date) => setDateRange({ ...dateRange, end: date })}
+                  onSelect={(date) => {
+                    if (date) {
+                      date.setHours(23, 59, 59, 999);
+                    }
+                    setDateRange({ ...dateRange, end: date });
+                  }}
                   initialFocus
                 />
               </PopoverContent>
@@ -649,7 +654,8 @@ export const Timetable: React.FC<{
           <ChronologicalView
             timerEntries={timerEntries}
             taskMap={taskMap}
-            onUpdate={updateTimeEntry}
+            onUpdateTimeEntry={updateTimeEntry}
+            onUpdateTaskCategory={updateCategory}
             onDelete={deleteTimeEntry}
             onJumpToTask={onJumpToTask}
           />
