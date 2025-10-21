@@ -11,28 +11,34 @@ import { aStarTextSearch } from "@/lib/a-star-search";
 import { byId, TaskCard } from "./TaskCard";
 
 const sortTasks = (a: Task, b: Task) => {
-  // 1. Done tasks at the bottom
-  if (a.triageStatus === "Done" && b.triageStatus !== "Done") return 1;
+  // 1. Timeclocked tasks at the top
+  const aIsTimeclocked = a.timer && a.timer.some(entry => entry.endTime === 0);
+  const bIsTimeclocked = b.timer && b.timer.some(entry => entry.endTime === 0);
+  if (aIsTimeclocked && !bIsTimeclocked) return -1;
+  if (!aIsTimeclocked && bIsTimeclocked) return 1;
+
+  // 2. Done tasks at the bottom
+ if (a.triageStatus === "Done" && b.triageStatus !== "Done") return 1;
   if (a.triageStatus !== "Done" && b.triageStatus === "Done") return -1;
   if (a.triageStatus === "Done" && b.triageStatus === "Done") {
     return (b.terminationDate ?? b.createdAt) - (a.terminationDate ?? a.createdAt);
-  }
+ }
 
-  // 2. Blocked tasks
+ // 3. Blocked tasks
   const aIsBlocked = a.triageStatus === 'Blocked';
   const bIsBlocked = b.triageStatus === 'Blocked';
   if (aIsBlocked && !bIsBlocked) return 1;
   if (!aIsBlocked && bIsBlocked) return -1;
 
-  // 3. Urgency and Impact
+  // 4. Urgency and Impact
   const aScore = (a.urgent ? 2 : 0) + (a.impact ? 1 : 0);
   const bScore = (b.urgent ? 2 : 0) + (b.impact ? 1 : 0);
 
   if (aScore !== bScore) {
     return bScore - aScore;
-  }
+ }
 
-  // 4. Fallback to creation time
+  // 5. Fallback to creation time
   return a.createdAt - b.createdAt;
 };
 
