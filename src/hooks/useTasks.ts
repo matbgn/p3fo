@@ -47,6 +47,7 @@ export type Task = {
   terminationDate?: number;
   comment?: string;
   durationInMinutes?: number;
+  priority?: number; // New field for explicit prioritization
 };
 
 const STORAGE_KEY = "dyad_task_board_v1";
@@ -75,6 +76,7 @@ const loadTasks = () => {
           category: t.category || undefined,
           comment: t.comment || undefined,
           durationInMinutes: t.durationInMinutes || undefined,
+          priority: t.priority || 0, // Initialize priority to 0 if not present
         };
       });
       tasks = parsed;
@@ -151,6 +153,7 @@ const createTask = (title: string, parentId: string | null) => {
     terminationDate: undefined,
     comment: undefined,
     durationInMinutes: undefined,
+    priority: 0, // Initialize new tasks with priority 0
   };
   tasks = [...tasks, t];
 
@@ -358,6 +361,7 @@ const updateTerminationDate = (taskId: string, terminationDate: number | undefin
         children: [], // Will be populated later
         title: `${task.title} (Copy)`,
         createdAt: Date.now(),
+        priority: Math.min(...tasks.map(t => t.priority || 0)) - 1, // Set lower priority than all existing tasks
       };
       
       // Duplicate children if they exist
@@ -522,6 +526,10 @@ const updateTerminationDate = (taskId: string, terminationDate: number | undefin
     }, []),
     updateDurationInMinutes: React.useCallback((taskId: string, durationInMinutes: number | undefined) => {
       updateTaskInTasks(taskId, (t) => ({ ...t, durationInMinutes: durationInMinutes }));
+      persistTasks();
+    }, []),
+    updatePriority: React.useCallback((taskId: string, priority: number) => {
+      updateTaskInTasks(taskId, (t) => ({ ...t, priority: priority }));
       persistTasks();
     }, []),
   };

@@ -9,11 +9,12 @@ import SettingsPage from "./SettingsPage";
 import MetricsPage from "./MetricsPage";
 import QoLIndexSurveyPage from "./QoLIndexSurveyPage";
 import { addReminder } from "@/utils/reminders";
+import PlanView from "@/components/PlanView"; // Import PlanView
 import { Button } from "@/components/ui/button";
 
 const Index: React.FC = () => {
   const [view, setView] = React.useState<
-    "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "qol-survey"
+    "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "qol-survey" | "plan"
   >("focus");
   const [focusedTaskId, setFocusedTaskId] = React.useState<string | null>(null);
 
@@ -36,14 +37,6 @@ const Index: React.FC = () => {
       <header className="border-b">
         <div className="container mx-auto px-4 py-10">
           <div className="flex items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-                P3Fo - Plan, Program, Project, and Focus on what matters
-              </h1>
-              <p className="mt-2 text-muted-foreground">
-                Organize your goals with results in mind
-              </p>
-            </div>
             <div className="flex flex-col items-end gap-2">
               <ViewSwitcher value={view} onChange={setView} />
             </div>
@@ -60,6 +53,8 @@ const Index: React.FC = () => {
           <Timetable onJumpToTask={handleFocusOnTask} />
         ) : view === "program" ? (
           <ProgramView onFocusOnTask={handleFocusOnTask} />
+        ) : view === "plan" ? (
+          <PlanView onFocusOnTask={handleFocusOnTask} />
         ) : view === "metrics" ? (
           <MetricsPage />
         ) : view === "qol-survey" ? (

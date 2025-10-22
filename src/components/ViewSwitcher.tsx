@@ -8,21 +8,24 @@ import {
   History,
   Smile,
   LayoutDashboard,
+  ListTodo,
+  ChartNoAxesGantt, // Add ChartNoAxesGantt icon
 } from 'lucide-react';
 
 interface ViewSwitcherProps {
-  value: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "qol-survey";
-  onChange: (view: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "qol-survey") => void;
+  value: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "qol-survey" | "plan"; // Add "plan"
+  onChange: (view: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "qol-survey" | "plan") => void; // Add "plan"
 }
 
 interface ViewOption {
-  id: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "qol-survey";
+  id: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "qol-survey" | "plan"; // Add "plan"
   label: string;
   icon: React.ReactNode;
 }
 
 export function ViewSwitcher({ value, onChange }: ViewSwitcherProps) {
   const views: ViewOption[] = [
+    { id: 'plan', label: 'Plan', icon: <ChartNoAxesGantt className="w-4 h-4" /> }, // Move Plan view to first and change icon
     { id: 'program', label: 'Program', icon: <Calendar className="w-4 h-4" /> },
     { id: 'kanban', label: 'Project', icon: <LayoutDashboard className="w-4 h-4" /> },
     { id: 'focus', label: 'Focus', icon: <ListChecks className="w-4 h-4" /> },

@@ -210,6 +210,7 @@ interface TaskCardProps {
   open?: boolean;
   onToggleOpen?: (id: string, toggleAll?: boolean) => void;
   onFocusOnTask?: (taskId: string) => void;
+  disableReparenting?: boolean; // New prop to disable reparenting on drop
 }
 
 export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
@@ -238,6 +239,7 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
     updateComment,
     updateTerminationDate,
     updateDurationInMinutes,
+    disableReparenting,
   },
   ref
 ) => {
@@ -337,6 +339,7 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
         }
       }}
       onDrop={(e) => {
+        if (disableReparenting) return; // Prevent reparenting if disabled
         const dragId = e.dataTransfer.getData("text/task-id");
         if (!dragId) return;
         reparent(dragId, task.id);
