@@ -11,26 +11,35 @@ import { aStarTextSearch } from "@/lib/a-star-search";
 import { byId, TaskCard } from "./TaskCard";
 
 const sortTasks = (a: Task, b: Task) => {
-  // 1. Timeclocked tasks at the top
+  // 1. Priority (if it exists) - higher priority (lower number) comes first
+  if (a.priority !== undefined && b.priority !== undefined) {
+    return a.priority - b.priority; // Lower number means higher priority
+  } else if (a.priority !== undefined) {
+    return -1; // Tasks with priority come first
+  } else if (b.priority !== undefined) {
+    return 1; // Tasks with priority come first
+  }
+
+  // 2. Timeclocked tasks at the top
   const aIsTimeclocked = a.timer && a.timer.some(entry => entry.endTime === 0);
   const bIsTimeclocked = b.timer && b.timer.some(entry => entry.endTime === 0);
   if (aIsTimeclocked && !bIsTimeclocked) return -1;
   if (!aIsTimeclocked && bIsTimeclocked) return 1;
 
-  // 2. Done tasks at the bottom
+  // 3. Done tasks at the bottom
  if (a.triageStatus === "Done" && b.triageStatus !== "Done") return 1;
   if (a.triageStatus !== "Done" && b.triageStatus === "Done") return -1;
   if (a.triageStatus === "Done" && b.triageStatus === "Done") {
     return (b.terminationDate ?? b.createdAt) - (a.terminationDate ?? a.createdAt);
  }
 
- // 3. Blocked tasks
+ // 4. Blocked tasks
   const aIsBlocked = a.triageStatus === 'Blocked';
   const bIsBlocked = b.triageStatus === 'Blocked';
   if (aIsBlocked && !bIsBlocked) return 1;
   if (!aIsBlocked && bIsBlocked) return -1;
 
-  // 4. Urgency and Impact
+  // 5. Urgency and Impact
   const aScore = (a.urgent ? 2 : 0) + (a.impact ? 1 : 0);
   const bScore = (b.urgent ? 2 : 0) + (b.impact ? 1 : 0);
 
@@ -38,7 +47,7 @@ const sortTasks = (a: Task, b: Task) => {
     return bScore - aScore;
  }
 
-  // 5. Fallback to creation time
+  // 6. Fallback to creation time
   return a.createdAt - b.createdAt;
 };
 

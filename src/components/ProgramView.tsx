@@ -184,7 +184,20 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-row flex-wrap gap-2 overflow-x-auto">
-            {tasksWithoutTerminationDate.map(task => (
+            {tasksWithoutTerminationDate
+              .sort((a, b) => {
+                // First, sort by priority if it exists
+                if (a.priority !== undefined && b.priority !== undefined) {
+                  return a.priority - b.priority; // Lower number means higher priority
+                } else if (a.priority !== undefined) {
+                  return -1; // Tasks with priority come first
+                } else if (b.priority !== undefined) {
+                  return 1; // Tasks with priority come first
+                }
+                // If no priority, maintain original order (by creation date)
+                return a.createdAt - b.createdAt;
+              })
+              .map(task => (
               <div key={task.id} className="w-64">
                 <TaskCard
                   task={task}
