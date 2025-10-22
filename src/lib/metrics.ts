@@ -80,51 +80,78 @@ export const calculateTimeSpentOnNewCapabilities = (
   tasks: Task[],
   weeks: number = 4
 ): { totalTime: number; newCapabilitiesTime: number; percentage: number } => {
-  const cutoffDate = Date.now() - (weeks * 7 * 24 * 60 * 60 * 1000);
+  const cutoffDate = Date.now() - (weeks * 7 * 24 * 60 * 1000);
   
-  // Filter tasks created in the last N weeks
-  const recentTasks = tasks.filter(task =>
-    task.createdAt >= cutoffDate
+  // Create a map of task IDs to task objects for easy lookup
+  const taskMap = tasks.reduce((acc, task) => {
+    acc[task.id] = task;
+    return acc;
+  }, {} as Record<string, Task>);
+  
+  // Find all timer entries that overlap with the computation period (last N weeks)
+  const allTimerEntriesInPeriod = tasks.flatMap(task =>
+    (task.timer || [])
+      .filter(entry => {
+        // An entry overlaps with the period if:
+        // - it didn't end before the cutoff date AND didn't start after now
+        const entryEndDate = entry.endTime > 0 ? entry.endTime : Date.now();
+        return !(entryEndDate < cutoffDate || entry.startTime > Date.now());
+      })
+      .map(entry => ({ task, entry }))
   );
   
-  // Get all task IDs from recent tasks
-  const recentTaskIds = recentTasks.map(task => task.id);
-  
-  // Calculate total time for all recent tasks
-  const totalTime = calculateTotalTimeForTasks(tasks, recentTaskIds);
-  
-  // Filter for high impact tasks (new capabilities) and their subtasks
-  const newCapabilitiesTasks = recentTasks.filter(task => task.impact === true);
-  
-  // Get all subtask IDs for high impact tasks
-  const getAllSubtaskIds = (taskIds: string[]): string[] => {
-    const result: string[] = [];
-    const queue = [...taskIds];
+  // Calculate total time spent across all tasks in the period
+  const totalTime = allTimerEntriesInPeriod.reduce((total, { entry }) => {
+    // Calculate the portion of the entry that falls within [cutoffDate, now]
+    const entryStart = entry.startTime;
+    const entryEnd = entry.endTime > 0 ? entry.endTime : Date.now();
     
-    while (queue.length > 0) {
-      const currentTaskId = queue.shift()!;
-      const currentTask = tasks.find(t => t.id === currentTaskId);
-      
-      if (currentTask && currentTask.children && currentTask.children.length > 0) {
-        result.push(...currentTask.children);
-        queue.push(...currentTask.children);
+    // Effective start is the later of entry start or cutoff date
+    const effectiveStart = Math.max(entryStart, cutoffDate);
+    // Effective end is the earlier of entry end or now
+    const effectiveEnd = Math.min(entryEnd, Date.now());
+    
+    // Only count if the effective range is valid (start < end) and within the computation period
+    if (effectiveStart < effectiveEnd) {
+      return total + (effectiveEnd - effectiveStart);
+    }
+    return total;
+  }, 0);
+  
+  // Find timer entries for tasks that have an impact ancestor (including the task itself)
+  const newCapabilitiesEntries = allTimerEntriesInPeriod.filter(({ task }) => {
+    // Check if this task or any of its ancestors has impact = true
+    let currentTask = task;
+    while (currentTask) {
+      if (currentTask.impact === true) {
+        return true;
+      }
+      if (currentTask.parentId) {
+        currentTask = taskMap[currentTask.parentId];
+      } else {
+        break;
       }
     }
+    return false;
+  });
+  
+  // Calculate time spent on new capabilities (tasks with impact ancestors) in the period
+  const newCapabilitiesTime = newCapabilitiesEntries.reduce((total, { entry }) => {
+    // Calculate the portion of the entry that falls within [cutoffDate, now]
+    const entryStart = entry.startTime;
+    const entryEnd = entry.endTime > 0 ? entry.endTime : Date.now();
     
-    return result;
-  };
-  
-  // Get IDs of high impact tasks
-  const highImpactTaskIds = newCapabilitiesTasks.map(task => task.id);
-  
-  // Get all subtask IDs of high impact tasks
-  const subtaskIds = getAllSubtaskIds(highImpactTaskIds);
-  
-  // Combine high impact task IDs with their subtask IDs
-  const newCapabilitiesTaskIds = [...highImpactTaskIds, ...subtaskIds];
-  
-  // Calculate time for new capabilities tasks (including subtasks)
-  const newCapabilitiesTime = calculateTotalTimeForTasks(tasks, newCapabilitiesTaskIds);
+    // Effective start is the later of entry start or cutoff date
+    const effectiveStart = Math.max(entryStart, cutoffDate);
+    // Effective end is the earlier of entry end or now
+    const effectiveEnd = Math.min(entryEnd, Date.now());
+    
+    // Only count if the effective range is valid (start < end) and within the computation period
+    if (effectiveStart < effectiveEnd) {
+      return total + (effectiveEnd - effectiveStart);
+    }
+    return total;
+  }, 0);
   
   // Calculate percentage
   const percentage = totalTime > 0 ? (newCapabilitiesTime / totalTime) * 100 : 0;
