@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TaskCard } from './TaskCard'; // Import TaskCard
 import ComparativePrioritizationView from './ComparativePrioritizationView'; // Import the new component
 import { Button } from '@/components/ui/button'; // Import Button for view switching
+import { Input } from '@/components/ui/input';
 
 interface PlanViewProps {
   onFocusOnTask: (taskId: string) => void;
@@ -38,10 +39,18 @@ const sortPlanTasks = (a: Task, b: Task) => {
 };
 
 const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
-  const { tasks, updateStatus, updateDifficulty, updateCategory, updateTitle, deleteTask, duplicateTaskStructure, toggleUrgent, toggleImpact, toggleMajorIncident, toggleDone, toggleTimer, reparent, updateTerminationDate, updateComment, updateDurationInMinutes, updatePriority } = useTasks();
+  const { tasks, updateStatus, updateDifficulty, updateCategory, updateTitle, deleteTask, duplicateTaskStructure, toggleUrgent, toggleImpact, toggleMajorIncident, toggleDone, toggleTimer, reparent, updateTerminationDate, updateComment, updateDurationInMinutes, updatePriority, createTask } = useTasks();
 
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<'storyboard' | 'prioritization'>('storyboard'); // New state for view switching
+  // Quick add functionality
+  const [input, setInput] = useState("");
+  const addTopTask = () => {
+    const v = input.trim();
+    if (!v) return;
+    createTask(v, null);
+    setInput("");
+  };
 
   const prioritizedTasks = React.useMemo(() => {
     return tasks
@@ -119,20 +128,34 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
 
   return (
     <Card className="h-full flex flex-col">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle>Plan View</CardTitle>
-        <div className="flex space-x-2">
-          <Button
-            variant={activeView === 'storyboard' ? 'default' : 'outline'}
-            onClick={() => setActiveView('storyboard')}
-          >
-            Storyboard
-          </Button>
-          <Button
-            variant={activeView === 'prioritization' ? 'default' : 'outline'}
-            onClick={() => setActiveView('prioritization')}
-          >
-            Prioritization
+      <CardHeader className="flex flex-col space-y-4 pb-2">
+        <div className="flex flex-row items-center justify-between">
+          <CardTitle>Plan View</CardTitle>
+          <div className="flex space-x-2">
+            <Button
+              variant={activeView === 'storyboard' ? 'default' : 'outline'}
+              onClick={() => setActiveView('storyboard')}
+            >
+              Storyboard
+            </Button>
+            <Button
+              variant={activeView === 'prioritization' ? 'default' : 'outline'}
+              onClick={() => setActiveView('prioritization')}
+            >
+              Prioritization
+            </Button>
+          </div>
+        </div>
+        <div className="mb-2 flex gap-2">
+          <Input
+            placeholder="Quick add top task..."
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addTopTask()}
+            className="max-w-md"
+          />
+          <Button onClick={addTopTask} disabled={!input.trim()}>
+            Add
           </Button>
         </div>
       </CardHeader>
