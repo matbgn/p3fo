@@ -36,7 +36,15 @@ const Index: React.FC = () => {
     <div className="min-h-screen bg-background">
       <header className="border-b">
         <div className="container mx-auto px-4 py-10">
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center justify-left gap-12">
+            <div className="flex items-center">
+              {/* Project Logo */}
+              <img
+                src="/P3Fo_Logo.svg"
+                alt="P3Fo Logo"
+                className="h-10 w-auto"
+              />
+            </div>
             <div className="flex flex-col items-end gap-2">
               <ViewSwitcher value={view} onChange={setView} />
             </div>
