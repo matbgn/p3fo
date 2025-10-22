@@ -40,7 +40,7 @@ const Index: React.FC = () => {
             <div className="flex items-center">
               {/* Project Logo */}
               <img
-                src="/P3Fo_Logo.svg"
+                src={`${import.meta.env.BASE_URL}P3Fo_Logo.png`}
                 alt="P3Fo Logo"
                 className="h-10 w-auto"
               />
