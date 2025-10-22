@@ -18,10 +18,10 @@ const sortPlanTasks = (a: Task, b: Task) => {
     return 1; // b comes before a
   }
 
-  // If both have explicit priorities, sort by priority (higher value first)
+  // If both have explicit priorities, sort by priority (lower value first - ascending order)
   if (a.priority !== undefined && b.priority !== undefined) {
     if (a.priority !== b.priority) {
-      return b.priority - a.priority; // Descending order for priority
+      return a.priority - b.priority; // Ascending order for priority (1, 2, 3, etc.)
     }
   }
 
@@ -71,42 +71,41 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
     
     if (!draggedTask || !targetTask) return;
 
-    // Get all top-level tasks (including Done and Dropped) for priority calculation
-    const allTopLevelTasks = tasks.filter(task => !task.parentId);
     // Get visible top-level tasks that are not Done or Dropped (same filter as prioritizedTasks)
     const visibleTopLevelTasks = tasks.filter(task => !task.parentId && task.triageStatus !== 'Done' && task.triageStatus !== 'Dropped');
     
-    // Remove the dragged task from its current position
-    const currentOrder = visibleTopLevelTasks.filter(task => task.id !== draggedTaskId);
+    // Get the sorted order (this is what the user sees in the UI)
+    const currentDisplayOrder = [...visibleTopLevelTasks].sort(sortPlanTasks);
     
-    // Find the target task's position in the current order
-    const targetIndex = currentOrder.findIndex(task => task.id === targetTaskId);
+    // Find positions in the display order (what the user sees)
+    const draggedIndex = currentDisplayOrder.findIndex(task => task.id === draggedTaskId);
+    const targetIndex = currentDisplayOrder.findIndex(task => task.id === targetTaskId);
     
     if (targetIndex === -1 && targetTaskId !== '') {
-      // If target not found in filtered list but targetTaskId is not empty, return
+      // If target not found in display list but targetTaskId is not empty, return
       return;
     }
 
-    let newOrder;
+    let newDisplayOrder;
     if (targetTaskId === '') {
       // If dropped outside specific cards, add to the end
-      newOrder = [...currentOrder, draggedTask];
+      newDisplayOrder = currentDisplayOrder.filter(task => task.id !== draggedTaskId);
+      newDisplayOrder.push(draggedTask);
     } else if (targetIndex !== -1) {
-      // Insert the dragged task at the target's position
-      newOrder = [...currentOrder.slice(0, targetIndex), draggedTask, ...currentOrder.slice(targetIndex)];
+      // Remove the dragged task from its current position and insert at target position
+      newDisplayOrder = currentDisplayOrder.filter(task => task.id !== draggedTaskId);
+      // Adjust target index if the dragged task was before the target in the original list
+      const adjustedTargetIndex = targetIndex > draggedIndex ? targetIndex - 1 : targetIndex;
+      newDisplayOrder.splice(adjustedTargetIndex, 0, draggedTask);
     } else {
       // Fallback: if target task not found, add to end
-      newOrder = [...currentOrder, draggedTask];
+      newDisplayOrder = currentDisplayOrder.filter(task => task.id !== draggedTaskId);
+      newDisplayOrder.push(draggedTask);
     }
 
-    // Assign new priority values based on the new order
-    // Use high enough values to ensure they override any existing priorities
-    // Start from a high base and decrease for each subsequent task
-    const currentMaxPriority = Math.max(...allTopLevelTasks.map(t => t.priority || 0), 0); // Calculate dynamic base priority using ALL top-level tasks
-    const basePriority = currentMaxPriority + 1000; // Ensure new priorities override existing ones
-    
-    newOrder.forEach((task, index) => {
-      const newPriority = basePriority - index; // Higher index gets lower priority number
+    // Assign new priority values based on the new display order starting from 1
+    newDisplayOrder.forEach((task, index) => {
+      const newPriority = index + 1; // First task gets priority 1, second gets 2, etc.
       updatePriority(task.id, newPriority);
     });
 
@@ -142,7 +141,7 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
           <div
             className="flex flex-nowrap overflow-x-auto h-full p-2 space-x-4"
             onDragOver={handleDragOver}
-            onDrop={(e) => handleDrop(e, '')} // Handle drop outside of specific cards
+            onDrop={(e) => handleDrop(e, '')} // Handle drop outside of specific cards (at the end)
           >
             {prioritizedTasks.length === 0 ? (
               <div className="text-muted-foreground p-4">No tasks to plan.</div>
