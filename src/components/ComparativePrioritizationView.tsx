@@ -40,7 +40,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
   // Initialize selected tasks with all non-done, non-dropped top-level tasks
   useEffect(() => {
     setSelectedTasks(topLevelTasks);
-  }, [topLevelTasks]);
+  }, []);
 
   const handleTaskSelection = (task: Task, isSelected: boolean) => {
     if (isSelected) {
