@@ -112,10 +112,10 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
   const applyPriorities = () => {
     if (prioritizedResults) {
       // Assign priorities based on rank (higher score = higher priority)
-      // Max priority is the number of tasks, lowest is 1
+      // Use ascending order (1, 2, 3, etc.) so the highest-ranked task gets priority 1
       const updatedPriorities = prioritizedResults.map((result, index) => ({
         id: result.taskId,
-        priority: prioritizedResults.length - index,
+        priority: index + 1, // First task gets priority 1 (highest priority), second gets 2, etc.
       }));
       onUpdatePriorities(updatedPriorities);
       onClose(); // Close the view after applying
