@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, CircleDot, Flame } from 'lucide-react';
+import { saveFiltersToSessionStorage, loadFiltersFromSessionStorage, clearFiltersFromSessionStorage } from "@/lib/filter-storage";
+import { Filters } from "./FilterControls";
 
 interface ComparativePrioritizationViewProps {
   tasks: Task[];
@@ -22,11 +24,26 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
   onUpdatePriorities,
   onClose,
 }) => {
+  const defaultComparativeFilters: Filters = {
+    showUrgent: false,
+    showImpact: false,
+    showMajorIncident: false,
+    status: [],
+    searchText: "",
+    difficulty: [],
+    category: []
+  };
+
+  const [filters, setFilters] = useState<Filters>(() => {
+    const storedFilters = loadFiltersFromSessionStorage();
+    return storedFilters || defaultComparativeFilters;
+  });
+
   const [selectedTasks, setSelectedTasks] = useState<Task[]>([]);
-  const [filterUrgent, setFilterUrgent] = useState<boolean | null>(null); // null = all, true = only urgent, false = exclude urgent
-  const [filterImpact, setFilterImpact] = useState<boolean | null>(null); // null = all, true = only impact, false = exclude impact
-  const [filterIncident, setFilterIncident] = useState<boolean | null>(null); // null = all, true = only incident, false = exclude incident
-  const [comparisonState, setComparisonState] = useState<{
+  const [filterUrgent, setFilterUrgent] = useState<boolean | null>(filters.showUrgent ? true : (filters.showUrgent === false ? false : null)); // null = all, true = only urgent, false = exclude urgent
+ const [filterImpact, setFilterImpact] = useState<boolean | null>(filters.showImpact ? true : (filters.showImpact === false ? false : null)); // null = all, true = only impact, false = exclude impact
+ const [filterIncident, setFilterIncident] = useState<boolean | null>(filters.showMajorIncident ? true : (filters.showMajorIncident === false ? false : null)); // null = all, true = only incident, false = exclude incident
+ const [comparisonState, setComparisonState] = useState<{
     leftTask: Task | null;
     rightTask: Task | null;
     currentIndex: number;
@@ -42,8 +59,20 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
   const [prioritizedResults, setPrioritizedResults] = useState<ComparisonResult[] | null>(null);
   const topLevelTasks = tasks.filter(task => !task.parentId); // Filter for top-level tasks
 
-  // Initialize selected tasks with all non-done, non-dropped top-level tasks
+ // Effect to update session storage when filters change
   useEffect(() => {
+    const newFilters: Filters = {
+      ...filters,
+      showUrgent: filterUrgent === null ? false : filterUrgent,
+      showImpact: filterImpact === null ? false : filterImpact,
+      showMajorIncident: filterIncident === null ? false : filterIncident,
+    };
+    setFilters(newFilters);
+    saveFiltersToSessionStorage(newFilters);
+  }, [filterUrgent, filterImpact, filterIncident]);
+
+  // Initialize selected tasks with all non-done, non-dropped top-level tasks
+ useEffect(() => {
     setSelectedTasks(topLevelTasks);
   }, []);
 

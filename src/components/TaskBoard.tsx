@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { FilterControls, Filters } from "./FilterControls";
 import { useTasks, Task, TriageStatus } from "@/hooks/useTasks";
 import { QuickTimer } from "@/components/QuickTimer";
 import { aStarTextSearch } from "@/lib/a-star-search";
+import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
 
 import { byId, TaskCard } from "./TaskCard";
 
@@ -63,7 +64,8 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
 
   const [path, setPath] = React.useState<string[]>([]);
   const [highlightedTaskId, setHighlightedTaskId] = React.useState<string | null>(null);
-  const [filters, setFilters] = React.useState<Filters>({
+
+  const defaultTaskBoardFilters: Filters = {
     showUrgent: false,
     showImpact: false,
     showMajorIncident: false,
@@ -71,7 +73,19 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
     searchText: "",
     difficulty: [],
     category: []
+  };
+
+  const [filters, setFilters] = React.useState<Filters>(() => {
+    const storedFilters = loadFiltersFromSessionStorage();
+    return storedFilters || defaultTaskBoardFilters;
   });
+
+  // Effect to update session storage when filters change
+  useEffect(() => {
+    // The FilterControls component now handles saving filters to session storage
+    // No need to save here directly, as setFilters is passed to FilterControls
+  }, [filters]);
+
   const cardRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
 
   React.useEffect(() => {
@@ -252,10 +266,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
           <FilterControls 
             filters={filters} 
             setFilters={setFilters} 
-            defaultFilters={{
-              status: ["Backlog", "Ready", "WIP", "Blocked"],
-              category: []
-            }}
+            defaultFilters={defaultTaskBoardFilters}
           />
           {/* Vertical separator */}
           <div className="h-6 border-l border-gray-300 mx-2"></div>
@@ -405,7 +416,9 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                       }
 
                       // Apply category filter
-                      if (filters.category.length > 0 && !filters.category.includes(task.category)) {
+                      // Tasks without a category should be displayed if any category is selected.
+                      // Tasks with a category should only be displayed if their category is selected.
+                      if (filters.category.length > 0 && task.category && !filters.category.includes(task.category)) {
                         return false;
                       }
 

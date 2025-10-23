@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useTasks, Task, TriageStatus, Category } from "@/hooks/useTasks";
@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { eventBus } from "@/lib/events";
 import { FilterControls, Filters } from "./FilterControls";
 import { aStarTextSearch } from "@/lib/a-star-search";
+import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
 
 
 
@@ -228,7 +229,8 @@ const Column: React.FC<{
 
 const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ onFocusOnTask }) => {
   const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateCategory, updateTitle, deleteTask, duplicateTaskStructure, reparent, toggleDone, updateTerminationDate, updateDurationInMinutes, updateComment } = useTasks();
-  const [filters, setFilters] = React.useState<Filters>({
+
+  const defaultKanbanFilters: Filters = {
     showUrgent: false,
     showImpact: false,
     showMajorIncident: false,
@@ -236,7 +238,19 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
     searchText: "",
     difficulty: [],
     category: []
+  };
+
+  const [filters, setFilters] = React.useState<Filters>(() => {
+    const storedFilters = loadFiltersFromSessionStorage();
+    return storedFilters || defaultKanbanFilters;
   });
+
+  // Effect to update session storage when filters change
+  useEffect(() => {
+    // The FilterControls component now handles saving filters to session storage
+    // No need to save here directly, as setFilters is passed to FilterControls
+  }, [filters]);
+
   const map = React.useMemo(() => byId(tasks), [tasks]);
   const topTasks = React.useMemo(() => {
     let filtered = tasks.filter((t) => !t.parentId);
@@ -255,7 +269,7 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
       filtered = filtered.filter(t => filters.difficulty.includes(t.difficulty));
     }
     if (filters.category.length > 0) {
-      filtered = filtered.filter(t => t.category && filters.category.includes(t.category));
+      filtered = filtered.filter(t => !t.category || filters.category.includes(t.category));
     }
     if (filters.status.length > 0) {
       filtered = filtered.filter(t => filters.status.includes(t.triageStatus));
@@ -392,10 +406,7 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
         <FilterControls 
           filters={filters} 
           setFilters={setFilters} 
-          defaultFilters={{
-            status: ["Backlog", "Ready", "WIP", "Blocked", "Done", "Dropped"],
-            category: []
-          }}
+          defaultFilters={defaultKanbanFilters}
         />
       </div>
  
