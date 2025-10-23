@@ -4,7 +4,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MultiSelect } from "@/components/ui/multi-select";
-import { TriageStatus } from "@/hooks/useTasks";
+import { TriageStatus, Category } from "@/hooks/useTasks";
+import { CATEGORIES } from "@/data/categories";
 
 export type Filters = {
   showUrgent: boolean;
@@ -14,6 +15,7 @@ export type Filters = {
   showDone?: boolean;
   searchText?: string;
   difficulty: number[];
+  category: Category[];
 };
 
 interface FilterControlsProps {
@@ -38,7 +40,8 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
       status: [],
       showDone: false,
       searchText: "",
-      difficulty: []
+      difficulty: [],
+      category: []
     };
     
     // If defaultFilters is provided, use it to override the base reset filters
@@ -135,12 +138,22 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
           className="w-40"
         />
       </div>
+      <div className="flex items-center space-x-2">
+        <Label>Category:</Label>
+        <MultiSelect
+          options={CATEGORIES.map(c => ({ value: c, label: c }))}
+          selected={filters.category}
+          onChange={(selected) => setFilters(f => ({ ...f, category: selected as Category[] }))}
+          placeholder="Select category..."
+          className="w-40"
+        />
+      </div>
       <Button
         variant="outline"
         size="sm"
         onClick={() => setFilters(getResetFilters())}
       >
-        Clear
+        Clear All Filters
       </Button>
     </React.Fragment>
   );

@@ -29,7 +29,8 @@ export type Category =
   | "UX/UI"
   | "Admin"
   | "Development"
-  | "System Operations";
+  | "System Operations"
+  | "Private";
 
 export type Task = {
   id: string;

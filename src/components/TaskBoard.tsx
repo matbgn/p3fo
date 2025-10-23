@@ -69,7 +69,8 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
     showMajorIncident: false,
     status: ["Backlog", "Ready", "WIP", "Blocked"], // All non-Done, non-Dropped statuses by default
     searchText: "",
-    difficulty: []
+    difficulty: [],
+    category: []
   });
   const cardRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -252,7 +253,8 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
             filters={filters} 
             setFilters={setFilters} 
             defaultFilters={{
-              status: ["Backlog", "Ready", "WIP", "Blocked"]
+              status: ["Backlog", "Ready", "WIP", "Blocked"],
+              category: []
             }}
           />
           {/* Vertical separator */}
@@ -399,6 +401,11 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
 
                       // Apply difficulty filter
                       if (filters.difficulty.length > 0 && !filters.difficulty.includes(task.difficulty)) {
+                        return false;
+                      }
+
+                      // Apply category filter
+                      if (filters.category.length > 0 && !filters.category.includes(task.category)) {
                         return false;
                       }
 
