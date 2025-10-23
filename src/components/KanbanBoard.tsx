@@ -34,7 +34,12 @@ const sortTasks = (a: Task, b: Task) => {
   if (aIsBlocked && !bIsBlocked) return 1;
   if (!aIsBlocked && bIsBlocked) return -1;
 
-  // 4. Urgency and Impact
+  // 4. Priority
+  if (a.priority !== b.priority) {
+   return (a.priority ?? 0) - (b.priority ?? 0);
+ }
+
+  // 5. Urgency and Impact
   const aScore = (a.urgent ? 2 : 0) + (a.impact ? 1 : 0);
   const bScore = (b.urgent ? 2 : 0) + (b.impact ? 1 : 0);
 
@@ -42,13 +47,13 @@ const sortTasks = (a: Task, b: Task) => {
     return bScore - aScore;
   }
 
-  // 5. Tasks with terminationDate (deadline) first
+  // 6. Tasks with terminationDate (deadline) first
   const aHasDeadline = a.terminationDate !== undefined && a.terminationDate !== 0;
   const bHasDeadline = b.terminationDate !== undefined && b.terminationDate !== 0;
   if (aHasDeadline && !bHasDeadline) return -1;
   if (!aHasDeadline && bHasDeadline) return 1;
 
-  // 6. Fallback to creation time
+  // 7. Fallback to creation time
   return a.createdAt - b.createdAt;
 };
 
