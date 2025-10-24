@@ -21,8 +21,6 @@ import { ChronologicalView } from "./ChronologicalView";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { EditableTimeEntry, formatDuration } from "./EditableTimeEntry";
 import { useSettings } from "@/hooks/useSettings";
-import { saveFiltersToSessionStorage, loadFiltersFromSessionStorage, clearFiltersFromSessionStorage } from "@/lib/filter-storage";
-import { Filters } from "./FilterControls";
 
 type TimetableView = "categorical" | "chronological";
 type TimeChunk = "all" | "am" | "pm";
@@ -54,42 +52,12 @@ export const Timetable: React.FC<{
     }, {} as Record<string, typeof tasks[0]>);
   }, [tasks]);
 
-  const defaultTimetableFilters: Filters = {
-    showUrgent: false,
-    showImpact: false,
-    showMajorIncident: false,
-    status: [],
-    searchText: "",
-    difficulty: [],
-    category: []
-  };
-
-  const [filters, setFilters] = useState<Filters>(() => {
-    const storedFilters = loadFiltersFromSessionStorage();
-    // Merge stored filters with default timetable-specific filters
-    return { ...defaultTimetableFilters, ...storedFilters };
-  });
-
-  // Update individual filter states from the combined filters object
-  const [selectedCategories, setSelectedCategories] = useState<Category[]>(filters.category || []);
+  const [selectedCategories, setSelectedCategories] = useState<Category[]>([]);
   const [dateRange, setDateRange] = useState<{ start?: Date; end?: Date }>({}); // Date range is not part of Filters type, managed separately
   const [predefinedRange, setPredefinedRange] = useState<string | null>(null); // Predefined range is not part of Filters type, managed separately
-  const [showUrgent, setShowUrgent] = useState(filters.showUrgent);
-  const [showImpact, setShowImpact] = useState(filters.showImpact);
-  const [showMajorIncident, setShowMajorIncident] = useState(filters.showMajorIncident);
-
-  // Effect to update combined filters object when individual filter states change
-  useEffect(() => {
-    const newFilters: Filters = {
-      ...filters,
-      showUrgent,
-      showImpact,
-      showMajorIncident,
-      category: selectedCategories,
-    };
-    setFilters(newFilters);
-    saveFiltersToSessionStorage(newFilters);
-  }, [showUrgent, showImpact, showMajorIncident, selectedCategories]);
+  const [showUrgent, setShowUrgent] = useState(false);
+  const [showImpact, setShowImpact] = useState(false);
+  const [showMajorIncident, setShowMajorIncident] = useState(false);
 
   // Helper to determine if the current range is a single day
   const isSingleDayRange = React.useCallback(() => {
@@ -547,7 +515,7 @@ export const Timetable: React.FC<{
             setShowImpact(false);
             setShowMajorIncident(false);
             setTimeChunk("all");
-            clearFiltersFromSessionStorage(); // Clear from session storage as well
+            // No need to clear from session storage for Timetable
           }}
         >
           Clear All Filters
