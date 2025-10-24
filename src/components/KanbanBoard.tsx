@@ -273,9 +273,6 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
     }
     if (filters.status.length > 0) {
       filtered = filtered.filter(t => filters.status.includes(t.triageStatus));
-    } else {
-      // If no status is selected, show no tasks
-      filtered = [];
     }
     return filtered;
   }, [tasks, filters]);

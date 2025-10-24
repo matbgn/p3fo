@@ -383,12 +383,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                       // Subtasks themselves don't have tags, so we only apply status filtering to them
                       if (task.parentId) {
                         // For subtasks, we only apply the status filter.
-                        if (filters.status.length > 0) {
-                          if (!filters.status.includes(task.triageStatus)) {
-                            return false;
-                          }
-                        } else {
-                          // If no statuses are selected, hide all tasks.
+                        if (filters.status.length > 0 && !filters.status.includes(task.triageStatus)) {
                           return false;
                         }
                         // Subtasks pass all other filters (urgent, impact, etc.)
@@ -423,13 +418,9 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                       }
 
                       // 5. Apply status filter (multiselect) for all tasks
-                      // If filters.status is empty, it means "show nothing", so hide all tasks.
-                      // If filters.status is not empty, then check if the task's triageStatus is included.
-                      if (filters.status.length > 0) {
-                        if (!filters.status.includes(task.triageStatus)) {
-                          return false;
-                        }
-                      } else {
+                      // If filters.status is empty, show all tasks (no filtering).
+                      // If filters.status has values, only show tasks with matching statuses.
+                      if (filters.status.length > 0 && !filters.status.includes(task.triageStatus)) {
                         return false;
                       }
 
