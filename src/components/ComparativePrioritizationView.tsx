@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Task } from '@/hooks/useTasks';
+import { Task, useTasks } from '@/hooks/useTasks';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -10,7 +10,6 @@ import { Filters } from "./FilterControls";
 
 interface ComparativePrioritizationViewProps {
   tasks: Task[];
-  onUpdatePriorities: (updatedTasks: { id: string; priority: number }[]) => void;
   onClose: () => void; // To allow closing or switching back to the main view
 }
 
@@ -21,9 +20,9 @@ interface ComparisonResult {
 
 const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps> = ({
   tasks,
-  onUpdatePriorities,
   onClose,
 }) => {
+  const { updatePrioritiesBulk } = useTasks(); // Use the new bulk update function
   const defaultComparativeFilters: Filters = {
     showUrgent: false,
     showImpact: false,
@@ -40,9 +39,9 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
   });
 
   const [selectedTasks, setSelectedTasks] = useState<Task[]>([]);
-  const [filterUrgent, setFilterUrgent] = useState<boolean | null>(filters.showUrgent ? true : (filters.showUrgent === false ? false : null)); // null = all, true = only urgent, false = exclude urgent
- const [filterImpact, setFilterImpact] = useState<boolean | null>(filters.showImpact ? true : (filters.showImpact === false ? false : null)); // null = all, true = only impact, false = exclude impact
- const [filterIncident, setFilterIncident] = useState<boolean | null>(filters.showMajorIncident ? true : (filters.showMajorIncident === false ? false : null)); // null = all, true = only incident, false = exclude incident
+  const [filterUrgent, setFilterUrgent] = useState<boolean | null>(null); // null = all, true = only urgent, false = exclude urgent
+  const [filterImpact, setFilterImpact] = useState<boolean | null>(null); // null = all, true = only impact, false = exclude impact
+  const [filterIncident, setFilterIncident] = useState<boolean | null>(null); // null = all, true = only incident, false = exclude incident
  const [comparisonState, setComparisonState] = useState<{
     leftTask: Task | null;
     rightTask: Task | null;
@@ -57,6 +56,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
     pairs: [],
   });
   const [prioritizedResults, setPrioritizedResults] = useState<ComparisonResult[] | null>(null);
+  const [initialTaskPriorities, setInitialTaskPriorities] = useState<Record<string, number | undefined>>({});
   const topLevelTasks = tasks.filter(task => !task.parentId); // Filter for top-level tasks
 
  // Effect to update session storage when filters change
@@ -72,9 +72,10 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
   }, [filterUrgent, filterImpact, filterIncident]);
 
   // Initialize selected tasks with all non-done, non-dropped top-level tasks
- useEffect(() => {
-    setSelectedTasks(topLevelTasks);
-  }, []);
+  useEffect(() => {
+    setSelectedTasks(topLevelTasks.filter(task => task.triageStatus !== "Done" && task.triageStatus !== "Dropped"));
+    setInitialTaskPriorities(Object.fromEntries(tasks.map(task => [task.id, task.priority])));
+  }, [tasks]);
 
   // Filter tasks based on urgency, impact, and incident state
   const filterTasks = (tasks: Task[]): Task[] => {
@@ -130,7 +131,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
         newPairs.push([selectedTasks[i].id, selectedTasks[j].id]);
       }
     }
-
+ 
     setComparisonState({
       leftTask: selectedTasks.find(t => t.id === newPairs[0][0]) || null,
       rightTask: selectedTasks.find(t => t.id === newPairs[0][1]) || null,
@@ -170,20 +171,60 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
 
   const applyPriorities = () => {
     if (prioritizedResults) {
-      // Assign priorities based on rank (higher score = higher priority)
-      // Use ascending order (1, 2, 3, etc.) so the highest-ranked task gets priority 1
-      const updatedPriorities = prioritizedResults.map((result, index) => ({
-        id: result.taskId,
-        priority: index + 1, // First task gets priority 1 (highest priority), second gets 2, etc.
+      // Create a map for quick lookup of all tasks by ID
+      const allTasksMap = new Map<string, Task>();
+      tasks.forEach(task => allTasksMap.set(task.id, task));
+
+      // Get the original full list of tasks, sorted by their current priority.
+      // This maintains the relative order of tasks not involved in comparison.
+      const originalSortedTasks = [...tasks].sort((a, b) => (a.priority || Infinity) - (b.priority || Infinity));
+
+      // Create a set of IDs for tasks that were part of the comparison.
+      const selectedTaskIds = new Set(prioritizedResults.map(result => result.taskId));
+
+      // Create a list of the selected tasks, ordered according to their new priorities.
+      const newOrderedSelectedTasks = prioritizedResults.map(result => allTasksMap.get(result.taskId)!);
+      let currentSelectedTaskIndex = 0;
+
+      // Build the final merged list of tasks.
+      const finalMergedTasks: Task[] = [];
+      for (const task of originalSortedTasks) {
+        if (selectedTaskIds.has(task.id)) {
+          // If this task was selected for comparison, insert the next task from the newly prioritized list
+          finalMergedTasks.push(newOrderedSelectedTasks[currentSelectedTaskIndex]);
+          currentSelectedTaskIndex++;
+        } else {
+          // If this task was not selected, keep it in its original relative position
+          finalMergedTasks.push(task);
+        }
+      }
+
+      // Assign new sequential priorities based on the final merged list.
+      const updatedPriorities = finalMergedTasks.map((task, index) => ({
+        id: task.id,
+        priority: index + 1, // Priorities are 1-based
       }));
-      onUpdatePriorities(updatedPriorities);
+
+      updatePrioritiesBulk(updatedPriorities); // Use the bulk update function
       onClose(); // Close the view after applying
     }
   };
 
+  const handleCopyTitlesToClipboard = () => {
+    const titles = filteredTopLevelTasks.map(task => task.title).join('\n');
+    navigator.clipboard.writeText(titles)
+      .then(() => {
+        alert('Task titles copied to clipboard!');
+      })
+      .catch(err => {
+        console.error('Failed to copy text: ', err);
+        alert('Failed to copy task titles to clipboard.');
+      });
+  };
+
   const currentPair = comparisonState.pairs[comparisonState.currentIndex];
-  const progress = selectedTasks.length > 1 
-    ? ((comparisonState.currentIndex) / comparisonState.pairs.length) * 100 
+  const progress = selectedTasks.length > 1
+    ? ((comparisonState.currentIndex) / comparisonState.pairs.length) * 100
     : 0;
 
   return (
@@ -324,40 +365,46 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                       checked={selectedTasks.some(t => t.id === task.id)}
                       onCheckedChange={(checked) => handleTaskSelection(task, !!checked)}
                     />
-                    <div className="flex-1">
+                    <div className="flex-1 flex flex-wrap items-center gap-x-2">
                       <label
                         htmlFor={`task-${task.id}`}
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 block"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                       >
                         {task.title}
                       </label>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {task.urgent && (
-                          <Badge variant="destructive" className="text-xs py-0.5 px-1.5">
-                            <AlertTriangle className="h-2.5 w-2.5 mr-1" />
-                            Urgent
-                          </Badge>
-                        )}
-                        {task.impact && (
-                          <Badge variant="secondary" className="text-xs py-0.5 px-1.5 bg-yellow-500 hover:bg-yellow-600 text-yellow-900">
-                            <CircleDot className="h-2.5 w-2.5 mr-1" />
-                            High Impact
-                          </Badge>
-                        )}
-                        {task.majorIncident && (
-                          <Badge variant="destructive" className="text-xs py-0.5 px-1.5 bg-red-700 hover:bg-red-800 text-white">
-                            <Flame className="h-2.5 w-2.5 mr-1" />
-                            Incident
-                          </Badge>
-                        )}
-                      </div>
+                      {task.urgent && (
+                        <Badge variant="destructive" className="text-xs py-0.5 px-1.5">
+                          <AlertTriangle className="h-2.5 w-2.5 mr-1" />
+                          Urgent
+                        </Badge>
+                      )}
+                      {task.impact && (
+                        <Badge variant="secondary" className="text-xs py-0.5 px-1.5 bg-yellow-500 hover:bg-yellow-600 text-yellow-900">
+                          <CircleDot className="h-2.5 w-2.5 mr-1" />
+                          High Impact
+                        </Badge>
+                      )}
+                      {task.majorIncident && (
+                        <Badge variant="destructive" className="text-xs py-0.5 px-1.5 bg-red-700 hover:bg-red-800 text-white">
+                          <Flame className="h-2.5 w-2.5 mr-1" />
+                          Incident
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
-              <Button onClick={startComparison} className="mt-4" disabled={selectedTasks.length < 2}>
-                Start Comparative Prioritization ({selectedTasks.length} tasks selected)
-              </Button>
+              <div className="mt-4 flex space-x-2">
+                <Button onClick={startComparison} disabled={selectedTasks.length < 2}>
+                  Start Comparative Prioritization ({selectedTasks.length} tasks selected)
+                </Button>
+                <Button variant="outline" onClick={handleCopyTitlesToClipboard} disabled={selectedTasks.length === 0}>
+                  Copy List to Clipboard
+                </Button>
+                <Button variant="outline" onClick={() => setSelectedTasks([])} disabled={selectedTasks.length === 0}>
+                  Deselect All
+                </Button>
+              </div>
             </div>
  
             {comparisonState.leftTask && comparisonState.rightTask && (

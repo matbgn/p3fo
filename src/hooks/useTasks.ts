@@ -529,8 +529,18 @@ const updateTerminationDate = (taskId: string, terminationDate: number | undefin
       updateTaskInTasks(taskId, (t) => ({ ...t, durationInMinutes: durationInMinutes }));
       persistTasks();
     }, []),
-    updatePriority: React.useCallback((taskId: string, priority: number) => {
+    updatePriority: React.useCallback((taskId: string, priority: number | undefined) => {
       updateTaskInTasks(taskId, (t) => ({ ...t, priority: priority }));
+      persistTasks();
+    }, []),
+    updatePrioritiesBulk: React.useCallback((updatedTasks: { id: string; priority: number | undefined }[]) => {
+      tasks = tasks.map(task => {
+        const updatedTask = updatedTasks.find(t => t.id === task.id);
+        if (updatedTask) {
+          return { ...task, priority: updatedTask.priority };
+        }
+        return task;
+      });
       persistTasks();
     }, []),
   };
