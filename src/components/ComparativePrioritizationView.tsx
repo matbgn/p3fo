@@ -404,6 +404,9 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                 <Button variant="outline" onClick={() => setSelectedTasks([])} disabled={selectedTasks.length === 0}>
                   Deselect All
                 </Button>
+                <Button variant="outline" onClick={() => setSelectedTasks(filteredTopLevelTasks)} disabled={selectedTasks.length === filteredTopLevelTasks.length}>
+                  Select All
+                </Button>
               </div>
             </div>
  
