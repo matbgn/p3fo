@@ -24,14 +24,14 @@ A comprehensive productivity tool to organize your goals with results in mind, b
 
 ## 📋 Current Views
 
-. **Focus View**: TaskBoard for detailed task and subtask management
-. **Project View**: Visual kanban board with drag-and-drop capabilities
-. **Program View**: Calendar-based task scheduling
-. **Plan View**: Strategic planning interface with priorization tool
-. **Timetable View**: Time management dashboard
-. **QoL Survey**: Quality of Life Index tracking
-. **Metrics Dashboard**: Productivity analytics and insights
-. **Settings**: Application configuration
+1. **Focus View**: TaskBoard for detailed task and subtask management
+2. **Kanban View**: Visual kanban board with drag-and-drop capabilities
+3. **Timetable View**: Calendar-based task scheduling
+4. **Program View**: High-level program management interface
+5. **Plan View**: Strategic planning interface with prioritization tool
+6. **Metrics Dashboard**: Productivity analytics and insights
+7. **QoL Survey**: Quality of Life Index tracking
+8. **Settings**: Application configuration
 
 ## 🚀 Quick Start
 
