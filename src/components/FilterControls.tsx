@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MultiSelect } from "@/components/ui/multi-select";
-import { TriageStatus } from "@/hooks/useTasks";
+import { TriageStatus, Category } from "@/hooks/useTasks";
+import { CATEGORIES } from "@/data/categories";
+import { saveFiltersToSessionStorage, clearFiltersFromSessionStorage } from "@/lib/filter-storage";
 
 export type Filters = {
   showUrgent: boolean;
@@ -14,6 +16,7 @@ export type Filters = {
   showDone?: boolean;
   searchText?: string;
   difficulty: number[];
+  category: Category[];
 };
 
 interface FilterControlsProps {
@@ -23,12 +26,18 @@ interface FilterControlsProps {
   defaultFilters?: Partial<Filters>;
 }
 
-export const FilterControls: React.FC<FilterControlsProps> = ({ 
-  filters, 
-  setFilters, 
+export const FilterControls: React.FC<FilterControlsProps> = ({
+  filters,
+  setFilters,
   includeDoneFilter,
-  defaultFilters 
+  defaultFilters
 }) => {
+  // Update state and persist to session storage
+  const updateAndPersistFilters = (newFilters: Filters) => {
+    setFilters(newFilters);
+    saveFiltersToSessionStorage(newFilters);
+  };
+
   const getResetFilters = (): Filters => {
     // Default reset filters (previous behavior)
     const baseResetFilters: Filters = {
@@ -38,9 +47,10 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
       status: [],
       showDone: false,
       searchText: "",
-      difficulty: []
+      difficulty: [],
+      category: []
     };
-    
+
     // If defaultFilters is provided, use it to override the base reset filters
     if (defaultFilters) {
       return {
@@ -48,8 +58,14 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
         ...defaultFilters
       };
     }
-    
+
     return baseResetFilters;
+  };
+
+  const handleClearFilters = () => {
+    const resetFilters = getResetFilters();
+    updateAndPersistFilters(resetFilters);
+    clearFiltersFromSessionStorage();
   };
 
   return (
@@ -59,7 +75,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
           type="text"
           placeholder="Search tasks..."
           value={filters.searchText || ""}
-          onChange={(e) => setFilters(f => ({ ...f, searchText: e.target.value }))}
+          onChange={(e) => updateAndPersistFilters({ ...filters, searchText: e.target.value })}
           className="w-40"
         />
       </div>
@@ -68,7 +84,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
         <Checkbox
           id="show-urgent"
           checked={filters.showUrgent}
-          onCheckedChange={(checked) => setFilters(f => ({ ...f, showUrgent: !!checked }))}
+          onCheckedChange={(checked) => updateAndPersistFilters({ ...filters, showUrgent: !!checked })}
         />
         <Label htmlFor="show-urgent">Urgent</Label>
       </div>
@@ -77,7 +93,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
         <Checkbox
           id="show-impact"
           checked={filters.showImpact}
-          onCheckedChange={(checked) => setFilters(f => ({ ...f, showImpact: !!checked }))}
+          onCheckedChange={(checked) => updateAndPersistFilters({ ...filters, showImpact: !!checked })}
         />
         <Label htmlFor="show-impact">High Impact</Label>
       </div>
@@ -86,7 +102,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
         <Checkbox
           id="show-major-incident"
           checked={filters.showMajorIncident}
-          onCheckedChange={(checked) => setFilters(f => ({ ...f, showMajorIncident: !!checked }))}
+          onCheckedChange={(checked) => updateAndPersistFilters({ ...filters, showMajorIncident: !!checked })}
         />
         <Label htmlFor="show-major-incident">Incident on Delivery</Label>
       </div>
@@ -103,7 +119,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
             { value: "Dropped", label: "Dropped" }
           ]}
           selected={filters.status}
-          onChange={(selected) => setFilters(f => ({ ...f, status: selected as TriageStatus[] }))}
+          onChange={(selected) => updateAndPersistFilters({ ...filters, status: selected as TriageStatus[] })}
           placeholder="Select status..."
           className="w-40"
         />
@@ -113,7 +129,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
           <Checkbox
             id="show-done"
             checked={!!filters.showDone}
-            onCheckedChange={(checked) => setFilters(f => ({ ...f, showDone: !!checked }))}
+            onCheckedChange={(checked) => updateAndPersistFilters({ ...filters, showDone: !!checked })}
           />
           <Label htmlFor="show-done">Done</Label>
         </div>
@@ -130,17 +146,27 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
             { value: "8", label: "8" }
           ]}
           selected={filters.difficulty.map(String)}
-          onChange={(selected) => setFilters(f => ({ ...f, difficulty: selected.map(Number) }))}
+          onChange={(selected) => updateAndPersistFilters({ ...filters, difficulty: selected.map(Number) })}
           placeholder="Select difficulty..."
+          className="w-40"
+        />
+      </div>
+      <div className="flex items-center space-x-2">
+        <Label>Category:</Label>
+        <MultiSelect
+          options={CATEGORIES.map(c => ({ value: c, label: c }))}
+          selected={filters.category}
+          onChange={(selected) => updateAndPersistFilters({ ...filters, category: selected as Category[] })}
+          placeholder="Select category..."
           className="w-40"
         />
       </div>
       <Button
         variant="outline"
         size="sm"
-        onClick={() => setFilters(getResetFilters())}
+        onClick={handleClearFilters}
       >
-        Clear
+        Clear All Filters
       </Button>
     </React.Fragment>
   );

@@ -29,7 +29,8 @@ export type Category =
   | "UX/UI"
   | "Admin"
   | "Development"
-  | "System Operations";
+  | "System Operations"
+  | "Private";
 
 export type Task = {
   id: string;
@@ -157,7 +158,7 @@ const createTask = (title: string, parentId: string | null) => {
   };
   tasks = [...tasks, t];
 
-  if (parentId) {
+ if (parentId) {
     tasks = tasks.map(currentTask => {
       if (currentTask.id === parentId) {
         const updatedParent = {
@@ -172,6 +173,9 @@ const createTask = (title: string, parentId: string | null) => {
       }
       return currentTask;
     });
+    
+    // Check parent task completion since a new subtask was added
+    checkParentTaskCompletion(parentId);
   }
   persistTasks();
   return t.id;
@@ -189,7 +193,7 @@ const reparent = (taskId: string, newParentId: string | null) => {
     cursor = map[cursor]?.parentId;
   }
 
-  const oldParentId = task.parentId ?? null;
+ const oldParentId = task.parentId ?? null;
 
   tasks = tasks.map(t => {
     if (t.id === taskId) {
@@ -202,7 +206,18 @@ const reparent = (taskId: string, newParentId: string | null) => {
     return t;
   });
   persistTasks();
+  
+  // Check parent task completion for both old and new parent since task relationships changed
+  if (oldParentId) {
+    checkParentTaskCompletion(oldParentId);
+  }
+  if (newParentId) {
+    checkParentTaskCompletion(newParentId);
+  }
 };
+
+// Flag to prevent cascading when updating due to child completion
+let isUpdatingDueToChildCompletion = false;
 
 const updateStatus = (taskId: string, status: TriageStatus) => {
   const taskMap = byId(tasks);
@@ -211,20 +226,26 @@ const updateStatus = (taskId: string, status: TriageStatus) => {
 
   const tasksToUpdate = new Set<string>([taskId]);
 
-  if (status === 'Done') {
+  // Only cascade to children if this is not due to child completion logic
+  if (status === 'Done' && !isUpdatingDueToChildCompletion) {
     const getAllChildren = (id: string) => {
       const currentTask = taskMap[id];
       if (currentTask?.children) {
         currentTask.children.forEach(childId => {
-          tasksToUpdate.add(childId);
-          getAllChildren(childId);
+          // Only add child to update if it's not already "Dropped"
+          // This preserves "Dropped" status of children when parent is marked as "Done"
+          const childTask = taskMap[childId];
+          if (childTask && childTask.triageStatus !== "Dropped") {
+            tasksToUpdate.add(childId);
+            getAllChildren(childId);
+          }
         });
       }
     };
     getAllChildren(taskId);
   }
 
-  tasks = tasks.map(t => {
+ tasks = tasks.map(t => {
     if (tasksToUpdate.has(t.id)) {
       return {
         ...t,
@@ -236,13 +257,74 @@ const updateStatus = (taskId: string, status: TriageStatus) => {
   });
 
   persistTasks();
+  
+  // Check parent task completion if this task has a parent
+  // Only do this if we're updating a single task (not cascading from parent to children)
+  if (task.parentId && tasksToUpdate.size === 1) {
+    checkParentTaskCompletion(task.parentId);
+  }
+  
+  // If this task has children, check if all children are done/dropped to potentially update this task status
+  if (task.children && task.children.length > 0) {
+    isUpdatingDueToChildCompletion = true;
+    checkParentTaskCompletion(taskId);
+    isUpdatingDueToChildCompletion = false;
+  }
 };
 
 const toggleDone = (taskId: string) => {
   const task = tasks.find(t => t.id === taskId);
-  if (task) {
-    const newStatus = task.triageStatus === "Done" ? "Ready" : "Done";
+ if (task) {
+    // Toggle between Done/Dropped and Ready/WIP/Blocked/Backlog
+    let newStatus: TriageStatus;
+    if (task.triageStatus === "Done" || task.triageStatus === "Dropped") {
+      // If the task is currently Done or Dropped, revert to Ready
+      newStatus = "Ready";
+    } else {
+      // If the task is in any other state, set it to Done
+      newStatus = "Done";
+    }
     updateStatus(taskId, newStatus);
+  }
+};
+
+// Function to check if all subtasks of a parent are done/dropped and update parent status accordingly
+const checkParentTaskCompletion = (parentId: string) => {
+  const parentTask = tasks.find(t => t.id === parentId);
+  if (!parentTask || !parentTask.children || parentTask.children.length === 0) {
+    return; // No children to check
+ }
+  
+  // Check if all children are done or dropped (consider both as completed)
+ const allChildrenDoneOrDropped = parentTask.children.every(childId => {
+    const childTask = tasks.find(t => t.id === childId);
+    return childTask && (childTask.triageStatus === "Done" || childTask.triageStatus === "Dropped");
+  });
+  
+  if (allChildrenDoneOrDropped) {
+    // Determine the appropriate status for the parent based on children's status
+    // If all children are "Dropped", set parent to "Dropped", otherwise "Done"
+    const allChildrenDropped = parentTask.children.every(childId => {
+      const childTask = tasks.find(t => t.id === childId);
+      return childTask && childTask.triageStatus === "Dropped";
+    });
+    
+    const desiredStatus = allChildrenDropped ? "Dropped" : "Done";
+    
+    // If all children are done/dropped and parent is not already in the desired status, update it
+    if (parentTask.triageStatus !== "Done" && parentTask.triageStatus !== "Dropped") {
+      // Use the internal update function to avoid cascading
+      isUpdatingDueToChildCompletion = true;
+      updateStatus(parentId, desiredStatus);
+      isUpdatingDueToChildCompletion = false;
+    }
+  }
+  // If not all children are done/dropped and parent is done/dropped, revert parent to Ready
+  else if (parentTask.triageStatus === "Done" || parentTask.triageStatus === "Dropped") {
+    // Use the internal update function to avoid cascading
+    isUpdatingDueToChildCompletion = true;
+    updateStatus(parentId, "Ready");
+    isUpdatingDueToChildCompletion = false;
   }
 };
 
@@ -311,96 +393,110 @@ const updateTerminationDate = (taskId: string, terminationDate: number | undefin
   }, []);
 
   const deleteTask = React.useCallback((taskId: string) => {
-    const map = byId(tasks);
-    const taskToDelete = map[taskId];
-    if (!taskToDelete) return;
-
-    const childrenIds = new Set<string>();
-    const getChildren = (id: string) => {
-      childrenIds.add(id);
-      const t = map[id];
-      if (t?.children) {
-        t.children.forEach(getChildren);
-      }
-    };
-    getChildren(taskId);
-
-    tasks = tasks.filter((t) => !childrenIds.has(t.id));
-
-    if (taskToDelete.parentId) {
-      tasks = tasks.map(t => {
-        if (t.id === taskToDelete.parentId) {
-          return { ...t, children: (t.children || []).filter(id => id !== taskId) };
+      const map = byId(tasks);
+      const taskToDelete = map[taskId];
+      if (!taskToDelete) return;
+  
+      const childrenIds = new Set<string>();
+      const getChildren = (id: string) => {
+        childrenIds.add(id);
+        const t = map[id];
+        if (t?.children) {
+          t.children.forEach(getChildren);
         }
-        return t;
-      });
-    }
-
-    persistTasks();
-  }, []);
+      };
+      getChildren(taskId);
+  
+      // Store the parent ID before deleting the task
+      const parentId = taskToDelete.parentId;
+  
+      tasks = tasks.filter((t) => !childrenIds.has(t.id));
+  
+      if (taskToDelete.parentId) {
+        tasks = tasks.map(t => {
+          if (t.id === taskToDelete.parentId) {
+            return { ...t, children: (t.children || []).filter(id => id !== taskId) };
+          }
+          return t;
+        });
+      }
+  
+      persistTasks();
+      
+      // Check parent task completion if the deleted task had a parent
+      if (parentId) {
+        checkParentTaskCompletion(parentId);
+      }
+    }, []);
 
   const duplicateTaskStructure = React.useCallback((taskId: string) => {
-    const map = byId(tasks);
-    const originalTask = map[taskId];
-    if (!originalTask) return null;
-
-    // Create a mapping of old IDs to new IDs
-    const idMap = new Map<string, string>();
-    
-    // Recursive function to duplicate a task and its children
-    const duplicateTask = (task: Task, newParentId: string | null): Task => {
-      // Generate new ID for this task
-      const newId = crypto.randomUUID();
-      idMap.set(task.id, newId);
+      const map = byId(tasks);
+      const originalTask = map[taskId];
+      if (!originalTask) return null;
+  
+      // Create a mapping of old IDs to new IDs
+      const idMap = new Map<string, string>();
       
-      // Create the duplicated task
-      const duplicatedTask: Task = {
-        ...task,
-        id: newId,
-        parentId: newParentId,
-        children: [], // Will be populated later
-        title: `${task.title} (Copy)`,
-        createdAt: Date.now(),
-        priority: Math.min(...tasks.map(t => t.priority || 0)) - 1, // Set lower priority than all existing tasks
+      // Recursive function to duplicate a task and its children
+      const duplicateTask = (task: Task, newParentId: string | null): Task => {
+        // Generate new ID for this task
+        const newId = crypto.randomUUID();
+        idMap.set(task.id, newId);
+        
+        // Create the duplicated task
+        const duplicatedTask: Task = {
+          ...task,
+          id: newId,
+          parentId: newParentId,
+          children: [], // Will be populated later
+          title: `${task.title} (Copy)`,
+          createdAt: Date.now(),
+          priority: Math.min(...tasks.map(t => t.priority || 0)) - 1, // Set lower priority than all existing tasks
+        };
+        
+        // Duplicate children if they exist
+        if (task.children && task.children.length > 0) {
+          const duplicatedChildren: string[] = [];
+          task.children.forEach(childId => {
+            const childTask = map[childId];
+            if (childTask) {
+              const duplicatedChild = duplicateTask(childTask, newId);
+              duplicatedChildren.push(duplicatedChild.id);
+              tasks = [...tasks, duplicatedChild];
+            }
+          });
+          duplicatedTask.children = duplicatedChildren;
+        }
+        
+        return duplicatedTask;
       };
       
-      // Duplicate children if they exist
-      if (task.children && task.children.length > 0) {
-        const duplicatedChildren: string[] = [];
-        task.children.forEach(childId => {
-          const childTask = map[childId];
-          if (childTask) {
-            const duplicatedChild = duplicateTask(childTask, newId);
-            duplicatedChildren.push(duplicatedChild.id);
-            tasks = [...tasks, duplicatedChild];
+      // Start duplication process
+      const duplicatedTask = duplicateTask(originalTask, originalTask.parentId);
+      tasks = [...tasks, duplicatedTask];
+      
+      // Update parent's children array if the duplicated task has a parent
+      if (originalTask.parentId) {
+        tasks = tasks.map(t => {
+          if (t.id === originalTask.parentId) {
+            return {
+              ...t,
+              children: [...(t.children || []), duplicatedTask.id]
+            };
           }
+          return t;
         });
-        duplicatedTask.children = duplicatedChildren;
       }
       
-      return duplicatedTask;
-    };
-    
-    // Start duplication process
-    const duplicatedTask = duplicateTask(originalTask, originalTask.parentId);
-    tasks = [...tasks, duplicatedTask];
-    
-    // Update parent's children array if the duplicated task has a parent
-    if (originalTask.parentId) {
-      tasks = tasks.map(t => {
-        if (t.id === originalTask.parentId) {
-          return {
-            ...t,
-            children: [...(t.children || []), duplicatedTask.id]
-          };
-        }
-        return t;
-      });
-    }
-    
-    persistTasks();
-    return duplicatedTask.id;
-  }, []);
+      persistTasks();
+      
+      // Check parent task completion since new tasks were added
+      if (originalTask.parentId) {
+        checkParentTaskCompletion(originalTask.parentId);
+      }
+      
+      return duplicatedTask.id;
+    }, []);
 
   const clearAllTasks = React.useCallback(() => {
     tasks = [];
@@ -528,8 +624,18 @@ const updateTerminationDate = (taskId: string, terminationDate: number | undefin
       updateTaskInTasks(taskId, (t) => ({ ...t, durationInMinutes: durationInMinutes }));
       persistTasks();
     }, []),
-    updatePriority: React.useCallback((taskId: string, priority: number) => {
+    updatePriority: React.useCallback((taskId: string, priority: number | undefined) => {
       updateTaskInTasks(taskId, (t) => ({ ...t, priority: priority }));
+      persistTasks();
+    }, []),
+    updatePrioritiesBulk: React.useCallback((updatedTasks: { id: string; priority: number | undefined }[]) => {
+      tasks = tasks.map(task => {
+        const updatedTask = updatedTasks.find(t => t.id === task.id);
+        if (updatedTask) {
+          return { ...task, priority: updatedTask.priority };
+        }
+        return task;
+      });
       persistTasks();
     }, []),
   };

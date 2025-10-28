@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useTasks, Task, TriageStatus, Category } from "@/hooks/useTasks";
@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { eventBus } from "@/lib/events";
 import { FilterControls, Filters } from "./FilterControls";
 import { aStarTextSearch } from "@/lib/a-star-search";
+import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
 
 
 
@@ -34,7 +35,12 @@ const sortTasks = (a: Task, b: Task) => {
   if (aIsBlocked && !bIsBlocked) return 1;
   if (!aIsBlocked && bIsBlocked) return -1;
 
-  // 4. Urgency and Impact
+  // 4. Priority
+  if (a.priority !== b.priority) {
+   return (a.priority ?? 0) - (b.priority ?? 0);
+ }
+
+  // 5. Urgency and Impact
   const aScore = (a.urgent ? 2 : 0) + (a.impact ? 1 : 0);
   const bScore = (b.urgent ? 2 : 0) + (b.impact ? 1 : 0);
 
@@ -42,13 +48,13 @@ const sortTasks = (a: Task, b: Task) => {
     return bScore - aScore;
   }
 
-  // 5. Tasks with terminationDate (deadline) first
+  // 6. Tasks with terminationDate (deadline) first
   const aHasDeadline = a.terminationDate !== undefined && a.terminationDate !== 0;
   const bHasDeadline = b.terminationDate !== undefined && b.terminationDate !== 0;
   if (aHasDeadline && !bHasDeadline) return -1;
   if (!aHasDeadline && bHasDeadline) return 1;
 
-  // 6. Fallback to creation time
+  // 7. Fallback to creation time
   return a.createdAt - b.createdAt;
 };
 
@@ -223,14 +229,28 @@ const Column: React.FC<{
 
 const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ onFocusOnTask }) => {
   const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateCategory, updateTitle, deleteTask, duplicateTaskStructure, reparent, toggleDone, updateTerminationDate, updateDurationInMinutes, updateComment } = useTasks();
-  const [filters, setFilters] = React.useState<Filters>({
+
+  const defaultKanbanFilters: Filters = {
     showUrgent: false,
     showImpact: false,
     showMajorIncident: false,
     status: ["Backlog", "Ready", "WIP", "Blocked", "Done", "Dropped"], // All statuses selected by default
     searchText: "",
-    difficulty: []
+    difficulty: [],
+    category: []
+  };
+
+  const [filters, setFilters] = React.useState<Filters>(() => {
+    const storedFilters = loadFiltersFromSessionStorage();
+    return storedFilters || defaultKanbanFilters;
   });
+
+  // Effect to update session storage when filters change
+  useEffect(() => {
+    // The FilterControls component now handles saving filters to session storage
+    // No need to save here directly, as setFilters is passed to FilterControls
+  }, [filters]);
+
   const map = React.useMemo(() => byId(tasks), [tasks]);
   const topTasks = React.useMemo(() => {
     let filtered = tasks.filter((t) => !t.parentId);
@@ -248,11 +268,11 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
     if (filters.difficulty.length > 0) {
       filtered = filtered.filter(t => filters.difficulty.includes(t.difficulty));
     }
+    if (filters.category.length > 0) {
+      filtered = filtered.filter(t => !t.category || filters.category.includes(t.category));
+    }
     if (filters.status.length > 0) {
       filtered = filtered.filter(t => filters.status.includes(t.triageStatus));
-    } else {
-      // If no status is selected, show no tasks
-      filtered = [];
     }
     return filtered;
   }, [tasks, filters]);
@@ -383,9 +403,7 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
         <FilterControls 
           filters={filters} 
           setFilters={setFilters} 
-          defaultFilters={{
-            status: ["Backlog", "Ready", "WIP", "Blocked", "Done", "Dropped"]
-          }}
+          defaultFilters={defaultKanbanFilters}
         />
       </div>
  

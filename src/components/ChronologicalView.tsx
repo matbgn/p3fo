@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Table, TableBody, TableHeader, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { EditableTimeEntry } from './EditableTimeEntry';
 import { TaskHierarchy } from './TaskHierarchy';
 import { useTasks } from '@/hooks/useTasks';
+import { saveFiltersToSessionStorage, loadFiltersFromSessionStorage, clearFiltersFromSessionStorage } from "@/lib/filter-storage";
+import { Filters } from "./FilterControls";
 
 // Define the props for ChronologicalView
 interface ChronologicalViewProps {
@@ -22,7 +24,29 @@ export const ChronologicalView: React.FC<ChronologicalViewProps> = ({
   onDelete,
   onJumpToTask,
 }) => {
-  const { updateTimeEntry, updateCategory } = useTasks();
+ const { updateTimeEntry, updateCategory } = useTasks();
+
+  const defaultChronologicalFilters: Filters = {
+    showUrgent: false,
+    showImpact: false,
+    showMajorIncident: false,
+    status: [],
+    searchText: "",
+    difficulty: [],
+    category: []
+  };
+
+  const [filters, setFilters] = React.useState<Filters>(() => {
+    const storedFilters = loadFiltersFromSessionStorage();
+    return storedFilters || defaultChronologicalFilters;
+  });
+
+ // Effect to update session storage when filters change
+  useEffect(() => {
+    // The FilterControls component now handles saving filters to session storage
+    // No need to save here directly, as setFilters is passed to FilterControls
+ }, [filters]);
+
   // Sort entries in reverse chronologically by start time
   const sortedEntries = [...timerEntries].sort((a, b) => b.startTime - a.startTime);
 

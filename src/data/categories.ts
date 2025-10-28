@@ -16,4 +16,5 @@ export const CATEGORIES: Category[] = [
   "Admin",
   "Development",
   "System Operations",
+  "Private",
 ];

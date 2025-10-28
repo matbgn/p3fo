@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useTasks, Category } from "@/hooks/useTasks";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CategorySelect } from "./CategorySelect";
@@ -51,9 +51,10 @@ export const Timetable: React.FC<{
       return acc;
     }, {} as Record<string, typeof tasks[0]>);
   }, [tasks]);
+
   const [selectedCategories, setSelectedCategories] = useState<Category[]>([]);
-  const [dateRange, setDateRange] = useState<{ start?: Date; end?: Date }>({});
-  const [predefinedRange, setPredefinedRange] = useState<string | null>(null);
+  const [dateRange, setDateRange] = useState<{ start?: Date; end?: Date }>({}); // Date range is not part of Filters type, managed separately
+  const [predefinedRange, setPredefinedRange] = useState<string | null>(null); // Predefined range is not part of Filters type, managed separately
   const [showUrgent, setShowUrgent] = useState(false);
   const [showImpact, setShowImpact] = useState(false);
   const [showMajorIncident, setShowMajorIncident] = useState(false);
@@ -179,12 +180,17 @@ export const Timetable: React.FC<{
  
   // Filter tasks by category, urgency, impact, and major incident
   const filteredTasks = tasks.filter((task) => {
-    // Category filter
+    // Category filter: if categories are selected, show tasks that either have no category
+    // OR have a category that is included in the selected categories.
     if (selectedCategories.length > 0) {
       if (task.category) {
         if (!selectedCategories.includes(task.category)) return false;
       } else {
-        if (!selectedCategories.includes("Uncategorized" as any)) return false;
+        // If task has no category, it should be shown if "Uncategorized" is selected
+        // or if there are other categories selected (implying "show all" when no specific category is assigned)
+        if (!selectedCategories.includes("Uncategorized" as any) && selectedCategories.length > 0) {
+          return false;
+        }
       }
     }
  
@@ -509,6 +515,7 @@ export const Timetable: React.FC<{
             setShowImpact(false);
             setShowMajorIncident(false);
             setTimeChunk("all");
+            // No need to clear from session storage for Timetable
           }}
         >
           Clear All Filters
