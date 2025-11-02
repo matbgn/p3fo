@@ -5,38 +5,11 @@ import { TaskCard } from './TaskCard'; // Import TaskCard
 import ComparativePrioritizationView from './ComparativePrioritizationView'; // Import the new component
 import { Button } from '@/components/ui/button'; // Import Button for view switching
 import { Input } from '@/components/ui/input';
+import { sortTasks } from '@/utils/taskSorting';
 
 interface PlanViewProps {
   onFocusOnTask: (taskId: string) => void;
 }
-
-const sortPlanTasks = (a: Task, b: Task) => {
-  // Always prioritize tasks with an explicit priority over those without
-  if (a.priority !== undefined && b.priority === undefined) {
-    return -1; // a comes before b
-  }
-  if (a.priority === undefined && b.priority !== undefined) {
-    return 1; // b comes before a
-  }
-
-  // If both have explicit priorities, sort by priority (lower value first - ascending order)
-  if (a.priority !== undefined && b.priority !== undefined) {
-    if (a.priority !== b.priority) {
-      return a.priority - b.priority; // Ascending order for priority (1, 2, 3, etc.)
-    }
-  }
-
-  // Then by urgency
-  if (a.urgent && !b.urgent) return -1;
-  if (!a.urgent && b.urgent) return 1;
-
-  // Then by impact
-  if (a.impact && !b.impact) return -1;
-  if (!a.impact && b.impact) return 1;
-
-  // Fallback to creation time
-  return a.createdAt - b.createdAt;
-};
 
 const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
   const { tasks, updateStatus, updateDifficulty, updateCategory, updateTitle, deleteTask, duplicateTaskStructure, toggleUrgent, toggleImpact, toggleMajorIncident, toggleDone, toggleTimer, reparent, updateTerminationDate, updateComment, updateDurationInMinutes, updatePriority, createTask } = useTasks();
@@ -55,7 +28,7 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
   const prioritizedTasks = React.useMemo(() => {
     return tasks
       .filter(task => !task.parentId && task.triageStatus !== 'Done' && task.triageStatus !== 'Dropped') // Filter for top-level tasks
-      .sort(sortPlanTasks);
+      .sort(sortTasks.plan);
   }, [tasks]); // Re-calculate only when 'tasks' changes
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
@@ -84,7 +57,7 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
     const visibleTopLevelTasks = tasks.filter(task => !task.parentId && task.triageStatus !== 'Done' && task.triageStatus !== 'Dropped');
     
     // Get the sorted order (this is what the user sees in the UI)
-    const currentDisplayOrder = [...visibleTopLevelTasks].sort(sortPlanTasks);
+    const currentDisplayOrder = [...visibleTopLevelTasks].sort(sortTasks.plan);
     
     // Find positions in the display order (what the user sees)
     const draggedIndex = currentDisplayOrder.findIndex(task => task.id === draggedTaskId);
@@ -121,10 +94,6 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
     setDraggedTaskId(null);
   };
 
-  const handleUpdatePriorities = (updatedTasks: { id: string; priority: number }[]) => {
-    updatedTasks.forEach(task => updatePriority(task.id, task.priority));
-    setActiveView('storyboard'); // Switch back to storyboard view after applying priorities
-  };
 
   return (
     <Card className="h-full flex flex-col">
@@ -210,7 +179,6 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
         ) : (
           <ComparativePrioritizationView
             tasks={prioritizedTasks}
-            onUpdatePriorities={handleUpdatePriorities}
             onClose={() => setActiveView('storyboard')}
           />
         )}

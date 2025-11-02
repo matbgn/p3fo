@@ -8,49 +8,9 @@ import { useTasks, Task, TriageStatus } from "@/hooks/useTasks";
 import { QuickTimer } from "@/components/QuickTimer";
 import { aStarTextSearch } from "@/lib/a-star-search";
 import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
+import { sortTasks } from "@/utils/taskSorting";
 
 import { byId, TaskCard } from "./TaskCard";
-
-const sortTasks = (a: Task, b: Task) => {
-  // 1. Priority (if it exists) - higher priority (lower number) comes first
-  if (a.priority !== undefined && b.priority !== undefined) {
-    return a.priority - b.priority; // Lower number means higher priority
-  } else if (a.priority !== undefined) {
-    return -1; // Tasks with priority come first
-  } else if (b.priority !== undefined) {
-    return 1; // Tasks with priority come first
-  }
-
-  // 2. Timeclocked tasks at the top
-  const aIsTimeclocked = a.timer && a.timer.some(entry => entry.endTime === 0);
-  const bIsTimeclocked = b.timer && b.timer.some(entry => entry.endTime === 0);
-  if (aIsTimeclocked && !bIsTimeclocked) return -1;
-  if (!aIsTimeclocked && bIsTimeclocked) return 1;
-
-  // 3. Done tasks at the bottom
-  if (a.triageStatus === "Done" && b.triageStatus !== "Done") return 1;
-  if (a.triageStatus !== "Done" && b.triageStatus === "Done") return -1;
-  if (a.triageStatus === "Done" && b.triageStatus === "Done") {
-    return (b.terminationDate ?? b.createdAt) - (a.terminationDate ?? a.createdAt);
-  }
-
-  // 4. Blocked tasks
-  const aIsBlocked = a.triageStatus === 'Blocked';
-  const bIsBlocked = b.triageStatus === 'Blocked';
-  if (aIsBlocked && !bIsBlocked) return 1;
-  if (!aIsBlocked && bIsBlocked) return -1;
-
-  // 5. Urgency and Impact
-  const aScore = (a.urgent ? 2 : 0) + (a.impact ? 1 : 0);
-  const bScore = (b.urgent ? 2 : 0) + (b.impact ? 1 : 0);
-
-  if (aScore !== bScore) {
-    return bScore - aScore;
-  }
-
-  // 6. Fallback to creation time
-  return a.createdAt - b.createdAt;
-};
 
 type Column = {
   parentId: string | null;
@@ -162,12 +122,12 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
 
       cols.push({
         parentId: "search-results", // Unique ID for search results column
-        items: searchResultTasks.sort(sortTasks),
+        items: searchResultTasks.sort(sortTasks.taskboard),
         activeId: null, // No active task in search results column
       });
     }
 
-    const rootItems = tasks.filter((t) => !t.parentId).sort(sortTasks);
+    const rootItems = tasks.filter((t) => !t.parentId).sort(sortTasks.taskboard);
     cols.push({ parentId: null, items: rootItems, activeId: path[0] });
 
     path.forEach((taskId, idx) => {
@@ -176,7 +136,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
       // Show all children to ensure tasks from other columns are visible
       const children = ((t.children || [])
         .map((id) => map[id])
-        .filter(Boolean) as Task[]).sort(sortTasks);
+        .filter(Boolean) as Task[]).sort(sortTasks.taskboard);
       cols.push({
         parentId: t.id,
         items: children,

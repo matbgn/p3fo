@@ -8,55 +8,11 @@ import { eventBus } from "@/lib/events";
 import { FilterControls, Filters } from "./FilterControls";
 import { aStarTextSearch } from "@/lib/a-star-search";
 import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
-
-
+import { sortTasks } from "@/utils/taskSorting";
 
 type BoardCard =
   | { kind: "parent"; task: Task }
   | { kind: "child"; task: Task; parent: Task };
-
-const sortTasks = (a: Task, b: Task) => {
-  // 1. Timeclocked tasks at the top
-  const aIsTimeclocked = a.timer && a.timer.some(entry => entry.endTime === 0);
-  const bIsTimeclocked = b.timer && b.timer.some(entry => entry.endTime === 0);
-  if (aIsTimeclocked && !bIsTimeclocked) return -1;
-  if (!aIsTimeclocked && bIsTimeclocked) return 1;
-
-  // 2. Done tasks at the bottom
-  if (a.triageStatus === "Done" && b.triageStatus !== "Done") return 1;
-  if (a.triageStatus !== "Done" && b.triageStatus === "Done") return -1;
-  if (a.triageStatus === "Done" && b.triageStatus === "Done") {
-    return (b.terminationDate ?? b.createdAt) - (a.terminationDate ?? a.createdAt);
-  }
-
- // 3. Blocked tasks
-  const aIsBlocked = a.triageStatus === 'Blocked';
-  const bIsBlocked = b.triageStatus === 'Blocked';
-  if (aIsBlocked && !bIsBlocked) return 1;
-  if (!aIsBlocked && bIsBlocked) return -1;
-
-  // 4. Priority
-  if (a.priority !== b.priority) {
-   return (a.priority ?? 0) - (b.priority ?? 0);
- }
-
-  // 5. Urgency and Impact
-  const aScore = (a.urgent ? 2 : 0) + (a.impact ? 1 : 0);
-  const bScore = (b.urgent ? 2 : 0) + (b.impact ? 1 : 0);
-
-  if (aScore !== bScore) {
-    return bScore - aScore;
-  }
-
-  // 6. Tasks with terminationDate (deadline) first
-  const aHasDeadline = a.terminationDate !== undefined && a.terminationDate !== 0;
-  const bHasDeadline = b.terminationDate !== undefined && b.terminationDate !== 0;
-  if (aHasDeadline && !bHasDeadline) return -1;
-  if (!aHasDeadline && bHasDeadline) return 1;
-
-  // 7. Fallback to creation time
-  return a.createdAt - b.createdAt;
-};
 
 const STATUSES: TriageStatus[] = ["Backlog", "Ready", "WIP", "Blocked", "Done", "Dropped"];
 
@@ -361,7 +317,7 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
     for (const s of STATUSES) {
       acc[s] = acc[s].sort((a, b) => {
         // Use the same sorting logic as TaskBoard.tsx for consistency
-        const sortResult = sortTasks(a.task, b.task);
+        const sortResult = sortTasks.kanban(a.task, b.task);
         if (sortResult !== 0) return sortResult;
 
         // If tasks are equal in priority, maintain parent-child ordering
