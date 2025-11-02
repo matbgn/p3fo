@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useTasks, Task } from '@/hooks/useTasks';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TaskCard } from './TaskCard'; // Import TaskCard
@@ -6,6 +6,9 @@ import ComparativePrioritizationView from './ComparativePrioritizationView'; // 
 import { Button } from '@/components/ui/button'; // Import Button for view switching
 import { Input } from '@/components/ui/input';
 import { sortTasks } from '@/utils/taskSorting';
+import { FilterControls, Filters } from "./FilterControls";
+import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
+import { QuickTimer } from "@/components/QuickTimer";
 
 interface PlanViewProps {
   onFocusOnTask: (taskId: string) => void;
@@ -16,6 +19,22 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
 
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<'storyboard' | 'prioritization'>('storyboard'); // New state for view switching
+
+  const defaultPlanViewFilters: Filters = {
+    showUrgent: false,
+    showImpact: false,
+    showMajorIncident: false,
+    status: ["Backlog", "Ready", "WIP", "Blocked"], // All non-Done, non-Dropped statuses by default
+    searchText: "",
+    difficulty: [],
+    category: []
+  };
+
+  const [filters, setFilters] = React.useState<Filters>(() => {
+    const storedFilters = loadFiltersFromSessionStorage();
+    return storedFilters || defaultPlanViewFilters;
+  });
+
   // Quick add functionality
   const [input, setInput] = useState("");
   const addTopTask = () => {
@@ -28,8 +47,49 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
   const prioritizedTasks = React.useMemo(() => {
     return tasks
       .filter(task => !task.parentId && task.triageStatus !== 'Done' && task.triageStatus !== 'Dropped') // Filter for top-level tasks
+      .filter(task => {
+        // Apply search filter
+        if (filters.searchText?.trim()) {
+          const searchText = filters.searchText.toLowerCase();
+          if (!task.title.toLowerCase().includes(searchText)) {
+            return false;
+          }
+        }
+
+        // Apply urgent filter
+        if (filters.showUrgent && !task.urgent) {
+          return false;
+        }
+
+        // Apply impact filter
+        if (filters.showImpact && !task.impact) {
+          return false;
+        }
+
+        // Apply major incident filter
+        if (filters.showMajorIncident && !task.majorIncident) {
+          return false;
+        }
+
+        // Apply difficulty filter
+        if (filters.difficulty.length > 0 && !filters.difficulty.includes(task.difficulty)) {
+          return false;
+        }
+
+        // Apply category filter
+        if (filters.category.length > 0 && task.category && !filters.category.includes(task.category)) {
+          return false;
+        }
+
+        // Apply status filter
+        if (filters.status.length > 0 && !filters.status.includes(task.triageStatus)) {
+          return false;
+        }
+
+        return true;
+      })
       .sort(sortTasks.plan);
-  }, [tasks]); // Re-calculate only when 'tasks' changes
+  }, [tasks, filters]); // Re-calculate when 'tasks' or 'filters' change
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
     setDraggedTaskId(taskId);
@@ -126,6 +186,27 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
           <Button onClick={addTopTask} disabled={!input.trim()}>
             Add
           </Button>
+        </div>
+
+        <div className="mb-4 flex flex-wrap items-center gap-4 border rounded-lg p-3">
+          <FilterControls
+            filters={filters}
+            setFilters={setFilters}
+            defaultFilters={defaultPlanViewFilters}
+          />
+          {/* Vertical separator */}
+          <div className="h-6 border-l border-gray-300 mx-2"></div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">Quick time edition:</span>
+            <QuickTimer onJumpToTask={(taskId) => {
+              // Find the task and focus on it
+              const task = tasks.find(t => t.id === taskId);
+              if (task) {
+                onFocusOnTask(taskId);
+              }
+            }} />
+          </div>
         </div>
       </CardHeader>
       <CardContent className="flex-grow overflow-hidden">
