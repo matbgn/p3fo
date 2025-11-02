@@ -219,6 +219,19 @@ const reparent = (taskId: string, newParentId: string | null) => {
 // Flag to prevent cascading when updating due to child completion
 let isUpdatingDueToChildCompletion = false;
 
+// Helper function to find the minimum priority among backlog tasks
+const getMinBacklogPriority = (): number => {
+  const backlogTasks = tasks.filter(t => t.triageStatus === "Backlog");
+  if (backlogTasks.length === 0) return 0;
+  
+  const priorities = backlogTasks
+    .map(t => t.priority || 0)
+    .filter(p => p !== undefined && p !== null);
+  
+  // Subtract 1 to place the blocked task in front of all backlog tasks
+  return priorities.length > 0 ? Math.min(...priorities) - 1 : -1;
+};
+
 const updateStatus = (taskId: string, status: TriageStatus) => {
   const taskMap = byId(tasks);
   const task = taskMap[taskId];
@@ -247,11 +260,19 @@ const updateStatus = (taskId: string, status: TriageStatus) => {
 
  tasks = tasks.map(t => {
     if (tasksToUpdate.has(t.id)) {
-      return {
+      const updatedTask = {
         ...t,
         triageStatus: status,
         terminationDate: status === 'Done' ? Date.now() : undefined
       };
+      
+      // Automatically degrade priority when task is moved to Blocked status
+      if (status === "Blocked") {
+        const minBacklogPriority = getMinBacklogPriority();
+        updatedTask.priority = minBacklogPriority;
+      }
+      
+      return updatedTask;
     }
     return t;
   });

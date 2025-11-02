@@ -28,13 +28,13 @@ const sortTasks = (a: Task, b: Task) => {
   if (!aIsTimeclocked && bIsTimeclocked) return 1;
 
   // 3. Done tasks at the bottom
- if (a.triageStatus === "Done" && b.triageStatus !== "Done") return 1;
+  if (a.triageStatus === "Done" && b.triageStatus !== "Done") return 1;
   if (a.triageStatus !== "Done" && b.triageStatus === "Done") return -1;
   if (a.triageStatus === "Done" && b.triageStatus === "Done") {
     return (b.terminationDate ?? b.createdAt) - (a.terminationDate ?? a.createdAt);
- }
+  }
 
- // 4. Blocked tasks
+  // 4. Blocked tasks
   const aIsBlocked = a.triageStatus === 'Blocked';
   const bIsBlocked = b.triageStatus === 'Blocked';
   if (aIsBlocked && !bIsBlocked) return 1;
@@ -46,7 +46,7 @@ const sortTasks = (a: Task, b: Task) => {
 
   if (aScore !== bScore) {
     return bScore - aScore;
- }
+  }
 
   // 6. Fallback to creation time
   return a.createdAt - b.createdAt;
@@ -263,9 +263,9 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
     <div className="w-full">
       <div className="mb-4 flex flex-wrap items-center gap-4">
         <div className="flex flex-wrap items-center gap-4 border rounded-lg p-3">
-          <FilterControls 
-            filters={filters} 
-            setFilters={setFilters} 
+          <FilterControls
+            filters={filters}
+            setFilters={setFilters}
             defaultFilters={defaultTaskBoardFilters}
           />
           {/* Vertical separator */}
@@ -316,8 +316,8 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                       {col.parentId === "search-results"
                         ? "Results"
                         : i === 0
-                        ? "Top tasks"
-                        : map[col.parentId!]?.title || "Subtasks"}
+                          ? "Top tasks"
+                          : map[col.parentId!]?.title || "Subtasks"}
                     </span>
                   </div>
                   <Button size="sm" variant="secondary" onClick={() => handleAdd(i, "New task")}>
@@ -376,7 +376,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                       // we should not show any items in the regular columns.
                       filteredItems = [];
                     }
-                    
+
                     // Apply all other filters
                     const fullyFilteredItems = filteredItems.filter(task => {
                       // For subtasks, we want them to be visible when their parent task matches the filters
@@ -389,7 +389,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                         // Subtasks pass all other filters (urgent, impact, etc.)
                         return true;
                       }
-                      
+
                       // 2. Apply urgent filter (applies to all tasks that passed the done filter)
                       if (filters.showUrgent && !task.urgent) {
                         return false;
@@ -427,7 +427,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                       // If we reach here, the task passes all active filters.
                       return true;
                     });
-                    
+
                     return fullyFilteredItems.length === 0 ? (
                       <div className="text-xs text-muted-foreground px-2 py-6">No items yet.</div>
                     ) : (
