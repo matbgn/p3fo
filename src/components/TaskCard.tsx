@@ -400,7 +400,7 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
             </Select>
           )}
         </div>
-        {!hasSubtasks && !isTriageBoard && (
+        {!hasSubtasks && (
           <div className="flex items-center gap-2">
             <Button
               size="sm"

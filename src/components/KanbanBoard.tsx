@@ -9,6 +9,7 @@ import { FilterControls, Filters } from "./FilterControls";
 import { aStarTextSearch } from "@/lib/a-star-search";
 import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
 import { sortTasks } from "@/utils/taskSorting";
+import { QuickTimer } from "@/components/QuickTimer";
 
 type BoardCard =
   | { kind: "parent"; task: Task }
@@ -40,7 +41,8 @@ const Column: React.FC<{
   updateTerminationDate: (id: string, terminationDate: number | undefined) => void;
   updateDurationInMinutes: (id: string, durationInMinutes: number | undefined) => void;
   updateComment: (id: string, comment: string) => void;
-}> = ({ title, cards, tasks, onDropTask, onChangeStatus, onUpdateCategory, onUpdateUser, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onToggleDone, onUpdateDifficulty, onUpdateTitle, onDelete, duplicateTaskStructure, openParents, onToggleParent, onReparent, onFocusOnTask, updateTerminationDate, updateDurationInMinutes, updateComment }) => {
+  onToggleTimer: (id: string) => void;
+}> = ({ title, cards, tasks, onDropTask, onChangeStatus, onUpdateCategory, onUpdateUser, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onToggleDone, onUpdateDifficulty, onUpdateTitle, onDelete, duplicateTaskStructure, openParents, onToggleParent, onReparent, onFocusOnTask, updateTerminationDate, updateDurationInMinutes, updateComment, onToggleTimer }) => {
   // Build render blocks: either a single ParentCard/ChildCard or a group block for open parent children
   type Block =
     | { type: "single"; node: React.ReactNode; key: string }
@@ -72,7 +74,7 @@ const Column: React.FC<{
             deleteTask={onDelete}
             duplicateTaskStructure={duplicateTaskStructure}
             toggleDone={() => onToggleDone(c.task)}
-            toggleTimer={() => {}}
+            toggleTimer={onToggleTimer}
             isTriageBoard={true}
             reparent={onReparent}
             onFocusOnTask={onFocusOnTask}
@@ -168,7 +170,7 @@ const Column: React.FC<{
                     deleteTask={onDelete}
                     duplicateTaskStructure={duplicateTaskStructure}
                     toggleDone={() => onToggleDone(task)}
-                    toggleTimer={() => {}}
+                    toggleTimer={onToggleTimer}
                     isTriageBoard={true}
                     reparent={onReparent}
                     onFocusOnTask={onFocusOnTask}
@@ -187,7 +189,7 @@ const Column: React.FC<{
 };
 
 const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ onFocusOnTask }) => {
-  const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, reparent, toggleDone, updateTerminationDate, updateDurationInMinutes, updateComment } = useTasks();
+  const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, reparent, toggleDone, toggleTimer, updateTerminationDate, updateDurationInMinutes, updateComment } = useTasks();
 
   const defaultKanbanFilters: Filters = {
     showUrgent: false,
@@ -359,11 +361,24 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
       </div>
 
       <div className="flex flex-wrap items-center gap-4 border rounded-lg p-3 mb-4">
-        <FilterControls 
-          filters={filters} 
-          setFilters={setFilters} 
+        <FilterControls
+          filters={filters}
+          setFilters={setFilters}
           defaultFilters={defaultKanbanFilters}
         />
+        {/* Vertical separator */}
+        <div className="h-6 border-l border-gray-300 mx-2"></div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">Quick time edition:</span>
+          <QuickTimer onJumpToTask={(taskId) => {
+            // Find the task and focus on it
+            const task = tasks.find(t => t.id === taskId);
+            if (task) {
+              onFocusOnTask?.(taskId);
+            }
+          }} />
+        </div>
       </div>
  
        <div className="flex gap-4 pb-4">
@@ -389,6 +404,7 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
             onToggleParent={toggleParent}
             onReparent={reparent}
             onFocusOnTask={onFocusOnTask}
+            onToggleTimer={toggleTimer}
             updateTerminationDate={updateTerminationDate}
             updateDurationInMinutes={updateDurationInMinutes}
             updateComment={updateComment}
