@@ -49,6 +49,7 @@ export type Task = {
   comment?: string;
   durationInMinutes?: number;
   priority?: number; // New field for explicit prioritization
+  userId?: string; // User assigned to this task
 };
 
 const STORAGE_KEY = "dyad_task_board_v1";
@@ -374,6 +375,11 @@ const updateCategory = (taskId: string, category: Category | undefined) => {
   persistTasks();
 };
 
+const updateUser = (taskId: string, userId: string | undefined) => {
+  updateTaskInTasks(taskId, (t) => ({ ...t, userId: userId }));
+  persistTasks();
+};
+
 const updateTerminationDate = (taskId: string, terminationDate: number | undefined) => {
   updateTaskInTasks(taskId, (t) => ({ ...t, terminationDate: terminationDate }));
   persistTasks();
@@ -614,13 +620,14 @@ const updateTerminationDate = (taskId: string, terminationDate: number | undefin
     persistTasks();
   }, []);
 
-  return {
+return {
     tasks,
     createTask,
     reparent,
     toggleDone,
     updateStatus,
     updateCategory,
+    updateUser,
     toggleUrgent,
     toggleImpact,
     toggleMajorIncident,

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { GripVertical, Folder, AlertTriangle, CircleDot, Trash2, Clock2, Play, Pause, ChevronDown, ChevronRight, Flame, FileText, BellRing, CalendarIcon } from "lucide-react";
+import { GripVertical, Folder, AlertTriangle, CircleDot, Trash2, Clock2, Play, Pause, ChevronDown, ChevronRight, Flame, FileText, BellRing, CalendarIcon, User } from "lucide-react";
 import { TaskStatusSelect } from "./TaskStatusSelect";
 import { useTasks, Task, Category, TriageStatus } from "@/hooks/useTasks";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,9 @@ import { formatDuration, timestampToZurichInstant, instantToZurichPlainDateTime,
 import { format } from "date-fns";
 import { addReminder } from "@/utils/reminders";
 import { useReminderStore } from "@/hooks/useReminders";
+import { UserAvatar } from "./UserAvatar";
+import { UserSelector } from "./UserSelector";
+import { useUserSettings } from "@/hooks/useUserSettings";
 
 const LiveTimeBadge: React.FC<{ task: Task; totalTime?: number; onClick?: () => void }> = React.memo(({ task, totalTime, onClick }) => {
   const [runningTime, setRunningTime] = React.useState(0);
@@ -195,6 +198,7 @@ interface TaskCardProps {
   updateComment: (id: string, comment: string) => void;
   updateTerminationDate: (id: string, terminationDate: number | undefined) => void;
   updateDurationInMinutes: (id: string, durationInMinutes: number | undefined) => void;
+  updateUser: (id: string, userId: string | undefined) => void;
   deleteTask: (id: string) => void;
   duplicateTaskStructure: (id: string) => void;
   toggleUrgent: (id: string) => void;
@@ -221,6 +225,7 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
     updateDifficulty,
     updateCategory,
     updateTitle,
+    updateUser,
     deleteTask,
     duplicateTaskStructure,
     toggleUrgent,
@@ -252,6 +257,7 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
   const [isDateTimeBlockOpen, setIsDateTimeBlockOpen] = React.useState(false); // New state for date/time block
   const [isReminderActive, setIsReminderActive] = React.useState(false); // New state for reminder active status
   const { scheduledReminders, updateScheduledReminderTriggerDate, dismissReminder } = useReminderStore();
+  const { userSettings } = useUserSettings();
 
   React.useEffect(() => {
     setCommentText(task.comment || "");
@@ -628,59 +634,74 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
           </DialogContent>
         </Dialog>
       </div>
-      {isTriageBoard && hasSubtasks && onToggleOpen && (
-        <div className="flex items-center gap-2 mt-2">
+      {hasSubtasks && onToggleOpen && (
+        <div className="flex justify-between items-center mt-2">
           <button
             className="inline-flex items-center text-xs px-2 py-1 rounded-md border hover:bg-accent/60 transition"
-            onClick={() => onToggleOpen(task.id, true)}
+            onClick={(e) => {
+              e.stopPropagation(); // Prevent onActivate from being called
+              onToggleOpen(task.id, true);
+            }}
             aria-pressed={open}
           >
             {open ? <ChevronDown className="h-4 w-4 mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
             Subtasks
           </button>
+          <UserSelector
+            value={task.userId || ''}
+            onChange={(userId) => updateUser(task.id, userId === 'current-user' ? userSettings.username : userId)}
+          />
         </div>
       )}
-      <div className="mt-2 flex flex-wrap gap-1">
-        {task.urgent && !task.parentId && (
-          <Badge
-            variant="destructive"
-            className="cursor-pointer mb-2"
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleUrgent(task.id);
-            }}
-          >
-            <AlertTriangle className="h-3 w-3 mr-1" />
-            Urgent
-          </Badge>
-        )}
-        {task.impact && !task.parentId && (
-          <Badge
-            variant="secondary"
-            className="cursor-pointer bg-yellow-500 hover:bg-yellow-600 text-yellow-900 mb-2"
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleImpact(task.id);
-            }}
-          >
-            <CircleDot className="h-3 w-3 mr-1" />
-            High Impact
-          </Badge>
-        )}
-        {task.majorIncident && !task.parentId && (
-          <Badge
-            variant="destructive"
-            className="cursor-pointer bg-red-700 hover:bg-red-800 text-white mb-2"
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleMajorIncident(task.id);
-            }}
-          >
-            <Flame className="h-3 w-3 mr-1" />
-            Incident on Delivery
-          </Badge>
-        )}
-      </div>
+      {!hasSubtasks && (
+        <div className="mt-2 flex justify-between items-center">
+          <div className="flex flex-wrap gap-1">
+            {task.urgent && !task.parentId && (
+              <Badge
+                variant="destructive"
+                className="cursor-pointer mb-2"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleUrgent(task.id);
+                }}
+              >
+                <AlertTriangle className="h-3 w-3 mr-1" />
+                Urgent
+              </Badge>
+            )}
+            {task.impact && !task.parentId && (
+              <Badge
+                variant="secondary"
+                className="cursor-pointer bg-yellow-500 hover:bg-yellow-600 text-yellow-900 mb-2"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleImpact(task.id);
+                }}
+              >
+                <CircleDot className="h-3 w-3 mr-1" />
+                High Impact
+              </Badge>
+            )}
+            {task.majorIncident && !task.parentId && (
+              <Badge
+                variant="destructive"
+                className="cursor-pointer bg-red-700 hover:bg-red-800 text-white mb-2"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleMajorIncident(task.id);
+                }}
+              >
+                <Flame className="h-3 w-3 mr-1" />
+                Incident on Delivery
+              </Badge>
+            )}
+          </div>
+          <UserSelector
+            value={task.userId || ''}
+            onChange={(userId) => updateUser(task.id, userId === 'current-user' ? userSettings.username : userId)}
+          />
+        </div>
+      )}
       {canHaveTimer && (
         <div className="flex flex-col gap-2 w-full">
           <CategorySelect
@@ -691,7 +712,9 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
         </div>
       )}
       <div className="mt-2 flex justify-between items-center">
-        <TaskStatusSelect value={task.triageStatus} onChange={(s) => updateStatus(task.id, s)} />
+        <div className="flex items-center gap-2">
+          <TaskStatusSelect value={task.triageStatus} onChange={(s) => updateStatus(task.id, s)} />
+        </div>
         {!task.parentId && (
           <div className="flex gap-1">
             <Button

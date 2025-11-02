@@ -2,9 +2,11 @@ import React from 'react';
 import { useTasks } from '@/hooks/useTasks';
 import { Button } from '@/components/ui/button';
 import { useReminderStore } from '@/hooks/useReminders';
+import { useUserSettings } from '@/hooks/useUserSettings';
 
 const DataExporter: React.FC = () => {
   const { tasks } = useTasks();
+  const { userSettings } = useUserSettings();
 
   const handleExport = () => {
     const settingsToExport = {
@@ -21,6 +23,7 @@ const DataExporter: React.FC = () => {
       scheduledReminders: useReminderStore.getState().scheduledReminders,
       qolSurveyResponse: JSON.parse(localStorage.getItem('qolSurveyResponse') || '{}'),
       settings: settingsToExport,
+      userSettings,
     };
 
     const data = JSON.stringify(exportData, null, 2);

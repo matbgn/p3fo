@@ -19,7 +19,7 @@ type Column = {
 };
 
 const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId }) => {
-  const { tasks, createTask, reparent, updateStatus, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateTitle, deleteTask, duplicateTaskStructure, toggleDone, updateTaskTimer, toggleTimer, updateTimeEntry, updateCategory, updateComment, updateTerminationDate, updateDurationInMinutes } = useTasks();
+  const { tasks, createTask, reparent, updateStatus, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleDone, updateTaskTimer, toggleTimer, updateTimeEntry, updateCategory, updateComment, updateTerminationDate, updateDurationInMinutes } = useTasks();
   const map = React.useMemo(() => byId(tasks), [tasks]);
 
   const [path, setPath] = React.useState<string[]>([]);
@@ -415,6 +415,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                           }}
                           isActive={t.id === col.activeId}
                           isHighlighted={t.id === highlightedTaskId}
+                          isTriageBoard={true}
                           updateStatus={handleChangeStatus}
                           updateDifficulty={updateDifficulty}
                           updateCategory={updateCategory}
@@ -434,6 +435,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                               }
                             }
                           }}
+                          updateUser={updateUser}
                           deleteTask={deleteTask}
                           duplicateTaskStructure={duplicateTaskStructure}
                           toggleUrgent={toggleUrgent}
@@ -442,6 +444,34 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                           toggleTimer={toggleTimer}
                           toggleDone={(task) => toggleDone(task.id)}
                           reparent={reparent}
+                          onToggleOpen={(taskId, toggleAll) => {
+                            const task = map[taskId];
+                            if (task && task.children && task.children.length > 0) {
+                              // Jump to the first child and highlight it
+                              const firstChildId = task.children[0];
+                              
+                              // Build full path to parent and then to first child
+                              const newPath: string[] = [];
+                              let current: Task | undefined = task;
+                              while (current) {
+                                newPath.unshift(current.id);
+                                current = current.parentId ? map[current.parentId] : undefined;
+                              }
+                              // Add first child to the end
+                              newPath.push(firstChildId);
+                              
+                              setPath(newPath);
+                              setHighlightedTaskId(firstChildId); // Highlight the first child
+                              
+                              // Scroll to the highlighted child after a short delay
+                              setTimeout(() => {
+                                cardRefs.current[firstChildId]?.scrollIntoView({
+                                  behavior: "smooth",
+                                  block: "center",
+                                });
+                              }, 100);
+                            }
+                          }}
                           updateComment={updateComment}
                           updateTerminationDate={updateTerminationDate}
                           updateDurationInMinutes={updateDurationInMinutes}

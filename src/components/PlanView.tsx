@@ -15,10 +15,13 @@ interface PlanViewProps {
 }
 
 const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
-  const { tasks, updateStatus, updateDifficulty, updateCategory, updateTitle, deleteTask, duplicateTaskStructure, toggleUrgent, toggleImpact, toggleMajorIncident, toggleDone, toggleTimer, reparent, updateTerminationDate, updateComment, updateDurationInMinutes, updatePriority, createTask } = useTasks();
+  const { tasks, updateStatus, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleUrgent, toggleImpact, toggleMajorIncident, toggleDone, toggleTimer, reparent, updateTerminationDate, updateComment, updateDurationInMinutes, updatePriority, createTask } = useTasks();
 
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<'storyboard' | 'prioritization'>('storyboard'); // New state for view switching
+
+  // Track which parents are expanded in PlanView
+  const [openParents, setOpenParents] = useState<Record<string, boolean>>({});
 
   const defaultPlanViewFilters: Filters = {
     showUrgent: false,
@@ -90,6 +93,29 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
       })
       .sort(sortTasks.plan);
   }, [tasks, filters]); // Re-calculate when 'tasks' or 'filters' change
+
+  // Get all children for a parent task (recursively)
+  const getAllChildren = (task: Task): Task[] => {
+    let children: Task[] = [];
+    if (task.children) {
+      for (const childId of task.children) {
+        const child = tasks.find(t => t.id === childId);
+        if (child) {
+          children.push(child);
+          children = children.concat(getAllChildren(child));
+        }
+      }
+    }
+    return children;
+  };
+
+  // Toggle parent expansion
+  const toggleParent = (id: string) => {
+    setOpenParents(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
     setDraggedTaskId(taskId);
@@ -219,42 +245,86 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
             {prioritizedTasks.length === 0 ? (
               <div className="text-muted-foreground p-4">No tasks to plan.</div>
             ) : (
-              prioritizedTasks.map(task => (
-                <div
-                  key={task.id}
-                  className="min-w-[300px] max-w-[300px] p-2 border rounded-lg shadow-sm bg-white dark:bg-gray-800"
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, task.id)}
-                  onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, task.id)}
-                  style={{
-                    opacity: draggedTaskId === task.id ? 0.5 : 1,
-                    border: draggedTaskId && draggedTaskId !== task.id ? '2px dashed #ccc' : '2px solid transparent',
-                  }}
-                >
-                  <TaskCard
-                    task={task}
-                    tasks={tasks} // Pass all tasks for context
-                    updateStatus={updateStatus}
-                    updateDifficulty={updateDifficulty}
-                    updateCategory={updateCategory}
-                    updateTitle={updateTitle}
-                    deleteTask={deleteTask}
-                    duplicateTaskStructure={duplicateTaskStructure}
-                    toggleUrgent={toggleUrgent}
-                    toggleImpact={toggleImpact}
-                    toggleMajorIncident={toggleMajorIncident}
-                    toggleDone={() => toggleDone(task.id)}
-                    toggleTimer={toggleTimer}
-                    reparent={reparent}
-                    onFocusOnTask={onFocusOnTask}
-                    updateTerminationDate={updateTerminationDate}
-                    updateComment={updateComment}
-                    updateDurationInMinutes={updateDurationInMinutes}
-                    disableReparenting={true} // Disable reparenting in PlanView
-                  />
-                </div>
-              ))
+              prioritizedTasks.map(task => {
+                const children = getAllChildren(task);
+                return (
+                  <div
+                    key={task.id}
+                    className="min-w-[300px] max-w-[300px] p-2 border rounded-lg shadow-sm bg-white dark:bg-gray-800"
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, task.id)}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, task.id)}
+                    style={{
+                      opacity: draggedTaskId === task.id ? 0.5 : 1,
+                      border: draggedTaskId && draggedTaskId !== task.id ? '2px dashed #ccc' : '2px solid transparent',
+                    }}
+                  >
+                    <TaskCard
+                      task={task}
+                      tasks={tasks} // Pass all tasks for context
+                      updateStatus={updateStatus}
+                      updateDifficulty={updateDifficulty}
+                      updateCategory={updateCategory}
+                      updateTitle={updateTitle}
+                      updateUser={updateUser}
+                      deleteTask={deleteTask}
+                      duplicateTaskStructure={duplicateTaskStructure}
+                      toggleUrgent={toggleUrgent}
+                      toggleImpact={toggleImpact}
+                      toggleMajorIncident={toggleMajorIncident}
+                      toggleDone={() => toggleDone(task.id)}
+                      toggleTimer={toggleTimer}
+                      reparent={reparent}
+                      onFocusOnTask={onFocusOnTask}
+                      updateTerminationDate={updateTerminationDate}
+                      updateComment={updateComment}
+                      updateDurationInMinutes={updateDurationInMinutes}
+                      disableReparenting={true} // Disable reparenting in PlanView
+                      open={!!openParents[task.id]}
+                      onToggleOpen={toggleParent}
+                    />
+                    
+                    {/* Render subtasks when expanded */}
+                    {openParents[task.id] && children.length > 0 && (
+                      <div className="mt-2 space-y-2">
+                        <div className="text-xs font-medium text-muted-foreground px-1">
+                          Subtasks of: {task.title}
+                        </div>
+                        {children.map(child => (
+                          <div
+                            key={child.id}
+                            className="p-2 border rounded-md bg-muted/20"
+                          >
+                            <TaskCard
+                              task={child}
+                              tasks={tasks}
+                              updateStatus={updateStatus}
+                              updateDifficulty={updateDifficulty}
+                              updateCategory={updateCategory}
+                              updateTitle={updateTitle}
+                              updateUser={updateUser}
+                              deleteTask={deleteTask}
+                              duplicateTaskStructure={duplicateTaskStructure}
+                              toggleUrgent={toggleUrgent}
+                              toggleImpact={toggleImpact}
+                              toggleMajorIncident={toggleMajorIncident}
+                              toggleDone={() => toggleDone(child.id)}
+                              toggleTimer={toggleTimer}
+                              reparent={reparent}
+                              onFocusOnTask={onFocusOnTask}
+                              updateTerminationDate={updateTerminationDate}
+                              updateComment={updateComment}
+                              updateDurationInMinutes={updateDurationInMinutes}
+                              disableReparenting={true}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         ) : (

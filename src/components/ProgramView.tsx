@@ -43,6 +43,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
     updateDifficulty,
     updateCategory,
     updateTitle,
+    updateUser,
     deleteTask,
     duplicateTaskStructure,
     toggleUrgent,
@@ -206,6 +207,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
                   updateDifficulty={updateDifficulty}
                   updateCategory={updateCategory}
                   updateTitle={updateTitle}
+                  updateUser={updateUser}
                   deleteTask={deleteTask}
                   duplicateTaskStructure={duplicateTaskStructure}
                   toggleUrgent={toggleUrgent}
@@ -237,6 +239,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
               updateDifficulty={updateDifficulty}
               updateCategory={updateCategory}
               updateTitle={updateTitle}
+              updateUser={updateUser}
               deleteTask={deleteTask}
               duplicateTaskStructure={duplicateTaskStructure}
               toggleUrgent={toggleUrgent}

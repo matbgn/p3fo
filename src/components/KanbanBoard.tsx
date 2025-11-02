@@ -23,12 +23,13 @@ const Column: React.FC<{
   tasks: Task[];
   onDropTask: (taskId: string, status: TriageStatus) => void;
   onChangeStatus: (id: string, s: TriageStatus) => void;
+  onUpdateCategory: (id: string, category: Category) => void;
+  onUpdateUser: (id: string, userId: string | undefined) => void;
   onToggleUrgent: (id: string) => void;
   onToggleImpact: (id: string) => void;
   onToggleMajorIncident: (id: string) => void;
   onToggleDone: (task: Task) => void;
   onUpdateDifficulty: (id: string, difficulty: 0.5 | 1 | 2 | 3 | 5 | 8) => void;
-  onUpdateCategory: (id: string, category: Category) => void;
   onUpdateTitle: (id: string, title: string) => void;
   onDelete: (id: string) => void;
   duplicateTaskStructure: (taskId: string) => string | null;
@@ -39,7 +40,7 @@ const Column: React.FC<{
   updateTerminationDate: (id: string, terminationDate: number | undefined) => void;
   updateDurationInMinutes: (id: string, durationInMinutes: number | undefined) => void;
   updateComment: (id: string, comment: string) => void;
-}> = ({ title, cards, tasks, onDropTask, onChangeStatus, onUpdateCategory, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onToggleDone, onUpdateDifficulty, onUpdateTitle, onDelete, duplicateTaskStructure, openParents, onToggleParent, onReparent, onFocusOnTask, updateTerminationDate, updateDurationInMinutes, updateComment }) => {
+}> = ({ title, cards, tasks, onDropTask, onChangeStatus, onUpdateCategory, onUpdateUser, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onToggleDone, onUpdateDifficulty, onUpdateTitle, onDelete, duplicateTaskStructure, openParents, onToggleParent, onReparent, onFocusOnTask, updateTerminationDate, updateDurationInMinutes, updateComment }) => {
   // Build render blocks: either a single ParentCard/ChildCard or a group block for open parent children
   type Block =
     | { type: "single"; node: React.ReactNode; key: string }
@@ -60,6 +61,7 @@ const Column: React.FC<{
             tasks={tasks}
             updateStatus={onChangeStatus}
             updateCategory={onUpdateCategory}
+            updateUser={onUpdateUser}
             open={!!openParents[c.task.id]}
             onToggleOpen={(id) => onToggleParent(id, true)}
             toggleUrgent={onToggleUrgent}
@@ -157,6 +159,7 @@ const Column: React.FC<{
                     tasks={tasks}
                     updateStatus={onChangeStatus}
                     updateCategory={onUpdateCategory}
+                    updateUser={onUpdateUser}
                     toggleUrgent={onToggleUrgent}
                     toggleImpact={onToggleImpact}
                     toggleMajorIncident={onToggleMajorIncident}
@@ -184,7 +187,7 @@ const Column: React.FC<{
 };
 
 const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ onFocusOnTask }) => {
-  const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateCategory, updateTitle, deleteTask, duplicateTaskStructure, reparent, toggleDone, updateTerminationDate, updateDurationInMinutes, updateComment } = useTasks();
+  const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, reparent, toggleDone, updateTerminationDate, updateDurationInMinutes, updateComment } = useTasks();
 
   const defaultKanbanFilters: Filters = {
     showUrgent: false,
@@ -373,6 +376,7 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
             onDropTask={(id, status) => updateStatus(id, status)}
             onChangeStatus={(id, status) => updateStatus(id, status)}
             onUpdateCategory={(id, category) => updateCategory(id, category)}
+            onUpdateUser={(id, userId) => updateUser(id, userId)}
             onToggleUrgent={toggleUrgent}
             onToggleImpact={toggleImpact}
             onToggleMajorIncident={toggleMajorIncident}
