@@ -33,10 +33,26 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
     category: []
   };
 
-  const [filters, setFilters] = React.useState<Filters>(() => {
-    const storedFilters = loadFiltersFromSessionStorage();
-    return storedFilters || defaultPlanViewFilters;
-  });
+  const [filters, setFilters] = React.useState<Filters>(defaultPlanViewFilters);
+  const [loadingFilters, setLoadingFilters] = React.useState(true);
+
+  // Load filters on mount
+  useEffect(() => {
+    const loadFilters = async () => {
+      try {
+        const storedFilters = await loadFiltersFromSessionStorage();
+        if (storedFilters) {
+          setFilters(storedFilters);
+        }
+      } catch (error) {
+        console.error("Error loading filters:", error);
+      } finally {
+        setLoadingFilters(false);
+      }
+    };
+    
+    loadFilters();
+  }, []);
 
   // Quick add functionality
   const [input, setInput] = useState("");
@@ -75,17 +91,17 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
         }
 
         // Apply difficulty filter
-        if (filters.difficulty.length > 0 && !filters.difficulty.includes(task.difficulty)) {
+        if (filters.difficulty && Array.isArray(filters.difficulty) && filters.difficulty.length > 0 && !filters.difficulty.includes(task.difficulty)) {
           return false;
         }
 
         // Apply category filter
-        if (filters.category.length > 0 && task.category && !filters.category.includes(task.category)) {
+        if (filters.category && Array.isArray(filters.category) && filters.category.length > 0 && task.category && !filters.category.includes(task.category)) {
           return false;
         }
 
         // Apply status filter
-        if (filters.status.length > 0 && !filters.status.includes(task.triageStatus)) {
+        if (filters.status && Array.isArray(filters.status) && filters.status.length > 0 && !filters.status.includes(task.triageStatus)) {
           return false;
         }
 

@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { NotificationCenter } from "./components/NotificationCenter";
 import { UserSection } from "./components/UserSection";
+import { PersistenceProvider } from "@/lib/PersistenceProvider";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { useReminderStore } from "./hooks/useReminders";
@@ -26,21 +27,23 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <div className="relative">
-          <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
-            <NotificationCenter />
-            <UserSection />
+        <PersistenceProvider>
+          <Toaster />
+          <Sonner />
+          <div className="relative">
+            <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
+              <NotificationCenter />
+              <UserSection />
+            </div>
+            <BrowserRouter basename="/p3fo" future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
           </div>
-          <BrowserRouter basename="/p3fo" future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </div>
+        </PersistenceProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

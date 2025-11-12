@@ -1,0 +1,311 @@
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata } from './persistence-types';
+
+// Storage keys
+const TASKS_STORAGE_KEY = 'dyad_task_board_v1';
+const USER_SETTINGS_STORAGE_KEY = 'p3fo_user_settings_v1';
+const APP_SETTINGS_STORAGE_KEY = 'dyad_settings_v1';
+const QOL_SURVEY_STORAGE_KEY = 'qolSurveyResponse';
+const FILTERS_STORAGE_KEY = 'taskFilters';
+
+// Default values
+const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
+  username: 'User',
+  logo: '',
+  has_completed_onboarding: false,
+};
+
+const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
+  split_time: 40,
+  user_workload_percentage: 80,
+  weeks_computation: 4,
+  high_impact_task_goal: 5,
+  failure_rate_goal: 10,
+  qli_goal: 7,
+  new_capabilities_goal: 3,
+};
+
+export class BrowserJsonPersistence implements PersistenceAdapter {
+  async listTasks(): Promise<TaskEntity[]> {
+    if (typeof window === 'undefined') {
+      return [];
+    }
+    
+    try {
+      const stored = localStorage.getItem(TASKS_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch (error) {
+      console.error('Error reading tasks from localStorage:', error);
+      return [];
+    }
+  }
+
+  async getTask(id: string): Promise<TaskEntity | null> {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+    
+    try {
+      const tasks = await this.listTasks();
+      return tasks.find(task => task.id === id) || null;
+    } catch (error) {
+      console.error('Error getting task from localStorage:', error);
+      return null;
+    }
+  }
+
+  async createTask(input: Partial<TaskEntity>): Promise<TaskEntity> {
+    if (typeof window === 'undefined') {
+      throw new Error('Cannot create task in non-browser environment');
+    }
+    
+    try {
+      const tasks = await this.listTasks();
+      const newTask: TaskEntity = {
+        id: input.id || crypto.randomUUID(),
+        title: input.title || 'New Task',
+        created_at: input.created_at || new Date().toISOString(),
+        triage_status: input.triage_status || 'backlog',
+        urgent: input.urgent || false,
+        impact: input.impact || false,
+        major_incident: input.major_incident || false,
+        difficulty: input.difficulty || 1,
+        timer: input.timer || [],
+        category: input.category || 'General',
+        termination_date: input.termination_date || null,
+        comment: input.comment || null,
+        duration_in_minutes: input.duration_in_minutes || null,
+        priority: input.priority || null,
+        user_id: input.user_id || null,
+        parent_id: input.parent_id || null,
+        children: input.children || [],
+      };
+      
+      tasks.push(newTask);
+      localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
+      return newTask;
+    } catch (error) {
+      console.error('Error creating task in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async updateTask(id: string, patch: Partial<TaskEntity>): Promise<TaskEntity> {
+    if (typeof window === 'undefined') {
+      throw new Error('Cannot update task in non-browser environment');
+    }
+    
+    try {
+      const tasks = await this.listTasks();
+      const index = tasks.findIndex(task => task.id === id);
+      
+      if (index === -1) {
+        throw new Error(`Task with id ${id} not found`);
+      }
+      
+      tasks[index] = { ...tasks[index], ...patch };
+      localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
+      return tasks[index];
+    } catch (error) {
+      console.error('Error updating task in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async deleteTask(id: string): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    
+    try {
+      const tasks = await this.listTasks();
+      const filteredTasks = tasks.filter(task => task.id !== id);
+      localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(filteredTasks));
+    } catch (error) {
+      console.error('Error deleting task from localStorage:', error);
+      throw error;
+    }
+  }
+
+  async bulkUpdatePriorities(items: { id: string; priority: number | undefined }[]): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    
+    try {
+      const tasks = await this.listTasks();
+      
+      for (const { id, priority } of items) {
+        const index = tasks.findIndex(task => task.id === id);
+        if (index !== -1) {
+          tasks[index].priority = priority;
+        }
+      }
+      
+      localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
+    } catch (error) {
+      console.error('Error bulk updating priorities in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async clearAllTasks(): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    
+    try {
+      localStorage.removeItem(TASKS_STORAGE_KEY);
+    } catch (error) {
+      console.error('Error clearing tasks from localStorage:', error);
+      throw error;
+    }
+  }
+
+  async importTasks(tasks: TaskEntity[]): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    
+    try {
+      localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
+    } catch (error) {
+      console.error('Error importing tasks to localStorage:', error);
+      throw error;
+    }
+  }
+
+  async getUserSettings(): Promise<UserSettingsEntity> {
+    if (typeof window === 'undefined') {
+      return DEFAULT_USER_SETTINGS;
+    }
+    
+    try {
+      const stored = localStorage.getItem(USER_SETTINGS_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : DEFAULT_USER_SETTINGS;
+    } catch (error) {
+      console.error('Error reading user settings from localStorage:', error);
+      return DEFAULT_USER_SETTINGS;
+    }
+  }
+
+  async updateUserSettings(patch: Partial<UserSettingsEntity>): Promise<UserSettingsEntity> {
+    if (typeof window === 'undefined') {
+      return DEFAULT_USER_SETTINGS;
+    }
+    
+    try {
+      const current = await this.getUserSettings();
+      const updated = { ...current, ...patch };
+      localStorage.setItem(USER_SETTINGS_STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    } catch (error) {
+      console.error('Error updating user settings in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async getSettings(): Promise<AppSettingsEntity> {
+    if (typeof window === 'undefined') {
+      return DEFAULT_APP_SETTINGS;
+    }
+    
+    try {
+      const stored = localStorage.getItem(APP_SETTINGS_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : DEFAULT_APP_SETTINGS;
+    } catch (error) {
+      console.error('Error reading app settings from localStorage:', error);
+      return DEFAULT_APP_SETTINGS;
+    }
+  }
+
+  async updateSettings(patch: Partial<AppSettingsEntity>): Promise<AppSettingsEntity> {
+    if (typeof window === 'undefined') {
+      return DEFAULT_APP_SETTINGS;
+    }
+    
+    try {
+      const current = await this.getSettings();
+      const updated = { ...current, ...patch };
+      localStorage.setItem(APP_SETTINGS_STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    } catch (error) {
+      console.error('Error updating app settings in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async getQolSurveyResponse(): Promise<QolSurveyResponseEntity | null> {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+    
+    try {
+      const stored = localStorage.getItem(QOL_SURVEY_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : null;
+    } catch (error) {
+      console.error('Error reading QoL survey response from localStorage:', error);
+      return null;
+    }
+  }
+
+  async saveQolSurveyResponse(data: QolSurveyResponseEntity): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    
+    try {
+      localStorage.setItem(QOL_SURVEY_STORAGE_KEY, JSON.stringify(data));
+    } catch (error) {
+      console.error('Error saving QoL survey response to localStorage:', error);
+      throw error;
+    }
+  }
+
+  async getFilters(): Promise<FilterStateEntity | null> {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+    
+    try {
+      const stored = sessionStorage.getItem(FILTERS_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : null;
+    } catch (error) {
+      console.error('Error reading filters from sessionStorage:', error);
+      return null;
+    }
+  }
+
+  async saveFilters(data: FilterStateEntity): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    
+    try {
+      sessionStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(data));
+    } catch (error) {
+      console.error('Error saving filters to sessionStorage:', error);
+      throw error;
+    }
+  }
+
+  async clearFilters(): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    
+    try {
+      sessionStorage.removeItem(FILTERS_STORAGE_KEY);
+    } catch (error) {
+      console.error('Error clearing filters from sessionStorage:', error);
+      throw error;
+    }
+  }
+
+  async getMetadata(): Promise<StorageMetadata> {
+    return {
+      mode: 'browser-json',
+      backend: 'local',
+      version: '1.0.0',
+    };
+  }
+}

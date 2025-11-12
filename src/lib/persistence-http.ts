@@ -1,0 +1,145 @@
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata } from './persistence-types';
+
+export class HttpApiPersistence implements PersistenceAdapter {
+  private baseUrl: string;
+
+  constructor(apiUrl: string) {
+    this.baseUrl = apiUrl;
+  }
+
+  private async makeRequest(endpoint: string, options: RequestInit = {}) {
+    const url = `${this.baseUrl}${endpoint}`;
+    const response = await fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    // For DELETE requests or other requests that don't return content
+    if (response.status === 204 || endpoint.includes('/clear') || endpoint.includes('/delete')) {
+      return null;
+    }
+
+    return response.json();
+  }
+
+ // Tasks
+  async listTasks(): Promise<TaskEntity[]> {
+    return this.makeRequest('/api/tasks');
+  }
+
+  async getTask(id: string): Promise<TaskEntity | null> {
+    return this.makeRequest(`/api/tasks/${id}`);
+  }
+
+  async createTask(input: Partial<TaskEntity>): Promise<TaskEntity> {
+    return this.makeRequest('/api/tasks', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  async updateTask(id: string, patch: Partial<TaskEntity>): Promise<TaskEntity> {
+    return this.makeRequest(`/api/tasks/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  }
+
+  async deleteTask(id: string): Promise<void> {
+    await this.makeRequest(`/api/tasks/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+ async bulkUpdatePriorities(items: { id: string; priority: number | undefined }[]): Promise<void> {
+    await this.makeRequest('/api/tasks/bulk-priorities', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    });
+ }
+
+  async clearAllTasks(): Promise<void> {
+    await this.makeRequest('/api/tasks/clear', {
+      method: 'POST',
+    });
+  }
+
+ async importTasks(tasks: TaskEntity[]): Promise<void> {
+    await this.makeRequest('/api/tasks/import', {
+      method: 'POST',
+      body: JSON.stringify(tasks),
+    });
+  }
+
+  // User settings
+  async getUserSettings(): Promise<UserSettingsEntity> {
+    return this.makeRequest('/api/user-settings');
+  }
+
+ async updateUserSettings(patch: Partial<UserSettingsEntity>): Promise<UserSettingsEntity> {
+    return this.makeRequest('/api/user-settings', {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  }
+
+  // App settings
+  async getSettings(): Promise<AppSettingsEntity> {
+    return this.makeRequest('/api/settings');
+  }
+
+  async updateSettings(patch: Partial<AppSettingsEntity>): Promise<AppSettingsEntity> {
+    return this.makeRequest('/api/settings', {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  }
+
+ // QoL survey
+  async getQolSurveyResponse(): Promise<QolSurveyResponseEntity | null> {
+    return this.makeRequest('/api/qol');
+  }
+
+ async saveQolSurveyResponse(data: QolSurveyResponseEntity): Promise<void> {
+    await this.makeRequest('/api/qol', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+ // Filters
+  async getFilters(): Promise<FilterStateEntity | null> {
+    return this.makeRequest('/api/filters');
+  }
+
+ async saveFilters(data: FilterStateEntity): Promise<void> {
+    await this.makeRequest('/api/filters', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async clearFilters(): Promise<void> {
+    await this.makeRequest('/api/filters', {
+      method: 'DELETE',
+    });
+  }
+
+ // Metadata
+  async getMetadata(): Promise<StorageMetadata> {
+    // We'll need to enhance the backend to provide this info
+    // For now, we'll default to sqlite as specified in the proposal
+    return {
+      mode: 'server-sql',
+      backend: 'sqlite', // Default assumption until backend provides this info
+      version: '1.0.0',
+    };
+ }
+}

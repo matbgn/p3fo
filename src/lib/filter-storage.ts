@@ -1,29 +1,54 @@
 import { Filters } from "@/components/FilterControls";
 
-const SESSION_STORAGE_KEY = "taskFilters";
-
-export const saveFiltersToSessionStorage = (filters: Filters) => {
+// Save filters to persistence (sessionStorage or backend)
+export const saveFiltersToSessionStorage = async (filters: Filters) => {
   try {
-    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(filters));
+    const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+    const adapter = await persistence;
+    await adapter.saveFilters(filters);
   } catch (error) {
-    console.error("Error saving filters to session storage:", error);
+    console.error("Error saving filters to persistence:", error);
+    // Fallback to sessionStorage
+    try {
+      sessionStorage.setItem("taskFilters", JSON.stringify(filters));
+    } catch (e) {
+      console.error("Error saving filters to sessionStorage:", e);
+    }
   }
 };
 
-export const loadFiltersFromSessionStorage = (): Filters | null => {
+// Load filters from persistence (sessionStorage or backend)
+export const loadFiltersFromSessionStorage = async (): Promise<Filters | null> => {
   try {
-    const storedFilters = sessionStorage.getItem(SESSION_STORAGE_KEY);
-    return storedFilters ? JSON.parse(storedFilters) : null;
+    const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+    const adapter = await persistence;
+    return await adapter.getFilters();
   } catch (error) {
-    console.error("Error loading filters from session storage:", error);
-    return null;
+    console.error("Error loading filters from persistence:", error);
+    // Fallback to sessionStorage
+    try {
+      const storedFilters = sessionStorage.getItem("taskFilters");
+      return storedFilters ? JSON.parse(storedFilters) : null;
+    } catch (e) {
+      console.error("Error loading filters from sessionStorage:", e);
+      return null;
+    }
   }
 };
 
-export const clearFiltersFromSessionStorage = () => {
+// Clear filters from persistence (sessionStorage or backend)
+export const clearFiltersFromSessionStorage = async () => {
   try {
-    sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+    const adapter = await persistence;
+    await adapter.clearFilters();
   } catch (error) {
-    console.error("Error clearing filters from session storage:", error);
+    console.error("Error clearing filters from persistence:", error);
+    // Fallback to sessionStorage
+    try {
+      sessionStorage.removeItem("taskFilters");
+    } catch (e) {
+      console.error("Error clearing filters from sessionStorage:", e);
+    }
   }
 };

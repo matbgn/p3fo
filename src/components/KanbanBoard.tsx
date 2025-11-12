@@ -201,16 +201,26 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
     category: []
   };
 
-  const [filters, setFilters] = React.useState<Filters>(() => {
-    const storedFilters = loadFiltersFromSessionStorage();
-    return storedFilters || defaultKanbanFilters;
-  });
+  const [filters, setFilters] = React.useState<Filters>(defaultKanbanFilters);
+  const [loadingFilters, setLoadingFilters] = React.useState(true);
 
-  // Effect to update session storage when filters change
+  // Load filters on mount
   useEffect(() => {
-    // The FilterControls component now handles saving filters to session storage
-    // No need to save here directly, as setFilters is passed to FilterControls
-  }, [filters]);
+    const loadFilters = async () => {
+      try {
+        const storedFilters = await loadFiltersFromSessionStorage();
+        if (storedFilters) {
+          setFilters(storedFilters);
+        }
+      } catch (error) {
+        console.error("Error loading filters:", error);
+      } finally {
+        setLoadingFilters(false);
+      }
+    };
+    
+    loadFilters();
+  }, []);
 
   const map = React.useMemo(() => byId(tasks), [tasks]);
   const topTasks = React.useMemo(() => {
@@ -226,13 +236,13 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
     if (filters.showUrgent) filtered = filtered.filter(t => t.urgent);
     if (filters.showImpact) filtered = filtered.filter(t => t.impact);
     if (filters.showMajorIncident) filtered = filtered.filter(t => t.majorIncident);
-    if (filters.difficulty.length > 0) {
+    if (filters.difficulty && Array.isArray(filters.difficulty) && filters.difficulty.length > 0) {
       filtered = filtered.filter(t => filters.difficulty.includes(t.difficulty));
     }
-    if (filters.category.length > 0) {
+    if (filters.category && Array.isArray(filters.category) && filters.category.length > 0) {
       filtered = filtered.filter(t => !t.category || filters.category.includes(t.category));
     }
-    if (filters.status.length > 0) {
+    if (filters.status && Array.isArray(filters.status) && filters.status.length > 0) {
       filtered = filtered.filter(t => filters.status.includes(t.triageStatus));
     }
     return filtered;
