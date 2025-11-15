@@ -38,7 +38,9 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
           ) : value && value !== 'unassigned' ? (
             // Show the stored user ID as a simple avatar with initials
             <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
-              <span className="text-xs text-muted-foreground">{value.substring(0, 2).toUpperCase()}</span>
+              <span className="text-xs text-muted-foreground">
+                {value.split(' ').map(name => name[0]).join('').toUpperCase().slice(0, 2)}
+              </span>
             </div>
           ) : (
             <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
@@ -71,7 +73,9 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
           <SelectItem value={value}>
             <div className="flex items-center gap-2">
               <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
-                <span className="text-xs text-muted-foreground">{value.substring(0, 2).toUpperCase()}</span>
+                <span className="text-xs text-muted-foreground">
+                  {value.split(' ').map(name => name[0]).join('').toUpperCase().slice(0, 2)}
+                </span>
               </div>
               <span className="text-sm">{value}</span>
             </div>
