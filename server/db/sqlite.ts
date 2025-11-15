@@ -64,21 +64,12 @@ class SqliteClient implements DbClient {
     // Create user_settings table (single row)
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS user_settings (
-        id INTEGER PRIMARY KEY DEFAULT 1,
+        user_id TEXT PRIMARY KEY,
         username TEXT NOT NULL,
         logo TEXT,
         has_completed_onboarding BOOLEAN DEFAULT 0
       )
     `);
-
-    // Insert default user settings if not exists
-    const userSettingsCount = this.db.prepare('SELECT COUNT(*) as count FROM user_settings').get() as { count: number };
-    if (userSettingsCount.count === 0) {
-      this.db.prepare(`
-        INSERT INTO user_settings (id, username, logo, has_completed_onboarding) 
-        VALUES (1, @username, @logo, @has_completed_onboarding)
-      `).run(DEFAULT_USER_SETTINGS);
-    }
 
     // Create app_settings table (single row)
     this.db.exec(`
@@ -318,24 +309,32 @@ class SqliteClient implements DbClient {
   }
 
   // User settings
-  async getUserSettings(): Promise<UserSettingsEntity> {
-    const row = this.db.prepare('SELECT * FROM user_settings WHERE id = 1').get() as any;
-    return row ? {
+  async getUserSettings(userId: string): Promise<UserSettingsEntity | null> {
+    const row = this.db.prepare('SELECT * FROM user_settings WHERE user_id = ?').get(userId) as any;
+    if (!row) {
+      return null;
+    }
+    return {
+      userId: row.user_id,
       username: row.username,
       logo: row.logo,
       has_completed_onboarding: Boolean(row.has_completed_onboarding),
-    } : DEFAULT_USER_SETTINGS;
+    };
   }
 
-  async updateUserSettings(data: Partial<UserSettingsEntity>): Promise<UserSettingsEntity> {
-    const current = await this.getUserSettings();
-    const updated = { ...current, ...data };
+  async updateUserSettings(userId: string, data: Partial<UserSettingsEntity>): Promise<UserSettingsEntity> {
+    const current = await this.getUserSettings(userId) || { ...DEFAULT_USER_SETTINGS, userId };
+    const updated = { ...current, ...data, userId };
 
     this.db.prepare(`
-      UPDATE user_settings 
-      SET username = @username, logo = @logo, has_completed_onboarding = @has_completed_onboarding
-      WHERE id = 1
+      INSERT INTO user_settings (user_id, username, logo, has_completed_onboarding)
+      VALUES (@userId, @username, @logo, @has_completed_onboarding)
+      ON CONFLICT(user_id) DO UPDATE SET
+        username = excluded.username,
+        logo = excluded.logo,
+        has_completed_onboarding = excluded.has_completed_onboarding
     `).run({
+      userId: updated.userId,
       username: updated.username,
       logo: updated.logo,
       has_completed_onboarding: updated.has_completed_onboarding ? 1 : 0,

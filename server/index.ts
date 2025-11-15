@@ -136,19 +136,25 @@ app.post('/api/tasks/clear', async (req: Request, res: Response) => {
 });
 
 // User settings routes
-app.get('/api/user-settings', async (req: Request, res: Response) => {
+app.get('/api/user-settings/:userId', async (req: Request, res: Response) => {
   try {
-    const settings = await db.getUserSettings();
-    res.json(settings);
+    const { userId } = req.params;
+    const settings = await db.getUserSettings(userId);
+    if (settings) {
+      res.json(settings);
+    } else {
+      res.status(404).json({ error: 'User settings not found' });
+    }
   } catch (error) {
     console.error('Error fetching user settings:', error);
     res.status(500).json({ error: 'Failed to fetch user settings' });
- }
+  }
 });
 
-app.patch('/api/user-settings', async (req: Request, res: Response) => {
- try {
-    const settings = await db.updateUserSettings(req.body);
+app.post('/api/user-settings/:userId', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const settings = await db.updateUserSettings(userId, req.body);
     res.json(settings);
   } catch (error) {
     console.error('Error updating user settings:', error);

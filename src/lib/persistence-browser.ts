@@ -174,29 +174,29 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
   }
 
-  async getUserSettings(): Promise<UserSettingsEntity> {
+  async getUserSettings(userId: string): Promise<UserSettingsEntity | null> {
     if (typeof window === 'undefined') {
-      return DEFAULT_USER_SETTINGS;
+      return null;
     }
     
     try {
-      const stored = localStorage.getItem(USER_SETTINGS_STORAGE_KEY);
-      return stored ? JSON.parse(stored) : DEFAULT_USER_SETTINGS;
+      const stored = localStorage.getItem(`${USER_SETTINGS_STORAGE_KEY}_${userId}`);
+      return stored ? JSON.parse(stored) : null;
     } catch (error) {
       console.error('Error reading user settings from localStorage:', error);
-      return DEFAULT_USER_SETTINGS;
+      return null;
     }
   }
 
-  async updateUserSettings(patch: Partial<UserSettingsEntity>): Promise<UserSettingsEntity> {
+  async updateUserSettings(userId: string, patch: Partial<UserSettingsEntity>): Promise<UserSettingsEntity> {
     if (typeof window === 'undefined') {
-      return DEFAULT_USER_SETTINGS;
+      throw new Error('Cannot update user settings in a non-browser environment.');
     }
     
     try {
-      const current = await this.getUserSettings();
+      const current = await this.getUserSettings(userId) || { ...DEFAULT_USER_SETTINGS, userId };
       const updated = { ...current, ...patch };
-      localStorage.setItem(USER_SETTINGS_STORAGE_KEY, JSON.stringify(updated));
+      localStorage.setItem(`${USER_SETTINGS_STORAGE_KEY}_${userId}`, JSON.stringify(updated));
       return updated;
     } catch (error) {
       console.error('Error updating user settings in localStorage:', error);

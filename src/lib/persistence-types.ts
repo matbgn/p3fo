@@ -28,6 +28,7 @@ export interface TaskEntity {
 }
 
 export interface UserSettingsEntity {
+  userId: string;
   username: string;
   logo: string;
   has_completed_onboarding: boolean;
@@ -71,8 +72,8 @@ export interface PersistenceAdapter {
   importTasks(tasks: TaskEntity[]): Promise<void>;
 
   // User settings
-  getUserSettings(): Promise<UserSettingsEntity>;
-  updateUserSettings(patch: Partial<UserSettingsEntity>): Promise<UserSettingsEntity>;
+  getUserSettings(userId: string): Promise<UserSettingsEntity | null>;
+  updateUserSettings(userId: string, patch: Partial<UserSettingsEntity>): Promise<UserSettingsEntity>;
 
   // App settings
   getSettings(): Promise<AppSettingsEntity>;

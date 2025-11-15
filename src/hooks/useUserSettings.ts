@@ -13,18 +13,32 @@ const defaultUserSettings: UserSettings = {
   hasCompletedOnboarding: false,
 };
 
+// Get or create a unique user ID for the current client
+const getUserId = (): string => {
+  const userId = localStorage.getItem('p3fo_user_id');
+  if (userId) {
+    return userId;
+  }
+  const newUserId = crypto.randomUUID();
+  localStorage.setItem('p3fo_user_id', newUserId);
+  return newUserId;
+};
+
 // Load user settings from persistence
-const loadUserSettings = async (): Promise<UserSettings> => {
+const loadUserSettings = async (userId: string): Promise<UserSettings> => {
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
-    const settings = await adapter.getUserSettings();
+    const settings = await adapter.getUserSettings(userId);
     
-    // If no username is set, generate a random one
-    if (!settings.username) {
-      settings.username = getRandomUsername();
-      // Save the generated username
-      await adapter.updateUserSettings({ username: settings.username });
+    // If no settings are found for this user, create them
+    if (!settings) {
+      const newSettings: UserSettings = {
+        ...defaultUserSettings,
+        username: getRandomUsername(),
+      };
+      await adapter.updateUserSettings(userId, newSettings);
+      return newSettings;
     }
     
     return settings;
@@ -71,7 +85,8 @@ export const useUserSettings = () => {
   // Load settings on mount
   useEffect(() => {
     const initializeSettings = async () => {
-      const settings = await loadUserSettings();
+      const userId = getUserId();
+      const settings = await loadUserSettings(userId);
       setUserSettings(settings);
       setLoading(false);
     };
@@ -88,7 +103,8 @@ export const useUserSettings = () => {
       try {
         const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
         const adapter = await persistence;
-        await adapter.updateUserSettings(userSettings);
+        const userId = getUserId();
+        await adapter.updateUserSettings(userId, userSettings);
       } catch (error) {
         console.error('Error saving user settings to persistence:', error);
         // Fallback to localStorage

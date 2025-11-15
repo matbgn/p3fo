@@ -68,25 +68,43 @@ const loadTasks = async () => {
     const entities = await adapter.listTasks();
     
     // Convert TaskEntity[] to Task[]
-    tasks = entities.map(entity => ({
-      id: entity.id,
-      title: entity.title,
-      parentId: entity.parent_id,
-      children: entity.children || [],
-      createdAt: new Date(entity.created_at).getTime(),
-      triageStatus: entity.triage_status as TriageStatus,
-      urgent: entity.urgent,
-      impact: entity.impact,
-      majorIncident: entity.major_incident,
-      difficulty: entity.difficulty,
-      timer: entity.timer,
-      category: entity.category as Category,
-      terminationDate: entity.termination_date ? new Date(entity.termination_date).getTime() : undefined,
-      comment: entity.comment || undefined,
-      durationInMinutes: entity.duration_in_minutes || undefined,
-      priority: entity.priority || 0,
-      userId: entity.user_id || undefined,
-    }));
+    const taskMap: { [id: string]: Task } = {};
+    const topLevelTasks: Task[] = [];
+
+    // First pass: create all task objects and map them by ID
+    entities.forEach(entity => {
+      const task: Task = {
+        id: entity.id,
+        title: entity.title,
+        parentId: entity.parent_id,
+        children: [], // Initialize children array
+        createdAt: new Date(entity.created_at).getTime(),
+        triageStatus: entity.triage_status as TriageStatus,
+        urgent: entity.urgent,
+        impact: entity.impact,
+        majorIncident: entity.major_incident,
+        difficulty: entity.difficulty,
+        timer: entity.timer,
+        category: entity.category as Category,
+        terminationDate: entity.termination_date ? new Date(entity.termination_date).getTime() : undefined,
+        comment: entity.comment || undefined,
+        durationInMinutes: entity.duration_in_minutes || undefined,
+        priority: entity.priority || 0,
+        userId: entity.user_id || undefined,
+      };
+      taskMap[task.id] = task;
+    });
+
+    // Second pass: populate children arrays and identify top-level tasks
+    Object.values(taskMap).forEach(task => {
+      if (task.parentId && taskMap[task.parentId]) {
+        taskMap[task.parentId].children?.push(task.id);
+      } else {
+        topLevelTasks.push(task);
+      }
+    });
+
+    tasks = Object.values(taskMap);
     
     // If no tasks, initialize defaults
     if (tasks.length === 0) {
@@ -877,13 +895,29 @@ const updateTerminationDate = async (taskId: string, terminationDate: number | u
     if (!task) return parentIdToReturn;
     
     // Update local state
-    tasks = tasks.map((task) => {
-      if (task.id === id) {
-        parentIdToReturn = task.parentId || null; // Capture parentId before update
-        return { ...task, title };
+    tasks = tasks.map((currentTask) => {
+      if (currentTask.id === id) {
+        parentIdToReturn = currentTask.parentId || null; // Capture parentId before update
+        return { ...currentTask, title };
       }
-      return task;
+      return currentTask;
     });
+
+    // If the task has a parent, ensure the parent's children array is up-to-date
+    if (parentIdToReturn) {
+      tasks = tasks.map((currentTask) => {
+        if (currentTask.id === parentIdToReturn) {
+          // Ensure the child is in the parent's children array
+          if (!currentTask.children?.includes(id)) {
+            return {
+              ...currentTask,
+              children: [...(currentTask.children || []), id],
+            };
+          }
+        }
+        return currentTask;
+      });
+    }
     
     // Persist to backend
     try {

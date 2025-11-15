@@ -79,13 +79,13 @@ export class HttpApiPersistence implements PersistenceAdapter {
   }
 
   // User settings
-  async getUserSettings(): Promise<UserSettingsEntity> {
-    return this.makeRequest('/api/user-settings');
+  async getUserSettings(userId: string): Promise<UserSettingsEntity | null> {
+    return this.makeRequest(`/api/user-settings/${userId}`);
   }
 
- async updateUserSettings(patch: Partial<UserSettingsEntity>): Promise<UserSettingsEntity> {
-    return this.makeRequest('/api/user-settings', {
-      method: 'PATCH',
+  async updateUserSettings(userId: string, patch: Partial<UserSettingsEntity>): Promise<UserSettingsEntity> {
+    return this.makeRequest(`/api/user-settings/${userId}`, {
+      method: 'POST', // Using POST to create or update
       body: JSON.stringify(patch),
     });
   }

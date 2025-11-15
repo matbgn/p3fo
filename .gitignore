@@ -36,3 +36,6 @@ sketch
 dist/
 
 .vscode/
+
+*.db*
+.kilocode
