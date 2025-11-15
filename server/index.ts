@@ -82,13 +82,23 @@ app.get('/api/tasks/:id', async (req: Request, res: Response) => {
 
 app.patch('/api/tasks/:id', async (req: Request, res: Response) => {
   try {
+    console.log('API: Update task request received:', {
+      id: req.params.id,
+      body: req.body,
+      timestamp: new Date().toISOString()
+    });
+    
     const task = await db.updateTask(req.params.id, req.body);
+    
     if (!task) {
+      console.log('API: Task not found:', req.params.id);
       return res.status(404).json({ error: 'Task not found' });
     }
+    
+    console.log('API: Task updated successfully:', task);
     res.json(task);
- } catch (error) {
-    console.error('Error updating task:', error);
+  } catch (error) {
+    console.error('API: Error updating task:', error);
     res.status(500).json({ error: 'Failed to update task' });
   }
 });

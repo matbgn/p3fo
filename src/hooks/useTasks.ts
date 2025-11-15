@@ -62,10 +62,21 @@ const updateTaskInTasks = (taskId: string, updater: (task: Task) => Task) => {
 };
 
 const loadTasks = async () => {
+  console.log('=== loadTasks called ===', {
+    timestamp: new Date().toISOString()
+  });
+  
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
+    console.log('Loading tasks from database...');
     const entities = await adapter.listTasks();
+    console.log(`Found ${entities.length} tasks in database`);
+    
+    // Log all task IDs found in database
+    if (entities.length > 0) {
+      console.log('Task IDs in database:', entities.map(e => e.id));
+    }
     
     // Convert TaskEntity[] to Task[]
     const taskMap: { [id: string]: Task } = {};
@@ -105,10 +116,14 @@ const loadTasks = async () => {
     });
 
     tasks = Object.values(taskMap);
+    console.log(`Loaded ${tasks.length} tasks into memory`);
     
     // If no tasks, initialize defaults
     if (tasks.length === 0) {
+      console.log('No tasks found, initializing default tasks');
       await initializeDefaultTasks();
+    } else {
+      console.log('Tasks loaded successfully');
     }
   } catch (error) {
     console.error("Error loading tasks from persistence:", error);
@@ -132,6 +147,7 @@ const loadTasks = async () => {
           };
         });
         tasks = parsed;
+        console.log('Loaded tasks from localStorage fallback');
       } catch (e) {
         console.error("Error parsing legacy tasks:", e);
         await initializeDefaultTasks();
@@ -142,44 +158,24 @@ const loadTasks = async () => {
   }
 };
 
-  const initializeDefaultTasks = () => {
-  const a: Task = {
-    id: crypto.randomUUID(),
-    title: "Plan vacation",
-    createdAt: Date.now(),
-    parentId: null,
-    children: [],
-    triageStatus: "Backlog",
-    urgent: false,
-    impact: false,
-    majorIncident: false,
-    difficulty: 1,
-  };
-  const b: Task = {
-    id: crypto.randomUUID(),
-    title: "Research",
-    createdAt: Date.now(),
-    parentId: a.id,
-    children: [],
-    triageStatus: "Backlog",
-    urgent: false,
-    impact: false,
-    difficulty: 2,
-  };
-  const c: Task = {
-    id: crypto.randomUUID(),
-    title: "Find accommodations",
-    createdAt: Date.now(),
-    parentId: b.id,
-    children: [],
-    triageStatus: "Backlog",
-    urgent: false,
-    impact: false,
-    difficulty: 3,
-  };
-  a.children = [b.id];
-  b.children = [c.id];
-  tasks = [a, b, c];
+const initializeDefaultTasks = async () => {
+  console.log('=== initializeDefaultTasks called ===');
+  
+  console.log('Creating default tasks in database...');
+  
+  // Create task A (top level)
+  const taskAId = await createTask("Plan vacation", null);
+  console.log('Created task A:', taskAId);
+  
+  // Create task B (child of A)
+  const taskBId = await createTask("Research", taskAId);
+  console.log('Created task B:', taskBId);
+  
+  // Create task C (child of B)
+  const taskCId = await createTask("Find accommodations", taskBId);
+  console.log('Created task C:', taskCId);
+  
+  console.log('All default tasks created successfully in database');
 };
 
 // Load tasks on module initialization
@@ -223,6 +219,12 @@ const persistTasks = async () => {
 };
 
 const createTask = async (title: string, parentId: string | null) => {
+  console.log('=== createTask called ===', {
+    title,
+    parentId,
+    timestamp: new Date().toISOString()
+  });
+  
   const t: Task = {
     id: crypto.randomUUID(),
     title: title.trim(),
@@ -240,6 +242,8 @@ const createTask = async (title: string, parentId: string | null) => {
     durationInMinutes: undefined,
     priority: 0, // Initialize new tasks with priority 0
   };
+  
+  console.log('Creating task:', t);
   
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
@@ -266,12 +270,16 @@ const createTask = async (title: string, parentId: string | null) => {
       children: [],
     };
     
-    await adapter.createTask(entity);
+    console.log('Calling adapter.createTask with entity:', JSON.stringify(entity, null, 2));
+    const result = await adapter.createTask(entity);
+    console.log('Backend create successful, result:', result);
     
     // Update local state
     tasks = [...tasks, t];
+    console.log('Local state updated with new task');
 
     if (parentId) {
+      console.log('Updating parent task:', parentId);
       tasks = tasks.map(currentTask => {
         if (currentTask.id === parentId) {
           const updatedParent = {
@@ -292,8 +300,9 @@ const createTask = async (title: string, parentId: string | null) => {
     }
     
     await persistTasks();
+    console.log('persistTasks completed successfully');
   } catch (error) {
-    console.error("Error creating task:", error);
+    console.error('Error creating task:', error);
     // Fallback to old method
     tasks = [...tasks, t];
     if (parentId) {
@@ -316,6 +325,7 @@ const createTask = async (title: string, parentId: string | null) => {
     await persistTasks();
   }
   
+  console.log('createTask completed, returning task ID:', t.id);
   return t.id;
 };
 
@@ -803,15 +813,37 @@ const updateCategory = async (taskId: string, category: Category | undefined) =>
 };
 
 const updateUser = async (taskId: string, userId: string | undefined) => {
-  const task = tasks.find(t => t.id === taskId);
-  if (!task) return;
+  console.log('=== updateUser called ===', {
+    taskId,
+    userId,
+    timestamp: new Date().toISOString()
+  });
   
-  updateTaskInTasks(taskId, (t) => ({ ...t, userId: userId }));
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) {
+    console.error('Task not found:', taskId);
+    return;
+  }
+  
+  console.log('Current task state:', {
+    id: task.id,
+    title: task.title,
+    currentUserId: task.userId
+  });
+  
+  // Ensure userId is null, not undefined
+  const userIdForDb = userId || null;
+  console.log('userIdForDb:', userIdForDb);
+  
+  // Update local state
+  updateTaskInTasks(taskId, (t) => ({ ...t, userId: userIdForDb }));
+  console.log('Local state updated successfully');
   
   // Persist to backend
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
+    
     const entity: import('@/lib/persistence-types').TaskEntity = {
       id: task.id,
       title: task.title,
@@ -827,16 +859,24 @@ const updateUser = async (taskId: string, userId: string | undefined) => {
       comment: task.comment || null,
       duration_in_minutes: task.durationInMinutes || null,
       priority: task.priority || null,
-      user_id: userId || null,
+      user_id: userIdForDb, // Ensure null instead of undefined
       parent_id: task.parentId || null,
       children: task.children || [],
     };
-    await adapter.updateTask(taskId, entity);
+    
+    console.log('Calling adapter.updateTask with entity:', JSON.stringify(entity, null, 2));
+    const result = await adapter.updateTask(taskId, entity);
+    console.log('Backend update successful, result:', result);
   } catch (error) {
-    console.error("Error updating user:", error);
+    console.error('Error updating user in backend:', error);
+    // Revert local state on error
+    updateTaskInTasks(taskId, (t) => ({ ...t, userId: task.userId }));
+    console.log('Local state reverted due to error');
+    throw error;
   }
   
   await persistTasks();
+  console.log('persistTasks completed successfully');
 };
 
 const updateTerminationDate = async (taskId: string, terminationDate: number | undefined) => {

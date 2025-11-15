@@ -148,92 +148,121 @@ class SqliteClient implements DbClient {
   }
 
  async getTaskById(id: string): Promise<TaskEntity | null> {
-    const row = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as any;
-    if (!row) return null;
+   console.log('SQLite: getTaskById called with id:', id);
+   
+   const row = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as any;
+   console.log('SQLite: getTaskById result:', row);
+   
+   if (!row) {
+     console.log('SQLite: Task not found in database:', id);
+     return null;
+   }
 
-    return {
-      id: row.id,
-      parent_id: row.parent_id,
-      title: row.title,
-      created_at: row.created_at,
-      triage_status: row.triage_status,
-      urgent: Boolean(row.urgent),
-      impact: Boolean(row.impact),
-      major_incident: Boolean(row.major_incident),
-      difficulty: row.difficulty,
-      timer: row.timer ? JSON.parse(row.timer) : [],
-      category: row.category,
-      termination_date: row.termination_date,
-      comment: row.comment,
-      duration_in_minutes: row.duration_in_minutes,
-      priority: row.priority,
-      user_id: row.user_id,
-    };
-  }
+   const task = {
+     id: row.id,
+     parent_id: row.parent_id,
+     title: row.title,
+     created_at: row.created_at,
+     triage_status: row.triage_status,
+     urgent: Boolean(row.urgent),
+     impact: Boolean(row.impact),
+     major_incident: Boolean(row.major_incident),
+     difficulty: row.difficulty,
+     timer: row.timer ? JSON.parse(row.timer) : [],
+     category: row.category,
+     termination_date: row.termination_date,
+     comment: row.comment,
+     duration_in_minutes: row.duration_in_minutes,
+     priority: row.priority,
+     user_id: row.user_id,
+   };
+   
+   console.log('SQLite: Task found:', task);
+   return task;
+ }
 
  async createTask(task: Partial<TaskEntity>): Promise<TaskEntity> {
-    const newTask: TaskEntity = {
-      id: task.id || crypto.randomUUID(),
-      title: task.title || 'New Task',
-      created_at: task.created_at || new Date().toISOString(),
-      triage_status: task.triage_status || 'backlog',
-      urgent: task.urgent || false,
-      impact: task.impact || false,
-      major_incident: task.major_incident || false,
-      difficulty: task.difficulty || 1,
-      timer: task.timer || [],
-      category: task.category || 'General',
-      termination_date: task.termination_date || null,
-      comment: task.comment || null,
-      duration_in_minutes: task.duration_in_minutes || null,
-      priority: task.priority || null,
-      user_id: task.user_id || null,
-      parent_id: task.parent_id || null,
-    };
+   console.log('SQLite: createTask called with:', task);
+   
+   const newTask: TaskEntity = {
+     id: task.id || crypto.randomUUID(),
+     title: task.title || 'New Task',
+     created_at: task.created_at || new Date().toISOString(),
+     triage_status: task.triage_status || 'backlog',
+     urgent: task.urgent || false,
+     impact: task.impact || false,
+     major_incident: task.major_incident || false,
+     difficulty: task.difficulty || 1,
+     timer: task.timer || [],
+     category: task.category || 'General',
+     termination_date: task.termination_date || null,
+     comment: task.comment || null,
+     duration_in_minutes: task.duration_in_minutes || null,
+     priority: task.priority || null,
+     user_id: task.user_id || null,
+     parent_id: task.parent_id || null,
+   };
 
-    this.db.prepare(`
-      INSERT INTO tasks (id, parent_id, title, created_at, triage_status, urgent, impact, major_incident, 
-                         difficulty, timer, category, termination_date, comment, duration_in_minutes, priority, user_id)
-      VALUES (@id, @parent_id, @title, @created_at, @triage_status, @urgent, @impact, @major_incident,
-              @difficulty, @timer, @category, @termination_date, @comment, @duration_in_minutes, @priority, @user_id)
-    `).run({
-      id: newTask.id,
-      parent_id: newTask.parent_id,
-      title: newTask.title,
-      created_at: newTask.created_at,
-      triage_status: newTask.triage_status,
-      urgent: newTask.urgent ? 1 : 0,
-      impact: newTask.impact ? 1 : 0,
-      major_incident: newTask.major_incident ? 1 : 0,
-      difficulty: newTask.difficulty,
-      timer: JSON.stringify(newTask.timer),
-      category: newTask.category,
-      termination_date: newTask.termination_date,
-      comment: newTask.comment,
-      duration_in_minutes: newTask.duration_in_minutes,
-      priority: newTask.priority,
-      user_id: newTask.user_id,
-    });
+   console.log('SQLite: Creating task:', newTask);
 
-    return newTask;
-  }
+   const stmt = this.db.prepare(`
+     INSERT INTO tasks (id, parent_id, title, created_at, triage_status, urgent, impact, major_incident,
+                        difficulty, timer, category, termination_date, comment, duration_in_minutes, priority, user_id)
+     VALUES (@id, @parent_id, @title, @created_at, @triage_status, @urgent, @impact, @major_incident,
+             @difficulty, @timer, @category, @termination_date, @comment, @duration_in_minutes, @priority, @user_id)
+   `);
+   
+   const params = {
+     id: newTask.id,
+     parent_id: newTask.parent_id,
+     title: newTask.title,
+     created_at: newTask.created_at,
+     triage_status: newTask.triage_status,
+     urgent: newTask.urgent ? 1 : 0,
+     impact: newTask.impact ? 1 : 0,
+     major_incident: newTask.major_incident ? 1 : 0,
+     difficulty: newTask.difficulty,
+     timer: JSON.stringify(newTask.timer),
+     category: newTask.category,
+     termination_date: newTask.termination_date,
+     comment: newTask.comment,
+     duration_in_minutes: newTask.duration_in_minutes,
+     priority: newTask.priority,
+     user_id: newTask.user_id,
+   };
+   
+   console.log('SQLite: Executing insert with params:', JSON.stringify(params, null, 2));
+   
+   const result = stmt.run(params);
+   console.log('SQLite: Insert result:', result);
+
+   return newTask;
+ }
 
   async updateTask(id: string, data: Partial<TaskEntity>): Promise<TaskEntity | null> {
+    console.log('SQLite: updateTask called with:', { id, data });
+    
     // First get the current task
     const currentTask = await this.getTaskById(id);
-    if (!currentTask) return null;
+    if (!currentTask) {
+      console.error('SQLite: Task not found:', id);
+      return null;
+    }
 
     // Merge with existing task
     const updatedTask = { ...currentTask, ...data };
+    console.log('SQLite: Updated task object:', updatedTask);
 
-    this.db.prepare(`
-      UPDATE tasks 
-      SET parent_id = @parent_id, title = @title, triage_status = @triage_status, urgent = @urgent, 
+    const stmt = this.db.prepare(`
+      UPDATE tasks
+      SET parent_id = @parent_id, title = @title, triage_status = @triage_status, urgent = @urgent,
           impact = @impact, major_incident = @major_incident, difficulty = @difficulty, timer = @timer,
           category = @category, termination_date = @termination_date, comment = @comment,
           duration_in_minutes = @duration_in_minutes, priority = @priority, user_id = @user_id
       WHERE id = @id
-    `).run({
+    `);
+    
+    const params = {
       id,
       parent_id: updatedTask.parent_id,
       title: updatedTask.title,
@@ -249,7 +278,12 @@ class SqliteClient implements DbClient {
       duration_in_minutes: updatedTask.duration_in_minutes,
       priority: updatedTask.priority,
       user_id: updatedTask.user_id,
-    });
+    };
+    
+    console.log('SQLite: Executing update with params:', JSON.stringify(params, null, 2));
+    
+    const result = stmt.run(params);
+    console.log('SQLite: Update result:', result);
 
     return updatedTask;
   }

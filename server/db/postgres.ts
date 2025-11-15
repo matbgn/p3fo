@@ -248,21 +248,20 @@ class PostgresClient implements DbClient {
   }
 
   async updateTask(id: string, data: Partial<TaskEntity>): Promise<TaskEntity | null> {
+    console.log('PostgreSQL: updateTask called with:', { id, data });
+    
     // First get the current task
     const currentTask = await this.getTaskById(id);
-    if (!currentTask) return null;
+    if (!currentTask) {
+      console.error('PostgreSQL: Task not found:', id);
+      return null;
+    }
 
     // Merge with existing task
     const updatedTask = { ...currentTask, ...data };
+    console.log('PostgreSQL: Updated task object:', updatedTask);
 
-    await this.pool.query(`
-      UPDATE tasks 
-      SET parent_id = $1, title = $2, triage_status = $3, urgent = $4, 
-          impact = $5, major_incident = $6, difficulty = $7, timer = $8,
-          category = $9, termination_date = $10, comment = $11,
-          duration_in_minutes = $12, priority = $13, user_id = $14
-      WHERE id = $15
-    `, [
+    const params = [
       updatedTask.parent_id,
       updatedTask.title,
       updatedTask.triage_status,
@@ -278,8 +277,20 @@ class PostgresClient implements DbClient {
       updatedTask.priority,
       updatedTask.user_id,
       id
-    ]);
+    ];
+    
+    console.log('PostgreSQL: Executing update with params:', JSON.stringify(params, null, 2));
 
+    const result = await this.pool.query(`
+      UPDATE tasks
+      SET parent_id = $1, title = $2, triage_status = $3, urgent = $4,
+          impact = $5, major_incident = $6, difficulty = $7, timer = $8,
+          category = $9, termination_date = $10, comment = $11,
+          duration_in_minutes = $12, priority = $13, user_id = $14
+      WHERE id = $15
+    `, params);
+
+    console.log('PostgreSQL: Update result:', result);
     return updatedTask;
   }
 
