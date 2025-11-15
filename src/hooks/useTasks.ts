@@ -94,7 +94,7 @@ const loadTasks = async () => {
         urgent: entity.urgent,
         impact: entity.impact,
         majorIncident: entity.major_incident,
-        difficulty: entity.difficulty,
+        difficulty: entity.difficulty as 0.5 | 1 | 2 | 3 | 5 | 8,
         timer: entity.timer,
         category: entity.category as Category,
         terminationDate: entity.termination_date ? new Date(entity.termination_date).getTime() : undefined,
@@ -120,8 +120,19 @@ const loadTasks = async () => {
     
     // If no tasks, initialize defaults
     if (tasks.length === 0) {
-      console.log('No tasks found, initializing default tasks');
-      await initializeDefaultTasks();
+      console.log('No tasks found, calling server to initialize default tasks');
+      try {
+        const response = await fetch('http://localhost:3000/api/tasks/init-defaults', { method: 'POST' });
+        const result = await response.json();
+        if (result.success) {
+          console.log('Server acknowledged default tasks initialization. Creating tasks on frontend.');
+          await initializeDefaultTasks();
+        } else {
+          console.error('Server failed to acknowledge default tasks initialization:', result.error);
+        }
+      } catch (error) {
+        console.error('Error calling init-defaults endpoint:', error);
+      }
     } else {
       console.log('Tasks loaded successfully');
     }

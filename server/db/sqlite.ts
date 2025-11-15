@@ -289,9 +289,22 @@ class SqliteClient implements DbClient {
   }
 
   async deleteTask(id: string): Promise<void> {
-    // Delete children first (in case of foreign key constraints with cascade)
-    // Or delete all related tasks in a transaction
-    this.db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
+    console.log('SQLite: deleteTask called with id:', id);
+
+    const deleteRecursive = this.db.transaction((taskId: string) => {
+      const children = this.db.prepare('SELECT id FROM tasks WHERE parent_id = ?').all(taskId) as { id: string }[];
+      if (children.length > 0) {
+        console.log(`SQLite: Deleting children of task ${taskId}:`, children.map(c => c.id));
+        for (const child of children) {
+          deleteRecursive(child.id);
+        }
+      }
+      
+      const result = this.db.prepare('DELETE FROM tasks WHERE id = ?').run(taskId);
+      console.log(`SQLite: Deleted task ${taskId}, result:`, result);
+    });
+
+    deleteRecursive(id);
  }
 
   async bulkUpdateTaskPriorities(items: { id: string; priority: number | undefined }[]): Promise<void> {

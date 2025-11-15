@@ -145,6 +145,18 @@ app.post('/api/tasks/clear', async (req: Request, res: Response) => {
   }
 });
 
+app.post('/api/tasks/init-defaults', async (req: Request, res: Response) => {
+  try {
+    // This endpoint will be called from the frontend if no tasks exist.
+    // The actual creation of default tasks is handled by the `useTasks` hook.
+    console.log('API: Initialize default tasks endpoint hit');
+    res.json({ success: true, message: 'Default tasks initialization triggered' });
+  } catch (error) {
+    console.error('Error triggering default tasks initialization:', error);
+    res.status(500).json({ error: 'Failed to trigger default tasks initialization' });
+  }
+});
+
 // User settings routes
 app.get('/api/user-settings/:userId', async (req: Request, res: Response) => {
   try {
@@ -260,6 +272,13 @@ app.use('*', (req: Request, res: Response) => {
 async function startServer() {
   try {
     await initializeDb();
+
+    // Check if tasks exist, if not, the frontend will call the init-defaults endpoint
+    const tasks = await db.getTasks();
+    if (tasks.length === 0) {
+      console.log('No tasks found in the database. Frontend will initialize default tasks.');
+    }
+
     app.listen(PORT, () => {
       console.log(`P3FO Server listening on port ${PORT}`);
       console.log(`Database client: ${DB_CLIENT}`);
