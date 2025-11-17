@@ -9,6 +9,7 @@ const FILTERS_STORAGE_KEY = 'taskFilters';
 
 // Default values
 const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
+  userId: 'default-user',
   username: 'User',
   logo: '',
   has_completed_onboarding: false,

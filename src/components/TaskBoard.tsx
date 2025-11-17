@@ -169,9 +169,9 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
     setHighlightedTaskId(null); // Clear highlighted task on normal activation
   };
 
-  const handleAdd = (colIndex: number, title: string) => {
+  const handleAdd = async (colIndex: number, title: string) => {
     const parentId = colIndex === 0 ? null : columns[colIndex].parentId!;
-    const newId = createTask(title, parentId);
+    const newId = await createTask(title, parentId);
     handleActivate(colIndex, newId);
   };
 
@@ -437,8 +437,8 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                           updateStatus={handleChangeStatus}
                           updateDifficulty={updateDifficulty}
                           updateCategory={updateCategory}
-                          updateTitle={(id, title) => {
-                            const parentId = updateTitle(id, title); // Call useTasks' updateTitle
+                          updateTitle={async (id, title) => {
+                            const parentId = await updateTitle(id, title); // Call useTasks' updateTitle
                             if (parentId) {
                               // If the updated task had a parent, re-activate the parent's path
                               const parentTask = map[parentId];

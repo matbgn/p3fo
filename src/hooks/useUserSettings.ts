@@ -41,7 +41,12 @@ const loadUserSettings = async (userId: string): Promise<UserSettings> => {
       return newSettings;
     }
     
-    return settings;
+    // Map UserSettingsEntity to UserSettings
+    return {
+      username: settings.username,
+      logo: settings.logo,
+      hasCompletedOnboarding: settings.has_completed_onboarding
+    };
   } catch (error) {
     console.error('Error loading user settings from persistence:', error);
     

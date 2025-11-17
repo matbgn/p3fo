@@ -1,6 +1,26 @@
 // Types for the persistence layer
 // Matches the existing structures in useTasks, useUserSettings, useSettings, filter-storage, QoLIndexSurveyPage
 
+export type TriageStatus = "Backlog" | "Ready" | "WIP" | "Blocked" | "Done" | "Dropped";
+
+export type Category =
+  | "Marketing"
+  | "Documentation"
+  | "Consulting"
+  | "Testing"
+  | "Funerals"
+  | "Negotiated overtime"
+  | "Sickness"
+  | "Finances"
+  | "HR"
+  | "Training"
+  | "Support"
+  | "UX/UI"
+  | "Admin"
+  | "Development"
+  | "System Operations"
+  | "Private";
+
 export interface TaskTimer {
   startTime: number | null;
   elapsedTime: number;
@@ -11,13 +31,13 @@ export interface TaskEntity {
   id: string;
   title: string;
   created_at: string;
-  triage_status: string;
+  triage_status: TriageStatus | string;
   urgent: boolean;
   impact: boolean;
   major_incident: boolean;
   difficulty: number;
   timer: { startTime: number; endTime: number }[]; // Match existing app structure
-  category: string;
+  category: Category | string;
   termination_date: string | null;
   comment: string | null;
   duration_in_minutes: number | null;
@@ -50,8 +70,14 @@ export interface QolSurveyResponseEntity {
 }
 
 export interface FilterStateEntity {
-  // This will match the structure from src/lib/filter-storage.ts
-  [key: string]: any;
+  showUrgent: boolean;
+  showImpact: boolean;
+  showMajorIncident: boolean;
+  status: TriageStatus[];
+  showDone?: boolean;
+  searchText?: string;
+  difficulty: number[];
+  category: Category[];
 }
 
 export interface StorageMetadata {

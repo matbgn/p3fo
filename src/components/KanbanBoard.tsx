@@ -33,7 +33,7 @@ const Column: React.FC<{
   onUpdateDifficulty: (id: string, difficulty: 0.5 | 1 | 2 | 3 | 5 | 8) => void;
   onUpdateTitle: (id: string, title: string) => void;
   onDelete: (id: string) => void;
-  duplicateTaskStructure: (taskId: string) => string | null;
+  duplicateTaskStructure: (taskId: string) => Promise<string | null>;
   openParents: Record<string, boolean>;
   onToggleParent: (id: string, toggleAll?: boolean) => void;
   onReparent: (id: string, parentId: string | null) => void;

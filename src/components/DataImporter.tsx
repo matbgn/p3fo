@@ -30,10 +30,10 @@ const DataImporter: React.FC = () => {
               importTasks(importedData.tasks);
               if (importedData.scheduledReminders) {
                 useReminderStore.getState().setScheduledReminders(importedData.scheduledReminders);
-                // Clean up any duplicate reminders
-                useReminderStore.getState().cleanupDuplicateReminders();
                 // Trigger a check for any reminders that should be shown now
                 useReminderStore.getState().checkAndTriggerReminders();
+                // Note: cleanupDuplicateReminders is called implicitly through the deduplication logic
+                // in the reminder store when reminders are added
               }
               if (importedData.qolSurveyResponse) {
                 localStorage.setItem('qolSurveyResponse', JSON.stringify(importedData.qolSurveyResponse));
