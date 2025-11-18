@@ -22,7 +22,10 @@ export function useQLI() {
         setLoading(true);
         const responses = JSON.parse(localStorage.getItem('qolSurveyResponse') || '{}');
         if (Object.keys(responses).length === 0) {
-          throw new Error("No survey responses found.");
+          // No responses yet, return null data without error
+          setData(null);
+          setLoading(false);
+          return;
         }
 
         const favorableScores = ["Satisfied", "Very satisfied"];
@@ -64,7 +67,7 @@ export function useQLI() {
     };
 
     calculateQLI();
-    
+
     const handleStorageChange = () => {
       calculateQLI();
     };

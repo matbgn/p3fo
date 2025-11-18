@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { awareness } from '@/lib/collaboration';
+import { useUserSettings } from '@/hooks/useUserSettings';
+import { useView } from '@/context/ViewContext';
 
 // Define the cursor state structure
 export type CursorState = {
@@ -9,6 +11,7 @@ export type CursorState = {
         name: string;
         color: string;
     };
+    view?: string;
 };
 
 const colors = [
@@ -25,18 +28,20 @@ const colors = [
 ];
 
 const getRandomColor = () => colors[Math.floor(Math.random() * colors.length)];
-const getRandomName = () => `User ${Math.floor(Math.random() * 1000)}`;
 
 export const useCursors = () => {
     const [cursors, setCursors] = useState<Map<number, CursorState>>(new Map());
-    const [currentUser] = useState(() => ({
-        name: getRandomName(),
-        color: getRandomColor(),
-    }));
+    const { userSettings } = useUserSettings();
+    const { view } = useView();
+    const [userColor] = useState(getRandomColor());
 
     useEffect(() => {
         // Set local user state
-        awareness.setLocalStateField('user', currentUser);
+        awareness.setLocalStateField('user', {
+            name: userSettings.username,
+            color: userColor,
+        });
+        awareness.setLocalStateField('view', view);
 
         // Handle mouse movement
         const handleMouseMove = (e: MouseEvent) => {
@@ -58,6 +63,7 @@ export const useCursors = () => {
                         x: state.cursor.x,
                         y: state.cursor.y,
                         user: state.user,
+                        view: state.view,
                     });
                 }
             });
@@ -73,7 +79,7 @@ export const useCursors = () => {
             window.removeEventListener('mousemove', handleMouseMove);
             awareness.off('change', handleAwarenessUpdate);
         };
-    }, [currentUser]);
+    }, [userSettings.username, userColor, view]);
 
     return cursors;
 };

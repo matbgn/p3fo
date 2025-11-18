@@ -5,9 +5,13 @@ import { WebsocketProvider } from 'y-websocket';
 export const doc = new Y.Doc();
 
 // Connect to the WebSocket provider
-// Using the same host/port as the dev server, but with ws:// protocol
-const wsUrl = `ws://${window.location.hostname}:3000`;
+// Use the current protocol (ws or wss) and host, connecting to the /ws proxy
+const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const wsUrl = `${protocol}//${window.location.host}/ws`;
 export const provider = new WebsocketProvider(wsUrl, 'p3fo-room', doc);
 
 // Export awareness instance
 export const awareness = provider.awareness;
+
+// Export shared tasks map
+export const yTasks = doc.getMap('tasks');

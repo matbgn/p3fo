@@ -1,6 +1,7 @@
 import * as React from "react";
 import { eventBus } from "@/lib/events";
 import { usePersistence } from "@/lib/PersistenceProvider";
+import { yTasks, doc } from "@/lib/collaboration";
 
 // Polyfill for crypto.randomUUID if not available
 if (typeof crypto.randomUUID !== 'function') {
@@ -58,8 +59,30 @@ let tasks: Task[] = [];
 const byId = (arr: Task[]) => Object.fromEntries(arr.map((t) => [t.id, t]));
 
 const updateTaskInTasks = (taskId: string, updater: (task: Task) => Task) => {
-  tasks = tasks.map(t => t.id === taskId ? updater(t) : t);
+  tasks = tasks.map(t => {
+    if (t.id === taskId) {
+      const updated = updater(t);
+      // Sync to Yjs
+      yTasks.set(taskId, updated);
+      return updated;
+    }
+    return t;
+  });
 };
+
+// Observer for Yjs updates
+yTasks.observe(() => {
+  console.log('Yjs tasks updated');
+  const newTasks = Array.from(yTasks.values()) as Task[];
+
+  // Only update if we have tasks from Yjs
+  if (newTasks.length > 0) {
+    // Merge Yjs tasks with local tasks to preserve any local-only state if necessary
+    // For now, we'll trust Yjs as the source of truth for shared state
+    tasks = newTasks;
+    eventBus.publish("tasksChanged");
+  }
+});
 
 const loadTasks = async () => {
   console.log('=== loadTasks called ===', {
@@ -117,6 +140,22 @@ const loadTasks = async () => {
 
     tasks = Object.values(taskMap);
     console.log(`Loaded ${tasks.length} tasks into memory`);
+
+    // Sync loaded tasks to Yjs if Yjs is empty
+    if (yTasks.size === 0 && tasks.length > 0) {
+      console.log('Initializing Yjs with loaded tasks');
+      doc.transact(() => {
+        tasks.forEach(task => {
+          yTasks.set(task.id, task);
+        });
+      });
+    } else if (yTasks.size > 0) {
+      // If Yjs has data, it might be more up to date or from other clients
+      // For now, let's merge or prefer Yjs? 
+      // Simplest strategy: If Yjs has data, use it.
+      console.log('Yjs has data, using Yjs data');
+      tasks = Array.from(yTasks.values()) as Task[];
+    }
 
     // If no tasks, initialize defaults
     if (tasks.length === 0) {
@@ -252,6 +291,8 @@ const createTask = async (title: string, parentId: string | null) => {
 
     // Update local state
     tasks = [...tasks, t];
+    // Sync to Yjs
+    yTasks.set(t.id, t);
     console.log('Local state updated with new task');
 
     if (parentId) {
@@ -265,7 +306,11 @@ const createTask = async (title: string, parentId: string | null) => {
           if (updatedParent.timer && updatedParent.timer.length > 0) {
             t.timer = updatedParent.timer;
             updatedParent.timer = [];
+            // Update t in Yjs as well since we modified it
+            yTasks.set(t.id, t);
           }
+          // Sync parent update to Yjs
+          yTasks.set(updatedParent.id, updatedParent);
           return updatedParent;
         }
         return currentTask;
@@ -324,11 +369,17 @@ const reparent = async (taskId: string, newParentId: string | null) => {
   // Update local state
   tasks = tasks.map(t => {
     if (t.id === taskId) {
-      return { ...t, parentId: newParentId };
+      const updated = { ...t, parentId: newParentId };
+      yTasks.set(taskId, updated);
+      return updated;
     } else if (t.id === oldParentId) {
-      return { ...t, children: (t.children || []).filter(id => id !== taskId) };
+      const updated = { ...t, children: (t.children || []).filter(id => id !== taskId) };
+      yTasks.set(oldParentId, updated);
+      return updated;
     } else if (t.id === newParentId) {
-      return { ...t, children: Array.from(new Set([...(t.children || []), taskId])) };
+      const updated = { ...t, children: Array.from(new Set([...(t.children || []), taskId])) };
+      yTasks.set(newParentId, updated);
+      return updated;
     }
     return t;
   });
@@ -490,6 +541,9 @@ const updateStatus = async (taskId: string, status: TriageStatus) => {
         const minBacklogPriority = getMinBacklogPriority();
         updatedTask.priority = minBacklogPriority;
       }
+
+      // Sync to Yjs
+      yTasks.set(updatedTask.id, updatedTask);
 
       return updatedTask;
     }

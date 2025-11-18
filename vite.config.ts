@@ -11,6 +11,17 @@ export default defineConfig(({ mode }) => {
     server: {
       host: true, // This makes the dev server listen on all network interfaces
       allowedHosts: env.VITE_ALLOWED_HOSTS ? env.VITE_ALLOWED_HOSTS.split(',') : [],
+      proxy: {
+        '/ws': {
+          target: 'ws://localhost:3000',
+          ws: true,
+          rewrite: (path) => path.replace(/^\/ws/, ''),
+        },
+        '/api': {
+          target: 'http://localhost:3000',
+          changeOrigin: true,
+        },
+      },
     },
     resolve: {
       alias: {
