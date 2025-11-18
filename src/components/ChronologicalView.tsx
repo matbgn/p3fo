@@ -36,10 +36,23 @@ export const ChronologicalView: React.FC<ChronologicalViewProps> = ({
     category: []
   };
 
-  const [filters, setFilters] = React.useState<Filters>(() => {
-    const storedFilters = loadFiltersFromSessionStorage();
-    return storedFilters || defaultChronologicalFilters;
-  });
+  const [filters, setFilters] = React.useState<Filters>(defaultChronologicalFilters);
+  
+  // Load filters on mount
+  React.useEffect(() => {
+    const loadFilters = async () => {
+      try {
+        const storedFilters = await loadFiltersFromSessionStorage();
+        if (storedFilters) {
+          setFilters(storedFilters);
+        }
+      } catch (error) {
+        console.error("Error loading filters:", error);
+      }
+    };
+    
+    loadFilters();
+  }, []);
 
  // Effect to update session storage when filters change
   useEffect(() => {

@@ -35,10 +35,26 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
     category: []
   };
 
-  const [filters, setFilters] = React.useState<Filters>(() => {
-    const storedFilters = loadFiltersFromSessionStorage();
-    return storedFilters || defaultTaskBoardFilters;
-  });
+  const [filters, setFilters] = React.useState<Filters>(defaultTaskBoardFilters);
+  const [loadingFilters, setLoadingFilters] = React.useState(true);
+
+  // Load filters on mount
+  useEffect(() => {
+    const loadFilters = async () => {
+      try {
+        const storedFilters = await loadFiltersFromSessionStorage();
+        if (storedFilters) {
+          setFilters(storedFilters);
+        }
+      } catch (error) {
+        console.error("Error loading filters:", error);
+      } finally {
+        setLoadingFilters(false);
+      }
+    };
+    
+    loadFilters();
+  }, []);
 
   // Effect to update session storage when filters change
   useEffect(() => {
@@ -153,9 +169,9 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
     setHighlightedTaskId(null); // Clear highlighted task on normal activation
   };
 
-  const handleAdd = (colIndex: number, title: string) => {
+  const handleAdd = async (colIndex: number, title: string) => {
     const parentId = colIndex === 0 ? null : columns[colIndex].parentId!;
-    const newId = createTask(title, parentId);
+    const newId = await createTask(title, parentId);
     handleActivate(colIndex, newId);
   };
 
@@ -325,7 +341,9 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                     if (parentId !== undefined) reparent(id, parentId);
                   }}
                 >
-                  {(() => {
+                  {loadingFilters ? (
+                    <div className="text-xs text-muted-foreground px-2 py-6">Loading filters...</div>
+                  ) : (() => {
                     // Apply text search filter only if this is the search results column
                     let filteredItems = col.items;
                     if (col.parentId === "search-results" && filters.searchText?.trim()) {
@@ -343,7 +361,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                       // Subtasks themselves don't have tags, so we only apply status filtering to them
                       if (task.parentId) {
                         // For subtasks, we only apply the status filter.
-                        if (filters.status.length > 0 && !filters.status.includes(task.triageStatus)) {
+                        if (filters.status && Array.isArray(filters.status) && filters.status.length > 0 && !filters.status.includes(task.triageStatus)) {
                           return false;
                         }
                         // Subtasks pass all other filters (urgent, impact, etc.)
@@ -366,21 +384,21 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                       }
 
                       // Apply difficulty filter
-                      if (filters.difficulty.length > 0 && !filters.difficulty.includes(task.difficulty)) {
+                      if (filters.difficulty && Array.isArray(filters.difficulty) && filters.difficulty.length > 0 && !filters.difficulty.includes(task.difficulty)) {
                         return false;
                       }
 
                       // Apply category filter
                       // Tasks without a category should be displayed if any category is selected.
                       // Tasks with a category should only be displayed if their category is selected.
-                      if (filters.category.length > 0 && task.category && !filters.category.includes(task.category)) {
+                      if (filters.category && Array.isArray(filters.category) && filters.category.length > 0 && task.category && !filters.category.includes(task.category)) {
                         return false;
                       }
 
                       // 5. Apply status filter (multiselect) for all tasks
                       // If filters.status is empty, show all tasks (no filtering).
                       // If filters.status has values, only show tasks with matching statuses.
-                      if (filters.status.length > 0 && !filters.status.includes(task.triageStatus)) {
+                      if (filters.status && Array.isArray(filters.status) && filters.status.length > 0 && !filters.status.includes(task.triageStatus)) {
                         return false;
                       }
 
@@ -419,8 +437,8 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                           updateStatus={handleChangeStatus}
                           updateDifficulty={updateDifficulty}
                           updateCategory={updateCategory}
-                          updateTitle={(id, title) => {
-                            const parentId = updateTitle(id, title); // Call useTasks' updateTitle
+                          updateTitle={async (id, title) => {
+                            const parentId = await updateTitle(id, title); // Call useTasks' updateTitle
                             if (parentId) {
                               // If the updated task had a parent, re-activate the parent's path
                               const parentTask = map[parentId];

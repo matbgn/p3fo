@@ -33,10 +33,23 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
     category: []
   };
 
-  const [filters, setFilters] = useState<Filters>(() => {
-    const storedFilters = loadFiltersFromSessionStorage();
-    return storedFilters || defaultComparativeFilters;
-  });
+  const [filters, setFilters] = useState<Filters>(defaultComparativeFilters);
+  
+  // Load filters on mount
+  useEffect(() => {
+    const loadFilters = async () => {
+      try {
+        const storedFilters = await loadFiltersFromSessionStorage();
+        if (storedFilters) {
+          setFilters(storedFilters);
+        }
+      } catch (error) {
+        console.error("Error loading filters:", error);
+      }
+    };
+    
+    loadFilters();
+  }, []);
 
   const [selectedTasks, setSelectedTasks] = useState<Task[]>([]);
   const [filterUrgent, setFilterUrgent] = useState<boolean | null>(null); // null = all, true = only urgent, false = exclude urgent

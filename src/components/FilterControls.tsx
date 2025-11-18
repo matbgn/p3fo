@@ -55,7 +55,10 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
     if (defaultFilters) {
       return {
         ...baseResetFilters,
-        ...defaultFilters
+        ...defaultFilters,
+        // Ensure difficulty and category are always arrays
+        difficulty: defaultFilters.difficulty || [],
+        category: defaultFilters.category || []
       };
     }
 
@@ -118,7 +121,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
             { value: "Done", label: "Done" },
             { value: "Dropped", label: "Dropped" }
           ]}
-          selected={filters.status}
+          selected={filters.status || []}
           onChange={(selected) => updateAndPersistFilters({ ...filters, status: selected as TriageStatus[] })}
           placeholder="Select status..."
           className="w-40"
@@ -145,8 +148,8 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
             { value: "5", label: "5" },
             { value: "8", label: "8" }
           ]}
-          selected={filters.difficulty.map(String)}
-          onChange={(selected) => updateAndPersistFilters({ ...filters, difficulty: selected.map(Number) })}
+          selected={filters.difficulty?.map(String) || []}
+          onChange={(selected) => updateAndPersistFilters({ ...filters, difficulty: selected?.map(Number) || [] })}
           placeholder="Select difficulty..."
           className="w-40"
         />
@@ -155,8 +158,8 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
         <Label>Category:</Label>
         <MultiSelect
           options={CATEGORIES.map(c => ({ value: c, label: c }))}
-          selected={filters.category}
-          onChange={(selected) => updateAndPersistFilters({ ...filters, category: selected as Category[] })}
+          selected={filters.category || []}
+          onChange={(selected) => updateAndPersistFilters({ ...filters, category: (selected as Category[]) || [] })}
           placeholder="Select category..."
           className="w-40"
         />

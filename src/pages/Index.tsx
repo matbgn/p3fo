@@ -11,17 +11,10 @@ import QoLIndexSurveyPage from "./QoLIndexSurveyPage";
 import { addReminder } from "@/utils/reminders";
 import PlanView from "@/components/PlanView"; // Import PlanView
 import { Button } from "@/components/ui/button";
+import { useView } from "@/context/ViewContext";
 
 const Index: React.FC = () => {
-  const [view, setView] = React.useState<
-    "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "qol-survey" | "plan"
-  >("focus");
-  const [focusedTaskId, setFocusedTaskId] = React.useState<string | null>(null);
-
-  const handleFocusOnTask = React.useCallback((taskId: string) => {
-    setView("focus");
-    setFocusedTaskId(taskId);
-  }, []);
+  const { view, setView, focusedTaskId, handleFocusOnTask } = useView();
 
   useEffect(() => {
     addReminder({

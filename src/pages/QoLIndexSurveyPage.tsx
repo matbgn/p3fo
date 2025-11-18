@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
@@ -27,28 +27,74 @@ const satisfactionLevels = [
 
 const QoLIndexSurveyPage: React.FC = () => {
   const [responses, setResponses] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
 
-  React.useEffect(() => {
-    const savedResponses = JSON.parse(localStorage.getItem('qolSurveyResponse') || '{}');
-    if (Object.keys(savedResponses).length > 0) {
-      setResponses(savedResponses);
-    }
+  // Load saved responses on mount
+  useEffect(() => {
+    const loadResponses = async () => {
+      try {
+        const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+        const adapter = await persistence;
+        const savedResponses = await adapter.getQolSurveyResponse();
+        
+        if (savedResponses && Object.keys(savedResponses).length > 0) {
+          setResponses(savedResponses);
+        } else {
+          // Fallback to localStorage for backward compatibility
+          const legacyResponses = JSON.parse(localStorage.getItem('qolSurveyResponse') || '{}');
+          if (Object.keys(legacyResponses).length > 0) {
+            setResponses(legacyResponses);
+            // Migrate to new persistence
+            await adapter.saveQolSurveyResponse(legacyResponses);
+          }
+        }
+      } catch (error) {
+        console.error("Error loading QoL survey responses:", error);
+        // Fallback to localStorage
+        const legacyResponses = JSON.parse(localStorage.getItem('qolSurveyResponse') || '{}');
+        if (Object.keys(legacyResponses).length > 0) {
+          setResponses(legacyResponses);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadResponses();
   }, []);
 
   const handleResponseChange = (question: string, value: string) => {
     setResponses((prev) => ({ ...prev, [question]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     try {
-      localStorage.setItem('qolSurveyResponse', JSON.stringify(responses));
+      const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+      const adapter = await persistence;
+      await adapter.saveQolSurveyResponse(responses);
       alert("Survey responses saved!");
     } catch (error) {
-      console.error("Failed to save survey responses:", error);
-      alert("Error: Could not save survey responses.");
+      console.error("Failed to save survey responses to persistence:", error);
+      // Fallback to localStorage
+      try {
+        localStorage.setItem('qolSurveyResponse', JSON.stringify(responses));
+        alert("Survey responses saved (fallback to localStorage)!");
+      } catch (e) {
+        console.error("Failed to save survey responses to localStorage:", e);
+        alert("Error: Could not save survey responses.");
+      }
     }
   };
+
+  if (loading) {
+    return (
+      <div className="container mx-auto py-8">
+        <div className="text-center">Loading survey...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-8">
