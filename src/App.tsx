@@ -13,6 +13,8 @@ import { useReminderStore } from "./hooks/useReminders";
 
 const queryClient = new QueryClient();
 
+import { CursorOverlay } from "@/components/CursorOverlay";
+
 const App = () => {
   const { checkAndTriggerReminders } = useReminderStore();
 
@@ -30,6 +32,7 @@ const App = () => {
         <PersistenceProvider>
           <Toaster />
           <Sonner />
+          <CursorOverlay />
           <div className="relative">
             <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
               <NotificationCenter />

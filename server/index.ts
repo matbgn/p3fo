@@ -31,15 +31,15 @@ app.get('/api/health', async (req: Request, res: Response) => {
   try {
     // Test database connection
     await db.testConnection();
-    res.json({ 
-      ok: true, 
+    res.json({
+      ok: true,
       mode: DB_CLIENT,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
     console.error('Health check failed:', error);
-    res.status(500).json({ 
-      ok: false, 
+    res.status(500).json({
+      ok: false,
       error: 'Database connection failed',
       mode: DB_CLIENT
     });
@@ -61,7 +61,7 @@ app.post('/api/tasks', async (req: Request, res: Response) => {
   try {
     const task = await db.createTask(req.body);
     res.status(201).json(task);
- } catch (error) {
+  } catch (error) {
     console.error('Error creating task:', error);
     res.status(500).json({ error: 'Failed to create task' });
   }
@@ -87,14 +87,14 @@ app.patch('/api/tasks/:id', async (req: Request, res: Response) => {
       body: req.body,
       timestamp: new Date().toISOString()
     });
-    
+
     const task = await db.updateTask(req.params.id, req.body);
-    
+
     if (!task) {
       console.log('API: Task not found:', req.params.id);
       return res.status(404).json({ error: 'Task not found' });
     }
-    
+
     console.log('API: Task updated successfully:', task);
     res.json(task);
   } catch (error) {
@@ -192,14 +192,14 @@ app.get('/api/settings', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching app settings:', error);
     res.status(500).json({ error: 'Failed to fetch app settings' });
- }
+  }
 });
 
 app.patch('/api/settings', async (req: Request, res: Response) => {
- try {
+  try {
     const settings = await db.updateAppSettings(req.body);
     res.json(settings);
- } catch (error) {
+  } catch (error) {
     console.error('Error updating app settings:', error);
     res.status(500).json({ error: 'Failed to update app settings' });
   }
@@ -268,6 +268,10 @@ app.use('*', (req: Request, res: Response) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
+import { WebSocketServer } from 'ws';
+// @ts-ignore - y-websocket types are not perfect
+import { setupWSConnection } from 'y-websocket/bin/utils';
+
 // Initialize database and start server
 async function startServer() {
   try {
@@ -279,7 +283,7 @@ async function startServer() {
       console.log('No tasks found in the database. Frontend will initialize default tasks.');
     }
 
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       console.log(`P3FO Server listening on port ${PORT}`);
       console.log(`Database client: ${DB_CLIENT}`);
       if (DB_CLIENT === 'sqlite') {
@@ -288,6 +292,23 @@ async function startServer() {
         console.log(`PostgreSQL URL: ${DB_URL.replace(/\/\/[^@]*@/, '//***@')}`); // Mask credentials
       }
     });
+
+    // Attach WebSocket server
+    const wss = new WebSocketServer({ noServer: true });
+
+    server.on('upgrade', (request, socket, head) => {
+      // You can handle authentication here if needed
+      const handleAuth = (ws: any) => {
+        wss.emit('connection', ws, request);
+      };
+      wss.handleUpgrade(request, socket, head, handleAuth);
+    });
+
+    wss.on('connection', (ws, req) => {
+      const docName = req.url?.slice(1).split('?')[0] || 'default-doc';
+      setupWSConnection(ws, req, { docName });
+    });
+
   } catch (error) {
     console.error('Failed to start server:', error);
     process.exit(1);
