@@ -4,8 +4,8 @@ import { usePersistence } from "@/lib/PersistenceProvider";
 
 // Polyfill for crypto.randomUUID if not available
 if (typeof crypto.randomUUID !== 'function') {
-  crypto.randomUUID = function() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+  crypto.randomUUID = function () {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
       const r = Math.random() * 16 | 0;
       const v = c === 'x' ? r : (r & 0x3 | 0x8);
       return v.toString(16);
@@ -65,19 +65,19 @@ const loadTasks = async () => {
   console.log('=== loadTasks called ===', {
     timestamp: new Date().toISOString()
   });
-  
+
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
     console.log('Loading tasks from database...');
     const entities = await adapter.listTasks();
     console.log(`Found ${entities.length} tasks in database`);
-    
+
     // Log all task IDs found in database
     if (entities.length > 0) {
       console.log('Task IDs in database:', entities.map(e => e.id));
     }
-    
+
     // Convert TaskEntity[] to Task[]
     const taskMap: { [id: string]: Task } = {};
     const topLevelTasks: Task[] = [];
@@ -117,7 +117,7 @@ const loadTasks = async () => {
 
     tasks = Object.values(taskMap);
     console.log(`Loaded ${tasks.length} tasks into memory`);
-    
+
     // If no tasks, initialize defaults
     if (tasks.length === 0) {
       console.log('No tasks found, calling server to initialize default tasks');
@@ -171,63 +171,28 @@ const loadTasks = async () => {
 
 const initializeDefaultTasks = async () => {
   console.log('=== initializeDefaultTasks called ===');
-  
+
   console.log('Creating default tasks in database...');
-  
+
   // Create task A (top level)
   const taskAId = await createTask("Plan vacation", null);
   console.log('Created task A:', taskAId);
-  
+
   // Create task B (child of A)
   const taskBId = await createTask("Research", taskAId);
   console.log('Created task B:', taskBId);
-  
+
   // Create task C (child of B)
   const taskCId = await createTask("Find accommodations", taskBId);
   console.log('Created task C:', taskCId);
-  
+
   console.log('All default tasks created successfully in database');
 };
 
 // Load tasks on module initialization
 loadTasks();
 
-const persistTasks = async () => {
-  try {
-    const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
-    const adapter = await persistence;
-    
-    // Convert Task[] to TaskEntity[]
-    const entities = tasks.map(task => ({
-      id: task.id,
-      title: task.title,
-      created_at: new Date(task.createdAt).toISOString(),
-      triage_status: task.triageStatus,
-      urgent: task.urgent || false,
-      impact: task.impact || false,
-      major_incident: task.majorIncident || false,
-      difficulty: task.difficulty || 1,
-      timer: task.timer || [],
-      category: task.category || 'General',
-      termination_date: task.terminationDate ? new Date(task.terminationDate).toISOString() : null,
-      comment: task.comment || null,
-      duration_in_minutes: task.durationInMinutes || null,
-      priority: task.priority || null,
-      user_id: task.userId || null,
-      parent_id: task.parentId || null,
-      children: task.children || [],
-    }));
-    
-    // Clear and re-import all tasks (simple approach for now)
-    await adapter.clearAllTasks();
-    await adapter.importTasks(entities);
-  } catch (error) {
-    console.error("Error persisting tasks:", error);
-    // Fallback to localStorage
-    localStorage.setItem("dyad_task_board_v1", JSON.stringify(tasks));
-  }
-  eventBus.publish("tasksChanged");
-};
+
 
 const createTask = async (title: string, parentId: string | null) => {
   console.log('=== createTask called ===', {
@@ -235,7 +200,7 @@ const createTask = async (title: string, parentId: string | null) => {
     parentId,
     timestamp: new Date().toISOString()
   });
-  
+
   const t: Task = {
     id: crypto.randomUUID(),
     title: title.trim(),
@@ -253,13 +218,13 @@ const createTask = async (title: string, parentId: string | null) => {
     durationInMinutes: undefined,
     priority: 0, // Initialize new tasks with priority 0
   };
-  
+
   console.log('Creating task:', t);
-  
+
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
-    
+
     // Create task entity
     const entity: import('@/lib/persistence-types').TaskEntity = {
       id: t.id,
@@ -280,11 +245,11 @@ const createTask = async (title: string, parentId: string | null) => {
       parent_id: parentId,
       children: [],
     };
-    
+
     console.log('Calling adapter.createTask with entity:', JSON.stringify(entity, null, 2));
     const result = await adapter.createTask(entity);
     console.log('Backend create successful, result:', result);
-    
+
     // Update local state
     tasks = [...tasks, t];
     console.log('Local state updated with new task');
@@ -305,13 +270,15 @@ const createTask = async (title: string, parentId: string | null) => {
         }
         return currentTask;
       });
-      
+
       // Check parent task completion since a new subtask was added
       checkParentTaskCompletion(parentId);
     }
-    
-    await persistTasks();
-    console.log('persistTasks completed successfully');
+
+
+    // Optimistic update
+    eventBus.publish("tasksChanged");
+
   } catch (error) {
     console.error('Error creating task:', error);
     // Fallback to old method
@@ -333,9 +300,9 @@ const createTask = async (title: string, parentId: string | null) => {
       });
       checkParentTaskCompletion(parentId);
     }
-    await persistTasks();
+    eventBus.publish("tasksChanged");
   }
-  
+
   console.log('createTask completed, returning task ID:', t.id);
   return t.id;
 };
@@ -352,7 +319,7 @@ const reparent = async (taskId: string, newParentId: string | null) => {
     cursor = map[cursor]?.parentId;
   }
 
- const oldParentId = task.parentId ?? null;
+  const oldParentId = task.parentId ?? null;
 
   // Update local state
   tasks = tasks.map(t => {
@@ -365,12 +332,12 @@ const reparent = async (taskId: string, newParentId: string | null) => {
     }
     return t;
   });
-  
+
   // Persist to backend
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
-    
+
     // Update the reparented task
     const updatedTask = tasks.find(t => t.id === taskId);
     if (updatedTask) {
@@ -395,7 +362,7 @@ const reparent = async (taskId: string, newParentId: string | null) => {
       };
       await adapter.updateTask(taskId, entity);
     }
-    
+
     // Update old parent if exists
     if (oldParentId) {
       const oldParent = tasks.find(t => t.id === oldParentId);
@@ -422,7 +389,7 @@ const reparent = async (taskId: string, newParentId: string | null) => {
         await adapter.updateTask(oldParentId, entity);
       }
     }
-    
+
     // Update new parent if exists
     if (newParentId) {
       const newParent = tasks.find(t => t.id === newParentId);
@@ -453,9 +420,11 @@ const reparent = async (taskId: string, newParentId: string | null) => {
     console.error("Error reparenting task:", error);
     // Continue with local state update
   }
-  
-  await persistTasks();
-  
+
+
+  eventBus.publish("tasksChanged");
+
+
   // Check parent task completion for both old and new parent since task relationships changed
   if (oldParentId) {
     checkParentTaskCompletion(oldParentId);
@@ -472,11 +441,11 @@ let isUpdatingDueToChildCompletion = false;
 const getMinBacklogPriority = (): number => {
   const backlogTasks = tasks.filter(t => t.triageStatus === "Backlog");
   if (backlogTasks.length === 0) return 0;
-  
+
   const priorities = backlogTasks
     .map(t => t.priority || 0)
     .filter(p => p !== undefined && p !== null);
-  
+
   // Subtract 1 to place the blocked task in front of all backlog tasks
   return priorities.length > 0 ? Math.min(...priorities) - 1 : -1;
 };
@@ -515,13 +484,13 @@ const updateStatus = async (taskId: string, status: TriageStatus) => {
         triageStatus: status,
         terminationDate: status === 'Done' ? Date.now() : undefined
       };
-      
+
       // Automatically degrade priority when task is moved to Blocked status
       if (status === "Blocked") {
         const minBacklogPriority = getMinBacklogPriority();
         updatedTask.priority = minBacklogPriority;
       }
-      
+
       return updatedTask;
     }
     return t;
@@ -531,7 +500,7 @@ const updateStatus = async (taskId: string, status: TriageStatus) => {
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
-    
+
     // Update all affected tasks in the backend
     for (const id of tasksToUpdate) {
       const updatedTask = tasks.find(t => t.id === id);
@@ -562,15 +531,17 @@ const updateStatus = async (taskId: string, status: TriageStatus) => {
     console.error("Error updating task status:", error);
     // Continue with local state update and event
   }
-  
-  await persistTasks();
-  
+
+
+  eventBus.publish("tasksChanged");
+
+
   // Check parent task completion if this task has a parent
   // Only do this if we're updating a single task (not cascading from parent to children)
   if (task.parentId && tasksToUpdate.size === 1) {
     checkParentTaskCompletion(task.parentId);
   }
-  
+
   // If this task has children, check if all children are done/dropped to potentially update this task status
   if (task.children && task.children.length > 0) {
     isUpdatingDueToChildCompletion = true;
@@ -581,7 +552,7 @@ const updateStatus = async (taskId: string, status: TriageStatus) => {
 
 const toggleDone = (taskId: string) => {
   const task = tasks.find(t => t.id === taskId);
- if (task) {
+  if (task) {
     // Toggle between Done/Dropped and Ready/WIP/Blocked/Backlog
     let newStatus: TriageStatus;
     if (task.triageStatus === "Done" || task.triageStatus === "Dropped") {
@@ -600,14 +571,14 @@ const checkParentTaskCompletion = (parentId: string) => {
   const parentTask = tasks.find(t => t.id === parentId);
   if (!parentTask || !parentTask.children || parentTask.children.length === 0) {
     return; // No children to check
- }
-  
+  }
+
   // Check if all children are done or dropped (consider both as completed)
- const allChildrenDoneOrDropped = parentTask.children.every(childId => {
+  const allChildrenDoneOrDropped = parentTask.children.every(childId => {
     const childTask = tasks.find(t => t.id === childId);
     return childTask && (childTask.triageStatus === "Done" || childTask.triageStatus === "Dropped");
   });
-  
+
   if (allChildrenDoneOrDropped) {
     // Determine the appropriate status for the parent based on children's status
     // If all children are "Dropped", set parent to "Dropped", otherwise "Done"
@@ -615,9 +586,9 @@ const checkParentTaskCompletion = (parentId: string) => {
       const childTask = tasks.find(t => t.id === childId);
       return childTask && childTask.triageStatus === "Dropped";
     });
-    
+
     const desiredStatus = allChildrenDropped ? "Dropped" : "Done";
-    
+
     // If all children are done/dropped and parent is not already in the desired status, update it
     if (parentTask.triageStatus !== "Done" && parentTask.triageStatus !== "Dropped") {
       // Use the internal update function to avoid cascading
@@ -638,10 +609,10 @@ const checkParentTaskCompletion = (parentId: string) => {
 const toggleUrgent = async (taskId: string) => {
   const task = tasks.find(t => t.id === taskId);
   if (!task) return;
-  
+
   const newValue = !task.urgent;
   updateTaskInTasks(taskId, (t) => ({ ...t, urgent: newValue }));
-  
+
   // Persist to backend
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
@@ -669,17 +640,19 @@ const toggleUrgent = async (taskId: string) => {
   } catch (error) {
     console.error("Error toggling urgent:", error);
   }
-  
-  await persistTasks();
+
+
+  eventBus.publish("tasksChanged");
+
 };
 
 const toggleImpact = async (taskId: string) => {
   const task = tasks.find(t => t.id === taskId);
   if (!task) return;
-  
+
   const newValue = !task.impact;
   updateTaskInTasks(taskId, (t) => ({ ...t, impact: newValue }));
-  
+
   // Persist to backend
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
@@ -707,17 +680,19 @@ const toggleImpact = async (taskId: string) => {
   } catch (error) {
     console.error("Error toggling impact:", error);
   }
-  
-  await persistTasks();
+
+
+  eventBus.publish("tasksChanged");
+
 };
 
 const toggleMajorIncident = async (taskId: string) => {
   const task = tasks.find(t => t.id === taskId);
   if (!task) return;
-  
+
   const newValue = !task.majorIncident;
   updateTaskInTasks(taskId, (t) => ({ ...t, majorIncident: newValue }));
-  
+
   // Persist to backend
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
@@ -745,16 +720,18 @@ const toggleMajorIncident = async (taskId: string) => {
   } catch (error) {
     console.error("Error toggling major incident:", error);
   }
-  
-  await persistTasks();
+
+
+  eventBus.publish("tasksChanged");
+
 };
 
 const updateDifficulty = async (taskId: string, difficulty: 0.5 | 1 | 2 | 3 | 5 | 8) => {
   const task = tasks.find(t => t.id === taskId);
   if (!task) return;
-  
+
   updateTaskInTasks(taskId, (t) => ({ ...t, difficulty: difficulty }));
-  
+
   // Persist to backend
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
@@ -782,16 +759,18 @@ const updateDifficulty = async (taskId: string, difficulty: 0.5 | 1 | 2 | 3 | 5 
   } catch (error) {
     console.error("Error updating difficulty:", error);
   }
-  
-  await persistTasks();
+
+
+  eventBus.publish("tasksChanged");
+
 };
 
 const updateCategory = async (taskId: string, category: Category | undefined) => {
   const task = tasks.find(t => t.id === taskId);
   if (!task) return;
-  
+
   updateTaskInTasks(taskId, (t) => ({ ...t, category: category }));
-  
+
   // Persist to backend
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
@@ -819,8 +798,10 @@ const updateCategory = async (taskId: string, category: Category | undefined) =>
   } catch (error) {
     console.error("Error updating category:", error);
   }
-  
-  await persistTasks();
+
+
+  eventBus.publish("tasksChanged");
+
 };
 
 const updateUser = async (taskId: string, userId: string | undefined) => {
@@ -829,32 +810,32 @@ const updateUser = async (taskId: string, userId: string | undefined) => {
     userId,
     timestamp: new Date().toISOString()
   });
-  
+
   const task = tasks.find(t => t.id === taskId);
   if (!task) {
     console.error('Task not found:', taskId);
     return;
   }
-  
+
   console.log('Current task state:', {
     id: task.id,
     title: task.title,
     currentUserId: task.userId
   });
-  
+
   // Ensure userId is null, not undefined
   const userIdForDb = userId || null;
   console.log('userIdForDb:', userIdForDb);
-  
+
   // Update local state
   updateTaskInTasks(taskId, (t) => ({ ...t, userId: userIdForDb }));
   console.log('Local state updated successfully');
-  
+
   // Persist to backend
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
-    
+
     const entity: import('@/lib/persistence-types').TaskEntity = {
       id: task.id,
       title: task.title,
@@ -874,7 +855,7 @@ const updateUser = async (taskId: string, userId: string | undefined) => {
       parent_id: task.parentId || null,
       children: task.children || [],
     };
-    
+
     console.log('Calling adapter.updateTask with entity:', JSON.stringify(entity, null, 2));
     const result = await adapter.updateTask(taskId, entity);
     console.log('Backend update successful, result:', result);
@@ -885,17 +866,18 @@ const updateUser = async (taskId: string, userId: string | undefined) => {
     console.log('Local state reverted due to error');
     throw error;
   }
-  
-  await persistTasks();
-  console.log('persistTasks completed successfully');
+
+
+  eventBus.publish("tasksChanged");
+  console.log('updateUser completed successfully');
 };
 
 const updateTerminationDate = async (taskId: string, terminationDate: number | undefined) => {
   const task = tasks.find(t => t.id === taskId);
   if (!task) return;
-  
+
   updateTaskInTasks(taskId, (t) => ({ ...t, terminationDate: terminationDate }));
-  
+
   // Persist to backend
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
@@ -923,11 +905,13 @@ const updateTerminationDate = async (taskId: string, terminationDate: number | u
   } catch (error) {
     console.error("Error updating termination date:", error);
   }
-  
-  await persistTasks();
+
+
+  eventBus.publish("tasksChanged");
+
 };
 
-  export function useTasks() {
+export function useTasks() {
   const [_, setForceRender] = React.useState({});
 
   React.useEffect(() => {
@@ -944,7 +928,7 @@ const updateTerminationDate = async (taskId: string, terminationDate: number | u
     let parentIdToReturn: string | null = null;
     const task = tasks.find(t => t.id === id);
     if (!task) return parentIdToReturn;
-    
+
     // Update local state
     tasks = tasks.map((currentTask) => {
       if (currentTask.id === id) {
@@ -969,7 +953,7 @@ const updateTerminationDate = async (taskId: string, terminationDate: number | u
         return currentTask;
       });
     }
-    
+
     // Persist to backend
     try {
       const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
@@ -1000,21 +984,22 @@ const updateTerminationDate = async (taskId: string, terminationDate: number | u
     } catch (error) {
       console.error("Error updating task title:", error);
     }
-    
-    await persistTasks();
+
+
+    eventBus.publish("tasksChanged");
     return parentIdToReturn; // Return the parentId
   }, []);
 
   const updateTaskTimer = React.useCallback(async (taskId: string, startTime: number, endTime: number) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
-    
+
     // Update local state
     updateTaskInTasks(taskId, (t) => ({
       ...t,
       timer: [...(t.timer || []), { startTime, endTime }]
     }));
-    
+
     // Persist to backend
     try {
       const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
@@ -1045,170 +1030,173 @@ const updateTerminationDate = async (taskId: string, terminationDate: number | u
     } catch (error) {
       console.error("Error updating task timer:", error);
     }
-    
-    await persistTasks();
+
+
+    eventBus.publish("tasksChanged");
   }, []);
 
   const deleteTask = React.useCallback(async (taskId: string) => {
-      const map = byId(tasks);
-      const taskToDelete = map[taskId];
-      if (!taskToDelete) return;
-  
-      const childrenIds = new Set<string>();
-      const getChildren = (id: string) => {
-        childrenIds.add(id);
-        const t = map[id];
-        if (t?.children) {
-          t.children.forEach(getChildren);
+    const map = byId(tasks);
+    const taskToDelete = map[taskId];
+    if (!taskToDelete) return;
+
+    const childrenIds = new Set<string>();
+    const getChildren = (id: string) => {
+      childrenIds.add(id);
+      const t = map[id];
+      if (t?.children) {
+        t.children.forEach(getChildren);
+      }
+    };
+    getChildren(taskId);
+
+    // Store the parent ID before deleting the task
+    const parentId = taskToDelete.parentId;
+
+    // Update local state
+    tasks = tasks.filter((t) => !childrenIds.has(t.id));
+
+    if (taskToDelete.parentId) {
+      tasks = tasks.map(t => {
+        if (t.id === taskToDelete.parentId) {
+          return { ...t, children: (t.children || []).filter(id => id !== taskId) };
         }
-      };
-      getChildren(taskId);
-  
-      // Store the parent ID before deleting the task
-      const parentId = taskToDelete.parentId;
-  
-      // Update local state
-      tasks = tasks.filter((t) => !childrenIds.has(t.id));
-  
-      if (taskToDelete.parentId) {
-        tasks = tasks.map(t => {
-          if (t.id === taskToDelete.parentId) {
-            return { ...t, children: (t.children || []).filter(id => id !== taskId) };
-          }
-          return t;
-        });
+        return t;
+      });
+    }
+
+    // Persist to backend
+    try {
+      const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+      const adapter = await persistence;
+
+      // Delete all tasks in the hierarchy
+      for (const id of childrenIds) {
+        await adapter.deleteTask(id);
       }
-  
-      // Persist to backend
-      try {
-        const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
-        const adapter = await persistence;
-        
-        // Delete all tasks in the hierarchy
-        for (const id of childrenIds) {
-          await adapter.deleteTask(id);
-        }
-      } catch (error) {
-        console.error("Error deleting task:", error);
-        // Continue with local state update
-      }
-      
-      await persistTasks();
-      
-      // Check parent task completion if the deleted task had a parent
-      if (parentId) {
-        checkParentTaskCompletion(parentId);
-      }
-    }, []);
+    } catch (error) {
+      console.error("Error deleting task:", error);
+      // Continue with local state update
+    }
+
+
+    eventBus.publish("tasksChanged");
+
+    // Check parent task completion if the deleted task had a parent
+    if (parentId) {
+      checkParentTaskCompletion(parentId);
+    }
+  }, []);
 
   const duplicateTaskStructure = React.useCallback(async (taskId: string) => {
-      const map = byId(tasks);
-      const originalTask = map[taskId];
-      if (!originalTask) return null;
-  
-      // Create a mapping of old IDs to new IDs
-      const idMap = new Map<string, string>();
-      
-      // Recursive function to duplicate a task and its children
-      const duplicateTask = (task: Task, newParentId: string | null): Task => {
-        // Generate new ID for this task
-        const newId = crypto.randomUUID();
-        idMap.set(task.id, newId);
-        
-        // Create the duplicated task
-        const duplicatedTask: Task = {
-          ...task,
-          id: newId,
-          parentId: newParentId,
-          children: [], // Will be populated later
-          title: `${task.title} (Copy)`,
-          createdAt: Date.now(),
-          priority: Math.min(...tasks.map(t => t.priority || 0)) - 1, // Set lower priority than all existing tasks
-        };
-        
-        // Duplicate children if they exist
-        if (task.children && task.children.length > 0) {
-          const duplicatedChildren: string[] = [];
-          task.children.forEach(childId => {
-            const childTask = map[childId];
-            if (childTask) {
-              const duplicatedChild = duplicateTask(childTask, newId);
-              duplicatedChildren.push(duplicatedChild.id);
-              tasks = [...tasks, duplicatedChild];
-            }
-          });
-          duplicatedTask.children = duplicatedChildren;
-        }
-        
-        return duplicatedTask;
+    const map = byId(tasks);
+    const originalTask = map[taskId];
+    if (!originalTask) return null;
+
+    // Create a mapping of old IDs to new IDs
+    const idMap = new Map<string, string>();
+
+    // Recursive function to duplicate a task and its children
+    const duplicateTask = (task: Task, newParentId: string | null): Task => {
+      // Generate new ID for this task
+      const newId = crypto.randomUUID();
+      idMap.set(task.id, newId);
+
+      // Create the duplicated task
+      const duplicatedTask: Task = {
+        ...task,
+        id: newId,
+        parentId: newParentId,
+        children: [], // Will be populated later
+        title: `${task.title} (Copy)`,
+        createdAt: Date.now(),
+        priority: Math.min(...tasks.map(t => t.priority || 0)) - 1, // Set lower priority than all existing tasks
       };
-      
-      // Start duplication process
-      const duplicatedTask = duplicateTask(originalTask, originalTask.parentId);
-      tasks = [...tasks, duplicatedTask];
-      
-      // Update parent's children array if the duplicated task has a parent
-      if (originalTask.parentId) {
-        tasks = tasks.map(t => {
-          if (t.id === originalTask.parentId) {
-            return {
-              ...t,
-              children: [...(t.children || []), duplicatedTask.id]
-            };
+
+      // Duplicate children if they exist
+      if (task.children && task.children.length > 0) {
+        const duplicatedChildren: string[] = [];
+        task.children.forEach(childId => {
+          const childTask = map[childId];
+          if (childTask) {
+            const duplicatedChild = duplicateTask(childTask, newId);
+            duplicatedChildren.push(duplicatedChild.id);
+            tasks = [...tasks, duplicatedChild];
           }
-          return t;
         });
+        duplicatedTask.children = duplicatedChildren;
       }
-      
-      // Persist all duplicated tasks to backend
-      try {
-        const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
-        const adapter = await persistence;
-        
-        // Get all tasks that were created (original + all children)
-        const allNewTasks = tasks.filter(t => idMap.has(t.id) || t.id === duplicatedTask.id);
-        
-        // Convert to entities and create them
-        for (const task of allNewTasks) {
-          const entity: import('@/lib/persistence-types').TaskEntity = {
-            id: task.id,
-            title: task.title,
-            created_at: new Date(task.createdAt).toISOString(),
-            triage_status: task.triageStatus,
-            urgent: task.urgent || false,
-            impact: task.impact || false,
-            major_incident: task.majorIncident || false,
-            difficulty: task.difficulty || 1,
-            timer: task.timer || [],
-            category: task.category || 'General',
-            termination_date: task.terminationDate ? new Date(task.terminationDate).toISOString() : null,
-            comment: task.comment || null,
-            duration_in_minutes: task.durationInMinutes || null,
-            priority: task.priority || null,
-            user_id: task.userId || null,
-            parent_id: task.parentId || null,
-            children: task.children || [],
+
+      return duplicatedTask;
+    };
+
+    // Start duplication process
+    const duplicatedTask = duplicateTask(originalTask, originalTask.parentId);
+    tasks = [...tasks, duplicatedTask];
+
+    // Update parent's children array if the duplicated task has a parent
+    if (originalTask.parentId) {
+      tasks = tasks.map(t => {
+        if (t.id === originalTask.parentId) {
+          return {
+            ...t,
+            children: [...(t.children || []), duplicatedTask.id]
           };
-          await adapter.createTask(entity);
         }
-      } catch (error) {
-        console.error("Error duplicating task structure:", error);
-        // Continue with local state update
+        return t;
+      });
+    }
+
+    // Persist all duplicated tasks to backend
+    try {
+      const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+      const adapter = await persistence;
+
+      // Get all tasks that were created (original + all children)
+      const allNewTasks = tasks.filter(t => idMap.has(t.id) || t.id === duplicatedTask.id);
+
+      // Convert to entities and create them
+      for (const task of allNewTasks) {
+        const entity: import('@/lib/persistence-types').TaskEntity = {
+          id: task.id,
+          title: task.title,
+          created_at: new Date(task.createdAt).toISOString(),
+          triage_status: task.triageStatus,
+          urgent: task.urgent || false,
+          impact: task.impact || false,
+          major_incident: task.majorIncident || false,
+          difficulty: task.difficulty || 1,
+          timer: task.timer || [],
+          category: task.category || 'General',
+          termination_date: task.terminationDate ? new Date(task.terminationDate).toISOString() : null,
+          comment: task.comment || null,
+          duration_in_minutes: task.durationInMinutes || null,
+          priority: task.priority || null,
+          user_id: task.userId || null,
+          parent_id: task.parentId || null,
+          children: task.children || [],
+        };
+        await adapter.createTask(entity);
       }
-      
-      await persistTasks();
-      
-      // Check parent task completion since new tasks were added
-      if (originalTask.parentId) {
-        checkParentTaskCompletion(originalTask.parentId);
-      }
-      
-      return duplicatedTask.id;
-    }, []);
+    } catch (error) {
+      console.error("Error duplicating task structure:", error);
+      // Continue with local state update
+    }
+
+
+    eventBus.publish("tasksChanged");
+
+    // Check parent task completion since new tasks were added
+    if (originalTask.parentId) {
+      checkParentTaskCompletion(originalTask.parentId);
+    }
+
+    return duplicatedTask.id;
+  }, []);
 
   const clearAllTasks = React.useCallback(async () => {
     tasks = [];
-    
+
     // Persist to backend
     try {
       const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
@@ -1218,18 +1206,19 @@ const updateTerminationDate = async (taskId: string, terminationDate: number | u
       console.error("Error clearing all tasks:", error);
       // Continue with local state update
     }
-    
-    await persistTasks();
+
+
+    eventBus.publish("tasksChanged");
   }, []);
 
   const importTasks = React.useCallback(async (importedTasks: Task[]) => {
     tasks = importedTasks;
-    
+
     // Persist to backend
     try {
       const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
       const adapter = await persistence;
-      
+
       // Convert Task[] to TaskEntity[]
       const entities = importedTasks.map(task => ({
         id: task.id,
@@ -1250,14 +1239,15 @@ const updateTerminationDate = async (taskId: string, terminationDate: number | u
         parent_id: task.parentId || null,
         children: task.children || [],
       }));
-      
+
       await adapter.importTasks(entities);
     } catch (error) {
       console.error("Error importing tasks:", error);
       // Continue with local state update
     }
-    
-    await persistTasks();
+
+
+    eventBus.publish("tasksChanged");
   }, []);
 
   const calculateTotalTime = (taskId: string, taskArray: Task[]) => {
@@ -1296,7 +1286,7 @@ const updateTerminationDate = async (taskId: string, terminationDate: number | u
   const toggleTimer = React.useCallback(async (taskId: string) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
-    
+
     // First, stop any other running timers
     tasks = tasks.map(t => {
       if (t.id !== taskId && t.timer && t.timer.length > 0) {
@@ -1357,21 +1347,22 @@ const updateTerminationDate = async (taskId: string, terminationDate: number | u
     } catch (error) {
       console.error("Error toggling timer:", error);
     }
-    
-    await persistTasks();
+
+
+    eventBus.publish("tasksChanged");
     eventBus.publish("timerToggled", taskId);
   }, []);
 
   const updateTimeEntry = React.useCallback(async (taskId: string, entryIndex: number, newEntry: { startTime: number; endTime: number }) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
-    
+
     // Update local state
     updateTaskInTasks(taskId, (t) => ({
       ...t,
       timer: (t.timer || []).map((entry, i) => i === entryIndex ? newEntry : entry)
     }));
-    
+
     // Persist to backend
     try {
       const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
@@ -1402,20 +1393,21 @@ const updateTerminationDate = async (taskId: string, terminationDate: number | u
     } catch (error) {
       console.error("Error updating time entry:", error);
     }
-    
-    await persistTasks();
+
+
+    eventBus.publish("tasksChanged");
   }, []);
 
   const deleteTimeEntry = React.useCallback(async (taskId: string, entryIndex: number) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
-    
+
     // Update local state
     updateTaskInTasks(taskId, (t) => ({
       ...t,
       timer: (t.timer || []).filter((_, i) => i !== entryIndex)
     }));
-    
+
     // Persist to backend
     try {
       const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
@@ -1446,11 +1438,12 @@ const updateTerminationDate = async (taskId: string, terminationDate: number | u
     } catch (error) {
       console.error("Error deleting time entry:", error);
     }
-    
-    await persistTasks();
+
+
+    eventBus.publish("tasksChanged");
   }, []);
 
-return {
+  return {
     tasks,
     createTask,
     reparent,
@@ -1477,10 +1470,10 @@ return {
     updateComment: React.useCallback(async (taskId: string, comment: string) => {
       const task = tasks.find(t => t.id === taskId);
       if (!task) return;
-      
+
       // Update local state
       updateTaskInTasks(taskId, (t) => ({ ...t, comment: comment }));
-      
+
       // Persist to backend
       try {
         const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
@@ -1511,16 +1504,17 @@ return {
       } catch (error) {
         console.error("Error updating comment:", error);
       }
-      
-      await persistTasks();
+
+
+      eventBus.publish("tasksChanged");
     }, []),
     updateDurationInMinutes: React.useCallback(async (taskId: string, durationInMinutes: number | undefined) => {
       const task = tasks.find(t => t.id === taskId);
       if (!task) return;
-      
+
       // Update local state
       updateTaskInTasks(taskId, (t) => ({ ...t, durationInMinutes: durationInMinutes }));
-      
+
       // Persist to backend
       try {
         const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
@@ -1551,16 +1545,17 @@ return {
       } catch (error) {
         console.error("Error updating duration:", error);
       }
-      
-      await persistTasks();
+
+
+      eventBus.publish("tasksChanged");
     }, []),
     updatePriority: React.useCallback(async (taskId: string, priority: number | undefined) => {
       const task = tasks.find(t => t.id === taskId);
       if (!task) return;
-      
+
       // Update local state
       updateTaskInTasks(taskId, (t) => ({ ...t, priority: priority }));
-      
+
       // Persist to backend
       try {
         const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
@@ -1591,8 +1586,9 @@ return {
       } catch (error) {
         console.error("Error updating priority:", error);
       }
-      
-      await persistTasks();
+
+
+      eventBus.publish("tasksChanged");
     }, []),
     updatePrioritiesBulk: React.useCallback(async (updatedTasks: { id: string; priority: number | undefined }[]) => {
       // Update local state
@@ -1603,12 +1599,12 @@ return {
         }
         return task;
       });
-      
+
       // Persist to backend
       try {
         const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
         const adapter = await persistence;
-        
+
         // Update all affected tasks in the backend
         for (const { id, priority } of updatedTasks) {
           const task = tasks.find(t => t.id === id);
@@ -1638,8 +1634,9 @@ return {
       } catch (error) {
         console.error("Error bulk updating priorities:", error);
       }
-      
-      await persistTasks();
+
+
+      eventBus.publish("tasksChanged");
     }, []),
   };
 }
