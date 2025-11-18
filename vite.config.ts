@@ -6,7 +6,7 @@ import path from "path";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
   return {
-    base: env.BASE_URL || '/',
+    base: env.VITE_BASE_URL || '/',
     plugins: [dyadComponentTagger(), react()],
     server: {
       host: true, // This makes the dev server listen on all network interfaces
