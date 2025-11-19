@@ -1,11 +1,11 @@
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import { DbClient } from './index';
-import { 
-  TaskEntity, 
-  UserSettingsEntity, 
-  AppSettingsEntity, 
-  QolSurveyResponseEntity, 
-  FilterStateEntity 
+import {
+  TaskEntity,
+  UserSettingsEntity,
+  AppSettingsEntity,
+  QolSurveyResponseEntity,
+  FilterStateEntity
 } from '../../src/lib/persistence-types';
 
 // Default values
@@ -26,7 +26,7 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
 };
 
 export async function createSqliteClient(dbFile: string = './p3fo.db'): Promise<DbClient> {
-  const db = new Database(dbFile);
+  const db = new DatabaseSync(dbFile);
 
   // Enable WAL mode for better concurrency
   db.exec('PRAGMA journal_mode = WAL;');
@@ -35,7 +35,7 @@ export async function createSqliteClient(dbFile: string = './p3fo.db'): Promise<
 }
 
 class SqliteClient implements DbClient {
-  constructor(private db: Database.Database) {}
+  constructor(private db: DatabaseSync) { }
 
   async initialize(): Promise<void> {
     // Create tasks table
@@ -113,11 +113,11 @@ class SqliteClient implements DbClient {
     `);
   }
 
- async testConnection(): Promise<void> {
+  async testConnection(): Promise<void> {
     this.db.prepare('SELECT 1').run();
   }
 
- async close(): Promise<void> {
+  async close(): Promise<void> {
     this.db.close();
   }
 
@@ -309,12 +309,17 @@ class SqliteClient implements DbClient {
 
   async bulkUpdateTaskPriorities(items: { id: string; priority: number | undefined }[]): Promise<void> {
     const stmt = this.db.prepare('UPDATE tasks SET priority = ? WHERE id = ?');
-    const transaction = this.db.transaction((items) => {
+    // node:sqlite doesn't have a transaction helper like better-sqlite3, so we use BEGIN/COMMIT
+    this.db.exec('BEGIN');
+    try {
       for (const { id, priority } of items) {
-        stmt.run(priority, id);
+        stmt.run(priority ?? null, id);
       }
-    });
-    transaction(items);
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   async clearAllTasks(): Promise<void> {
@@ -322,14 +327,15 @@ class SqliteClient implements DbClient {
   }
 
   async importTasks(tasks: TaskEntity[]): Promise<void> {
-    const transaction = this.db.transaction((tasks) => {
+    this.db.exec('BEGIN');
+    try {
       const stmt = this.db.prepare(`
         INSERT OR REPLACE INTO tasks (id, parent_id, title, created_at, triage_status, urgent, impact, major_incident, 
                          difficulty, timer, category, termination_date, comment, duration_in_minutes, priority, user_id)
         VALUES (@id, @parent_id, @title, @created_at, @triage_status, @urgent, @impact, @major_incident,
                 @difficulty, @timer, @category, @termination_date, @comment, @duration_in_minutes, @priority, @user_id)
       `);
-      
+
       for (const task of tasks) {
         stmt.run({
           id: task.id,
@@ -350,9 +356,11 @@ class SqliteClient implements DbClient {
           user_id: task.user_id,
         });
       }
-    });
-    
-    transaction(tasks);
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   // User settings
@@ -391,7 +399,7 @@ class SqliteClient implements DbClient {
   }
 
   // App settings
- async getAppSettings(): Promise<AppSettingsEntity> {
+  async getAppSettings(): Promise<AppSettingsEntity> {
     const row = this.db.prepare('SELECT * FROM app_settings WHERE id = 1').get() as any;
     return row ? {
       split_time: row.split_time,
@@ -426,7 +434,7 @@ class SqliteClient implements DbClient {
     });
 
     return updated;
- }
+  }
 
   // QoL survey
   async getQolSurveyResponse(): Promise<QolSurveyResponseEntity | null> {
@@ -444,7 +452,7 @@ class SqliteClient implements DbClient {
     }
   }
 
- // Filters
+  // Filters
   async getFilters(): Promise<FilterStateEntity | null> {
     const row = this.db.prepare('SELECT data FROM filters WHERE id = 1').get() as any;
     return row?.data ? JSON.parse(row.data) : null;
