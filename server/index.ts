@@ -49,7 +49,8 @@ app.get('/api/health', async (req: Request, res: Response) => {
 // Tasks routes
 app.get('/api/tasks', async (req: Request, res: Response) => {
   try {
-    const tasks = await db.getTasks();
+    const userId = req.query.user_id as string | undefined;
+    const tasks = await db.getTasks(userId);
     res.json(tasks);
   } catch (error) {
     console.error('Error fetching tasks:', error);

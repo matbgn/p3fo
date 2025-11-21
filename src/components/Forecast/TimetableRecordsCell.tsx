@@ -3,14 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Task } from "@/hooks/useTasks";
 import { getProjectedHoursForActualMonth } from "@/utils/projectedHours";
-
-interface Settings {
-    userWorkloadPercentage: string;
-}
+import { CombinedSettings } from "@/hooks/useCombinedSettings";
 
 interface TimetableRecordsCellProps {
     tasks: Task[];
-    settings: Settings;
+    settings: CombinedSettings;
     year: number;
     month: number;
 }
@@ -24,7 +21,7 @@ const TimetableRecordsCell: React.FC<TimetableRecordsCellProps> = ({ tasks, sett
     );
 
     const balance = projectedHoursResult.hourlyBalanceProjection;
-    const workloadPercentage = parseFloat(settings.userWorkloadPercentage || "60");
+    const workloadPercentage = settings.userWorkloadPercentage;
     // Legacy logic: ratio = balance / workload (where workload is the percentage value, e.g. 60)
     const ratio = balance / workloadPercentage;
 

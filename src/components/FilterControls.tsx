@@ -7,6 +7,7 @@ import { MultiSelect } from "@/components/ui/multi-select";
 import { TriageStatus, Category } from "@/hooks/useTasks";
 import { CATEGORIES } from "@/data/categories";
 import { saveFiltersToSessionStorage, clearFiltersFromSessionStorage } from "@/lib/filter-storage";
+import { UserFilterSelector } from "@/components/UserFilterSelector";
 
 export type Filters = {
   showUrgent: boolean;
@@ -17,6 +18,7 @@ export type Filters = {
   searchText?: string;
   difficulty: number[];
   category: Category[];
+  selectedUserId?: string | null; // For multi-user filtering
 };
 
 interface FilterControlsProps {
@@ -82,6 +84,11 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
           className="w-40"
         />
       </div>
+
+      <UserFilterSelector
+        selectedUserId={filters.selectedUserId}
+        onUserChange={(userId) => updateAndPersistFilters({ ...filters, selectedUserId: userId })}
+      />
 
       <div className="flex items-center space-x-2">
         <Checkbox

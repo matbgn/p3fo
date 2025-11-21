@@ -1,14 +1,14 @@
 import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQLI } from "@/hooks/useQLI";
-import { useSettings } from "@/hooks/useSettings";
+import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 
 const QualityOfLifeIndexMetric: React.FC = () => {
   const { data, loading, error } = useQLI();
-  const { settings } = useSettings();
+  const { settings } = useCombinedSettings();
 
-  // Get goal from settings context
-  const goal = parseFloat(settings.qliGoal || "60");
+  // Get goal from combined settings
+  const goal = settings.qliGoal;
 
   const getCardClass = () => {
     if (loading || error || !data) {

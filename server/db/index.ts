@@ -8,7 +8,7 @@ export interface DbClient {
   close?(): Promise<void>;
 
   // Tasks
-  getTasks(): Promise<TaskEntity[]>;
+  getTasks(userId?: string): Promise<TaskEntity[]>;
   getTaskById(id: string): Promise<TaskEntity | null>;
   createTask(task: Partial<TaskEntity>): Promise<TaskEntity>;
   updateTask(id: string, data: Partial<TaskEntity>): Promise<TaskEntity | null>;

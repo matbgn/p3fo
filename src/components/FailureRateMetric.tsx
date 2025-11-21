@@ -1,22 +1,22 @@
 import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTasks } from "@/hooks/useTasks";
-import { useSettings } from "@/hooks/useSettings";
+import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 import { calculateFailureRate } from "@/lib/metrics";
 
 const FailureRateMetric: React.FC = () => {
   const { tasks } = useTasks();
-  const { settings } = useSettings();
-  
-  // Get settings from the context
-  const weeksComputation = parseInt(settings.weeksComputation || "4");
-  const failureRateGoal = parseFloat(settings.failureRateGoal || "5");
-  
+  const { settings } = useCombinedSettings();
+
+  // Get settings from combined settings
+  const weeksComputation = settings.weeksComputation;
+  const failureRateGoal = settings.failureRateGoal;
+
   const failureRate = calculateFailureRate(tasks, weeksComputation);
-  
+
   // Format failure rate as a percentage
   const formattedFailureRate = failureRate.toFixed(2);
-  
+
   // Determine if the failure rate is within goal (lower is better)
   const getCardClass = () => {
     if (failureRate <= failureRateGoal) {
@@ -28,7 +28,7 @@ const FailureRateMetric: React.FC = () => {
     }
     return "bg-red-100 border-l-4 border-red-500";
   };
-  
+
   return (
     <Card className={`h-32 ${getCardClass()}`}>
       <CardHeader className="pb-2">

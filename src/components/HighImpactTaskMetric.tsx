@@ -1,24 +1,24 @@
 import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTasks } from "@/hooks/useTasks";
-import { useSettings } from "@/hooks/useSettings";
+import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 import { calculateHighImpactTaskFrequency, getCompletedHighImpactTasks } from "@/lib/metrics";
 
 const HighImpactTaskMetric: React.FC = () => {
   const { tasks } = useTasks();
-  const { settings } = useSettings();
-  
-  // Get settings from the context
-  const workloadPercentage = parseFloat(settings.userWorkloadPercentage || "60") / 100;
-  const weeksComputation = parseInt(settings.weeksComputation || "4");
-  const highImpactTaskGoal = parseFloat(settings.highImpactTaskGoal || "3.63");
-  
+  const { settings } = useCombinedSettings();
+
+  // Get settings from the combined hook
+  const workloadPercentage = settings.userWorkloadPercentage / 100;
+  const weeksComputation = settings.weeksComputation;
+  const highImpactTaskGoal = settings.highImpactTaskGoal;
+
   const completedTasks = getCompletedHighImpactTasks(tasks, weeksComputation);
   const frequency = calculateHighImpactTaskFrequency(tasks, weeksComputation, workloadPercentage);
-  
+
   // Format frequency
   const formattedFrequency = (frequency).toFixed(1);
-  
+
   const getCardClass = () => {
     if (frequency >= highImpactTaskGoal) {
       return "bg-green-100 border-l-4 border-green-500";
@@ -29,7 +29,7 @@ const HighImpactTaskMetric: React.FC = () => {
     }
     return "bg-red-100 border-l-4 border-red-500";
   };
-  
+
   return (
     <Card className={`h-32 ${getCardClass()}`}>
       <CardHeader className="pb-2">

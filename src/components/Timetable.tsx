@@ -20,7 +20,8 @@ import { TaskTag } from "./TaskTag";
 import { ChronologicalView } from "./ChronologicalView";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { EditableTimeEntry, formatDuration } from "./EditableTimeEntry";
-import { useSettings } from "@/hooks/useSettings";
+import { useCombinedSettings } from "@/hooks/useCombinedSettings";
+import { UserFilterSelector } from "@/components/UserFilterSelector";
 
 type TimetableView = "categorical" | "chronological";
 type TimeChunk = "all" | "am" | "pm";
@@ -40,7 +41,7 @@ export const Timetable: React.FC<{
 }> = ({ onJumpToTask }) => {
   const navigate = useNavigate();
   const { tasks, updateTimeEntry, deleteTimeEntry, updateCategory } = useTasks();
-  const { settings } = useSettings();
+  const { settings } = useCombinedSettings();
   const [view, setView] = useState<TimetableView>("categorical");
   const [timeChunk, setTimeChunk] = useState<TimeChunk>("all");
 
@@ -58,6 +59,7 @@ export const Timetable: React.FC<{
   const [showUrgent, setShowUrgent] = useState(false);
   const [showImpact, setShowImpact] = useState(false);
   const [showMajorIncident, setShowMajorIncident] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   // Helper to determine if the current range is a single day
   const isSingleDayRange = React.useCallback(() => {
@@ -83,7 +85,7 @@ export const Timetable: React.FC<{
       setTimeChunk("all");
     }
   }, [isSingleDayRange, timeChunk]);
- 
+
   // Get date range based on predefined selection or custom selection
   const getDateRange = () => {
     // Get current time in Zurich timezone
@@ -94,7 +96,7 @@ export const Timetable: React.FC<{
       day: zurichNow.day
     });
     const todayZoned = todayPlainDate.toZonedDateTime('Europe/Zurich');
-    
+
     switch (predefinedRange) {
       case "today": {
         const endOfDay = todayZoned.add({ days: 1 }).subtract({ nanoseconds: 1 });
@@ -177,7 +179,7 @@ export const Timetable: React.FC<{
         };
     }
   };
- 
+
   // Filter tasks by category, urgency, impact, and major incident
   const filteredTasks = tasks.filter((task) => {
     // Category filter: if categories are selected, show tasks that either have no category
@@ -193,7 +195,7 @@ export const Timetable: React.FC<{
         }
       }
     }
- 
+
     // Urgent filter
     if (showUrgent) {
       let currentTaskForUrgent = task;
@@ -213,7 +215,7 @@ export const Timetable: React.FC<{
         return false;
       }
     }
- 
+
     // Impact filter
     if (showImpact) {
       let currentTaskForImpact = task;
@@ -233,7 +235,7 @@ export const Timetable: React.FC<{
         return false;
       }
     }
- 
+
     // Incident on Delivery filter
     if (showMajorIncident) {
       let currentTaskForMajorIncident = task;
@@ -253,10 +255,19 @@ export const Timetable: React.FC<{
         return false;
       }
     }
- 
+
+    // User filter
+    if (selectedUserId) {
+      if (selectedUserId === 'UNASSIGNED') {
+        if (task.userId && task.userId !== 'unassigned') return false;
+      } else {
+        if (task.userId !== selectedUserId) return false;
+      }
+    }
+
     return true;
   });
- 
+
   // Get all timer entries with task information
   const timerEntries = filteredTasks
     .filter((task) => task.timer && task.timer.length > 0)
@@ -281,32 +292,32 @@ export const Timetable: React.FC<{
         if (rangeStartZurich && entryEndZurich.epochNanoseconds < rangeStartZurich.epochNanoseconds) return false;
         if (rangeEndZurich && entryStartZurich.epochNanoseconds > rangeEndZurich.epochNanoseconds) return false;
       }
- 
+
       // Time chunk filter
       if (isSingleDayRange() && timeChunk !== "all") {
         const [splitHour, splitMinute] = settings.splitTime.split(':').map(Number);
         const entryStart = Temporal.Instant.fromEpochMilliseconds(entry.startTime).toZonedDateTimeISO('Europe/Zurich');
-        
+
         if (timeChunk === "am") {
           if (entryStart.hour >= splitHour) return false;
         } else if (timeChunk === "pm") {
           if (entryStart.hour < splitHour) return false;
         }
       }
- 
+
       return true;
     });
- 
+
   const formatDuration = (ms: number) => {
     const seconds = Math.floor(ms / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
     return `${String(hours).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
   };
- 
+
   // Calculate total time spent
   const totalTime = timerEntries.reduce((acc, entry) => acc + (entry.endTime > 0 ? entry.endTime - entry.startTime : Date.now() - entry.startTime), 0);
- 
+
   // Group entries by category for summary
   const entriesByCategory = timerEntries.reduce((acc, entry) => {
     const category = entry.taskCategory || "Uncategorized";
@@ -316,32 +327,32 @@ export const Timetable: React.FC<{
     acc[category].push(entry);
     return acc;
   }, {} as Record<string, typeof timerEntries>);
- 
+
   const categoryTotals = Object.entries(entriesByCategory).map(([category, entries]) => ({
     category,
     totalTime: entries.reduce((acc, entry) => acc + (entry.endTime > 0 ? entry.endTime - entry.startTime : Date.now() - entry.startTime), 0),
   }));
- 
+
   // Group entries by top-level parent task for detailed view
   const entriesByTopParentTask = timerEntries.reduce((acc, entry) => {
     // Find the top-level parent task
     let topLevelParentId = entry.taskId;
     let currentTask = taskMap[entry.taskId];
-    
+
     // Traverse up the hierarchy to find the top-level parent
     while (currentTask && currentTask.parentId) {
       topLevelParentId = currentTask.parentId;
       currentTask = taskMap[currentTask.parentId];
     }
-    
+
     if (!acc[topLevelParentId]) {
       acc[topLevelParentId] = [];
     }
     acc[topLevelParentId].push(entry);
     return acc;
   }, {} as Record<string, typeof timerEntries>);
- 
- 
+
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -355,7 +366,7 @@ export const Timetable: React.FC<{
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
-      
+
       {/* Filters */}
       <div className="flex flex-wrap gap-4 items-end">
         <div className="flex flex-col space-y-2">
@@ -383,7 +394,7 @@ export const Timetable: React.FC<{
                 />
               </PopoverContent>
             </Popover>
-            
+
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -414,6 +425,11 @@ export const Timetable: React.FC<{
           </div>
         </div>
 
+        <UserFilterSelector
+          selectedUserId={selectedUserId}
+          onUserChange={setSelectedUserId}
+        />
+
         {isSingleDayRange() && (
           <div className="flex flex-col space-y-2">
             <label className="text-sm font-medium">Time Chunk</label>
@@ -430,7 +446,7 @@ export const Timetable: React.FC<{
             </ToggleGroup>
           </div>
         )}
-        
+
         <div className="flex flex-col space-y-2">
           <label className="text-sm font-medium">Predefined Ranges</label>
           <div className="flex flex-wrap gap-2">
@@ -446,7 +462,7 @@ export const Timetable: React.FC<{
             ))}
           </div>
         </div>
- 
+
         <div className="flex flex-col space-y-2">
           <label className="text-sm font-medium">Categories</label>
           <div className="flex flex-wrap gap-2">
@@ -477,7 +493,7 @@ export const Timetable: React.FC<{
             </div>
           </div>
         </div>
-        
+
         <div className="flex flex-col space-y-2">
           <label className="text-sm font-medium">Criticity</label>
           <div className="flex flex-wrap gap-2">
@@ -487,14 +503,14 @@ export const Timetable: React.FC<{
               onCheckedChange={(checked) => setShowUrgent(!!checked)}
             />
             <label htmlFor="show-urgent" className="text-sm font-medium">Urgent</label>
- 
+
             <Checkbox
               id="show-impact"
               checked={showImpact}
               onCheckedChange={(checked) => setShowImpact(!!checked)}
             />
             <label htmlFor="show-impact" className="text-sm font-medium">High Impact</label>
- 
+
             <Checkbox
               id="show-major-incident"
               checked={showMajorIncident}
@@ -514,6 +530,9 @@ export const Timetable: React.FC<{
             setShowUrgent(false);
             setShowImpact(false);
             setShowMajorIncident(false);
+            setShowImpact(false);
+            setShowMajorIncident(false);
+            setSelectedUserId(null);
             setTimeChunk("all");
             // No need to clear from session storage for Timetable
           }}
@@ -521,7 +540,7 @@ export const Timetable: React.FC<{
           Clear All Filters
         </Button>
       </div>
-      
+
       {/* Summary by category */}
       <div className="mt-4">
         <h2 className="text-lg font-semibold mb-2">Time Summary by Category</h2>
@@ -546,7 +565,7 @@ export const Timetable: React.FC<{
           </TableBody>
         </Table>
       </div>
-      
+
       {/* Detailed timetable */}
       <div className="mt-6">
         <h2 className="text-lg font-semibold mb-2">Detailed Timetable</h2>
@@ -570,22 +589,22 @@ export const Timetable: React.FC<{
                     // Calculate grand total for this top parent task group
                     const groupTotal = entries.reduce((acc, entry) =>
                       acc + (entry.endTime > 0 ? entry.endTime - entry.startTime : Date.now() - entry.startTime), 0);
-                    
+
                     // Get top parent task info
                     const topParentTask = taskMap[topParentId];
-                    
+
                     // Group entries by their immediate parent for proper nesting
                     const entriesByImmediateParent = entries.reduce((acc, entry) => {
                       // The immediate parent for grouping is either the task's actual parent, or the task itself if it's a top-level task in this group
                       const immediateParentId = entry.taskParentId || entry.taskId;
-                      
+
                       if (!acc[immediateParentId]) {
                         acc[immediateParentId] = [];
                       }
                       acc[immediateParentId].push(entry);
                       return acc;
                     }, {} as Record<string, typeof entries>);
-                    
+
                     return (
                       <React.Fragment key={topParentId}>
                         {/* Top parent task row with grand total */}
@@ -603,13 +622,13 @@ export const Timetable: React.FC<{
                           <TableCell colSpan={3}></TableCell>
                           <TableCell className="font-bold">{formatDuration(groupTotal)}</TableCell>
                         </TableRow>
-                        
+
                         {/* Individual entries grouped by immediate parent */}
                         {Object.entries(entriesByImmediateParent).map(([parentId, parentEntries]) => {
                           // If this is not the top parent, show it as a subtask group
                           const parentTask = taskMap[parentId];
                           const isSubtaskGroup = parentId !== topParentId;
-                          
+
                           return (
                             <React.Fragment key={parentId}>
                               {/* Subtask group header */}
@@ -633,7 +652,7 @@ export const Timetable: React.FC<{
                                   </TableCell>
                                 </TableRow>
                               )}
-                              
+
                               {/* Individual entries */}
                               {parentEntries.map((entry) => (
                                 <EditableTimeEntry

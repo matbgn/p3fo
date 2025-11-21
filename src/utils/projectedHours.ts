@@ -1,5 +1,6 @@
 import { Task } from "@/hooks/useTasks";
 import { getWorkingDays, getWorkingDaysDeltaInSameMonth } from './workingdays';
+import { CombinedSettings } from '@/hooks/useCombinedSettings';
 
 type ProjectedHoursResult = {
     totalTimeElapsedForAllMonth: number
@@ -9,22 +10,18 @@ type ProjectedHoursResult = {
     hourlyBalanceProjection: number
 }
 
-interface Settings {
-    userWorkloadPercentage: string;
-}
-
 export function getProjectedHoursForActualMonth(
     year: number,
     month: number,
     tasks: Task[],
-    settings: Settings,
+    settings: CombinedSettings,
     isForcedProjection?: boolean
 ): ProjectedHoursResult {
     if (isForcedProjection === undefined || isForcedProjection === null) {
         isForcedProjection = false
     }
 
-    const workloadPercentage = parseFloat(settings.userWorkloadPercentage || "60");
+    const workloadPercentage = settings.userWorkloadPercentage;
     const workingDays = getWorkingDays(year, month)
     const hoursDue =
         Math.round(

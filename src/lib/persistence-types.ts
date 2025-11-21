@@ -52,6 +52,8 @@ export interface UserSettingsEntity {
   username: string;
   logo: string;
   has_completed_onboarding: boolean;
+  workload_percentage?: number;
+  split_time?: string;
 }
 
 export interface AppSettingsEntity {
@@ -88,7 +90,7 @@ export interface StorageMetadata {
 
 export interface PersistenceAdapter {
   // Tasks
-  listTasks(): Promise<TaskEntity[]>;
+  listTasks(userId?: string): Promise<TaskEntity[]>;
   getTask(id: string): Promise<TaskEntity | null>;
   createTask(input: Partial<TaskEntity>): Promise<TaskEntity>;
   updateTask(id: string, patch: Partial<TaskEntity>): Promise<TaskEntity>;

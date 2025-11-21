@@ -14,6 +14,8 @@ const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
   username: 'User',
   logo: '',
   has_completed_onboarding: false,
+  workload_percentage: 60,
+  split_time: '13:00',
 };
 
 const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
@@ -68,7 +70,9 @@ class SqliteClient implements DbClient {
         user_id TEXT PRIMARY KEY,
         username TEXT NOT NULL,
         logo TEXT,
-        has_completed_onboarding BOOLEAN DEFAULT 0
+        has_completed_onboarding BOOLEAN DEFAULT 0,
+        workload_percentage REAL DEFAULT 60,
+        split_time TEXT DEFAULT '13:00'
       )
     `);
 
@@ -123,10 +127,18 @@ class SqliteClient implements DbClient {
   }
 
   // Tasks
-  async getTasks(): Promise<TaskEntity[]> {
-    const rows = this.db.prepare(`
-      SELECT * FROM tasks ORDER BY priority DESC, created_at ASC
-    `).all() as any[];
+  async getTasks(userId?: string): Promise<TaskEntity[]> {
+    let query = 'SELECT * FROM tasks';
+    const params: any[] = [];
+
+    if (userId) {
+      query += ' WHERE user_id = ?';
+      params.push(userId);
+    }
+
+    query += ' ORDER BY priority DESC, created_at ASC';
+
+    const rows = this.db.prepare(query).all(...params) as any[];
 
     return rows.map(row => ({
       id: row.id,
@@ -375,6 +387,8 @@ class SqliteClient implements DbClient {
       username: row.username,
       logo: row.logo,
       has_completed_onboarding: Boolean(row.has_completed_onboarding),
+      workload_percentage: row.workload_percentage,
+      split_time: row.split_time,
     };
   }
 
@@ -383,17 +397,21 @@ class SqliteClient implements DbClient {
     const updated = { ...current, ...data, userId };
 
     this.db.prepare(`
-      INSERT INTO user_settings (user_id, username, logo, has_completed_onboarding)
-      VALUES (@userId, @username, @logo, @has_completed_onboarding)
+      INSERT INTO user_settings (user_id, username, logo, has_completed_onboarding, workload_percentage, split_time)
+      VALUES (@userId, @username, @logo, @has_completed_onboarding, @workload_percentage, @split_time)
       ON CONFLICT(user_id) DO UPDATE SET
         username = excluded.username,
         logo = excluded.logo,
-        has_completed_onboarding = excluded.has_completed_onboarding
+        has_completed_onboarding = excluded.has_completed_onboarding,
+        workload_percentage = excluded.workload_percentage,
+        split_time = excluded.split_time
     `).run({
       userId: updated.userId,
       username: updated.username,
       logo: updated.logo,
       has_completed_onboarding: updated.has_completed_onboarding ? 1 : 0,
+      workload_percentage: updated.workload_percentage ?? null,
+      split_time: updated.split_time ?? null,
     });
 
     return updated;
@@ -406,6 +424,8 @@ class SqliteClient implements DbClient {
       username: row.username,
       logo: row.logo,
       has_completed_onboarding: Boolean(row.has_completed_onboarding),
+      workload_percentage: row.workload_percentage,
+      split_time: row.split_time,
     }));
   }
 

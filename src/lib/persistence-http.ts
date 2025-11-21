@@ -30,8 +30,9 @@ export class HttpApiPersistence implements PersistenceAdapter {
   }
 
   // Tasks
-  async listTasks(): Promise<TaskEntity[]> {
-    return this.makeRequest('/api/tasks');
+  async listTasks(userId?: string): Promise<TaskEntity[]> {
+    const endpoint = userId ? `/api/tasks?user_id=${encodeURIComponent(userId)}` : '/api/tasks';
+    return this.makeRequest(endpoint);
   }
 
   async getTask(id: string): Promise<TaskEntity | null> {

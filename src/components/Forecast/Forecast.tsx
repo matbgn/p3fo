@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTasks } from "@/hooks/useTasks";
-import { useSettings } from "@/hooks/useSettings";
+import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { useUsers } from "@/hooks/useUsers";
 import { getWorkingDays } from "@/utils/workingdays";
@@ -10,7 +10,7 @@ import TimetableRecordsCell from "./TimetableRecordsCell";
 
 const Forecast: React.FC = () => {
     const { tasks } = useTasks();
-    const { settings } = useSettings();
+    const { settings } = useCombinedSettings();
     const { userSettings } = useUserSettings();
     const { users } = useUsers();
 

@@ -107,6 +107,21 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
           return false;
         }
 
+        // Apply user filter
+        if (filters.selectedUserId) {
+          if (filters.selectedUserId === 'UNASSIGNED') {
+            // Show tasks with no userId or empty userId or 'unassigned' string
+            if (task.userId && task.userId !== 'unassigned') {
+              return false;
+            }
+          } else {
+            // Show tasks assigned to the selected user
+            if (task.userId !== filters.selectedUserId) {
+              return false;
+            }
+          }
+        }
+
         return true;
       })
       .sort(sortTasks.plan);

@@ -3,12 +3,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import DataExporter from '@/components/DataExporter';
 import DataImporter from '@/components/DataImporter';
-import { useSettings } from '@/hooks/useSettings';
+import { useCombinedSettings } from '@/hooks/useCombinedSettings';
 import { Label } from '@/components/ui/label';
 
 const SettingsPage: React.FC = () => {
   const { clearAllTasks } = useTasks();
-  const { settings, updateSettings } = useSettings();
+  const { settings, updateSettings } = useCombinedSettings();
 
   const handleClearData = () => {
     if (window.confirm('Are you sure you want to delete all task data? This action cannot be undone.')) {
@@ -17,7 +17,15 @@ const SettingsPage: React.FC = () => {
   };
 
   const handleSettingChange = (key: keyof typeof settings, value: string) => {
-    updateSettings({ [key]: value });
+    if (key === 'splitTime') {
+      updateSettings({ [key]: value });
+    } else {
+      const numValue = parseFloat(value);
+      if (!isNaN(numValue)) {
+        // @ts-ignore - we know the key matches and value is number
+        updateSettings({ [key]: numValue });
+      }
+    }
   };
 
   return (
@@ -61,7 +69,7 @@ const SettingsPage: React.FC = () => {
                 Your workload percentage (default: 60%)
               </p>
             </div>
-            
+
             <div>
               <Label className="block text-sm font-medium mb-1">
                 Weeks Computation
@@ -77,7 +85,7 @@ const SettingsPage: React.FC = () => {
                 Number of weeks to compute metrics (default: 4 weeks)
               </p>
             </div>
-            
+
             <div>
               <Label className="block text-sm font-medium mb-1">
                 High Impact Task Goal
@@ -94,7 +102,7 @@ const SettingsPage: React.FC = () => {
                 Target high impact tasks per EFT (default: 3.63)
               </p>
             </div>
-            
+
             <div>
               <Label className="block text-sm font-medium mb-1">
                 Failure Rate Goal (Incident on Delivery)
@@ -157,7 +165,7 @@ const SettingsPage: React.FC = () => {
             </div>
           </div>
         </div>
-        
+
         <div>
           <h2 className="text-xl font-semibold">Data Management</h2>
           <p className="text-muted-foreground">

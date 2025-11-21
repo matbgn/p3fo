@@ -13,6 +13,8 @@ const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
   username: 'User',
   logo: '',
   has_completed_onboarding: false,
+  workload_percentage: 60,
+  split_time: '13:00',
 };
 
 const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
@@ -26,14 +28,21 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
 };
 
 export class BrowserJsonPersistence implements PersistenceAdapter {
-  async listTasks(): Promise<TaskEntity[]> {
+  async listTasks(userId?: string): Promise<TaskEntity[]> {
     if (typeof window === 'undefined') {
       return [];
     }
 
     try {
       const stored = localStorage.getItem(TASKS_STORAGE_KEY);
-      return stored ? JSON.parse(stored) : [];
+      const allTasks = stored ? JSON.parse(stored) : [];
+
+      // Filter by userId if provided
+      if (userId) {
+        return allTasks.filter((task: TaskEntity) => task.user_id === userId);
+      }
+
+      return allTasks;
     } catch (error) {
       console.error('Error reading tasks from localStorage:', error);
       return [];

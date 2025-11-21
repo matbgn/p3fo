@@ -228,6 +228,15 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
   const topTasks = React.useMemo(() => {
     let filtered = tasks.filter((t) => !t.parentId);
 
+    // Apply user filter first
+    if (filters.selectedUserId) {
+      if (filters.selectedUserId === 'UNASSIGNED') {
+        filtered = filtered.filter(t => !t.userId || t.userId === 'unassigned');
+      } else {
+        filtered = filtered.filter(t => t.userId === filters.selectedUserId);
+      }
+    }
+
     // Apply text search filter using A* algorithm
     if (filters.searchText?.trim()) {
       const searchResults = aStarTextSearch(filters.searchText, filtered.map(t => ({ id: t.id, title: t.title })));

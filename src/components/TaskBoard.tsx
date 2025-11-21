@@ -162,7 +162,8 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
       });
     });
     return cols;
-  }, [tasks, map, path, filters.searchText]);
+    return cols;
+  }, [tasks, map, path, filters]);
 
   const handleActivate = (colIndex: number, id: string) => {
     const newPath = path.slice(0, colIndex);
@@ -359,6 +360,22 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
 
                     // Apply all other filters
                     const fullyFilteredItems = filteredItems.filter(task => {
+                      // Apply user filter first
+                      // Apply user filter first
+                      if (filters.selectedUserId) {
+                        if (filters.selectedUserId === 'UNASSIGNED') {
+                          // Show tasks with no userId or empty userId or 'unassigned' string
+                          if (task.userId && task.userId !== 'unassigned') {
+                            return false;
+                          }
+                        } else {
+                          // When a user is selected, only show tasks assigned to that user
+                          if (task.userId !== filters.selectedUserId) {
+                            return false;
+                          }
+                        }
+                      }
+
                       // For subtasks, we want them to be visible when their parent task matches the filters
                       // Subtasks themselves don't have tags, so we only apply status filtering to them
                       if (task.parentId) {
