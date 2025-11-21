@@ -30,7 +30,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     if (typeof window === 'undefined') {
       return [];
     }
-    
+
     try {
       const stored = localStorage.getItem(TASKS_STORAGE_KEY);
       return stored ? JSON.parse(stored) : [];
@@ -44,7 +44,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     if (typeof window === 'undefined') {
       return null;
     }
-    
+
     try {
       const tasks = await this.listTasks();
       return tasks.find(task => task.id === id) || null;
@@ -58,7 +58,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     if (typeof window === 'undefined') {
       throw new Error('Cannot create task in non-browser environment');
     }
-    
+
     try {
       const tasks = await this.listTasks();
       const newTask: TaskEntity = {
@@ -80,7 +80,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
         parent_id: input.parent_id || null,
         children: input.children || [],
       };
-      
+
       tasks.push(newTask);
       localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
       return newTask;
@@ -94,15 +94,15 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     if (typeof window === 'undefined') {
       throw new Error('Cannot update task in non-browser environment');
     }
-    
+
     try {
       const tasks = await this.listTasks();
       const index = tasks.findIndex(task => task.id === id);
-      
+
       if (index === -1) {
         throw new Error(`Task with id ${id} not found`);
       }
-      
+
       tasks[index] = { ...tasks[index], ...patch };
       localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
       return tasks[index];
@@ -116,7 +116,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     if (typeof window === 'undefined') {
       return;
     }
-    
+
     try {
       const tasks = await this.listTasks();
       const filteredTasks = tasks.filter(task => task.id !== id);
@@ -131,17 +131,17 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     if (typeof window === 'undefined') {
       return;
     }
-    
+
     try {
       const tasks = await this.listTasks();
-      
+
       for (const { id, priority } of items) {
         const index = tasks.findIndex(task => task.id === id);
         if (index !== -1) {
           tasks[index].priority = priority;
         }
       }
-      
+
       localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
     } catch (error) {
       console.error('Error bulk updating priorities in localStorage:', error);
@@ -153,7 +153,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     if (typeof window === 'undefined') {
       return;
     }
-    
+
     try {
       localStorage.removeItem(TASKS_STORAGE_KEY);
     } catch (error) {
@@ -166,7 +166,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     if (typeof window === 'undefined') {
       return;
     }
-    
+
     try {
       localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
     } catch (error) {
@@ -179,7 +179,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     if (typeof window === 'undefined') {
       return null;
     }
-    
+
     try {
       const stored = localStorage.getItem(`${USER_SETTINGS_STORAGE_KEY}_${userId}`);
       return stored ? JSON.parse(stored) : null;
@@ -193,7 +193,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     if (typeof window === 'undefined') {
       throw new Error('Cannot update user settings in a non-browser environment.');
     }
-    
+
     try {
       const current = await this.getUserSettings(userId) || { ...DEFAULT_USER_SETTINGS, userId };
       const updated = { ...current, ...patch };
@@ -205,11 +205,34 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
   }
 
+  async listUsers(): Promise<UserSettingsEntity[]> {
+    if (typeof window === 'undefined') {
+      return [];
+    }
+
+    try {
+      const users: UserSettingsEntity[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(`${USER_SETTINGS_STORAGE_KEY}_`)) {
+          const stored = localStorage.getItem(key);
+          if (stored) {
+            users.push(JSON.parse(stored));
+          }
+        }
+      }
+      return users;
+    } catch (error) {
+      console.error('Error listing users from localStorage:', error);
+      return [];
+    }
+  }
+
   async getSettings(): Promise<AppSettingsEntity> {
     if (typeof window === 'undefined') {
       return DEFAULT_APP_SETTINGS;
     }
-    
+
     try {
       const stored = localStorage.getItem(APP_SETTINGS_STORAGE_KEY);
       return stored ? JSON.parse(stored) : DEFAULT_APP_SETTINGS;
@@ -223,7 +246,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     if (typeof window === 'undefined') {
       return DEFAULT_APP_SETTINGS;
     }
-    
+
     try {
       const current = await this.getSettings();
       const updated = { ...current, ...patch };
@@ -239,7 +262,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     if (typeof window === 'undefined') {
       return null;
     }
-    
+
     try {
       const stored = localStorage.getItem(QOL_SURVEY_STORAGE_KEY);
       return stored ? JSON.parse(stored) : null;
@@ -253,7 +276,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     if (typeof window === 'undefined') {
       return;
     }
-    
+
     try {
       localStorage.setItem(QOL_SURVEY_STORAGE_KEY, JSON.stringify(data));
     } catch (error) {
@@ -266,7 +289,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     if (typeof window === 'undefined') {
       return null;
     }
-    
+
     try {
       const stored = sessionStorage.getItem(FILTERS_STORAGE_KEY);
       return stored ? JSON.parse(stored) : null;
@@ -280,7 +303,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     if (typeof window === 'undefined') {
       return;
     }
-    
+
     try {
       sessionStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(data));
     } catch (error) {
@@ -293,7 +316,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     if (typeof window === 'undefined') {
       return;
     }
-    
+
     try {
       sessionStorage.removeItem(FILTERS_STORAGE_KEY);
     } catch (error) {

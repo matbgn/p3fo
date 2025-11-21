@@ -10,6 +10,7 @@ import {
   ResizableHandle,
 } from '@/components/ui/resizable';
 import { useTasks, Task } from '@/hooks/useTasks';
+import { useUserSettings } from '@/hooks/useUserSettings';
 import { TaskCard } from './TaskCard';
 import {
   Dialog,
@@ -34,7 +35,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
     if (calendarRef.current) {
       const scrollToTime = new Date();
       scrollToTime.setHours(12, 0, 0); // Set to 12 PM for middle of the day
-      calendarRef.current.get ;
+      calendarRef.current.get;
     }
   }, [view]); // Re-scroll if view changes
   const {
@@ -56,6 +57,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
     updateComment,
     updateDurationInMinutes, // Add updateDurationInMinutes here
   } = useTasks();
+  const { userId: currentUserId } = useUserSettings();
 
   const parentTasks = tasks.filter(
     task =>
@@ -144,8 +146,8 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
               eventPropGetter={(event) => ({
                 style: {
                   backgroundColor: event.resource.urgent ? '#dc2626' :
-                                  event.resource.impact ? '#ca8a04' :
-                                  event.resource.majorIncident ? '#991b1b' : '#3b82f6',
+                    event.resource.impact ? '#ca8a04' :
+                      event.resource.majorIncident ? '#991b1b' : '#3b82f6',
                   borderColor: 'transparent',
                   borderRadius: '4px',
                   color: 'white',
@@ -199,30 +201,30 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
                 return a.createdAt - b.createdAt;
               })
               .map(task => (
-              <div key={task.id} className="w-64">
-                <TaskCard
-                  task={task}
-                  tasks={tasks}
-                  updateStatus={updateStatus}
-                  updateDifficulty={updateDifficulty}
-                  updateCategory={updateCategory}
-                  updateTitle={updateTitle}
-                  updateUser={updateUser}
-                  deleteTask={deleteTask}
-                  duplicateTaskStructure={duplicateTaskStructure}
-                  toggleUrgent={toggleUrgent}
-                  toggleImpact={toggleImpact}
-                  toggleMajorIncident={toggleMajorIncident}
-                  toggleDone={() => toggleDone(task.id)}
-                  toggleTimer={toggleTimer}
-                  reparent={reparent}
-                  onFocusOnTask={onFocusOnTask}
-                  updateTerminationDate={updateTerminationDate}
-                  updateComment={updateComment}
-                  updateDurationInMinutes={updateDurationInMinutes} // Pass updateDurationInMinutes here
-                />
-              </div>
-            ))}
+                <div key={task.id} className="w-64">
+                  <TaskCard
+                    task={task}
+                    tasks={tasks}
+                    updateStatus={updateStatus}
+                    updateDifficulty={updateDifficulty}
+                    updateCategory={updateCategory}
+                    updateTitle={updateTitle}
+                    updateUser={(id, userId) => updateUser(id, userId === 'current-user' ? currentUserId : userId)}
+                    deleteTask={deleteTask}
+                    duplicateTaskStructure={duplicateTaskStructure}
+                    toggleUrgent={toggleUrgent}
+                    toggleImpact={toggleImpact}
+                    toggleMajorIncident={toggleMajorIncident}
+                    toggleDone={() => toggleDone(task.id)}
+                    toggleTimer={toggleTimer}
+                    reparent={reparent}
+                    onFocusOnTask={onFocusOnTask}
+                    updateTerminationDate={updateTerminationDate}
+                    updateComment={updateComment}
+                    updateDurationInMinutes={updateDurationInMinutes} // Pass updateDurationInMinutes here
+                  />
+                </div>
+              ))}
           </CardContent>
         </Card>
       </ResizablePanel>
@@ -239,7 +241,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
               updateDifficulty={updateDifficulty}
               updateCategory={updateCategory}
               updateTitle={updateTitle}
-              updateUser={updateUser}
+              updateUser={(id, userId) => updateUser(id, userId === 'current-user' ? currentUserId : userId)}
               deleteTask={deleteTask}
               duplicateTaskStructure={duplicateTaskStructure}
               toggleUrgent={toggleUrgent}

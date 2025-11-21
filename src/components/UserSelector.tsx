@@ -21,8 +21,8 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
   onChange,
   className
 }) => {
-  const { userSettings } = useUserSettings();
-  const isCurrentUser = value && value === userSettings.username;
+  const { userSettings, userId: currentUserId } = useUserSettings();
+  const isCurrentUser = value && (value === currentUserId || value === userSettings.username); // Support both for display, but prefer ID
 
   return (
     <Select value={value || 'unassigned'} onValueChange={(val) => onChange(val === 'unassigned' ? undefined : val)}>

@@ -30,7 +30,7 @@ const loadUserSettings = async (userId: string): Promise<UserSettings> => {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
     const settings = await adapter.getUserSettings(userId);
-    
+
     // If no settings are found for this user, create them
     if (!settings) {
       const newSettings: UserSettings = {
@@ -40,7 +40,7 @@ const loadUserSettings = async (userId: string): Promise<UserSettings> => {
       await adapter.updateUserSettings(userId, newSettings);
       return newSettings;
     }
-    
+
     // Map UserSettingsEntity to UserSettings
     return {
       username: settings.username,
@@ -49,7 +49,7 @@ const loadUserSettings = async (userId: string): Promise<UserSettings> => {
     };
   } catch (error) {
     console.error('Error loading user settings from persistence:', error);
-    
+
     // Fallback to localStorage for backward compatibility
     try {
       const storedSettings = localStorage.getItem('p3fo_user_settings_v1');
@@ -66,19 +66,19 @@ const loadUserSettings = async (userId: string): Promise<UserSettings> => {
     } catch (e) {
       console.error('Error parsing legacy user settings:', e);
     }
-    
+
     // If no settings exist, create default with random username
     const newSettings = {
       ...defaultUserSettings,
       username: getRandomUsername(),
     };
-    
+
     try {
       localStorage.setItem('p3fo_user_settings_v1', JSON.stringify(newSettings));
     } catch (error) {
       console.error('Error saving initial user settings:', error);
     }
-    
+
     return newSettings;
   }
 };
@@ -95,7 +95,7 @@ export const useUserSettings = () => {
       setUserSettings(settings);
       setLoading(false);
     };
-    
+
     initializeSettings();
   }, []);
 
@@ -104,7 +104,7 @@ export const useUserSettings = () => {
     const persistSettings = async () => {
       // Don't persist if still loading initial settings
       if (loading) return;
-      
+
       try {
         const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
         const adapter = await persistence;
@@ -120,7 +120,7 @@ export const useUserSettings = () => {
         }
       }
     };
-    
+
     persistSettings();
   }, [userSettings, loading]);
 
@@ -151,6 +151,7 @@ export const useUserSettings = () => {
   };
 
   return {
+    userId: getUserId(),
     userSettings,
     loading,
     updateUsername,

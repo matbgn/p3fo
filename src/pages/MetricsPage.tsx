@@ -3,8 +3,11 @@ import HighImpactTaskMetric from "@/components/HighImpactTaskMetric";
 import FailureRateMetric from "@/components/FailureRateMetric";
 import QualityOfLifeIndexMetric from "@/components/QualityOfLifeIndexMetric";
 import NewCapabilitiesMetric from "@/components/NewCapabilitiesMetric";
+import Forecast from "@/components/Forecast/Forecast";
 
 const MetricsPage: React.FC = () => {
+  const [activeTab, setActiveTab] = React.useState("forecast");
+
   return (
     <div className="flex flex-col gap-6 h-full">
       {/* Top pane for collaborative metrics cards */}
@@ -13,13 +16,13 @@ const MetricsPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* High Impact Task Achievement Frequency Metric */}
           <HighImpactTaskMetric />
-          
+
           {/* Failure Rate Metric */}
           <FailureRateMetric />
-          
+
           {/* Quality of Life Index Metric (third position) */}
           <QualityOfLifeIndexMetric />
-          
+
           {/* Time spent on New Capabilities Metric */}
           <NewCapabilitiesMetric />
         </div>
@@ -31,20 +34,35 @@ const MetricsPage: React.FC = () => {
         <div className="flex flex-col h-full">
           {/* Subtab navigation */}
           <div className="flex border-b mb-4">
-            <button className="px-4 py-2 font-medium border-b-2 border-primary text-primary">
-              Tab 1
+            <button
+              className={`px-4 py-2 font-medium ${activeTab === "forecast" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              onClick={() => setActiveTab("forecast")}
+            >
+              Forecast
             </button>
-            <button className="px-4 py-2 font-medium text-muted-foreground hover:text-foreground">
+            <button
+              className={`px-4 py-2 font-medium ${activeTab === "tab2" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              onClick={() => setActiveTab("tab2")}
+            >
               Tab 2
             </button>
-            <button className="px-4 py-2 font-medium text-muted-foreground hover:text-foreground">
+            <button
+              className={`px-4 py-2 font-medium ${activeTab === "tab3" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              onClick={() => setActiveTab("tab3")}
+            >
               Tab 3
             </button>
           </div>
-          
+
           {/* Graphics area */}
-          <div className="flex-1 flex items-center justify-center bg-muted rounded-lg">
-            <p className="text-muted-foreground">Graphics content will appear here</p>
+          <div className="flex-1 bg-muted/10 rounded-lg p-4 overflow-auto">
+            {activeTab === "forecast" ? (
+              <Forecast />
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-muted-foreground">Graphics content for {activeTab} will appear here</p>
+              </div>
+            )}
           </div>
         </div>
       </section>

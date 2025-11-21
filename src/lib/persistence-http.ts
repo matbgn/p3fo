@@ -29,7 +29,7 @@ export class HttpApiPersistence implements PersistenceAdapter {
     return response.json();
   }
 
- // Tasks
+  // Tasks
   async listTasks(): Promise<TaskEntity[]> {
     return this.makeRequest('/api/tasks');
   }
@@ -58,12 +58,12 @@ export class HttpApiPersistence implements PersistenceAdapter {
     });
   }
 
- async bulkUpdatePriorities(items: { id: string; priority: number | undefined }[]): Promise<void> {
+  async bulkUpdatePriorities(items: { id: string; priority: number | undefined }[]): Promise<void> {
     await this.makeRequest('/api/tasks/bulk-priorities', {
       method: 'POST',
       body: JSON.stringify({ items }),
     });
- }
+  }
 
   async clearAllTasks(): Promise<void> {
     await this.makeRequest('/api/tasks/clear', {
@@ -71,7 +71,7 @@ export class HttpApiPersistence implements PersistenceAdapter {
     });
   }
 
- async importTasks(tasks: TaskEntity[]): Promise<void> {
+  async importTasks(tasks: TaskEntity[]): Promise<void> {
     await this.makeRequest('/api/tasks/import', {
       method: 'POST',
       body: JSON.stringify(tasks),
@@ -90,6 +90,10 @@ export class HttpApiPersistence implements PersistenceAdapter {
     });
   }
 
+  async listUsers(): Promise<UserSettingsEntity[]> {
+    return this.makeRequest('/api/users');
+  }
+
   // App settings
   async getSettings(): Promise<AppSettingsEntity> {
     return this.makeRequest('/api/settings');
@@ -102,24 +106,24 @@ export class HttpApiPersistence implements PersistenceAdapter {
     });
   }
 
- // QoL survey
+  // QoL survey
   async getQolSurveyResponse(): Promise<QolSurveyResponseEntity | null> {
     return this.makeRequest('/api/qol');
   }
 
- async saveQolSurveyResponse(data: QolSurveyResponseEntity): Promise<void> {
+  async saveQolSurveyResponse(data: QolSurveyResponseEntity): Promise<void> {
     await this.makeRequest('/api/qol', {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   }
 
- // Filters
+  // Filters
   async getFilters(): Promise<FilterStateEntity | null> {
     return this.makeRequest('/api/filters');
   }
 
- async saveFilters(data: FilterStateEntity): Promise<void> {
+  async saveFilters(data: FilterStateEntity): Promise<void> {
     await this.makeRequest('/api/filters', {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -132,7 +136,7 @@ export class HttpApiPersistence implements PersistenceAdapter {
     });
   }
 
- // Metadata
+  // Metadata
   async getMetadata(): Promise<StorageMetadata> {
     // We'll need to enhance the backend to provide this info
     // For now, we'll default to sqlite as specified in the proposal
@@ -141,5 +145,5 @@ export class HttpApiPersistence implements PersistenceAdapter {
       backend: 'sqlite', // Default assumption until backend provides this info
       version: '1.0.0',
     };
- }
+  }
 }

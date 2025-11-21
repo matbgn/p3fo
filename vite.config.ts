@@ -11,6 +11,10 @@ export default defineConfig(({ mode }) => {
     server: {
       host: true, // This makes the dev server listen on all network interfaces
       allowedHosts: env.VITE_ALLOWED_HOSTS ? env.VITE_ALLOWED_HOSTS.split(',') : [],
+      watch: {
+        ignored: ['**/node_modules/**', '**/dist/**', '**/.git/**'],
+        usePolling: true,
+      },
       proxy: {
         '/ws': {
           target: 'ws://localhost:3000',

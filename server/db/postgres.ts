@@ -1,22 +1,23 @@
 import { Pool, PoolClient } from 'pg';
 import { DbClient } from './index';
-import { 
-  TaskEntity, 
-  UserSettingsEntity, 
-  AppSettingsEntity, 
-  QolSurveyResponseEntity, 
-  FilterStateEntity 
+import {
+  TaskEntity,
+  UserSettingsEntity,
+  AppSettingsEntity,
+  QolSurveyResponseEntity,
+  FilterStateEntity
 } from '../../src/lib/persistence-types';
 
 // Default values
 const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
+  userId: 'default-user',
   username: 'User',
   logo: '',
   has_completed_onboarding: false,
 };
 
 const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
- split_time: 40,
+  split_time: 40,
   user_workload_percentage: 80,
   weeks_computation: 4,
   high_impact_task_goal: 5,
@@ -43,7 +44,7 @@ export async function createPostgresClient(connectionString?: string): Promise<D
 }
 
 class PostgresClient implements DbClient {
-  constructor(private pool: Pool) {}
+  constructor(private pool: Pool) { }
 
   async initialize(): Promise<void> {
     // Create tasks table
@@ -135,7 +136,7 @@ class PostgresClient implements DbClient {
         data JSONB -- JSONB for efficient JSON operations
       )
     `);
- }
+  }
 
   async testConnection(): Promise<void> {
     const client = await this.pool.connect();
@@ -151,7 +152,7 @@ class PostgresClient implements DbClient {
   }
 
   // Tasks
- async getTasks(): Promise<TaskEntity[]> {
+  async getTasks(): Promise<TaskEntity[]> {
     const result = await this.pool.query(`
       SELECT * FROM tasks ORDER BY priority DESC NULLS LAST, created_at ASC
     `);
@@ -249,7 +250,7 @@ class PostgresClient implements DbClient {
 
   async updateTask(id: string, data: Partial<TaskEntity>): Promise<TaskEntity | null> {
     console.log('PostgreSQL: updateTask called with:', { id, data });
-    
+
     // First get the current task
     const currentTask = await this.getTaskById(id);
     if (!currentTask) {
@@ -278,7 +279,7 @@ class PostgresClient implements DbClient {
       updatedTask.user_id,
       id
     ];
-    
+
     console.log('PostgreSQL: Executing update with params:', JSON.stringify(params, null, 2));
 
     const result = await this.pool.query(`
@@ -294,7 +295,7 @@ class PostgresClient implements DbClient {
     return updatedTask;
   }
 
- async deleteTask(id: string): Promise<void> {
+  async deleteTask(id: string): Promise<void> {
     await this.pool.query('DELETE FROM tasks WHERE id = $1', [id]);
   }
 
@@ -303,14 +304,14 @@ class PostgresClient implements DbClient {
     const client: PoolClient = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      
+
       for (const { id, priority } of items) {
         await client.query(
           'UPDATE tasks SET priority = $1 WHERE id = $2',
           [priority, id]
         );
       }
-      
+
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK');
@@ -329,7 +330,7 @@ class PostgresClient implements DbClient {
     const client: PoolClient = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      
+
       for (const task of tasks) {
         await client.query(`
           INSERT INTO tasks (id, parent_id, title, created_at, triage_status, urgent, impact, major_incident, 
@@ -369,7 +370,7 @@ class PostgresClient implements DbClient {
           task.user_id,
         ]);
       }
-      
+
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK');
@@ -393,25 +394,26 @@ class PostgresClient implements DbClient {
     return DEFAULT_USER_SETTINGS;
   }
 
-  async updateUserSettings(data: Partial<UserSettingsEntity>): Promise<UserSettingsEntity> {
-    const current = await this.getUserSettings();
-    const updated = { ...current, ...data };
+  async updateUserSettings(userId: string, data: Partial<UserSettingsEntity>): Promise<UserSettingsEntity> {
+    const current = await this.getUserSettings(userId) || { ...DEFAULT_USER_SETTINGS, userId };
+    const updated = { ...current, ...data, userId };
 
     await this.pool.query(`
-      INSERT INTO user_settings (id, username, logo, has_completed_onboarding)
-      VALUES (1, $1, $2, $3)
-      ON CONFLICT (id) DO UPDATE SET
+      INSERT INTO user_settings (user_id, username, logo, has_completed_onboarding)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (user_id) DO UPDATE SET
         username = EXCLUDED.username,
         logo = EXCLUDED.logo,
         has_completed_onboarding = EXCLUDED.has_completed_onboarding
     `, [
+      updated.userId,
       updated.username,
       updated.logo,
       updated.has_completed_onboarding
     ]);
 
     return updated;
- }
+  }
 
   // App settings
   async getAppSettings(): Promise<AppSettingsEntity> {
@@ -460,8 +462,18 @@ class PostgresClient implements DbClient {
     return updated;
   }
 
+  async listUsers(): Promise<UserSettingsEntity[]> {
+    const result = await this.pool.query('SELECT * FROM user_settings');
+    return result.rows.map(row => ({
+      userId: row.user_id, // Note: Postgres returns column names as is
+      username: row.username,
+      logo: row.logo,
+      has_completed_onboarding: row.has_completed_onboarding,
+    }));
+  }
+
   // QoL survey
- async getQolSurveyResponse(): Promise<QolSurveyResponseEntity | null> {
+  async getQolSurveyResponse(): Promise<QolSurveyResponseEntity | null> {
     const result = await this.pool.query('SELECT responses FROM qol_survey WHERE id = 1');
     if (result.rows.length > 0 && result.rows[0].responses) {
       return result.rows[0].responses;

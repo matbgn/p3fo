@@ -100,6 +100,7 @@ export interface PersistenceAdapter {
   // User settings
   getUserSettings(userId: string): Promise<UserSettingsEntity | null>;
   updateUserSettings(userId: string, patch: Partial<UserSettingsEntity>): Promise<UserSettingsEntity>;
+  listUsers(): Promise<UserSettingsEntity[]>;
 
   // App settings
   getSettings(): Promise<AppSettingsEntity>;

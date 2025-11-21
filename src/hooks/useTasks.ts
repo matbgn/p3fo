@@ -1251,6 +1251,11 @@ export function useTasks() {
   const clearAllTasks = React.useCallback(async () => {
     tasks = [];
 
+    // Clear Yjs state
+    doc.transact(() => {
+      yTasks.clear();
+    });
+
     // Persist to backend
     try {
       const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());

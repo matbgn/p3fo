@@ -157,7 +157,17 @@ app.post('/api/tasks/init-defaults', async (req: Request, res: Response) => {
   }
 });
 
-// User settings routes
+// User settings
+app.get('/api/users', async (req: Request, res: Response) => {
+  try {
+    const users = await db.listUsers();
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
 app.get('/api/user-settings/:userId', async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;

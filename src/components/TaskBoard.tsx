@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Plus, CornerDownRight, FolderTree, Printer, Filter } from "lucide-react";
 import { FilterControls, Filters } from "./FilterControls";
 import { useTasks, Task, TriageStatus } from "@/hooks/useTasks";
+import { useUserSettings } from "@/hooks/useUserSettings";
 import { QuickTimer } from "@/components/QuickTimer";
 import { aStarTextSearch } from "@/lib/a-star-search";
 import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
@@ -20,6 +21,7 @@ type Column = {
 
 const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId }) => {
   const { tasks, createTask, reparent, updateStatus, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleDone, updateTaskTimer, toggleTimer, updateTimeEntry, updateCategory, updateComment, updateTerminationDate, updateDurationInMinutes } = useTasks();
+  const { userId: currentUserId } = useUserSettings();
   const map = React.useMemo(() => byId(tasks), [tasks]);
 
   const [path, setPath] = React.useState<string[]>([]);
@@ -52,7 +54,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
         setLoadingFilters(false);
       }
     };
-    
+
     loadFilters();
   }, []);
 
@@ -453,7 +455,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                               }
                             }
                           }}
-                          updateUser={updateUser}
+                          updateUser={(id, userId) => updateUser(id, userId === 'current-user' ? currentUserId : userId)}
                           deleteTask={deleteTask}
                           duplicateTaskStructure={duplicateTaskStructure}
                           toggleUrgent={toggleUrgent}
@@ -467,7 +469,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                             if (task && task.children && task.children.length > 0) {
                               // Jump to the first child and highlight it
                               const firstChildId = task.children[0];
-                              
+
                               // Build full path to parent and then to first child
                               const newPath: string[] = [];
                               let current: Task | undefined = task;
@@ -477,10 +479,10 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                               }
                               // Add first child to the end
                               newPath.push(firstChildId);
-                              
+
                               setPath(newPath);
                               setHighlightedTaskId(firstChildId); // Highlight the first child
-                              
+
                               // Scroll to the highlighted child after a short delay
                               setTimeout(() => {
                                 cardRefs.current[firstChildId]?.scrollIntoView({

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTasks, Task } from '@/hooks/useTasks';
+import { useUserSettings } from '@/hooks/useUserSettings';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TaskCard } from './TaskCard'; // Import TaskCard
 import ComparativePrioritizationView from './ComparativePrioritizationView'; // Import the new component
@@ -16,6 +17,7 @@ interface PlanViewProps {
 
 const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
   const { tasks, updateStatus, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleUrgent, toggleImpact, toggleMajorIncident, toggleDone, toggleTimer, reparent, updateTerminationDate, updateComment, updateDurationInMinutes, updatePriority, createTask } = useTasks();
+  const { userId: currentUserId } = useUserSettings();
 
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<'storyboard' | 'prioritization'>('storyboard'); // New state for view switching
@@ -50,7 +52,7 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
         setLoadingFilters(false);
       }
     };
-    
+
     loadFilters();
   }, []);
 
@@ -152,19 +154,19 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
 
     const draggedTask = tasks.find(task => task.id === draggedTaskId);
     const targetTask = tasks.find(task => task.id === targetTaskId);
-    
+
     if (!draggedTask || !targetTask) return;
 
     // Get visible top-level tasks that are not Done or Dropped (same filter as prioritizedTasks)
     const visibleTopLevelTasks = tasks.filter(task => !task.parentId && task.triageStatus !== 'Done' && task.triageStatus !== 'Dropped');
-    
+
     // Get the sorted order (this is what the user sees in the UI)
     const currentDisplayOrder = [...visibleTopLevelTasks].sort(sortTasks.plan);
-    
+
     // Find positions in the display order (what the user sees)
     const draggedIndex = currentDisplayOrder.findIndex(task => task.id === draggedTaskId);
     const targetIndex = currentDisplayOrder.findIndex(task => task.id === targetTaskId);
-    
+
     if (targetIndex === -1 && targetTaskId !== '') {
       // If target not found in display list but targetTaskId is not empty, return
       return;
@@ -283,7 +285,7 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
                       updateDifficulty={updateDifficulty}
                       updateCategory={updateCategory}
                       updateTitle={updateTitle}
-                      updateUser={updateUser}
+                      updateUser={(id, userId) => updateUser(id, userId === 'current-user' ? currentUserId : userId)}
                       deleteTask={deleteTask}
                       duplicateTaskStructure={duplicateTaskStructure}
                       toggleUrgent={toggleUrgent}
@@ -300,7 +302,7 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
                       open={!!openParents[task.id]}
                       onToggleOpen={toggleParent}
                     />
-                    
+
                     {/* Render subtasks when expanded */}
                     {openParents[task.id] && children.length > 0 && (
                       <div className="mt-2 space-y-2">
@@ -319,7 +321,7 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
                               updateDifficulty={updateDifficulty}
                               updateCategory={updateCategory}
                               updateTitle={updateTitle}
-                              updateUser={updateUser}
+                              updateUser={(id, userId) => updateUser(id, userId === 'current-user' ? currentUserId : userId)}
                               deleteTask={deleteTask}
                               duplicateTaskStructure={duplicateTaskStructure}
                               toggleUrgent={toggleUrgent}

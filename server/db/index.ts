@@ -8,7 +8,7 @@ export interface DbClient {
   close?(): Promise<void>;
 
   // Tasks
- getTasks(): Promise<TaskEntity[]>;
+  getTasks(): Promise<TaskEntity[]>;
   getTaskById(id: string): Promise<TaskEntity | null>;
   createTask(task: Partial<TaskEntity>): Promise<TaskEntity>;
   updateTask(id: string, data: Partial<TaskEntity>): Promise<TaskEntity | null>;
@@ -18,11 +18,12 @@ export interface DbClient {
   importTasks(tasks: TaskEntity[]): Promise<void>;
 
   // User settings
-  getUserSettings(): Promise<UserSettingsEntity>;
-  updateUserSettings(data: Partial<UserSettingsEntity>): Promise<UserSettingsEntity>;
+  getUserSettings(userId: string): Promise<UserSettingsEntity | null>;
+  updateUserSettings(userId: string, data: Partial<UserSettingsEntity>): Promise<UserSettingsEntity>;
+  listUsers(): Promise<UserSettingsEntity[]>;
 
   // App settings
- getAppSettings(): Promise<AppSettingsEntity>;
+  getAppSettings(): Promise<AppSettingsEntity>;
   updateAppSettings(data: Partial<AppSettingsEntity>): Promise<AppSettingsEntity>;
 
   // QoL survey
@@ -30,7 +31,7 @@ export interface DbClient {
   saveQolSurveyResponse(data: QolSurveyResponseEntity): Promise<void>;
 
   // Filters
- getFilters(): Promise<FilterStateEntity | null>;
+  getFilters(): Promise<FilterStateEntity | null>;
   saveFilters(data: FilterStateEntity): Promise<void>;
   clearFilters(): Promise<void>;
 }

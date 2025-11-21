@@ -257,7 +257,7 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
   const [isDateTimeBlockOpen, setIsDateTimeBlockOpen] = React.useState(false); // New state for date/time block
   const [isReminderActive, setIsReminderActive] = React.useState(false); // New state for reminder active status
   const { scheduledReminders, updateScheduledReminderTriggerDate, dismissReminder } = useReminderStore();
-  const { userSettings } = useUserSettings();
+  const { userSettings, userId: currentUserId } = useUserSettings();
 
   React.useEffect(() => {
     setCommentText(task.comment || "");
@@ -528,9 +528,9 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
                       // Check if a reminder with the same taskId and originalTriggerDate already exists
                       const existingReminder = scheduledReminders.find(
                         r => r.taskId === task.id &&
-                             r.originalTriggerDate === new Date(task.terminationDate || 0).toISOString()
+                          r.originalTriggerDate === new Date(task.terminationDate || 0).toISOString()
                       );
-                      
+
                       if (existingReminder) {
                         // If it exists, update it instead of creating a new one
                         updateScheduledReminderTriggerDate(task.id, new Date(task.terminationDate).toISOString(), newOffset);
@@ -649,7 +649,7 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
           </button>
           <UserSelector
             value={task.userId || ''}
-            onChange={(userId) => updateUser(task.id, userId === 'current-user' ? userSettings.username : userId)}
+            onChange={(selectedId) => updateUser(task.id, selectedId === 'current-user' ? currentUserId : selectedId)}
           />
         </div>
       )}
@@ -698,7 +698,7 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
           </div>
           <UserSelector
             value={task.userId || ''}
-            onChange={(userId) => updateUser(task.id, userId === 'current-user' ? userSettings.username : userId)}
+            onChange={(selectedId) => updateUser(task.id, selectedId === 'current-user' ? currentUserId : selectedId)}
           />
         </div>
       )}

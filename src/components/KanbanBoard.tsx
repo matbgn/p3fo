@@ -10,6 +10,7 @@ import { aStarTextSearch } from "@/lib/a-star-search";
 import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
 import { sortTasks } from "@/utils/taskSorting";
 import { QuickTimer } from "@/components/QuickTimer";
+import { useUserSettings } from "@/hooks/useUserSettings";
 
 type BoardCard =
   | { kind: "parent"; task: Task }
@@ -190,6 +191,7 @@ const Column: React.FC<{
 
 const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ onFocusOnTask }) => {
   const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, reparent, toggleDone, toggleTimer, updateTerminationDate, updateDurationInMinutes, updateComment } = useTasks();
+  const { userId: currentUserId } = useUserSettings();
 
   const defaultKanbanFilters: Filters = {
     showUrgent: false,
@@ -218,21 +220,21 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
         setLoadingFilters(false);
       }
     };
-    
+
     loadFilters();
   }, []);
 
   const map = React.useMemo(() => byId(tasks), [tasks]);
   const topTasks = React.useMemo(() => {
     let filtered = tasks.filter((t) => !t.parentId);
-    
+
     // Apply text search filter using A* algorithm
     if (filters.searchText?.trim()) {
       const searchResults = aStarTextSearch(filters.searchText, filtered.map(t => ({ id: t.id, title: t.title })));
       const matchingTaskIds = new Set(searchResults.filter(r => r.score >= 0.001).map(r => r.taskId));
       filtered = filtered.filter(t => matchingTaskIds.has(t.id));
     }
-    
+
     if (filters.showUrgent) filtered = filtered.filter(t => t.urgent);
     if (filters.showImpact) filtered = filtered.filter(t => t.impact);
     if (filters.showMajorIncident) filtered = filtered.filter(t => t.majorIncident);
@@ -278,11 +280,11 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
     const onTimerToggled = () => {
       setForceRender({});
     };
-    
+
     const onTasksChanged = () => {
       setForceRender({});
     };
-    
+
     eventBus.subscribe("timerToggled", onTimerToggled);
     eventBus.subscribe("tasksChanged", onTasksChanged);
     return () => {
@@ -343,7 +345,7 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
       });
     }
 
-    return acc;  
+    return acc;
   }, [topTasks, map, tasks]); // Added tasks as dependency to ensure re-render when tasks change
 
   // Quick add
@@ -390,10 +392,10 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
           }} />
         </div>
       </div>
- 
-       <div className="flex gap-4 pb-4">
-         {STATUSES.map((s) => (
-           <Column
+
+      <div className="flex gap-4 pb-4">
+        {STATUSES.map((s) => (
+          <Column
             key={s}
             title={s}
             cards={grouped[s]}
@@ -401,7 +403,7 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
             onDropTask={(id, status) => updateStatus(id, status)}
             onChangeStatus={(id, status) => updateStatus(id, status)}
             onUpdateCategory={(id, category) => updateCategory(id, category)}
-            onUpdateUser={(id, userId) => updateUser(id, userId)}
+            onUpdateUser={(id, userId) => updateUser(id, userId === 'current-user' ? currentUserId : userId)}
             onToggleUrgent={toggleUrgent}
             onToggleImpact={toggleImpact}
             onToggleMajorIncident={toggleMajorIncident}
