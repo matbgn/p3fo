@@ -28,6 +28,49 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
   new_capabilities_goal: 3,
 };
 
+interface TaskRow {
+  id: string;
+  parent_id: string | null;
+  title: string;
+  created_at: string;
+  triage_status: string;
+  urgent: number;
+  impact: number;
+  major_incident: number;
+  difficulty: number;
+  timer: string | null;
+  category: string;
+  termination_date: string | null;
+  comment: string | null;
+  duration_in_minutes: number | null;
+  priority: number | null;
+  user_id: string | null;
+}
+
+interface UserSettingsRow {
+  user_id: string;
+  username: string;
+  logo: string;
+  has_completed_onboarding: number;
+  workload_percentage: number;
+  split_time: string;
+}
+
+interface AppSettingsRow {
+  split_time: number;
+  user_workload_percentage: number;
+  weeks_computation: number;
+  high_impact_task_goal: number;
+  failure_rate_goal: number;
+  qli_goal: number;
+  new_capabilities_goal: number;
+}
+
+interface JsonRow {
+  data?: string;
+  responses?: string;
+}
+
 export async function createSqliteClient(dbFile: string = './p3fo.db'): Promise<DbClient> {
   const db = new DatabaseSync(dbFile);
 
@@ -76,6 +119,25 @@ class SqliteClient implements DbClient {
       )
     `);
 
+    // Migration: Add workload_percentage if it doesn't exist
+    try {
+      const columns = this.db.prepare("PRAGMA table_info(user_settings)").all() as { name: string }[];
+      const hasWorkload = columns.some(c => c.name === 'workload_percentage');
+      const hasSplitTime = columns.some(c => c.name === 'split_time');
+
+      if (!hasWorkload) {
+        console.log('SQLite: Migrating user_settings, adding workload_percentage');
+        this.db.exec("ALTER TABLE user_settings ADD COLUMN workload_percentage REAL DEFAULT 60");
+      }
+
+      if (!hasSplitTime) {
+        console.log('SQLite: Migrating user_settings, adding split_time');
+        this.db.exec("ALTER TABLE user_settings ADD COLUMN split_time TEXT DEFAULT '13:00'");
+      }
+    } catch (error) {
+      console.error('SQLite: Error checking/migrating schema:', error);
+    }
+
     // Create app_settings table (single row)
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS app_settings (
@@ -98,7 +160,7 @@ class SqliteClient implements DbClient {
                                   high_impact_task_goal, failure_rate_goal, qli_goal, new_capabilities_goal) 
         VALUES (1, @split_time, @user_workload_percentage, @weeks_computation, 
                 @high_impact_task_goal, @failure_rate_goal, @qli_goal, @new_capabilities_goal)
-      `).run(DEFAULT_APP_SETTINGS);
+      `).run(DEFAULT_APP_SETTINGS as unknown as Record<string, string | number | null>);
     }
 
     // Create qol_survey table (single row)
@@ -129,7 +191,7 @@ class SqliteClient implements DbClient {
   // Tasks
   async getTasks(userId?: string): Promise<TaskEntity[]> {
     let query = 'SELECT * FROM tasks';
-    const params: any[] = [];
+    const params: (string | number)[] = [];
 
     if (userId) {
       query += ' WHERE user_id = ?';
@@ -138,7 +200,7 @@ class SqliteClient implements DbClient {
 
     query += ' ORDER BY priority DESC, created_at ASC';
 
-    const rows = this.db.prepare(query).all(...params) as any[];
+    const rows = this.db.prepare(query).all(...params) as unknown as TaskRow[];
 
     return rows.map(row => ({
       id: row.id,
@@ -163,7 +225,7 @@ class SqliteClient implements DbClient {
   async getTaskById(id: string): Promise<TaskEntity | null> {
     console.log('SQLite: getTaskById called with id:', id);
 
-    const row = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as any;
+    const row = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow | undefined;
     console.log('SQLite: getTaskById result:', row);
 
     if (!row) {
@@ -304,7 +366,7 @@ class SqliteClient implements DbClient {
   async deleteTask(id: string): Promise<void> {
     console.log('SQLite: deleteTask called with id:', id);
 
-    const deleteRecursive = this.db.transaction((taskId: string) => {
+    const deleteRecursive = (taskId: string) => {
       const children = this.db.prepare('SELECT id FROM tasks WHERE parent_id = ?').all(taskId) as { id: string }[];
       if (children.length > 0) {
         console.log(`SQLite: Deleting children of task ${taskId}:`, children.map(c => c.id));
@@ -315,9 +377,16 @@ class SqliteClient implements DbClient {
 
       const result = this.db.prepare('DELETE FROM tasks WHERE id = ?').run(taskId);
       console.log(`SQLite: Deleted task ${taskId}, result:`, result);
-    });
+    };
 
-    deleteRecursive(id);
+    this.db.exec('BEGIN');
+    try {
+      deleteRecursive(id);
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   async bulkUpdateTaskPriorities(items: { id: string; priority: number | undefined }[]): Promise<void> {
@@ -378,7 +447,7 @@ class SqliteClient implements DbClient {
 
   // User settings
   async getUserSettings(userId: string): Promise<UserSettingsEntity | null> {
-    const row = this.db.prepare('SELECT * FROM user_settings WHERE user_id = ?').get(userId) as any;
+    const row = this.db.prepare('SELECT * FROM user_settings WHERE user_id = ?').get(userId) as UserSettingsRow | undefined;
     if (!row) {
       return null;
     }
@@ -418,7 +487,7 @@ class SqliteClient implements DbClient {
   }
 
   async listUsers(): Promise<UserSettingsEntity[]> {
-    const rows = this.db.prepare('SELECT * FROM user_settings').all() as any[];
+    const rows = this.db.prepare('SELECT * FROM user_settings').all() as unknown as UserSettingsRow[];
     return rows.map(row => ({
       userId: row.user_id,
       username: row.username,
@@ -429,9 +498,38 @@ class SqliteClient implements DbClient {
     }));
   }
 
+  async migrateUser(oldUserId: string, newUserId: string): Promise<void> {
+    this.db.exec('BEGIN');
+    try {
+      // 1. Migrate tasks
+      this.db.prepare('UPDATE tasks SET user_id = ? WHERE user_id = ?').run(newUserId, oldUserId);
+
+      // 2. Migrate settings
+      // Check if new user settings exist
+      const newSettings = this.db.prepare('SELECT user_id FROM user_settings WHERE user_id = ?').get(newUserId);
+
+      if (!newSettings) {
+        // If new user settings don't exist, move old settings to new user
+        this.db.prepare('UPDATE user_settings SET user_id = ? WHERE user_id = ?').run(newUserId, oldUserId);
+      } else {
+        // If new user settings exist, delete old settings (merging is complex, we assume target settings prevail)
+        this.db.prepare('DELETE FROM user_settings WHERE user_id = ?').run(oldUserId);
+      }
+
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  async clearAllUsers(): Promise<void> {
+    this.db.prepare('DELETE FROM user_settings').run();
+  }
+
   // App settings
   async getAppSettings(): Promise<AppSettingsEntity> {
-    const row = this.db.prepare('SELECT * FROM app_settings WHERE id = 1').get() as any;
+    const row = this.db.prepare('SELECT * FROM app_settings WHERE id = 1').get() as AppSettingsRow | undefined;
     return row ? {
       split_time: row.split_time,
       user_workload_percentage: row.user_workload_percentage,
@@ -469,7 +567,7 @@ class SqliteClient implements DbClient {
 
   // QoL survey
   async getQolSurveyResponse(): Promise<QolSurveyResponseEntity | null> {
-    const row = this.db.prepare('SELECT responses FROM qol_survey WHERE id = 1').get() as any;
+    const row = this.db.prepare('SELECT responses FROM qol_survey WHERE id = 1').get() as JsonRow | undefined;
     return row?.responses ? JSON.parse(row.responses) : null;
   }
 
@@ -485,7 +583,7 @@ class SqliteClient implements DbClient {
 
   // Filters
   async getFilters(): Promise<FilterStateEntity | null> {
-    const row = this.db.prepare('SELECT data FROM filters WHERE id = 1').get() as any;
+    const row = this.db.prepare('SELECT data FROM filters WHERE id = 1').get() as JsonRow | undefined;
     return row?.data ? JSON.parse(row.data) : null;
   }
 

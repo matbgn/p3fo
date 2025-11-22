@@ -36,9 +36,9 @@ const QoLIndexSurveyPage: React.FC = () => {
         const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
         const adapter = await persistence;
         const savedResponses = await adapter.getQolSurveyResponse();
-        
+
         if (savedResponses && Object.keys(savedResponses).length > 0) {
-          setResponses(savedResponses);
+          setResponses(savedResponses as Record<string, string>);
         } else {
           // Fallback to localStorage for backward compatibility
           const legacyResponses = JSON.parse(localStorage.getItem('qolSurveyResponse') || '{}');
@@ -59,7 +59,7 @@ const QoLIndexSurveyPage: React.FC = () => {
         setLoading(false);
       }
     };
-    
+
     loadResponses();
   }, []);
 
@@ -69,7 +69,7 @@ const QoLIndexSurveyPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
       const adapter = await persistence;

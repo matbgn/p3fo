@@ -6,10 +6,22 @@ import { useTasks } from '@/hooks/useTasks';
 import { saveFiltersToSessionStorage, loadFiltersFromSessionStorage, clearFiltersFromSessionStorage } from "@/lib/filter-storage";
 import { Filters } from "./FilterControls";
 
+import { Task } from '@/hooks/useTasks';
+
+interface TimerEntry {
+  taskId: string;
+  taskTitle: string;
+  taskCategory: string | undefined;
+  taskParentId: string | undefined;
+  index: number;
+  startTime: number;
+  endTime: number;
+}
+
 // Define the props for ChronologicalView
 interface ChronologicalViewProps {
-  timerEntries: any[]; // You might want to create a more specific type for this
-  taskMap: Record<string, any>;
+  timerEntries: TimerEntry[];
+  taskMap: Record<string, Task>;
   onUpdateTimeEntry: (taskId: string, entryIndex: number, entry: { startTime: number; endTime: number }) => void;
   onUpdateTaskCategory: (taskId: string, category: string | undefined) => void;
   onDelete: (taskId: string, entryIndex: number) => void;
@@ -24,7 +36,7 @@ export const ChronologicalView: React.FC<ChronologicalViewProps> = ({
   onDelete,
   onJumpToTask,
 }) => {
- const { updateTimeEntry, updateCategory } = useTasks();
+  const { updateTimeEntry, updateCategory } = useTasks();
 
   const defaultChronologicalFilters: Filters = {
     showUrgent: false,
@@ -37,7 +49,7 @@ export const ChronologicalView: React.FC<ChronologicalViewProps> = ({
   };
 
   const [filters, setFilters] = React.useState<Filters>(defaultChronologicalFilters);
-  
+
   // Load filters on mount
   React.useEffect(() => {
     const loadFilters = async () => {
@@ -50,15 +62,15 @@ export const ChronologicalView: React.FC<ChronologicalViewProps> = ({
         console.error("Error loading filters:", error);
       }
     };
-    
+
     loadFilters();
   }, []);
 
- // Effect to update session storage when filters change
+  // Effect to update session storage when filters change
   useEffect(() => {
     // The FilterControls component now handles saving filters to session storage
     // No need to save here directly, as setFilters is passed to FilterControls
- }, [filters]);
+  }, [filters]);
 
   // Sort entries in reverse chronologically by start time
   const sortedEntries = [...timerEntries].sort((a, b) => b.startTime - a.startTime);

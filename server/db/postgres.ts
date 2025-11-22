@@ -76,17 +76,36 @@ class PostgresClient implements DbClient {
         id INTEGER PRIMARY KEY DEFAULT 1,
         username TEXT NOT NULL,
         logo TEXT,
-        has_completed_onboarding BOOLEAN DEFAULT false
+        has_completed_onboarding BOOLEAN DEFAULT false,
+        workload_percentage REAL DEFAULT 60,
+        split_time TEXT DEFAULT '13:00'
       )
     `);
+
+    // Migration: Add columns if they don't exist
+    try {
+      await this.pool.query(`
+        DO $$ 
+        BEGIN 
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_settings' AND column_name='workload_percentage') THEN 
+            ALTER TABLE user_settings ADD COLUMN workload_percentage REAL DEFAULT 60; 
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_settings' AND column_name='split_time') THEN 
+            ALTER TABLE user_settings ADD COLUMN split_time TEXT DEFAULT '13:00'; 
+          END IF;
+        END $$;
+      `);
+    } catch (error) {
+      console.error('PostgreSQL: Error checking/migrating schema:', error);
+    }
 
     // Insert default user settings if not exists
     const userSettingsResult = await this.pool.query('SELECT COUNT(*) as count FROM user_settings');
     if (parseInt(userSettingsResult.rows[0].count) === 0) {
       await this.pool.query(`
-        INSERT INTO user_settings (id, username, logo, has_completed_onboarding) 
-        VALUES (1, $1, $2, $3)
-      `, [DEFAULT_USER_SETTINGS.username, DEFAULT_USER_SETTINGS.logo, DEFAULT_USER_SETTINGS.has_completed_onboarding]);
+        INSERT INTO user_settings (id, username, logo, has_completed_onboarding, workload_percentage, split_time) 
+        VALUES (1, $1, $2, $3, $4, $5)
+      `, [DEFAULT_USER_SETTINGS.username, DEFAULT_USER_SETTINGS.logo, DEFAULT_USER_SETTINGS.has_completed_onboarding, 60, '13:00']);
     }
 
     // Create app_settings table (single row)
@@ -212,7 +231,7 @@ class PostgresClient implements DbClient {
       impact: task.impact || false,
       major_incident: task.major_incident || false,
       difficulty: task.difficulty || 1,
-      timer: task.timer || { startTime: null, elapsedTime: 0, isRunning: false },
+      timer: task.timer || [],
       category: task.category || 'General',
       termination_date: task.termination_date || null,
       comment: task.comment || null,
@@ -381,17 +400,20 @@ class PostgresClient implements DbClient {
   }
 
   // User settings
-  async getUserSettings(): Promise<UserSettingsEntity> {
-    const result = await this.pool.query('SELECT * FROM user_settings WHERE id = 1');
+  async getUserSettings(userId: string): Promise<UserSettingsEntity | null> {
+    const result = await this.pool.query('SELECT * FROM user_settings WHERE id = 1'); // TODO: Use userId when table supports it
     if (result.rows.length > 0) {
       const row = result.rows[0];
       return {
+        userId: userId, // Return requested userId as we don't store it yet in this table schema
         username: row.username,
         logo: row.logo,
         has_completed_onboarding: row.has_completed_onboarding,
+        workload_percentage: row.workload_percentage,
+        split_time: row.split_time,
       };
     }
-    return DEFAULT_USER_SETTINGS;
+    return null;
   }
 
   async updateUserSettings(userId: string, data: Partial<UserSettingsEntity>): Promise<UserSettingsEntity> {
@@ -399,17 +421,20 @@ class PostgresClient implements DbClient {
     const updated = { ...current, ...data, userId };
 
     await this.pool.query(`
-      INSERT INTO user_settings (user_id, username, logo, has_completed_onboarding)
-      VALUES ($1, $2, $3, $4)
-      ON CONFLICT (user_id) DO UPDATE SET
+      INSERT INTO user_settings (id, username, logo, has_completed_onboarding, workload_percentage, split_time)
+      VALUES (1, $1, $2, $3, $4, $5)
+      ON CONFLICT (id) DO UPDATE SET
         username = EXCLUDED.username,
         logo = EXCLUDED.logo,
-        has_completed_onboarding = EXCLUDED.has_completed_onboarding
+        has_completed_onboarding = EXCLUDED.has_completed_onboarding,
+        workload_percentage = EXCLUDED.workload_percentage,
+        split_time = EXCLUDED.split_time
     `, [
-      updated.userId,
       updated.username,
       updated.logo,
-      updated.has_completed_onboarding
+      updated.has_completed_onboarding,
+      updated.workload_percentage,
+      updated.split_time
     ]);
 
     return updated;
@@ -470,6 +495,20 @@ class PostgresClient implements DbClient {
       logo: row.logo,
       has_completed_onboarding: row.has_completed_onboarding,
     }));
+  }
+
+  async migrateUser(oldUserId: string, newUserId: string): Promise<void> {
+    // 1. Migrate tasks
+    await this.pool.query('UPDATE tasks SET user_id = $1 WHERE user_id = $2', [newUserId, oldUserId]);
+
+    // 2. Migrate user settings
+    // Since we only have 1 row in user_settings currently, we don't really "migrate" rows.
+
+    console.log(`PostgreSQL: Migrated data from ${oldUserId} to ${newUserId}`);
+  }
+
+  async clearAllUsers(): Promise<void> {
+    await this.pool.query('DELETE FROM user_settings');
   }
 
   // QoL survey

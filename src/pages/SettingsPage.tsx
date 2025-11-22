@@ -7,12 +7,14 @@ import { useCombinedSettings } from '@/hooks/useCombinedSettings';
 import { Label } from '@/components/ui/label';
 
 const SettingsPage: React.FC = () => {
-  const { clearAllTasks } = useTasks();
+  const { clearAllTasks, clearAllUsers } = useTasks();
   const { settings, updateSettings } = useCombinedSettings();
 
-  const handleClearData = () => {
+  const handleClearData = async () => {
     if (window.confirm('Are you sure you want to delete all task data? This action cannot be undone.')) {
-      clearAllTasks();
+      await clearAllTasks();
+      await clearAllUsers();
+      // Also clear app settings if needed, but for now just tasks and users as requested
     }
   };
 
@@ -22,7 +24,7 @@ const SettingsPage: React.FC = () => {
     } else {
       const numValue = parseFloat(value);
       if (!isNaN(numValue)) {
-        // @ts-ignore - we know the key matches and value is number
+        // we know the key matches and value is number
         updateSettings({ [key]: numValue });
       }
     }

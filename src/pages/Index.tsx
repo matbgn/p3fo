@@ -11,7 +11,7 @@ import QoLIndexSurveyPage from "./QoLIndexSurveyPage";
 import { addReminder } from "@/utils/reminders";
 import PlanView from "@/components/PlanView"; // Import PlanView
 import { Button } from "@/components/ui/button";
-import { useView } from "@/context/ViewContext";
+import { useView } from "@/hooks/useView";
 
 const Index: React.FC = () => {
   const { view, setView, focusedTaskId, handleFocusOnTask } = useView();

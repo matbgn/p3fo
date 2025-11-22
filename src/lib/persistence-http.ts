@@ -95,6 +95,19 @@ export class HttpApiPersistence implements PersistenceAdapter {
     return this.makeRequest('/api/users');
   }
 
+  async migrateUser(oldUserId: string, newUserId: string): Promise<void> {
+    await this.makeRequest('/api/users/migrate', {
+      method: 'POST',
+      body: JSON.stringify({ oldUserId, newUserId }),
+    });
+  }
+
+  async clearAllUsers(): Promise<void> {
+    await this.makeRequest('/api/users/clear', {
+      method: 'POST',
+    });
+  }
+
   // App settings
   async getSettings(): Promise<AppSettingsEntity> {
     return this.makeRequest('/api/settings');

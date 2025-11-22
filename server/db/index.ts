@@ -21,6 +21,8 @@ export interface DbClient {
   getUserSettings(userId: string): Promise<UserSettingsEntity | null>;
   updateUserSettings(userId: string, data: Partial<UserSettingsEntity>): Promise<UserSettingsEntity>;
   listUsers(): Promise<UserSettingsEntity[]>;
+  migrateUser(oldUserId: string, newUserId: string): Promise<void>;
+  clearAllUsers?(): Promise<void>; // Optional for now to avoid breaking changes immediately, but we will implement it
 
   // App settings
   getAppSettings(): Promise<AppSettingsEntity>;
@@ -43,13 +45,15 @@ export async function createDbClient(
   sqliteFile?: string
 ): Promise<DbClient> {
   switch (clientType.toLowerCase()) {
-    case 'sqlite':
+    case 'sqlite': {
       const { createSqliteClient } = await import('./sqlite');
       return createSqliteClient(sqliteFile);
+    }
     case 'pg':
-    case 'postgres':
+    case 'postgres': {
       const { createPostgresClient } = await import('./postgres');
       return createPostgresClient(dbUrl);
+    }
     default:
       throw new Error(`Unsupported database client: ${clientType}`);
   }

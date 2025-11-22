@@ -68,7 +68,7 @@ export interface AppSettingsEntity {
 
 export interface QolSurveyResponseEntity {
   // This will be the JSON object from the QoL survey
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface FilterStateEntity {
@@ -104,6 +104,7 @@ export interface PersistenceAdapter {
   updateUserSettings(userId: string, patch: Partial<UserSettingsEntity>): Promise<UserSettingsEntity>;
   listUsers(): Promise<UserSettingsEntity[]>;
   migrateUser(oldUserId: string, newUserId: string): Promise<void>;
+  clearAllUsers(): Promise<void>;
 
   // App settings
   getSettings(): Promise<AppSettingsEntity>;

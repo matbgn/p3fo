@@ -268,7 +268,7 @@ export const adjectives = [
   'zealous',
 ];
 
-const sample = (arr: any[]) => {
+const sample = <T>(arr: T[]) => {
   return arr[Math.floor(Math.random() * arr.length)];
 };
 

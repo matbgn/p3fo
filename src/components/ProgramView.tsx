@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Calendar, momentLocalizer } from 'react-big-calendar';
+import { Calendar, momentLocalizer, View } from 'react-big-calendar';
 import moment from 'moment';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import { Badge } from '@/components/ui/badge';
@@ -29,13 +29,12 @@ interface ProgramViewProps {
 const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
   const [selectedTask, setSelectedTask] = React.useState<Task | null>(null);
   const [view, setView] = React.useState('week');
-  const calendarRef = useRef<any>(null); // Ref for the Calendar component
+  const calendarRef = useRef<Calendar>(null); // Ref for the Calendar component
 
   useEffect(() => {
     if (calendarRef.current) {
       const scrollToTime = new Date();
       scrollToTime.setHours(12, 0, 0); // Set to 12 PM for middle of the day
-      calendarRef.current.get;
     }
   }, [view]); // Re-scroll if view changes
   const {
@@ -125,8 +124,8 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
               startAccessor="start"
               endAccessor="end"
               style={{ height: '100%' }}
-              view={view as any}
-              onView={v => setView(v as any)}
+              view={view as View}
+              onView={v => setView(v)}
               views={['week', 'month']}
               onSelectEvent={(event) => setSelectedTask(event.resource)}
               defaultView="week"

@@ -34,7 +34,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
   };
 
   const [filters, setFilters] = useState<Filters>(defaultComparativeFilters);
-  
+
   // Load filters on mount
   useEffect(() => {
     const loadFilters = async () => {
@@ -47,7 +47,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
         console.error("Error loading filters:", error);
       }
     };
-    
+
     loadFilters();
   }, []);
 
@@ -55,7 +55,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
   const [filterUrgent, setFilterUrgent] = useState<boolean | null>(null); // null = all, true = only urgent, false = exclude urgent
   const [filterImpact, setFilterImpact] = useState<boolean | null>(null); // null = all, true = only impact, false = exclude impact
   const [filterIncident, setFilterIncident] = useState<boolean | null>(null); // null = all, true = only incident, false = exclude incident
- const [comparisonState, setComparisonState] = useState<{
+  const [comparisonState, setComparisonState] = useState<{
     leftTask: Task | null;
     rightTask: Task | null;
     currentIndex: number;
@@ -72,7 +72,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
   const [initialTaskPriorities, setInitialTaskPriorities] = useState<Record<string, number | undefined>>({});
   const topLevelTasks = tasks.filter(task => !task.parentId); // Filter for top-level tasks
 
- // Effect to update session storage when filters change
+  // Effect to update session storage when filters change
   useEffect(() => {
     const newFilters: Filters = {
       ...filters,
@@ -81,14 +81,15 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
       showMajorIncident: filterIncident === null ? false : filterIncident,
     };
     setFilters(newFilters);
+    setFilters(newFilters);
     saveFiltersToSessionStorage(newFilters);
-  }, [filterUrgent, filterImpact, filterIncident]);
+  }, [filterUrgent, filterImpact, filterIncident, filters]);
 
   // Initialize selected tasks with all non-done, non-dropped top-level tasks
   useEffect(() => {
     setSelectedTasks(topLevelTasks.filter(task => task.triageStatus !== "Done" && task.triageStatus !== "Dropped"));
     setInitialTaskPriorities(Object.fromEntries(tasks.map(task => [task.id, task.priority])));
-  }, [tasks]);
+  }, [tasks, topLevelTasks]);
 
   // Filter tasks based on urgency, impact, and incident state
   const filterTasks = (tasks: Task[]): Task[] => {
@@ -97,21 +98,21 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
       if (filterUrgent !== null && task.urgent !== filterUrgent) {
         return false;
       }
-      
+
       // Apply impact filter
       if (filterImpact !== null && task.impact !== filterImpact) {
         return false;
       }
-      
+
       // Apply incident filter
       if (filterIncident !== null && task.majorIncident !== filterIncident) {
         return false;
       }
-      
+
       return true;
     });
   };
-  
+
   // Get filtered top-level tasks
   const filteredTopLevelTasks = filterTasks(topLevelTasks);
 
@@ -144,7 +145,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
         newPairs.push([selectedTasks[i].id, selectedTasks[j].id]);
       }
     }
- 
+
     setComparisonState({
       leftTask: selectedTasks.find(t => t.id === newPairs[0][0]) || null,
       rightTask: selectedTasks.find(t => t.id === newPairs[0][1]) || null,
@@ -273,7 +274,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
           <React.Fragment>
             <div className="mb-4">
               <h3 className="text-lg font-semibold mb-2">Select Tasks for Comparison:</h3>
-              
+
               {/* Filtering Controls */}
               <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
                 <h4 className="text-sm font-medium mb-2">Filter by Criticity:</h4>
@@ -307,7 +308,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                       </Button>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center space-x-2">
                     <label className="text-sm">High Impact:</label>
                     <div className="flex space-x-2">
@@ -337,7 +338,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                       </Button>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center space-x-2">
                     <label className="text-sm">Incident:</label>
                     <div className="flex space-x-2">
@@ -368,7 +369,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                     </div>
                   </div>
                 </div>
-              
+
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-60 overflow-y-auto pr-2 mt-4">
                 {filteredTopLevelTasks.map((task) => (
@@ -422,7 +423,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                 </Button>
               </div>
             </div>
- 
+
             {comparisonState.leftTask && comparisonState.rightTask && (
               <div className="mt-6 p-4 border rounded-lg bg-gray-50 dark:bg-gray-700">
                 <h3 className="text-lg font-semibold mb-4 text-center">Which is more important?</h3>

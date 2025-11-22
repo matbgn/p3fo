@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useCurrentUser } from '@/context/UserContext';
-import { usePersistence } from '@/lib/PersistenceProvider';
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { usePersistence } from "@/hooks/usePersistence";
 import { AppSettingsEntity } from '@/lib/persistence-types';
 
 /**

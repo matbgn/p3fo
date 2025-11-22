@@ -2,7 +2,8 @@ import React, { useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useTasks, Task, TriageStatus, Category } from "@/hooks/useTasks";
-import { byId, TaskCard } from "./TaskCard";
+import { TaskCard } from "./TaskCard";
+import { byId } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { eventBus } from "@/lib/events";
 import { FilterControls, Filters } from "./FilterControls";
@@ -355,7 +356,7 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
     }
 
     return acc;
-  }, [topTasks, map, tasks]); // Added tasks as dependency to ensure re-render when tasks change
+  }, [topTasks, map]); // Removed tasks as dependency as topTasks and map are derived from it
 
   // Quick add
   const [input, setInput] = React.useState("");

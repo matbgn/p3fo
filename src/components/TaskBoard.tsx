@@ -11,7 +11,8 @@ import { aStarTextSearch } from "@/lib/a-star-search";
 import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
 import { sortTasks } from "@/utils/taskSorting";
 
-import { byId, TaskCard } from "./TaskCard";
+import { TaskCard } from "./TaskCard";
+import { byId } from "@/lib/utils";
 
 type Column = {
   parentId: string | null;

@@ -195,6 +195,34 @@ app.post('/api/user-settings/:userId', async (req: Request, res: Response) => {
   }
 });
 
+app.post('/api/users/migrate', async (req: Request, res: Response) => {
+  try {
+    const { oldUserId, newUserId } = req.body;
+    if (!oldUserId || !newUserId) {
+      return res.status(400).json({ error: 'Missing oldUserId or newUserId' });
+    }
+    await db.migrateUser(oldUserId, newUserId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error migrating user:', error);
+    res.status(500).json({ error: 'Failed to migrate user' });
+  }
+});
+
+app.post('/api/users/clear', async (req: Request, res: Response) => {
+  try {
+    if (db.clearAllUsers) {
+      await db.clearAllUsers();
+      res.json({ success: true });
+    } else {
+      res.status(501).json({ error: 'Not implemented' });
+    }
+  } catch (error) {
+    console.error('Error clearing users:', error);
+    res.status(500).json({ error: 'Failed to clear users' });
+  }
+});
+
 // App settings routes
 app.get('/api/settings', async (req: Request, res: Response) => {
   try {
@@ -280,7 +308,7 @@ app.use('*', (req: Request, res: Response) => {
 });
 
 import { WebSocketServer } from 'ws';
-// @ts-ignore - y-websocket types are not perfect
+// @ts-expect-error - y-websocket types are not perfect
 import { setupWSConnection } from 'y-websocket/bin/utils';
 
 // Initialize database and start server
@@ -309,7 +337,7 @@ async function startServer() {
 
     server.on('upgrade', (request, socket, head) => {
       // You can handle authentication here if needed
-      const handleAuth = (ws: any) => {
+      const handleAuth = (ws: unknown) => {
         wss.emit('connection', ws, request);
       };
       wss.handleUpgrade(request, socket, head, handleAuth);

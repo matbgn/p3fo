@@ -1,7 +1,7 @@
 import React from 'react';
 import { useCursors } from '@/hooks/useCursors';
 import { MousePointer2 } from 'lucide-react';
-import { useView } from '@/context/ViewContext';
+import { useView } from "@/hooks/useView";
 
 export const CursorOverlay = () => {
     const cursors = useCursors();

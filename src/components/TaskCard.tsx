@@ -27,7 +27,8 @@ import {
 } from "@/components/ui/select";
 import { CategorySelect } from "./CategorySelect";
 import { Temporal } from '@js-temporal/polyfill';
-import { formatDuration, timestampToZurichInstant, instantToZurichPlainDateTime, zurichPlainDateTimeToTimestamp, cn } from '@/lib/utils';
+import { formatDuration, instantToZurichPlainDateTime, zurichPlainDateTimeToTimestamp, cn } from '@/lib/utils';
+import { timestampToZurichInstant } from '@/lib/format-utils';
 import { format } from "date-fns";
 import { addReminder } from "@/utils/reminders";
 import { useReminderStore } from "@/hooks/useReminders";
@@ -186,7 +187,7 @@ const DifficultyBadge: React.FC<{ difficulty: number }> = ({ difficulty }) => {
   );
 };
 
-export const byId = (arr: Task[]) => Object.fromEntries(arr.map((t) => [t.id, t]));
+
 
 interface TaskCardProps {
   task: Task;
@@ -317,6 +318,7 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
         // Store the entry index to scroll to it when the TimeSheet opens
         if (event.detail.entryIndex !== undefined) {
           // We'll use a global variable to pass this information to TimeSheet
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (window as any).scrollToTimeEntryIndex = event.detail.entryIndex;
         }
       }

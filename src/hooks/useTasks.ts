@@ -1,6 +1,6 @@
 import * as React from "react";
 import { eventBus } from "@/lib/events";
-import { usePersistence } from "@/lib/PersistenceProvider";
+import { usePersistence } from "@/hooks/usePersistence";
 import { yTasks, doc } from "@/lib/collaboration";
 
 // Polyfill for crypto.randomUUID if not available
@@ -181,6 +181,7 @@ const loadTasks = async () => {
     const raw = localStorage.getItem("dyad_task_board_v1");
     if (raw) {
       try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const parsed: Task[] = JSON.parse(raw).map((t: any) => {
           const { done, ...rest } = t;
           return {
@@ -1270,6 +1271,18 @@ export function useTasks() {
     eventBus.publish("tasksChanged");
   }, []);
 
+  const clearAllUsers = React.useCallback(async () => {
+    try {
+      const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+      const adapter = await persistence;
+      if (adapter.clearAllUsers) {
+        await adapter.clearAllUsers();
+      }
+    } catch (error) {
+      console.error("Error clearing all users:", error);
+    }
+  }, []);
+
   const importTasks = React.useCallback(async (importedTasks: Task[]) => {
     tasks = importedTasks;
 
@@ -1519,6 +1532,7 @@ export function useTasks() {
     duplicateTaskStructure,
     updateTaskTimer,
     clearAllTasks,
+    clearAllUsers,
     importTasks,
     calculateTotalTime: (taskId: string) => calculateTotalTime(taskId, tasks),
     calculateTotalDifficulty: (taskId: string) => calculateTotalDifficulty(taskId, tasks),

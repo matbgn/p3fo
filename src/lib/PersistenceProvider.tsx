@@ -1,18 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { PersistenceAdapter } from './persistence-types';
 import { getPersistenceAdapter } from './persistence-factory';
-
-// Create the context
-const PersistenceContext = createContext<PersistenceAdapter | null>(null);
-
-// Custom hook to use the persistence context
-export const usePersistence = (): PersistenceAdapter => {
-  const context = useContext(PersistenceContext);
-  if (!context) {
-    throw new Error('usePersistence must be used within a PersistenceProvider');
-  }
-  return context;
-};
+import { PersistenceContext } from '@/context/PersistenceContextDefinition';
 
 // Props for the provider component
 interface PersistenceProviderProps {

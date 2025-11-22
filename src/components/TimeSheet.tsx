@@ -13,7 +13,7 @@ interface TimeSheetProps {
 // Helper function to convert Unix timestamp to Europe/Zurich time string
 const formatTimeWithTemporal = (ms: number): string => {
   if (ms <= 0) return 'Invalid Date';
-  
+
   try {
     // Create an Instant from the timestamp
     const instant = Temporal.Instant.fromEpochMilliseconds(ms);
@@ -72,11 +72,13 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
   // Scroll to specific entry when requested
   React.useEffect(() => {
     // Check if we need to scroll to a specific entry
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const scrollToIndex = (window as any).scrollToTimeEntryIndex;
     if (scrollToIndex !== undefined && entryRefs.current[scrollToIndex]) {
       entryRefs.current[scrollToIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
       entryRefs.current[scrollToIndex].classList.add('timesheet-entry-highlight');
       // Clean up the global variable
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).scrollToTimeEntryIndex;
     }
   }, [task?.timer]);
@@ -89,17 +91,15 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
     deleteTimeEntry(taskId, index);
   };
 
-  if (!task) {
-    return <div>Task not found.</div>;
-  }
-
   // State for running timer
-  const [runningTime, setRunningTime] = React.useState<{[key: number]: number}>({});
+  const [runningTime, setRunningTime] = React.useState<{ [key: number]: number }>({});
 
   // Update running timers
   React.useEffect(() => {
+    if (!task) return;
+
     const interval = setInterval(() => {
-      const newRunningTimes: {[key: number]: number} = {};
+      const newRunningTimes: { [key: number]: number } = {};
       task.timer?.forEach((entry, index) => {
         if (!entry.endTime || entry.endTime === 0) {
           newRunningTimes[index] = Date.now() - entry.startTime;
@@ -109,32 +109,36 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [task.timer]);
+  }, [task?.timer, task]);
+
+  if (!task) {
+    return <div>Task not found.</div>;
+  }
 
   return (
     <div className="space-y-4">
       {task.timer?.map((entry, index) => {
         const startInstant = timestampToZurichInstant(entry.startTime);
         const startPlainDateTime = instantToZurichPlainDateTime(startInstant);
-        
-        const endInstant = entry.endTime && entry.endTime > 0 
-          ? timestampToZurichInstant(entry.endTime) 
+
+        const endInstant = entry.endTime && entry.endTime > 0
+          ? timestampToZurichInstant(entry.endTime)
           : null;
-        const endPlainDateTime = endInstant 
-          ? instantToZurichPlainDateTime(endInstant) 
+        const endPlainDateTime = endInstant
+          ? instantToZurichPlainDateTime(endInstant)
           : null;
-        
+
         // Calculate duration
-        const duration = entry.endTime && entry.endTime > 0 
-          ? entry.endTime - entry.startTime 
+        const duration = entry.endTime && entry.endTime > 0
+          ? entry.endTime - entry.startTime
           : runningTime[index] || 0;
-          
+
         // Check if end time is before start time (negative duration)
         const isNegativeDuration = entry.endTime && entry.endTime > 0 && entry.endTime < entry.startTime;
-        
+
         return (
-          <div 
-            key={index} 
+          <div
+            key={index}
             ref={el => entryRefs.current[index] = el as HTMLDivElement}
             className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors timesheet-entry"
           >
@@ -151,12 +155,12 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
                       const [datePart, timePart] = e.target.value.split('T');
                       const [year, month, day] = datePart.split('-').map(Number);
                       const [hour, minute, second] = timePart.split(':').map(Number);
-                      
+
                       // Create a PlainDateTime in Zurich timezone
                       const newPlainDateTime = Temporal.PlainDateTime.from({
                         year, month, day, hour, minute, second
                       });
-                      
+
                       const newTimestamp = zurichPlainDateTimeToTimestamp(newPlainDateTime);
                       handleUpdate(index, { ...entry, startTime: newTimestamp });
                     } catch (error) {
@@ -167,16 +171,16 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
                     // Handle keyboard navigation
                     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
                       e.preventDefault();
-                      
+
                       try {
                         let newPlainDateTime = Temporal.PlainDateTime.from(startPlainDateTime);
-                        
+
                         if (e.key === 'ArrowUp') {
                           newPlainDateTime = newPlainDateTime.add({ seconds: 1 });
                         } else {
                           newPlainDateTime = newPlainDateTime.subtract({ seconds: 1 });
                         }
-                        
+
                         const newTimestamp = zurichPlainDateTimeToTimestamp(newPlainDateTime);
                         handleUpdate(index, { ...entry, startTime: newTimestamp });
                       } catch (error) {
@@ -187,7 +191,7 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
                   className="flex-1"
                 />
               </div>
-              
+
               <div className="flex items-center gap-2 mt-2">
                 <div className="w-20 text-sm font-medium text-muted-foreground">End</div>
                 <Input
@@ -201,12 +205,12 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
                         const [datePart, timePart] = e.target.value.split('T');
                         const [year, month, day] = datePart.split('-').map(Number);
                         const [hour, minute, second] = timePart.split(':').map(Number);
-                        
+
                         // Create a PlainDateTime in Zurich timezone
                         const newPlainDateTime = Temporal.PlainDateTime.from({
                           year, month, day, hour, minute, second
                         });
-                        
+
                         const newTimestamp = zurichPlainDateTimeToTimestamp(newPlainDateTime);
                         handleUpdate(index, { ...entry, endTime: newTimestamp });
                       } catch (error) {
@@ -221,16 +225,16 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
                     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
                       e.preventDefault();
                       if (!endPlainDateTime) return;
-                      
+
                       try {
                         let newPlainDateTime = Temporal.PlainDateTime.from(endPlainDateTime);
-                        
+
                         if (e.key === 'ArrowUp') {
                           newPlainDateTime = newPlainDateTime.add({ seconds: 1 });
                         } else {
                           newPlainDateTime = newPlainDateTime.subtract({ seconds: 1 });
                         }
-                        
+
                         const newTimestamp = zurichPlainDateTimeToTimestamp(newPlainDateTime);
                         handleUpdate(index, { ...entry, endTime: newTimestamp });
                       } catch (error) {
@@ -245,7 +249,7 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
                 )}
               </div>
             </div>
-            
+
             <div className="flex flex-col items-center justify-center min-w-[100px] px-3">
               {duration > 0 && (
                 <div className="text-lg font-semibold timesheet-duration">
@@ -256,7 +260,7 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
                 <div className="text-sm text-muted-foreground animate-pulse">Running</div>
               )}
             </div>
-            
+
             <Button variant="destructive" size="icon" onClick={() => handleDelete(index)}>
               <Trash2 className="h-4 w-4" />
             </Button>

@@ -6,7 +6,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { usePersistence } from '@/lib/PersistenceProvider';
+import { usePersistence } from "@/hooks/usePersistence";
 import { UserSettingsEntity } from '@/lib/persistence-types';
 import { Label } from '@/components/ui/label';
 

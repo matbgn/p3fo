@@ -4,27 +4,10 @@ import { getRandomUsername } from '@/lib/username-generator';
 import { getPersistenceAdapter } from '@/lib/persistence-factory';
 import { UserSettingsEntity } from '@/lib/persistence-types';
 
+import { UserContext, UserContextType } from './UserContextDefinition';
+
 const USER_ID_COOKIE_NAME = 'p3fo_user_id';
 const COOKIE_EXPIRY_DAYS = 365 * 10; // 10 years
-
-export interface UserContextType {
-    userId: string | null;
-    userSettings: UserSettingsEntity | null;
-    loading: boolean;
-    updateUserSettings: (patch: Partial<UserSettingsEntity>) => Promise<void>;
-    refreshUserSettings: () => Promise<void>;
-    changeUserId: (newUserId: string) => Promise<void>;
-}
-
-const UserContext = createContext<UserContextType | undefined>(undefined);
-
-export const useCurrentUser = (): UserContextType => {
-    const context = useContext(UserContext);
-    if (context === undefined) {
-        throw new Error('useCurrentUser must be used within a UserProvider');
-    }
-    return context;
-};
 
 export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [userId, setUserId] = useState<string | null>(null);

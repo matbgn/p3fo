@@ -1,4 +1,4 @@
-type EventHandler = (data?: any) => void;
+type EventHandler = (data?: unknown) => void;
 
 class EventBus {
   private subscribers: { [event: string]: EventHandler[] } = {};
@@ -19,7 +19,7 @@ class EventBus {
     );
   }
 
-  publish(event: string, data?: any) {
+  publish(event: string, data?: unknown) {
     if (!this.subscribers[event]) {
       return;
     }

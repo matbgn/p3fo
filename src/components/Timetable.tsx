@@ -19,7 +19,8 @@ import { useNavigate } from "react-router-dom";
 import { TaskTag } from "./TaskTag";
 import { ChronologicalView } from "./ChronologicalView";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { EditableTimeEntry, formatDuration } from "./EditableTimeEntry";
+import { EditableTimeEntry } from "./EditableTimeEntry";
+import { formatDuration } from "@/lib/format-utils";
 import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 import { UserFilterSelector } from "@/components/UserFilterSelector";
 
@@ -190,7 +191,7 @@ export const Timetable: React.FC<{
       } else {
         // If task has no category, it should be shown if "Uncategorized" is selected
         // or if there are other categories selected (implying "show all" when no specific category is assigned)
-        if (!selectedCategories.includes("Uncategorized" as any) && selectedCategories.length > 0) {
+        if (!selectedCategories.includes("Uncategorized" as Category) && selectedCategories.length > 0) {
           return false;
         }
       }
@@ -471,9 +472,9 @@ export const Timetable: React.FC<{
               onChange={(category) => {
                 if (category && category !== "none" && !selectedCategories.includes(category)) {
                   setSelectedCategories([...selectedCategories, category]);
-                } else if (category === "none" && !selectedCategories.includes("Uncategorized" as any)) {
+                } else if (category === "none" && !selectedCategories.includes("Uncategorized" as Category)) {
                   // Handle "No category" selection
-                  setSelectedCategories([...selectedCategories, "Uncategorized" as any]);
+                  setSelectedCategories([...selectedCategories, "Uncategorized" as Category]);
                 }
               }}
               className="w-48"

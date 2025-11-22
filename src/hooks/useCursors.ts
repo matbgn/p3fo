@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { awareness } from '@/lib/collaboration';
 import { useUserSettings } from '@/hooks/useUserSettings';
-import { useView } from '@/context/ViewContext';
+import { useView } from "@/hooks/useView";
 
 // Define the cursor state structure
 export type CursorState = {

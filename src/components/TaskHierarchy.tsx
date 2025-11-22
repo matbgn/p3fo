@@ -1,13 +1,15 @@
 import React from 'react';
 import { TaskTag } from './TaskTag';
 
+import { Task } from '@/hooks/useTasks';
+
 interface TaskHierarchyProps {
-  task: any;
-  taskMap: Record<string, any>;
+  task: Task;
+  taskMap: Record<string, Task>;
 }
 
 export const TaskHierarchy: React.FC<TaskHierarchyProps> = ({ task, taskMap }) => {
-  const getHierarchy = (currentTask: any) => {
+  const getHierarchy = (currentTask: Task) => {
     const hierarchy = [];
     let parent = currentTask.parentId ? taskMap[currentTask.parentId] : null;
     while (parent) {
@@ -28,7 +30,7 @@ export const TaskHierarchy: React.FC<TaskHierarchyProps> = ({ task, taskMap }) =
       {hierarchy.map((p, index) => (
         <React.Fragment key={p.id}>
           <span>{p.title}</span>
-          <TaskTag 
+          <TaskTag
             impact={p.impact}
             urgent={p.urgent}
             majorIncident={p.majorIncident}
