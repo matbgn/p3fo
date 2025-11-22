@@ -103,6 +103,7 @@ export interface PersistenceAdapter {
   getUserSettings(userId: string): Promise<UserSettingsEntity | null>;
   updateUserSettings(userId: string, patch: Partial<UserSettingsEntity>): Promise<UserSettingsEntity>;
   listUsers(): Promise<UserSettingsEntity[]>;
+  migrateUser(oldUserId: string, newUserId: string): Promise<void>;
 
   // App settings
   getSettings(): Promise<AppSettingsEntity>;

@@ -237,6 +237,47 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
   }
 
+  async migrateUser(oldUserId: string, newUserId: string): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      // 1. Migrate tasks
+      const tasks = await this.listTasks();
+      let tasksChanged = false;
+
+      tasks.forEach(task => {
+        if (task.user_id === oldUserId) {
+          task.user_id = newUserId;
+          tasksChanged = true;
+        }
+      });
+
+      if (tasksChanged) {
+        localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
+      }
+
+      // 2. Migrate settings
+      const oldSettings = await this.getUserSettings(oldUserId);
+      if (oldSettings) {
+        // Save as new user settings, updating the ID
+        await this.updateUserSettings(newUserId, {
+          ...oldSettings,
+          userId: newUserId
+        });
+
+        // Remove old settings
+        localStorage.removeItem(`${USER_SETTINGS_STORAGE_KEY}_${oldUserId}`);
+      }
+
+      console.log(`Migrated data from ${oldUserId} to ${newUserId}`);
+    } catch (error) {
+      console.error('Error migrating user data:', error);
+      throw error;
+    }
+  }
+
   async getSettings(): Promise<AppSettingsEntity> {
     if (typeof window === 'undefined') {
       return DEFAULT_APP_SETTINGS;

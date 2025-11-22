@@ -13,6 +13,7 @@ export interface UserContextType {
     loading: boolean;
     updateUserSettings: (patch: Partial<UserSettingsEntity>) => Promise<void>;
     refreshUserSettings: () => Promise<void>;
+    changeUserId: (newUserId: string) => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -110,6 +111,43 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
+    // Change user ID and migrate data
+    const changeUserId = async (newUserId: string) => {
+        if (!userId) {
+            throw new Error('Cannot change user ID: no current user ID');
+        }
+
+        try {
+            setLoading(true);
+            const adapter = await getPersistenceAdapter();
+
+            // Migrate data
+            await adapter.migrateUser(userId, newUserId);
+
+            // Update cookie
+            Cookies.set(USER_ID_COOKIE_NAME, newUserId, { expires: COOKIE_EXPIRY_DAYS });
+
+            // Update state
+            setUserId(newUserId);
+
+            // Reload settings for new user
+            const settings = await adapter.getUserSettings(newUserId);
+            if (settings) {
+                setUserSettings(settings);
+            } else {
+                // Should not happen if migration worked, but just in case
+                await refreshUserSettings();
+            }
+
+            console.log(`Successfully changed user ID from ${userId} to ${newUserId}`);
+        } catch (error) {
+            console.error('Error changing user ID:', error);
+            throw error;
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <UserContext.Provider
             value={{
@@ -118,6 +156,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 loading,
                 updateUserSettings,
                 refreshUserSettings,
+                changeUserId,
             }}
         >
             {children}
