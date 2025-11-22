@@ -225,7 +225,7 @@ class SqliteClient implements DbClient {
   async getTaskById(id: string): Promise<TaskEntity | null> {
     console.log('SQLite: getTaskById called with id:', id);
 
-    const row = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow | undefined;
+    const row = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as unknown as TaskRow | undefined;
     console.log('SQLite: getTaskById result:', row);
 
     if (!row) {
@@ -447,7 +447,7 @@ class SqliteClient implements DbClient {
 
   // User settings
   async getUserSettings(userId: string): Promise<UserSettingsEntity | null> {
-    const row = this.db.prepare('SELECT * FROM user_settings WHERE user_id = ?').get(userId) as UserSettingsRow | undefined;
+    const row = this.db.prepare('SELECT * FROM user_settings WHERE user_id = ?').get(userId) as unknown as UserSettingsRow | undefined;
     if (!row) {
       return null;
     }
@@ -523,13 +523,17 @@ class SqliteClient implements DbClient {
     }
   }
 
+  async deleteUser(userId: string): Promise<void> {
+    this.db.prepare('DELETE FROM user_settings WHERE user_id = ?').run(userId);
+  }
+
   async clearAllUsers(): Promise<void> {
     this.db.prepare('DELETE FROM user_settings').run();
   }
 
   // App settings
   async getAppSettings(): Promise<AppSettingsEntity> {
-    const row = this.db.prepare('SELECT * FROM app_settings WHERE id = 1').get() as AppSettingsRow | undefined;
+    const row = this.db.prepare('SELECT * FROM app_settings WHERE id = 1').get() as unknown as AppSettingsRow | undefined;
     return row ? {
       split_time: row.split_time,
       user_workload_percentage: row.user_workload_percentage,

@@ -278,6 +278,20 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
   }
 
+  async deleteUser(userId: string): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      localStorage.removeItem(`${USER_SETTINGS_STORAGE_KEY}_${userId}`);
+      console.log(`Deleted user ${userId}`);
+    } catch (error) {
+      console.error('Error deleting user from localStorage:', error);
+      throw error;
+    }
+  }
+
   async clearAllUsers(): Promise<void> {
     if (typeof window === 'undefined') {
       return;

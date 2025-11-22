@@ -104,6 +104,7 @@ export interface PersistenceAdapter {
   updateUserSettings(userId: string, patch: Partial<UserSettingsEntity>): Promise<UserSettingsEntity>;
   listUsers(): Promise<UserSettingsEntity[]>;
   migrateUser(oldUserId: string, newUserId: string): Promise<void>;
+  deleteUser(userId: string): Promise<void>;
   clearAllUsers(): Promise<void>;
 
   // App settings

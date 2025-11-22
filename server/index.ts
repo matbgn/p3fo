@@ -2,6 +2,9 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { createDbClient } from './db';
 import { DbClient } from './db';
+import { WebSocketServer } from 'ws';
+// @ts-ignore - y-websocket types are not available
+import { setupWSConnection } from 'y-websocket/bin/utils';
 
 // Initialize Express app
 const app = express();
@@ -15,6 +18,19 @@ const DB_SQLITE_FILE = process.env.P3FO_DB_SQLITE_FILE || './p3fo.db';
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+
+// Serve static files in production
+if (process.env.NODE_ENV === 'production') {
+  const path = await import('path');
+  const { fileURLToPath } = await import('url');
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+
+  // Serve static files from the dist directory
+  const staticPath = path.resolve(__dirname, '../');
+  console.log(`Serving static files from: ${staticPath}`);
+  app.use(express.static(staticPath, { index: false }));
+}
 
 // Initialize database client
 let db: DbClient;
@@ -209,6 +225,17 @@ app.post('/api/users/migrate', async (req: Request, res: Response) => {
   }
 });
 
+app.delete('/api/users/:userId', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    await db.deleteUser(userId);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
 app.post('/api/users/clear', async (req: Request, res: Response) => {
   try {
     if (db.clearAllUsers) {
@@ -302,15 +329,19 @@ app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// 404 handler
-app.use('*', (req: Request, res: Response) => {
-  res.status(404).json({ error: 'Route not found' });
+// 404 handler - serve index.html for client-side routing in production
+app.use('*', async (req: Request, res: Response) => {
+  if (process.env.NODE_ENV === 'production') {
+    const path = await import('path');
+    const { fileURLToPath } = await import('url');
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const indexPath = path.resolve(__dirname, '../index.html');
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).json({ error: 'Route not found' });
+  }
 });
-
-import { WebSocketServer } from 'ws';
-// @ts-expect-error - y-websocket types are not perfect
-import { setupWSConnection } from 'y-websocket/bin/utils';
-
 // Initialize database and start server
 async function startServer() {
   try {

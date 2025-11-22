@@ -507,6 +507,10 @@ class PostgresClient implements DbClient {
     console.log(`PostgreSQL: Migrated data from ${oldUserId} to ${newUserId}`);
   }
 
+  async deleteUser(userId: string): Promise<void> {
+    await this.pool.query('DELETE FROM user_settings WHERE user_id = $1', [userId]);
+  }
+
   async clearAllUsers(): Promise<void> {
     await this.pool.query('DELETE FROM user_settings');
   }

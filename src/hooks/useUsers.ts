@@ -35,5 +35,22 @@ export const useUsers = () => {
         };
     }, []);
 
-    return { users, loading, refreshUsers: fetchUsers };
+    const deleteUser = async (userId: string) => {
+        try {
+            const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+            const adapter = await persistence;
+            await adapter.deleteUser(userId);
+
+            // Refresh the list
+            await fetchUsers();
+
+            // Notify others
+            eventBus.publish('userSettingsChanged');
+        } catch (error) {
+            console.error('Error deleting user:', error);
+            throw error;
+        }
+    };
+
+    return { users, loading, refreshUsers: fetchUsers, deleteUser };
 };

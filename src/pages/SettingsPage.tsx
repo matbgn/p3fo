@@ -5,6 +5,7 @@ import DataExporter from '@/components/DataExporter';
 import DataImporter from '@/components/DataImporter';
 import { useCombinedSettings } from '@/hooks/useCombinedSettings';
 import { Label } from '@/components/ui/label';
+import { UserManagement } from '@/components/UserManagement';
 
 const SettingsPage: React.FC = () => {
   const { clearAllTasks, clearAllUsers } = useTasks();
@@ -166,6 +167,10 @@ const SettingsPage: React.FC = () => {
               </p>
             </div>
           </div>
+        </div>
+
+        <div className="pt-6 border-t">
+          <UserManagement />
         </div>
 
         <div>

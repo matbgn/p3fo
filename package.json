@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "preview:gh": "VITE_BASE_URL=/p3fo/ vite preview",
-    "dev:server": "tsx server/index.ts",
+    "dev:server": "tsx watch server/index.ts",
     "start:server": "node dist/server/index.js"
   },
   "dependencies": {

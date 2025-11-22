@@ -22,6 +22,7 @@ export interface DbClient {
   updateUserSettings(userId: string, data: Partial<UserSettingsEntity>): Promise<UserSettingsEntity>;
   listUsers(): Promise<UserSettingsEntity[]>;
   migrateUser(oldUserId: string, newUserId: string): Promise<void>;
+  deleteUser(userId: string): Promise<void>;
   clearAllUsers?(): Promise<void>; // Optional for now to avoid breaking changes immediately, but we will implement it
 
   // App settings

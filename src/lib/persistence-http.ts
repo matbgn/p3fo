@@ -110,6 +110,12 @@ export class HttpApiPersistence implements PersistenceAdapter {
     });
   }
 
+  async deleteUser(userId: string): Promise<void> {
+    await this.makeRequest(`/api/users/${userId}`, {
+      method: 'DELETE',
+    });
+  }
+
   async clearAllUsers(): Promise<void> {
     await this.makeRequest('/api/users/clear', {
       method: 'POST',
