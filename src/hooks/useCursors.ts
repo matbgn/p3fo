@@ -36,6 +36,12 @@ export const useCursors = () => {
     const [userColor] = useState(getRandomColor());
 
     useEffect(() => {
+        // Early exit if awareness is not available (browser-only mode)
+        if (!awareness) {
+            console.log('Cursors: Disabled (browser-only mode)');
+            return;
+        }
+
         // Set local user state
         awareness.setLocalStateField('user', {
             name: userSettings.username,

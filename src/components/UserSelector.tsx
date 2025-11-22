@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/select';
 import { UserAvatar } from './UserAvatar';
 import { useUserSettings } from '@/hooks/useUserSettings';
+import { useUsers } from '@/hooks/useUsers';
 import { cn } from '@/lib/utils';
 
 interface UserSelectorProps {
@@ -22,7 +23,16 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
   className
 }) => {
   const { userSettings, userId: currentUserId } = useUserSettings();
-  const isCurrentUser = value && (value === currentUserId || value === userSettings.username); // Support both for display, but prefer ID
+  const { users, loading } = useUsers();
+
+  const isCurrentUser = value && value === currentUserId;
+
+  // Get username by userId from the users list
+  const getUserById = (userId: string) => {
+    return users.find(u => u.userId === userId);
+  };
+
+  const otherUser = value && !isCurrentUser ? getUserById(value) : null;
 
   return (
     <Select value={value || 'unassigned'} onValueChange={(val) => onChange(val === 'unassigned' ? undefined : val)}>
@@ -35,12 +45,17 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
               size="sm"
               showTooltip={false}
             />
+          ) : otherUser ? (
+            <UserAvatar
+              username={otherUser.username}
+              logo={otherUser.logo}
+              size="sm"
+              showTooltip={false}
+            />
           ) : value && value !== 'unassigned' ? (
-            // Show the stored user ID as a simple avatar with initials
+            // Fallback if user not found in list (shouldn't happen normally)
             <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
-              <span className="text-xs text-muted-foreground">
-                {value.split(' ').map(name => name[0]).join('').toUpperCase().slice(0, 2)}
-              </span>
+              <span className="text-xs text-muted-foreground">?</span>
             </div>
           ) : (
             <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
@@ -69,19 +84,20 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
             <span className="text-sm">Myself ({userSettings.username})</span>
           </div>
         </SelectItem>
-        {value && value !== 'unassigned' && value !== 'current-user' && !isCurrentUser && (
-          <SelectItem value={value}>
+        {/* Show other users from the users list */}
+        {users.filter(u => u.userId !== currentUserId).map((user) => (
+          <SelectItem key={user.userId} value={user.userId}>
             <div className="flex items-center gap-2">
-              <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
-                <span className="text-xs text-muted-foreground">
-                  {value.split(' ').map(name => name[0]).join('').toUpperCase().slice(0, 2)}
-                </span>
-              </div>
-              <span className="text-sm">{value}</span>
+              <UserAvatar
+                username={user.username}
+                logo={user.logo}
+                size="sm"
+                showTooltip={false}
+              />
+              <span className="text-sm">{user.username}</span>
             </div>
           </SelectItem>
-        )}
-        {/* Future: Add support for other users from shared team data */}
+        ))}
       </SelectContent>
     </Select>
   );

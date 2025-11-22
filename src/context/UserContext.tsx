@@ -3,6 +3,7 @@ import Cookies from 'js-cookie';
 import { getRandomUsername } from '@/lib/username-generator';
 import { getPersistenceAdapter } from '@/lib/persistence-factory';
 import { UserSettingsEntity } from '@/lib/persistence-types';
+import { eventBus } from '@/lib/events';
 
 import { UserContext, UserContextType } from './UserContextDefinition';
 
@@ -70,6 +71,9 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const adapter = await getPersistenceAdapter();
             const updated = await adapter.updateUserSettings(userId, patch);
             setUserSettings(updated);
+
+            // Emit event so other components can refresh
+            eventBus.publish('userSettingsChanged');
         } catch (error) {
             console.error('Error updating user settings:', error);
             throw error;

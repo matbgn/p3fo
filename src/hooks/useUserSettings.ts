@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getRandomUsername } from '@/lib/username-generator';
+import { eventBus } from '@/lib/events';
 
 export interface UserSettings {
   username: string;
@@ -97,6 +98,22 @@ export const useUserSettings = () => {
     };
 
     initializeSettings();
+  }, []);
+
+  // Listen for external settings changes and reload
+  useEffect(() => {
+    const handleSettingsChanged = async () => {
+      console.log('useUserSettings: Settings changed externally, reloading...');
+      const userId = getUserId();
+      const settings = await loadUserSettings(userId);
+      setUserSettings(settings);
+    };
+
+    eventBus.subscribe('userSettingsChanged', handleSettingsChanged);
+
+    return () => {
+      eventBus.unsubscribe('userSettingsChanged', handleSettingsChanged);
+    };
   }, []);
 
   // Persist settings when they change

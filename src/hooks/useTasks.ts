@@ -1,7 +1,8 @@
 import * as React from "react";
 import { eventBus } from "@/lib/events";
 import { usePersistence } from "@/hooks/usePersistence";
-import { yTasks, doc } from "@/lib/collaboration";
+import { yTasks, doc, initializeCollaboration, isCollaborationEnabled } from "@/lib/collaboration";
+import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
 
 // Polyfill for crypto.randomUUID if not available
 if (typeof crypto.randomUUID !== 'function') {
@@ -58,31 +59,47 @@ let tasks: Task[] = [];
 
 const byId = (arr: Task[]) => Object.fromEntries(arr.map((t) => [t.id, t]));
 
+// Sync task to Yjs if collaboration is enabled
+const syncTaskToYjs = (taskId: string, task: Task) => {
+  if (isCollaborationEnabled()) {
+    yTasks.set(taskId, task);
+  }
+};
+
 const updateTaskInTasks = (taskId: string, updater: (task: Task) => Task) => {
   tasks = tasks.map(t => {
     if (t.id === taskId) {
       const updated = updater(t);
-      // Sync to Yjs
-      yTasks.set(taskId, updated);
+      syncTaskToYjs(taskId, updated);
       return updated;
     }
     return t;
   });
 };
 
-// Observer for Yjs updates
-yTasks.observe(() => {
-  console.log('Yjs tasks updated');
-  const newTasks = Array.from(yTasks.values()) as Task[];
+// Initialize collaboration if not in browser-only mode
+if (!PERSISTENCE_CONFIG.FORCE_BROWSER) {
+  initializeCollaboration();
+}
 
-  // Only update if we have tasks from Yjs
-  if (newTasks.length > 0) {
-    // Merge Yjs tasks with local tasks to preserve any local-only state if necessary
-    // For now, we'll trust Yjs as the source of truth for shared state
-    tasks = newTasks;
-    eventBus.publish("tasksChanged");
-  }
-});
+// Observer for Yjs updates - only set up if collaboration is enabled
+if (isCollaborationEnabled()) {
+  console.log('Setting up Yjs observer for task synchronization');
+  yTasks.observe(() => {
+    console.log('Yjs tasks updated');
+    const newTasks = Array.from(yTasks.values()) as Task[];
+
+    // Only update if we have tasks from Yjs
+    if (newTasks.length > 0) {
+      // Merge Yjs tasks with local tasks to preserve any local-only state if necessary
+      // For now, we'll trust Yjs as the source of truth for shared state
+      tasks = newTasks;
+      eventBus.publish("tasksChanged");
+    }
+  });
+} else {
+  console.log('Yjs observer disabled (browser-only mode)');
+}
 
 const loadTasks = async () => {
   console.log('=== loadTasks called ===', {
@@ -141,20 +158,23 @@ const loadTasks = async () => {
     tasks = Object.values(taskMap);
     console.log(`Loaded ${tasks.length} tasks into memory`);
 
-    // Sync loaded tasks to Yjs if Yjs is empty
-    if (yTasks.size === 0 && tasks.length > 0) {
-      console.log('Initializing Yjs with loaded tasks');
-      doc.transact(() => {
-        tasks.forEach(task => {
-          yTasks.set(task.id, task);
+    // Only sync to Yjs if collaboration is enabled
+    if (isCollaborationEnabled()) {
+      // Sync loaded tasks to Yjs if Yjs is empty
+      if (yTasks.size === 0 && tasks.length > 0) {
+        console.log('Initializing Yjs with loaded tasks');
+        doc.transact(() => {
+          tasks.forEach(task => {
+            yTasks.set(task.id, task);
+          });
         });
-      });
-    } else if (yTasks.size > 0) {
-      // If Yjs has data, it might be more up to date or from other clients
-      // For now, let's merge or prefer Yjs? 
-      // Simplest strategy: If Yjs has data, use it.
-      console.log('Yjs has data, using Yjs data');
-      tasks = Array.from(yTasks.values()) as Task[];
+      } else if (yTasks.size > 0) {
+        // If Yjs has data, it might be more up to date or from other clients
+        // For now, let's merge or prefer Yjs? 
+        // Simplest strategy: If Yjs has data, use it.
+        console.log('Yjs has data, using Yjs data');
+        tasks = Array.from(yTasks.values()) as Task[];
+      }
     }
 
     // If no tasks, initialize defaults
@@ -292,8 +312,7 @@ const createTask = async (title: string, parentId: string | null) => {
 
     // Update local state
     tasks = [...tasks, t];
-    // Sync to Yjs
-    yTasks.set(t.id, t);
+    syncTaskToYjs(t.id, t);
     console.log('Local state updated with new task');
 
     if (parentId) {
@@ -307,11 +326,9 @@ const createTask = async (title: string, parentId: string | null) => {
           if (updatedParent.timer && updatedParent.timer.length > 0) {
             t.timer = updatedParent.timer;
             updatedParent.timer = [];
-            // Update t in Yjs as well since we modified it
-            yTasks.set(t.id, t);
+            syncTaskToYjs(t.id, t);
           }
-          // Sync parent update to Yjs
-          yTasks.set(updatedParent.id, updatedParent);
+          syncTaskToYjs(updatedParent.id, updatedParent);
           return updatedParent;
         }
         return currentTask;
@@ -371,15 +388,15 @@ const reparent = async (taskId: string, newParentId: string | null) => {
   tasks = tasks.map(t => {
     if (t.id === taskId) {
       const updated = { ...t, parentId: newParentId };
-      yTasks.set(taskId, updated);
+      syncTaskToYjs(taskId, updated);
       return updated;
     } else if (t.id === oldParentId) {
       const updated = { ...t, children: (t.children || []).filter(id => id !== taskId) };
-      yTasks.set(oldParentId, updated);
+      syncTaskToYjs(oldParentId, updated);
       return updated;
     } else if (t.id === newParentId) {
       const updated = { ...t, children: Array.from(new Set([...(t.children || []), taskId])) };
-      yTasks.set(newParentId, updated);
+      syncTaskToYjs(newParentId, updated);
       return updated;
     }
     return t;
@@ -543,8 +560,7 @@ const updateStatus = async (taskId: string, status: TriageStatus) => {
         updatedTask.priority = minBacklogPriority;
       }
 
-      // Sync to Yjs
-      yTasks.set(updatedTask.id, updatedTask);
+      syncTaskToYjs(updatedTask.id, updatedTask);
 
       return updatedTask;
     }

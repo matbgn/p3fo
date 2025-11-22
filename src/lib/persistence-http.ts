@@ -81,7 +81,15 @@ export class HttpApiPersistence implements PersistenceAdapter {
 
   // User settings
   async getUserSettings(userId: string): Promise<UserSettingsEntity | null> {
-    return this.makeRequest(`/api/user-settings/${userId}`);
+    try {
+      return await this.makeRequest(`/api/user-settings/${userId}`);
+    } catch (error) {
+      // If user settings don't exist (404), return null so they can be created
+      if (error instanceof Error && error.message.includes('404')) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   async updateUserSettings(userId: string, patch: Partial<UserSettingsEntity>): Promise<UserSettingsEntity> {
