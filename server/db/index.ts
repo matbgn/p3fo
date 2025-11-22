@@ -1,5 +1,5 @@
 // Database client interface and factory
-import { TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity } from '../../src/lib/persistence-types';
+import { TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity } from '../../src/lib/persistence-types.js';
 
 // Define the database client interface
 export interface DbClient {
@@ -47,12 +47,12 @@ export async function createDbClient(
 ): Promise<DbClient> {
   switch (clientType.toLowerCase()) {
     case 'sqlite': {
-      const { createSqliteClient } = await import('./sqlite');
+      const { createSqliteClient } = await import('./sqlite.js');
       return createSqliteClient(sqliteFile);
     }
     case 'pg':
     case 'postgres': {
-      const { createPostgresClient } = await import('./postgres');
+      const { createPostgresClient } = await import('./postgres.js');
       return createPostgresClient(dbUrl);
     }
     default:

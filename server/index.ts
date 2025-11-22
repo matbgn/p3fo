@@ -1,7 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
-import { createDbClient } from './db';
-import { DbClient } from './db';
+import { createDbClient } from './db/index.js';
+import { DbClient } from './db/index.js';
 import { WebSocketServer } from 'ws';
 // @ts-ignore - y-websocket types are not available
 import { setupWSConnection } from 'y-websocket/bin/utils';
@@ -27,7 +27,8 @@ if (process.env.NODE_ENV === 'production') {
   const __dirname = path.dirname(__filename);
 
   // Serve static files from the dist directory
-  const staticPath = path.resolve(__dirname, '../');
+  // __dirname is dist/server/server
+  const staticPath = path.resolve(__dirname, '../../');
   console.log(`Serving static files from: ${staticPath}`);
   app.use(express.static(staticPath, { index: false }));
 }
@@ -336,7 +337,7 @@ app.use('*', async (req: Request, res: Response) => {
     const { fileURLToPath } = await import('url');
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
-    const indexPath = path.resolve(__dirname, '../index.html');
+    const indexPath = path.resolve(__dirname, '../../index.html');
     res.sendFile(indexPath);
   } else {
     res.status(404).json({ error: 'Route not found' });

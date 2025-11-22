@@ -1,12 +1,12 @@
 import { DatabaseSync } from 'node:sqlite';
-import { DbClient } from './index';
+import { DbClient } from './index.js';
 import {
   TaskEntity,
   UserSettingsEntity,
   AppSettingsEntity,
   QolSurveyResponseEntity,
   FilterStateEntity
-} from '../../src/lib/persistence-types';
+} from '../../src/lib/persistence-types.js';
 
 // Default values
 const DEFAULT_USER_SETTINGS: UserSettingsEntity = {

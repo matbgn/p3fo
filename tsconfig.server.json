@@ -1,0 +1,35 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "module": "ES2022",
+        "target": "ES2022",
+        "lib": [
+            "ES2022"
+        ],
+        "outDir": "./dist/server",
+        "rootDir": ".",
+        "moduleResolution": "node",
+        "esModuleInterop": true,
+        "resolveJsonModule": true,
+        "skipLibCheck": true,
+        "strict": false,
+        "noImplicitAny": false,
+        "allowSyntheticDefaultImports": true,
+        "forceConsistentCasingInFileNames": true
+    },
+    "include": [
+        "server/**/*",
+        "src/lib/persistence-types.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist",
+        "src/**/*.tsx",
+        "src/**/*.test.ts",
+        "src/main.tsx",
+        "src/App.tsx",
+        "src/components/**/*",
+        "src/pages/**/*",
+        "src/hooks/**/*"
+    ]
+}

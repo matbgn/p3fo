@@ -17,12 +17,12 @@ export default defineConfig(({ mode }) => {
       },
       proxy: {
         '/ws': {
-          target: 'ws://localhost:3000',
+          target: process.env.WS_TARGET || 'ws://localhost:3000',
           ws: true,
           rewrite: (path) => path.replace(/^\/ws/, ''),
         },
         '/api': {
-          target: 'http://localhost:3000',
+          target: process.env.API_TARGET || 'http://localhost:3000',
           changeOrigin: true,
         },
       },
