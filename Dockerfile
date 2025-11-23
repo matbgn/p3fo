@@ -1,6 +1,9 @@
 # Stage 1: Build the application
 FROM node:24-slim AS build
 
+ARG VITE_BASE_URL=/
+ENV VITE_BASE_URL=$VITE_BASE_URL
+
 WORKDIR /app
 
 # Install necessary build tools
@@ -53,7 +56,8 @@ RUN groupadd -r appuser && useradd -r -g appuser -m -d /home/appuser appuser
 
 # Set Node environment to production
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=5173
+ENV VITE_BASE_URL=/
 
 # Copy the built files with correct ownership
 COPY --chown=appuser:appuser --from=build /app/dist ./dist
@@ -72,7 +76,7 @@ RUN mkdir -p /home/appuser/data && \
 USER appuser
 
 # Expose the port the app runs on
-EXPOSE 3000
+EXPOSE 5173
 
 # Set the entrypoint
 ENTRYPOINT ["/app/start.sh"]

@@ -7,7 +7,7 @@ let persistenceAdapter: PersistenceAdapter | null = null;
 
 // Health check function to test backend availability
 async function checkBackendHealth(apiUrl: string): Promise<boolean> {
- try {
+  try {
     const response = await fetch(`${apiUrl}/api/health`);
     const data = await response.json();
     return response.ok && data.ok === true;
@@ -22,17 +22,17 @@ export async function getPersistenceAdapter(): Promise<PersistenceAdapter> {
     return persistenceAdapter;
   }
 
- // 1. If force browser mode is enabled, use browser persistence
+  // 1. If force browser mode is enabled, use browser persistence
   if (PERSISTENCE_CONFIG.FORCE_BROWSER) {
     console.log('Persistence: Using browser JSON mode (forced)');
     persistenceAdapter = new BrowserJsonPersistence();
     return persistenceAdapter;
   }
 
- // 2. If API URL is configured, try to use server persistence
-  if (PERSISTENCE_CONFIG.API_URL) {
+  // 2. If API URL is configured, try to use server persistence
+  if (typeof PERSISTENCE_CONFIG.API_URL === 'string') {
     const isHealthy = await checkBackendHealth(PERSISTENCE_CONFIG.API_URL);
-    
+
     if (isHealthy) {
       console.log('Persistence: Using server mode');
       // We'll import dynamically once HttpApiPersistence is created
@@ -45,7 +45,7 @@ export async function getPersistenceAdapter(): Promise<PersistenceAdapter> {
   }
 
   // 3. Default to browser persistence
- console.log('Persistence: Using browser JSON mode (default)');
+  console.log('Persistence: Using browser JSON mode (default)');
   persistenceAdapter = new BrowserJsonPersistence();
   return persistenceAdapter;
 }
@@ -54,20 +54,20 @@ export function getSelectedMode(): 'browser-json' | 'server-sql' {
   if (persistenceAdapter) {
     // This would require a method on the adapter to identify the type
     // For now we'll implement a simple check
-    return persistenceAdapter instanceof BrowserJsonPersistence 
-      ? 'browser-json' 
+    return persistenceAdapter instanceof BrowserJsonPersistence
+      ? 'browser-json'
       : 'server-sql';
   }
-  
+
   // If not initialized yet, determine based on config
- if (PERSISTENCE_CONFIG.FORCE_BROWSER) {
+  if (PERSISTENCE_CONFIG.FORCE_BROWSER) {
     return 'browser-json';
   }
-  
-  if (PERSISTENCE_CONFIG.API_URL) {
+
+  if (typeof PERSISTENCE_CONFIG.API_URL === 'string') {
     // Would check health, but we're just determining type
     return 'server-sql';
   }
-  
+
   return 'browser-json';
 }

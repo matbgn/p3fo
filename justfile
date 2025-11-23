@@ -6,7 +6,7 @@ set dotenv-load := true
 # Variables for the p3fo project
 PROJECT_NAME := "p3fo"
 DOCKER_IMAGE_NAME := "git.at-it.ch/advance-ticket/p3fo"
-PORT := "3000"
+PORT := "5173"
 
 # Check for environment variable presence
 _check-env var:
@@ -40,6 +40,24 @@ sync-versions version:
   git add VERSION package.json
   git commit -m "ci: bump p3fo to v{{version}}"
 
+# --- Changelog Generation Tasks ---
+changelog:
+  #!/bin/bash
+  # if on main, exit
+  if [ "$(git rev-parse --abbrev-ref HEAD)" = "main" ]; then
+    echo "You are on main branch, you should be on another branch"
+    exit 1
+  fi
+  git-sv cgl --add-next-version > CHANGELOG.md
+  if [ -n "$(git status --porcelain CHANGELOG.md)" ]; then
+    git add CHANGELOG.md
+    git commit -m "chore: update CHANGELOG.md to $(git-sv nv)"
+    if [ -z "$(git rev-parse --abbrev-ref '@{upstream}')" ]; then
+      git push --set-upstream origin "$(git rev-parse --abbrev-ref HEAD)"
+    else
+      git push
+    fi
+  fi
 
 docker-build version="$(git-sv cv)":
   #!/usr/bin/env bash
@@ -81,7 +99,6 @@ docker-build-run:
 docker-run:
   @echo "Starting {{PROJECT_NAME}} stack..."
   docker compose up -d
-
 
 # --- Docker Compose Logs Task ---
 docker-logs:
@@ -132,9 +149,27 @@ deploy-version version: _check-BW_SESSION
   #!/usr/bin/env bash
   VERSION="{{version}}"
   just sync-versions "$VERSION"
-  just docker-build-version "$VERSION"
+  just docker-build "$VERSION"
   ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit adt-vmg-202
   just finish
+
+# --- Release Task (Complete Release Workflow) ---
+release:
+  #!/bin/bash
+  VERSION=$(git-sv nv)
+  just sync-versions "$VERSION"
+  just changelog
+  just create-github-release "$VERSION"
+  git pull
+
+create-github-release version:
+    #!/bin/bash
+    if [ "{{version}}" != "$(git-sv rn)" ]; then
+        echo "Creating new release {{version}}"
+        NOTES_FILE=$(mktemp)
+        git-sv rn > "$NOTES_FILE"
+        gcli -t github releases create -t "{{version}}" -T "$NOTES_FILE"
+    fi
 
 # --- Check if BW_SESSION is set (for production tasks)
 @_check-BW_SESSION:

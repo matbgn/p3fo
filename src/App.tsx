@@ -42,7 +42,7 @@ const App = () => {
                   <NotificationCenter />
                   <UserSection />
                 </div>
-                <BrowserRouter basename="/p3fo" future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                <BrowserRouter basename={import.meta.env.VITE_BASE_URL || "/p3fo"} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
                   <Routes>
                     <Route path="/" element={<Index />} />
                     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

@@ -6,7 +6,7 @@ echo "--- P3FO Container Start ---"
 
 # Set up environment
 export NODE_ENV=production
-export PORT=${PORT:-3000}
+export PORT=${PORT:-5173}
 
 # Set database configuration (default to SQLite in data directory)
 export P3FO_DB_CLIENT=${P3FO_DB_CLIENT:-sqlite}

@@ -181,7 +181,7 @@ const loadTasks = async () => {
     if (tasks.length === 0) {
       console.log('No tasks found, calling server to initialize default tasks');
       try {
-        const response = await fetch('http://localhost:3000/api/tasks/init-defaults', { method: 'POST' });
+        const response = await fetch('/api/tasks/init-defaults', { method: 'POST' });
         const result = await response.json();
         if (result.success) {
           console.log('Server acknowledged default tasks initialization. Creating tasks on frontend.');
