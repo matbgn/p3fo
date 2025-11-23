@@ -26,23 +26,51 @@ dev:
   @echo "[2/2] Starting development server (separate terminal)..."
   npm run dev:server
 
-# --- Docker Build Task ---
-docker-build:
-  @echo "Building docker images for {{PROJECT_NAME}} stack..."
-  docker compose build
-
-# --- Docker Save Task ---
-docker-save:
+# --- Version Management Tasks ---
+sync-versions version:
   #!/usr/bin/env bash
+  echo "{{version}}" > VERSION
+  # add it to package.json
+  jq --arg version "{{version}}" '.version = $version' package.json > tmp.json && mv tmp.json package.json
+
+  if [ -z "$(git status --porcelain VERSION package.json)" ]; then
+    echo "No changes in VERSION or package.json, skipping commit."
+    exit 0
+  fi
+  git add VERSION package.json
+  git commit -m "ci: bump p3fo to v{{version}}"
+
+
+docker-build version="$(git-sv cv)":
+  #!/usr/bin/env bash
+  @echo "Using version: {{version}}"
   set -e
   echo "Creating tar files for deployment..."
   mkdir -p ~/Dev/itpark/infrastructure-as-code/ansible/dist/
-  echo "Building images with explicit tags..."
-  # Build both services with explicit tags that match the ansible expectations
-  docker build -t p3fo:latest .
-  echo "Saving p3fo image to tar file..."
-  docker save -o ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar p3fo:latest
-  echo "Tar file created successfully: ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar"
+
+  echo "Building p3fo docker image with version {{version}}..."
+
+  LAST_P3FO_HASH="$(docker images --format '{{{{.ID}}' p3fo)"
+  echo "Last p3fo hash: $LAST_P3FO_HASH"
+  LAST_P3FO_VERSION="$(docker images --format '{{{{.Tag}}' {{DOCKER_IMAGE_NAME}} | sort -V | tail -n 1)"
+  echo "Last p3fo version: $LAST_P3FO_VERSION"
+
+  # Build with version tag
+  docker build -t {{DOCKER_IMAGE_NAME}}:"{{version}}" .
+
+  P3FO_CHANGED="$(docker images --format '{{{{.ID}}' p3fo)"
+  echo "New p3fo hash: $P3FO_CHANGED"
+
+  if [ "$LAST_P3FO_HASH" != "$P3FO_CHANGED" ] || [ "$LAST_P3FO_VERSION" != "{{version}}" ]; then
+    echo "Tagging p3fo docker image with version {{version}}..."
+    # docker tag is already done above, but ensuring latest is updated
+    docker tag p3fo:latest p3fo:latest
+    echo "Saving p3fo docker image to tar file..."
+    docker save -o ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar {{DOCKER_IMAGE_NAME}}:"{{version}}"
+    echo "Tar file created successfully: ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar"
+  else
+    echo "p3fo docker image has not changed"
+  fi
 
 # --- Docker Compose Run Task (with build) ---
 docker-build-run:
@@ -99,6 +127,15 @@ deploy: _check-BW_SESSION docker-build
   ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit adt-vmg-202
   just finish
 
+# --- Deploy with version ---
+deploy-version version: _check-BW_SESSION
+  #!/usr/bin/env bash
+  VERSION="{{version}}"
+  just sync-versions "$VERSION"
+  just docker-build-version "$VERSION"
+  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit adt-vmg-202
+  just finish
+
 # --- Check if BW_SESSION is set (for production tasks)
 @_check-BW_SESSION:
     if [ -z "${BW_SESSION}" ]; then \
@@ -140,3 +177,10 @@ hwkey-interaction:
   @echo "INTERACT WITH YOUR HW CRYPTO KEY!"
   @echo "---------------------------------"
   @echo
+
+# --- Show current versions ---
+version:
+  @echo "Current git-sv version (current): $(git-sv cv)"
+  @echo "Next git-sv version (next): $(git-sv nv)"
+  @if [ -f VERSION ]; then echo "Local VERSION file: $(cat VERSION)"; fi
+  @echo "package.json version: $(jq -r '.version' package.json)"
