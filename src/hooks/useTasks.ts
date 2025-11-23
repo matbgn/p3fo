@@ -57,6 +57,9 @@ export type Task = {
 
 let tasks: Task[] = [];
 
+// Key for localStorage to track if default tasks have been initialized
+const DEFAULT_TASKS_INITIALIZED_KEY = 'p3fo_default_tasks_initialized';
+
 const byId = (arr: Task[]) => Object.fromEntries(arr.map((t) => [t.id, t]));
 
 // Sync task to Yjs if collaboration is enabled
@@ -89,13 +92,10 @@ if (isCollaborationEnabled()) {
     console.log('Yjs tasks updated');
     const newTasks = Array.from(yTasks.values()) as Task[];
 
-    // Only update if we have tasks from Yjs
-    if (newTasks.length > 0) {
-      // Merge Yjs tasks with local tasks to preserve any local-only state if necessary
-      // For now, we'll trust Yjs as the source of truth for shared state
-      tasks = newTasks;
-      eventBus.publish("tasksChanged");
-    }
+    // Always update, even if empty (e.g., all tasks deleted)
+    // This ensures deletions to empty state trigger UI updates
+    tasks = newTasks;
+    eventBus.publish("tasksChanged");
   });
 } else {
   console.log('Yjs observer disabled (browser-only mode)');
@@ -177,20 +177,28 @@ const loadTasks = async () => {
       }
     }
 
-    // If no tasks, initialize defaults
+    // If no tasks, initialize defaults (but only if not already initialized)
     if (tasks.length === 0) {
-      console.log('No tasks found, calling server to initialize default tasks');
-      try {
-        const response = await fetch('/api/tasks/init-defaults', { method: 'POST' });
-        const result = await response.json();
-        if (result.success) {
-          console.log('Server acknowledged default tasks initialization. Creating tasks on frontend.');
-          await initializeDefaultTasks();
-        } else {
-          console.error('Server failed to acknowledge default tasks initialization:', result.error);
+      const alreadyInitialized = localStorage.getItem(DEFAULT_TASKS_INITIALIZED_KEY);
+
+      if (!alreadyInitialized) {
+        console.log('No tasks found, calling server to initialize default tasks');
+        try {
+          const response = await fetch('/api/tasks/init-defaults', { method: 'POST' });
+          const result = await response.json();
+          if (result.success) {
+            console.log('Server acknowledged default tasks initialization. Creating tasks on frontend.');
+            await initializeDefaultTasks();
+            // Mark as initialized so we don't recreate them if user deletes all tasks
+            localStorage.setItem(DEFAULT_TASKS_INITIALIZED_KEY, 'true');
+          } else {
+            console.error('Server failed to acknowledge default tasks initialization:', result.error);
+          }
+        } catch (error) {
+          console.error('Error calling init-defaults endpoint:', error);
         }
-      } catch (error) {
-        console.error('Error calling init-defaults endpoint:', error);
+      } else {
+        console.log('Default tasks already initialized previously, skipping creation');
       }
     } else {
       console.log('Tasks loaded successfully');
@@ -1163,6 +1171,16 @@ export function useTasks() {
           return { ...t, children: (t.children || []).filter(id => id !== taskId) };
         }
         return t;
+      });
+    }
+
+    // Sync deletions to Yjs for cross-client propagation
+    if (isCollaborationEnabled()) {
+      console.log('Syncing task deletions to Yjs:', Array.from(childrenIds));
+      doc.transact(() => {
+        for (const id of childrenIds) {
+          yTasks.delete(id);
+        }
       });
     }
 
