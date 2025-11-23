@@ -31,6 +31,19 @@ docker-build:
   @echo "Building docker images for {{PROJECT_NAME}} stack..."
   docker compose build
 
+# --- Docker Save Task ---
+docker-save:
+  #!/usr/bin/env bash
+  set -e
+  echo "Creating tar files for deployment..."
+  mkdir -p ~/Dev/itpark/infrastructure-as-code/ansible/dist/
+  echo "Building images with explicit tags..."
+  # Build both services with explicit tags that match the ansible expectations
+  docker build -t p3fo:latest .
+  echo "Saving p3fo image to tar file..."
+  docker save -o ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar p3fo:latest
+  echo "Tar file created successfully: ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar"
+
 # --- Docker Compose Run Task (with build) ---
 docker-build-run:
   @echo "Building and starting {{PROJECT_NAME}} stack..."
