@@ -3,6 +3,8 @@ import { eventBus } from "@/lib/events";
 import { usePersistence } from "@/hooks/usePersistence";
 import { yTasks, doc, initializeCollaboration, isCollaborationEnabled } from "@/lib/collaboration";
 import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
+import { taskToEntity, tasksToEntities } from "@/lib/task-conversions";
+
 
 // Polyfill for crypto.randomUUID if not available
 if (typeof crypto.randomUUID !== 'function') {
@@ -293,26 +295,8 @@ const createTask = async (title: string, parentId: string | null) => {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
 
-    // Create task entity
-    const entity: import('@/lib/persistence-types').TaskEntity = {
-      id: t.id,
-      title: t.title,
-      created_at: new Date(t.createdAt).toISOString(),
-      triage_status: t.triageStatus,
-      urgent: t.urgent || false,
-      impact: t.impact || false,
-      major_incident: t.majorIncident || false,
-      difficulty: t.difficulty || 1,
-      timer: t.timer || [],
-      category: t.category || 'General',
-      termination_date: null,
-      comment: null,
-      duration_in_minutes: null,
-      priority: t.priority,
-      user_id: null,
-      parent_id: parentId,
-      children: [],
-    };
+    // Create task entity using centralized conversion function
+    const entity = taskToEntity(t);
 
     console.log('Calling adapter.createTask with entity:', JSON.stringify(entity, null, 2));
     const result = await adapter.createTask(entity);
@@ -418,25 +402,7 @@ const reparent = async (taskId: string, newParentId: string | null) => {
     // Update the reparented task
     const updatedTask = tasks.find(t => t.id === taskId);
     if (updatedTask) {
-      const entity: import('@/lib/persistence-types').TaskEntity = {
-        id: updatedTask.id,
-        title: updatedTask.title,
-        created_at: new Date(updatedTask.createdAt).toISOString(),
-        triage_status: updatedTask.triageStatus,
-        urgent: updatedTask.urgent || false,
-        impact: updatedTask.impact || false,
-        major_incident: updatedTask.majorIncident || false,
-        difficulty: updatedTask.difficulty || 1,
-        timer: updatedTask.timer || [],
-        category: updatedTask.category || 'General',
-        termination_date: updatedTask.terminationDate ? new Date(updatedTask.terminationDate).toISOString() : null,
-        comment: updatedTask.comment || null,
-        duration_in_minutes: updatedTask.durationInMinutes || null,
-        priority: updatedTask.priority || null,
-        user_id: updatedTask.userId || null,
-        parent_id: newParentId,
-        children: updatedTask.children || [],
-      };
+      const entity = { ...taskToEntity(updatedTask), parent_id: newParentId };
       await adapter.updateTask(taskId, entity);
     }
 
@@ -444,25 +410,7 @@ const reparent = async (taskId: string, newParentId: string | null) => {
     if (oldParentId) {
       const oldParent = tasks.find(t => t.id === oldParentId);
       if (oldParent) {
-        const entity: import('@/lib/persistence-types').TaskEntity = {
-          id: oldParent.id,
-          title: oldParent.title,
-          created_at: new Date(oldParent.createdAt).toISOString(),
-          triage_status: oldParent.triageStatus,
-          urgent: oldParent.urgent || false,
-          impact: oldParent.impact || false,
-          major_incident: oldParent.majorIncident || false,
-          difficulty: oldParent.difficulty || 1,
-          timer: oldParent.timer || [],
-          category: oldParent.category || 'General',
-          termination_date: oldParent.terminationDate ? new Date(oldParent.terminationDate).toISOString() : null,
-          comment: oldParent.comment || null,
-          duration_in_minutes: oldParent.durationInMinutes || null,
-          priority: oldParent.priority || null,
-          user_id: oldParent.userId || null,
-          parent_id: oldParent.parentId || null,
-          children: oldParent.children || [],
-        };
+        const entity = taskToEntity(oldParent);
         await adapter.updateTask(oldParentId, entity);
       }
     }
@@ -471,25 +419,7 @@ const reparent = async (taskId: string, newParentId: string | null) => {
     if (newParentId) {
       const newParent = tasks.find(t => t.id === newParentId);
       if (newParent) {
-        const entity: import('@/lib/persistence-types').TaskEntity = {
-          id: newParent.id,
-          title: newParent.title,
-          created_at: new Date(newParent.createdAt).toISOString(),
-          triage_status: newParent.triageStatus,
-          urgent: newParent.urgent || false,
-          impact: newParent.impact || false,
-          major_incident: newParent.majorIncident || false,
-          difficulty: newParent.difficulty || 1,
-          timer: newParent.timer || [],
-          category: newParent.category || 'General',
-          termination_date: newParent.terminationDate ? new Date(newParent.terminationDate).toISOString() : null,
-          comment: newParent.comment || null,
-          duration_in_minutes: newParent.durationInMinutes || null,
-          priority: newParent.priority || null,
-          user_id: newParent.userId || null,
-          parent_id: newParent.parentId || null,
-          children: newParent.children || [],
-        };
+        const entity = taskToEntity(newParent);
         await adapter.updateTask(newParentId, entity);
       }
     }
@@ -584,25 +514,7 @@ const updateStatus = async (taskId: string, status: TriageStatus) => {
     for (const id of tasksToUpdate) {
       const updatedTask = tasks.find(t => t.id === id);
       if (updatedTask) {
-        const entity: import('@/lib/persistence-types').TaskEntity = {
-          id: updatedTask.id,
-          title: updatedTask.title,
-          created_at: new Date(updatedTask.createdAt).toISOString(),
-          triage_status: updatedTask.triageStatus,
-          urgent: updatedTask.urgent || false,
-          impact: updatedTask.impact || false,
-          major_incident: updatedTask.majorIncident || false,
-          difficulty: updatedTask.difficulty || 1,
-          timer: updatedTask.timer || [],
-          category: updatedTask.category || 'General',
-          termination_date: updatedTask.terminationDate ? new Date(updatedTask.terminationDate).toISOString() : null,
-          comment: updatedTask.comment || null,
-          duration_in_minutes: updatedTask.durationInMinutes || null,
-          priority: updatedTask.priority || null,
-          user_id: updatedTask.userId || null,
-          parent_id: updatedTask.parentId || null,
-          children: updatedTask.children || [],
-        };
+        const entity = taskToEntity(updatedTask);
         await adapter.updateTask(id, entity);
       }
     }
@@ -696,25 +608,7 @@ const toggleUrgent = async (taskId: string) => {
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
-    const entity: import('@/lib/persistence-types').TaskEntity = {
-      id: task.id,
-      title: task.title,
-      created_at: new Date(task.createdAt).toISOString(),
-      triage_status: task.triageStatus,
-      urgent: newValue,
-      impact: task.impact || false,
-      major_incident: task.majorIncident || false,
-      difficulty: task.difficulty || 1,
-      timer: task.timer || [],
-      category: task.category || 'General',
-      termination_date: task.terminationDate ? new Date(task.terminationDate).toISOString() : null,
-      comment: task.comment || null,
-      duration_in_minutes: task.durationInMinutes || null,
-      priority: task.priority || null,
-      user_id: task.userId || null,
-      parent_id: task.parentId || null,
-      children: task.children || [],
-    };
+    const entity = { ...taskToEntity(task), urgent: newValue };
     await adapter.updateTask(taskId, entity);
   } catch (error) {
     console.error("Error toggling urgent:", error);
@@ -736,25 +630,7 @@ const toggleImpact = async (taskId: string) => {
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
-    const entity: import('@/lib/persistence-types').TaskEntity = {
-      id: task.id,
-      title: task.title,
-      created_at: new Date(task.createdAt).toISOString(),
-      triage_status: task.triageStatus,
-      urgent: task.urgent || false,
-      impact: newValue,
-      major_incident: task.majorIncident || false,
-      difficulty: task.difficulty || 1,
-      timer: task.timer || [],
-      category: task.category || 'General',
-      termination_date: task.terminationDate ? new Date(task.terminationDate).toISOString() : null,
-      comment: task.comment || null,
-      duration_in_minutes: task.durationInMinutes || null,
-      priority: task.priority || null,
-      user_id: task.userId || null,
-      parent_id: task.parentId || null,
-      children: task.children || [],
-    };
+    const entity = { ...taskToEntity(task), impact: newValue };
     await adapter.updateTask(taskId, entity);
   } catch (error) {
     console.error("Error toggling impact:", error);
@@ -776,25 +652,7 @@ const toggleMajorIncident = async (taskId: string) => {
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
-    const entity: import('@/lib/persistence-types').TaskEntity = {
-      id: task.id,
-      title: task.title,
-      created_at: new Date(task.createdAt).toISOString(),
-      triage_status: task.triageStatus,
-      urgent: task.urgent || false,
-      impact: task.impact || false,
-      major_incident: newValue,
-      difficulty: task.difficulty || 1,
-      timer: task.timer || [],
-      category: task.category || 'General',
-      termination_date: task.terminationDate ? new Date(task.terminationDate).toISOString() : null,
-      comment: task.comment || null,
-      duration_in_minutes: task.durationInMinutes || null,
-      priority: task.priority || null,
-      user_id: task.userId || null,
-      parent_id: task.parentId || null,
-      children: task.children || [],
-    };
+    const entity = { ...taskToEntity(task), major_incident: newValue };
     await adapter.updateTask(taskId, entity);
   } catch (error) {
     console.error("Error toggling major incident:", error);
@@ -815,25 +673,7 @@ const updateDifficulty = async (taskId: string, difficulty: 0.5 | 1 | 2 | 3 | 5 
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
-    const entity: import('@/lib/persistence-types').TaskEntity = {
-      id: task.id,
-      title: task.title,
-      created_at: new Date(task.createdAt).toISOString(),
-      triage_status: task.triageStatus,
-      urgent: task.urgent || false,
-      impact: task.impact || false,
-      major_incident: task.majorIncident || false,
-      difficulty: difficulty,
-      timer: task.timer || [],
-      category: task.category || 'General',
-      termination_date: task.terminationDate ? new Date(task.terminationDate).toISOString() : null,
-      comment: task.comment || null,
-      duration_in_minutes: task.durationInMinutes || null,
-      priority: task.priority || null,
-      user_id: task.userId || null,
-      parent_id: task.parentId || null,
-      children: task.children || [],
-    };
+    const entity = { ...taskToEntity(task), difficulty };
     await adapter.updateTask(taskId, entity);
   } catch (error) {
     console.error("Error updating difficulty:", error);
@@ -854,25 +694,7 @@ const updateCategory = async (taskId: string, category: Category | undefined) =>
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
-    const entity: import('@/lib/persistence-types').TaskEntity = {
-      id: task.id,
-      title: task.title,
-      created_at: new Date(task.createdAt).toISOString(),
-      triage_status: task.triageStatus,
-      urgent: task.urgent || false,
-      impact: task.impact || false,
-      major_incident: task.majorIncident || false,
-      difficulty: task.difficulty || 1,
-      timer: task.timer || [],
-      category: category || 'General',
-      termination_date: task.terminationDate ? new Date(task.terminationDate).toISOString() : null,
-      comment: task.comment || null,
-      duration_in_minutes: task.durationInMinutes || null,
-      priority: task.priority || null,
-      user_id: task.userId || null,
-      parent_id: task.parentId || null,
-      children: task.children || [],
-    };
+    const entity = { ...taskToEntity(task), category: category || 'General' };
     await adapter.updateTask(taskId, entity);
   } catch (error) {
     console.error("Error updating category:", error);
@@ -932,25 +754,7 @@ const updateUser = async (taskId: string, userId: string | undefined) => {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
 
-    const entity: import('@/lib/persistence-types').TaskEntity = {
-      id: task.id,
-      title: task.title,
-      created_at: new Date(task.createdAt).toISOString(),
-      triage_status: task.triageStatus,
-      urgent: task.urgent || false,
-      impact: task.impact || false,
-      major_incident: task.majorIncident || false,
-      difficulty: task.difficulty || 1,
-      timer: task.timer || [],
-      category: task.category || 'General',
-      termination_date: task.terminationDate ? new Date(task.terminationDate).toISOString() : null,
-      comment: task.comment || null,
-      duration_in_minutes: task.durationInMinutes || null,
-      priority: task.priority || null,
-      user_id: userIdForDb, // Ensure null instead of undefined
-      parent_id: task.parentId || null,
-      children: task.children || [],
-    };
+    const entity = { ...taskToEntity(task), user_id: userIdForDb };
 
     console.log('Calling adapter.updateTask with entity:', JSON.stringify(entity, null, 2));
     const result = await adapter.updateTask(taskId, entity);
@@ -991,25 +795,7 @@ const updateTerminationDate = async (taskId: string, terminationDate: number | u
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
-    const entity: import('@/lib/persistence-types').TaskEntity = {
-      id: task.id,
-      title: task.title,
-      created_at: new Date(task.createdAt).toISOString(),
-      triage_status: task.triageStatus,
-      urgent: task.urgent || false,
-      impact: task.impact || false,
-      major_incident: task.majorIncident || false,
-      difficulty: task.difficulty || 1,
-      timer: task.timer || [],
-      category: task.category || 'General',
-      termination_date: terminationDate ? new Date(terminationDate).toISOString() : null,
-      comment: task.comment || null,
-      duration_in_minutes: task.durationInMinutes || null,
-      priority: task.priority || null,
-      user_id: task.userId || null,
-      parent_id: task.parentId || null,
-      children: task.children || [],
-    };
+    const entity = { ...taskToEntity(task), termination_date: terminationDate ? new Date(terminationDate).toISOString() : null };
     await adapter.updateTask(taskId, entity);
   } catch (error) {
     console.error("Error updating termination date:", error);
@@ -1069,25 +855,7 @@ export function useTasks() {
       const adapter = await persistence;
       const updatedTask = tasks.find(t => t.id === id);
       if (updatedTask) {
-        const entity: import('@/lib/persistence-types').TaskEntity = {
-          id: updatedTask.id,
-          title: title,
-          created_at: new Date(updatedTask.createdAt).toISOString(),
-          triage_status: updatedTask.triageStatus,
-          urgent: updatedTask.urgent || false,
-          impact: updatedTask.impact || false,
-          major_incident: updatedTask.majorIncident || false,
-          difficulty: updatedTask.difficulty || 1,
-          timer: updatedTask.timer || [],
-          category: updatedTask.category || 'General',
-          termination_date: updatedTask.terminationDate ? new Date(updatedTask.terminationDate).toISOString() : null,
-          comment: updatedTask.comment || null,
-          duration_in_minutes: updatedTask.durationInMinutes || null,
-          priority: updatedTask.priority || null,
-          user_id: updatedTask.userId || null,
-          parent_id: updatedTask.parentId || null,
-          children: updatedTask.children || [],
-        };
+        const entity = { ...taskToEntity(updatedTask), title };
         await adapter.updateTask(id, entity);
       }
     } catch (error) {
@@ -1115,25 +883,7 @@ export function useTasks() {
       const adapter = await persistence;
       const updatedTask = tasks.find(t => t.id === taskId);
       if (updatedTask) {
-        const entity: import('@/lib/persistence-types').TaskEntity = {
-          id: updatedTask.id,
-          title: updatedTask.title,
-          created_at: new Date(updatedTask.createdAt).toISOString(),
-          triage_status: updatedTask.triageStatus,
-          urgent: updatedTask.urgent || false,
-          impact: updatedTask.impact || false,
-          major_incident: updatedTask.majorIncident || false,
-          difficulty: updatedTask.difficulty || 1,
-          timer: updatedTask.timer || [],
-          category: updatedTask.category || 'General',
-          termination_date: updatedTask.terminationDate ? new Date(updatedTask.terminationDate).toISOString() : null,
-          comment: updatedTask.comment || null,
-          duration_in_minutes: updatedTask.durationInMinutes || null,
-          priority: updatedTask.priority || null,
-          user_id: updatedTask.userId || null,
-          parent_id: updatedTask.parentId || null,
-          children: updatedTask.children || [],
-        };
+        const entity = taskToEntity(updatedTask);
         await adapter.updateTask(taskId, entity);
       }
     } catch (error) {
@@ -1198,7 +948,6 @@ export function useTasks() {
       // Continue with local state update
     }
 
-
     eventBus.publish("tasksChanged");
 
     // Check parent task completion if the deleted task had a parent
@@ -1207,7 +956,7 @@ export function useTasks() {
     }
   }, []);
 
-  const duplicateTaskStructure = React.useCallback(async (taskId: string) => {
+  const duplicateTaskStructure = async (taskId: string): Promise<string | null> => {
     const map = byId(tasks);
     const originalTask = map[taskId];
     if (!originalTask) return null;
@@ -1215,10 +964,14 @@ export function useTasks() {
     // Create a mapping of old IDs to new IDs
     const idMap = new Map<string, string>();
 
+    // Pre-calculate minimum priority once (O(n)) instead of recalculating for each duplicate (was O(n) per duplicate)
+    const minExistingPriority = Math.min(...tasks.map(t => t.priority || 0));
+    const newBasePriority = minExistingPriority - 1;
+
     // Recursive function to duplicate a task and its children
     const duplicateTask = (task: Task, newParentId: string | null): Task => {
       // Generate new ID for this task
-      const newId = crypto.randomUUID();
+      const newId = crypto.randomUUID ? crypto.randomUUID() : `task - ${Date.now()} -${Math.random()} `;
       idMap.set(task.id, newId);
 
       // Create the duplicated task
@@ -1229,7 +982,7 @@ export function useTasks() {
         children: [], // Will be populated later
         title: `${task.title} (Copy)`,
         createdAt: Date.now(),
-        priority: Math.min(...tasks.map(t => t.priority || 0)) - 1, // Set lower priority than all existing tasks
+        priority: newBasePriority, // Use pre-calculated value (O(1) lookup)
       };
 
       // Duplicate children if they exist
@@ -1276,25 +1029,7 @@ export function useTasks() {
 
       // Convert to entities and create them
       for (const task of allNewTasks) {
-        const entity: import('@/lib/persistence-types').TaskEntity = {
-          id: task.id,
-          title: task.title,
-          created_at: new Date(task.createdAt).toISOString(),
-          triage_status: task.triageStatus,
-          urgent: task.urgent || false,
-          impact: task.impact || false,
-          major_incident: task.majorIncident || false,
-          difficulty: task.difficulty || 1,
-          timer: task.timer || [],
-          category: task.category || 'General',
-          termination_date: task.terminationDate ? new Date(task.terminationDate).toISOString() : null,
-          comment: task.comment || null,
-          duration_in_minutes: task.durationInMinutes || null,
-          priority: task.priority || null,
-          user_id: task.userId || null,
-          parent_id: task.parentId || null,
-          children: task.children || [],
-        };
+        const entity = taskToEntity(task);
         await adapter.createTask(entity);
       }
     } catch (error) {
@@ -1311,7 +1046,7 @@ export function useTasks() {
     }
 
     return duplicatedTask.id;
-  }, []);
+  };
 
   const clearAllTasks = React.useCallback(async () => {
     tasks = [];
@@ -1459,25 +1194,7 @@ export function useTasks() {
       const adapter = await persistence;
       const updatedTask = tasks.find(t => t.id === taskId);
       if (updatedTask) {
-        const entity: import('@/lib/persistence-types').TaskEntity = {
-          id: updatedTask.id,
-          title: updatedTask.title,
-          created_at: new Date(updatedTask.createdAt).toISOString(),
-          triage_status: updatedTask.triageStatus,
-          urgent: updatedTask.urgent || false,
-          impact: updatedTask.impact || false,
-          major_incident: updatedTask.majorIncident || false,
-          difficulty: updatedTask.difficulty || 1,
-          timer: updatedTask.timer || [],
-          category: updatedTask.category || 'General',
-          termination_date: updatedTask.terminationDate ? new Date(updatedTask.terminationDate).toISOString() : null,
-          comment: updatedTask.comment || null,
-          duration_in_minutes: updatedTask.durationInMinutes || null,
-          priority: updatedTask.priority || null,
-          user_id: updatedTask.userId || null,
-          parent_id: updatedTask.parentId || null,
-          children: updatedTask.children || [],
-        };
+        const entity = taskToEntity(updatedTask);
         await adapter.updateTask(taskId, entity);
       }
     } catch (error) {
@@ -1505,25 +1222,7 @@ export function useTasks() {
       const adapter = await persistence;
       const updatedTask = tasks.find(t => t.id === taskId);
       if (updatedTask) {
-        const entity: import('@/lib/persistence-types').TaskEntity = {
-          id: updatedTask.id,
-          title: updatedTask.title,
-          created_at: new Date(updatedTask.createdAt).toISOString(),
-          triage_status: updatedTask.triageStatus,
-          urgent: updatedTask.urgent || false,
-          impact: updatedTask.impact || false,
-          major_incident: updatedTask.majorIncident || false,
-          difficulty: updatedTask.difficulty || 1,
-          timer: updatedTask.timer || [],
-          category: updatedTask.category || 'General',
-          termination_date: updatedTask.terminationDate ? new Date(updatedTask.terminationDate).toISOString() : null,
-          comment: updatedTask.comment || null,
-          duration_in_minutes: updatedTask.durationInMinutes || null,
-          priority: updatedTask.priority || null,
-          user_id: updatedTask.userId || null,
-          parent_id: updatedTask.parentId || null,
-          children: updatedTask.children || [],
-        };
+        const entity = taskToEntity(updatedTask);
         await adapter.updateTask(taskId, entity);
       }
     } catch (error) {
@@ -1550,25 +1249,7 @@ export function useTasks() {
       const adapter = await persistence;
       const updatedTask = tasks.find(t => t.id === taskId);
       if (updatedTask) {
-        const entity: import('@/lib/persistence-types').TaskEntity = {
-          id: updatedTask.id,
-          title: updatedTask.title,
-          created_at: new Date(updatedTask.createdAt).toISOString(),
-          triage_status: updatedTask.triageStatus,
-          urgent: updatedTask.urgent || false,
-          impact: updatedTask.impact || false,
-          major_incident: updatedTask.majorIncident || false,
-          difficulty: updatedTask.difficulty || 1,
-          timer: updatedTask.timer || [],
-          category: updatedTask.category || 'General',
-          termination_date: updatedTask.terminationDate ? new Date(updatedTask.terminationDate).toISOString() : null,
-          comment: updatedTask.comment || null,
-          duration_in_minutes: updatedTask.durationInMinutes || null,
-          priority: updatedTask.priority || null,
-          user_id: updatedTask.userId || null,
-          parent_id: updatedTask.parentId || null,
-          children: updatedTask.children || [],
-        };
+        const entity = taskToEntity(updatedTask);
         await adapter.updateTask(taskId, entity);
       }
     } catch (error) {
@@ -1617,25 +1298,7 @@ export function useTasks() {
         const adapter = await persistence;
         const updatedTask = tasks.find(t => t.id === taskId);
         if (updatedTask) {
-          const entity: import('@/lib/persistence-types').TaskEntity = {
-            id: updatedTask.id,
-            title: updatedTask.title,
-            created_at: new Date(updatedTask.createdAt).toISOString(),
-            triage_status: updatedTask.triageStatus,
-            urgent: updatedTask.urgent || false,
-            impact: updatedTask.impact || false,
-            major_incident: updatedTask.majorIncident || false,
-            difficulty: updatedTask.difficulty || 1,
-            timer: updatedTask.timer || [],
-            category: updatedTask.category || 'General',
-            termination_date: updatedTask.terminationDate ? new Date(updatedTask.terminationDate).toISOString() : null,
-            comment: comment,
-            duration_in_minutes: updatedTask.durationInMinutes || null,
-            priority: updatedTask.priority || null,
-            user_id: updatedTask.userId || null,
-            parent_id: updatedTask.parentId || null,
-            children: updatedTask.children || [],
-          };
+          const entity = { ...taskToEntity(updatedTask), comment };
           await adapter.updateTask(taskId, entity);
         }
       } catch (error) {
@@ -1658,25 +1321,7 @@ export function useTasks() {
         const adapter = await persistence;
         const updatedTask = tasks.find(t => t.id === taskId);
         if (updatedTask) {
-          const entity: import('@/lib/persistence-types').TaskEntity = {
-            id: updatedTask.id,
-            title: updatedTask.title,
-            created_at: new Date(updatedTask.createdAt).toISOString(),
-            triage_status: updatedTask.triageStatus,
-            urgent: updatedTask.urgent || false,
-            impact: updatedTask.impact || false,
-            major_incident: updatedTask.majorIncident || false,
-            difficulty: updatedTask.difficulty || 1,
-            timer: updatedTask.timer || [],
-            category: updatedTask.category || 'General',
-            termination_date: updatedTask.terminationDate ? new Date(updatedTask.terminationDate).toISOString() : null,
-            comment: updatedTask.comment || null,
-            duration_in_minutes: durationInMinutes,
-            priority: updatedTask.priority || null,
-            user_id: updatedTask.userId || null,
-            parent_id: updatedTask.parentId || null,
-            children: updatedTask.children || [],
-          };
+          const entity = { ...taskToEntity(updatedTask), duration_in_minutes: durationInMinutes };
           await adapter.updateTask(taskId, entity);
         }
       } catch (error) {
@@ -1699,25 +1344,7 @@ export function useTasks() {
         const adapter = await persistence;
         const updatedTask = tasks.find(t => t.id === taskId);
         if (updatedTask) {
-          const entity: import('@/lib/persistence-types').TaskEntity = {
-            id: updatedTask.id,
-            title: updatedTask.title,
-            created_at: new Date(updatedTask.createdAt).toISOString(),
-            triage_status: updatedTask.triageStatus,
-            urgent: updatedTask.urgent || false,
-            impact: updatedTask.impact || false,
-            major_incident: updatedTask.majorIncident || false,
-            difficulty: updatedTask.difficulty || 1,
-            timer: updatedTask.timer || [],
-            category: updatedTask.category || 'General',
-            termination_date: updatedTask.terminationDate ? new Date(updatedTask.terminationDate).toISOString() : null,
-            comment: updatedTask.comment || null,
-            duration_in_minutes: updatedTask.durationInMinutes || null,
-            priority: priority,
-            user_id: updatedTask.userId || null,
-            parent_id: updatedTask.parentId || null,
-            children: updatedTask.children || [],
-          };
+          const entity = { ...taskToEntity(updatedTask), priority };
           await adapter.updateTask(taskId, entity);
         }
       } catch (error) {
@@ -1746,25 +1373,7 @@ export function useTasks() {
         for (const { id, priority } of updatedTasks) {
           const task = tasks.find(t => t.id === id);
           if (task) {
-            const entity: import('@/lib/persistence-types').TaskEntity = {
-              id: task.id,
-              title: task.title,
-              created_at: new Date(task.createdAt).toISOString(),
-              triage_status: task.triageStatus,
-              urgent: task.urgent || false,
-              impact: task.impact || false,
-              major_incident: task.majorIncident || false,
-              difficulty: task.difficulty || 1,
-              timer: task.timer || [],
-              category: task.category || 'General',
-              termination_date: task.terminationDate ? new Date(task.terminationDate).toISOString() : null,
-              comment: task.comment || null,
-              duration_in_minutes: task.durationInMinutes || null,
-              priority: priority,
-              user_id: task.userId || null,
-              parent_id: task.parentId || null,
-              children: task.children || [],
-            };
+            const entity = { ...taskToEntity(task), priority };
             await adapter.updateTask(id, entity);
           }
         }
