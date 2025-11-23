@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { UserSettingsEntity } from '@/lib/persistence-types';
 import { eventBus } from '@/lib/events';
+import { yUserSettings, isCollaborationEnabled } from '@/lib/collaboration';
 
 export const useUsers = () => {
     const [users, setUsers] = useState<UserSettingsEntity[]>([]);
@@ -32,6 +33,24 @@ export const useUsers = () => {
 
         return () => {
             eventBus.unsubscribe('userSettingsChanged', handleUserSettingsChanged);
+        };
+    }, []);
+
+    // Listen for Yjs user settings changes from other clients
+    useEffect(() => {
+        if (!isCollaborationEnabled()) {
+            return;
+        }
+
+        const handleYjsUserSettingsChange = () => {
+            console.log('Yjs user settings changed, refreshing users list');
+            fetchUsers();
+        };
+
+        yUserSettings.observe(handleYjsUserSettingsChange);
+
+        return () => {
+            yUserSettings.unobserve(handleYjsUserSettingsChange);
         };
     }, []);
 

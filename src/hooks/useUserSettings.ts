@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getRandomUsername } from '@/lib/username-generator';
 import { eventBus } from '@/lib/events';
+import { yUserSettings, isCollaborationEnabled } from '@/lib/collaboration';
 
 export interface UserSettings {
   username: string;
@@ -127,6 +128,17 @@ export const useUserSettings = () => {
         const adapter = await persistence;
         const userId = getUserId();
         await adapter.updateUserSettings(userId, userSettings);
+
+        // Sync to Yjs for cross-client synchronization
+        if (isCollaborationEnabled()) {
+          console.log('Syncing user settings to Yjs:', { userId, username: userSettings.username });
+          yUserSettings.set(userId, {
+            userId,
+            username: userSettings.username,
+            logo: userSettings.logo,
+            has_completed_onboarding: userSettings.hasCompletedOnboarding
+          });
+        }
       } catch (error) {
         console.error('Error saving user settings to persistence:', error);
         // Fallback to localStorage
@@ -140,6 +152,48 @@ export const useUserSettings = () => {
 
     persistSettings();
   }, [userSettings, loading]);
+
+  // Listen for Yjs user settings changes from other clients
+  useEffect(() => {
+    if (!isCollaborationEnabled()) {
+      return;
+    }
+
+    const handleYjsUserSettingsChange = () => {
+      const userId = getUserId();
+      const yjsSettings = yUserSettings.get(userId) as {
+        userId: string;
+        username: string;
+        logo: string;
+        has_completed_onboarding: boolean;
+      } | undefined;
+
+      if (yjsSettings) {
+        console.log('Received user settings update from Yjs:', yjsSettings);
+
+        // Check if settings actually changed to avoid loops
+        if (yjsSettings.username !== userSettings.username ||
+          yjsSettings.logo !== userSettings.logo ||
+          yjsSettings.has_completed_onboarding !== userSettings.hasCompletedOnboarding) {
+
+          setUserSettings({
+            username: yjsSettings.username,
+            logo: yjsSettings.logo,
+            hasCompletedOnboarding: yjsSettings.has_completed_onboarding
+          });
+
+          // Emit event for local components to refresh
+          eventBus.publish('userSettingsChanged');
+        }
+      }
+    };
+
+    yUserSettings.observe(handleYjsUserSettingsChange);
+
+    return () => {
+      yUserSettings.unobserve(handleYjsUserSettingsChange);
+    };
+  }, [userSettings]);
 
   const updateUsername = (newUsername: string) => {
     setUserSettings(prev => ({

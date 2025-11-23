@@ -894,13 +894,30 @@ const updateUser = async (taskId: string, userId: string | undefined) => {
     currentUserId: task.userId
   });
 
-  // Ensure userId is null, not undefined
-  const userIdForDb = userId || null;
-  console.log('userIdForDb:', userIdForDb);
+  // Ensure userId is undefined if empty string, or null for DB
+  const normalizedUserId = userId === '' ? undefined : userId;
+  const userIdForDb = normalizedUserId || null;
+  console.log('Normalized userId:', normalizedUserId, 'userIdForDb:', userIdForDb);
 
-  // Update local state
-  updateTaskInTasks(taskId, (t) => ({ ...t, userId: userIdForDb }));
-  console.log('Local state updated successfully');
+  // Update local state and sync to Yjs atomically
+  const updatedTask = { ...task, userId: normalizedUserId };
+
+  tasks = tasks.map(t => {
+    if (t.id === taskId) {
+      return updatedTask;
+    }
+    return t;
+  });
+
+  // Sync to Yjs using atomic transaction for better consistency
+  if (isCollaborationEnabled()) {
+    console.log('Syncing to Yjs with transaction');
+    doc.transact(() => {
+      yTasks.set(taskId, updatedTask);
+    });
+  }
+
+  console.log('Local state and Yjs updated successfully');
 
   // Persist to backend
   try {
@@ -933,8 +950,21 @@ const updateUser = async (taskId: string, userId: string | undefined) => {
   } catch (error) {
     console.error('Error updating user in backend:', error);
     // Revert local state on error
-    updateTaskInTasks(taskId, (t) => ({ ...t, userId: task.userId }));
-    console.log('Local state reverted due to error');
+    tasks = tasks.map(t => {
+      if (t.id === taskId) {
+        return task; // Revert to original
+      }
+      return t;
+    });
+
+    // Revert Yjs on error
+    if (isCollaborationEnabled()) {
+      doc.transact(() => {
+        yTasks.set(taskId, task);
+      });
+    }
+
+    console.log('Local state and Yjs reverted due to error');
     throw error;
   }
 
