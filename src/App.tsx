@@ -8,6 +8,7 @@ import { NotificationCenter } from "./components/NotificationCenter";
 import { UserSection } from "./components/UserSection";
 import { PersistenceProvider } from "@/lib/PersistenceProvider";
 import { UserProvider } from "@/context/UserContext";
+import { UserSettingsProvider } from "@/context/UserSettingsContext";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { useReminderStore } from "./hooks/useReminders";
@@ -32,26 +33,28 @@ const App = () => {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <PersistenceProvider>
-          <UserProvider>
-            <ViewProvider>
-              <Toaster />
-              <Sonner />
-              <CursorOverlay />
-              <div className="relative">
-                <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
-                  <NotificationCenter />
-                  <UserSection />
+          <UserSettingsProvider>
+            <UserProvider>
+              <ViewProvider>
+                <Toaster />
+                <Sonner />
+                <CursorOverlay />
+                <div className="relative">
+                  <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
+                    <NotificationCenter />
+                    <UserSection />
+                  </div>
+                  <BrowserRouter basename={import.meta.env.VITE_BASE_URL || "/p3fo"} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                    <Routes>
+                      <Route path="/" element={<Index />} />
+                      {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </BrowserRouter>
                 </div>
-                <BrowserRouter basename={import.meta.env.VITE_BASE_URL || "/p3fo"} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-                  <Routes>
-                    <Route path="/" element={<Index />} />
-                    {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                </BrowserRouter>
-              </div>
-            </ViewProvider>
-          </UserProvider>
+              </ViewProvider>
+            </UserProvider>
+          </UserSettingsProvider>
         </PersistenceProvider>
       </TooltipProvider>
     </QueryClientProvider>

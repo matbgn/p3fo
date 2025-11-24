@@ -1,9 +1,8 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
-import { createDbClient } from './db/index.ts';
-import { DbClient } from './db/index.ts';
+import { createDbClient } from './db/index.js';
+import { DbClient } from './db/index.js';
 import { WebSocketServer } from 'ws';
-// @ts-expect-error - y-websocket types are not available
 import { setupWSConnection } from 'y-websocket/bin/utils';
 
 // Initialize Express app

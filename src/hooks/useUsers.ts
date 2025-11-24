@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import * as Y from 'yjs';
 import { UserSettingsEntity } from '@/lib/persistence-types';
 import { eventBus } from '@/lib/events';
 import { yUserSettings, isCollaborationEnabled } from '@/lib/collaboration';
@@ -42,7 +43,11 @@ export const useUsers = () => {
             return;
         }
 
-        const handleYjsUserSettingsChange = () => {
+        const handleYjsUserSettingsChange = (event: Y.YMapEvent<unknown>) => {
+            // Ignore local changes to prevent loops
+            if (event.transaction.local) {
+                return;
+            }
             console.log('Yjs user settings changed, refreshing users list');
             fetchUsers();
         };
