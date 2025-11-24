@@ -5,6 +5,8 @@ import QualityOfLifeIndexMetric from "@/components/QualityOfLifeIndexMetric";
 import NewCapabilitiesMetric from "@/components/NewCapabilitiesMetric";
 import Forecast from "@/components/Forecast/Forecast";
 
+import HourlyBalance from "@/components/HourlyBalance";
+
 const MetricsPage: React.FC = () => {
   const [activeTab, setActiveTab] = React.useState("forecast");
 
@@ -41,10 +43,10 @@ const MetricsPage: React.FC = () => {
               Forecast
             </button>
             <button
-              className={`px-4 py-2 font-medium ${activeTab === "tab2" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
-              onClick={() => setActiveTab("tab2")}
+              className={`px-4 py-2 font-medium ${activeTab === "hourly-balance" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              onClick={() => setActiveTab("hourly-balance")}
             >
-              Tab 2
+              Hourly Balance
             </button>
             <button
               className={`px-4 py-2 font-medium ${activeTab === "tab3" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
@@ -58,6 +60,8 @@ const MetricsPage: React.FC = () => {
           <div className="flex-1 bg-muted/10 rounded-lg p-4 overflow-auto">
             {activeTab === "forecast" ? (
               <Forecast />
+            ) : activeTab === "hourly-balance" ? (
+              <HourlyBalance />
             ) : (
               <div className="flex items-center justify-center h-full">
                 <p className="text-muted-foreground">Graphics content for {activeTab} will appear here</p>

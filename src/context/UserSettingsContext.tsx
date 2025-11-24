@@ -3,17 +3,20 @@ import * as Y from 'yjs';
 import { getRandomUsername } from '@/lib/username-generator';
 import { eventBus } from '@/lib/events';
 import { yUserSettings, isCollaborationEnabled } from '@/lib/collaboration';
+import { MonthlyBalanceData } from '@/lib/persistence-types';
 
 export interface UserSettings {
     username: string;
     logo: string; // base64 encoded image or URL
     hasCompletedOnboarding: boolean;
+    monthlyBalances: Record<string, MonthlyBalanceData>;
 }
 
 const defaultUserSettings: UserSettings = {
     username: '', // Will be set to random name on first load if empty
     logo: '',
     hasCompletedOnboarding: false,
+    monthlyBalances: {},
 };
 
 // Get or create a unique user ID for the current client
@@ -48,7 +51,8 @@ const loadUserSettings = async (userId: string): Promise<UserSettings> => {
         return {
             username: settings.username,
             logo: settings.logo,
-            hasCompletedOnboarding: settings.has_completed_onboarding
+            hasCompletedOnboarding: settings.has_completed_onboarding,
+            monthlyBalances: settings.monthly_balances || {},
         };
     } catch (error) {
         console.error('Error loading user settings from persistence:', error);
@@ -149,7 +153,8 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                         userId,
                         username: userSettings.username,
                         logo: userSettings.logo,
-                        has_completed_onboarding: userSettings.hasCompletedOnboarding
+                        has_completed_onboarding: userSettings.hasCompletedOnboarding,
+                        monthly_balances: userSettings.monthlyBalances
                     });
                 }
             } catch (error) {
@@ -191,6 +196,7 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 username: string;
                 logo: string;
                 has_completed_onboarding: boolean;
+                monthly_balances?: Record<string, MonthlyBalanceData>;
             } | undefined;
 
             if (yjsSettings) {
@@ -198,16 +204,24 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 // Use the ref to check against current state without triggering re-subscription
                 const currentSettings = userSettingsRef.current;
 
+                // Simple deep comparison for monthlyBalances could be expensive, 
+                // but for now let's check reference or JSON stringify if needed.
+                // Or just assume if other fields changed or if we receive an update we might want to sync.
+                // Let's do a JSON stringify comparison for monthlyBalances to be safe.
+                const monthlyBalancesChanged = JSON.stringify(yjsSettings.monthly_balances || {}) !== JSON.stringify(currentSettings.monthlyBalances);
+
                 if (yjsSettings.username !== currentSettings.username ||
                     yjsSettings.logo !== currentSettings.logo ||
-                    yjsSettings.has_completed_onboarding !== currentSettings.hasCompletedOnboarding) {
+                    yjsSettings.has_completed_onboarding !== currentSettings.hasCompletedOnboarding ||
+                    monthlyBalancesChanged) {
 
                     console.log('Received user settings update from Yjs:', yjsSettings);
 
                     setUserSettings({
                         username: yjsSettings.username,
                         logo: yjsSettings.logo,
-                        hasCompletedOnboarding: yjsSettings.has_completed_onboarding
+                        hasCompletedOnboarding: yjsSettings.has_completed_onboarding,
+                        monthlyBalances: yjsSettings.monthly_balances || {}
                     });
 
                     // NOTE: We do NOT emit 'userSettingsChanged' here because that triggers
@@ -265,6 +279,7 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
     );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useUserSettingsContext = () => {
     const context = useContext(UserSettingsContext);
     if (context === undefined) {

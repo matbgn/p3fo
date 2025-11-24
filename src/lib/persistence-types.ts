@@ -47,6 +47,12 @@ export interface TaskEntity {
   children?: string[]; // Add children array for hierarchical structure
 }
 
+export interface MonthlyBalanceData {
+  workload: number;
+  hourly_balance: number;
+  hours_done: number;
+}
+
 export interface UserSettingsEntity {
   userId: string;
   username: string;
@@ -54,6 +60,7 @@ export interface UserSettingsEntity {
   has_completed_onboarding: boolean;
   workload_percentage?: number;
   split_time?: string;
+  monthly_balances?: Record<string, MonthlyBalanceData>;
 }
 
 export interface AppSettingsEntity {

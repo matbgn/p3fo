@@ -54,6 +54,7 @@ interface UserSettingsRow {
   has_completed_onboarding: number;
   workload_percentage: number;
   split_time: string;
+  monthly_balances: string; // JSON string
 }
 
 interface AppSettingsRow {
@@ -115,15 +116,17 @@ class SqliteClient implements DbClient {
         logo TEXT,
         has_completed_onboarding BOOLEAN DEFAULT 0,
         workload_percentage REAL DEFAULT 60,
-        split_time TEXT DEFAULT '13:00'
+        split_time TEXT DEFAULT '13:00',
+        monthly_balances TEXT -- JSON string
       )
     `);
 
-    // Migration: Add workload_percentage if it doesn't exist
+    // Migration: Add columns if they don't exist
     try {
       const columns = this.db.prepare("PRAGMA table_info(user_settings)").all() as { name: string }[];
       const hasWorkload = columns.some(c => c.name === 'workload_percentage');
       const hasSplitTime = columns.some(c => c.name === 'split_time');
+      const hasMonthlyBalances = columns.some(c => c.name === 'monthly_balances');
 
       if (!hasWorkload) {
         console.log('SQLite: Migrating user_settings, adding workload_percentage');
@@ -133,6 +136,11 @@ class SqliteClient implements DbClient {
       if (!hasSplitTime) {
         console.log('SQLite: Migrating user_settings, adding split_time');
         this.db.exec("ALTER TABLE user_settings ADD COLUMN split_time TEXT DEFAULT '13:00'");
+      }
+
+      if (!hasMonthlyBalances) {
+        console.log('SQLite: Migrating user_settings, adding monthly_balances');
+        this.db.exec("ALTER TABLE user_settings ADD COLUMN monthly_balances TEXT");
       }
     } catch (error) {
       console.error('SQLite: Error checking/migrating schema:', error);
@@ -458,6 +466,7 @@ class SqliteClient implements DbClient {
       has_completed_onboarding: Boolean(row.has_completed_onboarding),
       workload_percentage: row.workload_percentage,
       split_time: row.split_time,
+      monthly_balances: row.monthly_balances ? JSON.parse(row.monthly_balances) : {},
     };
   }
 
@@ -466,14 +475,15 @@ class SqliteClient implements DbClient {
     const updated = { ...current, ...data, userId };
 
     this.db.prepare(`
-      INSERT INTO user_settings (user_id, username, logo, has_completed_onboarding, workload_percentage, split_time)
-      VALUES (@userId, @username, @logo, @has_completed_onboarding, @workload_percentage, @split_time)
+      INSERT INTO user_settings (user_id, username, logo, has_completed_onboarding, workload_percentage, split_time, monthly_balances)
+      VALUES (@userId, @username, @logo, @has_completed_onboarding, @workload_percentage, @split_time, @monthly_balances)
       ON CONFLICT(user_id) DO UPDATE SET
         username = excluded.username,
         logo = excluded.logo,
         has_completed_onboarding = excluded.has_completed_onboarding,
         workload_percentage = excluded.workload_percentage,
-        split_time = excluded.split_time
+        split_time = excluded.split_time,
+        monthly_balances = excluded.monthly_balances
     `).run({
       userId: updated.userId,
       username: updated.username,
@@ -481,6 +491,7 @@ class SqliteClient implements DbClient {
       has_completed_onboarding: updated.has_completed_onboarding ? 1 : 0,
       workload_percentage: updated.workload_percentage ?? null,
       split_time: updated.split_time ?? null,
+      monthly_balances: updated.monthly_balances ? JSON.stringify(updated.monthly_balances) : null,
     });
 
     return updated;
@@ -495,6 +506,7 @@ class SqliteClient implements DbClient {
       has_completed_onboarding: Boolean(row.has_completed_onboarding),
       workload_percentage: row.workload_percentage,
       split_time: row.split_time,
+      monthly_balances: row.monthly_balances ? JSON.parse(row.monthly_balances) : {},
     }));
   }
 

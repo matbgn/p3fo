@@ -78,7 +78,8 @@ class PostgresClient implements DbClient {
         logo TEXT,
         has_completed_onboarding BOOLEAN DEFAULT false,
         workload_percentage REAL DEFAULT 60,
-        split_time TEXT DEFAULT '13:00'
+        split_time TEXT DEFAULT '13:00',
+        monthly_balances JSONB
       )
     `);
 
@@ -92,6 +93,9 @@ class PostgresClient implements DbClient {
           END IF;
           IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_settings' AND column_name='split_time') THEN 
             ALTER TABLE user_settings ADD COLUMN split_time TEXT DEFAULT '13:00'; 
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_settings' AND column_name='monthly_balances') THEN 
+            ALTER TABLE user_settings ADD COLUMN monthly_balances JSONB; 
           END IF;
         END $$;
       `);
@@ -411,6 +415,7 @@ class PostgresClient implements DbClient {
         has_completed_onboarding: row.has_completed_onboarding,
         workload_percentage: row.workload_percentage,
         split_time: row.split_time,
+        monthly_balances: row.monthly_balances || {},
       };
     }
     return null;
@@ -421,20 +426,22 @@ class PostgresClient implements DbClient {
     const updated = { ...current, ...data, userId };
 
     await this.pool.query(`
-      INSERT INTO user_settings (id, username, logo, has_completed_onboarding, workload_percentage, split_time)
-      VALUES (1, $1, $2, $3, $4, $5)
+      INSERT INTO user_settings (id, username, logo, has_completed_onboarding, workload_percentage, split_time, monthly_balances)
+      VALUES (1, $1, $2, $3, $4, $5, $6)
       ON CONFLICT (id) DO UPDATE SET
         username = EXCLUDED.username,
         logo = EXCLUDED.logo,
         has_completed_onboarding = EXCLUDED.has_completed_onboarding,
         workload_percentage = EXCLUDED.workload_percentage,
-        split_time = EXCLUDED.split_time
+        split_time = EXCLUDED.split_time,
+        monthly_balances = EXCLUDED.monthly_balances
     `, [
       updated.username,
       updated.logo,
       updated.has_completed_onboarding,
       updated.workload_percentage,
-      updated.split_time
+      updated.split_time,
+      updated.monthly_balances ? JSON.stringify(updated.monthly_balances) : null
     ]);
 
     return updated;
@@ -494,6 +501,9 @@ class PostgresClient implements DbClient {
       username: row.username,
       logo: row.logo,
       has_completed_onboarding: row.has_completed_onboarding,
+      workload_percentage: row.workload_percentage,
+      split_time: row.split_time,
+      monthly_balances: row.monthly_balances || {},
     }));
   }
 
