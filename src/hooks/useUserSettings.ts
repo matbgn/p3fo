@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getRandomUsername } from '@/lib/username-generator';
 import { eventBus } from '@/lib/events';
 import { yUserSettings, isCollaborationEnabled } from '@/lib/collaboration';
@@ -153,6 +153,13 @@ export const useUserSettings = () => {
     persistSettings();
   }, [userSettings, loading]);
 
+  // Keep a ref to the current settings for the Yjs observer to check against
+  // without adding it as a dependency
+  const userSettingsRef = useRef(userSettings);
+  useEffect(() => {
+    userSettingsRef.current = userSettings;
+  }, [userSettings]);
+
   // Listen for Yjs user settings changes from other clients
   useEffect(() => {
     if (!isCollaborationEnabled()) {
@@ -169,12 +176,15 @@ export const useUserSettings = () => {
       } | undefined;
 
       if (yjsSettings) {
-        console.log('Received user settings update from Yjs:', yjsSettings);
-
         // Check if settings actually changed to avoid loops
-        if (yjsSettings.username !== userSettings.username ||
-          yjsSettings.logo !== userSettings.logo ||
-          yjsSettings.has_completed_onboarding !== userSettings.hasCompletedOnboarding) {
+        // Use the ref to check against current state without triggering re-subscription
+        const currentSettings = userSettingsRef.current;
+
+        if (yjsSettings.username !== currentSettings.username ||
+          yjsSettings.logo !== currentSettings.logo ||
+          yjsSettings.has_completed_onboarding !== currentSettings.hasCompletedOnboarding) {
+
+          console.log('Received user settings update from Yjs:', yjsSettings);
 
           setUserSettings({
             username: yjsSettings.username,
@@ -182,8 +192,9 @@ export const useUserSettings = () => {
             hasCompletedOnboarding: yjsSettings.has_completed_onboarding
           });
 
-          // Emit event for local components to refresh
-          eventBus.publish('userSettingsChanged');
+          // NOTE: We do NOT emit 'userSettingsChanged' here because that triggers
+          // a reload from persistence, which might be stale compared to Yjs.
+          // The local state update above is sufficient for this component.
         }
       }
     };
@@ -193,7 +204,7 @@ export const useUserSettings = () => {
     return () => {
       yUserSettings.unobserve(handleYjsUserSettingsChange);
     };
-  }, [userSettings]);
+  }, []);
 
   const updateUsername = (newUsername: string) => {
     setUserSettings(prev => ({
