@@ -3,12 +3,11 @@ import cors from 'cors';
 import { createDbClient } from './db/index.js';
 import { DbClient } from './db/index.js';
 import { WebSocketServer } from 'ws';
-// @ts-ignore - y-websocket types are not available
 import { setupWSConnection } from 'y-websocket/bin/utils';
 
 // Initialize Express app
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5172;
 
 // Environment variables
 const DB_CLIENT = process.env.P3FO_DB_CLIENT || 'sqlite'; // 'sqlite' or 'pg'
@@ -30,7 +29,11 @@ if (process.env.NODE_ENV === 'production') {
   // __dirname is dist/server/server
   const staticPath = path.resolve(__dirname, '../../');
   console.log(`Serving static files from: ${staticPath}`);
-  app.use(express.static(staticPath, { index: false }));
+
+  const baseUrl = process.env.VITE_BASE_URL || '/';
+  console.log(`Mounting static files at: ${baseUrl}`);
+
+  app.use(baseUrl, express.static(staticPath, { index: false }));
 }
 
 // Initialize database client
@@ -338,7 +341,14 @@ app.use('*', async (req: Request, res: Response) => {
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
     const indexPath = path.resolve(__dirname, '../../index.html');
-    res.sendFile(indexPath);
+
+    // Only serve index.html for routes that match the base URL
+    const baseUrl = process.env.VITE_BASE_URL || '/';
+    if (req.originalUrl.startsWith(baseUrl)) {
+      res.sendFile(indexPath);
+    } else {
+      res.status(404).json({ error: 'Route not found' });
+    }
   } else {
     res.status(404).json({ error: 'Route not found' });
   }

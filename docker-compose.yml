@@ -1,42 +1,28 @@
-version: '3'
-
 services:
-  p3fo-api:
-    build: .
-    container_name: p3fo-api
+  p3fo:
+    build:
+      context: .
+      args:
+        - VITE_BASE_URL=${VITE_BASE_URL:-/}
+    container_name: p3fo
     ports:
-      - "3000:3000"
+      - "5173:5173"
     environment:
       - NODE_ENV=production
+      - PORT=5173
+      - VITE_BASE_URL=${VITE_BASE_URL:-/}
       - P3FO_DB_CLIENT=${P3FO_DB_CLIENT:-sqlite}
       - P3FO_DB_SQLITE_FILE=${P3FO_DB_SQLITE_FILE:-/home/appuser/data/p3fo.db}
       - P3FO_DB_URL=${P3FO_DB_URL}
     volumes:
       - p3fo_data:/home/appuser/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:5173/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
     restart: unless-stopped
-
-  p3fo:
-    build: .
-    container_name: p3fo
-    command: sh -c "cd /app && npm install -g pnpm && pnpm install && pnpm run dev -- --host --port 5173"
-    ports:
-      - "5173:5173"
-    volumes:
-      - .:/app
-      - /app/node_modules
-    environment:
-      - NODE_ENV=development
-      - API_TARGET=http://p3fo-api:3000
-      - WS_TARGET=ws://p3fo-api:3000
-    depends_on:
-      - p3fo-api
-    restart: "no"
 
 volumes:
   p3fo_data:

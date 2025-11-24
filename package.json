@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "preview:gh": "VITE_BASE_URL=/p3fo/ vite preview",
-    "dev:server": "tsx watch server/index.ts",
+    "dev:server": "PORT=5172 tsx watch server/index.ts",
+    "dev:all": "concurrently \"pnpm dev:server\" \"pnpm dev\"",
     "start:server": "node dist/server/index.js"
   },
   "dependencies": {
