@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.2.0 (2025-11-24)
+
+### Features
+
+- introduce monthly balance tracking graph (cdde904)
+
+### Bug Fixes
+
+- **user join:** optimize yjs code on first log (dee9c2b)
+- **task:** fix task title update (9c9827f)
+- **user join:** correct username generation (7de2901)
+- deletion on collaboration (44c9f22)
+- username propagation in collaboration mode (451e5cc)
+
+---
+
 ## v0.1.0 (2025-11-23)
 
 ### Features

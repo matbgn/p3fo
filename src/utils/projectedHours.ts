@@ -138,4 +138,86 @@ export function getProjectedHoursForActualMonth(
     }
 }
 
-export default { getProjectedHoursForActualMonth }
+export type DataPoint = {
+    date: string;
+    "Hours Delta per each Month": number;
+    "Cummulative Hourly Balance": number;
+    desc_id: string;
+    workload: number;
+    hourly_balance: number;
+    hours_done: number;
+};
+
+import { MonthlyBalanceData } from "@/lib/persistence-types";
+
+export function getHistoricalHourlyBalances(
+    tasks: Task[],
+    settings: CombinedSettings,
+    monthsBack: number = 6,
+    monthlyBalances: Record<string, MonthlyBalanceData> = {}
+): DataPoint[] {
+    const now = new Date();
+    const data: DataPoint[] = [];
+    let cumulativeBalance = 0;
+
+    for (let offset = monthsBack; offset >= 0; offset--) {
+        const monthDate = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+        const year = monthDate.getFullYear();
+        const monthNum = monthDate.getMonth() + 1;
+        const descId = `${year}-${String(monthNum).padStart(2, '0')}`;
+
+        const projRes = getProjectedHoursForActualMonth(year, monthNum, tasks, settings, offset === 0);
+
+        let workload = settings.userWorkloadPercentage;
+        // For current month, use projected hours. For past months, use actual hours done
+        let hoursDone = offset === 0 ? projRes.totalTimeExpandedInHours : projRes.totalTimeElapsedForAllMonth;
+
+        // Calculate hours due based on working days and workload
+        const workingDays = getWorkingDays(year, monthNum);
+        let hoursDue = Math.round((workload / 100) * workingDays * 8 * 10) / 10;
+
+        // Calculate delta as hours_done - hours_due
+        let delta = hoursDone - hoursDue;
+
+        // If it's a past month and we have a manual entry, use it
+        if (offset > 0 && monthlyBalances[descId]) {
+            const manualEntry = monthlyBalances[descId];
+            workload = manualEntry.workload;
+            hoursDone = manualEntry.hours_done;
+
+            // Recalculate hours due with manual workload
+            hoursDue = Math.round((workload / 100) * workingDays * 8 * 10) / 10;
+
+            // Delta is auto-calculated from hours done and due
+            delta = hoursDone - hoursDue;
+        } else if (offset > 0) {
+            // Past month without manual entry: make it empty/0 as requested
+            delta = 0;
+            hoursDone = 0;
+            workload = 0;
+            hoursDue = 0;
+        }
+
+        cumulativeBalance += delta;
+
+        const dateStr = `${monthDate.toLocaleDateString("default", { month: "short" })} ${monthDate.getFullYear() % 100}`;
+
+        data.push({
+            date: dateStr,
+            "Hours Delta per each Month": delta,
+            "Cummulative Hourly Balance": cumulativeBalance,
+            desc_id: descId,
+            workload: workload,
+            hourly_balance: delta,
+            hours_done: hoursDone,
+        });
+    }
+
+    // Don't reverse - oldest month on left, newest on right
+    return data;
+}
+
+export default {
+    getProjectedHoursForActualMonth,
+    getHistoricalHourlyBalances,
+};

@@ -76,5 +76,22 @@ export const useUsers = () => {
         }
     };
 
-    return { users, loading, refreshUsers: fetchUsers, deleteUser };
+    const updateUser = async (userId: string, patch: Partial<UserSettingsEntity>) => {
+        try {
+            const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+            const adapter = await persistence;
+            await adapter.updateUserSettings(userId, patch);
+
+            // Refresh the list
+            await fetchUsers();
+
+            // Notify others
+            eventBus.publish('userSettingsChanged');
+        } catch (error) {
+            console.error('Error updating user:', error);
+            throw error;
+        }
+    };
+
+    return { users, loading, refreshUsers: fetchUsers, deleteUser, updateUser };
 };

@@ -21,10 +21,7 @@ _check-env var:
 dev:
   @echo "--- Starting P3FO Development Environment ---"
   @echo "[1/2] Starting development server..."
-  npm run dev
-
-  @echo "[2/2] Starting development server (separate terminal)..."
-  npm run dev:server
+  npm run dev:all
 
 # --- Version Management Tasks ---
 sync-versions version:
@@ -156,6 +153,11 @@ deploy-version version: _check-BW_SESSION
 # --- Release Task (Complete Release Workflow) ---
 release:
   #!/bin/bash
+  # if on main, exit
+  if [ "$(git rev-parse --abbrev-ref HEAD)" = "main" ]; then
+    echo "You are on main branch, you should be on another branch"
+    exit 1
+  fi
   VERSION=$(git-sv nv)
   just sync-versions "$VERSION"
   just changelog
