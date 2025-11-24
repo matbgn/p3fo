@@ -828,7 +828,9 @@ export function useTasks() {
     tasks = tasks.map((currentTask) => {
       if (currentTask.id === id) {
         parentIdToReturn = currentTask.parentId || null; // Capture parentId before update
-        return { ...currentTask, title };
+        const updated = { ...currentTask, title };
+        syncTaskToYjs(id, updated);
+        return updated;
       }
       return currentTask;
     });
@@ -839,10 +841,12 @@ export function useTasks() {
         if (currentTask.id === parentIdToReturn) {
           // Ensure the child is in the parent's children array
           if (!currentTask.children?.includes(id)) {
-            return {
+            const updatedParent = {
               ...currentTask,
               children: [...(currentTask.children || []), id],
             };
+            syncTaskToYjs(currentTask.id, updatedParent);
+            return updatedParent;
           }
         }
         return currentTask;
