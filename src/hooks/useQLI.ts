@@ -1,4 +1,5 @@
 import * as React from "react";
+import { usePersistence } from "@/hooks/usePersistence";
 
 // Type for the QLI data
 export type QLIData = {
@@ -15,13 +16,15 @@ export function useQLI() {
   const [data, setData] = React.useState<QLIData | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const persistence = usePersistence();
 
   React.useEffect(() => {
-    const calculateQLI = () => {
+    const calculateQLI = async () => {
       try {
         setLoading(true);
-        const responses = JSON.parse(localStorage.getItem('qolSurveyResponse') || '{}');
-        if (Object.keys(responses).length === 0) {
+        const allResponses = await persistence.getAllQolSurveyResponses();
+
+        if (Object.keys(allResponses).length === 0) {
           // No responses yet, return null data without error
           setData(null);
           setLoading(false);
@@ -29,31 +32,40 @@ export function useQLI() {
         }
 
         const favorableScores = ["Satisfied", "Very satisfied"];
-        let favorableCount = 0;
-        let validResponseCount = 0;
+        let totalFavorableCount = 0;
+        let totalValidResponseCount = 0;
 
-        for (const answer of Object.values(responses)) {
-          if (answer && answer !== "No answer") {
-            validResponseCount++;
-            if (favorableScores.includes(answer as string)) {
-              favorableCount++;
+        // Iterate through each user's responses
+        for (const userResponses of Object.values(allResponses)) {
+          if (!userResponses) continue;
+
+          // Iterate through answers in a user's response
+          for (const answer of Object.values(userResponses)) {
+            if (answer && answer !== "No answer") {
+              totalValidResponseCount++;
+              if (favorableScores.includes(answer as string)) {
+                totalFavorableCount++;
+              }
             }
           }
         }
 
-        if (validResponseCount === 0) {
-          throw new Error('No valid answers found in the survey responses.');
+        if (totalValidResponseCount === 0) {
+          // No valid answers found across all users
+          setData(null);
+          setLoading(false);
+          return;
         }
 
-        const rawScore = (favorableCount / validResponseCount) * 100;
+        const rawScore = (totalFavorableCount / totalValidResponseCount) * 100;
         const roundedScore = Math.round(rawScore);
 
         const qliData: QLIData = {
           score: roundedScore,
           details: {
-            total_responses: 1, // Since we now only have one set of responses
-            favorable_responses: favorableCount,
-            valid_responses: validResponseCount,
+            total_responses: Object.keys(allResponses).length, // Number of users who responded
+            favorable_responses: totalFavorableCount,
+            valid_responses: totalValidResponseCount,
             raw_score: rawScore
           }
         };
@@ -77,7 +89,7 @@ export function useQLI() {
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, []);
+  }, [persistence]);
 
   return { data, loading, error };
 }

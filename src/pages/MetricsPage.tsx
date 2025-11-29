@@ -4,11 +4,13 @@ import FailureRateMetric from "@/components/FailureRateMetric";
 import QualityOfLifeIndexMetric from "@/components/QualityOfLifeIndexMetric";
 import NewCapabilitiesMetric from "@/components/NewCapabilitiesMetric";
 import Forecast from "@/components/Forecast/Forecast";
-
 import HourlyBalance from "@/components/HourlyBalance";
+import QoLSurvey from "@/components/QoLSurvey";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 const MetricsPage: React.FC = () => {
   const [activeTab, setActiveTab] = React.useState("forecast");
+  const { userId } = useCurrentUser();
 
   return (
     <div className="flex flex-col gap-6 h-full">
@@ -49,10 +51,10 @@ const MetricsPage: React.FC = () => {
               Hourly Balance
             </button>
             <button
-              className={`px-4 py-2 font-medium ${activeTab === "tab3" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
-              onClick={() => setActiveTab("tab3")}
+              className={`px-4 py-2 font-medium ${activeTab === "individual-qol" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              onClick={() => setActiveTab("individual-qol")}
             >
-              Tab 3
+              Individual QoL
             </button>
           </div>
 
@@ -62,6 +64,8 @@ const MetricsPage: React.FC = () => {
               <Forecast />
             ) : activeTab === "hourly-balance" ? (
               <HourlyBalance />
+            ) : activeTab === "individual-qol" ? (
+              userId ? <QoLSurvey userId={userId} /> : <div>Please log in to view survey</div>
             ) : (
               <div className="flex items-center justify-center h-full">
                 <p className="text-muted-foreground">Graphics content for {activeTab} will appear here</p>

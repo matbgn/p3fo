@@ -6,7 +6,7 @@ import {
   BarChart3,
   Settings,
   History,
-  Smile,
+
   LayoutDashboard,
   ListTodo,
   ChartNoAxesGantt, // Add ChartNoAxesGantt icon
@@ -15,12 +15,12 @@ import { useCursors } from '@/hooks/useCursors';
 import { Badge } from './ui/badge';
 
 interface ViewSwitcherProps {
-  value: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "qol-survey" | "plan"; // Add "plan"
-  onChange: (view: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "qol-survey" | "plan") => void; // Add "plan"
+  value: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "plan"; // Add "plan"
+  onChange: (view: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "plan") => void; // Add "plan"
 }
 
 interface ViewOption {
-  id: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "qol-survey" | "plan"; // Add "plan"
+  id: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "plan"; // Add "plan"
   label: string;
   icon: React.ReactNode;
 }
@@ -44,7 +44,7 @@ export function ViewSwitcher({ value, onChange }: ViewSwitcherProps) {
     { id: 'kanban', label: 'Project', icon: <LayoutDashboard className="w-4 h-4" /> },
     { id: 'focus', label: 'Focus', icon: <ListChecks className="w-4 h-4" /> },
     { id: 'timetable', label: 'Timetable', icon: <History className="w-4 h-4" /> },
-    { id: 'qol-survey', label: 'QLI', icon: <Smile className="w-4 h-4" /> },
+
     { id: 'metrics', label: 'Metrics', icon: <BarChart3 className="w-4 h-4" /> },
     { id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" /> },
   ];

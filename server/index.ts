@@ -276,9 +276,24 @@ app.patch('/api/settings', async (req: Request, res: Response) => {
 });
 
 // QoL survey routes
-app.get('/api/qol', async (req: Request, res: Response) => {
+app.get('/api/qol/all', async (req: Request, res: Response) => {
   try {
-    const response = await db.getQolSurveyResponse();
+    if (db.getAllQolSurveyResponses) {
+      const responses = await db.getAllQolSurveyResponses();
+      res.json(responses);
+    } else {
+      res.status(501).json({ error: 'Not implemented' });
+    }
+  } catch (error) {
+    console.error('Error fetching all QoL survey responses:', error);
+    res.status(500).json({ error: 'Failed to fetch all QoL survey responses' });
+  }
+});
+
+app.get('/api/qol/:userId', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const response = await db.getQolSurveyResponse(userId);
     res.json(response);
   } catch (error) {
     console.error('Error fetching QoL survey response:', error);
@@ -286,9 +301,10 @@ app.get('/api/qol', async (req: Request, res: Response) => {
   }
 });
 
-app.put('/api/qol', async (req: Request, res: Response) => {
+app.put('/api/qol/:userId', async (req: Request, res: Response) => {
   try {
-    await db.saveQolSurveyResponse(req.body);
+    const { userId } = req.params;
+    await db.saveQolSurveyResponse(userId, req.body);
     res.json({ success: true });
   } catch (error) {
     console.error('Error saving QoL survey response:', error);

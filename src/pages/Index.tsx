@@ -7,7 +7,7 @@ import { Timetable } from "@/components/Timetable";
 import ProgramView from "@/components/ProgramView";
 import SettingsPage from "./SettingsPage";
 import MetricsPage from "./MetricsPage";
-import QoLIndexSurveyPage from "./QoLIndexSurveyPage";
+
 import { addReminder } from "@/utils/reminders";
 import PlanView from "@/components/PlanView"; // Import PlanView
 import { Button } from "@/components/ui/button";
@@ -58,8 +58,6 @@ const Index: React.FC = () => {
           <PlanView onFocusOnTask={handleFocusOnTask} />
         ) : view === "metrics" ? (
           <MetricsPage />
-        ) : view === "qol-survey" ? (
-          <QoLIndexSurveyPage />
         ) : (
           <SettingsPage />
         )}

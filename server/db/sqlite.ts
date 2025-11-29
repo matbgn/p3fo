@@ -171,10 +171,19 @@ class SqliteClient implements DbClient {
       `).run(DEFAULT_APP_SETTINGS as unknown as Record<string, string | number | null>);
     }
 
-    // Create qol_survey table (single row)
+    // Create qol_survey table
+    // Check if we need to migrate from the old single-row schema
+    const qolColumns = this.db.prepare("PRAGMA table_info(qol_survey)").all() as { name: string }[];
+    const hasUserId = qolColumns.some(c => c.name === 'user_id');
+
+    if (qolColumns.length > 0 && !hasUserId) {
+      console.log('SQLite: Dropping old qol_survey table to migrate to per-user schema');
+      this.db.exec('DROP TABLE qol_survey');
+    }
+
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS qol_survey (
-        id INTEGER PRIMARY KEY DEFAULT 1,
+        user_id TEXT PRIMARY KEY,
         responses TEXT -- JSON string
       )
     `);
@@ -536,11 +545,27 @@ class SqliteClient implements DbClient {
   }
 
   async deleteUser(userId: string): Promise<void> {
-    this.db.prepare('DELETE FROM user_settings WHERE user_id = ?').run(userId);
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare('DELETE FROM qol_survey WHERE user_id = ?').run(userId);
+      this.db.prepare('DELETE FROM user_settings WHERE user_id = ?').run(userId);
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   async clearAllUsers(): Promise<void> {
-    this.db.prepare('DELETE FROM user_settings').run();
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare('DELETE FROM qol_survey').run();
+      this.db.prepare('DELETE FROM user_settings').run();
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   // App settings
@@ -582,19 +607,31 @@ class SqliteClient implements DbClient {
   }
 
   // QoL survey
-  async getQolSurveyResponse(): Promise<QolSurveyResponseEntity | null> {
-    const row = this.db.prepare('SELECT responses FROM qol_survey WHERE id = 1').get() as JsonRow | undefined;
+  async getQolSurveyResponse(userId: string): Promise<QolSurveyResponseEntity | null> {
+    const row = this.db.prepare('SELECT responses FROM qol_survey WHERE user_id = ?').get(userId) as JsonRow | undefined;
     return row?.responses ? JSON.parse(row.responses) : null;
   }
 
-  async saveQolSurveyResponse(data: QolSurveyResponseEntity): Promise<void> {
-    // Check if row exists
-    const exists = this.db.prepare('SELECT id FROM qol_survey WHERE id = 1').get();
-    if (exists) {
-      this.db.prepare('UPDATE qol_survey SET responses = ? WHERE id = 1').run(JSON.stringify(data));
-    } else {
-      this.db.prepare('INSERT INTO qol_survey (id, responses) VALUES (1, ?)').run(JSON.stringify(data));
+  async saveQolSurveyResponse(userId: string, data: QolSurveyResponseEntity): Promise<void> {
+    this.db.prepare(`
+      INSERT INTO qol_survey (user_id, responses) 
+      VALUES (@userId, @responses)
+      ON CONFLICT(user_id) DO UPDATE SET responses = excluded.responses
+    `).run({
+      userId,
+      responses: JSON.stringify(data)
+    });
+  }
+
+  async getAllQolSurveyResponses(): Promise<Record<string, QolSurveyResponseEntity>> {
+    const rows = this.db.prepare('SELECT user_id, responses FROM qol_survey').all() as { user_id: string, responses: string }[];
+    const result: Record<string, QolSurveyResponseEntity> = {};
+    for (const row of rows) {
+      if (row.responses) {
+        result[row.user_id] = JSON.parse(row.responses);
+      }
     }
+    return result;
   }
 
   // Filters

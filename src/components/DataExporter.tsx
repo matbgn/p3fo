@@ -20,8 +20,8 @@ const DataExporter: React.FC = () => {
       // Fetch app settings from persistence
       const appSettings = await adapter.getSettings();
 
-      // Fetch QoL survey response from persistence
-      const qolSurveyResponse = await adapter.getQolSurveyResponse() || {};
+      // Fetch ALL QoL survey responses from persistence (for all users)
+      const allQolSurveyResponses = await adapter.getAllQolSurveyResponses() || {};
 
       // Map app settings to export format
       const settingsToExport = {
@@ -36,7 +36,7 @@ const DataExporter: React.FC = () => {
       const exportData = {
         tasks,
         scheduledReminders: useReminderStore.getState().scheduledReminders,
-        qolSurveyResponse,
+        qolSurveyResponses: allQolSurveyResponses, // Export all users' QoL data
         settings: settingsToExport,
         userSettings: {
           userId,

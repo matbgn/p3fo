@@ -285,6 +285,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
 
     try {
       localStorage.removeItem(`${USER_SETTINGS_STORAGE_KEY}_${userId}`);
+      localStorage.removeItem(`${QOL_SURVEY_STORAGE_KEY}_${userId}`);
       console.log(`Deleted user ${userId}`);
     } catch (error) {
       console.error('Error deleting user from localStorage:', error);
@@ -301,7 +302,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && key.startsWith(`${USER_SETTINGS_STORAGE_KEY}_`)) {
+        if (key && (key.startsWith(`${USER_SETTINGS_STORAGE_KEY}_`) || key.startsWith(`${QOL_SURVEY_STORAGE_KEY}_`))) {
           keysToRemove.push(key);
         }
       }
@@ -343,13 +344,13 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
   }
 
-  async getQolSurveyResponse(): Promise<QolSurveyResponseEntity | null> {
+  async getQolSurveyResponse(userId: string): Promise<QolSurveyResponseEntity | null> {
     if (typeof window === 'undefined') {
       return null;
     }
 
     try {
-      const stored = localStorage.getItem(QOL_SURVEY_STORAGE_KEY);
+      const stored = localStorage.getItem(`${QOL_SURVEY_STORAGE_KEY}_${userId}`);
       return stored ? JSON.parse(stored) : null;
     } catch (error) {
       console.error('Error reading QoL survey response from localStorage:', error);
@@ -357,16 +358,40 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
   }
 
-  async saveQolSurveyResponse(data: QolSurveyResponseEntity): Promise<void> {
+  async saveQolSurveyResponse(userId: string, data: QolSurveyResponseEntity): Promise<void> {
     if (typeof window === 'undefined') {
       return;
     }
 
     try {
-      localStorage.setItem(QOL_SURVEY_STORAGE_KEY, JSON.stringify(data));
+      localStorage.setItem(`${QOL_SURVEY_STORAGE_KEY}_${userId}`, JSON.stringify(data));
     } catch (error) {
       console.error('Error saving QoL survey response to localStorage:', error);
       throw error;
+    }
+  }
+
+  async getAllQolSurveyResponses(): Promise<Record<string, QolSurveyResponseEntity>> {
+    if (typeof window === 'undefined') {
+      return {};
+    }
+
+    try {
+      const responses: Record<string, QolSurveyResponseEntity> = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(`${QOL_SURVEY_STORAGE_KEY}_`)) {
+          const userId = key.replace(`${QOL_SURVEY_STORAGE_KEY}_`, '');
+          const stored = localStorage.getItem(key);
+          if (stored) {
+            responses[userId] = JSON.parse(stored);
+          }
+        }
+      }
+      return responses;
+    } catch (error) {
+      console.error('Error getting all QoL survey responses from localStorage:', error);
+      return {};
     }
   }
 
