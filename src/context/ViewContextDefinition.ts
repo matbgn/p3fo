@@ -7,7 +7,7 @@ export type ViewType =
     | "program"
     | "settings"
     | "metrics"
-    | "qol-survey"
+
     | "plan";
 
 export interface ViewContextType {

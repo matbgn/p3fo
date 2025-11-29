@@ -8,27 +8,15 @@ import { useUsers } from "@/hooks/useUsers";
 import { getWorkingDays } from "@/utils/workingdays";
 import TimetableRecordsCell from "./TimetableRecordsCell";
 
-const Forecast: React.FC = () => {
+interface ForecastProps {
+    userId: string;
+}
+
+const Forecast: React.FC<ForecastProps> = ({ userId }) => {
     const { tasks } = useTasks();
     const { settings } = useCombinedSettings();
     const { userSettings } = useUserSettings();
     const { users } = useUsers();
-
-    const [selectedUserId, setSelectedUserId] = useState<string>("");
-
-    // Set default selected user to current user when loaded
-    useEffect(() => {
-        if (userSettings.username && !selectedUserId) {
-            // Find the user ID corresponding to the current username if possible,
-            // or just use the current user's ID if we had it.
-            // useUserSettings doesn't expose ID directly in the hook return, but it uses it internally.
-            // Let's try to find the user in the list that matches the current username.
-            const currentUser = users.find(u => u.username === userSettings.username);
-            if (currentUser) {
-                setSelectedUserId(currentUser.userId);
-            }
-        }
-    }, [userSettings, users, selectedUserId]);
 
     const now = new Date();
     const year = now.getFullYear();
@@ -48,38 +36,31 @@ const Forecast: React.FC = () => {
         return () => clearInterval(timer);
     }, []);
 
-    const selectedUser = users.find(u => u.userId === selectedUserId);
+    const selectedUser = users.find(u => u.userId === userId);
 
     // Filter tasks by selected user
-    const filteredTasks = selectedUserId === "unassigned"
+    const filteredTasks = userId === "unassigned"
         ? tasks.filter(task => !task.userId)
-        : selectedUserId
-            ? tasks.filter(task => task.userId === selectedUserId || (selectedUser && task.userId === selectedUser.username))
+        : userId
+            ? tasks.filter(task => task.userId === userId || (selectedUser && task.userId === selectedUser.username))
             : tasks;
-    const displayUserName = selectedUserId === "unassigned"
+    const displayUserName = userId === "unassigned"
         ? "Unassigned"
         : selectedUser
             ? selectedUser.username
             : (userSettings.username || "Select User");
+
+    // Use selected user's workload if available, otherwise fallback to current settings
+    const forecastSettings = {
+        ...settings,
+        userWorkloadPercentage: selectedUser?.workload ?? settings.userWorkloadPercentage
+    };
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
             <Card className="h-28">
                 <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
                     <CardTitle className="text-sm font-medium">User</CardTitle>
-                    <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                        <SelectTrigger className="w-[140px] h-8">
-                            <SelectValue placeholder="Select user" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="unassigned">Unassigned</SelectItem>
-                            {users.map((user) => (
-                                <SelectItem key={user.userId} value={user.userId}>
-                                    {user.username}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold truncate" title={displayUserName}>
@@ -117,7 +98,7 @@ const Forecast: React.FC = () => {
 
             <TimetableRecordsCell
                 tasks={filteredTasks}
-                settings={settings}
+                settings={forecastSettings}
                 year={year}
                 month={month}
             />

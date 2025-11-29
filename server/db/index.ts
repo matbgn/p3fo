@@ -30,8 +30,9 @@ export interface DbClient {
   updateAppSettings(data: Partial<AppSettingsEntity>): Promise<AppSettingsEntity>;
 
   // QoL survey
-  getQolSurveyResponse(): Promise<QolSurveyResponseEntity | null>;
-  saveQolSurveyResponse(data: QolSurveyResponseEntity): Promise<void>;
+  getQolSurveyResponse(userId: string): Promise<QolSurveyResponseEntity | null>;
+  saveQolSurveyResponse(userId: string, data: QolSurveyResponseEntity): Promise<void>;
+  getAllQolSurveyResponses?(): Promise<Record<string, QolSurveyResponseEntity>>;
 
   // Filters
   getFilters(): Promise<FilterStateEntity | null>;

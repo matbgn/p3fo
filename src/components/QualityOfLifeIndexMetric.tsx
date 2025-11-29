@@ -28,7 +28,7 @@ const QualityOfLifeIndexMetric: React.FC = () => {
     return (
       <Card className="h-32 bg-card">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium">Quality of Life Index</CardTitle>
+          <CardTitle className="text-sm font-medium">Team Quality of Life Index</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">Loading...</div>
@@ -44,7 +44,7 @@ const QualityOfLifeIndexMetric: React.FC = () => {
     return (
       <Card className="h-32 bg-card">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium">Quality of Life Index</CardTitle>
+          <CardTitle className="text-sm font-medium">Team Quality of Life Index</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold text-red-500">Error</div>
@@ -60,7 +60,7 @@ const QualityOfLifeIndexMetric: React.FC = () => {
     return (
       <Card className="h-32 bg-card">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium">Quality of Life Index</CardTitle>
+          <CardTitle className="text-sm font-medium">Team Quality of Life Index</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">No data</div>
@@ -75,7 +75,7 @@ const QualityOfLifeIndexMetric: React.FC = () => {
   return (
     <Card className={`h-32 ${getCardClass()}`}>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">Quality of Life Index</CardTitle>
+        <CardTitle className="text-sm font-medium">Team Quality of Life Index</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">{data.score}%</div>

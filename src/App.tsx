@@ -33,8 +33,8 @@ const App = () => {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <PersistenceProvider>
-          <UserSettingsProvider>
-            <UserProvider>
+          <UserProvider>
+            <UserSettingsProvider>
               <ViewProvider>
                 <Toaster />
                 <Sonner />
@@ -53,11 +53,11 @@ const App = () => {
                   </BrowserRouter>
                 </div>
               </ViewProvider>
-            </UserProvider>
-          </UserSettingsProvider>
+            </UserSettingsProvider>
+          </UserProvider>
         </PersistenceProvider>
       </TooltipProvider>
-    </QueryClientProvider>
+    </QueryClientProvider >
   );
 };
 

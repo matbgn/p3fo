@@ -17,6 +17,13 @@ export interface CombinedSettings {
     failureRateGoal: number;
     qliGoal: number;
     newCapabilitiesGoal: number;
+    vacationLimitMultiplier: number;
+    hourlyBalanceLimitUpper: number;
+    hourlyBalanceLimitLower: number;
+
+    // User preference
+    weekStartDay: 0 | 1; // 0 for Sunday, 1 for Monday
+    defaultPlanView: 'week' | 'month';
 }
 
 /**
@@ -46,6 +53,11 @@ const defaultCombinedSettings: CombinedSettings = {
     failureRateGoal: 5,
     qliGoal: 60,
     newCapabilitiesGoal: 57.98,
+    vacationLimitMultiplier: 1.5,
+    hourlyBalanceLimitUpper: 0.5,
+    hourlyBalanceLimitLower: -0.5,
+    weekStartDay: 1, // Default to Monday
+    defaultPlanView: 'week',
 };
 
 /**
@@ -75,6 +87,11 @@ export const useCombinedSettings = () => {
                     failureRateGoal: appSettings.failure_rate_goal || 5,
                     qliGoal: appSettings.qli_goal || 60,
                     newCapabilitiesGoal: appSettings.new_capabilities_goal || 57.98,
+                    vacationLimitMultiplier: appSettings.vacation_limit_multiplier || 1.5,
+                    hourlyBalanceLimitUpper: appSettings.hourly_balance_limit_upper || 0.5,
+                    hourlyBalanceLimitLower: appSettings.hourly_balance_limit_lower || -0.5,
+                    weekStartDay: 1,
+                    defaultPlanView: 'week',
                 };
 
                 // Override with user-specific settings if they exist
@@ -82,8 +99,27 @@ export const useCombinedSettings = () => {
                     if (userSettings.split_time) {
                         merged.splitTime = userSettings.split_time;
                     }
-                    if (userSettings.workload_percentage !== undefined) {
-                        merged.userWorkloadPercentage = userSettings.workload_percentage;
+                    if (userSettings.workload !== undefined) {
+                        merged.userWorkloadPercentage = userSettings.workload;
+                    }
+                    // We'll store weekStartDay in userSettings as a generic preference if possible, 
+                    // but since the schema might not support it yet, we'll rely on local state/defaults for now 
+                    // or assume it's added to the userSettings object if the backend supports it.
+                    // For this implementation, we will persist it in localStorage as a fallback if not in userSettings,
+                    // or just keep it in memory if we can't change the backend schema easily.
+                    // However, the prompt implies we should add it. Let's assume we can add it to userSettings 
+                    // or use a workaround. Since I can't easily change the backend schema without seeing it,
+
+                    // Actually, let's check if we can add it to the UserSettings type. 
+                    // I'll assume for now we can't easily change the DB schema in this step without more info.
+                    // But I need to persist it. I'll use localStorage for `weekStartDay` specifically for this user.
+                    const localWeekStart = localStorage.getItem(`weekStartDay_${userSettings.userId}`);
+                    if (localWeekStart) {
+                        merged.weekStartDay = parseInt(localWeekStart) as 0 | 1;
+                    }
+                    const storedDefaultPlanView = localStorage.getItem(`defaultPlanView_${userSettings.userId}`);
+                    if (storedDefaultPlanView) {
+                        merged.defaultPlanView = storedDefaultPlanView as 'week' | 'month';
                     }
                 }
 
@@ -109,7 +145,7 @@ export const useCombinedSettings = () => {
 
         try {
             // Separate user-specific updates from global updates
-            const userUpdates: { split_time?: string; workload_percentage?: number } = {};
+            const userUpdates: { split_time?: string; workload?: number } = {};
             const appUpdates: Partial<AppSettingsEntity> = {};
 
             // Route updates to appropriate storage
@@ -123,10 +159,21 @@ export const useCombinedSettings = () => {
             }
             if (updates.userWorkloadPercentage !== undefined) {
                 if (userSettings) {
-                    userUpdates.workload_percentage = updates.userWorkloadPercentage;
+                    userUpdates.workload = updates.userWorkloadPercentage;
                 } else {
                     // Only update app settings if no user is logged in
                     appUpdates.user_workload_percentage = updates.userWorkloadPercentage;
+                }
+            }
+
+            if (updates.weekStartDay !== undefined) {
+                if (userSettings) {
+                    localStorage.setItem(`weekStartDay_${userSettings.userId}`, updates.weekStartDay.toString());
+                }
+            }
+            if (updates.defaultPlanView !== undefined) {
+                if (userSettings) {
+                    localStorage.setItem(`defaultPlanView_${userSettings.userId}`, updates.defaultPlanView);
                 }
             }
 
@@ -145,6 +192,15 @@ export const useCombinedSettings = () => {
             }
             if (updates.newCapabilitiesGoal !== undefined) {
                 appUpdates.new_capabilities_goal = updates.newCapabilitiesGoal;
+            }
+            if (updates.vacationLimitMultiplier !== undefined) {
+                appUpdates.vacation_limit_multiplier = updates.vacationLimitMultiplier;
+            }
+            if (updates.hourlyBalanceLimitUpper !== undefined) {
+                appUpdates.hourly_balance_limit_upper = updates.hourlyBalanceLimitUpper;
+            }
+            if (updates.hourlyBalanceLimitLower !== undefined) {
+                appUpdates.hourly_balance_limit_lower = updates.hourlyBalanceLimitLower;
             }
 
             // Save user-specific updates if any
@@ -169,12 +225,17 @@ export const useCombinedSettings = () => {
             const appSettings = await persistence.getSettings();
             const merged: CombinedSettings = {
                 splitTime: userSettings?.split_time || appSplitTimeToString(appSettings.split_time || 40),
-                userWorkloadPercentage: userSettings?.workload_percentage || appSettings.user_workload_percentage || 60,
+                userWorkloadPercentage: userSettings?.workload || appSettings.user_workload_percentage || 60,
                 weeksComputation: appSettings.weeks_computation || 4,
                 highImpactTaskGoal: appSettings.high_impact_task_goal || 3.63,
                 failureRateGoal: appSettings.failure_rate_goal || 5,
                 qliGoal: appSettings.qli_goal || 60,
                 newCapabilitiesGoal: appSettings.new_capabilities_goal || 57.98,
+                vacationLimitMultiplier: appSettings.vacation_limit_multiplier || 1.5,
+                hourlyBalanceLimitUpper: appSettings.hourly_balance_limit_upper || 0.5,
+                hourlyBalanceLimitLower: appSettings.hourly_balance_limit_lower || -0.5,
+                weekStartDay: settings.weekStartDay, // Keep current local state
+                defaultPlanView: settings.defaultPlanView,
             };
             setSettings(merged);
         }

@@ -1,10 +1,25 @@
 # Changelog
 
-## v0.2.0 (2025-11-24)
+## v0.3.0 (2025-11-29)
 
 ### Features
 
+- **vacations:** introduce a graph to project and report vacations usage (70368af)
+- **programm view:** add default plan view setting (6c85f16)
+- **user settings:** add a starting day param in settings for Mo VS Su (36a8d1a)
+- **timetable:** add user assignment to time entries, integrate new date range picker, and persist user filters (44ec0e8)
+- centralize user selection in MetricsPage, passing selected userId to Forecast, HourlyBalance, and QoLSurvey components (c0ec060)
 - introduce monthly balance tracking graph (cdde904)
+
+### Bug Fixes
+
+- **metrics:** correct `newCapabilitiesTime` cutoff date calculation missing seconds conversion (8902d2b)
+- export all user settings and enable their import for full data restoration (4f8d653)
+- team QoL survey index to be user-specific (99a26c1)
+
+---
+
+## v0.2.0 (2025-11-24)
 
 ### Bug Fixes
 

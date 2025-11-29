@@ -144,10 +144,22 @@ class PostgresClient implements DbClient {
       ]);
     }
 
-    // Create qol_survey table (single row)
+    // Create qol_survey table
+    // Check if we need to migrate from the old single-row schema
+    const qolColumns = await this.pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='qol_survey' AND column_name='user_id'");
+
+    if (qolColumns.rows.length === 0) {
+      // Check if table exists at all
+      const tableExists = await this.pool.query("SELECT 1 FROM information_schema.tables WHERE table_name='qol_survey'");
+      if (tableExists.rows.length > 0) {
+        console.log('PostgreSQL: Dropping old qol_survey table to migrate to per-user schema');
+        await this.pool.query('DROP TABLE qol_survey');
+      }
+    }
+
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS qol_survey (
-        id INTEGER PRIMARY KEY DEFAULT 1,
+        user_id TEXT PRIMARY KEY,
         responses JSONB -- JSONB for efficient JSON operations
       )
     `);
@@ -413,7 +425,7 @@ class PostgresClient implements DbClient {
         username: row.username,
         logo: row.logo,
         has_completed_onboarding: row.has_completed_onboarding,
-        workload_percentage: row.workload_percentage,
+        workload: row.workload_percentage,
         split_time: row.split_time,
         monthly_balances: row.monthly_balances || {},
       };
@@ -439,7 +451,7 @@ class PostgresClient implements DbClient {
       updated.username,
       updated.logo,
       updated.has_completed_onboarding,
-      updated.workload_percentage,
+      updated.workload,
       updated.split_time,
       updated.monthly_balances ? JSON.stringify(updated.monthly_balances) : null
     ]);
@@ -501,7 +513,7 @@ class PostgresClient implements DbClient {
       username: row.username,
       logo: row.logo,
       has_completed_onboarding: row.has_completed_onboarding,
-      workload_percentage: row.workload_percentage,
+      workload: row.workload_percentage,
       split_time: row.split_time,
       monthly_balances: row.monthly_balances || {},
     }));
@@ -518,28 +530,41 @@ class PostgresClient implements DbClient {
   }
 
   async deleteUser(userId: string): Promise<void> {
+    await this.pool.query('DELETE FROM qol_survey WHERE user_id = $1', [userId]);
     await this.pool.query('DELETE FROM user_settings WHERE user_id = $1', [userId]);
   }
 
   async clearAllUsers(): Promise<void> {
+    await this.pool.query('DELETE FROM qol_survey');
     await this.pool.query('DELETE FROM user_settings');
   }
 
   // QoL survey
-  async getQolSurveyResponse(): Promise<QolSurveyResponseEntity | null> {
-    const result = await this.pool.query('SELECT responses FROM qol_survey WHERE id = 1');
+  async getQolSurveyResponse(userId: string): Promise<QolSurveyResponseEntity | null> {
+    const result = await this.pool.query('SELECT responses FROM qol_survey WHERE user_id = $1', [userId]);
     if (result.rows.length > 0 && result.rows[0].responses) {
       return result.rows[0].responses;
     }
     return null;
   }
 
-  async saveQolSurveyResponse(data: QolSurveyResponseEntity): Promise<void> {
+  async saveQolSurveyResponse(userId: string, data: QolSurveyResponseEntity): Promise<void> {
     await this.pool.query(`
-      INSERT INTO qol_survey (id, responses)
-      VALUES (1, $1)
-      ON CONFLICT (id) DO UPDATE SET responses = EXCLUDED.responses
-    `, [data]);
+      INSERT INTO qol_survey (user_id, responses)
+      VALUES ($1, $2)
+      ON CONFLICT (user_id) DO UPDATE SET responses = EXCLUDED.responses
+    `, [userId, data]);
+  }
+
+  async getAllQolSurveyResponses(): Promise<Record<string, QolSurveyResponseEntity>> {
+    const result = await this.pool.query('SELECT user_id, responses FROM qol_survey');
+    const responses: Record<string, QolSurveyResponseEntity> = {};
+    for (const row of result.rows) {
+      if (row.responses) {
+        responses[row.user_id] = row.responses;
+      }
+    }
+    return responses;
   }
 
   // Filters

@@ -14,7 +14,7 @@ const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
   username: 'User',
   logo: '',
   has_completed_onboarding: false,
-  workload_percentage: 60,
+  workload: 60,
   split_time: '13:00',
 };
 
@@ -53,6 +53,7 @@ interface UserSettingsRow {
   logo: string;
   has_completed_onboarding: number;
   workload_percentage: number;
+  workload?: number; // Added to match entity and migration
   split_time: string;
   monthly_balances: string; // JSON string
 }
@@ -116,6 +117,7 @@ class SqliteClient implements DbClient {
         logo TEXT,
         has_completed_onboarding BOOLEAN DEFAULT 0,
         workload_percentage REAL DEFAULT 60,
+        workload REAL DEFAULT 60,
         split_time TEXT DEFAULT '13:00',
         monthly_balances TEXT -- JSON string
       )
@@ -124,13 +126,23 @@ class SqliteClient implements DbClient {
     // Migration: Add columns if they don't exist
     try {
       const columns = this.db.prepare("PRAGMA table_info(user_settings)").all() as { name: string }[];
-      const hasWorkload = columns.some(c => c.name === 'workload_percentage');
+      const hasWorkloadPercentage = columns.some(c => c.name === 'workload_percentage');
+      const hasWorkload = columns.some(c => c.name === 'workload');
       const hasSplitTime = columns.some(c => c.name === 'split_time');
       const hasMonthlyBalances = columns.some(c => c.name === 'monthly_balances');
 
-      if (!hasWorkload) {
+      if (!hasWorkloadPercentage) {
         console.log('SQLite: Migrating user_settings, adding workload_percentage');
         this.db.exec("ALTER TABLE user_settings ADD COLUMN workload_percentage REAL DEFAULT 60");
+      }
+
+      if (!hasWorkload) {
+        console.log('SQLite: Migrating user_settings, adding workload');
+        this.db.exec("ALTER TABLE user_settings ADD COLUMN workload REAL DEFAULT 60");
+        // Migrate data from workload_percentage if it exists
+        if (hasWorkloadPercentage) {
+          this.db.exec("UPDATE user_settings SET workload = workload_percentage WHERE workload IS NULL");
+        }
       }
 
       if (!hasSplitTime) {
@@ -171,10 +183,19 @@ class SqliteClient implements DbClient {
       `).run(DEFAULT_APP_SETTINGS as unknown as Record<string, string | number | null>);
     }
 
-    // Create qol_survey table (single row)
+    // Create qol_survey table
+    // Check if we need to migrate from the old single-row schema
+    const qolColumns = this.db.prepare("PRAGMA table_info(qol_survey)").all() as { name: string }[];
+    const hasUserId = qolColumns.some(c => c.name === 'user_id');
+
+    if (qolColumns.length > 0 && !hasUserId) {
+      console.log('SQLite: Dropping old qol_survey table to migrate to per-user schema');
+      this.db.exec('DROP TABLE qol_survey');
+    }
+
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS qol_survey (
-        id INTEGER PRIMARY KEY DEFAULT 1,
+        user_id TEXT PRIMARY KEY,
         responses TEXT -- JSON string
       )
     `);
@@ -464,7 +485,7 @@ class SqliteClient implements DbClient {
       username: row.username,
       logo: row.logo,
       has_completed_onboarding: Boolean(row.has_completed_onboarding),
-      workload_percentage: row.workload_percentage,
+      workload: row.workload ?? row.workload_percentage ?? 60,
       split_time: row.split_time,
       monthly_balances: row.monthly_balances ? JSON.parse(row.monthly_balances) : {},
     };
@@ -475,13 +496,13 @@ class SqliteClient implements DbClient {
     const updated = { ...current, ...data, userId };
 
     this.db.prepare(`
-      INSERT INTO user_settings (user_id, username, logo, has_completed_onboarding, workload_percentage, split_time, monthly_balances)
-      VALUES (@userId, @username, @logo, @has_completed_onboarding, @workload_percentage, @split_time, @monthly_balances)
+      INSERT INTO user_settings (user_id, username, logo, has_completed_onboarding, workload, split_time, monthly_balances)
+      VALUES (@userId, @username, @logo, @has_completed_onboarding, @workload, @split_time, @monthly_balances)
       ON CONFLICT(user_id) DO UPDATE SET
         username = excluded.username,
         logo = excluded.logo,
         has_completed_onboarding = excluded.has_completed_onboarding,
-        workload_percentage = excluded.workload_percentage,
+        workload = excluded.workload,
         split_time = excluded.split_time,
         monthly_balances = excluded.monthly_balances
     `).run({
@@ -489,7 +510,7 @@ class SqliteClient implements DbClient {
       username: updated.username,
       logo: updated.logo,
       has_completed_onboarding: updated.has_completed_onboarding ? 1 : 0,
-      workload_percentage: updated.workload_percentage ?? null,
+      workload: updated.workload ?? null,
       split_time: updated.split_time ?? null,
       monthly_balances: updated.monthly_balances ? JSON.stringify(updated.monthly_balances) : null,
     });
@@ -504,7 +525,7 @@ class SqliteClient implements DbClient {
       username: row.username,
       logo: row.logo,
       has_completed_onboarding: Boolean(row.has_completed_onboarding),
-      workload_percentage: row.workload_percentage,
+      workload: row.workload ?? row.workload_percentage ?? 60,
       split_time: row.split_time,
       monthly_balances: row.monthly_balances ? JSON.parse(row.monthly_balances) : {},
     }));
@@ -536,11 +557,27 @@ class SqliteClient implements DbClient {
   }
 
   async deleteUser(userId: string): Promise<void> {
-    this.db.prepare('DELETE FROM user_settings WHERE user_id = ?').run(userId);
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare('DELETE FROM qol_survey WHERE user_id = ?').run(userId);
+      this.db.prepare('DELETE FROM user_settings WHERE user_id = ?').run(userId);
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   async clearAllUsers(): Promise<void> {
-    this.db.prepare('DELETE FROM user_settings').run();
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare('DELETE FROM qol_survey').run();
+      this.db.prepare('DELETE FROM user_settings').run();
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   // App settings
@@ -582,19 +619,31 @@ class SqliteClient implements DbClient {
   }
 
   // QoL survey
-  async getQolSurveyResponse(): Promise<QolSurveyResponseEntity | null> {
-    const row = this.db.prepare('SELECT responses FROM qol_survey WHERE id = 1').get() as JsonRow | undefined;
+  async getQolSurveyResponse(userId: string): Promise<QolSurveyResponseEntity | null> {
+    const row = this.db.prepare('SELECT responses FROM qol_survey WHERE user_id = ?').get(userId) as JsonRow | undefined;
     return row?.responses ? JSON.parse(row.responses) : null;
   }
 
-  async saveQolSurveyResponse(data: QolSurveyResponseEntity): Promise<void> {
-    // Check if row exists
-    const exists = this.db.prepare('SELECT id FROM qol_survey WHERE id = 1').get();
-    if (exists) {
-      this.db.prepare('UPDATE qol_survey SET responses = ? WHERE id = 1').run(JSON.stringify(data));
-    } else {
-      this.db.prepare('INSERT INTO qol_survey (id, responses) VALUES (1, ?)').run(JSON.stringify(data));
+  async saveQolSurveyResponse(userId: string, data: QolSurveyResponseEntity): Promise<void> {
+    this.db.prepare(`
+      INSERT INTO qol_survey (user_id, responses) 
+      VALUES (@userId, @responses)
+      ON CONFLICT(user_id) DO UPDATE SET responses = excluded.responses
+    `).run({
+      userId,
+      responses: JSON.stringify(data)
+    });
+  }
+
+  async getAllQolSurveyResponses(): Promise<Record<string, QolSurveyResponseEntity>> {
+    const rows = this.db.prepare('SELECT user_id, responses FROM qol_survey').all() as { user_id: string, responses: string }[];
+    const result: Record<string, QolSurveyResponseEntity> = {};
+    for (const row of rows) {
+      if (row.responses) {
+        result[row.user_id] = JSON.parse(row.responses);
+      }
     }
+    return result;
   }
 
   // Filters

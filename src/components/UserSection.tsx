@@ -1,18 +1,22 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useContext } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Shuffle, Edit2, User, Upload, Fingerprint } from "lucide-react";
 import { useUserSettings } from "@/hooks/useUserSettings";
-import { getRandomUsername } from "@/lib/username-generator";
+import { UserContext } from "@/context/UserContextDefinition";
 import { cn } from "@/lib/utils";
 import { eventBus } from "@/lib/events";
 
 export function UserSection() {
   const { userSettings, updateUsername, updateLogo, regenerateUsername } = useUserSettings();
+  const userContext = useContext(UserContext);
+
   const [isEditing, setIsEditing] = useState(false);
+  const [isChangingUuid, setIsChangingUuid] = useState(false);
   const [tempUsername, setTempUsername] = useState(userSettings?.username || "");
+  const [tempUuid, setTempUuid] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Sync tempUsername when userSettings changes
@@ -21,6 +25,13 @@ export function UserSection() {
       setTempUsername(userSettings.username);
     }
   }, [userSettings?.username]);
+
+  // Initialize tempUuid when entering change mode
+  React.useEffect(() => {
+    if (isChangingUuid && userContext?.userId) {
+      setTempUuid(userContext.userId);
+    }
+  }, [isChangingUuid, userContext?.userId]);
 
   if (!userSettings) return null;
 
@@ -52,6 +63,40 @@ export function UserSection() {
   const handleCancelEdit = () => {
     setTempUsername(userSettings.username);
     setIsEditing(false);
+  };
+
+  const handleChangeUuidToggle = () => {
+    if (isChangingUuid) {
+      // We are submitting the change
+      handleMigrateUuid();
+    } else {
+      // Start changing UUID
+      setIsChangingUuid(true);
+      // Reset editing state if active
+      setIsEditing(false);
+    }
+  };
+
+  const handleCancelUuidChange = () => {
+    setIsChangingUuid(false);
+    setTempUuid("");
+  };
+
+  const handleMigrateUuid = async () => {
+    if (!tempUuid.trim() || tempUuid === userContext?.userId) {
+      setIsChangingUuid(false);
+      return;
+    }
+
+    try {
+      console.log(`Migrating from ${userContext?.userId} to ${tempUuid}`);
+      await userContext?.changeUserId(tempUuid);
+      setIsChangingUuid(false);
+      // Close popover or show success message?
+    } catch (error) {
+      console.error("Failed to migrate UUID:", error);
+      // Ideally show an error toast here
+    }
   };
 
   const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -107,7 +152,7 @@ export function UserSection() {
               </AvatarFallback>
             </Avatar>
             <div className="flex-1">
-              {!isEditing ? (
+              {!isEditing && !isChangingUuid ? (
                 <div className="space-y-2">
                   <div className="text-sm font-medium">
                     {userSettings.username}
@@ -116,7 +161,7 @@ export function UserSection() {
                     Click to edit your profile
                   </div>
                 </div>
-              ) : (
+              ) : isEditing ? (
                 <div className="space-y-2">
                   <Input
                     value={tempUsername}
@@ -129,33 +174,44 @@ export function UserSection() {
                     Press Enter to save or Esc to cancel
                   </div>
                 </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">
+                    Migrate to UUID
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Enter a previous UUID to recover data
+                  </div>
+                </div>
               )}
             </div>
           </div>
 
           <div className="space-y-3">
             {/* Logo Upload Section */}
-            <div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-start gap-2"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Upload className="h-4 w-4" />
-                Upload Logo
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleLogoUpload}
-              />
-            </div>
+            {!isChangingUuid && (
+              <div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start gap-2"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload Logo
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleLogoUpload}
+                />
+              </div>
+            )}
 
             {/* Username Actions */}
-            {!isEditing ? (
+            {!isEditing && !isChangingUuid ? (
               <>
                 <Button
                   variant="outline"
@@ -175,8 +231,17 @@ export function UserSection() {
                   <Shuffle className="h-4 w-4" />
                   Generate New Name
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start gap-2"
+                  onClick={handleChangeUuidToggle}
+                >
+                  <Fingerprint className="h-4 w-4" />
+                  Change UUID
+                </Button>
               </>
-            ) : (
+            ) : isEditing ? (
               <div className="flex gap-2">
                 <Button
                   variant="default"
@@ -196,10 +261,39 @@ export function UserSection() {
                   Cancel
                 </Button>
               </div>
+            ) : (
+              <div className="space-y-2">
+                <Input
+                  value={tempUuid}
+                  onChange={(e) => setTempUuid(e.target.value)}
+                  placeholder="Enter new UUID"
+                  className="text-sm font-mono"
+                  autoFocus
+                />
+                <div className="flex gap-2">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="flex-1"
+                    onClick={handleMigrateUuid}
+                    disabled={!tempUuid.trim() || tempUuid === userContext?.userId}
+                  >
+                    Migrate
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={handleCancelUuidChange}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
             )}
 
             {/* Clear Logo */}
-            {userSettings.logo && !isEditing && (
+            {userSettings.logo && !isEditing && !isChangingUuid && (
               <Button
                 variant="outline"
                 size="sm"

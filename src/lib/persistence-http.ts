@@ -135,15 +135,20 @@ export class HttpApiPersistence implements PersistenceAdapter {
   }
 
   // QoL survey
-  async getQolSurveyResponse(): Promise<QolSurveyResponseEntity | null> {
-    return this.makeRequest('/api/qol');
+  // QoL survey
+  async getQolSurveyResponse(userId: string): Promise<QolSurveyResponseEntity | null> {
+    return this.makeRequest(`/api/qol/${userId}`);
   }
 
-  async saveQolSurveyResponse(data: QolSurveyResponseEntity): Promise<void> {
-    await this.makeRequest('/api/qol', {
+  async saveQolSurveyResponse(userId: string, data: QolSurveyResponseEntity): Promise<void> {
+    await this.makeRequest(`/api/qol/${userId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
+  }
+
+  async getAllQolSurveyResponses(): Promise<Record<string, QolSurveyResponseEntity>> {
+    return this.makeRequest('/api/qol/all');
   }
 
   // Filters

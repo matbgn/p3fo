@@ -3,16 +3,7 @@ import { useTasks, Category } from "@/hooks/useTasks";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CategorySelect } from "./CategorySelect";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import { Input } from "@/components/ui/input";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
-import { Calendar as CalendarIcon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Temporal } from '@js-temporal/polyfill';
 import { useNavigate } from "react-router-dom";
@@ -23,6 +14,11 @@ import { EditableTimeEntry } from "./EditableTimeEntry";
 import { formatDuration } from "@/lib/format-utils";
 import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 import { UserFilterSelector } from "@/components/UserFilterSelector";
+
+import { loadFiltersFromSessionStorage, saveFiltersToSessionStorage } from "@/lib/filter-storage";
+import { Filters } from "@/components/FilterControls";
+import { DateRangePicker } from "@/components/DateRangePicker";
+import { DateRange } from "react-day-picker";
 
 type TimetableView = "categorical" | "chronological";
 type TimeChunk = "all" | "am" | "pm";
@@ -41,9 +37,10 @@ export const Timetable: React.FC<{
   onJumpToTask?: (taskId: string) => void;
 }> = ({ onJumpToTask }) => {
   const navigate = useNavigate();
-  const { tasks, updateTimeEntry, deleteTimeEntry, updateCategory } = useTasks();
+  const { tasks, updateTimeEntry, deleteTimeEntry, updateCategory, updateUser } = useTasks();
   const { settings } = useCombinedSettings();
-  const [view, setView] = useState<TimetableView>("categorical");
+  const weekStartsOn = settings.weekStartDay as 0 | 1;
+  const [view, setView] = useState<TimetableView>("chronological");
   const [timeChunk, setTimeChunk] = useState<TimeChunk>("all");
 
   // Create a map of task IDs to task objects for easy lookup
@@ -56,40 +53,25 @@ export const Timetable: React.FC<{
 
   const [selectedCategories, setSelectedCategories] = useState<Category[]>([]);
   const [dateRange, setDateRange] = useState<{ start?: Date; end?: Date }>({}); // Date range is not part of Filters type, managed separately
-  const [predefinedRange, setPredefinedRange] = useState<string | null>(null); // Predefined range is not part of Filters type, managed separately
+  const [predefinedRange, setPredefinedRange] = useState<string | null>("today"); // Predefined range is not part of Filters type, managed separately
   const [showUrgent, setShowUrgent] = useState(false);
   const [showImpact, setShowImpact] = useState(false);
   const [showMajorIncident, setShowMajorIncident] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
-  // Helper to determine if the current range is a single day
-  const isSingleDayRange = React.useCallback(() => {
-    // If a predefined range is selected, check if it's 'today' or 'yesterday'
-    if (predefinedRange === 'today' || predefinedRange === 'yesterday') {
-      return true;
-    }
-    // If a custom range is selected, check if start and end dates are the same day
-    if (dateRange.start && dateRange.end) {
-      const start = new Date(dateRange.start);
-      const end = new Date(dateRange.end);
-      // Normalize dates to midnight for comparison
-      start.setHours(0, 0, 0, 0);
-      end.setHours(0, 0, 0, 0);
-      return start.getTime() === end.getTime();
-    }
-    return false;
-  }, [dateRange, predefinedRange]);
+  // Load filters from storage on mount
+  useEffect(() => {
+    const load = async () => {
+      const filters = await loadFiltersFromSessionStorage();
+      if (filters?.selectedUserId) {
+        setSelectedUserId(filters.selectedUserId);
+      }
+    };
+    load();
+  }, []);
 
-  // Effect to reset timeChunk if the date range is no longer a single day
-  React.useEffect(() => {
-    if (!isSingleDayRange() && timeChunk !== "all") {
-      setTimeChunk("all");
-    }
-  }, [isSingleDayRange, timeChunk]);
-
-  // Get date range based on predefined selection or custom selection
-  const getDateRange = () => {
-    // Get current time in Zurich timezone
+  // Helper to calculate date range for a given preset
+  const calculateDateRange = (rangeValue: string) => {
     const zurichNow = Temporal.Now.zonedDateTimeISO('Europe/Zurich');
     const todayPlainDate = Temporal.PlainDate.from({
       year: zurichNow.year,
@@ -98,7 +80,7 @@ export const Timetable: React.FC<{
     });
     const todayZoned = todayPlainDate.toZonedDateTime('Europe/Zurich');
 
-    switch (predefinedRange) {
+    switch (rangeValue) {
       case "today": {
         const endOfDay = todayZoned.add({ days: 1 }).subtract({ nanoseconds: 1 });
         return {
@@ -115,9 +97,28 @@ export const Timetable: React.FC<{
         };
       }
       case "thisWeek": {
-        // Get start of week (Sunday)
-        const daysToSubtract = todayZoned.dayOfWeek === 7 ? 0 : todayZoned.dayOfWeek;
-        const startOfWeek = todayZoned.subtract({ days: daysToSubtract }).with({
+        const daysToSubtract = todayZoned.dayOfWeek === (weekStartsOn === 0 ? 7 : 1) ? 0 : (todayZoned.dayOfWeek - (weekStartsOn === 0 ? 0 : 1) + 7) % 7;
+        // Actually, let's simplify using date-fns logic or just simple math
+        // If weekStartsOn is 1 (Monday):
+        // Sunday (7) -> subtract 6
+        // Monday (1) -> subtract 0
+        // ...
+        // If weekStartsOn is 0 (Sunday):
+        // Sunday (7) -> subtract 0
+        // Monday (1) -> subtract 1
+
+        // Let's rely on date-fns for this calculation to be consistent with DateRangePicker
+        // But we are using Temporal here.
+        // Let's stick to Temporal but correct logic.
+
+        let daysToSub = 0;
+        if (weekStartsOn === 1) { // Monday
+          daysToSub = todayZoned.dayOfWeek === 7 ? 6 : todayZoned.dayOfWeek - 1;
+        } else { // Sunday
+          daysToSub = todayZoned.dayOfWeek === 7 ? 0 : todayZoned.dayOfWeek;
+        }
+
+        const startOfWeek = todayZoned.subtract({ days: daysToSub }).with({
           hour: 0, minute: 0, second: 0, millisecond: 0, microsecond: 0, nanosecond: 0
         });
         const endOfWeek = startOfWeek.add({ days: 6 }).with({
@@ -129,9 +130,14 @@ export const Timetable: React.FC<{
         };
       }
       case "lastWeek": {
-        // Get start of last week
-        const daysToSubtract = todayZoned.dayOfWeek === 7 ? 7 : (todayZoned.dayOfWeek + 7);
-        const startOfLastWeek = todayZoned.subtract({ days: daysToSubtract }).with({
+        let daysToSub = 0;
+        if (weekStartsOn === 1) { // Monday
+          daysToSub = todayZoned.dayOfWeek === 7 ? 6 : todayZoned.dayOfWeek - 1;
+        } else { // Sunday
+          daysToSub = todayZoned.dayOfWeek === 7 ? 0 : todayZoned.dayOfWeek;
+        }
+        // Go to start of this week, then subtract 7 days
+        const startOfLastWeek = todayZoned.subtract({ days: daysToSub + 7 }).with({
           hour: 0, minute: 0, second: 0, millisecond: 0, microsecond: 0, nanosecond: 0
         });
         const endOfLastWeek = startOfLastWeek.add({ days: 6 }).with({
@@ -173,13 +179,78 @@ export const Timetable: React.FC<{
         };
       }
       default:
-        // Ensure start and end are always Date objects for consistency
-        return {
-          start: dateRange.start ? new Date(dateRange.start) : undefined,
-          end: dateRange.end ? new Date(dateRange.end) : undefined
-        };
+        return { start: undefined, end: undefined };
     }
   };
+
+  // Initialize date range for "today" default
+  useEffect(() => {
+    // Only set if dateRange is empty (initial load) and predefinedRange is today
+    if (!dateRange.start && !dateRange.end && predefinedRange === "today") {
+      const range = calculateDateRange("today");
+      setDateRange(range);
+    }
+  }, []); // Run once on mount
+
+  const handleUserChange = async (newUserId: string | null) => {
+    setSelectedUserId(newUserId);
+    const currentFilters = await loadFiltersFromSessionStorage() || {
+      showUrgent: false,
+      showImpact: false,
+      showMajorIncident: false,
+      status: [],
+      showDone: false,
+      searchText: "",
+      difficulty: [],
+      category: []
+    } as Filters;
+
+    await saveFiltersToSessionStorage({
+      ...currentFilters,
+      selectedUserId: newUserId
+    });
+  };
+
+  // Handle date range change from DateRangePicker
+  const handleDateRangeChange = (range: DateRange | undefined) => {
+    setDateRange({
+      start: range?.from,
+      end: range?.to
+    });
+    // Clear predefined range to rely on date comparison for isSingleDayRange
+    setPredefinedRange(null);
+  };
+
+  const handlePredefinedRangeClick = (value: string) => {
+    setPredefinedRange(value);
+    const range = calculateDateRange(value);
+    setDateRange(range);
+  };
+
+  // Helper to determine if the current range is a single day
+  const isSingleDayRange = React.useCallback(() => {
+    // If a predefined range is selected, check if it's 'today' or 'yesterday'
+    if (predefinedRange === 'today' || predefinedRange === 'yesterday') {
+      return true;
+    }
+    // If a custom range is selected, check if start and end dates are the same day
+    if (dateRange.start && dateRange.end) {
+      const start = new Date(dateRange.start);
+      const end = new Date(dateRange.end);
+      // Normalize dates to midnight for comparison
+      start.setHours(0, 0, 0, 0);
+      end.setHours(0, 0, 0, 0);
+      return start.getTime() === end.getTime();
+    }
+    return false;
+  }, [dateRange, predefinedRange]);
+
+  // Effect to reset timeChunk if the date range is no longer a single day
+  React.useEffect(() => {
+    if (!isSingleDayRange() && timeChunk !== "all") {
+      setTimeChunk("all");
+    }
+  }, [isSingleDayRange, timeChunk]);
 
   // Filter tasks by category, urgency, impact, and major incident
   const filteredTasks = tasks.filter((task) => {
@@ -284,13 +355,14 @@ export const Timetable: React.FC<{
     )
     .filter((entry) => {
       // Date range filter
-      const range = getDateRange();
+      const range = dateRange;
       if (range.start || range.end) {
         const entryStartZurich = Temporal.Instant.fromEpochMilliseconds(entry.startTime).toZonedDateTimeISO('Europe/Zurich');
-        const entryEndZurich = entry.endTime > 0 ? Temporal.Instant.fromEpochMilliseconds(entry.endTime).toZonedDateTimeISO('Europe/Zurich') : Temporal.Now.zonedDateTimeISO('Europe/Zurich');
         const rangeStartZurich = range.start ? Temporal.Instant.fromEpochMilliseconds(range.start.getTime()).toZonedDateTimeISO('Europe/Zurich') : null;
         const rangeEndZurich = range.end ? Temporal.Instant.fromEpochMilliseconds(range.end.getTime()).toZonedDateTimeISO('Europe/Zurich') : null;
-        if (rangeStartZurich && entryEndZurich.epochNanoseconds < rangeStartZurich.epochNanoseconds) return false;
+
+        // Only check if the START time of the task falls within the range
+        if (rangeStartZurich && entryStartZurich.epochNanoseconds < rangeStartZurich.epochNanoseconds) return false;
         if (rangeEndZurich && entryStartZurich.epochNanoseconds > rangeEndZurich.epochNanoseconds) return false;
       }
 
@@ -371,64 +443,17 @@ export const Timetable: React.FC<{
       {/* Filters */}
       <div className="flex flex-wrap gap-4 items-end">
         <div className="flex flex-col space-y-2">
-          <label className="text-sm font-medium">Date Range</label>
-          <div className="flex gap-2">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant={"outline"}
-                  className={cn(
-                    "w-48 justify-start text-left font-normal",
-                    !dateRange.start && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dateRange.start ? format(dateRange.start, "PPP") : "Start date"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={dateRange.start}
-                  onSelect={(date) => setDateRange({ ...dateRange, start: date })}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant={"outline"}
-                  className={cn(
-                    "w-48 justify-start text-left font-normal",
-                    !dateRange.end && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dateRange.end ? format(dateRange.end, "PPP") : "End date"}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={dateRange.end}
-                  onSelect={(date) => {
-                    if (date) {
-                      date.setHours(23, 59, 59, 999);
-                    }
-                    setDateRange({ ...dateRange, end: date });
-                  }}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
+          <label className="text-sm font-medium">Time period</label>
+          <DateRangePicker
+            date={{ from: dateRange.start, to: dateRange.end }}
+            setDate={(range) => handleDateRangeChange(range)}
+            weekStartsOn={weekStartsOn}
+          />
         </div>
 
         <UserFilterSelector
           selectedUserId={selectedUserId}
-          onUserChange={setSelectedUserId}
+          onUserChange={handleUserChange}
         />
 
         {isSingleDayRange() && (
@@ -456,13 +481,15 @@ export const Timetable: React.FC<{
                 key={range.value}
                 variant={predefinedRange === range.value ? "default" : "outline"}
                 size="sm"
-                onClick={() => setPredefinedRange(range.value)}
+                onClick={() => handlePredefinedRangeClick(range.value)}
               >
                 {range.label}
               </Button>
             ))}
           </div>
         </div>
+
+
 
         <div className="flex flex-col space-y-2">
           <label className="text-sm font-medium">Categories</label>
@@ -533,7 +560,7 @@ export const Timetable: React.FC<{
             setShowMajorIncident(false);
             setShowImpact(false);
             setShowMajorIncident(false);
-            setSelectedUserId(null);
+            handleUserChange(null);
             setTimeChunk("all");
             // No need to clear from session storage for Timetable
           }}
@@ -580,6 +607,7 @@ export const Timetable: React.FC<{
                   <TableRow>
                     <TableHead>Task</TableHead>
                     <TableHead>Category</TableHead>
+                    <TableHead>User</TableHead>
                     <TableHead>Start Time</TableHead>
                     <TableHead>End Time</TableHead>
                     <TableHead>Duration</TableHead>
@@ -620,7 +648,7 @@ export const Timetable: React.FC<{
                               />
                             </div>
                           </TableCell>
-                          <TableCell colSpan={3}></TableCell>
+                          <TableCell colSpan={4}></TableCell>
                           <TableCell className="font-bold">{formatDuration(groupTotal)}</TableCell>
                         </TableRow>
 
@@ -646,7 +674,7 @@ export const Timetable: React.FC<{
                                       />
                                     </div>
                                   </TableCell>
-                                  <TableCell colSpan={3}></TableCell>
+                                  <TableCell colSpan={4}></TableCell>
                                   <TableCell className="font-medium">
                                     {formatDuration(parentEntries.reduce((acc, entry) =>
                                       acc + (entry.endTime > 0 ? entry.endTime - entry.startTime : Date.now() - entry.startTime), 0))}
@@ -662,6 +690,7 @@ export const Timetable: React.FC<{
                                   taskMap={taskMap}
                                   onUpdateTimeEntry={updateTimeEntry}
                                   onUpdateTaskCategory={updateCategory}
+                                  onUpdateUser={updateUser}
                                   onDelete={deleteTimeEntry}
                                   onJumpToTask={onJumpToTask}
                                 />
@@ -683,6 +712,7 @@ export const Timetable: React.FC<{
             taskMap={taskMap}
             onUpdateTimeEntry={updateTimeEntry}
             onUpdateTaskCategory={updateCategory}
+            onUpdateUser={updateUser}
             onDelete={deleteTimeEntry}
             onJumpToTask={onJumpToTask}
           />

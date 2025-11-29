@@ -51,6 +51,8 @@ export interface MonthlyBalanceData {
   workload: number;
   hourly_balance: number;
   hours_done: number;
+  vacations_hourly_balance?: number;
+  vacations_hourly_taken?: number;
 }
 
 export interface UserSettingsEntity {
@@ -58,7 +60,7 @@ export interface UserSettingsEntity {
   username: string;
   logo: string;
   has_completed_onboarding: boolean;
-  workload_percentage?: number;
+  workload?: number;
   split_time?: string;
   monthly_balances?: Record<string, MonthlyBalanceData>;
 }
@@ -71,6 +73,9 @@ export interface AppSettingsEntity {
   failure_rate_goal: number;
   qli_goal: number;
   new_capabilities_goal: number;
+  vacation_limit_multiplier?: number;
+  hourly_balance_limit_upper?: number;
+  hourly_balance_limit_lower?: number;
 }
 
 export interface QolSurveyResponseEntity {
@@ -119,8 +124,9 @@ export interface PersistenceAdapter {
   updateSettings(patch: Partial<AppSettingsEntity>): Promise<AppSettingsEntity>;
 
   // QoL survey
-  getQolSurveyResponse(): Promise<QolSurveyResponseEntity | null>;
-  saveQolSurveyResponse(data: QolSurveyResponseEntity): Promise<void>;
+  getQolSurveyResponse(userId: string): Promise<QolSurveyResponseEntity | null>;
+  saveQolSurveyResponse(userId: string, data: QolSurveyResponseEntity): Promise<void>;
+  getAllQolSurveyResponses(): Promise<Record<string, QolSurveyResponseEntity>>;
 
   // Filters
   getFilters(): Promise<FilterStateEntity | null>;

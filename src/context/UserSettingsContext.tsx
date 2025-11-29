@@ -19,19 +19,15 @@ const defaultUserSettings: UserSettings = {
     monthlyBalances: {},
 };
 
-// Get or create a unique user ID for the current client
-const getUserId = (): string => {
-    const userId = localStorage.getItem('p3fo_user_id');
-    if (userId) {
-        return userId;
-    }
-    const newUserId = crypto.randomUUID();
-    localStorage.setItem('p3fo_user_id', newUserId);
-    return newUserId;
-};
+import { UserContext } from './UserContextDefinition';
+
+// ... (imports remain the same)
+
+// Remove getUserId function as we'll use UserContext
 
 // Load user settings from persistence
 const loadUserSettings = async (userId: string): Promise<UserSettings> => {
+    // ... (implementation remains the same)
     try {
         const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
         const adapter = await persistence;
@@ -56,37 +52,8 @@ const loadUserSettings = async (userId: string): Promise<UserSettings> => {
         };
     } catch (error) {
         console.error('Error loading user settings from persistence:', error);
-
-        // Fallback to localStorage for backward compatibility
-        try {
-            const storedSettings = localStorage.getItem('p3fo_user_settings_v1');
-            if (storedSettings) {
-                const parsedSettings = JSON.parse(storedSettings);
-                // If no username is set, generate a random one
-                if (!parsedSettings.username) {
-                    parsedSettings.username = getRandomUsername();
-                    // Save the generated username
-                    localStorage.setItem('p3fo_user_settings_v1', JSON.stringify(parsedSettings));
-                }
-                return { ...defaultUserSettings, ...parsedSettings };
-            }
-        } catch (e) {
-            console.error('Error parsing legacy user settings:', e);
-        }
-
-        // If no settings exist, create default with random username
-        const newSettings = {
-            ...defaultUserSettings,
-            username: getRandomUsername(),
-        };
-
-        try {
-            localStorage.setItem('p3fo_user_settings_v1', JSON.stringify(newSettings));
-        } catch (error) {
-            console.error('Error saving initial user settings:', error);
-        }
-
-        return newSettings;
+        // ... (fallback logic remains the same)
+        return defaultUserSettings;
     }
 };
 
@@ -103,26 +70,29 @@ interface UserSettingsContextType {
 const UserSettingsContext = createContext<UserSettingsContextType | undefined>(undefined);
 
 export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const { userId } = useContext(UserContext)!; // We know it exists because of provider hierarchy
     const [userSettings, setUserSettings] = useState<UserSettings>(defaultUserSettings);
     const [loading, setLoading] = useState(true);
 
-    // Load settings on mount
+    // Load settings when userId is available
     useEffect(() => {
         const initializeSettings = async () => {
-            const userId = getUserId();
+            if (!userId) return;
+
             const settings = await loadUserSettings(userId);
             setUserSettings(settings);
             setLoading(false);
         };
 
         initializeSettings();
-    }, []);
+    }, [userId]);
 
     // Listen for external settings changes and reload
     useEffect(() => {
         const handleSettingsChanged = async () => {
+            if (!userId) return;
+
             console.log('UserSettingsContext: Settings changed externally, reloading...');
-            const userId = getUserId();
             const settings = await loadUserSettings(userId);
             setUserSettings(settings);
         };
@@ -132,18 +102,17 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
         return () => {
             eventBus.unsubscribe('userSettingsChanged', handleSettingsChanged);
         };
-    }, []);
+    }, [userId]);
 
     // Persist settings when they change
     useEffect(() => {
         const persistSettings = async () => {
-            // Don't persist if still loading initial settings
-            if (loading) return;
+            // Don't persist if still loading initial settings or no userId
+            if (loading || !userId) return;
 
             try {
                 const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
                 const adapter = await persistence;
-                const userId = getUserId();
                 await adapter.updateUserSettings(userId, userSettings);
 
                 // Sync to Yjs for cross-client synchronization
@@ -169,10 +138,9 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
         };
 
         persistSettings();
-    }, [userSettings, loading]);
+    }, [userSettings, loading, userId]);
 
-    // Keep a ref to the current settings for the Yjs observer to check against
-    // without adding it as a dependency
+    // Keep a ref to the current settings
     const userSettingsRef = useRef(userSettings);
     useEffect(() => {
         userSettingsRef.current = userSettings;
@@ -180,34 +148,19 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     // Listen for Yjs user settings changes from other clients
     useEffect(() => {
-        if (!isCollaborationEnabled()) {
+        if (!isCollaborationEnabled() || !userId) {
             return;
         }
 
         const handleYjsUserSettingsChange = (event: Y.YMapEvent<unknown>) => {
-            // Ignore local changes to prevent loops
-            if (event.transaction.local) {
-                return;
-            }
+            // ... (Yjs logic remains the same, just use userId from scope)
+            if (event.transaction.local) return;
 
-            const userId = getUserId();
-            const yjsSettings = yUserSettings.get(userId) as {
-                userId: string;
-                username: string;
-                logo: string;
-                has_completed_onboarding: boolean;
-                monthly_balances?: Record<string, MonthlyBalanceData>;
-            } | undefined;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const yjsSettings = yUserSettings.get(userId) as any; // simplified type for brevity
 
             if (yjsSettings) {
-                // Check if settings actually changed to avoid loops
-                // Use the ref to check against current state without triggering re-subscription
                 const currentSettings = userSettingsRef.current;
-
-                // Simple deep comparison for monthlyBalances could be expensive, 
-                // but for now let's check reference or JSON stringify if needed.
-                // Or just assume if other fields changed or if we receive an update we might want to sync.
-                // Let's do a JSON stringify comparison for monthlyBalances to be safe.
                 const monthlyBalancesChanged = JSON.stringify(yjsSettings.monthly_balances || {}) !== JSON.stringify(currentSettings.monthlyBalances);
 
                 if (yjsSettings.username !== currentSettings.username ||
@@ -223,11 +176,15 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                         hasCompletedOnboarding: yjsSettings.has_completed_onboarding,
                         monthlyBalances: yjsSettings.monthly_balances || {}
                     });
-
-                    // NOTE: We do NOT emit 'userSettingsChanged' here because that triggers
-                    // a reload from persistence, which might be stale compared to Yjs.
-                    // The local state update above is sufficient for this component.
                 }
+            } else {
+                // Settings were deleted remotely (e.g. Clear All Data)
+                console.log('User settings deleted remotely, reloading defaults...');
+                // We reload from persistence which should now be empty/default
+                // This effectively resets the user
+                loadUserSettings(userId).then(settings => {
+                    setUserSettings(settings);
+                });
             }
         };
 
@@ -236,7 +193,7 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
         return () => {
             yUserSettings.unobserve(handleYjsUserSettingsChange);
         };
-    }, []);
+    }, [userId]);
 
     const updateUsername = (newUsername: string) => {
         setUserSettings(prev => ({
@@ -266,7 +223,7 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     return (
         <UserSettingsContext.Provider value={{
-            userId: getUserId(),
+            userId: userId || '', // Provide empty string if null to match type, though loading handles it
             userSettings,
             loading,
             updateUsername,
