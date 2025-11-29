@@ -3,10 +3,10 @@ import { Task } from "@/hooks/useTasks";
 // Get tasks completed in the last N weeks
 export const getCompletedHighImpactTasks = (tasks: Task[], weeks: number = 4): Task[] => {
   const cutoffDate = Date.now() - (weeks * 7 * 24 * 60 * 60 * 1000);
-  
-  return tasks.filter(task => 
+
+  return tasks.filter(task =>
     task.triageStatus === 'Done' &&
-    task.impact === true && 
+    task.impact === true &&
     task.createdAt >= cutoffDate
   );
 };
@@ -14,9 +14,9 @@ export const getCompletedHighImpactTasks = (tasks: Task[], weeks: number = 4): T
 // Get major incidents in the last N weeks
 export const getMajorIncidents = (tasks: Task[], weeks: number = 4): Task[] => {
   const cutoffDate = Date.now() - (weeks * 7 * 24 * 60 * 60 * 1000);
-  
-  return tasks.filter(task => 
-    task.majorIncident === true && 
+
+  return tasks.filter(task =>
+    task.majorIncident === true &&
     task.createdAt >= cutoffDate
   );
 };
@@ -28,11 +28,11 @@ export const calculateHighImpactTaskFrequency = (
   workloadPercentage: number = 0.6
 ): number => {
   const completedHighImpactTasks = getCompletedHighImpactTasks(tasks, weeks);
-  
+
   if (weeks === 0) {
     return 0;
   }
-  
+
   // Returns the frequency of completed high-impact tasks per week.
   return completedHighImpactTasks.length / weeks;
 };
@@ -43,15 +43,15 @@ export const calculateFailureRate = (
   weeks: number = 4
 ): number => {
   const cutoffDate = Date.now() - (weeks * 7 * 24 * 60 * 60 * 1000);
-  
+
   // Get all tasks in the period (regardless of status)
   const allTasksInPeriod = tasks.filter(task =>
     task.createdAt >= cutoffDate
   );
-  
+
   // Get major incidents in the period
   const majorIncidents = getMajorIncidents(tasks, weeks);
-  
+
   // Return failure rate as percentage of all tasks that had incidents
   return allTasksInPeriod.length > 0
     ? (majorIncidents.length / allTasksInPeriod.length) * 100
@@ -63,14 +63,14 @@ export const calculateTotalTimeForTasks = (tasks: Task[], taskIds: string[]): nu
   return taskIds.reduce((total, taskId) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return total;
-    
+
     const taskTime = (task.timer || []).reduce((acc, entry) => {
       if (entry.endTime) {
         return acc + (entry.endTime - entry.startTime);
       }
       return acc;
     }, 0);
-    
+
     return total + taskTime;
   }, 0);
 };
@@ -80,14 +80,14 @@ export const calculateTimeSpentOnNewCapabilities = (
   tasks: Task[],
   weeks: number = 4
 ): { totalTime: number; newCapabilitiesTime: number; percentage: number } => {
-  const cutoffDate = Date.now() - (weeks * 7 * 24 * 60 * 1000);
-  
+  const cutoffDate = Date.now() - (weeks * 7 * 24 * 60 * 60 * 1000);
+
   // Create a map of task IDs to task objects for easy lookup
   const taskMap = tasks.reduce((acc, task) => {
     acc[task.id] = task;
     return acc;
   }, {} as Record<string, Task>);
-  
+
   // Find all timer entries that overlap with the computation period (last N weeks)
   const allTimerEntriesInPeriod = tasks.flatMap(task =>
     (task.timer || [])
@@ -99,25 +99,25 @@ export const calculateTimeSpentOnNewCapabilities = (
       })
       .map(entry => ({ task, entry }))
   );
-  
+
   // Calculate total time spent across all tasks in the period
   const totalTime = allTimerEntriesInPeriod.reduce((total, { entry }) => {
     // Calculate the portion of the entry that falls within [cutoffDate, now]
     const entryStart = entry.startTime;
     const entryEnd = entry.endTime > 0 ? entry.endTime : Date.now();
-    
+
     // Effective start is the later of entry start or cutoff date
     const effectiveStart = Math.max(entryStart, cutoffDate);
     // Effective end is the earlier of entry end or now
     const effectiveEnd = Math.min(entryEnd, Date.now());
-    
+
     // Only count if the effective range is valid (start < end) and within the computation period
     if (effectiveStart < effectiveEnd) {
       return total + (effectiveEnd - effectiveStart);
     }
     return total;
   }, 0);
-  
+
   // Find timer entries for tasks that have an impact ancestor (including the task itself)
   const newCapabilitiesEntries = allTimerEntriesInPeriod.filter(({ task }) => {
     // Check if this task or any of its ancestors has impact = true
@@ -134,27 +134,27 @@ export const calculateTimeSpentOnNewCapabilities = (
     }
     return false;
   });
-  
+
   // Calculate time spent on new capabilities (tasks with impact ancestors) in the period
   const newCapabilitiesTime = newCapabilitiesEntries.reduce((total, { entry }) => {
     // Calculate the portion of the entry that falls within [cutoffDate, now]
     const entryStart = entry.startTime;
     const entryEnd = entry.endTime > 0 ? entry.endTime : Date.now();
-    
+
     // Effective start is the later of entry start or cutoff date
     const effectiveStart = Math.max(entryStart, cutoffDate);
     // Effective end is the earlier of entry end or now
     const effectiveEnd = Math.min(entryEnd, Date.now());
-    
+
     // Only count if the effective range is valid (start < end) and within the computation period
     if (effectiveStart < effectiveEnd) {
       return total + (effectiveEnd - effectiveStart);
     }
     return total;
   }, 0);
-  
+
   // Calculate percentage
   const percentage = totalTime > 0 ? (newCapabilitiesTime / totalTime) * 100 : 0;
-  
+
   return { totalTime, newCapabilitiesTime, percentage };
 };
