@@ -13,7 +13,7 @@ const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
   username: 'User',
   logo: '',
   has_completed_onboarding: false,
-  workload_percentage: 60,
+  workload: 60,
   split_time: '13:00',
 };
 
@@ -191,7 +191,15 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
 
     try {
       const stored = localStorage.getItem(`${USER_SETTINGS_STORAGE_KEY}_${userId}`);
-      return stored ? JSON.parse(stored) : null;
+      if (!stored) return null;
+
+      const parsed = JSON.parse(stored);
+      // Migration for legacy data
+      if (parsed.workload === undefined && parsed.workload_percentage !== undefined) {
+        parsed.workload = parsed.workload_percentage;
+        delete parsed.workload_percentage;
+      }
+      return parsed;
     } catch (error) {
       console.error('Error reading user settings from localStorage:', error);
       return null;
@@ -226,7 +234,13 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
         if (key && key.startsWith(`${USER_SETTINGS_STORAGE_KEY}_`)) {
           const stored = localStorage.getItem(key);
           if (stored) {
-            users.push(JSON.parse(stored));
+            const parsed = JSON.parse(stored);
+            // Migration for legacy data
+            if (parsed.workload === undefined && parsed.workload_percentage !== undefined) {
+              parsed.workload = parsed.workload_percentage;
+              delete parsed.workload_percentage;
+            }
+            users.push(parsed);
           }
         }
       }

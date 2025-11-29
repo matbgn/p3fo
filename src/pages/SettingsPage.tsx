@@ -242,6 +242,56 @@ const SettingsPage: React.FC = () => {
                     Target time spent on new capabilities (default: 57.98%)
                   </p>
                 </div>
+
+                <div>
+                  <Label className="block text-sm font-medium mb-1">
+                    Vacation Limit Multiplier
+                  </Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={settings.vacationLimitMultiplier}
+                    onChange={(e) => handleSettingChange('vacationLimitMultiplier', e.target.value)}
+                    className="w-24 mt-2"
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Multiplier for max vacation balance (default: 1.5)
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="block text-sm font-medium mb-1">
+                    Hourly Balance Upper Limit Multiplier
+                  </Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={settings.hourlyBalanceLimitUpper}
+                    onChange={(e) => handleSettingChange('hourlyBalanceLimitUpper', e.target.value)}
+                    className="w-24 mt-2"
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Multiplier for upper hourly balance limit (default: 0.5)
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="block text-sm font-medium mb-1">
+                    Hourly Balance Lower Limit Multiplier
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={settings.hourlyBalanceLimitLower}
+                    onChange={(e) => handleSettingChange('hourlyBalanceLimitLower', e.target.value)}
+                    className="w-24 mt-2"
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Multiplier for lower hourly balance limit (default: -0.5)
+                  </p>
+                </div>
               </div>
             </div>
 

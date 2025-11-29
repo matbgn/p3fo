@@ -425,7 +425,7 @@ class PostgresClient implements DbClient {
         username: row.username,
         logo: row.logo,
         has_completed_onboarding: row.has_completed_onboarding,
-        workload_percentage: row.workload_percentage,
+        workload: row.workload_percentage,
         split_time: row.split_time,
         monthly_balances: row.monthly_balances || {},
       };
@@ -451,7 +451,7 @@ class PostgresClient implements DbClient {
       updated.username,
       updated.logo,
       updated.has_completed_onboarding,
-      updated.workload_percentage,
+      updated.workload,
       updated.split_time,
       updated.monthly_balances ? JSON.stringify(updated.monthly_balances) : null
     ]);
@@ -513,7 +513,7 @@ class PostgresClient implements DbClient {
       username: row.username,
       logo: row.logo,
       has_completed_onboarding: row.has_completed_onboarding,
-      workload_percentage: row.workload_percentage,
+      workload: row.workload_percentage,
       split_time: row.split_time,
       monthly_balances: row.monthly_balances || {},
     }));

@@ -5,6 +5,7 @@ import QualityOfLifeIndexMetric from "@/components/QualityOfLifeIndexMetric";
 import NewCapabilitiesMetric from "@/components/NewCapabilitiesMetric";
 import Forecast from "@/components/Forecast/Forecast";
 import HourlyBalance from "@/components/HourlyBalance";
+import VacationsBalance from "@/components/VacationsBalance";
 import QoLSurvey from "@/components/QoLSurvey";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
@@ -115,6 +116,13 @@ const MetricsPage: React.FC = () => {
             >
               Hourly Balance
             </button>
+
+            <button
+              className={`px-4 py-2 font-medium ${activeTab === "vacations" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              onClick={() => setActiveTab("vacations")}
+            >
+              Vacations
+            </button>
             <button
               className={`px-4 py-2 font-medium ${activeTab === "individual-qol" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
               onClick={() => setActiveTab("individual-qol")}
@@ -129,6 +137,8 @@ const MetricsPage: React.FC = () => {
               <Forecast userId={selectedUserId} />
             ) : activeTab === "hourly-balance" ? (
               <HourlyBalance userId={selectedUserId} />
+            ) : activeTab === "vacations" ? (
+              <VacationsBalance userId={selectedUserId} />
             ) : activeTab === "individual-qol" ? (
               selectedUserId && selectedUserId !== "unassigned" ? <QoLSurvey userId={selectedUserId} /> : <div>Please select a user to view survey</div>
             ) : (

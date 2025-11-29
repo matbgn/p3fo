@@ -10,9 +10,14 @@ import {
 import { Input } from "@/components/ui/input";
 import type { DataPoint } from "@/utils/projectedHours";
 
+import { Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
 interface TimetableRawTableProps {
   data: DataPoint[];
   onUpdate: (descId: string, field: keyof DataPoint, value: number) => void;
+  onDelete?: (descId: string) => void;
+  isRowDeletable?: (index: number) => boolean;
 }
 
 const EditableCell: React.FC<{
@@ -73,62 +78,75 @@ const EditableCell: React.FC<{
   );
 };
 
-const TimetableRawTable: React.FC<TimetableRawTableProps> = ({ data, onUpdate }) => {
-  // Helper to check if a row is the current month (first in the list because of reverse?)
-  // Actually data is reversed in getHistoricalHourlyBalances, so current month is the last one?
-  // Let's check the date or logic. getHistoricalHourlyBalances returns data.reverse().
-  // So the first element is the oldest month, the last element is the current month.
-  // Wait, usually tables show newest on top?
-  // The user didn't specify order, but usually charts go left-right (old-new).
-  // If data is passed to chart as is, it's old -> new.
-  // If table iterates data, it shows old -> new (top -> bottom).
-  // The user said "For the previous entries...".
-  // Let's assume the last element is the current month.
-
-  const isCurrentMonth = (index: number) => index === data.length - 1;
+const TimetableRawTable: React.FC<TimetableRawTableProps> = ({ data, onUpdate, onDelete, isRowDeletable }) => {
+  // Helper to check if a row is the current month
+  // In getHistoricalHourlyBalances, data is pushed from oldest to newest.
+  // So the last element is the current month.
+  // Actually, the data passed to this table is REVERSED in HourlyBalance ([...tableData].reverse())
+  // So the FIRST element is the current month (newest).
+  // Let's verify usage in HourlyBalance: <TimetableRawTable data={[...tableData].reverse()} ... />
+  // So index 0 is the newest (current month).
+  const isCurrentMonth = (index: number) => index === 0;
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex-1 overflow-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="font-bold text-gray-500">Month</TableHead>
-              <TableHead className="font-bold text-gray-500">Workload</TableHead>
-              <TableHead className="font-bold text-gray-500">Hourly Balance</TableHead>
-              <TableHead className="font-bold text-gray-500">Hours Done</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.map((row, index) => {
-              const isEditable = !isCurrentMonth(index);
-              return (
-                <TableRow key={index} className="hover:bg-muted/50">
-                  <TableCell className="font-medium text-gray-600">{row.desc_id}</TableCell>
-                  <TableCell className="text-gray-600">
-                    <EditableCell
-                      value={row.workload}
-                      onSave={(val) => onUpdate(row.desc_id, "workload", val)}
-                      isEditable={isEditable}
-                    />
-                  </TableCell>
-                  <TableCell className="text-gray-600">
-                    {/* Hourly Balance is auto-calculated, not editable */}
-                    <span>{row.hourly_balance.toFixed(1)}</span>
-                  </TableCell>
-                  <TableCell className="text-gray-600">
-                    <EditableCell
-                      value={row.hours_done}
-                      onSave={(val) => onUpdate(row.desc_id, "hours_done", val)}
-                      isEditable={isEditable}
-                    />
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </div>
+    <div className="rounded-md border">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[100px]">Month</TableHead>
+            <TableHead>Workload %</TableHead>
+            <TableHead>Hourly Balance</TableHead>
+            <TableHead>Hours Done</TableHead>
+            <TableHead className="w-[50px]"></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {data.map((row, index) => {
+            // If data is reversed, index 0 is current month.
+            // We want to allow editing for past months?
+            // Previous code: const isEditable = !isCurrentMonth(index);
+            // If index 0 is current month, then !isCurrentMonth(0) is false. Correct.
+            const isEditable = !isCurrentMonth(index);
+            const showDelete = onDelete && !isCurrentMonth(index) && (isRowDeletable ? isRowDeletable(index) : true);
+
+            return (
+              <TableRow key={index}>
+                <TableCell className="font-medium">{row.desc_id}</TableCell>
+                <TableCell>
+                  <EditableCell
+                    value={row.workload}
+                    onSave={(val) => onUpdate(row.desc_id, "workload", val)}
+                    isEditable={isEditable}
+                  />
+                </TableCell>
+                <TableCell>
+                  {/* Hourly Balance is auto-calculated, not editable */}
+                  <span>{row.hourly_balance.toFixed(1)}</span>
+                </TableCell>
+                <TableCell>
+                  <EditableCell
+                    value={row.hours_done}
+                    onSave={(val) => onUpdate(row.desc_id, "hours_done", val)}
+                    isEditable={isEditable}
+                  />
+                </TableCell>
+                <TableCell>
+                  {showDelete && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                      onClick={() => onDelete!(row.desc_id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
     </div>
   );
 };

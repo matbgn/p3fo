@@ -34,6 +34,9 @@ const DataExporter: React.FC = () => {
         failureRateGoal: appSettings.failure_rate_goal?.toString(),
         qliGoal: appSettings.qli_goal?.toString(),
         newCapabilitiesGoal: appSettings.new_capabilities_goal?.toString(),
+        vacationLimitMultiplier: appSettings.vacation_limit_multiplier?.toString(),
+        hourlyBalanceLimitUpper: appSettings.hourly_balance_limit_upper?.toString(),
+        hourlyBalanceLimitLower: appSettings.hourly_balance_limit_lower?.toString(),
       };
 
       const exportData = {
@@ -49,16 +52,25 @@ const DataExporter: React.FC = () => {
       };
 
       const data = JSON.stringify(exportData, null, 2);
+
       const blob = new Blob([data], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = 'p3fo-export.json';
+      document.body.appendChild(a); // Append to body to ensure click works
       a.click();
-      URL.revokeObjectURL(url);
+      document.body.removeChild(a); // Remove after click
+
+      // Delay revocation to ensure download starts
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+      }, 100);
+
+
     } catch (error) {
       console.error('Error exporting data:', error);
-      alert('Failed to export data. Please try again.');
+      alert(`Failed to export data: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsExporting(false);
     }

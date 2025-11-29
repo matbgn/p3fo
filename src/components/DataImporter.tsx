@@ -46,6 +46,10 @@ const DataImporter: React.FC = () => {
               if (importedData.allUserSettings && Array.isArray(importedData.allUserSettings)) {
                 for (const user of importedData.allUserSettings) {
                   if (user.userId) {
+                    // Handle legacy workload_percentage
+                    if (user.workload === undefined && (user as any).workload_percentage !== undefined) {
+                      user.workload = (user as any).workload_percentage;
+                    }
                     await adapter.updateUserSettings(user.userId, user);
                   }
                 }

@@ -50,6 +50,12 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
             ? selectedUser.username
             : (userSettings.username || "Select User");
 
+    // Use selected user's workload if available, otherwise fallback to current settings
+    const forecastSettings = {
+        ...settings,
+        userWorkloadPercentage: selectedUser?.workload ?? settings.userWorkloadPercentage
+    };
+
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
             <Card className="h-28">
@@ -92,7 +98,7 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
 
             <TimetableRecordsCell
                 tasks={filteredTasks}
-                settings={settings}
+                settings={forecastSettings}
                 year={year}
                 month={month}
             />

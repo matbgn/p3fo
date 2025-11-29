@@ -17,6 +17,9 @@ export interface CombinedSettings {
     failureRateGoal: number;
     qliGoal: number;
     newCapabilitiesGoal: number;
+    vacationLimitMultiplier: number;
+    hourlyBalanceLimitUpper: number;
+    hourlyBalanceLimitLower: number;
 
     // User preference
     weekStartDay: 0 | 1; // 0 for Sunday, 1 for Monday
@@ -50,6 +53,9 @@ const defaultCombinedSettings: CombinedSettings = {
     failureRateGoal: 5,
     qliGoal: 60,
     newCapabilitiesGoal: 57.98,
+    vacationLimitMultiplier: 1.5,
+    hourlyBalanceLimitUpper: 0.5,
+    hourlyBalanceLimitLower: -0.5,
     weekStartDay: 1, // Default to Monday
     defaultPlanView: 'week',
 };
@@ -81,6 +87,9 @@ export const useCombinedSettings = () => {
                     failureRateGoal: appSettings.failure_rate_goal || 5,
                     qliGoal: appSettings.qli_goal || 60,
                     newCapabilitiesGoal: appSettings.new_capabilities_goal || 57.98,
+                    vacationLimitMultiplier: appSettings.vacation_limit_multiplier || 1.5,
+                    hourlyBalanceLimitUpper: appSettings.hourly_balance_limit_upper || 0.5,
+                    hourlyBalanceLimitLower: appSettings.hourly_balance_limit_lower || -0.5,
                     weekStartDay: 1,
                     defaultPlanView: 'week',
                 };
@@ -90,8 +99,8 @@ export const useCombinedSettings = () => {
                     if (userSettings.split_time) {
                         merged.splitTime = userSettings.split_time;
                     }
-                    if (userSettings.workload_percentage !== undefined) {
-                        merged.userWorkloadPercentage = userSettings.workload_percentage;
+                    if (userSettings.workload !== undefined) {
+                        merged.userWorkloadPercentage = userSettings.workload;
                     }
                     // We'll store weekStartDay in userSettings as a generic preference if possible, 
                     // but since the schema might not support it yet, we'll rely on local state/defaults for now 
@@ -136,7 +145,7 @@ export const useCombinedSettings = () => {
 
         try {
             // Separate user-specific updates from global updates
-            const userUpdates: { split_time?: string; workload_percentage?: number } = {};
+            const userUpdates: { split_time?: string; workload?: number } = {};
             const appUpdates: Partial<AppSettingsEntity> = {};
 
             // Route updates to appropriate storage
@@ -150,7 +159,7 @@ export const useCombinedSettings = () => {
             }
             if (updates.userWorkloadPercentage !== undefined) {
                 if (userSettings) {
-                    userUpdates.workload_percentage = updates.userWorkloadPercentage;
+                    userUpdates.workload = updates.userWorkloadPercentage;
                 } else {
                     // Only update app settings if no user is logged in
                     appUpdates.user_workload_percentage = updates.userWorkloadPercentage;
@@ -184,6 +193,15 @@ export const useCombinedSettings = () => {
             if (updates.newCapabilitiesGoal !== undefined) {
                 appUpdates.new_capabilities_goal = updates.newCapabilitiesGoal;
             }
+            if (updates.vacationLimitMultiplier !== undefined) {
+                appUpdates.vacation_limit_multiplier = updates.vacationLimitMultiplier;
+            }
+            if (updates.hourlyBalanceLimitUpper !== undefined) {
+                appUpdates.hourly_balance_limit_upper = updates.hourlyBalanceLimitUpper;
+            }
+            if (updates.hourlyBalanceLimitLower !== undefined) {
+                appUpdates.hourly_balance_limit_lower = updates.hourlyBalanceLimitLower;
+            }
 
             // Save user-specific updates if any
             if (Object.keys(userUpdates).length > 0 && userSettings) {
@@ -207,12 +225,15 @@ export const useCombinedSettings = () => {
             const appSettings = await persistence.getSettings();
             const merged: CombinedSettings = {
                 splitTime: userSettings?.split_time || appSplitTimeToString(appSettings.split_time || 40),
-                userWorkloadPercentage: userSettings?.workload_percentage || appSettings.user_workload_percentage || 60,
+                userWorkloadPercentage: userSettings?.workload || appSettings.user_workload_percentage || 60,
                 weeksComputation: appSettings.weeks_computation || 4,
                 highImpactTaskGoal: appSettings.high_impact_task_goal || 3.63,
                 failureRateGoal: appSettings.failure_rate_goal || 5,
                 qliGoal: appSettings.qli_goal || 60,
                 newCapabilitiesGoal: appSettings.new_capabilities_goal || 57.98,
+                vacationLimitMultiplier: appSettings.vacation_limit_multiplier || 1.5,
+                hourlyBalanceLimitUpper: appSettings.hourly_balance_limit_upper || 0.5,
+                hourlyBalanceLimitLower: appSettings.hourly_balance_limit_lower || -0.5,
                 weekStartDay: settings.weekStartDay, // Keep current local state
                 defaultPlanView: settings.defaultPlanView,
             };
