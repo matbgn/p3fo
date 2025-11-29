@@ -23,6 +23,9 @@ const DataExporter: React.FC = () => {
       // Fetch ALL QoL survey responses from persistence (for all users)
       const allQolSurveyResponses = await adapter.getAllQolSurveyResponses() || {};
 
+      // Fetch ALL user settings
+      const allUserSettings = await adapter.listUsers();
+
       // Map app settings to export format
       const settingsToExport = {
         userWorkloadPercentage: appSettings.user_workload_percentage?.toString(),
@@ -42,6 +45,7 @@ const DataExporter: React.FC = () => {
           userId,
           ...userSettings,
         },
+        allUserSettings, // Export all users for full restore
       };
 
       const data = JSON.stringify(exportData, null, 2);

@@ -37,9 +37,18 @@ const DataImporter: React.FC = () => {
                 useReminderStore.getState().checkAndTriggerReminders();
               }
 
-              // Import User Settings
+              // Import User Settings (Single - Legacy/Current Context)
               if (importedData.userSettings && importedData.userSettings.userId) {
                 await adapter.updateUserSettings(importedData.userSettings.userId, importedData.userSettings);
+              }
+
+              // Import All User Settings (Full Restore)
+              if (importedData.allUserSettings && Array.isArray(importedData.allUserSettings)) {
+                for (const user of importedData.allUserSettings) {
+                  if (user.userId) {
+                    await adapter.updateUserSettings(user.userId, user);
+                  }
+                }
               }
 
               // Import QoL Survey Responses (new format: all users)
