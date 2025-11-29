@@ -30,7 +30,7 @@ const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
     // Filter data for chart: only show last 6 months of history + projection
     const historyData = data.filter(d => !d.projected);
     const projectedData = data.filter(d => d.projected);
-    const chartHistoryData = historyData.slice(-6); // Last 6 months
+    const chartHistoryData = historyData.slice(-monthsBack); // Last 6 months
     const chartData = [...chartHistoryData, ...projectedData];
 
     // Filter data for table: show based on monthsBack
@@ -175,7 +175,7 @@ const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
                 <span className="font-medium">User: {displayUserName}</span>
             </div>
 
-            <div className="flex flex-row gap-6 h-full min-h-[500px]">
+            <div className="flex flex-row gap-6 h-full min-h-[500px] items-start">
                 <div className="w-1/3 min-w-[400px] border rounded-lg p-4 bg-white flex flex-col">
                     {/* Table: newest month at top, oldest at bottom */}
                     <div className="flex-1 overflow-auto">
@@ -192,7 +192,7 @@ const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
                         )}
                     </div>
                 </div>
-                <div className="flex-1 min-h-[400px] border rounded-lg p-4 bg-white">
+                <div className="flex-1 h-[600px] border rounded-lg p-4 bg-white">
                     <VacationsChart data={chartData} limitMultiplier={settings.vacationLimitMultiplier} />
                 </div>
             </div>

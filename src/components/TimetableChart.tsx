@@ -72,7 +72,7 @@ const TimetableChart: React.FC<TimetableChartProps> = ({ data, limitUpper, limit
               <Tooltip content={<CustomTooltip />} />
               <Legend verticalAlign="top" height={36} />
               <Area
-                type="monotone"
+                type="linear"
                 dataKey="hourly_balance"
                 name="Hours Delta per each Month"
                 stroke="#2563eb"
@@ -80,7 +80,7 @@ const TimetableChart: React.FC<TimetableChartProps> = ({ data, limitUpper, limit
                 fill="url(#deltaFill)"
               />
               <Area
-                type="monotone"
+                type="linear"
                 dataKey="cumulative_balance"
                 name="Cummulative Hourly Balance"
                 stroke="#059669"

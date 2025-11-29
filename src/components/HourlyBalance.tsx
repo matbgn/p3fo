@@ -47,7 +47,7 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
     // We want the last 6 months of history + all projection
     const historyData = data.filter(d => !d.projected);
     const projectedData = data.filter(d => d.projected);
-    const chartHistoryData = historyData.slice(-6); // Last 6 months
+    const chartHistoryData = historyData.slice(-monthsBack); // Dynamic history based on user selection
     // User requested to restore previous rendering, which likely means NO projections in the chart
     // as the "Previously" image showed the graph ending at the current month.
     const chartData = chartHistoryData;
@@ -157,7 +157,7 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
             <div className="flex items-center justify-between">
                 <span className="font-medium">User: {displayUserName}</span>
             </div>
-            <div className="flex flex-row gap-6 h-full">
+            <div className="flex flex-row gap-6 h-full items-start">
                 <div className="w-1/3 min-w-[300px] border rounded-lg p-4 bg-white flex flex-col">
                     {/* Table: newest month at top, oldest at bottom */}
                     <div className="flex-1 overflow-auto">
@@ -185,7 +185,7 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
                         )}
                     </div>
                 </div>
-                <div className="flex-1 min-h-[400px] border rounded-lg p-4 bg-white">
+                <div className="flex-1 h-[600px] border rounded-lg p-4 bg-white">
                     {/* Chart: oldest month on left, newest on right */}
                     <TimetableChart
                         data={chartData}
