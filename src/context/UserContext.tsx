@@ -22,11 +22,23 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // Check for existing user ID in cookie
                 let currentUserId = Cookies.get(USER_ID_COOKIE_NAME);
 
-                // If no cookie exists, generate new user ID and set cookie
+                // If no cookie exists, check localStorage (legacy/migration) or generate new
                 if (!currentUserId) {
-                    currentUserId = crypto.randomUUID();
+                    // Check legacy localStorage ID
+                    const legacyId = localStorage.getItem('p3fo_user_id');
+
+                    if (legacyId) {
+                        console.log('Found legacy user ID in localStorage:', legacyId);
+                        currentUserId = legacyId;
+                    } else {
+                        currentUserId = crypto.randomUUID();
+                        console.log('Generated new user ID:', currentUserId);
+                    }
+
+                    // Sync to cookie
                     Cookies.set(USER_ID_COOKIE_NAME, currentUserId, { expires: COOKIE_EXPIRY_DAYS });
-                    console.log('Generated new user ID:', currentUserId);
+                    // Sync to localStorage (ensure it's there for consistency)
+                    localStorage.setItem('p3fo_user_id', currentUserId);
                 }
 
                 setUserId(currentUserId);
@@ -127,6 +139,9 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             console.log(`Successfully changed user ID from ${userId} to ${newUserId}`);
+
+            // Emit event so other components can refresh (e.g. UserManagement)
+            eventBus.publish('userSettingsChanged');
         } catch (error) {
             console.error('Error changing user ID:', error);
             throw error;

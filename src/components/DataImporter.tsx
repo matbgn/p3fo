@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useReminderStore } from '@/hooks/useReminders';
 import { getPersistenceAdapter } from '@/lib/persistence-factory';
+import { QolSurveyResponseEntity } from '@/lib/persistence-types';
 
 const DataImporter: React.FC = () => {
   const { importTasks } = useTasks();
@@ -44,7 +45,7 @@ const DataImporter: React.FC = () => {
               // Import QoL Survey Responses (new format: all users)
               if (importedData.qolSurveyResponses) {
                 for (const [userId, response] of Object.entries(importedData.qolSurveyResponses)) {
-                  await adapter.saveQolSurveyResponse(userId, response as any);
+                  await adapter.saveQolSurveyResponse(userId, response as QolSurveyResponseEntity);
                 }
               } else if (importedData.qolSurveyResponse) {
                 // Fallback for old format (single user)

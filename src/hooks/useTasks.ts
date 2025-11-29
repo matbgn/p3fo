@@ -1,7 +1,7 @@
 import * as React from "react";
 import { eventBus } from "@/lib/events";
 import { usePersistence } from "@/hooks/usePersistence";
-import { yTasks, doc, initializeCollaboration, isCollaborationEnabled } from "@/lib/collaboration";
+import { yTasks, yUserSettings, doc, initializeCollaboration, isCollaborationEnabled } from "@/lib/collaboration";
 import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
 import { taskToEntity, tasksToEntities } from "@/lib/task-conversions";
 
@@ -1075,6 +1075,13 @@ export function useTasks() {
   }, []);
 
   const clearAllUsers = React.useCallback(async () => {
+    // Clear Yjs state
+    if (isCollaborationEnabled()) {
+      doc.transact(() => {
+        yUserSettings.clear();
+      });
+    }
+
     try {
       const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
       const adapter = await persistence;
