@@ -17,12 +17,14 @@ interface DateRangePickerProps {
     date: DateRange | undefined
     setDate: (date: DateRange | undefined) => void
     className?: string
+    weekStartsOn?: 0 | 1
 }
 
 export function DateRangePicker({
     date,
     setDate,
     className,
+    weekStartsOn = 1,
 }: DateRangePickerProps) {
     const [open, setOpen] = React.useState(false)
     const [tempDate, setTempDate] = React.useState<DateRange | undefined>(date)
@@ -36,13 +38,6 @@ export function DateRangePicker({
     // Helper to check if a range matches a preset
     const checkPreset = (range: DateRange | undefined) => {
         if (!range?.from || !range?.to) return "custom"
-
-        const now = new Date()
-        const today = { from: now, to: now }
-        const yesterday = { from: subDays(now, 1), to: subDays(now, 1) }
-        // ... logic to detect preset could be complex, for now we rely on manual selection
-        // or we can just set "custom" if it doesn't match exactly the *last clicked* preset.
-        // But better to just let the user select the preset.
         return "custom"
     }
 
@@ -69,7 +64,7 @@ export function DateRangePicker({
             value: "thisWeek",
             getRange: () => {
                 const now = new Date()
-                return { from: startOfWeek(now, { weekStartsOn: 1 }), to: endOfWeek(now, { weekStartsOn: 1 }) }
+                return { from: startOfWeek(now, { weekStartsOn }), to: endOfWeek(now, { weekStartsOn }) }
             }
         },
         {
@@ -78,7 +73,7 @@ export function DateRangePicker({
             getRange: () => {
                 const now = new Date()
                 const lastWeek = subWeeks(now, 1)
-                return { from: startOfWeek(lastWeek, { weekStartsOn: 1 }), to: endOfWeek(lastWeek, { weekStartsOn: 1 }) }
+                return { from: startOfWeek(lastWeek, { weekStartsOn }), to: endOfWeek(lastWeek, { weekStartsOn }) }
             }
         },
         {
@@ -188,6 +183,7 @@ export function DateRangePicker({
                                 }}
                                 numberOfMonths={2}
                                 className="p-3"
+                                weekStartsOn={weekStartsOn}
                             />
                             <div className="flex items-center justify-between p-3 border-t">
                                 <div className="text-sm text-muted-foreground">

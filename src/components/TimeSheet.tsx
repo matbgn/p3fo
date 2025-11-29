@@ -2,9 +2,15 @@ import React from 'react';
 import { useTasks } from '@/hooks/useTasks';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Trash2 } from 'lucide-react';
+import { Trash2, CalendarIcon, Clock } from 'lucide-react';
 import { Temporal } from '@js-temporal/polyfill';
 import './TimeSheet.css';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
+import { useCombinedSettings } from "@/hooks/useCombinedSettings";
+import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
 
 interface TimeSheetProps {
   taskId: string;
@@ -59,8 +65,23 @@ const formatDuration = (milliseconds: number): string => {
 
 export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
   const { tasks, updateTimeEntry, deleteTimeEntry } = useTasks();
+  const { settings } = useCombinedSettings();
+  const weekStartsOn = settings.weekStartDay as 0 | 1;
   const task = tasks.find(t => t.id === taskId);
   const entryRefs = React.useRef<HTMLDivElement[]>([]);
+
+  // State for time picker dialog
+  const [timePickerOpen, setTimePickerOpen] = React.useState(false);
+  const [timePickerConfig, setTimePickerConfig] = React.useState<{
+    index: number;
+    type: 'start' | 'end';
+    initialTime: number;
+  } | null>(null);
+
+  const openTimePicker = (index: number, type: 'start' | 'end', initialTime: number) => {
+    setTimePickerConfig({ index, type, initialTime });
+    setTimePickerOpen(true);
+  };
 
   // Clean up any running timers when the component unmounts
   React.useEffect(() => {
@@ -145,105 +166,140 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
             <div className="flex flex-col flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <div className="w-20 text-sm font-medium text-muted-foreground">Start</div>
-                <Input
-                  type="datetime-local"
-                  step="1"
-                  value={startPlainDateTime.toString({ smallestUnit: 'second' }).slice(0, 19)}
-                  onChange={(e) => {
-                    try {
-                      // Parse the input value and convert to Zurich time
-                      const [datePart, timePart] = e.target.value.split('T');
-                      const [year, month, day] = datePart.split('-').map(Number);
-                      const [hour, minute, second] = timePart.split(':').map(Number);
-
-                      // Create a PlainDateTime in Zurich timezone
-                      const newPlainDateTime = Temporal.PlainDateTime.from({
-                        year, month, day, hour, minute, second
-                      });
-
-                      const newTimestamp = zurichPlainDateTimeToTimestamp(newPlainDateTime);
-                      handleUpdate(index, { ...entry, startTime: newTimestamp });
-                    } catch (error) {
-                      console.error('Invalid date input:', error);
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    // Handle keyboard navigation
-                    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-                      e.preventDefault();
-
-                      try {
-                        let newPlainDateTime = Temporal.PlainDateTime.from(startPlainDateTime);
-
-                        if (e.key === 'ArrowUp') {
-                          newPlainDateTime = newPlainDateTime.add({ seconds: 1 });
-                        } else {
-                          newPlainDateTime = newPlainDateTime.subtract({ seconds: 1 });
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "flex-1 justify-start text-left font-normal",
+                        !entry.startTime && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {entry.startTime ? (
+                        format(new Date(entry.startTime), "PPP p")
+                      ) : (
+                        <span>Pick a date</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={new Date(entry.startTime)}
+                      onSelect={(date) => {
+                        if (date) {
+                          const current = new Date(entry.startTime);
+                          date.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
+                          handleUpdate(index, { ...entry, startTime: date.getTime() });
                         }
-
-                        const newTimestamp = zurichPlainDateTimeToTimestamp(newPlainDateTime);
-                        handleUpdate(index, { ...entry, startTime: newTimestamp });
-                      } catch (error) {
-                        console.error('Error adjusting time:', error);
-                      }
-                    }
-                  }}
-                  className="flex-1"
-                />
+                      }}
+                      initialFocus
+                      weekStartsOn={weekStartsOn}
+                    />
+                    <div className="p-3 border-t border-border flex gap-2 items-center">
+                      <Input
+                        id={`start-time-${index}`}
+                        type="time"
+                        value={format(new Date(entry.startTime), "HH:mm:ss")}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            const [hours, minutes, seconds] = e.target.value.split(':').map(Number);
+                            const newDate = new Date(entry.startTime);
+                            newDate.setHours(hours, minutes, seconds || 0);
+                            handleUpdate(index, { ...entry, startTime: newDate.getTime() });
+                          }
+                        }}
+                        step="1"
+                        className="flex-1"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openTimePicker(index, 'start', entry.startTime)}
+                      >
+                        <Clock className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
 
               <div className="flex items-center gap-2 mt-2">
                 <div className="w-20 text-sm font-medium text-muted-foreground">End</div>
-                <Input
-                  type="datetime-local"
-                  step="1"
-                  value={endPlainDateTime ? endPlainDateTime.toString({ smallestUnit: 'second' }).slice(0, 19) : ''}
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      try {
-                        // Parse the input value and convert to Zurich time
-                        const [datePart, timePart] = e.target.value.split('T');
-                        const [year, month, day] = datePart.split('-').map(Number);
-                        const [hour, minute, second] = timePart.split(':').map(Number);
-
-                        // Create a PlainDateTime in Zurich timezone
-                        const newPlainDateTime = Temporal.PlainDateTime.from({
-                          year, month, day, hour, minute, second
-                        });
-
-                        const newTimestamp = zurichPlainDateTimeToTimestamp(newPlainDateTime);
-                        handleUpdate(index, { ...entry, endTime: newTimestamp });
-                      } catch (error) {
-                        console.error('Invalid date input:', error);
-                      }
-                    } else {
-                      handleUpdate(index, { ...entry, endTime: 0 });
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    // Handle keyboard navigation
-                    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-                      e.preventDefault();
-                      if (!endPlainDateTime) return;
-
-                      try {
-                        let newPlainDateTime = Temporal.PlainDateTime.from(endPlainDateTime);
-
-                        if (e.key === 'ArrowUp') {
-                          newPlainDateTime = newPlainDateTime.add({ seconds: 1 });
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "flex-1 justify-start text-left font-normal",
+                        (!entry.endTime || entry.endTime === 0) && "text-muted-foreground",
+                        isNegativeDuration && "border-red-500"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {entry.endTime && entry.endTime > 0 ? (
+                        format(new Date(entry.endTime), "PPP p")
+                      ) : (
+                        <span>Running...</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={entry.endTime && entry.endTime > 0 ? new Date(entry.endTime) : undefined}
+                      onSelect={(date) => {
+                        if (date) {
+                          const current = entry.endTime && entry.endTime > 0 ? new Date(entry.endTime) : new Date();
+                          date.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
+                          handleUpdate(index, { ...entry, endTime: date.getTime() });
                         } else {
-                          newPlainDateTime = newPlainDateTime.subtract({ seconds: 1 });
+                          // If cleared, maybe set to 0 (running)? Or just don't allow clearing here easily?
+                          // Let's assume selecting a date sets it.
+                          // Actually, if they deselect, maybe we should set it to 0?
+                          // But standard calendar behavior is toggle.
+                          // Let's just update if date is valid.
                         }
-
-                        const newTimestamp = zurichPlainDateTimeToTimestamp(newPlainDateTime);
-                        handleUpdate(index, { ...entry, endTime: newTimestamp });
-                      } catch (error) {
-                        console.error('Error adjusting time:', error);
-                      }
-                    }
-                  }}
-                  className={`flex-1 ${isNegativeDuration ? 'border-red-500' : ''}`}
-                />
+                      }}
+                      initialFocus
+                      weekStartsOn={weekStartsOn}
+                    />
+                    <div className="p-3 border-t border-border flex flex-col gap-2">
+                      <div className="flex gap-2 items-center">
+                        <Input
+                          id={`end-time-${index}`}
+                          type="time"
+                          value={entry.endTime && entry.endTime > 0 ? format(new Date(entry.endTime), "HH:mm:ss") : ""}
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              const [hours, minutes, seconds] = e.target.value.split(':').map(Number);
+                              const newDate = entry.endTime && entry.endTime > 0 ? new Date(entry.endTime) : new Date();
+                              newDate.setHours(hours, minutes, seconds || 0);
+                              handleUpdate(index, { ...entry, endTime: newDate.getTime() });
+                            }
+                          }}
+                          step="1"
+                          className="flex-1"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openTimePicker(index, 'end', entry.endTime || Date.now())}
+                        >
+                          <Clock className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleUpdate(index, { ...entry, endTime: 0 })}
+                      >
+                        Set to Running
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
                 {isNegativeDuration && (
                   <div className="text-red-500 text-sm">End time cannot be before start time</div>
                 )}
@@ -267,6 +323,23 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
           </div>
         );
       })}
+      {timePickerConfig && (
+        <TimePickerDialog
+          isOpen={timePickerOpen}
+          onClose={() => setTimePickerOpen(false)}
+          initialTime={timePickerConfig.initialTime}
+          onTimeChange={(date) => {
+            if (task && task.timer && task.timer[timePickerConfig.index]) {
+              const entry = task.timer[timePickerConfig.index];
+              if (timePickerConfig.type === 'start') {
+                handleUpdate(timePickerConfig.index, { ...entry, startTime: date.getTime() });
+              } else {
+                handleUpdate(timePickerConfig.index, { ...entry, endTime: date.getTime() });
+              }
+            }
+          }}
+        />
+      )}
     </div>
   );
 };

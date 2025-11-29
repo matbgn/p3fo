@@ -10,6 +10,13 @@ import { CATEGORIES } from "../data/categories";
 import { Category } from "@/hooks/useTasks";
 
 import { formatTimeWithTemporal, formatDuration, timestampToZurichInstant } from "@/lib/format-utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
+import { useCombinedSettings } from "@/hooks/useCombinedSettings";
+import { CalendarIcon, Clock } from "lucide-react";
+import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
 
 // Helper function to convert Temporal.Instant to Europe/Zurich PlainDateTime
 const instantToZurichPlainDateTime = (instant: Temporal.Instant): Temporal.PlainDateTime => {
@@ -50,6 +57,20 @@ export const EditableTimeEntry: React.FC<{
   const [editStartTime, setEditStartTime] = useState('');
   const [editEndTime, setEditEndTime] = useState('');
   const [editTaskCategory, setEditTaskCategory] = useState<string>("Uncategorized");
+  const { settings } = useCombinedSettings();
+  const weekStartsOn = settings.weekStartDay as 0 | 1;
+
+  // State for time picker dialog
+  const [timePickerOpen, setTimePickerOpen] = useState(false);
+  const [timePickerConfig, setTimePickerConfig] = useState<{
+    type: 'start' | 'end';
+    initialTime: number;
+  } | null>(null);
+
+  const openTimePicker = (type: 'start' | 'end', initialTime: number) => {
+    setTimePickerConfig({ type, initialTime });
+    setTimePickerOpen(true);
+  };
 
   const startInstant = timestampToZurichInstant(entry.startTime);
   const startPlainDateTime = instantToZurichPlainDateTime(startInstant);
@@ -145,24 +166,149 @@ export const EditableTimeEntry: React.FC<{
           <span className="text-muted-foreground">-</span>
         </TableCell>
         <TableCell>
-          <Input
-            type="datetime-local"
-            step="1"
-            value={editStartTime}
-            onChange={(e) => setEditStartTime(e.target.value)}
-          />
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={"outline"}
+                className={cn(
+                  "w-[240px] justify-start text-left font-normal",
+                  !editStartTime && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {editStartTime ? (
+                  format(new Date(editStartTime), "PPP p")
+                ) : (
+                  <span>Pick a date</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={editStartTime ? new Date(editStartTime) : undefined}
+                onSelect={(date) => {
+                  if (date) {
+                    const current = editStartTime ? new Date(editStartTime) : new Date();
+                    date.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
+                    setEditStartTime(date.toISOString().slice(0, 19));
+                  }
+                }}
+                initialFocus
+                weekStartsOn={weekStartsOn}
+              />
+              <div className="p-3 border-t border-border flex gap-2 items-center">
+                <Input
+                  id={`edit-start-time-${entry.taskId}-${entry.index}`}
+                  type="time"
+                  value={editStartTime ? format(new Date(editStartTime), "HH:mm:ss") : ""}
+                  onChange={(e) => {
+                    if (editStartTime && e.target.value) {
+                      const [hours, minutes, seconds] = e.target.value.split(':').map(Number);
+                      const newDate = new Date(editStartTime);
+                      newDate.setHours(hours, minutes, seconds || 0);
+                      setEditStartTime(newDate.toISOString().slice(0, 19));
+                    }
+                  }}
+                  step="1"
+                  className="flex-1"
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => openTimePicker('start', editStartTime ? new Date(editStartTime).getTime() : Date.now())}
+                >
+                  <Clock className="h-4 w-4" />
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
         </TableCell>
         <TableCell>
-          <Input
-            type="datetime-local"
-            step="1"
-            value={editEndTime}
-            onChange={(e) => setEditEndTime(e.target.value)}
-          />
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={"outline"}
+                className={cn(
+                  "w-[240px] justify-start text-left font-normal",
+                  !editEndTime && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {editEndTime ? (
+                  format(new Date(editEndTime), "PPP p")
+                ) : (
+                  <span>Running...</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={editEndTime ? new Date(editEndTime) : undefined}
+                onSelect={(date) => {
+                  if (date) {
+                    const current = editEndTime ? new Date(editEndTime) : new Date();
+                    date.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
+                    setEditEndTime(date.toISOString().slice(0, 19));
+                  }
+                }}
+                initialFocus
+                weekStartsOn={weekStartsOn}
+              />
+              <div className="p-3 border-t border-border flex flex-col gap-2">
+                <div className="flex gap-2 items-center">
+                  <Input
+                    id={`edit-end-time-${entry.taskId}-${entry.index}`}
+                    type="time"
+                    value={editEndTime ? format(new Date(editEndTime), "HH:mm:ss") : ""}
+                    onChange={(e) => {
+                      if (editEndTime && e.target.value) {
+                        const [hours, minutes, seconds] = e.target.value.split(':').map(Number);
+                        const newDate = new Date(editEndTime);
+                        newDate.setHours(hours, minutes, seconds || 0);
+                        setEditEndTime(newDate.toISOString().slice(0, 19));
+                      }
+                    }}
+                    step="1"
+                    className="flex-1"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => openTimePicker('end', editEndTime ? new Date(editEndTime).getTime() : Date.now())}
+                  >
+                    <Clock className="h-4 w-4" />
+                  </Button>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setEditEndTime('')}
+                >
+                  Set to Running
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
         </TableCell>
         <TableCell className="flex gap-2">
           <Button size="sm" onClick={handleSave}>Save</Button>
           <Button size="sm" variant="outline" onClick={handleCancel}>Cancel</Button>
+          {timePickerConfig && (
+            <TimePickerDialog
+              isOpen={timePickerOpen}
+              onClose={() => setTimePickerOpen(false)}
+              initialTime={timePickerConfig.initialTime}
+              onTimeChange={(date) => {
+                if (timePickerConfig.type === 'start') {
+                  setEditStartTime(date.toISOString().slice(0, 19));
+                } else {
+                  setEditEndTime(date.toISOString().slice(0, 19));
+                }
+              }}
+            />
+          )}
         </TableCell>
       </TableRow>
     );

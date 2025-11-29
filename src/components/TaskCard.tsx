@@ -35,6 +35,8 @@ import { useReminderStore } from "@/hooks/useReminders";
 import { UserAvatar } from "./UserAvatar";
 import { UserSelector } from "./UserSelector";
 import { useUserSettings } from "@/hooks/useUserSettings";
+import { Calendar } from "@/components/ui/calendar";
+import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 
 const LiveTimeBadge: React.FC<{ task: Task; totalTime?: number; onClick?: () => void }> = React.memo(({ task, totalTime, onClick }) => {
   const [runningTime, setRunningTime] = React.useState(0);
@@ -259,6 +261,8 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
   const [isReminderActive, setIsReminderActive] = React.useState(false); // New state for reminder active status
   const { scheduledReminders, updateScheduledReminderTriggerDate, dismissReminder } = useReminderStore();
   const { userSettings, userId: currentUserId } = useUserSettings();
+  const { settings } = useCombinedSettings();
+  const weekStartsOn = settings.weekStartDay as 0 | 1;
 
   React.useEffect(() => {
     setCommentText(task.comment || "");
@@ -461,35 +465,64 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
       {isDateTimeBlockOpen && !task.parentId && (
         <div className="flex flex-col gap-2 mb-2">
           <div className="flex items-center gap-2">
-            <Input
-              type="datetime-local"
-              step="1"
-              value={task.terminationDate ? instantToZurichPlainDateTime(timestampToZurichInstant(task.terminationDate)).toString({ smallestUnit: 'second' }).slice(0, 19) : ''}
-              onChange={(e) => {
-                if (e.target.value) {
-                  try {
-                    const [datePart, timePart] = e.target.value.split('T');
-                    const [year, month, day] = datePart.split('-').map(Number);
-                    const [hour, minute, second] = timePart.split(':').map(Number);
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant={"outline"}
+                  className={cn(
+                    "flex-1 h-7 px-2 py-1 text-xs justify-start text-left font-normal",
+                    !task.terminationDate && "text-muted-foreground"
+                  )}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <CalendarIcon className="mr-2 h-3 w-3" />
+                  {task.terminationDate ? (
+                    format(new Date(task.terminationDate), "PPP p")
+                  ) : (
+                    <span>Pick a date</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start" onClick={(e) => e.stopPropagation()}>
+                <Calendar
+                  mode="single"
+                  selected={task.terminationDate ? new Date(task.terminationDate) : undefined}
+                  onSelect={(date) => {
+                    if (date) {
+                      const current = task.terminationDate ? new Date(task.terminationDate) : new Date();
+                      // Preserve time from current selection or default to current time
+                      date.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
 
-                    const newPlainDateTime = Temporal.PlainDateTime.from({
-                      year, month, day, hour, minute, second
-                    });
-
-                    const newTimestamp = zurichPlainDateTimeToTimestamp(newPlainDateTime);
-                    updateTerminationDate(task.id, newTimestamp);
-                    updateScheduledReminderTriggerDate(task.id, new Date(newTimestamp).toISOString(), offsetMinutes);
-                  } catch (error) {
-                    console.error('Invalid date input:', error);
-                  }
-                } else {
-                  updateTerminationDate(task.id, undefined);
-                  updateScheduledReminderTriggerDate(task.id, undefined, offsetMinutes);
-                }
-              }}
-              className="flex-1 h-7 px-2 py-1 text-xs"
-              onClick={(e) => e.stopPropagation()}
-            />
+                      const newTimestamp = date.getTime();
+                      updateTerminationDate(task.id, newTimestamp);
+                      updateScheduledReminderTriggerDate(task.id, date.toISOString(), offsetMinutes);
+                    } else {
+                      updateTerminationDate(task.id, undefined);
+                      updateScheduledReminderTriggerDate(task.id, undefined, offsetMinutes);
+                    }
+                  }}
+                  initialFocus
+                  weekStartsOn={weekStartsOn}
+                />
+                <div className="p-3 border-t border-border">
+                  <Input
+                    type="time"
+                    value={task.terminationDate ? format(new Date(task.terminationDate), "HH:mm") : ""}
+                    onChange={(e) => {
+                      if (task.terminationDate && e.target.value) {
+                        const [hours, minutes] = e.target.value.split(':').map(Number);
+                        const newDate = new Date(task.terminationDate);
+                        newDate.setHours(hours, minutes);
+                        const newTimestamp = newDate.getTime();
+                        updateTerminationDate(task.id, newTimestamp);
+                        updateScheduledReminderTriggerDate(task.id, newDate.toISOString(), offsetMinutes);
+                      }
+                    }}
+                    className="w-full"
+                  />
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
           <div style={{ display: "flex", alignItems: "center" }} className={`ml-1 gap-2 text-xs flex-1 cursor-pointer select-none`}>
             Planed duration :

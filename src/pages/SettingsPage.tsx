@@ -8,6 +8,7 @@ import { useCombinedSettings } from '@/hooks/useCombinedSettings';
 import { Label } from '@/components/ui/label';
 import { UserManagement } from '@/components/UserManagement';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 const SettingsPage: React.FC = () => {
   const { clearAllTasks, clearAllUsers } = useTasks();
@@ -92,6 +93,29 @@ const SettingsPage: React.FC = () => {
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
                     Your workload percentage (default: 60%)
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="block text-sm font-medium mb-1">
+                    Start of Week
+                  </Label>
+                  <RadioGroup
+                    value={settings.weekStartDay?.toString() || "1"}
+                    onValueChange={(value) => handleSettingChange('weekStartDay', value)}
+                    className="flex flex-col space-y-1 mt-2"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="1" id="week-start-monday" />
+                      <Label htmlFor="week-start-monday">Monday</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="0" id="week-start-sunday" />
+                      <Label htmlFor="week-start-sunday">Sunday</Label>
+                    </div>
+                  </RadioGroup>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Choose which day the week starts on.
                   </p>
                 </div>
               </div>

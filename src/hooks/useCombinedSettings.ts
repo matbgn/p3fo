@@ -17,6 +17,9 @@ export interface CombinedSettings {
     failureRateGoal: number;
     qliGoal: number;
     newCapabilitiesGoal: number;
+
+    // User preference
+    weekStartDay: 0 | 1; // 0 for Sunday, 1 for Monday
 }
 
 /**
@@ -46,6 +49,7 @@ const defaultCombinedSettings: CombinedSettings = {
     failureRateGoal: 5,
     qliGoal: 60,
     newCapabilitiesGoal: 57.98,
+    weekStartDay: 1, // Default to Monday
 };
 
 /**
@@ -75,6 +79,7 @@ export const useCombinedSettings = () => {
                     failureRateGoal: appSettings.failure_rate_goal || 5,
                     qliGoal: appSettings.qli_goal || 60,
                     newCapabilitiesGoal: appSettings.new_capabilities_goal || 57.98,
+                    weekStartDay: 1, // Default to Monday, will be overridden by localStorage if exists
                 };
 
                 // Override with user-specific settings if they exist
@@ -84,6 +89,23 @@ export const useCombinedSettings = () => {
                     }
                     if (userSettings.workload_percentage !== undefined) {
                         merged.userWorkloadPercentage = userSettings.workload_percentage;
+                    }
+                    // We'll store weekStartDay in userSettings as a generic preference if possible, 
+                    // but since the schema might not support it yet, we'll rely on local state/defaults for now 
+                    // or assume it's added to the userSettings object if the backend supports it.
+                    // For this implementation, we will persist it in localStorage as a fallback if not in userSettings,
+                    // or just keep it in memory if we can't change the backend schema easily.
+                    // However, the prompt implies we should add it. Let's assume we can add it to userSettings 
+                    // or use a workaround. Since I can't easily change the backend schema without seeing it,
+                    // I'll use localStorage for this specific setting as a "user preference" that persists locally for now,
+                    // or just keep it in the combined settings state.
+
+                    // Actually, let's check if we can add it to the UserSettings type. 
+                    // I'll assume for now we can't easily change the DB schema in this step without more info.
+                    // But I need to persist it. I'll use localStorage for `weekStartDay` specifically for this user.
+                    const localWeekStart = localStorage.getItem(`weekStartDay_${userSettings.userId}`);
+                    if (localWeekStart) {
+                        merged.weekStartDay = parseInt(localWeekStart) as 0 | 1;
                     }
                 }
 
@@ -127,6 +149,12 @@ export const useCombinedSettings = () => {
                 } else {
                     // Only update app settings if no user is logged in
                     appUpdates.user_workload_percentage = updates.userWorkloadPercentage;
+                }
+            }
+
+            if (updates.weekStartDay !== undefined) {
+                if (userSettings) {
+                    localStorage.setItem(`weekStartDay_${userSettings.userId}`, updates.weekStartDay.toString());
                 }
             }
 
@@ -175,6 +203,7 @@ export const useCombinedSettings = () => {
                 failureRateGoal: appSettings.failure_rate_goal || 5,
                 qliGoal: appSettings.qli_goal || 60,
                 newCapabilitiesGoal: appSettings.new_capabilities_goal || 57.98,
+                weekStartDay: settings.weekStartDay, // Keep current local state
             };
             setSettings(merged);
         }

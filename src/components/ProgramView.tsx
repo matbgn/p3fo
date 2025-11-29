@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/resizable';
 import { useTasks, Task } from '@/hooks/useTasks';
 import { useUserSettings } from '@/hooks/useUserSettings';
+import { useCombinedSettings } from '@/hooks/useCombinedSettings';
 import { TaskCard } from './TaskCard';
 import {
   Dialog,
@@ -20,7 +21,7 @@ import {
 } from '@/components/ui/dialog';
 import { AlertTriangle, CircleDot, Flame } from 'lucide-react';
 
-const localizer = momentLocalizer(moment);
+
 
 interface ProgramViewProps {
   onFocusOnTask: (taskId: string) => void;
@@ -30,6 +31,20 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
   const [selectedTask, setSelectedTask] = React.useState<Task | null>(null);
   const [view, setView] = React.useState('week');
   const calendarRef = useRef<Calendar>(null); // Ref for the Calendar component
+
+  const { settings } = useCombinedSettings();
+  const weekStartsOn = settings.weekStartDay;
+
+  useEffect(() => {
+    moment.updateLocale('en', {
+      week: {
+        dow: weekStartsOn,
+        doy: 4,
+      }
+    });
+  }, [weekStartsOn]);
+
+  const localizer = React.useMemo(() => momentLocalizer(moment), [weekStartsOn]);
 
   useEffect(() => {
     if (calendarRef.current) {
@@ -118,6 +133,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
           </CardHeader>
           <CardContent className="h-full overflow-y-auto flex-grow">
             <Calendar
+              key={weekStartsOn}
               ref={calendarRef}
               localizer={localizer}
               events={events}

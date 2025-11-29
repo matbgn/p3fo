@@ -39,6 +39,7 @@ export const Timetable: React.FC<{
   const navigate = useNavigate();
   const { tasks, updateTimeEntry, deleteTimeEntry, updateCategory, updateUser } = useTasks();
   const { settings } = useCombinedSettings();
+  const weekStartsOn = settings.weekStartDay as 0 | 1;
   const [view, setView] = useState<TimetableView>("chronological");
   const [timeChunk, setTimeChunk] = useState<TimeChunk>("all");
 
@@ -96,8 +97,28 @@ export const Timetable: React.FC<{
         };
       }
       case "thisWeek": {
-        const daysToSubtract = todayZoned.dayOfWeek === 7 ? 0 : todayZoned.dayOfWeek;
-        const startOfWeek = todayZoned.subtract({ days: daysToSubtract }).with({
+        const daysToSubtract = todayZoned.dayOfWeek === (weekStartsOn === 0 ? 7 : 1) ? 0 : (todayZoned.dayOfWeek - (weekStartsOn === 0 ? 0 : 1) + 7) % 7;
+        // Actually, let's simplify using date-fns logic or just simple math
+        // If weekStartsOn is 1 (Monday):
+        // Sunday (7) -> subtract 6
+        // Monday (1) -> subtract 0
+        // ...
+        // If weekStartsOn is 0 (Sunday):
+        // Sunday (7) -> subtract 0
+        // Monday (1) -> subtract 1
+
+        // Let's rely on date-fns for this calculation to be consistent with DateRangePicker
+        // But we are using Temporal here.
+        // Let's stick to Temporal but correct logic.
+
+        let daysToSub = 0;
+        if (weekStartsOn === 1) { // Monday
+          daysToSub = todayZoned.dayOfWeek === 7 ? 6 : todayZoned.dayOfWeek - 1;
+        } else { // Sunday
+          daysToSub = todayZoned.dayOfWeek === 7 ? 0 : todayZoned.dayOfWeek;
+        }
+
+        const startOfWeek = todayZoned.subtract({ days: daysToSub }).with({
           hour: 0, minute: 0, second: 0, millisecond: 0, microsecond: 0, nanosecond: 0
         });
         const endOfWeek = startOfWeek.add({ days: 6 }).with({
@@ -109,8 +130,14 @@ export const Timetable: React.FC<{
         };
       }
       case "lastWeek": {
-        const daysToSubtract = todayZoned.dayOfWeek === 7 ? 7 : (todayZoned.dayOfWeek + 7);
-        const startOfLastWeek = todayZoned.subtract({ days: daysToSubtract }).with({
+        let daysToSub = 0;
+        if (weekStartsOn === 1) { // Monday
+          daysToSub = todayZoned.dayOfWeek === 7 ? 6 : todayZoned.dayOfWeek - 1;
+        } else { // Sunday
+          daysToSub = todayZoned.dayOfWeek === 7 ? 0 : todayZoned.dayOfWeek;
+        }
+        // Go to start of this week, then subtract 7 days
+        const startOfLastWeek = todayZoned.subtract({ days: daysToSub + 7 }).with({
           hour: 0, minute: 0, second: 0, millisecond: 0, microsecond: 0, nanosecond: 0
         });
         const endOfLastWeek = startOfLastWeek.add({ days: 6 }).with({
@@ -419,7 +446,8 @@ export const Timetable: React.FC<{
           <label className="text-sm font-medium">Time period</label>
           <DateRangePicker
             date={{ from: dateRange.start, to: dateRange.end }}
-            setDate={handleDateRangeChange}
+            setDate={(range) => handleDateRangeChange(range)}
+            weekStartsOn={weekStartsOn}
           />
         </div>
 
