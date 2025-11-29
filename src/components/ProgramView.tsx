@@ -29,11 +29,40 @@ interface ProgramViewProps {
 
 const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
   const [selectedTask, setSelectedTask] = React.useState<Task | null>(null);
-  const [view, setView] = React.useState('week');
   const calendarRef = useRef<Calendar>(null); // Ref for the Calendar component
 
   const { settings } = useCombinedSettings();
   const weekStartsOn = settings.weekStartDay;
+  const defaultPlanView = settings.defaultPlanView || 'week';
+
+  const [view, setView] = React.useState<View>(defaultPlanView);
+
+  // Update view when defaultPlanView setting changes, but only if it hasn't been manually changed?
+  // Or just set initial state. The requirement is "change default view".
+  // So initial state is enough. However, if the user changes the setting while on the page, 
+  // it might be nice to update it. But usually "default" means "on load".
+  // Let's stick to initial state for now, but since we're using a hook, 
+  // if we want it to react to setting changes we'd need a useEffect.
+  // Given the user flow (change setting -> go to plan view), initial state is key.
+  // But if they are already on the view, changing the setting elsewhere won't affect them until reload/re-nav.
+  // Let's add a useEffect to sync it if the user wants immediate feedback, 
+  // but standard behavior for "default" is usually just initial.
+  // Let's just use the prop in useState which only runs once, 
+  // BUT we need to make sure it updates if the component re-mounts.
+  // Actually, let's use a useEffect to update the view if the setting changes, 
+  // so they can see the effect immediately if they have two windows open or something.
+  // No, that might be annoying if they manually changed the view.
+  // Let's stick to initializing it.
+
+  // Wait, `useState(defaultPlanView)` only initializes once.
+  // If `defaultPlanView` changes (e.g. settings loaded late), we might want to update it.
+  // `useCombinedSettings` has a loading state.
+
+  useEffect(() => {
+    if (defaultPlanView) {
+      setView(defaultPlanView);
+    }
+  }, [defaultPlanView]);
 
   useEffect(() => {
     moment.updateLocale('en', {

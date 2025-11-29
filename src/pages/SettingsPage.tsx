@@ -23,7 +23,7 @@ const SettingsPage: React.FC = () => {
   };
 
   const handleSettingChange = (key: keyof typeof settings, value: string) => {
-    if (key === 'splitTime') {
+    if (key === 'splitTime' || key === 'defaultPlanView') {
       updateSettings({ [key]: value });
     } else {
       const numValue = parseFloat(value);
@@ -116,6 +116,29 @@ const SettingsPage: React.FC = () => {
                   </RadioGroup>
                   <p className="text-sm text-muted-foreground mt-1">
                     Choose which day the week starts on.
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="block text-sm font-medium mb-1">
+                    Default Plan View
+                  </Label>
+                  <RadioGroup
+                    value={settings.defaultPlanView || "week"}
+                    onValueChange={(value) => handleSettingChange('defaultPlanView', value)}
+                    className="flex flex-col space-y-1 mt-2"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="week" id="plan-view-week" />
+                      <Label htmlFor="plan-view-week">Week</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="month" id="plan-view-month" />
+                      <Label htmlFor="plan-view-month">Month</Label>
+                    </div>
+                  </RadioGroup>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Choose the default view for the Program/Plan page.
                   </p>
                 </div>
               </div>

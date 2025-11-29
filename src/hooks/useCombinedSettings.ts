@@ -20,6 +20,7 @@ export interface CombinedSettings {
 
     // User preference
     weekStartDay: 0 | 1; // 0 for Sunday, 1 for Monday
+    defaultPlanView: 'week' | 'month';
 }
 
 /**
@@ -50,6 +51,7 @@ const defaultCombinedSettings: CombinedSettings = {
     qliGoal: 60,
     newCapabilitiesGoal: 57.98,
     weekStartDay: 1, // Default to Monday
+    defaultPlanView: 'week',
 };
 
 /**
@@ -79,7 +81,8 @@ export const useCombinedSettings = () => {
                     failureRateGoal: appSettings.failure_rate_goal || 5,
                     qliGoal: appSettings.qli_goal || 60,
                     newCapabilitiesGoal: appSettings.new_capabilities_goal || 57.98,
-                    weekStartDay: 1, // Default to Monday, will be overridden by localStorage if exists
+                    weekStartDay: 1,
+                    defaultPlanView: 'week',
                 };
 
                 // Override with user-specific settings if they exist
@@ -97,8 +100,6 @@ export const useCombinedSettings = () => {
                     // or just keep it in memory if we can't change the backend schema easily.
                     // However, the prompt implies we should add it. Let's assume we can add it to userSettings 
                     // or use a workaround. Since I can't easily change the backend schema without seeing it,
-                    // I'll use localStorage for this specific setting as a "user preference" that persists locally for now,
-                    // or just keep it in the combined settings state.
 
                     // Actually, let's check if we can add it to the UserSettings type. 
                     // I'll assume for now we can't easily change the DB schema in this step without more info.
@@ -106,6 +107,10 @@ export const useCombinedSettings = () => {
                     const localWeekStart = localStorage.getItem(`weekStartDay_${userSettings.userId}`);
                     if (localWeekStart) {
                         merged.weekStartDay = parseInt(localWeekStart) as 0 | 1;
+                    }
+                    const storedDefaultPlanView = localStorage.getItem(`defaultPlanView_${userSettings.userId}`);
+                    if (storedDefaultPlanView) {
+                        merged.defaultPlanView = storedDefaultPlanView as 'week' | 'month';
                     }
                 }
 
@@ -157,6 +162,11 @@ export const useCombinedSettings = () => {
                     localStorage.setItem(`weekStartDay_${userSettings.userId}`, updates.weekStartDay.toString());
                 }
             }
+            if (updates.defaultPlanView !== undefined) {
+                if (userSettings) {
+                    localStorage.setItem(`defaultPlanView_${userSettings.userId}`, updates.defaultPlanView);
+                }
+            }
 
             // Global-only settings
             if (updates.weeksComputation !== undefined) {
@@ -204,6 +214,7 @@ export const useCombinedSettings = () => {
                 qliGoal: appSettings.qli_goal || 60,
                 newCapabilitiesGoal: appSettings.new_capabilities_goal || 57.98,
                 weekStartDay: settings.weekStartDay, // Keep current local state
+                defaultPlanView: settings.defaultPlanView,
             };
             setSettings(merged);
         }
