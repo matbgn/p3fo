@@ -24,6 +24,7 @@ interface ChronologicalViewProps {
   taskMap: Record<string, Task>;
   onUpdateTimeEntry: (taskId: string, entryIndex: number, entry: { startTime: number; endTime: number }) => void;
   onUpdateTaskCategory: (taskId: string, category: string | undefined) => void;
+  onUpdateUser: (taskId: string, userId: string | undefined) => void;
   onDelete: (taskId: string, entryIndex: number) => void;
   onJumpToTask?: (taskId: string) => void;
 }
@@ -33,6 +34,7 @@ export const ChronologicalView: React.FC<ChronologicalViewProps> = ({
   taskMap,
   onUpdateTimeEntry,
   onUpdateTaskCategory,
+  onUpdateUser,
   onDelete,
   onJumpToTask,
 }) => {
@@ -85,6 +87,7 @@ export const ChronologicalView: React.FC<ChronologicalViewProps> = ({
             <TableRow>
               <TableHead>Task</TableHead>
               <TableHead>Category</TableHead>
+              <TableHead>User</TableHead>
               <TableHead>Start Time</TableHead>
               <TableHead>End Time</TableHead>
               <TableHead>Duration</TableHead>
@@ -98,6 +101,7 @@ export const ChronologicalView: React.FC<ChronologicalViewProps> = ({
                 taskMap={taskMap}
                 onUpdateTimeEntry={updateTimeEntry}
                 onUpdateTaskCategory={updateCategory}
+                onUpdateUser={onUpdateUser}
                 onDelete={onDelete}
                 onJumpToTask={onJumpToTask}
               >

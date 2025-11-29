@@ -11,6 +11,8 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useUsers } from "@/hooks/useUsers";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { loadFiltersFromSessionStorage, saveFiltersToSessionStorage } from "@/lib/filter-storage";
+import { Filters } from "@/components/FilterControls";
 
 const MetricsPage: React.FC = () => {
   const [activeTab, setActiveTab] = React.useState("forecast");
@@ -20,17 +22,45 @@ const MetricsPage: React.FC = () => {
 
   const [selectedUserId, setSelectedUserId] = React.useState<string>("");
 
-  // Set default selected user to current user when loaded
+  // Load from storage on mount
   React.useEffect(() => {
-    if (userSettings.username && !selectedUserId) {
-      const currentUser = users.find(u => u.username === userSettings.username);
-      if (currentUser) {
-        setSelectedUserId(currentUser.userId);
-      } else if (currentUserId) {
-        setSelectedUserId(currentUserId);
+    const load = async () => {
+      const filters = await loadFiltersFromSessionStorage();
+      if (filters?.selectedUserId) {
+        setSelectedUserId(filters.selectedUserId);
+      } else {
+        // Default to current user if no filter is saved
+        if (userSettings.username) {
+          const currentUser = users.find(u => u.username === userSettings.username);
+          if (currentUser) {
+            setSelectedUserId(currentUser.userId);
+          } else if (currentUserId) {
+            setSelectedUserId(currentUserId);
+          }
+        }
       }
-    }
-  }, [userSettings, users, selectedUserId, currentUserId]);
+    };
+    load();
+  }, [userSettings, users, currentUserId]);
+
+  const handleUserChange = async (newUserId: string) => {
+    setSelectedUserId(newUserId);
+    const currentFilters = await loadFiltersFromSessionStorage() || {
+      showUrgent: false,
+      showImpact: false,
+      showMajorIncident: false,
+      status: [],
+      showDone: false,
+      searchText: "",
+      difficulty: [],
+      category: []
+    } as Filters;
+
+    await saveFiltersToSessionStorage({
+      ...currentFilters,
+      selectedUserId: newUserId
+    });
+  };
 
   return (
     <div className="flex flex-col gap-6 h-full">
@@ -56,7 +86,7 @@ const MetricsPage: React.FC = () => {
       <section className="flex-1 border rounded-lg p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold">Individual Metrics</h2>
-          <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+          <Select value={selectedUserId} onValueChange={handleUserChange}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Select user" />
             </SelectTrigger>

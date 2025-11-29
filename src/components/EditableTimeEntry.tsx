@@ -25,6 +25,8 @@ const zurichPlainDateTimeToTimestamp = (plainDateTime: Temporal.PlainDateTime): 
 
 import { Task } from '@/hooks/useTasks';
 
+import { UserSelector } from "./UserSelector";
+
 // Editable time entry component
 export const EditableTimeEntry: React.FC<{
   entry: {
@@ -39,10 +41,11 @@ export const EditableTimeEntry: React.FC<{
   taskMap: Record<string, Task>;
   onUpdateTimeEntry: (taskId: string, entryIndex: number, entry: { startTime: number; endTime: number }) => void;
   onUpdateTaskCategory: (taskId: string, category: string | undefined) => void;
+  onUpdateUser: (taskId: string, userId: string | undefined) => void;
   onDelete: (taskId: string, entryIndex: number) => void;
   onJumpToTask?: (taskId: string) => void;
   children?: React.ReactNode;
-}> = ({ entry, taskMap, onUpdateTimeEntry, onUpdateTaskCategory, onDelete, onJumpToTask, children }) => {
+}> = ({ entry, taskMap, onUpdateTimeEntry, onUpdateTaskCategory, onUpdateUser, onDelete, onJumpToTask, children }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editStartTime, setEditStartTime] = useState('');
   const [editEndTime, setEditEndTime] = useState('');
@@ -138,6 +141,10 @@ export const EditableTimeEntry: React.FC<{
           </Select>
         </TableCell>
         <TableCell>
+          {/* User selection not available in edit mode for now, or could be added */}
+          <span className="text-muted-foreground">-</span>
+        </TableCell>
+        <TableCell>
           <Input
             type="datetime-local"
             step="1"
@@ -193,6 +200,13 @@ export const EditableTimeEntry: React.FC<{
         {children}
       </TableCell>
       <TableCell>{entry.taskCategory || "Uncategorized"}</TableCell>
+      <TableCell>
+        <UserSelector
+          value={task?.userId}
+          onChange={(userId) => onUpdateUser(task.id, userId)}
+          className="h-6 w-auto"
+        />
+      </TableCell>
       <TableCell>{formatTimeWithTemporal(entry.startTime)}</TableCell>
       <TableCell>{entry.endTime > 0 ? formatTimeWithTemporal(entry.endTime) : 'Running'}</TableCell>
       <TableCell className="flex items-center justify-between">
