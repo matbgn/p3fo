@@ -15,51 +15,44 @@ import {
 } from "@/components/ui/select";
 import { MonthlyBalanceData } from "@/lib/persistence-types";
 
-const HourlyBalance: React.FC = () => {
+interface HourlyBalanceProps {
+    userId: string;
+}
+
+const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
     const { tasks } = useTasks();
     const { settings } = useCombinedSettings();
     const { users, updateUser } = useUsers();
     const { userSettings } = useUserSettings();
 
-    const [selectedUserId, setSelectedUserId] = useState<string>("");
-
-    useEffect(() => {
-        if (userSettings.username && !selectedUserId) {
-            const currentUser = users.find((u) => u.username === userSettings.username);
-            if (currentUser) {
-                setSelectedUserId(currentUser.userId);
-            }
-        }
-    }, [userSettings.username, users, selectedUserId]);
-
     const filteredTasks =
-        selectedUserId === "unassigned"
+        userId === "unassigned"
             ? tasks.filter((task) => !task.userId)
-            : selectedUserId
+            : userId
                 ? tasks.filter(
                     (task) =>
-                        task.userId === selectedUserId ||
-                        (users.find((u) => u.userId === selectedUserId)?.username &&
-                            task.userId === users.find((u) => u.userId === selectedUserId)?.username)
+                        task.userId === userId ||
+                        (users.find((u) => u.userId === userId)?.username &&
+                            task.userId === users.find((u) => u.userId === userId)?.username)
                 )
                 : tasks;
 
-    const selectedUser = users.find((u) => u.userId === selectedUserId);
+    const selectedUser = users.find((u) => u.userId === userId);
     const monthlyBalances = selectedUser?.monthly_balances || {};
 
     const data = getHistoricalHourlyBalances(filteredTasks, settings, 6, monthlyBalances);
 
     const displayUserName =
-        selectedUserId === "unassigned"
+        userId === "unassigned"
             ? "Unassigned"
             : selectedUser
                 ? selectedUser.username
                 : userSettings.username || "Select User";
 
     const handleUpdate = async (descId: string, field: keyof DataPoint, value: number) => {
-        console.log('[HourlyBalance] handleUpdate called:', { descId, field, value, selectedUserId });
+        console.log('[HourlyBalance] handleUpdate called:', { descId, field, value, userId });
 
-        if (!selectedUserId || selectedUserId === "unassigned") {
+        if (!userId || userId === "unassigned") {
             console.log('[HourlyBalance] Skipping update - no user or unassigned');
             return;
         }
@@ -97,7 +90,7 @@ const HourlyBalance: React.FC = () => {
         };
 
         console.log('[HourlyBalance] Calling updateUser with:', { updatedMonthlyBalances });
-        await updateUser(selectedUserId, { monthly_balances: updatedMonthlyBalances });
+        await updateUser(userId, { monthly_balances: updatedMonthlyBalances });
         console.log('[HourlyBalance] updateUser complete');
     };
 
@@ -105,19 +98,6 @@ const HourlyBalance: React.FC = () => {
         <div className="flex flex-col gap-4 h-full">
             <div className="flex items-center justify-between">
                 <span className="font-medium">User: {displayUserName}</span>
-                <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                    <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Select user" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="unassigned">Unassigned</SelectItem>
-                        {users.map((user) => (
-                            <SelectItem key={user.userId} value={user.userId}>
-                                {user.username}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
             </div>
             <div className="flex flex-row gap-6 h-full">
                 <div className="w-1/3 min-w-[300px] border rounded-lg p-4 bg-white">

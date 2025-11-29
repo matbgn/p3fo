@@ -8,9 +8,29 @@ import HourlyBalance from "@/components/HourlyBalance";
 import QoLSurvey from "@/components/QoLSurvey";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
+import { useUsers } from "@/hooks/useUsers";
+import { useUserSettings } from "@/hooks/useUserSettings";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 const MetricsPage: React.FC = () => {
   const [activeTab, setActiveTab] = React.useState("forecast");
-  const { userId } = useCurrentUser();
+  const { userId: currentUserId } = useCurrentUser();
+  const { users } = useUsers();
+  const { userSettings } = useUserSettings();
+
+  const [selectedUserId, setSelectedUserId] = React.useState<string>("");
+
+  // Set default selected user to current user when loaded
+  React.useEffect(() => {
+    if (userSettings.username && !selectedUserId) {
+      const currentUser = users.find(u => u.username === userSettings.username);
+      if (currentUser) {
+        setSelectedUserId(currentUser.userId);
+      } else if (currentUserId) {
+        setSelectedUserId(currentUserId);
+      }
+    }
+  }, [userSettings, users, selectedUserId, currentUserId]);
 
   return (
     <div className="flex flex-col gap-6 h-full">
@@ -34,7 +54,22 @@ const MetricsPage: React.FC = () => {
 
       {/* Bottom pane for graphics in subtab separated view */}
       <section className="flex-1 border rounded-lg p-6">
-        <h2 className="text-xl font-semibold mb-4">Individual Metrics</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold">Individual Metrics</h2>
+          <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Select user" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="unassigned">Unassigned</SelectItem>
+              {users.map((user) => (
+                <SelectItem key={user.userId} value={user.userId}>
+                  {user.username}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <div className="flex flex-col h-full">
           {/* Subtab navigation */}
           <div className="flex border-b mb-4">
@@ -61,11 +96,11 @@ const MetricsPage: React.FC = () => {
           {/* Graphics area */}
           <div className="flex-1 bg-muted/10 rounded-lg p-4 overflow-auto">
             {activeTab === "forecast" ? (
-              <Forecast />
+              <Forecast userId={selectedUserId} />
             ) : activeTab === "hourly-balance" ? (
-              <HourlyBalance />
+              <HourlyBalance userId={selectedUserId} />
             ) : activeTab === "individual-qol" ? (
-              userId ? <QoLSurvey userId={userId} /> : <div>Please log in to view survey</div>
+              selectedUserId && selectedUserId !== "unassigned" ? <QoLSurvey userId={selectedUserId} /> : <div>Please select a user to view survey</div>
             ) : (
               <div className="flex items-center justify-center h-full">
                 <p className="text-muted-foreground">Graphics content for {activeTab} will appear here</p>
