@@ -18,14 +18,14 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
     const { userSettings } = useUserSettings();
     const { users } = useUsers();
 
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1; // 1-indexed for getWorkingDays and display
+    const [selectedDate, setSelectedDate] = useState(new Date());
+    const year = selectedDate.getFullYear();
+    const month = selectedDate.getMonth() + 1; // 1-indexed for getWorkingDays and display
 
     const workingDays = getWorkingDays(year, month);
 
     // Format month name
-    const monthName = now.toLocaleString('default', { month: 'long' });
+    const monthName = selectedDate.toLocaleString('default', { month: 'long' });
 
     // Force re-render every minute to update running timers
     const [, setTick] = useState(0);
@@ -56,6 +56,25 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
         userWorkloadPercentage: selectedUser?.workload ?? settings.userWorkloadPercentage
     };
 
+    const handleYearChange = (value: string) => {
+        const newDate = new Date(selectedDate);
+        newDate.setFullYear(parseInt(value));
+        setSelectedDate(newDate);
+    };
+
+    const handleMonthChange = (value: string) => {
+        const newDate = new Date(selectedDate);
+        newDate.setMonth(parseInt(value) - 1);
+        setSelectedDate(newDate);
+    };
+
+    const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i);
+    const months = Array.from({ length: 12 }, (_, i) => i + 1);
+
+    // Get vacations taken for the selected month
+    const descId = `${year}-${String(month).padStart(2, '0')}`;
+    const vacationsTaken = selectedUser?.monthly_balances?.[descId]?.vacations_hourly_taken || 0;
+
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
             <Card className="h-28">
@@ -74,7 +93,16 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
                     <CardTitle className="text-sm font-medium">Year</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{year}</div>
+                    <Select value={year.toString()} onValueChange={handleYearChange}>
+                        <SelectTrigger>
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {years.map(y => (
+                                <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </CardContent>
             </Card>
 
@@ -83,7 +111,18 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
                     <CardTitle className="text-sm font-medium">Month</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{monthName}</div>
+                    <Select value={month.toString()} onValueChange={handleMonthChange}>
+                        <SelectTrigger>
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {months.map(m => (
+                                <SelectItem key={m} value={m.toString()}>
+                                    {new Date(0, m - 1).toLocaleString('default', { month: 'long' })}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </CardContent>
             </Card>
 
@@ -101,6 +140,7 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
                 settings={forecastSettings}
                 year={year}
                 month={month}
+                vacationsTaken={vacationsTaken}
             />
         </div>
     );

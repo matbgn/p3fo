@@ -53,6 +53,8 @@ export interface MonthlyBalanceData {
   hours_done: number;
   vacations_hourly_balance?: number;
   vacations_hourly_taken?: number;
+  is_manual?: boolean;
+  modified_by?: string;
 }
 
 export interface UserSettingsEntity {

@@ -26,12 +26,12 @@ function calculateHoursDoneFromTasks(tasks: Task[], year: number, month: number)
                     end = Date.now();
                 }
 
-                // Check overlap with month
-                const effectiveStart = Math.max(start, startOfMonth);
-                const effectiveEnd = Math.min(end, endOfMonth);
-
-                if (effectiveEnd > effectiveStart) {
-                    totalMilliseconds += (effectiveEnd - effectiveStart);
+                // Check if task starts in the considered month
+                if (start >= startOfMonth && start <= endOfMonth) {
+                    // Count the entire duration of the task in the month it started
+                    if (end > start) {
+                        totalMilliseconds += (end - start);
+                    }
                 }
             });
         }
@@ -73,11 +73,65 @@ export function getRemainingWorkingDays(year: number, month: number): number {
     return remaining;
 }
 
+// Helper to calculate total time from tasks for a specific date range
+function calculateHoursDoneInDateRange(tasks: Task[], startDate: Date, endDate: Date): number {
+    let totalMilliseconds = 0;
+    const startRange = startDate.getTime();
+    const endRange = endDate.getTime();
+
+    tasks.forEach(task => {
+        if (task.timer && Array.isArray(task.timer)) {
+            task.timer.forEach(entry => {
+                const start = entry.startTime;
+                let end = entry.endTime;
+                if (!end || end === 0) {
+                    end = Date.now();
+                }
+
+                // Check overlap with range
+                const effectiveStart = Math.max(start, startRange);
+                const effectiveEnd = Math.min(end, endRange);
+
+                if (effectiveEnd > effectiveStart) {
+                    totalMilliseconds += (effectiveEnd - effectiveStart);
+                }
+            });
+        }
+    });
+
+    return totalMilliseconds / (1000 * 60 * 60);
+}
+
+function calculateHistoryPace(tasks: Task[], daysBack: number = 50): number {
+    const now = new Date();
+    const startDate = new Date(now);
+    startDate.setDate(now.getDate() - daysBack);
+
+    // 1. Calculate working days in the range
+    // We need to iterate day by day or use a more sophisticated method.
+    // Given 50 days is small, iteration is fine.
+    const hd = new Holidays('CH', 'BE', { types: ['public'] });
+    let workingDays = 0;
+    for (let d = new Date(startDate); d <= now; d.setDate(d.getDate() + 1)) {
+        if (d.getDay() !== 0 && d.getDay() !== 6 && !hd.isHoliday(d)) {
+            workingDays++;
+        }
+    }
+
+    if (workingDays === 0) return 0;
+
+    // 2. Calculate hours done in the range
+    const hoursDone = calculateHoursDoneInDateRange(tasks, startDate, now);
+
+    return hoursDone / workingDays;
+}
+
 export function getProjectedHoursForActualMonth(
     year: number,
     month: number,
     tasks: Task[],
-    settings: CombinedSettings
+    settings: CombinedSettings,
+    vacationsTaken: number = 0
 ) {
     const workingDays = getWorkingDays(year, month);
     const hoursToBeDoneByDayByContract = 8;
@@ -86,14 +140,55 @@ export function getProjectedHoursForActualMonth(
     const hoursDue = workingDays * hoursToBeDoneByDayByContract * workloadInDecimal;
     const hoursDone = calculateHoursDoneFromTasks(tasks, year, month);
 
-    const remainingWorkingDays = getRemainingWorkingDays(year, month);
+    // Linear Projection Logic with Gliding Average
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    const currentDay = now.getDate();
 
-    // If no working days left (or past month), projected is what is done.
-    // Otherwise, assume we meet the target (hoursDue).
-    const totalTimeExpandedInHours = remainingWorkingDays > 0 ? hoursDue : hoursDone;
+    let projectedTotal = hoursDone;
+
+    // Only project if we are in the current month or a future month
+    // For past months, projected is just what was done (handled by initial assignment)
+    if (year > currentYear || (year === currentYear && month > currentMonth)) {
+        // Future month: default to theoretical target
+        projectedTotal = hoursDue;
+    } else if (year === currentYear && month === currentMonth) {
+        // Current month
+        // Calculate working days passed so far (from day 1 to today)
+        const workingDaysSoFar = getWorkingDays(year, month, 1, currentDay);
+        const totalWorkingDaysInMonth = workingDays; // Already calculated above
+
+        // Calculate History Pace (last 50 days)
+        const historyPace = calculateHistoryPace(tasks, 50);
+
+        // Calculate Current Pace
+        // We use Math.max(1, workingDaysSoFar) to avoid division by zero
+        const currentPace = hoursDone / Math.max(1, workingDaysSoFar);
+
+        // Calculate Weight Z
+        // Z goes from 0 (start of month) to 1 (end of month)
+        // We clamp it between 0 and 1 just in case
+        const z = Math.max(0, Math.min(1, workingDaysSoFar / totalWorkingDaysInMonth));
+
+        const weightedPace = (z * currentPace) + ((1 - z) * historyPace);
+
+        projectedTotal = weightedPace * totalWorkingDaysInMonth;
+
+    } else {
+        // Past month
+        projectedTotal = hoursDone;
+    }
+
+    // Add vacations taken to the projected total (as they count towards the balance)
+    // vacationsTaken is negative, so we subtract it to add the absolute value
+    projectedTotal -= vacationsTaken;
+
+    const totalTimeExpandedInHours = projectedTotal;
 
     // Balance is always done - due
-    const balance = hoursDone - hoursDue;
+    // For the "Delta hours projected with due" we want the projected balance
+    const balance = totalTimeExpandedInHours - hoursDue;
 
     return {
         totalTimeElapsedForAllMonth: Math.round(hoursDone * 10) / 10,
@@ -105,16 +200,21 @@ export function getProjectedHoursForActualMonth(
     };
 }
 
-export type DataPoint = {
-    date: string;
+export interface DataPoint {
+    date: string; // Keep date as it's used in data.push
     desc_id: string;
     workload: number;
     hourly_balance: number;
     hours_done: number;
-    hours_due: number;
+    hours_due: number; // Keep hours_due as it's used in data.push
     projected: boolean;
-    cumulative_balance: number;
-};
+    cumulative_balance: number; // Keep cumulative_balance as it's used in data.push
+    vacations_due?: number; // Added from snippet
+    vacations_hourly_balance?: number; // Added from snippet
+    vacations_hourly_taken?: number; // Added from snippet
+    is_manual?: boolean; // Added from instruction
+    modified_by?: string; // Added from instruction
+}
 
 // Alias for backward compatibility if needed, though I'll export DataPoint directly
 export type HourlyBalanceDataPoint = DataPoint;
@@ -130,6 +230,11 @@ export function getHistoricalHourlyBalances(
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
     const defaultWorkload = userWorkload ?? settings.userWorkloadPercentage;
+
+    const effectiveSettings = {
+        ...settings,
+        userWorkloadPercentage: defaultWorkload
+    };
 
     // 1. Determine the start date for history
     // Find the earliest month in monthlyBalances
@@ -171,7 +276,8 @@ export function getHistoricalHourlyBalances(
             if (isCurrentMonth) {
                 // For current month, ALWAYS use the projected logic which accounts for remaining working days
                 // This ensures consistency with the Forecast view and ignores potentially stale stored values
-                const projected = getProjectedHoursForActualMonth(year, month, tasks, settings);
+                const vacationsTaken = monthlyBalances[descId]?.vacations_hourly_taken || 0;
+                const projected = getProjectedHoursForActualMonth(year, month, tasks, effectiveSettings, vacationsTaken);
                 hoursDone = projected.totalTimeExpandedInHours;
             } else if (monthlyBalances[descId].hours_done !== undefined && monthlyBalances[descId].hours_done !== 0) {
                 // Use manual hours done if present for past months
@@ -214,7 +320,9 @@ export function getHistoricalHourlyBalances(
             hours_done: Number(hoursDone.toFixed(1)),
             hours_due: Number(hoursDue.toFixed(1)),
             projected: false,
-            cumulative_balance: Number(cumulativeBalance.toFixed(1))
+            cumulative_balance: Number(cumulativeBalance.toFixed(1)),
+            is_manual: monthlyBalances[descId]?.is_manual,
+            modified_by: monthlyBalances[descId]?.modified_by
         });
     }
 

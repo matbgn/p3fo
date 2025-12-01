@@ -10,14 +10,16 @@ interface TimetableRecordsCellProps {
     settings: CombinedSettings;
     year: number;
     month: number;
+    vacationsTaken?: number;
 }
 
-const TimetableRecordsCell: React.FC<TimetableRecordsCellProps> = ({ tasks, settings, year, month }) => {
+const TimetableRecordsCell: React.FC<TimetableRecordsCellProps> = ({ tasks, settings, year, month, vacationsTaken = 0 }) => {
     const projectedHoursResult = getProjectedHoursForActualMonth(
         year,
         month,
         tasks,
-        settings
+        settings,
+        vacationsTaken
     );
 
     const balance = projectedHoursResult.hourlyBalanceProjection;
