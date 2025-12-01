@@ -204,11 +204,8 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
 
     return (
         <div className="flex flex-col gap-4 h-full">
-            <div className="flex items-center justify-between">
-                <span className="font-medium">User: {displayUserName}</span>
-            </div>
-            <div className="flex flex-row gap-6 h-full items-start">
-                <div className="w-1/3 min-w-[300px] border rounded-lg p-4 bg-white flex flex-col">
+            <div className="flex flex-col lg:flex-row gap-6 h-full items-start">
+                <div className="w-full lg:w-1/3 lg:min-w-[300px] flex flex-col order-2 lg:order-1">
                     {/* Table: newest month at top, oldest at bottom */}
                     <div className="flex-1 overflow-auto">
                         <TimetableRawTable
@@ -235,7 +232,7 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
                         )}
                     </div>
                 </div>
-                <div className="flex-1 h-[600px] border rounded-lg p-4 bg-white">
+                <div className="w-full lg:flex-1 h-[400px] lg:h-[600px] flex flex-col order-1 lg:order-2">
                     {/* Chart: oldest month on left, newest on right */}
                     <TimetableChart
                         data={chartData}
