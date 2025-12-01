@@ -10,8 +10,14 @@ import {
 import { Input } from "@/components/ui/input";
 import type { DataPoint } from "@/utils/projectedHours";
 
-import { Trash2 } from "lucide-react";
+import { Trash2, Pen } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface TimetableRawTableProps {
   data: DataPoint[];
@@ -111,7 +117,21 @@ const TimetableRawTable: React.FC<TimetableRawTableProps> = ({ data, onUpdate, o
 
             return (
               <TableRow key={index}>
-                <TableCell className="font-medium">{row.desc_id}</TableCell>
+                <TableCell className="font-medium flex items-center gap-2">
+                  {row.desc_id}
+                  {row.is_manual && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Pen className="h-3 w-3 text-blue-500" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Edited by {row.modified_by || 'Unknown'}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                </TableCell>
                 <TableCell>
                   <EditableCell
                     value={row.workload}

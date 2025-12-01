@@ -200,16 +200,21 @@ export function getProjectedHoursForActualMonth(
     };
 }
 
-export type DataPoint = {
-    date: string;
+export interface DataPoint {
+    date: string; // Keep date as it's used in data.push
     desc_id: string;
     workload: number;
     hourly_balance: number;
     hours_done: number;
-    hours_due: number;
+    hours_due: number; // Keep hours_due as it's used in data.push
     projected: boolean;
-    cumulative_balance: number;
-};
+    cumulative_balance: number; // Keep cumulative_balance as it's used in data.push
+    vacations_due?: number; // Added from snippet
+    vacations_hourly_balance?: number; // Added from snippet
+    vacations_hourly_taken?: number; // Added from snippet
+    is_manual?: boolean; // Added from instruction
+    modified_by?: string; // Added from instruction
+}
 
 // Alias for backward compatibility if needed, though I'll export DataPoint directly
 export type HourlyBalanceDataPoint = DataPoint;
@@ -315,7 +320,9 @@ export function getHistoricalHourlyBalances(
             hours_done: Number(hoursDone.toFixed(1)),
             hours_due: Number(hoursDue.toFixed(1)),
             projected: false,
-            cumulative_balance: Number(cumulativeBalance.toFixed(1))
+            cumulative_balance: Number(cumulativeBalance.toFixed(1)),
+            is_manual: monthlyBalances[descId]?.is_manual,
+            modified_by: monthlyBalances[descId]?.modified_by
         });
     }
 

@@ -18,7 +18,7 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
     const { tasks } = useTasks();
     const { settings } = useCombinedSettings();
     const { users, updateUser } = useUsers();
-    const { userSettings } = useUserSettings();
+    const { userSettings, userId: currentUserId } = useUserSettings();
     const [monthsBack, setMonthsBack] = useState(6);
 
     const filteredTasks =
@@ -63,6 +63,54 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
                 ? selectedUser.username
                 : userSettings.username || "Select User";
 
+    // Auto-persist previous month if missing (Lazy Persistence)
+    useEffect(() => {
+        if (!userId || userId === "unassigned" || !selectedUser) return;
+
+        const now = new Date();
+        const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const prevYear = prevDate.getFullYear();
+        const prevMonth = prevDate.getMonth() + 1;
+        const prevDescId = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
+
+        // Check if previous month exists in monthlyBalances
+        if (!monthlyBalances[prevDescId]) {
+            // Calculate it using the projection logic (which handles past months correctly)
+            // We need to pass the correct settings and tasks
+            // Use effective settings (user workload)
+            const effectiveSettings = {
+                ...settings,
+                userWorkloadPercentage: userWorkload
+            };
+
+            // We need to get vacations taken for that month if any (from where? if record missing, it's 0)
+            const vacationsTaken = 0;
+
+            const projected = getHistoricalHourlyBalances(filteredTasks, settings, 0, monthlyBalances, userWorkload)
+                .find(d => d.desc_id === prevDescId);
+
+            // If we found the data point (which we should as getHistoricalHourlyBalances generates it)
+            if (projected) {
+                const newBalance: MonthlyBalanceData = {
+                    workload: projected.workload,
+                    hourly_balance: projected.hourly_balance,
+                    hours_done: projected.hours_done,
+                    vacations_hourly_taken: projected.vacations_hourly_taken,
+                    vacations_hourly_balance: projected.vacations_hourly_balance,
+                    is_manual: false
+                };
+
+                const updatedMonthlyBalances = {
+                    ...monthlyBalances,
+                    [prevDescId]: newBalance,
+                };
+
+                // Save it
+                updateUser(userId, { monthly_balances: updatedMonthlyBalances });
+            }
+        }
+    }, [userId, selectedUser, monthlyBalances, filteredTasks, settings, userWorkload, updateUser]);
+
     const handleUpdate = async (descId: string, field: keyof DataPoint, value: number) => {
         if (!userId || userId === "unassigned") {
             return;
@@ -77,6 +125,8 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
         const updatedBalance: MonthlyBalanceData = {
             ...currentBalance,
             [field]: value,
+            is_manual: true,
+            modified_by: currentUserId // Track who modified it (current logged in user)
         };
 
         // Recalculate hourly_balance if workload or hours_done changed
