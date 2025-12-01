@@ -1,15 +1,15 @@
 import Holidays from 'date-holidays'
 
-export function getWorkingDays(year: number, month: number): number {
+export function getWorkingDays(year: number, month: number, startDay: number = 1, endDay?: number): number {
     // Create an instance of the Swiss holiday calendar
     const hd = new Holidays('CH', 'BE', { types: ['public'] })
 
     // Get the total number of days in the month
-    const lastDayOfMonth: number = new Date(year, month, 0).getDate()
+    const lastDayOfMonth: number = endDay || new Date(year, month, 0).getDate()
 
     // Count the number of working days excluding public holidays
     let workingDays = 0
-    for (let day = 1; day <= lastDayOfMonth; day++) {
+    for (let day = startDay; day <= lastDayOfMonth; day++) {
         const date: Date = new Date(year, month - 1, day)
         if (date.getDay() !== 0 && date.getDay() !== 6 && !hd.isHoliday(date)) {
             workingDays++

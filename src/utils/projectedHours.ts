@@ -86,11 +86,42 @@ export function getProjectedHoursForActualMonth(
     const hoursDue = workingDays * hoursToBeDoneByDayByContract * workloadInDecimal;
     const hoursDone = calculateHoursDoneFromTasks(tasks, year, month);
 
-    const remainingWorkingDays = getRemainingWorkingDays(year, month);
+    // Linear Projection Logic
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    const currentDay = now.getDate();
 
-    // If no working days left (or past month), projected is what is done.
-    // Otherwise, assume we meet the target (hoursDue).
-    const totalTimeExpandedInHours = remainingWorkingDays > 0 ? hoursDue : hoursDone;
+    let projectedTotal = hoursDone;
+
+    // Only project if we are in the current month or a future month
+    // For past months, projected is just what was done (handled by initial assignment)
+    if (year > currentYear || (year === currentYear && month > currentMonth)) {
+        // Future month: default to theoretical target
+        projectedTotal = hoursDue;
+    } else if (year === currentYear && month === currentMonth) {
+        // Current month
+        // Calculate working days passed so far (from day 1 to today)
+        const workingDaysSoFar = getWorkingDays(year, month, 1, currentDay);
+
+        if (hoursDone > 0) {
+            // User has started working. Project based on current pace.
+            // Pace = hoursDone / workingDaysSoFar
+            // Projected = Pace * totalWorkingDays
+            // We use Math.max(1, workingDaysSoFar) to avoid division by zero if today is 1st of month and it's a holiday/weekend
+            // effectively treating it as if 1 unit of time has passed if they managed to log hours.
+            const pace = hoursDone / Math.max(1, workingDaysSoFar);
+            projectedTotal = pace * workingDays;
+        } else {
+            // User hasn't started working yet. Default to theoretical target.
+            projectedTotal = hoursDue;
+        }
+    } else {
+        // Past month
+        projectedTotal = hoursDone;
+    }
+
+    const totalTimeExpandedInHours = projectedTotal;
 
     // Balance is always done - due
     // For the "Delta hours projected with due" we want the projected balance
