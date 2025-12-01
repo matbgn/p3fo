@@ -130,7 +130,8 @@ export function getProjectedHoursForActualMonth(
     year: number,
     month: number,
     tasks: Task[],
-    settings: CombinedSettings
+    settings: CombinedSettings,
+    vacationsTaken: number = 0
 ) {
     const workingDays = getWorkingDays(year, month);
     const hoursToBeDoneByDayByContract = 8;
@@ -170,22 +171,6 @@ export function getProjectedHoursForActualMonth(
         // We clamp it between 0 and 1 just in case
         const z = Math.max(0, Math.min(1, workingDaysSoFar / totalWorkingDaysInMonth));
 
-        // Weighted Average Pace
-        // If historyPace is 0 (e.g. new user), we might want to fallback to theoretical pace or just currentPace
-        // But for now, let's trust the formula. If history is 0, it drags it down, which is correct if they did nothing.
-        // However, if they are new, history might be misleading.
-        // Let's assume if historyPace is 0 and currentPace is > 0, we might want to lean on currentPace?
-        // The prompt says "let's say the 50 last days", implying established users.
-        // Let's stick to the formula: ProjectedPace = Z * CurrentPace + (1 - Z) * HistoryPace
-
-        // BUT: If the user has NO history (historyPace is 0), maybe we should use the theoretical target as history?
-        // "I don't want this average to impact too much the projection"
-        // If history is 0, it will heavily impact the start of the month (Z near 0).
-        // Let's use the theoretical daily target as a fallback for history if it's 0?
-        // No, the user said "past records". If there are no past records, 0 is the record.
-        // But if they just started, 0 is harsh.
-        // Let's use the formula as is.
-
         const weightedPace = (z * currentPace) + ((1 - z) * historyPace);
 
         projectedTotal = weightedPace * totalWorkingDaysInMonth;
@@ -194,6 +179,10 @@ export function getProjectedHoursForActualMonth(
         // Past month
         projectedTotal = hoursDone;
     }
+
+    // Add vacations taken to the projected total (as they count towards the balance)
+    // vacationsTaken is negative, so we subtract it to add the absolute value
+    projectedTotal -= vacationsTaken;
 
     const totalTimeExpandedInHours = projectedTotal;
 
@@ -282,7 +271,8 @@ export function getHistoricalHourlyBalances(
             if (isCurrentMonth) {
                 // For current month, ALWAYS use the projected logic which accounts for remaining working days
                 // This ensures consistency with the Forecast view and ignores potentially stale stored values
-                const projected = getProjectedHoursForActualMonth(year, month, tasks, effectiveSettings);
+                const vacationsTaken = monthlyBalances[descId]?.vacations_hourly_taken || 0;
+                const projected = getProjectedHoursForActualMonth(year, month, tasks, effectiveSettings, vacationsTaken);
                 hoursDone = projected.totalTimeExpandedInHours;
             } else if (monthlyBalances[descId].hours_done !== undefined && monthlyBalances[descId].hours_done !== 0) {
                 // Use manual hours done if present for past months

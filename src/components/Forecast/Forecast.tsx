@@ -71,6 +71,10 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
     const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i);
     const months = Array.from({ length: 12 }, (_, i) => i + 1);
 
+    // Get vacations taken for the selected month
+    const descId = `${year}-${String(month).padStart(2, '0')}`;
+    const vacationsTaken = selectedUser?.monthly_balances?.[descId]?.vacations_hourly_taken || 0;
+
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
             <Card className="h-28">
@@ -136,6 +140,7 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
                 settings={forecastSettings}
                 year={year}
                 month={month}
+                vacationsTaken={vacationsTaken}
             />
         </div>
     );
