@@ -1,21 +1,34 @@
 # Changelog
 
-## v0.3.0 (2025-11-29)
+## v0.4.0 (2025-12-01)
 
 ### Features
 
+- **timetable:** persist data once month is done (001a80b)
+- **forecast:** incorporate vacation hours into projected hours and balance calculations (8b2579b)
+- **forecast:** enhance projected hours calculation with a gliding average combining current and historical pace (3dfdf9e)
+- **timetable:** implement year and month selection in the forecast view (4896e55)
 - **vacations:** introduce a graph to project and report vacations usage (70368af)
 - **programm view:** add default plan view setting (6c85f16)
 - **user settings:** add a starting day param in settings for Mo VS Su (36a8d1a)
 - **timetable:** add user assignment to time entries, integrate new date range picker, and persist user filters (44ec0e8)
 - centralize user selection in MetricsPage, passing selected userId to Forecast, HourlyBalance, and QoLSurvey components (c0ec060)
-- introduce monthly balance tracking graph (cdde904)
 
 ### Bug Fixes
 
+- **forecast:** restore linear progression for the projected hours (c4b8af2)
+- applied effective user workload settings when calculating projected hours for the current month (6774e92)
 - **metrics:** correct `newCapabilitiesTime` cutoff date calculation missing seconds conversion (8902d2b)
 - export all user settings and enable their import for full data restoration (4f8d653)
 - team QoL survey index to be user-specific (99a26c1)
+
+---
+
+## v0.3.0 (2025-11-24)
+
+### Features
+
+- introduce monthly balance tracking graph (cdde904)
 
 ---
 
