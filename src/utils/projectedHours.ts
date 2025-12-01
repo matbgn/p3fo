@@ -93,7 +93,8 @@ export function getProjectedHoursForActualMonth(
     const totalTimeExpandedInHours = remainingWorkingDays > 0 ? hoursDue : hoursDone;
 
     // Balance is always done - due
-    const balance = hoursDone - hoursDue;
+    // For the "Delta hours projected with due" we want the projected balance
+    const balance = totalTimeExpandedInHours - hoursDue;
 
     return {
         totalTimeElapsedForAllMonth: Math.round(hoursDone * 10) / 10,
@@ -130,6 +131,11 @@ export function getHistoricalHourlyBalances(
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
     const defaultWorkload = userWorkload ?? settings.userWorkloadPercentage;
+
+    const effectiveSettings = {
+        ...settings,
+        userWorkloadPercentage: defaultWorkload
+    };
 
     // 1. Determine the start date for history
     // Find the earliest month in monthlyBalances
@@ -171,7 +177,7 @@ export function getHistoricalHourlyBalances(
             if (isCurrentMonth) {
                 // For current month, ALWAYS use the projected logic which accounts for remaining working days
                 // This ensures consistency with the Forecast view and ignores potentially stale stored values
-                const projected = getProjectedHoursForActualMonth(year, month, tasks, settings);
+                const projected = getProjectedHoursForActualMonth(year, month, tasks, effectiveSettings);
                 hoursDone = projected.totalTimeExpandedInHours;
             } else if (monthlyBalances[descId].hours_done !== undefined && monthlyBalances[descId].hours_done !== 0) {
                 // Use manual hours done if present for past months
