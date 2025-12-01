@@ -73,6 +73,59 @@ export function getRemainingWorkingDays(year: number, month: number): number {
     return remaining;
 }
 
+// Helper to calculate total time from tasks for a specific date range
+function calculateHoursDoneInDateRange(tasks: Task[], startDate: Date, endDate: Date): number {
+    let totalMilliseconds = 0;
+    const startRange = startDate.getTime();
+    const endRange = endDate.getTime();
+
+    tasks.forEach(task => {
+        if (task.timer && Array.isArray(task.timer)) {
+            task.timer.forEach(entry => {
+                const start = entry.startTime;
+                let end = entry.endTime;
+                if (!end || end === 0) {
+                    end = Date.now();
+                }
+
+                // Check overlap with range
+                const effectiveStart = Math.max(start, startRange);
+                const effectiveEnd = Math.min(end, endRange);
+
+                if (effectiveEnd > effectiveStart) {
+                    totalMilliseconds += (effectiveEnd - effectiveStart);
+                }
+            });
+        }
+    });
+
+    return totalMilliseconds / (1000 * 60 * 60);
+}
+
+function calculateHistoryPace(tasks: Task[], daysBack: number = 50): number {
+    const now = new Date();
+    const startDate = new Date(now);
+    startDate.setDate(now.getDate() - daysBack);
+
+    // 1. Calculate working days in the range
+    // We need to iterate day by day or use a more sophisticated method.
+    // Given 50 days is small, iteration is fine.
+    const hd = new Holidays('CH', 'BE', { types: ['public'] });
+    let workingDays = 0;
+    for (let d = new Date(startDate); d <= now; d.setDate(d.getDate() + 1)) {
+        if (d.getDay() !== 0 && d.getDay() !== 6 && !hd.isHoliday(d)) {
+            workingDays++;
+        }
+    }
+
+    if (workingDays === 0) return 0;
+
+    // 2. Calculate hours done in the range
+    const hoursDone = calculateHoursDoneInDateRange(tasks, startDate, now);
+
+    return hoursDone / workingDays;
+}
+
 export function getProjectedHoursForActualMonth(
     year: number,
     month: number,
@@ -86,7 +139,7 @@ export function getProjectedHoursForActualMonth(
     const hoursDue = workingDays * hoursToBeDoneByDayByContract * workloadInDecimal;
     const hoursDone = calculateHoursDoneFromTasks(tasks, year, month);
 
-    // Linear Projection Logic
+    // Linear Projection Logic with Gliding Average
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
@@ -103,19 +156,40 @@ export function getProjectedHoursForActualMonth(
         // Current month
         // Calculate working days passed so far (from day 1 to today)
         const workingDaysSoFar = getWorkingDays(year, month, 1, currentDay);
+        const totalWorkingDaysInMonth = workingDays; // Already calculated above
 
-        if (hoursDone > 0) {
-            // User has started working. Project based on current pace.
-            // Pace = hoursDone / workingDaysSoFar
-            // Projected = Pace * totalWorkingDays
-            // We use Math.max(1, workingDaysSoFar) to avoid division by zero if today is 1st of month and it's a holiday/weekend
-            // effectively treating it as if 1 unit of time has passed if they managed to log hours.
-            const pace = hoursDone / Math.max(1, workingDaysSoFar);
-            projectedTotal = pace * workingDays;
-        } else {
-            // User hasn't started working yet. Default to theoretical target.
-            projectedTotal = hoursDue;
-        }
+        // Calculate History Pace (last 50 days)
+        const historyPace = calculateHistoryPace(tasks, 50);
+
+        // Calculate Current Pace
+        // We use Math.max(1, workingDaysSoFar) to avoid division by zero
+        const currentPace = hoursDone / Math.max(1, workingDaysSoFar);
+
+        // Calculate Weight Z
+        // Z goes from 0 (start of month) to 1 (end of month)
+        // We clamp it between 0 and 1 just in case
+        const z = Math.max(0, Math.min(1, workingDaysSoFar / totalWorkingDaysInMonth));
+
+        // Weighted Average Pace
+        // If historyPace is 0 (e.g. new user), we might want to fallback to theoretical pace or just currentPace
+        // But for now, let's trust the formula. If history is 0, it drags it down, which is correct if they did nothing.
+        // However, if they are new, history might be misleading.
+        // Let's assume if historyPace is 0 and currentPace is > 0, we might want to lean on currentPace?
+        // The prompt says "let's say the 50 last days", implying established users.
+        // Let's stick to the formula: ProjectedPace = Z * CurrentPace + (1 - Z) * HistoryPace
+
+        // BUT: If the user has NO history (historyPace is 0), maybe we should use the theoretical target as history?
+        // "I don't want this average to impact too much the projection"
+        // If history is 0, it will heavily impact the start of the month (Z near 0).
+        // Let's use the theoretical daily target as a fallback for history if it's 0?
+        // No, the user said "past records". If there are no past records, 0 is the record.
+        // But if they just started, 0 is harsh.
+        // Let's use the formula as is.
+
+        const weightedPace = (z * currentPace) + ((1 - z) * historyPace);
+
+        projectedTotal = weightedPace * totalWorkingDaysInMonth;
+
     } else {
         // Past month
         projectedTotal = hoursDone;
