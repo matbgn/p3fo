@@ -26,12 +26,12 @@ function calculateHoursDoneFromTasks(tasks: Task[], year: number, month: number)
                     end = Date.now();
                 }
 
-                // Check overlap with month
-                const effectiveStart = Math.max(start, startOfMonth);
-                const effectiveEnd = Math.min(end, endOfMonth);
-
-                if (effectiveEnd > effectiveStart) {
-                    totalMilliseconds += (effectiveEnd - effectiveStart);
+                // Check if task starts in the considered month
+                if (start >= startOfMonth && start <= endOfMonth) {
+                    // Count the entire duration of the task in the month it started
+                    if (end > start) {
+                        totalMilliseconds += (end - start);
+                    }
                 }
             });
         }
