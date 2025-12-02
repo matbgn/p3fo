@@ -26,6 +26,7 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
   failure_rate_goal: 10,
   qli_goal: 7,
   new_capabilities_goal: 3,
+  hours_to_be_done_by_day: 8,
 };
 
 interface TaskRow {
@@ -66,6 +67,7 @@ interface AppSettingsRow {
   failure_rate_goal: number;
   qli_goal: number;
   new_capabilities_goal: number;
+  hours_to_be_done_by_day: number;
 }
 
 interface JsonRow {
@@ -168,18 +170,32 @@ class SqliteClient implements DbClient {
         high_impact_task_goal REAL DEFAULT 5,
         failure_rate_goal REAL DEFAULT 10,
         qli_goal REAL DEFAULT 7,
-        new_capabilities_goal REAL DEFAULT 3
+        new_capabilities_goal REAL DEFAULT 3,
+        hours_to_be_done_by_day REAL DEFAULT 8
       )
     `);
+
+    // Migration: Add hours_to_be_done_by_day to app_settings if it doesn't exist
+    try {
+      const appColumns = this.db.prepare("PRAGMA table_info(app_settings)").all() as { name: string }[];
+      const hasHoursToBeDone = appColumns.some(c => c.name === 'hours_to_be_done_by_day');
+
+      if (!hasHoursToBeDone) {
+        console.log('SQLite: Migrating app_settings, adding hours_to_be_done_by_day');
+        this.db.exec("ALTER TABLE app_settings ADD COLUMN hours_to_be_done_by_day REAL DEFAULT 8");
+      }
+    } catch (error) {
+      console.error('SQLite: Error checking/migrating app_settings schema:', error);
+    }
 
     // Insert default app settings if not exists
     const appSettingsCount = this.db.prepare('SELECT COUNT(*) as count FROM app_settings').get() as { count: number };
     if (appSettingsCount.count === 0) {
       this.db.prepare(`
         INSERT INTO app_settings (id, split_time, user_workload_percentage, weeks_computation, 
-                                  high_impact_task_goal, failure_rate_goal, qli_goal, new_capabilities_goal) 
+                                  high_impact_task_goal, failure_rate_goal, qli_goal, new_capabilities_goal, hours_to_be_done_by_day) 
         VALUES (1, @split_time, @user_workload_percentage, @weeks_computation, 
-                @high_impact_task_goal, @failure_rate_goal, @qli_goal, @new_capabilities_goal)
+                @high_impact_task_goal, @failure_rate_goal, @qli_goal, @new_capabilities_goal, @hours_to_be_done_by_day)
       `).run(DEFAULT_APP_SETTINGS as unknown as Record<string, string | number | null>);
     }
 
@@ -591,6 +607,7 @@ class SqliteClient implements DbClient {
       failure_rate_goal: row.failure_rate_goal,
       qli_goal: row.qli_goal,
       new_capabilities_goal: row.new_capabilities_goal,
+      hours_to_be_done_by_day: row.hours_to_be_done_by_day ?? 8,
     } : DEFAULT_APP_SETTINGS;
   }
 
@@ -603,7 +620,8 @@ class SqliteClient implements DbClient {
       SET split_time = @split_time, user_workload_percentage = @user_workload_percentage,
           weeks_computation = @weeks_computation, high_impact_task_goal = @high_impact_task_goal,
           failure_rate_goal = @failure_rate_goal, qli_goal = @qli_goal,
-          new_capabilities_goal = @new_capabilities_goal
+          new_capabilities_goal = @new_capabilities_goal,
+          hours_to_be_done_by_day = @hours_to_be_done_by_day
       WHERE id = 1
     `).run({
       split_time: updated.split_time,
@@ -613,6 +631,7 @@ class SqliteClient implements DbClient {
       failure_rate_goal: updated.failure_rate_goal,
       qli_goal: updated.qli_goal,
       new_capabilities_goal: updated.new_capabilities_goal,
+      hours_to_be_done_by_day: updated.hours_to_be_done_by_day,
     });
 
     return updated;

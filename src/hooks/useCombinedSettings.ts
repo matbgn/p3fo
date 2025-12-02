@@ -20,6 +20,7 @@ export interface CombinedSettings {
     vacationLimitMultiplier: number;
     hourlyBalanceLimitUpper: number;
     hourlyBalanceLimitLower: number;
+    hoursToBeDoneByDay: number;
 
     // User preference
     weekStartDay: 0 | 1; // 0 for Sunday, 1 for Monday
@@ -56,6 +57,7 @@ const defaultCombinedSettings: CombinedSettings = {
     vacationLimitMultiplier: 1.5,
     hourlyBalanceLimitUpper: 0.5,
     hourlyBalanceLimitLower: -0.5,
+    hoursToBeDoneByDay: 8,
     weekStartDay: 1, // Default to Monday
     defaultPlanView: 'week',
 };
@@ -90,6 +92,7 @@ export const useCombinedSettings = () => {
                     vacationLimitMultiplier: appSettings.vacation_limit_multiplier || 1.5,
                     hourlyBalanceLimitUpper: appSettings.hourly_balance_limit_upper || 0.5,
                     hourlyBalanceLimitLower: appSettings.hourly_balance_limit_lower || -0.5,
+                    hoursToBeDoneByDay: appSettings.hours_to_be_done_by_day || 8,
                     weekStartDay: 1,
                     defaultPlanView: 'week',
                 };
@@ -202,6 +205,9 @@ export const useCombinedSettings = () => {
             if (updates.hourlyBalanceLimitLower !== undefined) {
                 appUpdates.hourly_balance_limit_lower = updates.hourlyBalanceLimitLower;
             }
+            if (updates.hoursToBeDoneByDay !== undefined) {
+                appUpdates.hours_to_be_done_by_day = updates.hoursToBeDoneByDay;
+            }
 
             // Save user-specific updates if any
             if (Object.keys(userUpdates).length > 0 && userSettings) {
@@ -234,6 +240,7 @@ export const useCombinedSettings = () => {
                 vacationLimitMultiplier: appSettings.vacation_limit_multiplier || 1.5,
                 hourlyBalanceLimitUpper: appSettings.hourly_balance_limit_upper || 0.5,
                 hourlyBalanceLimitLower: appSettings.hourly_balance_limit_lower || -0.5,
+                hoursToBeDoneByDay: appSettings.hours_to_be_done_by_day || 8,
                 weekStartDay: settings.weekStartDay, // Keep current local state
                 defaultPlanView: settings.defaultPlanView,
             };

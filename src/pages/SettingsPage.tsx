@@ -151,6 +151,23 @@ const SettingsPage: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
                 <div>
                   <Label className="block text-sm font-medium mb-1">
+                    Standard Daily Hours
+                  </Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={settings.hoursToBeDoneByDay}
+                    onChange={(e) => handleSettingChange('hoursToBeDoneByDay', e.target.value)}
+                    className="w-24 mt-2"
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Standard working hours per day (default: 8)
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="block text-sm font-medium mb-1">
                     Weeks Computation
                   </Label>
                   <Input

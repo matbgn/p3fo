@@ -134,7 +134,7 @@ export function getProjectedHoursForActualMonth(
     vacationsTaken: number = 0
 ) {
     const workingDays = getWorkingDays(year, month);
-    const hoursToBeDoneByDayByContract = 8;
+    const hoursToBeDoneByDayByContract = settings.hoursToBeDoneByDay ?? 8;
     const workloadInDecimal = settings.userWorkloadPercentage / 100;
 
     const hoursDue = workingDays * hoursToBeDoneByDayByContract * workloadInDecimal;
@@ -288,7 +288,7 @@ export function getHistoricalHourlyBalances(
 
             // Always calculate balance to ensure consistency, ignoring potentially stale stored balance
             const workingDays = getWorkingDays(year, month);
-            const hoursDue = workingDays * 8 * (workload / 100);
+            const hoursDue = workingDays * (settings.hoursToBeDoneByDay ?? 8) * (workload / 100);
             currentBalance = hoursDone - hoursDue;
         } else {
             // No record in DB
@@ -303,14 +303,14 @@ export function getHistoricalHourlyBalances(
             }
 
             const workingDays = getWorkingDays(year, month);
-            const hoursDue = workingDays * 8 * (workload / 100);
+            const hoursDue = workingDays * (settings.hoursToBeDoneByDay ?? 8) * (workload / 100);
             currentBalance = hoursDone - hoursDue;
         }
 
         cumulativeBalance += currentBalance;
 
         const workingDays = getWorkingDays(year, month);
-        const hoursDue = workingDays * 8 * (workload / 100);
+        const hoursDue = workingDays * (settings.hoursToBeDoneByDay ?? 8) * (workload / 100);
 
         data.push({
             date: `${date.toLocaleDateString("default", { month: "short" })} ${year % 100}`,
@@ -338,7 +338,7 @@ export function getHistoricalHourlyBalances(
         const descId = `${year}-${String(month).padStart(2, '0')}`;
 
         const workingDays = getWorkingDays(year, month);
-        const hoursDue = workingDays * 8 * (lastWorkload / 100);
+        const hoursDue = workingDays * (settings.hoursToBeDoneByDay ?? 8) * (lastWorkload / 100);
 
         projectedBalance += 0; // Assume neutral balance for projection
 
@@ -360,9 +360,10 @@ export function getHistoricalHourlyBalances(
 export function getMonthProjectionVacations(
     year: number,
     month: number,
-    workloadInDecimal: number
+    workloadInDecimal: number,
+    hoursToBeDoneByDay: number = 8
 ): number {
-    const hoursToBeDoneByDayByContract = 8;
+    const hoursToBeDoneByDayByContract = hoursToBeDoneByDay;
     const vacationsWeekNbrByContract = 5;
     const vacationsRate =
         Math.round(
@@ -438,7 +439,7 @@ export function getVacationsBalances(
             }
         }
 
-        const vacationsDue = getMonthProjectionVacations(year, month, workload / 100);
+        const vacationsDue = getMonthProjectionVacations(year, month, workload / 100, settings.hoursToBeDoneByDay ?? 8);
 
         let currentBalance = 0;
         if (monthlyBalances[descId] && monthlyBalances[descId].vacations_hourly_balance !== undefined) {
@@ -472,7 +473,7 @@ export function getVacationsBalances(
         const month = date.getMonth() + 1;
         const descId = `${year}-${String(month).padStart(2, '0')}`;
 
-        const vacationsDue = getMonthProjectionVacations(year, month, lastWorkload / 100);
+        const vacationsDue = getMonthProjectionVacations(year, month, lastWorkload / 100, settings.hoursToBeDoneByDay ?? 8);
         projectedBalance += vacationsDue;
 
         data.push({

@@ -78,6 +78,7 @@ export interface AppSettingsEntity {
   vacation_limit_multiplier?: number;
   hourly_balance_limit_upper?: number;
   hourly_balance_limit_lower?: number;
+  hours_to_be_done_by_day?: number;
 }
 
 export interface QolSurveyResponseEntity {
