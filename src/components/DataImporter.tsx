@@ -82,6 +82,10 @@ const DataImporter: React.FC = () => {
                   failure_rate_goal: importedData.settings.failureRateGoal ? Number(importedData.settings.failureRateGoal) : undefined,
                   qli_goal: importedData.settings.qliGoal ? Number(importedData.settings.qliGoal) : undefined,
                   new_capabilities_goal: importedData.settings.newCapabilitiesGoal ? Number(importedData.settings.newCapabilitiesGoal) : undefined,
+                  vacation_limit_multiplier: importedData.settings.vacationLimitMultiplier ? Number(importedData.settings.vacationLimitMultiplier) : undefined,
+                  hourly_balance_limit_upper: importedData.settings.hourlyBalanceLimitUpper ? Number(importedData.settings.hourlyBalanceLimitUpper) : undefined,
+                  hourly_balance_limit_lower: importedData.settings.hourlyBalanceLimitLower ? Number(importedData.settings.hourlyBalanceLimitLower) : undefined,
+                  hours_to_be_done_by_day: importedData.settings.hoursToBeDoneByDay ? Number(importedData.settings.hoursToBeDoneByDay) : undefined,
                 };
                 await adapter.updateSettings(appSettings);
               }
