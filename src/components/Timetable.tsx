@@ -71,14 +71,14 @@ export const Timetable: React.FC<{
   }, []);
 
   // Helper to calculate date range for a given preset
-  const calculateDateRange = (rangeValue: string) => {
-    const zurichNow = Temporal.Now.zonedDateTimeISO('Europe/Zurich');
+  const calculateDateRange = React.useCallback((rangeValue: string) => {
+    const timezoneNow = Temporal.Now.zonedDateTimeISO(settings.timezone || 'Europe/Zurich');
     const todayPlainDate = Temporal.PlainDate.from({
-      year: zurichNow.year,
-      month: zurichNow.month,
-      day: zurichNow.day
+      year: timezoneNow.year,
+      month: timezoneNow.month,
+      day: timezoneNow.day
     });
-    const todayZoned = todayPlainDate.toZonedDateTime('Europe/Zurich');
+    const todayZoned = todayPlainDate.toZonedDateTime(settings.timezone || 'Europe/Zurich');
 
     switch (rangeValue) {
       case "today": {
@@ -89,7 +89,7 @@ export const Timetable: React.FC<{
         };
       }
       case "yesterday": {
-        const yesterdayZoned = todayPlainDate.subtract({ days: 1 }).toZonedDateTime('Europe/Zurich');
+        const yesterdayZoned = todayPlainDate.subtract({ days: 1 }).toZonedDateTime(settings.timezone || 'Europe/Zurich');
         const endOfYesterday = yesterdayZoned.add({ days: 1 }).subtract({ nanoseconds: 1 });
         return {
           start: new Date(yesterdayZoned.epochMilliseconds),
@@ -181,7 +181,7 @@ export const Timetable: React.FC<{
       default:
         return { start: undefined, end: undefined };
     }
-  };
+  }, [weekStartsOn]);
 
   // Initialize date range for "today" default
   useEffect(() => {
@@ -190,7 +190,7 @@ export const Timetable: React.FC<{
       const range = calculateDateRange("today");
       setDateRange(range);
     }
-  }, []); // Run once on mount
+  }, [dateRange.start, dateRange.end, predefinedRange, calculateDateRange]); // Run when dateRange or predefinedRange changes
 
   const handleUserChange = async (newUserId: string | null) => {
     setSelectedUserId(newUserId);
@@ -357,19 +357,19 @@ export const Timetable: React.FC<{
       // Date range filter
       const range = dateRange;
       if (range.start || range.end) {
-        const entryStartZurich = Temporal.Instant.fromEpochMilliseconds(entry.startTime).toZonedDateTimeISO('Europe/Zurich');
-        const rangeStartZurich = range.start ? Temporal.Instant.fromEpochMilliseconds(range.start.getTime()).toZonedDateTimeISO('Europe/Zurich') : null;
-        const rangeEndZurich = range.end ? Temporal.Instant.fromEpochMilliseconds(range.end.getTime()).toZonedDateTimeISO('Europe/Zurich') : null;
+        const entryStartTimezone = Temporal.Instant.fromEpochMilliseconds(entry.startTime).toZonedDateTimeISO(settings.timezone || 'Europe/Zurich');
+        const rangeStartTimezone = range.start ? Temporal.Instant.fromEpochMilliseconds(range.start.getTime()).toZonedDateTimeISO(settings.timezone || 'Europe/Zurich') : null;
+        const rangeEndTimezone = range.end ? Temporal.Instant.fromEpochMilliseconds(range.end.getTime()).toZonedDateTimeISO(settings.timezone || 'Europe/Zurich') : null;
 
         // Only check if the START time of the task falls within the range
-        if (rangeStartZurich && entryStartZurich.epochNanoseconds < rangeStartZurich.epochNanoseconds) return false;
-        if (rangeEndZurich && entryStartZurich.epochNanoseconds > rangeEndZurich.epochNanoseconds) return false;
+        if (rangeStartTimezone && entryStartTimezone.epochNanoseconds < rangeStartTimezone.epochNanoseconds) return false;
+        if (rangeEndTimezone && entryStartTimezone.epochNanoseconds > rangeEndTimezone.epochNanoseconds) return false;
       }
 
       // Time chunk filter
       if (isSingleDayRange() && timeChunk !== "all") {
         const [splitHour, splitMinute] = settings.splitTime.split(':').map(Number);
-        const entryStart = Temporal.Instant.fromEpochMilliseconds(entry.startTime).toZonedDateTimeISO('Europe/Zurich');
+        const entryStart = Temporal.Instant.fromEpochMilliseconds(entry.startTime).toZonedDateTimeISO(settings.timezone || 'Europe/Zurich');
 
         if (timeChunk === "am") {
           if (entryStart.hour >= splitHour) return false;

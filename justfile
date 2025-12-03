@@ -21,7 +21,7 @@ _check-env var:
 dev:
   @echo "--- Starting P3FO Development Environment ---"
   @echo "[1/2] Starting development server..."
-  npm run dev:all
+  pnpm run dev:all
 
 # --- Version Management Tasks ---
 sync-versions version:

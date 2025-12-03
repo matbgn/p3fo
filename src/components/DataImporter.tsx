@@ -47,9 +47,11 @@ const DataImporter: React.FC = () => {
                 for (const user of importedData.allUserSettings) {
                   if (user.userId) {
                     // Handle legacy workload_percentage
-                    if (user.workload === undefined && (user as any).workload_percentage !== undefined) {
-                      user.workload = (user as any).workload_percentage;
+                    if (user.workload === undefined && user.workload_percentage !== undefined) {
+                      user.workload = user.workload_percentage;
                     }
+                    // Ensure new fields are present if available
+                    // (No explicit mapping needed if keys match, but good to be aware)
                     await adapter.updateUserSettings(user.userId, user);
                   }
                 }
@@ -82,6 +84,13 @@ const DataImporter: React.FC = () => {
                   failure_rate_goal: importedData.settings.failureRateGoal ? Number(importedData.settings.failureRateGoal) : undefined,
                   qli_goal: importedData.settings.qliGoal ? Number(importedData.settings.qliGoal) : undefined,
                   new_capabilities_goal: importedData.settings.newCapabilitiesGoal ? Number(importedData.settings.newCapabilitiesGoal) : undefined,
+                  vacation_limit_multiplier: importedData.settings.vacationLimitMultiplier ? Number(importedData.settings.vacationLimitMultiplier) : undefined,
+                  hourly_balance_limit_upper: importedData.settings.hourlyBalanceLimitUpper ? Number(importedData.settings.hourlyBalanceLimitUpper) : undefined,
+                  hourly_balance_limit_lower: importedData.settings.hourlyBalanceLimitLower ? Number(importedData.settings.hourlyBalanceLimitLower) : undefined,
+                  hours_to_be_done_by_day: importedData.settings.hoursToBeDoneByDay ? Number(importedData.settings.hoursToBeDoneByDay) : undefined,
+                  timezone: importedData.settings.timezone,
+                  country: importedData.settings.country,
+                  region: importedData.settings.region,
                 };
                 await adapter.updateSettings(appSettings);
               }

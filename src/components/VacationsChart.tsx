@@ -20,9 +20,11 @@ interface VacationsChartProps {
     limitMultiplier: number;
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+import { TooltipProps } from 'recharts';
+
+const CustomTooltip: React.FC<TooltipProps<number, string>> = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
-        const filtered = payload.filter((p: any) => {
+        const filtered = payload.filter((p) => {
             if (p.dataKey === 'balance_history' && p.value === 0) return false;
             if (p.dataKey === 'balance_projected' && p.value === 0) return false;
             return true;
@@ -33,7 +35,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
         return (
             <div className="bg-white border border-slate-200 p-3 rounded shadow-sm opacity-95">
                 <p className="font-medium mb-2">{label}</p>
-                {filtered.map((entry: any, index: number) => (
+                {filtered.map((entry, index: number) => (
                     <div key={index} className="text-sm mb-1" style={{ color: entry.color }}>
                         {entry.name} : {Number(entry.value).toFixed(1)}
                     </div>

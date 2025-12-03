@@ -65,6 +65,7 @@ export interface UserSettingsEntity {
   workload?: number;
   split_time?: string;
   monthly_balances?: Record<string, MonthlyBalanceData>;
+  timezone?: string;
 }
 
 export interface AppSettingsEntity {
@@ -78,6 +79,10 @@ export interface AppSettingsEntity {
   vacation_limit_multiplier?: number;
   hourly_balance_limit_upper?: number;
   hourly_balance_limit_lower?: number;
+  hours_to_be_done_by_day?: number;
+  timezone?: string;
+  country?: string;
+  region?: string;
 }
 
 export interface QolSurveyResponseEntity {

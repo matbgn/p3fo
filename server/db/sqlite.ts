@@ -26,6 +26,7 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
   failure_rate_goal: 10,
   qli_goal: 7,
   new_capabilities_goal: 3,
+  hours_to_be_done_by_day: 8,
 };
 
 interface TaskRow {
@@ -66,6 +67,13 @@ interface AppSettingsRow {
   failure_rate_goal: number;
   qli_goal: number;
   new_capabilities_goal: number;
+  hours_to_be_done_by_day: number;
+  vacation_limit_multiplier?: number;
+  hourly_balance_limit_upper?: number;
+  hourly_balance_limit_lower?: number;
+  timezone?: string;
+  country?: string;
+  region?: string;
 }
 
 interface JsonRow {
@@ -130,6 +138,7 @@ class SqliteClient implements DbClient {
       const hasWorkload = columns.some(c => c.name === 'workload');
       const hasSplitTime = columns.some(c => c.name === 'split_time');
       const hasMonthlyBalances = columns.some(c => c.name === 'monthly_balances');
+      const hasTimezone = columns.some(c => c.name === 'timezone');
 
       if (!hasWorkloadPercentage) {
         console.log('SQLite: Migrating user_settings, adding workload_percentage');
@@ -154,6 +163,11 @@ class SqliteClient implements DbClient {
         console.log('SQLite: Migrating user_settings, adding monthly_balances');
         this.db.exec("ALTER TABLE user_settings ADD COLUMN monthly_balances TEXT");
       }
+
+      if (!hasTimezone) {
+        console.log('SQLite: Migrating user_settings, adding timezone');
+        this.db.exec("ALTER TABLE user_settings ADD COLUMN timezone TEXT");
+      }
     } catch (error) {
       console.error('SQLite: Error checking/migrating schema:', error);
     }
@@ -168,18 +182,74 @@ class SqliteClient implements DbClient {
         high_impact_task_goal REAL DEFAULT 5,
         failure_rate_goal REAL DEFAULT 10,
         qli_goal REAL DEFAULT 7,
-        new_capabilities_goal REAL DEFAULT 3
+        new_capabilities_goal REAL DEFAULT 3,
+        hours_to_be_done_by_day REAL DEFAULT 8,
+        vacation_limit_multiplier REAL DEFAULT 1.5,
+        hourly_balance_limit_upper REAL DEFAULT 0.5,
+        hourly_balance_limit_lower REAL DEFAULT -0.5,
+        timezone TEXT DEFAULT 'Europe/Zurich',
+        country TEXT DEFAULT 'CH',
+        region TEXT DEFAULT 'BE'
       )
     `);
+
+    // Migration: Add hours_to_be_done_by_day to app_settings if it doesn't exist
+    try {
+      const appColumns = this.db.prepare("PRAGMA table_info(app_settings)").all() as { name: string }[];
+      const hasHoursToBeDone = appColumns.some(c => c.name === 'hours_to_be_done_by_day');
+      const hasVacationLimit = appColumns.some(c => c.name === 'vacation_limit_multiplier');
+      const hasHourlyUpper = appColumns.some(c => c.name === 'hourly_balance_limit_upper');
+      const hasHourlyLower = appColumns.some(c => c.name === 'hourly_balance_limit_lower');
+      const hasAppTimezone = appColumns.some(c => c.name === 'timezone');
+      const hasAppCountry = appColumns.some(c => c.name === 'country');
+      const hasAppRegion = appColumns.some(c => c.name === 'region');
+
+      if (!hasHoursToBeDone) {
+        console.log('SQLite: Migrating app_settings, adding hours_to_be_done_by_day');
+        this.db.exec("ALTER TABLE app_settings ADD COLUMN hours_to_be_done_by_day REAL DEFAULT 8");
+      }
+
+      if (!hasVacationLimit) {
+        console.log('SQLite: Migrating app_settings, adding vacation_limit_multiplier');
+        this.db.exec("ALTER TABLE app_settings ADD COLUMN vacation_limit_multiplier REAL DEFAULT 1.5");
+      }
+
+      if (!hasHourlyUpper) {
+        console.log('SQLite: Migrating app_settings, adding hourly_balance_limit_upper');
+        this.db.exec("ALTER TABLE app_settings ADD COLUMN hourly_balance_limit_upper REAL DEFAULT 0.5");
+      }
+
+      if (!hasHourlyLower) {
+        console.log('SQLite: Migrating app_settings, adding hourly_balance_limit_lower');
+        this.db.exec("ALTER TABLE app_settings ADD COLUMN hourly_balance_limit_lower REAL DEFAULT -0.5");
+      }
+
+      if (!hasAppTimezone) {
+        console.log('SQLite: Migrating app_settings, adding timezone');
+        this.db.exec("ALTER TABLE app_settings ADD COLUMN timezone TEXT DEFAULT 'Europe/Zurich'");
+      }
+
+      if (!hasAppCountry) {
+        console.log('SQLite: Migrating app_settings, adding country');
+        this.db.exec("ALTER TABLE app_settings ADD COLUMN country TEXT DEFAULT 'CH'");
+      }
+
+      if (!hasAppRegion) {
+        console.log('SQLite: Migrating app_settings, adding region');
+        this.db.exec("ALTER TABLE app_settings ADD COLUMN region TEXT DEFAULT 'BE'");
+      }
+    } catch (error) {
+      console.error('SQLite: Error checking/migrating app_settings schema:', error);
+    }
 
     // Insert default app settings if not exists
     const appSettingsCount = this.db.prepare('SELECT COUNT(*) as count FROM app_settings').get() as { count: number };
     if (appSettingsCount.count === 0) {
       this.db.prepare(`
         INSERT INTO app_settings (id, split_time, user_workload_percentage, weeks_computation, 
-                                  high_impact_task_goal, failure_rate_goal, qli_goal, new_capabilities_goal) 
+                                  high_impact_task_goal, failure_rate_goal, qli_goal, new_capabilities_goal, hours_to_be_done_by_day) 
         VALUES (1, @split_time, @user_workload_percentage, @weeks_computation, 
-                @high_impact_task_goal, @failure_rate_goal, @qli_goal, @new_capabilities_goal)
+                @high_impact_task_goal, @failure_rate_goal, @qli_goal, @new_capabilities_goal, @hours_to_be_done_by_day)
       `).run(DEFAULT_APP_SETTINGS as unknown as Record<string, string | number | null>);
     }
 
@@ -496,15 +566,16 @@ class SqliteClient implements DbClient {
     const updated = { ...current, ...data, userId };
 
     this.db.prepare(`
-      INSERT INTO user_settings (user_id, username, logo, has_completed_onboarding, workload, split_time, monthly_balances)
-      VALUES (@userId, @username, @logo, @has_completed_onboarding, @workload, @split_time, @monthly_balances)
+      INSERT INTO user_settings (user_id, username, logo, has_completed_onboarding, workload, split_time, monthly_balances, timezone)
+      VALUES (@userId, @username, @logo, @has_completed_onboarding, @workload, @split_time, @monthly_balances, @timezone)
       ON CONFLICT(user_id) DO UPDATE SET
         username = excluded.username,
         logo = excluded.logo,
         has_completed_onboarding = excluded.has_completed_onboarding,
         workload = excluded.workload,
         split_time = excluded.split_time,
-        monthly_balances = excluded.monthly_balances
+        monthly_balances = excluded.monthly_balances,
+        timezone = excluded.timezone
     `).run({
       userId: updated.userId,
       username: updated.username,
@@ -513,6 +584,7 @@ class SqliteClient implements DbClient {
       workload: updated.workload ?? null,
       split_time: updated.split_time ?? null,
       monthly_balances: updated.monthly_balances ? JSON.stringify(updated.monthly_balances) : null,
+      timezone: updated.timezone ?? null,
     });
 
     return updated;
@@ -591,6 +663,13 @@ class SqliteClient implements DbClient {
       failure_rate_goal: row.failure_rate_goal,
       qli_goal: row.qli_goal,
       new_capabilities_goal: row.new_capabilities_goal,
+      hours_to_be_done_by_day: row.hours_to_be_done_by_day ?? 8,
+      vacation_limit_multiplier: row.vacation_limit_multiplier ?? 1.5,
+      hourly_balance_limit_upper: row.hourly_balance_limit_upper ?? 0.5,
+      hourly_balance_limit_lower: row.hourly_balance_limit_lower ?? -0.5,
+      timezone: row.timezone ?? 'Europe/Zurich',
+      country: row.country ?? 'CH',
+      region: row.region ?? 'BE',
     } : DEFAULT_APP_SETTINGS;
   }
 
@@ -603,7 +682,14 @@ class SqliteClient implements DbClient {
       SET split_time = @split_time, user_workload_percentage = @user_workload_percentage,
           weeks_computation = @weeks_computation, high_impact_task_goal = @high_impact_task_goal,
           failure_rate_goal = @failure_rate_goal, qli_goal = @qli_goal,
-          new_capabilities_goal = @new_capabilities_goal
+          new_capabilities_goal = @new_capabilities_goal,
+          hours_to_be_done_by_day = @hours_to_be_done_by_day,
+          vacation_limit_multiplier = @vacation_limit_multiplier,
+          hourly_balance_limit_upper = @hourly_balance_limit_upper,
+          hourly_balance_limit_lower = @hourly_balance_limit_lower,
+          timezone = @timezone,
+          country = @country,
+          region = @region
       WHERE id = 1
     `).run({
       split_time: updated.split_time,
@@ -613,7 +699,14 @@ class SqliteClient implements DbClient {
       failure_rate_goal: updated.failure_rate_goal,
       qli_goal: updated.qli_goal,
       new_capabilities_goal: updated.new_capabilities_goal,
-    });
+      hours_to_be_done_by_day: updated.hours_to_be_done_by_day,
+      vacation_limit_multiplier: updated.vacation_limit_multiplier,
+      hourly_balance_limit_upper: updated.hourly_balance_limit_upper,
+      hourly_balance_limit_lower: updated.hourly_balance_limit_lower,
+      timezone: updated.timezone,
+      country: updated.country,
+      region: updated.region,
+    } as any);
 
     return updated;
   }

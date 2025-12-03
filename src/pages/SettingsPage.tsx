@@ -22,14 +22,14 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleSettingChange = (key: keyof typeof settings, value: string) => {
-    if (key === 'splitTime' || key === 'defaultPlanView') {
-      updateSettings({ [key]: value });
+  const handleSettingChange = (key: keyof typeof settings, value: string, scope?: 'user' | 'global') => {
+    if (key === 'splitTime' || key === 'defaultPlanView' || key === 'timezone' || key === 'country' || key === 'region') {
+      updateSettings({ [key]: value }, scope);
     } else {
       const numValue = parseFloat(value);
       if (!isNaN(numValue)) {
         // we know the key matches and value is number
-        updateSettings({ [key]: numValue });
+        updateSettings({ [key]: numValue }, scope);
       }
     }
   };
@@ -143,6 +143,30 @@ const SettingsPage: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            <div className="pt-6 border-t">
+              <h2 className="text-xl font-semibold mb-4">Personal Location Settings</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Override workspace defaults with your specific location settings.
+              </p>
+              <div className="space-y-6 max-w-md">
+                <div>
+                  <Label className="block text-sm font-medium mb-1">
+                    My Timezone
+                  </Label>
+                  <Input
+                    type="text"
+                    value={settings.timezone}
+                    onChange={(e) => handleSettingChange('timezone', e.target.value, 'user')}
+                    className="mt-2"
+                    placeholder="Europe/Zurich"
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Your local timezone (overrides workspace default)
+                  </p>
+                </div>
+              </div>
+            </div>
           </TabsContent>
 
           <TabsContent value="workspace" className="space-y-8 mt-0">
@@ -157,7 +181,7 @@ const SettingsPage: React.FC = () => {
                     type="number"
                     min="1"
                     value={settings.weeksComputation}
-                    onChange={(e) => handleSettingChange('weeksComputation', e.target.value)}
+                    onChange={(e) => handleSettingChange('weeksComputation', e.target.value, 'global')}
                     className="w-24 mt-2"
                   />
                   <p className="text-sm text-muted-foreground mt-1">
@@ -174,7 +198,7 @@ const SettingsPage: React.FC = () => {
                     min="0"
                     step="0.01"
                     value={settings.highImpactTaskGoal}
-                    onChange={(e) => handleSettingChange('highImpactTaskGoal', e.target.value)}
+                    onChange={(e) => handleSettingChange('highImpactTaskGoal', e.target.value, 'global')}
                     className="w-24 mt-2"
                   />
                   <p className="text-sm text-muted-foreground mt-1">
@@ -193,7 +217,7 @@ const SettingsPage: React.FC = () => {
                       max="100"
                       step="0.01"
                       value={settings.failureRateGoal}
-                      onChange={(e) => handleSettingChange('failureRateGoal', e.target.value)}
+                      onChange={(e) => handleSettingChange('failureRateGoal', e.target.value, 'global')}
                       className="w-24"
                     />
                     <span>%</span>
@@ -213,7 +237,7 @@ const SettingsPage: React.FC = () => {
                       min="0"
                       max="100"
                       value={settings.qliGoal}
-                      onChange={(e) => handleSettingChange('qliGoal', e.target.value)}
+                      onChange={(e) => handleSettingChange('qliGoal', e.target.value, 'global')}
                       className="w-24"
                     />
                     <span>%</span>
@@ -233,13 +257,35 @@ const SettingsPage: React.FC = () => {
                       min="0"
                       max="100"
                       value={settings.newCapabilitiesGoal}
-                      onChange={(e) => handleSettingChange('newCapabilitiesGoal', e.target.value)}
+                      onChange={(e) => handleSettingChange('newCapabilitiesGoal', e.target.value, 'global')}
                       className="w-24"
                     />
                     <span>%</span>
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
                     Target time spent on new capabilities (default: 57.98%)
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-6 border-t">
+              <h2 className="text-xl font-semibold mb-4">Time & Hours</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
+                <div>
+                  <Label className="block text-sm font-medium mb-1">
+                    Standard Daily Hours
+                  </Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={settings.hoursToBeDoneByDay}
+                    onChange={(e) => handleSettingChange('hoursToBeDoneByDay', e.target.value, 'global')}
+                    className="w-24 mt-2"
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Standard working hours per day (default: 8)
                   </p>
                 </div>
 
@@ -252,7 +298,7 @@ const SettingsPage: React.FC = () => {
                     min="0"
                     step="0.1"
                     value={settings.vacationLimitMultiplier}
-                    onChange={(e) => handleSettingChange('vacationLimitMultiplier', e.target.value)}
+                    onChange={(e) => handleSettingChange('vacationLimitMultiplier', e.target.value, 'global')}
                     className="w-24 mt-2"
                   />
                   <p className="text-sm text-muted-foreground mt-1">
@@ -269,7 +315,7 @@ const SettingsPage: React.FC = () => {
                     min="0"
                     step="0.1"
                     value={settings.hourlyBalanceLimitUpper}
-                    onChange={(e) => handleSettingChange('hourlyBalanceLimitUpper', e.target.value)}
+                    onChange={(e) => handleSettingChange('hourlyBalanceLimitUpper', e.target.value, 'global')}
                     className="w-24 mt-2"
                   />
                   <p className="text-sm text-muted-foreground mt-1">
@@ -285,11 +331,61 @@ const SettingsPage: React.FC = () => {
                     type="number"
                     step="0.1"
                     value={settings.hourlyBalanceLimitLower}
-                    onChange={(e) => handleSettingChange('hourlyBalanceLimitLower', e.target.value)}
+                    onChange={(e) => handleSettingChange('hourlyBalanceLimitLower', e.target.value, 'global')}
                     className="w-24 mt-2"
                   />
                   <p className="text-sm text-muted-foreground mt-1">
                     Multiplier for lower hourly balance limit (default: -0.5)
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="block text-sm font-medium mb-1">
+                    Timezone
+                  </Label>
+                  <Input
+                    type="text"
+                    value={settings.timezone}
+                    onChange={(e) => handleSettingChange('timezone', e.target.value, 'global')}
+                    className="mt-2"
+                    placeholder="Europe/Zurich"
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    IANA Timezone identifier (default: Europe/Zurich)
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="block text-sm font-medium mb-1">
+                    Country
+                  </Label>
+                  <Input
+                    type="text"
+                    value={settings.country}
+                    onChange={(e) => handleSettingChange('country', e.target.value, 'global')}
+                    className="w-24 mt-2"
+                    placeholder="CH"
+                    maxLength={2}
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Country code for holidays (default: CH)
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="block text-sm font-medium mb-1">
+                    Region
+                  </Label>
+                  <Input
+                    type="text"
+                    value={settings.region}
+                    onChange={(e) => handleSettingChange('region', e.target.value, 'global')}
+                    className="w-24 mt-2"
+                    placeholder="BE"
+                    maxLength={2}
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Region code for holidays (default: BE)
                   </p>
                 </div>
               </div>

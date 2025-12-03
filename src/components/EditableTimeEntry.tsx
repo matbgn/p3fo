@@ -9,7 +9,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { CATEGORIES } from "../data/categories";
 import { Category } from "@/hooks/useTasks";
 
-import { formatTimeWithTemporal, formatDuration, timestampToZurichInstant } from "@/lib/format-utils";
+import { formatTimeWithTemporal, formatDuration, timestampToInstant, plainDateTimeToTimestamp, instantToPlainDateTime } from "@/lib/format-utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
@@ -18,21 +18,13 @@ import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 import { CalendarIcon, Clock } from "lucide-react";
 import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
 
-// Helper function to convert Temporal.Instant to Europe/Zurich PlainDateTime
-const instantToZurichPlainDateTime = (instant: Temporal.Instant): Temporal.PlainDateTime => {
-  const zurich = instant.toZonedDateTimeISO('Europe/Zurich');
-  return zurich.toPlainDateTime();
-};
-
-// Helper function to convert Europe/Zurich PlainDateTime to Unix timestamp
-const zurichPlainDateTimeToTimestamp = (plainDateTime: Temporal.PlainDateTime): number => {
-  const zurich = plainDateTime.toZonedDateTime('Europe/Zurich');
-  return zurich.epochMilliseconds;
-};
 
 import { Task } from '@/hooks/useTasks';
 
 import { UserSelector } from "./UserSelector";
+import { useUsers } from '@/hooks/useUsers';
+import { useUserSettings } from '@/hooks/useUserSettings';
+import { UserAvatar } from "./UserAvatar";
 
 // Editable time entry component
 export const EditableTimeEntry: React.FC<{
@@ -60,6 +52,11 @@ export const EditableTimeEntry: React.FC<{
   const { settings } = useCombinedSettings();
   const weekStartsOn = settings.weekStartDay as 0 | 1;
 
+  const task = taskMap[entry.taskId];
+  const { users } = useUsers();
+  const { userSettings, userId: currentUserId } = useUserSettings();
+  const [editUserId, setEditUserId] = useState<string | undefined>(undefined);
+
   // State for time picker dialog
   const [timePickerOpen, setTimePickerOpen] = useState(false);
   const [timePickerConfig, setTimePickerConfig] = useState<{
@@ -72,14 +69,14 @@ export const EditableTimeEntry: React.FC<{
     setTimePickerOpen(true);
   };
 
-  const startInstant = timestampToZurichInstant(entry.startTime);
-  const startPlainDateTime = instantToZurichPlainDateTime(startInstant);
+  const startInstant = timestampToInstant(entry.startTime);
+  const startPlainDateTime = instantToPlainDateTime(startInstant, settings.timezone);
 
   const endInstant = entry.endTime > 0
-    ? timestampToZurichInstant(entry.endTime)
+    ? timestampToInstant(entry.endTime)
     : null;
   const endPlainDateTime = endInstant
-    ? instantToZurichPlainDateTime(endInstant)
+    ? instantToPlainDateTime(endInstant, settings.timezone)
     : null;
 
   // Calculate duration
@@ -91,6 +88,7 @@ export const EditableTimeEntry: React.FC<{
     setEditStartTime(startPlainDateTime.toString({ smallestUnit: 'second' }).slice(0, 19));
     setEditEndTime(endPlainDateTime ? endPlainDateTime.toString({ smallestUnit: 'second' }).slice(0, 19) : '');
     setEditTaskCategory(entry.taskCategory || "Uncategorized");
+    setEditUserId(task?.userId);
     setIsEditing(true);
   };
 
@@ -110,7 +108,7 @@ export const EditableTimeEntry: React.FC<{
         hour: startHour, minute: startMinute, second: startSecond
       });
 
-      const newStartTime = zurichPlainDateTimeToTimestamp(startPlainDateTime);
+      const newStartTime = plainDateTimeToTimestamp(startPlainDateTime, settings.timezone);
 
       let newEndTime = 0;
       if (editEndTime) {
@@ -123,11 +121,12 @@ export const EditableTimeEntry: React.FC<{
           hour: endHour, minute: endMinute, second: endSecond
         });
 
-        newEndTime = zurichPlainDateTimeToTimestamp(endPlainDateTime);
+        newEndTime = plainDateTimeToTimestamp(endPlainDateTime, settings.timezone);
       }
 
       onUpdateTimeEntry(entry.taskId, entry.index, { startTime: newStartTime, endTime: newEndTime });
       onUpdateTaskCategory(entry.taskId, editTaskCategory === "Uncategorized" ? undefined : editTaskCategory);
+      onUpdateUser(entry.taskId, editUserId);
       setIsEditing(false);
     } catch (error) {
       console.error('Error updating time entry:', error);
@@ -162,8 +161,11 @@ export const EditableTimeEntry: React.FC<{
           </Select>
         </TableCell>
         <TableCell>
-          {/* User selection not available in edit mode for now, or could be added */}
-          <span className="text-muted-foreground">-</span>
+          <UserSelector
+            value={editUserId}
+            onChange={setEditUserId}
+            className="h-6 w-auto"
+          />
         </TableCell>
         <TableCell>
           <Popover>
@@ -191,7 +193,7 @@ export const EditableTimeEntry: React.FC<{
                   if (date) {
                     const current = editStartTime ? new Date(editStartTime) : new Date();
                     date.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
-                    setEditStartTime(date.toISOString().slice(0, 19));
+                    setEditStartTime(format(date, "yyyy-MM-dd'T'HH:mm:ss"));
                   }
                 }}
                 initialFocus
@@ -207,7 +209,7 @@ export const EditableTimeEntry: React.FC<{
                       const [hours, minutes, seconds] = e.target.value.split(':').map(Number);
                       const newDate = new Date(editStartTime);
                       newDate.setHours(hours, minutes, seconds || 0);
-                      setEditStartTime(newDate.toISOString().slice(0, 19));
+                      setEditStartTime(format(newDate, "yyyy-MM-dd'T'HH:mm:ss"));
                     }
                   }}
                   step="1"
@@ -250,7 +252,7 @@ export const EditableTimeEntry: React.FC<{
                   if (date) {
                     const current = editEndTime ? new Date(editEndTime) : new Date();
                     date.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
-                    setEditEndTime(date.toISOString().slice(0, 19));
+                    setEditEndTime(format(date, "yyyy-MM-dd'T'HH:mm:ss"));
                   }
                 }}
                 initialFocus
@@ -267,7 +269,7 @@ export const EditableTimeEntry: React.FC<{
                         const [hours, minutes, seconds] = e.target.value.split(':').map(Number);
                         const newDate = new Date(editEndTime);
                         newDate.setHours(hours, minutes, seconds || 0);
-                        setEditEndTime(newDate.toISOString().slice(0, 19));
+                        setEditEndTime(format(newDate, "yyyy-MM-dd'T'HH:mm:ss"));
                       }
                     }}
                     step="1"
@@ -300,11 +302,15 @@ export const EditableTimeEntry: React.FC<{
               isOpen={timePickerOpen}
               onClose={() => setTimePickerOpen(false)}
               initialTime={timePickerConfig.initialTime}
-              onTimeChange={(date) => {
+              onTimeChange={(timestamp) => {
+                const instant = timestampToInstant(timestamp);
+                const plainDateTime = instantToPlainDateTime(instant, settings.timezone);
+                const dateString = plainDateTime.toString({ smallestUnit: 'second' });
+
                 if (timePickerConfig.type === 'start') {
-                  setEditStartTime(date.toISOString().slice(0, 19));
+                  setEditStartTime(dateString);
                 } else {
-                  setEditEndTime(date.toISOString().slice(0, 19));
+                  setEditEndTime(dateString);
                 }
               }}
             />
@@ -314,7 +320,6 @@ export const EditableTimeEntry: React.FC<{
     );
   }
 
-  const task = taskMap[entry.taskId];
   let indentLevel = 0;
   let current = taskMap[entry.taskId];
   const topParentId = entry.taskParentId || entry.taskId;
@@ -347,14 +352,27 @@ export const EditableTimeEntry: React.FC<{
       </TableCell>
       <TableCell>{entry.taskCategory || "Uncategorized"}</TableCell>
       <TableCell>
-        <UserSelector
-          value={task?.userId}
-          onChange={(userId) => onUpdateUser(task.id, userId)}
-          className="h-6 w-auto"
-        />
+        {task?.userId ? (
+          (() => {
+            const isCurrentUser = task.userId === currentUserId;
+            const otherUser = !isCurrentUser ? users.find((u) => u.userId === task.userId) : null;
+            return (
+              <UserAvatar
+                username={isCurrentUser ? userSettings.username : otherUser?.username || 'Unknown'}
+                logo={isCurrentUser ? userSettings.logo : otherUser?.logo}
+                size="sm"
+                showTooltip={true}
+              />
+            );
+          })()
+        ) : (
+          <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
+            <span className="text-xs text-muted-foreground">-</span>
+          </div>
+        )}
       </TableCell>
-      <TableCell>{formatTimeWithTemporal(entry.startTime)}</TableCell>
-      <TableCell>{entry.endTime > 0 ? formatTimeWithTemporal(entry.endTime) : 'Running'}</TableCell>
+      <TableCell>{formatTimeWithTemporal(entry.startTime, settings.timezone)}</TableCell>
+      <TableCell>{entry.endTime > 0 ? formatTimeWithTemporal(entry.endTime, settings.timezone) : 'Running'}</TableCell>
       <TableCell className="flex items-center justify-between">
         <span>{formatDuration(duration)}</span>
         <div className="flex gap-1">

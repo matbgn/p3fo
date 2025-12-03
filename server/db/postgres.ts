@@ -24,6 +24,7 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
   failure_rate_goal: 10,
   qli_goal: 7,
   new_capabilities_goal: 3,
+  hours_to_be_done_by_day: 8,
 };
 
 export async function createPostgresClient(connectionString?: string): Promise<DbClient> {
@@ -79,7 +80,15 @@ class PostgresClient implements DbClient {
         has_completed_onboarding BOOLEAN DEFAULT false,
         workload_percentage REAL DEFAULT 60,
         split_time TEXT DEFAULT '13:00',
-        monthly_balances JSONB
+      CREATE TABLE IF NOT EXISTS user_settings (
+        id INTEGER PRIMARY KEY DEFAULT 1,
+        username TEXT NOT NULL,
+        logo TEXT,
+        has_completed_onboarding BOOLEAN DEFAULT false,
+        workload_percentage REAL DEFAULT 60,
+        split_time TEXT DEFAULT '13:00',
+        monthly_balances JSONB,
+        timezone TEXT
       )
     `);
 
@@ -96,6 +105,9 @@ class PostgresClient implements DbClient {
           END IF;
           IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_settings' AND column_name='monthly_balances') THEN 
             ALTER TABLE user_settings ADD COLUMN monthly_balances JSONB; 
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_settings' AND column_name='timezone') THEN 
+            ALTER TABLE user_settings ADD COLUMN timezone TEXT; 
           END IF;
         END $$;
       `);
@@ -122,7 +134,16 @@ class PostgresClient implements DbClient {
         high_impact_task_goal REAL DEFAULT 5,
         failure_rate_goal REAL DEFAULT 10,
         qli_goal REAL DEFAULT 7,
-        new_capabilities_goal REAL DEFAULT 3
+        failure_rate_goal REAL DEFAULT 10,
+        qli_goal REAL DEFAULT 7,
+        new_capabilities_goal REAL DEFAULT 3,
+        hours_to_be_done_by_day REAL DEFAULT 8,
+        vacation_limit_multiplier REAL DEFAULT 1.5,
+        hourly_balance_limit_upper REAL DEFAULT 0.5,
+        hourly_balance_limit_lower REAL DEFAULT -0.5,
+        timezone TEXT DEFAULT 'Europe/Zurich',
+        country TEXT DEFAULT 'CH',
+        region TEXT DEFAULT 'BE'
       )
     `);
 
@@ -140,8 +161,41 @@ class PostgresClient implements DbClient {
         DEFAULT_APP_SETTINGS.high_impact_task_goal,
         DEFAULT_APP_SETTINGS.failure_rate_goal,
         DEFAULT_APP_SETTINGS.qli_goal,
-        DEFAULT_APP_SETTINGS.new_capabilities_goal
+        DEFAULT_APP_SETTINGS.new_capabilities_goal,
+        DEFAULT_APP_SETTINGS.hours_to_be_done_by_day
       ]);
+    }
+
+    // Migration: Add columns to app_settings if they don't exist
+    try {
+      await this.pool.query(`
+        DO $$ 
+        BEGIN 
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='app_settings' AND column_name='hours_to_be_done_by_day') THEN 
+            ALTER TABLE app_settings ADD COLUMN hours_to_be_done_by_day REAL DEFAULT 8; 
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='app_settings' AND column_name='vacation_limit_multiplier') THEN 
+            ALTER TABLE app_settings ADD COLUMN vacation_limit_multiplier REAL DEFAULT 1.5; 
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='app_settings' AND column_name='hourly_balance_limit_upper') THEN 
+            ALTER TABLE app_settings ADD COLUMN hourly_balance_limit_upper REAL DEFAULT 0.5; 
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='app_settings' AND column_name='hourly_balance_limit_lower') THEN 
+            ALTER TABLE app_settings ADD COLUMN hourly_balance_limit_lower REAL DEFAULT -0.5; 
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='app_settings' AND column_name='timezone') THEN 
+            ALTER TABLE app_settings ADD COLUMN timezone TEXT DEFAULT 'Europe/Zurich'; 
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='app_settings' AND column_name='country') THEN 
+            ALTER TABLE app_settings ADD COLUMN country TEXT DEFAULT 'CH'; 
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='app_settings' AND column_name='region') THEN 
+            ALTER TABLE app_settings ADD COLUMN region TEXT DEFAULT 'BE'; 
+          END IF;
+        END $$;
+      `);
+    } catch (error) {
+      console.error('PostgreSQL: Error checking/migrating app_settings schema:', error);
     }
 
     // Create qol_survey table
@@ -428,6 +482,7 @@ class PostgresClient implements DbClient {
         workload: row.workload_percentage,
         split_time: row.split_time,
         monthly_balances: row.monthly_balances || {},
+        timezone: row.timezone,
       };
     }
     return null;
@@ -438,22 +493,24 @@ class PostgresClient implements DbClient {
     const updated = { ...current, ...data, userId };
 
     await this.pool.query(`
-      INSERT INTO user_settings (id, username, logo, has_completed_onboarding, workload_percentage, split_time, monthly_balances)
-      VALUES (1, $1, $2, $3, $4, $5, $6)
+      INSERT INTO user_settings (id, username, logo, has_completed_onboarding, workload_percentage, split_time, monthly_balances, timezone)
+      VALUES (1, $1, $2, $3, $4, $5, $6, $7)
       ON CONFLICT (id) DO UPDATE SET
         username = EXCLUDED.username,
         logo = EXCLUDED.logo,
         has_completed_onboarding = EXCLUDED.has_completed_onboarding,
         workload_percentage = EXCLUDED.workload_percentage,
         split_time = EXCLUDED.split_time,
-        monthly_balances = EXCLUDED.monthly_balances
+        monthly_balances = EXCLUDED.monthly_balances,
+        timezone = EXCLUDED.timezone
     `, [
       updated.username,
       updated.logo,
       updated.has_completed_onboarding,
       updated.workload,
       updated.split_time,
-      updated.monthly_balances ? JSON.stringify(updated.monthly_balances) : null
+      updated.monthly_balances ? JSON.stringify(updated.monthly_balances) : null,
+      updated.timezone
     ]);
 
     return updated;
@@ -472,6 +529,13 @@ class PostgresClient implements DbClient {
         failure_rate_goal: row.failure_rate_goal,
         qli_goal: row.qli_goal,
         new_capabilities_goal: row.new_capabilities_goal,
+        hours_to_be_done_by_day: row.hours_to_be_done_by_day ?? 8,
+        vacation_limit_multiplier: row.vacation_limit_multiplier ?? 1.5,
+        hourly_balance_limit_upper: row.hourly_balance_limit_upper ?? 0.5,
+        hourly_balance_limit_lower: row.hourly_balance_limit_lower ?? -0.5,
+        timezone: row.timezone ?? 'Europe/Zurich',
+        country: row.country ?? 'CH',
+        region: row.region ?? 'BE',
       };
     }
     return DEFAULT_APP_SETTINGS;
@@ -483,8 +547,10 @@ class PostgresClient implements DbClient {
 
     await this.pool.query(`
       INSERT INTO app_settings (id, split_time, user_workload_percentage, weeks_computation, 
-                                high_impact_task_goal, failure_rate_goal, qli_goal, new_capabilities_goal)
-      VALUES (1, $1, $2, $3, $4, $5, $6, $7)
+                                high_impact_task_goal, failure_rate_goal, qli_goal, new_capabilities_goal,
+                                hours_to_be_done_by_day, vacation_limit_multiplier, hourly_balance_limit_upper,
+                                hourly_balance_limit_lower, timezone, country, region)
+      VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       ON CONFLICT (id) DO UPDATE SET
         split_time = EXCLUDED.split_time,
         user_workload_percentage = EXCLUDED.user_workload_percentage,
@@ -492,7 +558,14 @@ class PostgresClient implements DbClient {
         high_impact_task_goal = EXCLUDED.high_impact_task_goal,
         failure_rate_goal = EXCLUDED.failure_rate_goal,
         qli_goal = EXCLUDED.qli_goal,
-        new_capabilities_goal = EXCLUDED.new_capabilities_goal
+        new_capabilities_goal = EXCLUDED.new_capabilities_goal,
+        hours_to_be_done_by_day = EXCLUDED.hours_to_be_done_by_day,
+        vacation_limit_multiplier = EXCLUDED.vacation_limit_multiplier,
+        hourly_balance_limit_upper = EXCLUDED.hourly_balance_limit_upper,
+        hourly_balance_limit_lower = EXCLUDED.hourly_balance_limit_lower,
+        timezone = EXCLUDED.timezone,
+        country = EXCLUDED.country,
+        region = EXCLUDED.region
     `, [
       updated.split_time,
       updated.user_workload_percentage,
@@ -500,7 +573,14 @@ class PostgresClient implements DbClient {
       updated.high_impact_task_goal,
       updated.failure_rate_goal,
       updated.qli_goal,
-      updated.new_capabilities_goal
+      updated.new_capabilities_goal,
+      updated.hours_to_be_done_by_day,
+      updated.vacation_limit_multiplier,
+      updated.hourly_balance_limit_upper,
+      updated.hourly_balance_limit_lower,
+      updated.timezone,
+      updated.country,
+      updated.region
     ]);
 
     return updated;
@@ -516,6 +596,7 @@ class PostgresClient implements DbClient {
       workload: row.workload_percentage,
       split_time: row.split_time,
       monthly_balances: row.monthly_balances || {},
+      timezone: row.timezone,
     }));
   }
 

@@ -20,10 +20,14 @@ export interface CombinedSettings {
     vacationLimitMultiplier: number;
     hourlyBalanceLimitUpper: number;
     hourlyBalanceLimitLower: number;
+    hoursToBeDoneByDay: number;
 
     // User preference
     weekStartDay: 0 | 1; // 0 for Sunday, 1 for Monday
     defaultPlanView: 'week' | 'month';
+    timezone: string; // Timezone identifier (e.g., 'Europe/Zurich')
+    country: string; // Country code for holidays (e.g., 'CH')
+    region: string; // Region code for holidays (e.g., 'BE')
 }
 
 /**
@@ -56,8 +60,12 @@ const defaultCombinedSettings: CombinedSettings = {
     vacationLimitMultiplier: 1.5,
     hourlyBalanceLimitUpper: 0.5,
     hourlyBalanceLimitLower: -0.5,
+    hoursToBeDoneByDay: 8,
     weekStartDay: 1, // Default to Monday
     defaultPlanView: 'week',
+    timezone: 'Europe/Zurich', // Default timezone
+    country: 'CH', // Default country for holidays
+    region: 'BE', // Default region for holidays
 };
 
 /**
@@ -90,8 +98,12 @@ export const useCombinedSettings = () => {
                     vacationLimitMultiplier: appSettings.vacation_limit_multiplier || 1.5,
                     hourlyBalanceLimitUpper: appSettings.hourly_balance_limit_upper || 0.5,
                     hourlyBalanceLimitLower: appSettings.hourly_balance_limit_lower || -0.5,
+                    hoursToBeDoneByDay: appSettings.hours_to_be_done_by_day || 8,
                     weekStartDay: 1,
                     defaultPlanView: 'week',
+                    timezone: appSettings.timezone || 'Europe/Zurich',
+                    country: appSettings.country || 'CH',
+                    region: appSettings.region || 'BE',
                 };
 
                 // Override with user-specific settings if they exist
@@ -101,6 +113,9 @@ export const useCombinedSettings = () => {
                     }
                     if (userSettings.workload !== undefined) {
                         merged.userWorkloadPercentage = userSettings.workload;
+                    }
+                    if (userSettings.timezone) {
+                        merged.timezone = userSettings.timezone;
                     }
                     // We'll store weekStartDay in userSettings as a generic preference if possible, 
                     // but since the schema might not support it yet, we'll rely on local state/defaults for now 
@@ -139,30 +154,36 @@ export const useCombinedSettings = () => {
      * Update settings. User-specific fields (splitTime, userWorkloadPercentage) are saved
      * to user settings. Global fields are saved to app settings.
      */
-    const updateSettings = async (updates: Partial<CombinedSettings>) => {
+    const updateSettings = async (updates: Partial<CombinedSettings>, scope?: 'user' | 'global') => {
         // Optimistically update local state
         setSettings(prev => ({ ...prev, ...updates }));
 
         try {
             // Separate user-specific updates from global updates
-            const userUpdates: { split_time?: string; workload?: number } = {};
+            const userUpdates: { split_time?: string; workload?: number; timezone?: string } = {};
             const appUpdates: Partial<AppSettingsEntity> = {};
+
+            // Helper to decide where to put the update
+            const addToUser = (key: string, value: any) => {
+                (userUpdates as any)[key] = value;
+            };
+            const addToApp = (key: keyof AppSettingsEntity, value: any) => {
+                (appUpdates as any)[key] = value;
+            };
 
             // Route updates to appropriate storage
             if (updates.splitTime !== undefined) {
                 if (userSettings) {
-                    userUpdates.split_time = updates.splitTime;
+                    addToUser('split_time', updates.splitTime);
                 } else {
-                    // Only update app settings if no user is logged in
-                    appUpdates.split_time = stringToAppSplitTime(updates.splitTime);
+                    addToApp('split_time', stringToAppSplitTime(updates.splitTime));
                 }
             }
             if (updates.userWorkloadPercentage !== undefined) {
                 if (userSettings) {
-                    userUpdates.workload = updates.userWorkloadPercentage;
+                    addToUser('workload', updates.userWorkloadPercentage);
                 } else {
-                    // Only update app settings if no user is logged in
-                    appUpdates.user_workload_percentage = updates.userWorkloadPercentage;
+                    addToApp('user_workload_percentage', updates.userWorkloadPercentage);
                 }
             }
 
@@ -177,30 +198,34 @@ export const useCombinedSettings = () => {
                 }
             }
 
-            // Global-only settings
-            if (updates.weeksComputation !== undefined) {
-                appUpdates.weeks_computation = updates.weeksComputation;
+            // Global-only settings (always app)
+            if (updates.weeksComputation !== undefined) addToApp('weeks_computation', updates.weeksComputation);
+            if (updates.highImpactTaskGoal !== undefined) addToApp('high_impact_task_goal', updates.highImpactTaskGoal);
+            if (updates.failureRateGoal !== undefined) addToApp('failure_rate_goal', updates.failureRateGoal);
+            if (updates.qliGoal !== undefined) addToApp('qli_goal', updates.qliGoal);
+            if (updates.newCapabilitiesGoal !== undefined) addToApp('new_capabilities_goal', updates.newCapabilitiesGoal);
+            if (updates.vacationLimitMultiplier !== undefined) addToApp('vacation_limit_multiplier', updates.vacationLimitMultiplier);
+            if (updates.hourlyBalanceLimitUpper !== undefined) addToApp('hourly_balance_limit_upper', updates.hourlyBalanceLimitUpper);
+            if (updates.hourlyBalanceLimitLower !== undefined) addToApp('hourly_balance_limit_lower', updates.hourlyBalanceLimitLower);
+            if (updates.hoursToBeDoneByDay !== undefined) addToApp('hours_to_be_done_by_day', updates.hoursToBeDoneByDay);
+
+            // Scoped settings (Timezone, Country, Region)
+            if (updates.timezone !== undefined) {
+                if (scope === 'user' && userSettings) {
+                    addToUser('timezone', updates.timezone);
+                } else if (scope === 'global' || !userSettings) {
+                    addToApp('timezone', updates.timezone);
+                } else {
+                    // Default behavior if scope not specified but user logged in:
+                    // For now, assume global if not specified, to match previous behavior of workspace settings
+                    addToApp('timezone', updates.timezone);
+                }
             }
-            if (updates.highImpactTaskGoal !== undefined) {
-                appUpdates.high_impact_task_goal = updates.highImpactTaskGoal;
+            if (updates.country !== undefined) {
+                addToApp('country', updates.country);
             }
-            if (updates.failureRateGoal !== undefined) {
-                appUpdates.failure_rate_goal = updates.failureRateGoal;
-            }
-            if (updates.qliGoal !== undefined) {
-                appUpdates.qli_goal = updates.qliGoal;
-            }
-            if (updates.newCapabilitiesGoal !== undefined) {
-                appUpdates.new_capabilities_goal = updates.newCapabilitiesGoal;
-            }
-            if (updates.vacationLimitMultiplier !== undefined) {
-                appUpdates.vacation_limit_multiplier = updates.vacationLimitMultiplier;
-            }
-            if (updates.hourlyBalanceLimitUpper !== undefined) {
-                appUpdates.hourly_balance_limit_upper = updates.hourlyBalanceLimitUpper;
-            }
-            if (updates.hourlyBalanceLimitLower !== undefined) {
-                appUpdates.hourly_balance_limit_lower = updates.hourlyBalanceLimitLower;
+            if (updates.region !== undefined) {
+                addToApp('region', updates.region);
             }
 
             // Save user-specific updates if any
@@ -234,8 +259,12 @@ export const useCombinedSettings = () => {
                 vacationLimitMultiplier: appSettings.vacation_limit_multiplier || 1.5,
                 hourlyBalanceLimitUpper: appSettings.hourly_balance_limit_upper || 0.5,
                 hourlyBalanceLimitLower: appSettings.hourly_balance_limit_lower || -0.5,
+                hoursToBeDoneByDay: appSettings.hours_to_be_done_by_day || 8,
                 weekStartDay: settings.weekStartDay, // Keep current local state
                 defaultPlanView: settings.defaultPlanView,
+                timezone: appSettings.timezone || 'Europe/Zurich',
+                country: appSettings.country || 'CH',
+                region: appSettings.region || 'BE',
             };
             setSettings(merged);
         }

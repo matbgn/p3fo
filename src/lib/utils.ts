@@ -16,16 +16,5 @@ export function formatDuration(milliseconds: number): string {
   return `${String(hours).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
-export const timestampToZurichInstant = (timestamp: number): Temporal.Instant => {
-  return Temporal.Instant.fromEpochMilliseconds(timestamp);
-};
-
-export const instantToZurichPlainDateTime = (instant: Temporal.Instant): Temporal.PlainDateTime => {
-  const zurich = instant.toZonedDateTimeISO('Europe/Zurich');
-  return zurich.toPlainDateTime();
-};
-
-export const zurichPlainDateTimeToTimestamp = (plainDateTime: Temporal.PlainDateTime): number => {
-  const zurich = plainDateTime.toZonedDateTime('Europe/Zurich');
-  return zurich.epochMilliseconds;
-};
+// Export time-related functions from format-utils to maintain compatibility
+export { timestampToInstant, formatTimeWithTemporal, instantToPlainDateTime, plainDateTimeToTimestamp } from './format-utils';

@@ -11,57 +11,12 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
+import { timestampToInstant, formatDuration, instantToPlainDateTime } from '@/lib/format-utils';
 
 interface TimeSheetProps {
   taskId: string;
 }
 
-// Helper function to convert Unix timestamp to Europe/Zurich time string
-const formatTimeWithTemporal = (ms: number): string => {
-  if (ms <= 0) return 'Invalid Date';
-
-  try {
-    // Create an Instant from the timestamp
-    const instant = Temporal.Instant.fromEpochMilliseconds(ms);
-    // Convert to Zurich timezone
-    const zurich = instant.toZonedDateTimeISO('Europe/Zurich');
-    // Format as YYYY-MM-DD HH:MM:SS TZ HH:MM:SS
-    const dateString = zurich.toLocaleString('sv-SE'); // YYYY-MM-DD
-    const timeString = zurich.toPlainTime().toString({ smallestUnit: 'second' }); // HH:MM:SS
-    // Get timezone abbreviation
-    const timeZoneParts = zurich.toLocaleString('en-US', { timeZoneName: 'short' }).split(' ');
-    const timeZoneString = timeZoneParts.length > 1 ? timeZoneParts[timeZoneParts.length - 1] : 'CET';
-    return `${dateString} ${timeString} ${timeZoneString} ${timeString}`;
-  } catch (error) {
-    console.error('Error formatting time:', error);
-    return 'Invalid Date';
-  }
-};
-
-// Helper function to convert Unix timestamp to Temporal.Instant in Europe/Zurich
-const timestampToZurichInstant = (timestamp: number): Temporal.Instant => {
-  return Temporal.Instant.fromEpochMilliseconds(timestamp);
-};
-
-// Helper function to convert Temporal.Instant to Europe/Zurich PlainDateTime
-const instantToZurichPlainDateTime = (instant: Temporal.Instant): Temporal.PlainDateTime => {
-  const zurich = instant.toZonedDateTimeISO('Europe/Zurich');
-  return zurich.toPlainDateTime();
-};
-
-// Helper function to convert Europe/Zurich PlainDateTime to Unix timestamp
-const zurichPlainDateTimeToTimestamp = (plainDateTime: Temporal.PlainDateTime): number => {
-  const zurich = plainDateTime.toZonedDateTime('Europe/Zurich');
-  return zurich.epochMilliseconds;
-};
-
-// Helper function to format duration in HH:MM:SS
-const formatDuration = (milliseconds: number): string => {
-  const seconds = Math.floor(milliseconds / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  return `${String(hours).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
-};
 
 export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
   const { tasks, updateTimeEntry, deleteTimeEntry } = useTasks();
@@ -139,14 +94,14 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
   return (
     <div className="space-y-4">
       {task.timer?.map((entry, index) => {
-        const startInstant = timestampToZurichInstant(entry.startTime);
-        const startPlainDateTime = instantToZurichPlainDateTime(startInstant);
+        const startInstant = timestampToInstant(entry.startTime);
+        const startPlainDateTime = instantToPlainDateTime(startInstant, settings.timezone);
 
         const endInstant = entry.endTime && entry.endTime > 0
-          ? timestampToZurichInstant(entry.endTime)
+          ? timestampToInstant(entry.endTime)
           : null;
         const endPlainDateTime = endInstant
-          ? instantToZurichPlainDateTime(endInstant)
+          ? instantToPlainDateTime(endInstant, settings.timezone)
           : null;
 
         // Calculate duration
@@ -179,17 +134,17 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
                       {entry.startTime ? (
                         format(new Date(entry.startTime), "PPP p")
                       ) : (
-                        <span>Pick a date</span>
+                        <span>No start time</span>
                       )}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
                     <Calendar
                       mode="single"
-                      selected={new Date(entry.startTime)}
+                      selected={entry.startTime ? new Date(entry.startTime) : undefined}
                       onSelect={(date) => {
                         if (date) {
-                          const current = new Date(entry.startTime);
+                          const current = entry.startTime ? new Date(entry.startTime) : new Date();
                           date.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
                           handleUpdate(index, { ...entry, startTime: date.getTime() });
                         }
@@ -197,29 +152,31 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
                       initialFocus
                       weekStartsOn={weekStartsOn}
                     />
-                    <div className="p-3 border-t border-border flex gap-2 items-center">
-                      <Input
-                        id={`start-time-${index}`}
-                        type="time"
-                        value={format(new Date(entry.startTime), "HH:mm:ss")}
-                        onChange={(e) => {
-                          if (e.target.value) {
-                            const [hours, minutes, seconds] = e.target.value.split(':').map(Number);
-                            const newDate = new Date(entry.startTime);
-                            newDate.setHours(hours, minutes, seconds || 0);
-                            handleUpdate(index, { ...entry, startTime: newDate.getTime() });
-                          }
-                        }}
-                        step="1"
-                        className="flex-1"
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openTimePicker(index, 'start', entry.startTime)}
-                      >
-                        <Clock className="h-4 w-4" />
-                      </Button>
+                    <div className="p-3 border-t border-border flex flex-col gap-2">
+                      <div className="flex gap-2 items-center">
+                        <Input
+                          id={`start-time-${index}`}
+                          type="time"
+                          value={entry.startTime ? format(new Date(entry.startTime), "HH:mm:ss") : ""}
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              const [hours, minutes, seconds] = e.target.value.split(':').map(Number);
+                              const newDate = entry.startTime ? new Date(entry.startTime) : new Date();
+                              newDate.setHours(hours, minutes, seconds || 0);
+                              handleUpdate(index, { ...entry, startTime: newDate.getTime() });
+                            }
+                          }}
+                          step="1"
+                          className="flex-1"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openTimePicker(index, 'start', entry.startTime)}
+                        >
+                          <Clock className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -328,13 +285,13 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
           isOpen={timePickerOpen}
           onClose={() => setTimePickerOpen(false)}
           initialTime={timePickerConfig.initialTime}
-          onTimeChange={(date) => {
+          onTimeChange={(timestamp) => {
             if (task && task.timer && task.timer[timePickerConfig.index]) {
               const entry = task.timer[timePickerConfig.index];
               if (timePickerConfig.type === 'start') {
-                handleUpdate(timePickerConfig.index, { ...entry, startTime: date.getTime() });
+                handleUpdate(timePickerConfig.index, { ...entry, startTime: timestamp });
               } else {
-                handleUpdate(timePickerConfig.index, { ...entry, endTime: date.getTime() });
+                handleUpdate(timePickerConfig.index, { ...entry, endTime: timestamp });
               }
             }
           }}

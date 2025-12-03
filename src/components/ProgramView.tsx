@@ -73,6 +73,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
     });
   }, [weekStartsOn]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const localizer = React.useMemo(() => momentLocalizer(moment), [weekStartsOn]);
 
   useEffect(() => {

@@ -25,6 +25,7 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
   failure_rate_goal: 10,
   qli_goal: 7,
   new_capabilities_goal: 3,
+  hours_to_be_done_by_day: 8,
 };
 
 export class BrowserJsonPersistence implements PersistenceAdapter {
