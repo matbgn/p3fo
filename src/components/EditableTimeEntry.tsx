@@ -33,6 +33,9 @@ const zurichPlainDateTimeToTimestamp = (plainDateTime: Temporal.PlainDateTime): 
 import { Task } from '@/hooks/useTasks';
 
 import { UserSelector } from "./UserSelector";
+import { useUsers } from '@/hooks/useUsers';
+import { useUserSettings } from '@/hooks/useUserSettings';
+import { UserAvatar } from "./UserAvatar";
 
 // Editable time entry component
 export const EditableTimeEntry: React.FC<{
@@ -59,6 +62,11 @@ export const EditableTimeEntry: React.FC<{
   const [editTaskCategory, setEditTaskCategory] = useState<string>("Uncategorized");
   const { settings } = useCombinedSettings();
   const weekStartsOn = settings.weekStartDay as 0 | 1;
+
+  const task = taskMap[entry.taskId];
+  const { users } = useUsers();
+  const { userSettings, userId: currentUserId } = useUserSettings();
+  const [editUserId, setEditUserId] = useState<string | undefined>(undefined);
 
   // State for time picker dialog
   const [timePickerOpen, setTimePickerOpen] = useState(false);
@@ -91,6 +99,7 @@ export const EditableTimeEntry: React.FC<{
     setEditStartTime(startPlainDateTime.toString({ smallestUnit: 'second' }).slice(0, 19));
     setEditEndTime(endPlainDateTime ? endPlainDateTime.toString({ smallestUnit: 'second' }).slice(0, 19) : '');
     setEditTaskCategory(entry.taskCategory || "Uncategorized");
+    setEditUserId(task?.userId);
     setIsEditing(true);
   };
 
@@ -128,6 +137,7 @@ export const EditableTimeEntry: React.FC<{
 
       onUpdateTimeEntry(entry.taskId, entry.index, { startTime: newStartTime, endTime: newEndTime });
       onUpdateTaskCategory(entry.taskId, editTaskCategory === "Uncategorized" ? undefined : editTaskCategory);
+      onUpdateUser(entry.taskId, editUserId);
       setIsEditing(false);
     } catch (error) {
       console.error('Error updating time entry:', error);
@@ -162,8 +172,11 @@ export const EditableTimeEntry: React.FC<{
           </Select>
         </TableCell>
         <TableCell>
-          {/* User selection not available in edit mode for now, or could be added */}
-          <span className="text-muted-foreground">-</span>
+          <UserSelector
+            value={editUserId}
+            onChange={setEditUserId}
+            className="h-6 w-auto"
+          />
         </TableCell>
         <TableCell>
           <Popover>
@@ -314,7 +327,6 @@ export const EditableTimeEntry: React.FC<{
     );
   }
 
-  const task = taskMap[entry.taskId];
   let indentLevel = 0;
   let current = taskMap[entry.taskId];
   const topParentId = entry.taskParentId || entry.taskId;
@@ -347,11 +359,24 @@ export const EditableTimeEntry: React.FC<{
       </TableCell>
       <TableCell>{entry.taskCategory || "Uncategorized"}</TableCell>
       <TableCell>
-        <UserSelector
-          value={task?.userId}
-          onChange={(userId) => onUpdateUser(task.id, userId)}
-          className="h-6 w-auto"
-        />
+        {task?.userId ? (
+          (() => {
+            const isCurrentUser = task.userId === currentUserId;
+            const otherUser = !isCurrentUser ? users.find((u) => u.userId === task.userId) : null;
+            return (
+              <UserAvatar
+                username={isCurrentUser ? userSettings.username : otherUser?.username || 'Unknown'}
+                logo={isCurrentUser ? userSettings.logo : otherUser?.logo}
+                size="sm"
+                showTooltip={true}
+              />
+            );
+          })()
+        ) : (
+          <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
+            <span className="text-xs text-muted-foreground">-</span>
+          </div>
+        )}
       </TableCell>
       <TableCell>{formatTimeWithTemporal(entry.startTime)}</TableCell>
       <TableCell>{entry.endTime > 0 ? formatTimeWithTemporal(entry.endTime) : 'Running'}</TableCell>

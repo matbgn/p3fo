@@ -24,15 +24,17 @@ interface TimetableChartProps {
   limitLower: number;
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+import { TooltipProps } from 'recharts';
+
+const CustomTooltip: React.FC<TooltipProps<number, string>> = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
-    const filtered = payload.filter((p: any) => p.dataKey !== 'upperLimit' && p.dataKey !== 'lowerLimit');
+    const filtered = payload.filter((p) => p.dataKey !== 'upperLimit' && p.dataKey !== 'lowerLimit');
     if (!filtered.length) return null;
 
     return (
       <div className="bg-white border border-slate-200 p-3 rounded shadow-sm opacity-95">
         <p className="font-medium mb-2">{label}</p>
-        {filtered.map((entry: any, index: number) => (
+        {filtered.map((entry, index: number) => (
           <div key={index} className="text-sm mb-1" style={{ color: entry.color }}>
             {entry.name} : {Number(entry.value).toFixed(1)}
           </div>

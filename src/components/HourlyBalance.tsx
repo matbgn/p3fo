@@ -34,7 +34,7 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
                 : tasks;
 
     const selectedUser = users.find((u) => u.userId === userId);
-    const monthlyBalances = selectedUser?.monthly_balances || {};
+    const monthlyBalances = React.useMemo(() => selectedUser?.monthly_balances || {}, [selectedUser]);
 
     // Use selected user's workload if available, otherwise fallback to settings (which is current user's or default)
     // We need to pass this to getHistoricalHourlyBalances

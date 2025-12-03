@@ -71,7 +71,7 @@ export const Timetable: React.FC<{
   }, []);
 
   // Helper to calculate date range for a given preset
-  const calculateDateRange = (rangeValue: string) => {
+  const calculateDateRange = React.useCallback((rangeValue: string) => {
     const zurichNow = Temporal.Now.zonedDateTimeISO('Europe/Zurich');
     const todayPlainDate = Temporal.PlainDate.from({
       year: zurichNow.year,
@@ -181,7 +181,7 @@ export const Timetable: React.FC<{
       default:
         return { start: undefined, end: undefined };
     }
-  };
+  }, [weekStartsOn]);
 
   // Initialize date range for "today" default
   useEffect(() => {
@@ -190,7 +190,7 @@ export const Timetable: React.FC<{
       const range = calculateDateRange("today");
       setDateRange(range);
     }
-  }, []); // Run once on mount
+  }, [dateRange.start, dateRange.end, predefinedRange, calculateDateRange]); // Run when dateRange or predefinedRange changes
 
   const handleUserChange = async (newUserId: string | null) => {
     setSelectedUserId(newUserId);

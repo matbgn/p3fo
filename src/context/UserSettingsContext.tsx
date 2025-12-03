@@ -10,6 +10,8 @@ export interface UserSettings {
     logo: string; // base64 encoded image or URL
     hasCompletedOnboarding: boolean;
     monthlyBalances: Record<string, MonthlyBalanceData>;
+    // Legacy field for import compatibility
+    workload_percentage?: number;
 }
 
 const defaultUserSettings: UserSettings = {
