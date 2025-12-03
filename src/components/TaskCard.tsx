@@ -27,8 +27,8 @@ import {
 } from "@/components/ui/select";
 import { CategorySelect } from "./CategorySelect";
 import { Temporal } from '@js-temporal/polyfill';
-import { formatDuration, instantToZurichPlainDateTime, zurichPlainDateTimeToTimestamp, cn } from '@/lib/utils';
-import { timestampToZurichInstant } from '@/lib/format-utils';
+import { cn } from '@/lib/utils';
+import { formatDuration } from '@/lib/format-utils';
 import { format } from "date-fns";
 import { addReminder } from "@/utils/reminders";
 import { useReminderStore } from "@/hooks/useReminders";

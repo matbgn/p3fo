@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
+import { Temporal } from '@js-temporal/polyfill';
 import { ClockDial } from './clock-dial';
 import { Button } from './button';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './dialog';
+import { useCombinedSettings } from '@/hooks/useCombinedSettings';
 
 interface TimePickerProps {
     isOpen: boolean;
     onClose: () => void;
-    initialTime?: Date | number; // Date object or timestamp
-    onTimeChange: (time: Date) => void;
+    initialTime?: number; // Unix timestamp
+    onTimeChange: (timestamp: number) => void; // Returns Unix timestamp
 }
 
 export const TimePickerDialog: React.FC<TimePickerProps> = ({
@@ -17,33 +19,49 @@ export const TimePickerDialog: React.FC<TimePickerProps> = ({
     initialTime,
     onTimeChange,
 }) => {
-    const [selectedDate, setSelectedDate] = useState<Date>(
-        initialTime ? new Date(initialTime) : new Date()
-    );
+    const { settings } = useCombinedSettings();
+    const [selectedDateTime, setSelectedDateTime] = useState<Temporal.PlainDateTime>(() => {
+        if (initialTime) {
+            const instant = Temporal.Instant.fromEpochMilliseconds(initialTime);
+            const timezone = settings.timezone || 'Europe/Zurich';
+            const timezoneDateTime = instant.toZonedDateTimeISO(timezone);
+            return timezoneDateTime.toPlainDateTime();
+        }
+        // Default to current time in user's timezone
+        const now = Temporal.Now.zonedDateTimeISO(settings.timezone || 'Europe/Zurich');
+        return now.toPlainDateTime();
+    });
     const [mode, setMode] = useState<'hours' | 'minutes'>('hours');
 
     useEffect(() => {
         if (isOpen) {
-            setSelectedDate(initialTime ? new Date(initialTime) : new Date());
+            if (initialTime) {
+                const instant = Temporal.Instant.fromEpochMilliseconds(initialTime);
+                const timezoneDateTime = instant.toZonedDateTimeISO(settings.timezone || 'Europe/Zurich');
+                setSelectedDateTime(timezoneDateTime.toPlainDateTime());
+            } else {
+                const now = Temporal.Now.zonedDateTimeISO(settings.timezone || 'Europe/Zurich');
+                setSelectedDateTime(now.toPlainDateTime());
+            }
             setMode('hours');
         }
     }, [isOpen, initialTime]);
 
-    const hours = selectedDate.getHours();
-    const minutes = selectedDate.getMinutes();
+    const hours = selectedDateTime.hour;
+    const minutes = selectedDateTime.minute;
 
     const handleDialChange = (val: number) => {
-        const newDate = new Date(selectedDate);
         if (mode === 'hours') {
-            newDate.setHours(val);
+            setSelectedDateTime(selectedDateTime.with({ hour: val }));
         } else {
-            newDate.setMinutes(val);
+            setSelectedDateTime(selectedDateTime.with({ minute: val }));
         }
-        setSelectedDate(newDate);
     };
 
     const handleSave = () => {
-        onTimeChange(selectedDate);
+        // Convert PlainDateTime to timestamp in user's timezone
+        const timezoneDateTime = selectedDateTime.toZonedDateTime(settings.timezone || 'Europe/Zurich');
+        onTimeChange(timezoneDateTime.epochMilliseconds);
         onClose();
     };
 

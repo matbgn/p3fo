@@ -25,6 +25,9 @@ export interface CombinedSettings {
     // User preference
     weekStartDay: 0 | 1; // 0 for Sunday, 1 for Monday
     defaultPlanView: 'week' | 'month';
+    timezone: string; // Timezone identifier (e.g., 'Europe/Zurich')
+    country: string; // Country code for holidays (e.g., 'CH')
+    region: string; // Region code for holidays (e.g., 'BE')
 }
 
 /**
@@ -60,6 +63,9 @@ const defaultCombinedSettings: CombinedSettings = {
     hoursToBeDoneByDay: 8,
     weekStartDay: 1, // Default to Monday
     defaultPlanView: 'week',
+    timezone: 'Europe/Zurich', // Default timezone
+    country: 'CH', // Default country for holidays
+    region: 'BE', // Default region for holidays
 };
 
 /**
@@ -95,6 +101,9 @@ export const useCombinedSettings = () => {
                     hoursToBeDoneByDay: appSettings.hours_to_be_done_by_day || 8,
                     weekStartDay: 1,
                     defaultPlanView: 'week',
+                    timezone: appSettings.timezone || 'Europe/Zurich',
+                    country: appSettings.country || 'CH',
+                    region: appSettings.region || 'BE',
                 };
 
                 // Override with user-specific settings if they exist
@@ -208,6 +217,15 @@ export const useCombinedSettings = () => {
             if (updates.hoursToBeDoneByDay !== undefined) {
                 appUpdates.hours_to_be_done_by_day = updates.hoursToBeDoneByDay;
             }
+            if (updates.timezone !== undefined) {
+                appUpdates.timezone = updates.timezone;
+            }
+            if (updates.country !== undefined) {
+                appUpdates.country = updates.country;
+            }
+            if (updates.region !== undefined) {
+                appUpdates.region = updates.region;
+            }
 
             // Save user-specific updates if any
             if (Object.keys(userUpdates).length > 0 && userSettings) {
@@ -243,6 +261,9 @@ export const useCombinedSettings = () => {
                 hoursToBeDoneByDay: appSettings.hours_to_be_done_by_day || 8,
                 weekStartDay: settings.weekStartDay, // Keep current local state
                 defaultPlanView: settings.defaultPlanView,
+                timezone: appSettings.timezone || 'Europe/Zurich',
+                country: appSettings.country || 'CH',
+                region: appSettings.region || 'BE',
             };
             setSettings(merged);
         }

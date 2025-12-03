@@ -9,7 +9,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { CATEGORIES } from "../data/categories";
 import { Category } from "@/hooks/useTasks";
 
-import { formatTimeWithTemporal, formatDuration, timestampToZurichInstant } from "@/lib/format-utils";
+import { formatTimeWithTemporal, formatDuration, timestampToInstant, plainDateTimeToTimestamp, instantToPlainDateTime } from "@/lib/format-utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
@@ -18,17 +18,6 @@ import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 import { CalendarIcon, Clock } from "lucide-react";
 import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
 
-// Helper function to convert Temporal.Instant to Europe/Zurich PlainDateTime
-const instantToZurichPlainDateTime = (instant: Temporal.Instant): Temporal.PlainDateTime => {
-  const zurich = instant.toZonedDateTimeISO('Europe/Zurich');
-  return zurich.toPlainDateTime();
-};
-
-// Helper function to convert Europe/Zurich PlainDateTime to Unix timestamp
-const zurichPlainDateTimeToTimestamp = (plainDateTime: Temporal.PlainDateTime): number => {
-  const zurich = plainDateTime.toZonedDateTime('Europe/Zurich');
-  return zurich.epochMilliseconds;
-};
 
 import { Task } from '@/hooks/useTasks';
 
@@ -80,14 +69,14 @@ export const EditableTimeEntry: React.FC<{
     setTimePickerOpen(true);
   };
 
-  const startInstant = timestampToZurichInstant(entry.startTime);
-  const startPlainDateTime = instantToZurichPlainDateTime(startInstant);
+  const startInstant = timestampToInstant(entry.startTime);
+  const startPlainDateTime = instantToPlainDateTime(startInstant, settings.timezone);
 
   const endInstant = entry.endTime > 0
-    ? timestampToZurichInstant(entry.endTime)
+    ? timestampToInstant(entry.endTime)
     : null;
   const endPlainDateTime = endInstant
-    ? instantToZurichPlainDateTime(endInstant)
+    ? instantToPlainDateTime(endInstant, settings.timezone)
     : null;
 
   // Calculate duration
@@ -119,7 +108,7 @@ export const EditableTimeEntry: React.FC<{
         hour: startHour, minute: startMinute, second: startSecond
       });
 
-      const newStartTime = zurichPlainDateTimeToTimestamp(startPlainDateTime);
+      const newStartTime = plainDateTimeToTimestamp(startPlainDateTime, settings.timezone);
 
       let newEndTime = 0;
       if (editEndTime) {
@@ -132,7 +121,7 @@ export const EditableTimeEntry: React.FC<{
           hour: endHour, minute: endMinute, second: endSecond
         });
 
-        newEndTime = zurichPlainDateTimeToTimestamp(endPlainDateTime);
+        newEndTime = plainDateTimeToTimestamp(endPlainDateTime, settings.timezone);
       }
 
       onUpdateTimeEntry(entry.taskId, entry.index, { startTime: newStartTime, endTime: newEndTime });
@@ -313,7 +302,8 @@ export const EditableTimeEntry: React.FC<{
               isOpen={timePickerOpen}
               onClose={() => setTimePickerOpen(false)}
               initialTime={timePickerConfig.initialTime}
-              onTimeChange={(date) => {
+              onTimeChange={(timestamp) => {
+                const date = new Date(timestamp);
                 if (timePickerConfig.type === 'start') {
                   setEditStartTime(date.toISOString().slice(0, 19));
                 } else {
@@ -378,8 +368,8 @@ export const EditableTimeEntry: React.FC<{
           </div>
         )}
       </TableCell>
-      <TableCell>{formatTimeWithTemporal(entry.startTime)}</TableCell>
-      <TableCell>{entry.endTime > 0 ? formatTimeWithTemporal(entry.endTime) : 'Running'}</TableCell>
+      <TableCell>{formatTimeWithTemporal(entry.startTime, settings.timezone)}</TableCell>
+      <TableCell>{entry.endTime > 0 ? formatTimeWithTemporal(entry.endTime, settings.timezone) : 'Running'}</TableCell>
       <TableCell className="flex items-center justify-between">
         <span>{formatDuration(duration)}</span>
         <div className="flex gap-1">

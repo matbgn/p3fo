@@ -79,6 +79,9 @@ export interface AppSettingsEntity {
   hourly_balance_limit_upper?: number;
   hourly_balance_limit_lower?: number;
   hours_to_be_done_by_day?: number;
+  timezone?: string;
+  country?: string;
+  region?: string;
 }
 
 export interface QolSurveyResponseEntity {

@@ -42,7 +42,7 @@ function calculateHoursDoneFromTasks(tasks: Task[], year: number, month: number)
 
 
 
-export function getRemainingWorkingDays(year: number, month: number): number {
+export function getRemainingWorkingDays(year: number, month: number, country: string = 'CH', region: string = 'BE'): number {
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
@@ -58,7 +58,7 @@ export function getRemainingWorkingDays(year: number, month: number): number {
     }
 
     // Current month
-    const hd = new Holidays('CH', 'BE', { types: ['public'] });
+    const hd = new Holidays(country, region, { types: ['public'] });
     const lastDayOfMonth = new Date(year, month, 0).getDate();
     const today = now.getDate();
 
@@ -102,7 +102,7 @@ function calculateHoursDoneInDateRange(tasks: Task[], startDate: Date, endDate: 
     return totalMilliseconds / (1000 * 60 * 60);
 }
 
-function calculateHistoryPace(tasks: Task[], daysBack: number = 50): number {
+function calculateHistoryPace(tasks: Task[], daysBack: number = 50, country: string = 'CH', region: string = 'BE'): number {
     const now = new Date();
     const startDate = new Date(now);
     startDate.setDate(now.getDate() - daysBack);
@@ -110,7 +110,7 @@ function calculateHistoryPace(tasks: Task[], daysBack: number = 50): number {
     // 1. Calculate working days in the range
     // We need to iterate day by day or use a more sophisticated method.
     // Given 50 days is small, iteration is fine.
-    const hd = new Holidays('CH', 'BE', { types: ['public'] });
+    const hd = new Holidays(country, region, { types: ['public'] });
     let workingDays = 0;
     for (let d = new Date(startDate); d <= now; d.setDate(d.getDate() + 1)) {
         if (d.getDay() !== 0 && d.getDay() !== 6 && !hd.isHoliday(d)) {
@@ -133,7 +133,7 @@ export function getProjectedHoursForActualMonth(
     settings: CombinedSettings,
     vacationsTaken: number = 0
 ) {
-    const workingDays = getWorkingDays(year, month);
+    const workingDays = getWorkingDays(year, month, 1, undefined, settings.country, settings.region);
     const hoursToBeDoneByDayByContract = settings.hoursToBeDoneByDay ?? 8;
     const workloadInDecimal = settings.userWorkloadPercentage / 100;
 
@@ -156,11 +156,11 @@ export function getProjectedHoursForActualMonth(
     } else if (year === currentYear && month === currentMonth) {
         // Current month
         // Calculate working days passed so far (from day 1 to today)
-        const workingDaysSoFar = getWorkingDays(year, month, 1, currentDay);
+        const workingDaysSoFar = getWorkingDays(year, month, 1, currentDay, settings.country, settings.region);
         const totalWorkingDaysInMonth = workingDays; // Already calculated above
 
         // Calculate History Pace (last 50 days)
-        const historyPace = calculateHistoryPace(tasks, 50);
+        const historyPace = calculateHistoryPace(tasks, 50, settings.country, settings.region);
 
         // Calculate Current Pace
         // We use Math.max(1, workingDaysSoFar) to avoid division by zero
@@ -287,7 +287,7 @@ export function getHistoricalHourlyBalances(
             }
 
             // Always calculate balance to ensure consistency, ignoring potentially stale stored balance
-            const workingDays = getWorkingDays(year, month);
+            const workingDays = getWorkingDays(year, month, 1, undefined, settings.country, settings.region);
             const hoursDue = workingDays * (settings.hoursToBeDoneByDay ?? 8) * (workload / 100);
             currentBalance = hoursDone - hoursDue;
         } else {
@@ -302,14 +302,14 @@ export function getHistoricalHourlyBalances(
                 hoursDone = calculateHoursDoneFromTasks(tasks, year, month);
             }
 
-            const workingDays = getWorkingDays(year, month);
+            const workingDays = getWorkingDays(year, month, 1, undefined, settings.country, settings.region);
             const hoursDue = workingDays * (settings.hoursToBeDoneByDay ?? 8) * (workload / 100);
             currentBalance = hoursDone - hoursDue;
         }
 
         cumulativeBalance += currentBalance;
 
-        const workingDays = getWorkingDays(year, month);
+        const workingDays = getWorkingDays(year, month, 1, undefined, settings.country, settings.region);
         const hoursDue = workingDays * (settings.hoursToBeDoneByDay ?? 8) * (workload / 100);
 
         data.push({
@@ -337,7 +337,7 @@ export function getHistoricalHourlyBalances(
         const month = date.getMonth() + 1;
         const descId = `${year}-${String(month).padStart(2, '0')}`;
 
-        const workingDays = getWorkingDays(year, month);
+        const workingDays = getWorkingDays(year, month, 1, undefined, settings.country, settings.region);
         const hoursDue = workingDays * (settings.hoursToBeDoneByDay ?? 8) * (lastWorkload / 100);
 
         projectedBalance += 0; // Assume neutral balance for projection
@@ -361,7 +361,9 @@ export function getMonthProjectionVacations(
     year: number,
     month: number,
     workloadInDecimal: number,
-    hoursToBeDoneByDay: number = 8
+    hoursToBeDoneByDay: number = 8,
+    country: string = 'CH',
+    region: string = 'BE'
 ): number {
     const hoursToBeDoneByDayByContract = hoursToBeDoneByDay;
     const vacationsWeekNbrByContract = 5;
@@ -370,7 +372,7 @@ export function getMonthProjectionVacations(
             (vacationsWeekNbrByContract / (52 - vacationsWeekNbrByContract)) * 10000
         ) / 10000;
     const monthProjectedVacations =
-        getWorkingDays(year, month) *
+        getWorkingDays(year, month, 1, undefined, country, region) *
         hoursToBeDoneByDayByContract *
         workloadInDecimal *
         vacationsRate;
@@ -439,7 +441,7 @@ export function getVacationsBalances(
             }
         }
 
-        const vacationsDue = getMonthProjectionVacations(year, month, workload / 100, settings.hoursToBeDoneByDay ?? 8);
+        const vacationsDue = getMonthProjectionVacations(year, month, workload / 100, settings.hoursToBeDoneByDay ?? 8, settings.country, settings.region);
 
         let currentBalance = 0;
         if (monthlyBalances[descId] && monthlyBalances[descId].vacations_hourly_balance !== undefined) {
@@ -473,7 +475,7 @@ export function getVacationsBalances(
         const month = date.getMonth() + 1;
         const descId = `${year}-${String(month).padStart(2, '0')}`;
 
-        const vacationsDue = getMonthProjectionVacations(year, month, lastWorkload / 100, settings.hoursToBeDoneByDay ?? 8);
+        const vacationsDue = getMonthProjectionVacations(year, month, lastWorkload / 100, settings.hoursToBeDoneByDay ?? 8, settings.country, settings.region);
         projectedBalance += vacationsDue;
 
         data.push({

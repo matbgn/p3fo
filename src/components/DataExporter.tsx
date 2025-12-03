@@ -38,6 +38,9 @@ const DataExporter: React.FC = () => {
         hourlyBalanceLimitUpper: appSettings.hourly_balance_limit_upper?.toString(),
         hourlyBalanceLimitLower: appSettings.hourly_balance_limit_lower?.toString(),
         hoursToBeDoneByDay: appSettings.hours_to_be_done_by_day?.toString(),
+        timezone: appSettings.timezone,
+        country: appSettings.country,
+        region: appSettings.region,
       };
 
       const exportData = {

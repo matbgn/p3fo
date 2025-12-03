@@ -86,6 +86,9 @@ const DataImporter: React.FC = () => {
                   hourly_balance_limit_upper: importedData.settings.hourlyBalanceLimitUpper ? Number(importedData.settings.hourlyBalanceLimitUpper) : undefined,
                   hourly_balance_limit_lower: importedData.settings.hourlyBalanceLimitLower ? Number(importedData.settings.hourlyBalanceLimitLower) : undefined,
                   hours_to_be_done_by_day: importedData.settings.hoursToBeDoneByDay ? Number(importedData.settings.hoursToBeDoneByDay) : undefined,
+                  timezone: importedData.settings.timezone,
+                  country: importedData.settings.country,
+                  region: importedData.settings.region,
                 };
                 await adapter.updateSettings(appSettings);
               }
