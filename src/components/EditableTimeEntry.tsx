@@ -193,7 +193,7 @@ export const EditableTimeEntry: React.FC<{
                   if (date) {
                     const current = editStartTime ? new Date(editStartTime) : new Date();
                     date.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
-                    setEditStartTime(date.toISOString().slice(0, 19));
+                    setEditStartTime(format(date, "yyyy-MM-dd'T'HH:mm:ss"));
                   }
                 }}
                 initialFocus
@@ -209,7 +209,7 @@ export const EditableTimeEntry: React.FC<{
                       const [hours, minutes, seconds] = e.target.value.split(':').map(Number);
                       const newDate = new Date(editStartTime);
                       newDate.setHours(hours, minutes, seconds || 0);
-                      setEditStartTime(newDate.toISOString().slice(0, 19));
+                      setEditStartTime(format(newDate, "yyyy-MM-dd'T'HH:mm:ss"));
                     }
                   }}
                   step="1"
@@ -252,7 +252,7 @@ export const EditableTimeEntry: React.FC<{
                   if (date) {
                     const current = editEndTime ? new Date(editEndTime) : new Date();
                     date.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
-                    setEditEndTime(date.toISOString().slice(0, 19));
+                    setEditEndTime(format(date, "yyyy-MM-dd'T'HH:mm:ss"));
                   }
                 }}
                 initialFocus
@@ -269,7 +269,7 @@ export const EditableTimeEntry: React.FC<{
                         const [hours, minutes, seconds] = e.target.value.split(':').map(Number);
                         const newDate = new Date(editEndTime);
                         newDate.setHours(hours, minutes, seconds || 0);
-                        setEditEndTime(newDate.toISOString().slice(0, 19));
+                        setEditEndTime(format(newDate, "yyyy-MM-dd'T'HH:mm:ss"));
                       }
                     }}
                     step="1"
@@ -303,11 +303,14 @@ export const EditableTimeEntry: React.FC<{
               onClose={() => setTimePickerOpen(false)}
               initialTime={timePickerConfig.initialTime}
               onTimeChange={(timestamp) => {
-                const date = new Date(timestamp);
+                const instant = timestampToInstant(timestamp);
+                const plainDateTime = instantToPlainDateTime(instant, settings.timezone);
+                const dateString = plainDateTime.toString({ smallestUnit: 'second' });
+
                 if (timePickerConfig.type === 'start') {
-                  setEditStartTime(date.toISOString().slice(0, 19));
+                  setEditStartTime(dateString);
                 } else {
-                  setEditEndTime(date.toISOString().slice(0, 19));
+                  setEditEndTime(dateString);
                 }
               }}
             />
