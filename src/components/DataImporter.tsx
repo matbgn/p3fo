@@ -50,6 +50,8 @@ const DataImporter: React.FC = () => {
                     if (user.workload === undefined && user.workload_percentage !== undefined) {
                       user.workload = user.workload_percentage;
                     }
+                    // Ensure new fields are present if available
+                    // (No explicit mapping needed if keys match, but good to be aware)
                     await adapter.updateUserSettings(user.userId, user);
                   }
                 }

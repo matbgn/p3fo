@@ -114,6 +114,9 @@ export const useCombinedSettings = () => {
                     if (userSettings.workload !== undefined) {
                         merged.userWorkloadPercentage = userSettings.workload;
                     }
+                    if (userSettings.timezone) {
+                        merged.timezone = userSettings.timezone;
+                    }
                     // We'll store weekStartDay in userSettings as a generic preference if possible, 
                     // but since the schema might not support it yet, we'll rely on local state/defaults for now 
                     // or assume it's added to the userSettings object if the backend supports it.
@@ -151,30 +154,36 @@ export const useCombinedSettings = () => {
      * Update settings. User-specific fields (splitTime, userWorkloadPercentage) are saved
      * to user settings. Global fields are saved to app settings.
      */
-    const updateSettings = async (updates: Partial<CombinedSettings>) => {
+    const updateSettings = async (updates: Partial<CombinedSettings>, scope?: 'user' | 'global') => {
         // Optimistically update local state
         setSettings(prev => ({ ...prev, ...updates }));
 
         try {
             // Separate user-specific updates from global updates
-            const userUpdates: { split_time?: string; workload?: number } = {};
+            const userUpdates: { split_time?: string; workload?: number; timezone?: string } = {};
             const appUpdates: Partial<AppSettingsEntity> = {};
+
+            // Helper to decide where to put the update
+            const addToUser = (key: string, value: any) => {
+                (userUpdates as any)[key] = value;
+            };
+            const addToApp = (key: keyof AppSettingsEntity, value: any) => {
+                (appUpdates as any)[key] = value;
+            };
 
             // Route updates to appropriate storage
             if (updates.splitTime !== undefined) {
                 if (userSettings) {
-                    userUpdates.split_time = updates.splitTime;
+                    addToUser('split_time', updates.splitTime);
                 } else {
-                    // Only update app settings if no user is logged in
-                    appUpdates.split_time = stringToAppSplitTime(updates.splitTime);
+                    addToApp('split_time', stringToAppSplitTime(updates.splitTime));
                 }
             }
             if (updates.userWorkloadPercentage !== undefined) {
                 if (userSettings) {
-                    userUpdates.workload = updates.userWorkloadPercentage;
+                    addToUser('workload', updates.userWorkloadPercentage);
                 } else {
-                    // Only update app settings if no user is logged in
-                    appUpdates.user_workload_percentage = updates.userWorkloadPercentage;
+                    addToApp('user_workload_percentage', updates.userWorkloadPercentage);
                 }
             }
 
@@ -189,42 +198,34 @@ export const useCombinedSettings = () => {
                 }
             }
 
-            // Global-only settings
-            if (updates.weeksComputation !== undefined) {
-                appUpdates.weeks_computation = updates.weeksComputation;
-            }
-            if (updates.highImpactTaskGoal !== undefined) {
-                appUpdates.high_impact_task_goal = updates.highImpactTaskGoal;
-            }
-            if (updates.failureRateGoal !== undefined) {
-                appUpdates.failure_rate_goal = updates.failureRateGoal;
-            }
-            if (updates.qliGoal !== undefined) {
-                appUpdates.qli_goal = updates.qliGoal;
-            }
-            if (updates.newCapabilitiesGoal !== undefined) {
-                appUpdates.new_capabilities_goal = updates.newCapabilitiesGoal;
-            }
-            if (updates.vacationLimitMultiplier !== undefined) {
-                appUpdates.vacation_limit_multiplier = updates.vacationLimitMultiplier;
-            }
-            if (updates.hourlyBalanceLimitUpper !== undefined) {
-                appUpdates.hourly_balance_limit_upper = updates.hourlyBalanceLimitUpper;
-            }
-            if (updates.hourlyBalanceLimitLower !== undefined) {
-                appUpdates.hourly_balance_limit_lower = updates.hourlyBalanceLimitLower;
-            }
-            if (updates.hoursToBeDoneByDay !== undefined) {
-                appUpdates.hours_to_be_done_by_day = updates.hoursToBeDoneByDay;
-            }
+            // Global-only settings (always app)
+            if (updates.weeksComputation !== undefined) addToApp('weeks_computation', updates.weeksComputation);
+            if (updates.highImpactTaskGoal !== undefined) addToApp('high_impact_task_goal', updates.highImpactTaskGoal);
+            if (updates.failureRateGoal !== undefined) addToApp('failure_rate_goal', updates.failureRateGoal);
+            if (updates.qliGoal !== undefined) addToApp('qli_goal', updates.qliGoal);
+            if (updates.newCapabilitiesGoal !== undefined) addToApp('new_capabilities_goal', updates.newCapabilitiesGoal);
+            if (updates.vacationLimitMultiplier !== undefined) addToApp('vacation_limit_multiplier', updates.vacationLimitMultiplier);
+            if (updates.hourlyBalanceLimitUpper !== undefined) addToApp('hourly_balance_limit_upper', updates.hourlyBalanceLimitUpper);
+            if (updates.hourlyBalanceLimitLower !== undefined) addToApp('hourly_balance_limit_lower', updates.hourlyBalanceLimitLower);
+            if (updates.hoursToBeDoneByDay !== undefined) addToApp('hours_to_be_done_by_day', updates.hoursToBeDoneByDay);
+
+            // Scoped settings (Timezone, Country, Region)
             if (updates.timezone !== undefined) {
-                appUpdates.timezone = updates.timezone;
+                if (scope === 'user' && userSettings) {
+                    addToUser('timezone', updates.timezone);
+                } else if (scope === 'global' || !userSettings) {
+                    addToApp('timezone', updates.timezone);
+                } else {
+                    // Default behavior if scope not specified but user logged in:
+                    // For now, assume global if not specified, to match previous behavior of workspace settings
+                    addToApp('timezone', updates.timezone);
+                }
             }
             if (updates.country !== undefined) {
-                appUpdates.country = updates.country;
+                addToApp('country', updates.country);
             }
             if (updates.region !== undefined) {
-                appUpdates.region = updates.region;
+                addToApp('region', updates.region);
             }
 
             // Save user-specific updates if any

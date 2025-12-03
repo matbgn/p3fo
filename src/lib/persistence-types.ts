@@ -65,6 +65,7 @@ export interface UserSettingsEntity {
   workload?: number;
   split_time?: string;
   monthly_balances?: Record<string, MonthlyBalanceData>;
+  timezone?: string;
 }
 
 export interface AppSettingsEntity {
