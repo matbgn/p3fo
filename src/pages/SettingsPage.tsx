@@ -23,7 +23,7 @@ const SettingsPage: React.FC = () => {
   };
 
   const handleSettingChange = (key: keyof typeof settings, value: string) => {
-    if (key === 'splitTime' || key === 'defaultPlanView') {
+    if (key === 'splitTime' || key === 'defaultPlanView' || key === 'timezone' || key === 'country' || key === 'region') {
       updateSettings({ [key]: value });
     } else {
       const numValue = parseFloat(value);
@@ -151,23 +151,6 @@ const SettingsPage: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
                 <div>
                   <Label className="block text-sm font-medium mb-1">
-                    Standard Daily Hours
-                  </Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    value={settings.hoursToBeDoneByDay}
-                    onChange={(e) => handleSettingChange('hoursToBeDoneByDay', e.target.value)}
-                    className="w-24 mt-2"
-                  />
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Standard working hours per day (default: 8)
-                  </p>
-                </div>
-
-                <div>
-                  <Label className="block text-sm font-medium mb-1">
                     Weeks Computation
                   </Label>
                   <Input
@@ -259,6 +242,28 @@ const SettingsPage: React.FC = () => {
                     Target time spent on new capabilities (default: 57.98%)
                   </p>
                 </div>
+              </div>
+            </div>
+
+            <div className="pt-6 border-t">
+              <h2 className="text-xl font-semibold mb-4">Time & Hours</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
+                <div>
+                  <Label className="block text-sm font-medium mb-1">
+                    Standard Daily Hours
+                  </Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={settings.hoursToBeDoneByDay}
+                    onChange={(e) => handleSettingChange('hoursToBeDoneByDay', e.target.value)}
+                    className="w-24 mt-2"
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Standard working hours per day (default: 8)
+                  </p>
+                </div>
 
                 <div>
                   <Label className="block text-sm font-medium mb-1">
@@ -307,6 +312,56 @@ const SettingsPage: React.FC = () => {
                   />
                   <p className="text-sm text-muted-foreground mt-1">
                     Multiplier for lower hourly balance limit (default: -0.5)
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="block text-sm font-medium mb-1">
+                    Timezone
+                  </Label>
+                  <Input
+                    type="text"
+                    value={settings.timezone}
+                    onChange={(e) => handleSettingChange('timezone', e.target.value)}
+                    className="mt-2"
+                    placeholder="Europe/Zurich"
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    IANA Timezone identifier (default: Europe/Zurich)
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="block text-sm font-medium mb-1">
+                    Country
+                  </Label>
+                  <Input
+                    type="text"
+                    value={settings.country}
+                    onChange={(e) => handleSettingChange('country', e.target.value)}
+                    className="w-24 mt-2"
+                    placeholder="CH"
+                    maxLength={2}
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Country code for holidays (default: CH)
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="block text-sm font-medium mb-1">
+                    Region
+                  </Label>
+                  <Input
+                    type="text"
+                    value={settings.region}
+                    onChange={(e) => handleSettingChange('region', e.target.value)}
+                    className="w-24 mt-2"
+                    placeholder="BE"
+                    maxLength={2}
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Region code for holidays (default: BE)
                   </p>
                 </div>
               </div>
