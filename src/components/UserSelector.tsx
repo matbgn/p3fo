@@ -73,7 +73,7 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
             <span className="text-sm">Unassigned</span>
           </div>
         </SelectItem>
-        <SelectItem value="current-user">
+        <SelectItem value={currentUserId}>
           <div className="flex items-center gap-2">
             <UserAvatar
               username={userSettings.username}
