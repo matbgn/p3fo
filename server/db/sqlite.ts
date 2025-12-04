@@ -508,6 +508,15 @@ class SqliteClient implements DbClient {
   }
 
   async importTasks(tasks: TaskEntity[]): Promise<void> {
+    // 1. Get current FK state
+    const fkState = this.db.prepare('PRAGMA foreign_keys').get() as { foreign_keys: number };
+    const wasFkEnabled = fkState.foreign_keys === 1;
+
+    // 2. Disable FKs (must be done outside transaction)
+    if (wasFkEnabled) {
+      this.db.exec('PRAGMA foreign_keys = OFF');
+    }
+
     this.db.exec('BEGIN');
     try {
       const stmt = this.db.prepare(`
@@ -537,10 +546,41 @@ class SqliteClient implements DbClient {
           user_id: task.user_id,
         });
       }
+
+      // 3. Check for violations
+      let violations = this.db.prepare('PRAGMA foreign_key_check').all() as { table: string, rowid: number, parent: string, fkid: number }[];
+
+      if (violations.length > 0) {
+        console.log(`SQLite: Found ${violations.length} foreign key violations. Attempting to auto-repair orphaned tasks...`);
+
+        const repairStmt = this.db.prepare('UPDATE tasks SET parent_id = NULL WHERE rowid = ?');
+
+        for (const violation of violations) {
+          if (violation.table === 'tasks' && violation.parent === 'tasks') {
+            repairStmt.run(violation.rowid);
+          }
+        }
+
+        // Re-check violations
+        violations = this.db.prepare('PRAGMA foreign_key_check').all() as { table: string, rowid: number, parent: string, fkid: number }[];
+
+        if (violations.length > 0) {
+          console.error('SQLite: Foreign key violations persisted after repair attempt:', violations);
+          throw new Error(`Foreign key constraint failed: ${violations.length} violations found after repair attempt.`);
+        } else {
+          console.log('SQLite: All foreign key violations repaired successfully.');
+        }
+      }
+
       this.db.exec('COMMIT');
     } catch (error) {
       this.db.exec('ROLLBACK');
       throw error;
+    } finally {
+      // 4. Restore FK state
+      if (wasFkEnabled) {
+        this.db.exec('PRAGMA foreign_keys = ON');
+      }
     }
   }
 

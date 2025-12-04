@@ -164,7 +164,10 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
       <div className="flex items-center space-x-2">
         <Label>Category:</Label>
         <MultiSelect
-          options={CATEGORIES.map(c => ({ value: c, label: c }))}
+          options={[
+            { value: "Uncategorized", label: "Uncategorized" },
+            ...CATEGORIES.map(c => ({ value: c, label: c }))
+          ]}
           selected={filters.category || []}
           onChange={(selected) => updateAndPersistFilters({ ...filters, category: (selected as Category[]) || [] })}
           placeholder="Select category..."

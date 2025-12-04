@@ -1,11 +1,27 @@
 # Changelog
 
-## v0.5.0 (2025-12-03)
+## v0.6.0 (2025-12-04)
 
 ### Features
 
+- **timetable:** introduce 'Since X weeks' predefined date range (c8a9b06)
 - **settings:** reorganize time & hours settings out of goal metrics stuff (e05f782)
 - **timetable:** introduce a new workspace setting to set the hours due (7e1384e)
+
+### Bug Fixes
+
+- **metrics:** fix calculation on high impact tasks done (adf5575)
+- add user-specific timezone setting and refactor settings persistence with scope (a0de78c)
+- **timetable:** use Temporal API for consistent date string generation in time entries (b306c7a)
+- **data export:** add missing attributes to export and import (a40868d)
+- **timetable:** fix user selection on timetable entries for current user (e4e02ca)
+
+---
+
+## v0.5.0 (2025-12-01)
+
+### Features
+
 - **timetable:** persist data once month is done (001a80b)
 - **forecast:** incorporate vacation hours into projected hours and balance calculations (8b2579b)
 - **forecast:** enhance projected hours calculation with a gliding average combining current and historical pace (3dfdf9e)
@@ -13,10 +29,6 @@
 
 ### Bug Fixes
 
-- add user-specific timezone setting and refactor settings persistence with scope (a0de78c)
-- **timetable:** use Temporal API for consistent date string generation in time entries (b306c7a)
-- **data export:** add missing attributes to export and import (a40868d)
-- **timetable:** fix user selection on timetable entries for current user (e4e02ca)
 - **forecast:** restore linear progression for the projected hours (c4b8af2)
 - applied effective user workload settings when calculating projected hours for the current month (6774e92)
 

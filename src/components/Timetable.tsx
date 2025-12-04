@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { useTasks, Category } from "@/hooks/useTasks";
+import { useTasks, Category, TriageStatus } from "@/hooks/useTasks";
+import { CATEGORIES } from "@/data/categories";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CategorySelect } from "./CategorySelect";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -19,19 +19,10 @@ import { loadFiltersFromSessionStorage, saveFiltersToSessionStorage } from "@/li
 import { Filters } from "@/components/FilterControls";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { DateRange } from "react-day-picker";
+import { MultiSelect } from "@/components/ui/multi-select";
 
 type TimetableView = "categorical" | "chronological";
 type TimeChunk = "all" | "am" | "pm";
-
-const PREDEFINED_RANGES = [
-  { label: "Today", value: "today" },
-  { label: "Yesterday", value: "yesterday" },
-  { label: "This Week", value: "thisWeek" },
-  { label: "Last Week", value: "lastWeek" },
-  { label: "This Month", value: "thisMonth" },
-  { label: "Last Month", value: "lastMonth" },
-  { label: "Year to Date", value: "ytd" },
-];
 
 export const Timetable: React.FC<{
   onJumpToTask?: (taskId: string) => void;
@@ -40,8 +31,20 @@ export const Timetable: React.FC<{
   const { tasks, updateTimeEntry, deleteTimeEntry, updateCategory, updateUser } = useTasks();
   const { settings } = useCombinedSettings();
   const weekStartsOn = settings.weekStartDay as 0 | 1;
+  const weeksComputation = settings.weeksComputation || 4;
   const [view, setView] = useState<TimetableView>("chronological");
   const [timeChunk, setTimeChunk] = useState<TimeChunk>("all");
+
+  const PREDEFINED_RANGES = React.useMemo(() => [
+    { label: "Today", value: "today" },
+    { label: "Yesterday", value: "yesterday" },
+    { label: "This Week", value: "thisWeek" },
+    { label: "Last Week", value: "lastWeek" },
+    { label: "This Month", value: "thisMonth" },
+    { label: "Last Month", value: "lastMonth" },
+    { label: "Year to Date", value: "ytd" },
+    { label: `Since ${weeksComputation} weeks`, value: "sinceXWeeks" },
+  ], [weeksComputation]);
 
   // Create a map of task IDs to task objects for easy lookup
   const taskMap = React.useMemo(() => {
@@ -58,17 +61,50 @@ export const Timetable: React.FC<{
   const [showImpact, setShowImpact] = useState(false);
   const [showMajorIncident, setShowMajorIncident] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedStatuses, setSelectedStatuses] = useState<TriageStatus[]>([]);
 
   // Load filters from storage on mount
   useEffect(() => {
     const load = async () => {
       const filters = await loadFiltersFromSessionStorage();
-      if (filters?.selectedUserId) {
-        setSelectedUserId(filters.selectedUserId);
+      if (filters) {
+        if (filters.selectedUserId) setSelectedUserId(filters.selectedUserId);
+        if (filters.showUrgent) setShowUrgent(filters.showUrgent);
+        if (filters.showImpact) setShowImpact(filters.showImpact);
+        if (filters.showMajorIncident) setShowMajorIncident(filters.showMajorIncident);
+        if (filters.category) setSelectedCategories(filters.category);
+        if (filters.status) setSelectedStatuses(filters.status);
       }
     };
     load();
   }, []);
+
+  // Persist filters when they change
+  useEffect(() => {
+    const save = async () => {
+      const currentFilters = await loadFiltersFromSessionStorage() || {
+        showUrgent: false,
+        showImpact: false,
+        showMajorIncident: false,
+        status: [],
+        showDone: false,
+        searchText: "",
+        difficulty: [],
+        category: []
+      } as Filters;
+
+      await saveFiltersToSessionStorage({
+        ...currentFilters,
+        selectedUserId: selectedUserId,
+        showUrgent,
+        showImpact,
+        showMajorIncident,
+        category: selectedCategories,
+        status: selectedStatuses
+      });
+    };
+    save();
+  }, [selectedUserId, showUrgent, showImpact, showMajorIncident, selectedCategories, selectedStatuses]);
 
   // Helper to calculate date range for a given preset
   const calculateDateRange = React.useCallback((rangeValue: string) => {
@@ -98,18 +134,6 @@ export const Timetable: React.FC<{
       }
       case "thisWeek": {
         const daysToSubtract = todayZoned.dayOfWeek === (weekStartsOn === 0 ? 7 : 1) ? 0 : (todayZoned.dayOfWeek - (weekStartsOn === 0 ? 0 : 1) + 7) % 7;
-        // Actually, let's simplify using date-fns logic or just simple math
-        // If weekStartsOn is 1 (Monday):
-        // Sunday (7) -> subtract 6
-        // Monday (1) -> subtract 0
-        // ...
-        // If weekStartsOn is 0 (Sunday):
-        // Sunday (7) -> subtract 0
-        // Monday (1) -> subtract 1
-
-        // Let's rely on date-fns for this calculation to be consistent with DateRangePicker
-        // But we are using Temporal here.
-        // Let's stick to Temporal but correct logic.
 
         let daysToSub = 0;
         if (weekStartsOn === 1) { // Monday
@@ -178,10 +202,19 @@ export const Timetable: React.FC<{
           end: new Date(todayZoned.epochMilliseconds)
         };
       }
+      case "sinceXWeeks": {
+        const start = todayZoned.subtract({ weeks: weeksComputation }).with({
+          hour: 0, minute: 0, second: 0, millisecond: 0, microsecond: 0, nanosecond: 0
+        });
+        return {
+          start: new Date(start.epochMilliseconds),
+          end: new Date(todayZoned.epochMilliseconds)
+        };
+      }
       default:
         return { start: undefined, end: undefined };
     }
-  }, [weekStartsOn]);
+  }, [weekStartsOn, weeksComputation]);
 
   // Initialize date range for "today" default
   useEffect(() => {
@@ -194,21 +227,7 @@ export const Timetable: React.FC<{
 
   const handleUserChange = async (newUserId: string | null) => {
     setSelectedUserId(newUserId);
-    const currentFilters = await loadFiltersFromSessionStorage() || {
-      showUrgent: false,
-      showImpact: false,
-      showMajorIncident: false,
-      status: [],
-      showDone: false,
-      searchText: "",
-      difficulty: [],
-      category: []
-    } as Filters;
-
-    await saveFiltersToSessionStorage({
-      ...currentFilters,
-      selectedUserId: newUserId
-    });
+    // Persistence handled by useEffect
   };
 
   // Handle date range change from DateRangePicker
@@ -265,6 +284,13 @@ export const Timetable: React.FC<{
         if (!selectedCategories.includes("Uncategorized" as Category) && selectedCategories.length > 0) {
           return false;
         }
+      }
+    }
+
+    // Status filter
+    if (selectedStatuses.length > 0) {
+      if (!selectedStatuses.includes(task.triageStatus)) {
+        return false;
       }
     }
 
@@ -489,37 +515,36 @@ export const Timetable: React.FC<{
           </div>
         </div>
 
-
+        <div className="flex flex-col space-y-2">
+          <label className="text-sm font-medium">Status</label>
+          <MultiSelect
+            options={[
+              { value: "Backlog", label: "Backlog" },
+              { value: "Ready", label: "Ready" },
+              { value: "WIP", label: "WIP" },
+              { value: "Blocked", label: "Blocked" },
+              { value: "Done", label: "Done" },
+              { value: "Dropped", label: "Dropped" }
+            ]}
+            selected={selectedStatuses}
+            onChange={(selected) => setSelectedStatuses(selected as TriageStatus[])}
+            placeholder="Select status..."
+            className="w-40"
+          />
+        </div>
 
         <div className="flex flex-col space-y-2">
           <label className="text-sm font-medium">Categories</label>
-          <div className="flex flex-wrap gap-2">
-            <CategorySelect
-              value="none"
-              onChange={(category) => {
-                if (category && category !== "none" && !selectedCategories.includes(category)) {
-                  setSelectedCategories([...selectedCategories, category]);
-                } else if (category === "none" && !selectedCategories.includes("Uncategorized" as Category)) {
-                  // Handle "No category" selection
-                  setSelectedCategories([...selectedCategories, "Uncategorized" as Category]);
-                }
-              }}
-              className="w-48"
-            />
-            <div className="flex flex-wrap gap-1">
-              {selectedCategories.map((category) => (
-                <div key={category} className="bg-secondary rounded-md px-2 py-1 text-sm flex items-center">
-                  {category}
-                  <button
-                    onClick={() => setSelectedCategories(selectedCategories.filter((c) => c !== category))}
-                    className="ml-1 text-muted-foreground hover:text-foreground"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
+          <MultiSelect
+            options={[
+              { value: "Uncategorized", label: "Uncategorized" },
+              ...CATEGORIES.map(c => ({ value: c, label: c }))
+            ]}
+            selected={selectedCategories}
+            onChange={(selected) => setSelectedCategories(selected as Category[])}
+            placeholder="Select category..."
+            className="w-48"
+          />
         </div>
 
         <div className="flex flex-col space-y-2">
@@ -555,6 +580,7 @@ export const Timetable: React.FC<{
             setDateRange({});
             setPredefinedRange(null);
             setSelectedCategories([]);
+            setSelectedStatuses([]);
             setShowUrgent(false);
             setShowImpact(false);
             setShowMajorIncident(false);
