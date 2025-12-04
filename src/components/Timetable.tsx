@@ -24,16 +24,6 @@ import { MultiSelect } from "@/components/ui/multi-select";
 type TimetableView = "categorical" | "chronological";
 type TimeChunk = "all" | "am" | "pm";
 
-const PREDEFINED_RANGES = [
-  { label: "Today", value: "today" },
-  { label: "Yesterday", value: "yesterday" },
-  { label: "This Week", value: "thisWeek" },
-  { label: "Last Week", value: "lastWeek" },
-  { label: "This Month", value: "thisMonth" },
-  { label: "Last Month", value: "lastMonth" },
-  { label: "Year to Date", value: "ytd" },
-];
-
 export const Timetable: React.FC<{
   onJumpToTask?: (taskId: string) => void;
 }> = ({ onJumpToTask }) => {
@@ -41,8 +31,20 @@ export const Timetable: React.FC<{
   const { tasks, updateTimeEntry, deleteTimeEntry, updateCategory, updateUser } = useTasks();
   const { settings } = useCombinedSettings();
   const weekStartsOn = settings.weekStartDay as 0 | 1;
+  const weeksComputation = settings.weeksComputation || 4;
   const [view, setView] = useState<TimetableView>("chronological");
   const [timeChunk, setTimeChunk] = useState<TimeChunk>("all");
+
+  const PREDEFINED_RANGES = React.useMemo(() => [
+    { label: "Today", value: "today" },
+    { label: "Yesterday", value: "yesterday" },
+    { label: "This Week", value: "thisWeek" },
+    { label: "Last Week", value: "lastWeek" },
+    { label: "This Month", value: "thisMonth" },
+    { label: "Last Month", value: "lastMonth" },
+    { label: "Year to Date", value: "ytd" },
+    { label: `Since ${weeksComputation} weeks`, value: "sinceXWeeks" },
+  ], [weeksComputation]);
 
   // Create a map of task IDs to task objects for easy lookup
   const taskMap = React.useMemo(() => {
@@ -132,18 +134,6 @@ export const Timetable: React.FC<{
       }
       case "thisWeek": {
         const daysToSubtract = todayZoned.dayOfWeek === (weekStartsOn === 0 ? 7 : 1) ? 0 : (todayZoned.dayOfWeek - (weekStartsOn === 0 ? 0 : 1) + 7) % 7;
-        // Actually, let's simplify using date-fns logic or just simple math
-        // If weekStartsOn is 1 (Monday):
-        // Sunday (7) -> subtract 6
-        // Monday (1) -> subtract 0
-        // ...
-        // If weekStartsOn is 0 (Sunday):
-        // Sunday (7) -> subtract 0
-        // Monday (1) -> subtract 1
-
-        // Let's rely on date-fns for this calculation to be consistent with DateRangePicker
-        // But we are using Temporal here.
-        // Let's stick to Temporal but correct logic.
 
         let daysToSub = 0;
         if (weekStartsOn === 1) { // Monday
@@ -212,10 +202,19 @@ export const Timetable: React.FC<{
           end: new Date(todayZoned.epochMilliseconds)
         };
       }
+      case "sinceXWeeks": {
+        const start = todayZoned.subtract({ weeks: weeksComputation }).with({
+          hour: 0, minute: 0, second: 0, millisecond: 0, microsecond: 0, nanosecond: 0
+        });
+        return {
+          start: new Date(start.epochMilliseconds),
+          end: new Date(todayZoned.epochMilliseconds)
+        };
+      }
       default:
         return { start: undefined, end: undefined };
     }
-  }, [weekStartsOn]);
+  }, [weekStartsOn, weeksComputation]);
 
   // Initialize date range for "today" default
   useEffect(() => {
