@@ -1,13 +1,35 @@
 import { Task } from "@/hooks/useTasks";
 
+// Helper to check if a task or any of its ancestors is high impact
+const isHighImpactOrHasHighImpactAncestor = (task: Task, taskMap: Record<string, Task>): boolean => {
+  let currentTask: Task | undefined = task;
+  while (currentTask) {
+    if (currentTask.impact === true) {
+      return true;
+    }
+    if (currentTask.parentId) {
+      currentTask = taskMap[currentTask.parentId];
+    } else {
+      break;
+    }
+  }
+  return false;
+};
+
 // Get tasks completed in the last N weeks
 export const getCompletedHighImpactTasks = (tasks: Task[], weeks: number = 4): Task[] => {
   const cutoffDate = Date.now() - (weeks * 7 * 24 * 60 * 60 * 1000);
 
+  // Create a map for easy ancestor lookup
+  const taskMap = tasks.reduce((acc, task) => {
+    acc[task.id] = task;
+    return acc;
+  }, {} as Record<string, Task>);
+
   return tasks.filter(task =>
     task.triageStatus === 'Done' &&
-    task.impact === true &&
-    task.createdAt >= cutoffDate
+    task.createdAt >= cutoffDate &&
+    isHighImpactOrHasHighImpactAncestor(task, taskMap)
   );
 };
 
@@ -120,19 +142,7 @@ export const calculateTimeSpentOnNewCapabilities = (
 
   // Find timer entries for tasks that have an impact ancestor (including the task itself)
   const newCapabilitiesEntries = allTimerEntriesInPeriod.filter(({ task }) => {
-    // Check if this task or any of its ancestors has impact = true
-    let currentTask = task;
-    while (currentTask) {
-      if (currentTask.impact === true) {
-        return true;
-      }
-      if (currentTask.parentId) {
-        currentTask = taskMap[currentTask.parentId];
-      } else {
-        break;
-      }
-    }
-    return false;
+    return isHighImpactOrHasHighImpactAncestor(task, taskMap);
   });
 
   // Calculate time spent on new capabilities (tasks with impact ancestors) in the period
