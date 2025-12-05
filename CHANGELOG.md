@@ -1,16 +1,31 @@
 # Changelog
 
-## v0.6.0 (2025-12-04)
+## v0.7.0 (2025-12-05)
 
 ### Features
 
+- **filters:** add auto-expansion of filters when card compactness is full in board views (9b7c0e0)
+- **tasks:** allow creating tasks with an assigned user based on the current filter selection (46703f0)
+- **filters:** make filters section collapsable to follow compactness (198c3ea)
+- **tasks:** add detailed task edit modal (ed1b9f2)
+- **task layout:** add card compactness selector (6275d19)
 - **timetable:** introduce 'Since X weeks' predefined date range (c8a9b06)
+
+### Bug Fixes
+
+- **metrics:** fix calculation on high impact tasks done (adf5575)
+
+---
+
+## v0.6.0 (2025-12-03)
+
+### Features
+
 - **settings:** reorganize time & hours settings out of goal metrics stuff (e05f782)
 - **timetable:** introduce a new workspace setting to set the hours due (7e1384e)
 
 ### Bug Fixes
 
-- **metrics:** fix calculation on high impact tasks done (adf5575)
 - add user-specific timezone setting and refactor settings persistence with scope (a0de78c)
 - **timetable:** use Temporal API for consistent date string generation in time entries (b306c7a)
 - **data export:** add missing attributes to export and import (a40868d)
