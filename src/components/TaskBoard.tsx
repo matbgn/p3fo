@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Plus, CornerDownRight, FolderTree, Printer, Filter } from "lucide-react";
+import { Plus, CornerDownRight, FolderTree, Printer, Filter, ChevronDown, ChevronRight } from "lucide-react";
 import { FilterControls, Filters } from "./FilterControls";
 import { useTasks, Task, TriageStatus } from "@/hooks/useTasks";
 import { useUserSettings } from "@/hooks/useUserSettings";
@@ -12,7 +12,10 @@ import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
 import { sortTasks } from "@/utils/taskSorting";
 
 import { TaskCard } from "./TaskCard";
+
 import { byId } from "@/lib/utils";
+import { useView } from "@/hooks/useView";
+import { COMPACTNESS_ULTRA, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
 
 type Column = {
   parentId: string | null;
@@ -40,6 +43,18 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
 
   const [filters, setFilters] = React.useState<Filters>(defaultTaskBoardFilters);
   const [loadingFilters, setLoadingFilters] = React.useState(true);
+  const { cardCompactness } = useView();
+  const [isFiltersCollapsed, setIsFiltersCollapsed] = React.useState(false);
+
+  // Auto-collapse filters when switching to Ultra Compact mode
+  // Auto-expand filters when switching to Full mode
+  React.useEffect(() => {
+    if (cardCompactness === COMPACTNESS_ULTRA) {
+      setIsFiltersCollapsed(true);
+    } else if (cardCompactness === COMPACTNESS_FULL) {
+      setIsFiltersCollapsed(false);
+    }
+  }, [cardCompactness]);
 
   // Load filters on mount
   useEffect(() => {
@@ -175,7 +190,8 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
 
   const handleAdd = async (colIndex: number, title: string) => {
     const parentId = colIndex === 0 ? null : columns[colIndex].parentId!;
-    const newId = await createTask(title, parentId);
+    const assignedUserId = filters.selectedUserId && filters.selectedUserId !== 'UNASSIGNED' ? filters.selectedUserId : undefined;
+    const newId = await createTask(title, parentId, assignedUserId);
     handleActivate(colIndex, newId);
   };
 
@@ -240,37 +256,55 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
   }, [recomputeLines]);
 
   return (
-    <div className="w-full">
-      <div className="mb-4 flex flex-wrap items-center gap-4">
-        <div className="flex flex-wrap items-center gap-4 border rounded-lg p-3">
-          <FilterControls
-            filters={filters}
-            setFilters={setFilters}
-            defaultFilters={defaultTaskBoardFilters}
-          />
-          {/* Vertical separator */}
-          <div className="h-6 border-l border-gray-300 mx-2"></div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">Quick time edition:</span>
-            <QuickTimer onJumpToTask={(taskId) => {
-              // Find the task and activate its path
-              const task = map[taskId];
-              if (task) {
-                const newPath: string[] = [];
-                let current: Task | undefined = task;
-                while (current) {
-                  newPath.unshift(current.id);
-                  current = current.parentId ? map[current.parentId] : undefined;
-                }
-                setPath(newPath);
-              }
-            }} />
-          </div>
+    <div className="w-full">
+      <div className="mb-4 flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="p-0 h-6 w-6"
+            onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}
+          >
+            {isFiltersCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
+          <span className="text-sm font-medium text-muted-foreground cursor-pointer select-none" onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}>
+            Filters & Controls
+          </span>
         </div>
 
+        {!isFiltersCollapsed && (
+          <div className="flex flex-wrap items-center gap-4 border rounded-lg p-3">
+            <FilterControls
+              filters={filters}
+              setFilters={setFilters}
+              defaultFilters={defaultTaskBoardFilters}
+            />
+            {/* Vertical separator */}
+            <div className="h-6 border-l border-gray-300 mx-2"></div>
 
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">Quick time edition:</span>
+              <QuickTimer onJumpToTask={(taskId) => {
+                // Find the task and activate its path
+                const task = map[taskId];
+                if (task) {
+                  const newPath: string[] = [];
+                  let current: Task | undefined = task;
+                  while (current) {
+                    newPath.unshift(current.id);
+                    current = current.parentId ? map[current.parentId] : undefined;
+                  }
+                  setPath(newPath);
+                }
+              }} />
+            </div>
+          </div>
+        )}
       </div>
+
+
+
 
       <div className="relative">
         <div ref={containerRef} className="flex pb-4 relative gap-6 flex-nowrap justify-start">
@@ -523,7 +557,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
           ))}
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 

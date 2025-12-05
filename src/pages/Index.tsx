@@ -13,6 +13,8 @@ import PlanView from "@/components/PlanView"; // Import PlanView
 import { Button } from "@/components/ui/button";
 import { useView } from "@/hooks/useView";
 
+import { CompactnessSelector } from "@/components/CompactnessSelector";
+
 const Index: React.FC = () => {
   const { view, setView, focusedTaskId, handleFocusOnTask } = useView();
 
@@ -40,6 +42,7 @@ const Index: React.FC = () => {
             </div>
             <div className="flex flex-col items-end gap-2">
               <ViewSwitcher value={view} onChange={setView} />
+              <CompactnessSelector />
             </div>
           </div>
         </div>
