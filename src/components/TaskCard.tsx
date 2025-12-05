@@ -39,6 +39,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 import { useView } from "@/hooks/useView";
 import { COMPACTNESS_ULTRA, COMPACTNESS_COMPACT, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
+import { TaskEditModal } from "./TaskEditModal";
 
 const LiveTimeBadge: React.FC<{ task: Task; totalTime?: number; onClick?: () => void }> = React.memo(({ task, totalTime, onClick }) => {
   const [runningTime, setRunningTime] = React.useState(0);
@@ -106,7 +107,8 @@ const EditableTitle: React.FC<{
     }
   }, [isEditing]);
 
-  const handleDoubleClick = () => {
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
     setEditValue(title);
     setIsEditing(true);
   };
@@ -261,6 +263,7 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
   const [offsetMinutes, setOffsetMinutes] = React.useState(-1); // Default to -1 (No reminder)
   const [isDateTimeBlockOpen, setIsDateTimeBlockOpen] = React.useState(false); // New state for date/time block
   const [isReminderActive, setIsReminderActive] = React.useState(false); // New state for reminder active status
+  const [isEditModalOpen, setIsEditModalOpen] = React.useState(false); // New state for full edit modal
   const { scheduledReminders, updateScheduledReminderTriggerDate, dismissReminder } = useReminderStore();
   const { userSettings, userId: currentUserId } = useUserSettings();
   const { settings } = useCombinedSettings();
@@ -300,6 +303,17 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
     );
     setIsReminderActive(activeReminder);
   }, [task.id, scheduledReminders]);
+
+  const handleCardDoubleClick = (e: React.MouseEvent) => {
+    // Prevent opening if clicking on interactive elements that might bubble up
+    // (Though most should handle their own stopPropagation)
+    if (e.defaultPrevented) return;
+
+    setIsEditModalOpen(true);
+  };
+  // The line below was a duplicate and has been removed.
+  //   setIsReminderActive(activeReminder);
+  // }, [task.id, scheduledReminders]);
 
   const { calculateTotalTime, calculateTotalDifficulty } = useTasks();
   const hasSubtasks = task.children && task.children.length > 0;
@@ -342,10 +356,14 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
   }, [task.id]);
 
   return (
-    <div
+    <Card
       ref={ref}
-      onClick={() => onActivate?.(task.id)}
-      className={`w-full px-3 py-2 rounded-md border transition bg-card hover:bg-accent/40 ${isActive ? "ring-2 ring-orange-500 bg-orange-50 dark:bg-orange-950/30" : ""} ${isHighlighted ? "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950/30" : ""}`}
+      className={cn(
+        `mb-2 transition-all duration-200 hover:shadow-md ${isActive ? "ring-2 ring-primary" : ""} ${isHighlighted ? "ring-2 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20" : ""}`,
+        isUltraCompact ? "p-2" : "p-3"
+      )}
+      onClick={() => onActivate && onActivate(task.id)}
+      onDoubleClick={handleCardDoubleClick}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData("text/task-id", task.id);
@@ -863,6 +881,25 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
           )}
         </div>
       )}
-    </div>
+      {/* Task Edit Modal */}
+      <TaskEditModal
+        task={task}
+        tasks={tasks}
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        updateTitle={updateTitle}
+        updateComment={updateComment}
+        updateStatus={updateStatus}
+        updateCategory={updateCategory}
+        updateDifficulty={updateDifficulty}
+        updateUser={updateUser}
+        updateTerminationDate={updateTerminationDate}
+        updateDurationInMinutes={updateDurationInMinutes}
+        toggleUrgent={toggleUrgent}
+        toggleImpact={toggleImpact}
+        toggleMajorIncident={toggleMajorIncident}
+        currentUserId={currentUserId}
+      />
+    </Card>
   );
 });
