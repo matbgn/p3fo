@@ -11,7 +11,11 @@ import { aStarTextSearch } from "@/lib/a-star-search";
 import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
 import { sortTasks } from "@/utils/taskSorting";
 import { QuickTimer } from "@/components/QuickTimer";
+
 import { useUserSettings } from "@/hooks/useUserSettings";
+import { useView } from "@/hooks/useView";
+import { COMPACTNESS_ULTRA } from "@/context/ViewContextDefinition";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 type BoardCard =
   | { kind: "parent"; task: Task }
@@ -206,6 +210,15 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
 
   const [filters, setFilters] = React.useState<Filters>(defaultKanbanFilters);
   const [loadingFilters, setLoadingFilters] = React.useState(true);
+  const { cardCompactness } = useView();
+  const [isFiltersCollapsed, setIsFiltersCollapsed] = React.useState(false);
+
+  // Auto-collapse filters when switching to Ultra Compact mode
+  React.useEffect(() => {
+    if (cardCompactness === COMPACTNESS_ULTRA) {
+      setIsFiltersCollapsed(true);
+    }
+  }, [cardCompactness]);
 
   // Load filters on mount
   useEffect(() => {
@@ -382,25 +395,43 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
         </Button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4 border rounded-lg p-3 mb-4">
-        <FilterControls
-          filters={filters}
-          setFilters={setFilters}
-          defaultFilters={defaultKanbanFilters}
-        />
-        {/* Vertical separator */}
-        <div className="h-6 border-l border-gray-300 mx-2"></div>
-
+      <div className="mb-4 flex flex-col gap-2">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">Quick time edition:</span>
-          <QuickTimer onJumpToTask={(taskId) => {
-            // Find the task and focus on it
-            const task = tasks.find(t => t.id === taskId);
-            if (task) {
-              onFocusOnTask?.(taskId);
-            }
-          }} />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="p-0 h-6 w-6"
+            onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}
+          >
+            {isFiltersCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
+          <span className="text-sm font-medium text-muted-foreground cursor-pointer select-none" onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}>
+            Filters & Controls
+          </span>
         </div>
+
+        {!isFiltersCollapsed && (
+          <div className="flex flex-wrap items-center gap-4 border rounded-lg p-3">
+            <FilterControls
+              filters={filters}
+              setFilters={setFilters}
+              defaultFilters={defaultKanbanFilters}
+            />
+            {/* Vertical separator */}
+            <div className="h-6 border-l border-gray-300 mx-2"></div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">Quick time edition:</span>
+              <QuickTimer onJumpToTask={(taskId) => {
+                // Find the task and focus on it
+                const task = tasks.find(t => t.id === taskId);
+                if (task) {
+                  onFocusOnTask?.(taskId);
+                }
+              }} />
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-4 pb-4">
