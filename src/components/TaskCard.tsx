@@ -37,6 +37,8 @@ import { UserSelector } from "./UserSelector";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { Calendar } from "@/components/ui/calendar";
 import { useCombinedSettings } from "@/hooks/useCombinedSettings";
+import { useView } from "@/hooks/useView";
+import { COMPACTNESS_ULTRA, COMPACTNESS_COMPACT, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
 
 const LiveTimeBadge: React.FC<{ task: Task; totalTime?: number; onClick?: () => void }> = React.memo(({ task, totalTime, onClick }) => {
   const [runningTime, setRunningTime] = React.useState(0);
@@ -263,6 +265,11 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
   const { userSettings, userId: currentUserId } = useUserSettings();
   const { settings } = useCombinedSettings();
   const weekStartsOn = settings.weekStartDay as 0 | 1;
+  const { cardCompactness } = useView();
+
+  const isUltraCompact = cardCompactness === COMPACTNESS_ULTRA;
+  const isCompact = cardCompactness === COMPACTNESS_COMPACT;
+  const isFull = cardCompactness === COMPACTNESS_FULL;
 
   React.useEffect(() => {
     setCommentText(task.comment || "");
@@ -363,50 +370,60 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
       >
         <div className="flex justify-start gap-1">
           <div className="flex gap-1 items-center">
-            <LiveTimeBadge
-              task={task}
-              totalTime={hasSubtasks ? totalTime : undefined}
-              onClick={() => {
-                if (onFocusOnTask) {
-                  onFocusOnTask(task.id);
-                }
-              }}
-            />
+            {/* Always show LiveTimeBadge unless in Ultra Compact mode? Requirement says: 
+                Ultra Compact: "shows only the card name and the user assigned to it and the small icons of criticity"
+                Second view: "time related stuff in addition"
+            */}
+            {!isUltraCompact && (
+              <LiveTimeBadge
+                task={task}
+                totalTime={hasSubtasks ? totalTime : undefined}
+                onClick={() => {
+                  if (onFocusOnTask) {
+                    onFocusOnTask(task.id);
+                  }
+                }}
+              />
+            )}
           </div>
-          <div className="text-muted-foreground">/</div>
-          {hasSubtasks ? (
-            <DifficultyBadge difficulty={totalDifficulty} />
-          ) : (
-            <Select value={task.difficulty?.toString() || "1"} onValueChange={(v) => updateDifficulty(task.id, parseFloat(v) as 0.5 | 1 | 2 | 3 | 5 | 8)}>
-              <SelectTrigger className="h-6 w-16 p-0">
-                <SelectValue>
-                  {task.difficulty ? (
-                    <div className="flex items-center">
-                      <div className={`w-3 h-3 rounded-full ${getDifficultyColor(task.difficulty)} mr-2`} />
-                      <span>{task.difficulty}</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center">
-                      <div className={`w-3 h-3 rounded-full ${getDifficultyColor(1)} mr-2`} />
-                      <span>1</span>
-                    </div>
-                  )}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {DIFFICULTY_OPTIONS.map((difficulty) => (
-                  <SelectItem key={difficulty} value={difficulty.toString()}>
-                    <div className="flex items-center">
-                      <div className={`w-3 h-3 rounded-full ${getDifficultyColor(difficulty)} mr-2`} />
-                      <span>{difficulty}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {!isUltraCompact && <div className="text-muted-foreground">/</div>}
+          {/* Difficulty in Compact and Full mode */}
+          {!isUltraCompact && (
+            hasSubtasks ? (
+              <DifficultyBadge difficulty={totalDifficulty} />
+            ) : (
+              <Select value={task.difficulty?.toString() || "1"} onValueChange={(v) => updateDifficulty(task.id, parseFloat(v) as 0.5 | 1 | 2 | 3 | 5 | 8)}>
+                <SelectTrigger className="h-6 w-16 p-0">
+                  <SelectValue>
+                    {task.difficulty ? (
+                      <div className="flex items-center">
+                        <div className={`w-3 h-3 rounded-full ${getDifficultyColor(task.difficulty)} mr-2`} />
+                        <span>{task.difficulty}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center">
+                        <div className={`w-3 h-3 rounded-full ${getDifficultyColor(1)} mr-2`} />
+                        <span>1</span>
+                      </div>
+                    )}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {DIFFICULTY_OPTIONS.map((difficulty) => (
+                    <SelectItem key={difficulty} value={difficulty.toString()}>
+                      <div className="flex items-center">
+                        <div className={`w-3 h-3 rounded-full ${getDifficultyColor(difficulty)} mr-2`} />
+                        <span>{difficulty}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )
           )}
         </div>
-        {!hasSubtasks && (
+        {/* Timer controls - show in Compact and Full */}
+        {!hasSubtasks && !isUltraCompact && (
           <div className="flex items-center gap-2">
             <Button
               size="sm"
@@ -446,7 +463,8 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
             </Dialog>
           </div>
         )}
-        {!task.parentId && (
+        {/* Date picker toggle - show in Compact and Full */}
+        {!task.parentId && !isUltraCompact && (
           <div className="flex items-center gap-2">
             <Button
               size="sm"
@@ -622,53 +640,57 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
           done={task.triageStatus === "Done"}
           onUpdateTitle={(title) => updateTitle(task.id, title)}
         />
-        <Dialog open={isCommentModalOpen} onOpenChange={setIsCommentModalOpen}>
-          <DialogTrigger asChild>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 w-6 p-0 shrink-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsCommentModalOpen(true);
-              }}
-            >
-              <FileText className={`h-4 w-4 ${task.comment ? "text-blue-500" : "text-gray-400"}`} />
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md" aria-describedby={undefined}>
-            <DialogHeader>
-              <DialogTitle>Edit Comment - {task.title}</DialogTitle>
-              <DialogDescription className="sr-only">
-                Edit comment for task: {task.title}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <label htmlFor="comment" className="sr-only">Comment</label>
-                <textarea
-                  id="comment"
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  placeholder="Add a comment..."
-                />
-              </div>
-            </div>
-            <div className="flex justify-end">
+        {/* Comment icon - show in Compact and Full */}
+        {!isUltraCompact && (
+          <Dialog open={isCommentModalOpen} onOpenChange={setIsCommentModalOpen}>
+            <DialogTrigger asChild>
               <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0 shrink-0"
                 onClick={(e) => {
                   e.stopPropagation();
-                  updateComment(task.id, commentText);
-                  setIsCommentModalOpen(false);
+                  setIsCommentModalOpen(true);
                 }}
               >
-                Save Comment
+                <FileText className={`h-4 w-4 ${task.comment ? "text-blue-500" : "text-gray-400"}`} />
               </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent className="max-w-md" aria-describedby={undefined}>
+              <DialogHeader>
+                <DialogTitle>Edit Comment - {task.title}</DialogTitle>
+                <DialogDescription className="sr-only">
+                  Edit comment for task: {task.title}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <label htmlFor="comment" className="sr-only">Comment</label>
+                  <textarea
+                    id="comment"
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    placeholder="Add a comment..."
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    updateComment(task.id, commentText);
+                    setIsCommentModalOpen(false);
+                  }}
+                >
+                  Save Comment
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
+      {/* Subtasks toggle - show in ALL modes (Ultra, Compact, Full) */}
       {hasSubtasks && onToggleOpen && (
         <div className="flex justify-between items-center mt-2">
           <button
@@ -688,17 +710,14 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
           />
         </div>
       )}
+      {/* UserSelector and Badges for non-subtasks */}
       {!hasSubtasks && (
         <div className="mt-2 flex justify-between items-center">
           <div className="flex flex-wrap gap-1">
             {task.urgent && !task.parentId && (
               <Badge
                 variant="destructive"
-                className="cursor-pointer mb-2"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleUrgent(task.id);
-                }}
+                className="mb-2 cursor-default"
               >
                 <AlertTriangle className="h-3 w-3 mr-1" />
                 Urgent
@@ -707,11 +726,7 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
             {task.impact && !task.parentId && (
               <Badge
                 variant="secondary"
-                className="cursor-pointer bg-yellow-500 hover:bg-yellow-600 text-yellow-900 mb-2"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleImpact(task.id);
-                }}
+                className="bg-yellow-500 hover:bg-yellow-600 text-yellow-900 mb-2 cursor-default"
               >
                 <CircleDot className="h-3 w-3 mr-1" />
                 High Impact
@@ -720,24 +735,22 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
             {task.majorIncident && !task.parentId && (
               <Badge
                 variant="destructive"
-                className="cursor-pointer bg-red-700 hover:bg-red-800 text-white mb-2"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleMajorIncident(task.id);
-                }}
+                className="bg-red-700 hover:bg-red-800 text-white mb-2 cursor-default"
               >
                 <Flame className="h-3 w-3 mr-1" />
                 Incident on Delivery
               </Badge>
             )}
           </div>
+          {/* UserSelector - always show? "shows only the card name and the user assigned to it" - Yes */}
           <UserSelector
             value={task.userId || ''}
             onChange={(selectedId) => updateUser(task.id, selectedId === 'current-user' ? currentUserId : selectedId)}
           />
         </div>
       )}
-      {canHaveTimer && (
+      {/* Category Select - show in Full only */}
+      {canHaveTimer && isFull && (
         <div className="flex flex-col gap-2 w-full">
           <CategorySelect
             value={task.category || "none"}
@@ -746,102 +759,110 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
           />
         </div>
       )}
-      <div className="mt-2 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <TaskStatusSelect value={task.triageStatus} onChange={(s) => updateStatus(task.id, s)} />
+      {/* Bottom controls - Status and extra buttons */}
+      {/* 
+          Ultra Compact: Hide Status.
+          Compact: Hide Status ("takeaway the state column").
+          Full: Show Status.
+      */}
+      {isFull && (
+        <div className="mt-2 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <TaskStatusSelect value={task.triageStatus} onChange={(s) => updateStatus(task.id, s)} />
+          </div>
+          {!task.parentId && isFull && (
+            <div className="flex gap-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleUrgent(task.id);
+                }}
+              >
+                <AlertTriangle className={`h-4 w-4 ${task.urgent ? "text-red-500" : "text-gray-400"}`} />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleImpact(task.id);
+                }}
+              >
+                <CircleDot className={`h-4 w-4 ${task.impact ? "text-yellow-500" : "text-gray-400"}`} />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleMajorIncident(task.id);
+                }}
+              >
+                <Flame className={`h-4 w-4 ${task.majorIncident ? "text-red-700" : "text-gray-400"}`} />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  duplicateTaskStructure(task.id);
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                  <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                </svg>
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0 hover:text-red-500"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deleteTask(task.id);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+          {task.parentId && (
+            <div className="flex gap-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  duplicateTaskStructure(task.id);
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                  <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                </svg>
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0 hover:text-red-500"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deleteTask(task.id);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
-        {!task.parentId && (
-          <div className="flex gap-1">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 w-6 p-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleUrgent(task.id);
-              }}
-            >
-              <AlertTriangle className={`h-4 w-4 ${task.urgent ? "text-red-500" : "text-gray-400"}`} />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 w-6 p-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleImpact(task.id);
-              }}
-            >
-              <CircleDot className={`h-4 w-4 ${task.impact ? "text-yellow-500" : "text-gray-400"}`} />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 w-6 p-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleMajorIncident(task.id);
-              }}
-            >
-              <Flame className={`h-4 w-4 ${task.majorIncident ? "text-red-700" : "text-gray-400"}`} />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 w-6 p-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                duplicateTaskStructure(task.id);
-              }}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-                <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-              </svg>
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 w-6 p-0 hover:text-red-500"
-              onClick={(e) => {
-                e.stopPropagation();
-                deleteTask(task.id);
-              }}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
-        {task.parentId && (
-          <div className="flex gap-1">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 w-6 p-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                duplicateTaskStructure(task.id);
-              }}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-                <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-              </svg>
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 w-6 p-0 hover:text-red-500"
-              onClick={(e) => {
-                e.stopPropagation();
-                deleteTask(task.id);
-              }}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 });
