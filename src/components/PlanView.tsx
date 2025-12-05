@@ -74,7 +74,8 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
   const addTopTask = () => {
     const v = input.trim();
     if (!v) return;
-    createTask(v, null);
+    const assignedUserId = filters.selectedUserId && filters.selectedUserId !== 'UNASSIGNED' ? filters.selectedUserId : undefined;
+    createTask(v, null, assignedUserId);
     setInput("");
   };
 

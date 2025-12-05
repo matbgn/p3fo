@@ -264,7 +264,7 @@ loadTasks();
 
 
 
-const createTask = async (title: string, parentId: string | null) => {
+const createTask = async (title: string, parentId: string | null, userId?: string) => {
   console.log('=== createTask called ===', {
     title,
     parentId,
@@ -287,6 +287,7 @@ const createTask = async (title: string, parentId: string | null) => {
     comment: undefined,
     durationInMinutes: undefined,
     priority: 0, // Initialize new tasks with priority 0
+    userId: userId, // Assign user if provided
   };
 
   console.log('Creating task:', t);

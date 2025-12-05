@@ -187,7 +187,8 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
 
   const handleAdd = async (colIndex: number, title: string) => {
     const parentId = colIndex === 0 ? null : columns[colIndex].parentId!;
-    const newId = await createTask(title, parentId);
+    const assignedUserId = filters.selectedUserId && filters.selectedUserId !== 'UNASSIGNED' ? filters.selectedUserId : undefined;
+    const newId = await createTask(title, parentId, assignedUserId);
     handleActivate(colIndex, newId);
   };
 

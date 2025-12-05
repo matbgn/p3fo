@@ -376,7 +376,8 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
   const addTopTask = () => {
     const v = input.trim();
     if (!v) return;
-    createTask(v, null);
+    const assignedUserId = filters.selectedUserId && filters.selectedUserId !== 'UNASSIGNED' ? filters.selectedUserId : undefined;
+    createTask(v, null, assignedUserId);
     setInput("");
   };
 
