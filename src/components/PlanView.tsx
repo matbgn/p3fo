@@ -11,7 +11,7 @@ import { FilterControls, Filters } from "./FilterControls";
 import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
 import { QuickTimer } from "@/components/QuickTimer";
 import { useView } from "@/hooks/useView";
-import { COMPACTNESS_ULTRA } from "@/context/ViewContextDefinition";
+import { COMPACTNESS_ULTRA, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 interface PlanViewProps {
@@ -45,9 +45,12 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
   const [isFiltersCollapsed, setIsFiltersCollapsed] = React.useState(false);
 
   // Auto-collapse filters when switching to Ultra Compact mode
+  // Auto-expand filters when switching to Full mode
   React.useEffect(() => {
     if (cardCompactness === COMPACTNESS_ULTRA) {
       setIsFiltersCollapsed(true);
+    } else if (cardCompactness === COMPACTNESS_FULL) {
+      setIsFiltersCollapsed(false);
     }
   }, [cardCompactness]);
 

@@ -14,7 +14,7 @@ import { QuickTimer } from "@/components/QuickTimer";
 
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { useView } from "@/hooks/useView";
-import { COMPACTNESS_ULTRA } from "@/context/ViewContextDefinition";
+import { COMPACTNESS_ULTRA, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 type BoardCard =
@@ -214,9 +214,12 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
   const [isFiltersCollapsed, setIsFiltersCollapsed] = React.useState(false);
 
   // Auto-collapse filters when switching to Ultra Compact mode
+  // Auto-expand filters when switching to Full mode
   React.useEffect(() => {
     if (cardCompactness === COMPACTNESS_ULTRA) {
       setIsFiltersCollapsed(true);
+    } else if (cardCompactness === COMPACTNESS_FULL) {
+      setIsFiltersCollapsed(false);
     }
   }, [cardCompactness]);
 
