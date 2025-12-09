@@ -655,7 +655,7 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
         )}
         <EditableTitle
           title={task.title}
-          done={task.triageStatus === "Done"}
+          done={task.triageStatus === "Done" || task.triageStatus === "Dropped"}
           onUpdateTitle={(title) => updateTitle(task.id, title)}
         />
         {/* Comment icon - show in Compact and Full */}

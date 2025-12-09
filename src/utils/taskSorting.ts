@@ -29,11 +29,14 @@ const sortByActiveTimer = (a: Task, b: Task): number => {
   return 0;
 };
 
-// Base sorting criteria for done tasks
+// Base sorting criteria for done or dropped tasks
 const sortByDoneStatus = (a: Task, b: Task): number => {
-  if (a.triageStatus === "Done" && b.triageStatus !== "Done") return 1;
-  if (a.triageStatus !== "Done" && b.triageStatus === "Done") return -1;
-  if (a.triageStatus === "Done" && b.triageStatus === "Done") {
+  const isADoneOrDropped = a.triageStatus === "Done" || a.triageStatus === "Dropped";
+  const isBDoneOrDropped = b.triageStatus === "Done" || b.triageStatus === "Dropped";
+
+  if (isADoneOrDropped && !isBDoneOrDropped) return 1;
+  if (!isADoneOrDropped && isBDoneOrDropped) return -1;
+  if (isADoneOrDropped && isBDoneOrDropped) {
     return (b.terminationDate ?? b.createdAt) - (a.terminationDate ?? a.createdAt);
   }
   return 0;
