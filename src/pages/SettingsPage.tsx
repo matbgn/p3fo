@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { UserManagement } from '@/components/UserManagement';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { CompactnessSelector } from '@/components/CompactnessSelector';
 
 const SettingsPage: React.FC = () => {
   const { clearAllTasks, clearAllUsers } = useTasks();
@@ -139,6 +140,18 @@ const SettingsPage: React.FC = () => {
                   </RadioGroup>
                   <p className="text-sm text-muted-foreground mt-1">
                     Choose the default view for the Program/Plan page.
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="block text-sm font-medium mb-1">
+                    Card Compactness
+                  </Label>
+                  <div className="mt-2">
+                    <CompactnessSelector />
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Adjust the compactness of task cards.
                   </p>
                 </div>
               </div>
