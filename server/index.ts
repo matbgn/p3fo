@@ -343,6 +343,27 @@ app.delete('/api/filters', async (req: Request, res: Response) => {
   }
 });
 
+// Celebration Board routes
+app.get('/api/celebration-board', async (req: Request, res: Response) => {
+  try {
+    const state = await db.getCelebrationBoardState();
+    res.json(state);
+  } catch (error: any) {
+    console.error('Error fetching celebration board state:', error);
+    res.status(500).json({ error: 'Failed to fetch celebration board state', details: error.message });
+  }
+});
+
+app.put('/api/celebration-board', async (req: Request, res: Response) => {
+  try {
+    await db.updateCelebrationBoardState(req.body);
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error updating celebration board state:', error);
+    res.status(500).json({ error: 'Failed to update celebration board state', details: error.message });
+  }
+});
+
 // Error handling middleware
 app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
   console.error('Unhandled error:', error);

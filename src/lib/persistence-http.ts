@@ -1,4 +1,4 @@
-import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata } from './persistence-types';
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, CelebrationBoardEntity } from './persistence-types';
 
 export class HttpApiPersistence implements PersistenceAdapter {
   private baseUrl: string;
@@ -178,5 +178,17 @@ export class HttpApiPersistence implements PersistenceAdapter {
       backend: 'sqlite', // Default assumption until backend provides this info
       version: '1.0.0',
     };
+  }
+
+  // Celebration Board
+  async getCelebrationBoardState(): Promise<CelebrationBoardEntity | null> {
+    return this.makeRequest('/api/celebration-board');
+  }
+
+  async updateCelebrationBoardState(state: CelebrationBoardEntity): Promise<void> {
+    await this.makeRequest('/api/celebration-board', {
+      method: 'PUT',
+      body: JSON.stringify(state),
+    });
   }
 }

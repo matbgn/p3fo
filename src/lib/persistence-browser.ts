@@ -1,4 +1,4 @@
-import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata } from './persistence-types';
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, CelebrationBoardEntity } from './persistence-types';
 
 // Storage keys
 const TASKS_STORAGE_KEY = 'dyad_task_board_v1';
@@ -6,6 +6,7 @@ const USER_SETTINGS_STORAGE_KEY = 'p3fo_user_settings_v1';
 const APP_SETTINGS_STORAGE_KEY = 'dyad_settings_v1';
 const QOL_SURVEY_STORAGE_KEY = 'qolSurveyResponse';
 const FILTERS_STORAGE_KEY = 'taskFilters';
+const CELEBRATION_BOARD_STORAGE_KEY = 'celebrationBoard';
 
 // Default values
 const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
@@ -456,5 +457,32 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       backend: 'local',
       version: '1.0.0',
     };
+  }
+
+  async getCelebrationBoardState(): Promise<CelebrationBoardEntity | null> {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    try {
+      const stored = localStorage.getItem(CELEBRATION_BOARD_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : null;
+    } catch (error) {
+      console.error('Error reading celebration board state from localStorage:', error);
+      return null;
+    }
+  }
+
+  async updateCelebrationBoardState(state: CelebrationBoardEntity): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      localStorage.setItem(CELEBRATION_BOARD_STORAGE_KEY, JSON.stringify(state));
+    } catch (error) {
+      console.error('Error updating celebration board state in localStorage:', error);
+      throw error;
+    }
   }
 }

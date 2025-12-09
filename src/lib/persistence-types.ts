@@ -142,4 +142,37 @@ export interface PersistenceAdapter {
 
   // Metadata
   getMetadata(): Promise<StorageMetadata>;
+
+  // Celebration Board
+  getCelebrationBoardState(): Promise<CelebrationBoardEntity | null>;
+  updateCelebrationBoardState(state: CelebrationBoardEntity): Promise<void>;
+}
+
+export interface CelebrationCard {
+  id: string;
+  columnId: string;
+  content: string;
+  authorId: string;
+  likedBy: string[]; // Array of userIds who liked the card
+  isRevealed: boolean; // For hidden edition
+}
+
+export interface CelebrationColumn {
+  id: string;
+  title: string;
+  color: string; // For UI styling
+  isLocked: boolean;
+}
+
+export interface CelebrationBoardEntity {
+  moderatorId: string | null;
+  isSessionActive: boolean;
+  columns: CelebrationColumn[];
+  cards: CelebrationCard[];
+  timer: {
+    isRunning: boolean;
+    startTime: number | null;
+    duration: number; // in seconds
+  } | null;
+  hiddenEdition: boolean; // Global flag for hidden edition mode
 }

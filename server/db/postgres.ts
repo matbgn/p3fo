@@ -5,7 +5,8 @@ import {
   UserSettingsEntity,
   AppSettingsEntity,
   QolSurveyResponseEntity,
-  FilterStateEntity
+  FilterStateEntity,
+  CelebrationBoardEntity
 } from '../../src/lib/persistence-types.js';
 
 // Default values
@@ -221,6 +222,14 @@ class PostgresClient implements DbClient {
     // Create filters table (single row)
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS filters (
+        id INTEGER PRIMARY KEY DEFAULT 1,
+        data JSONB -- JSONB for efficient JSON operations
+      )
+    `);
+
+    // Create celebration_board table (single row)
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS celebration_board (
         id INTEGER PRIMARY KEY DEFAULT 1,
         data JSONB -- JSONB for efficient JSON operations
       )
@@ -667,5 +676,22 @@ class PostgresClient implements DbClient {
 
   async clearFilters(): Promise<void> {
     await this.pool.query('DELETE FROM filters WHERE id = 1');
+  }
+
+  // Celebration Board
+  async getCelebrationBoardState(): Promise<CelebrationBoardEntity | null> {
+    const result = await this.pool.query('SELECT data FROM celebration_board WHERE id = 1');
+    if (result.rows.length > 0 && result.rows[0].data) {
+      return result.rows[0].data;
+    }
+    return null;
+  }
+
+  async updateCelebrationBoardState(state: CelebrationBoardEntity): Promise<void> {
+    await this.pool.query(`
+      INSERT INTO celebration_board (id, data)
+      VALUES (1, $1)
+      ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
+    `, [state]);
   }
 }

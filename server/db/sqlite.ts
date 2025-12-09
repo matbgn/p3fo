@@ -5,7 +5,8 @@ import {
   UserSettingsEntity,
   AppSettingsEntity,
   QolSurveyResponseEntity,
-  FilterStateEntity
+  FilterStateEntity,
+  CelebrationBoardEntity
 } from '../../src/lib/persistence-types.js';
 
 // Default values
@@ -277,6 +278,27 @@ class SqliteClient implements DbClient {
         data TEXT -- JSON string
       )
     `);
+
+    // Create celebration_board table (single row)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS celebration_board (
+        id INTEGER PRIMARY KEY DEFAULT 1,
+        data TEXT -- JSON string
+      )
+    `);
+
+    // Migration: Check if data column exists
+    try {
+      const columns = this.db.prepare("PRAGMA table_info(celebration_board)").all() as { name: string }[];
+      const hasData = columns.some(c => c.name === 'data');
+
+      if (columns.length > 0 && !hasData) {
+        console.log('SQLite: Migrating celebration_board, adding data column');
+        this.db.exec("ALTER TABLE celebration_board ADD COLUMN data TEXT");
+      }
+    } catch (error) {
+      console.error('SQLite: Error checking/migrating celebration_board schema:', error);
+    }
   }
 
   async testConnection(): Promise<void> {
@@ -797,5 +819,21 @@ class SqliteClient implements DbClient {
 
   async clearFilters(): Promise<void> {
     this.db.prepare('DELETE FROM filters WHERE id = 1').run();
+  }
+
+  // Celebration Board
+  async getCelebrationBoardState(): Promise<CelebrationBoardEntity | null> {
+    const row = this.db.prepare('SELECT data FROM celebration_board WHERE id = 1').get() as JsonRow | undefined;
+    return row?.data ? JSON.parse(row.data) : null;
+  }
+
+  async updateCelebrationBoardState(state: CelebrationBoardEntity): Promise<void> {
+    // Check if row exists
+    const exists = this.db.prepare('SELECT id FROM celebration_board WHERE id = 1').get();
+    if (exists) {
+      this.db.prepare('UPDATE celebration_board SET data = ? WHERE id = 1').run(JSON.stringify(state));
+    } else {
+      this.db.prepare('INSERT INTO celebration_board (id, data) VALUES (1, ?)').run(JSON.stringify(state));
+    }
   }
 }
