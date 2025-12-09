@@ -29,11 +29,14 @@ const sortByActiveTimer = (a: Task, b: Task): number => {
   return 0;
 };
 
-// Base sorting criteria for done tasks
+// Base sorting criteria for done or dropped tasks
 const sortByDoneStatus = (a: Task, b: Task): number => {
-  if (a.triageStatus === "Done" && b.triageStatus !== "Done") return 1;
-  if (a.triageStatus !== "Done" && b.triageStatus === "Done") return -1;
-  if (a.triageStatus === "Done" && b.triageStatus === "Done") {
+  const isADoneOrDropped = a.triageStatus === "Done" || a.triageStatus === "Dropped";
+  const isBDoneOrDropped = b.triageStatus === "Done" || b.triageStatus === "Dropped";
+
+  if (isADoneOrDropped && !isBDoneOrDropped) return 1;
+  if (!isADoneOrDropped && isBDoneOrDropped) return -1;
+  if (isADoneOrDropped && isBDoneOrDropped) {
     return (b.terminationDate ?? b.createdAt) - (a.terminationDate ?? a.createdAt);
   }
   return 0;
@@ -119,23 +122,26 @@ const createUnifiedSorter = (config: {
       if (timerResult !== 0) return timerResult;
     }
 
-    // 2. Deadlines (time-sensitive work)
+    // 2. Done Status Handling (Specific user request: Done always at bottom)
+    if (config.statusHandling !== 'none') {
+      const doneResult = sortByDoneStatus(a, b);
+      if (doneResult !== 0) return doneResult;
+    }
+
+    // 3. Deadlines (time-sensitive work)
     if (config.prioritizeDeadlines) {
       const deadlineResult = sortByDeadlines(a, b);
       if (deadlineResult !== 0) return deadlineResult;
     }
 
-    // 3. Explicit Priorities
+    // 4. Explicit Priorities
     if (config.priorityHandling !== 'none') {
       const priorityResult = sortByPriority(a, b);
       if (priorityResult !== 0) return priorityResult;
     }
 
-    // 4. Status Handling (Done, Blocked)
+    // 5. Blocked Status Handling (Moved back to after priorities)
     if (config.statusHandling !== 'none') {
-      const doneResult = sortByDoneStatus(a, b);
-      if (doneResult !== 0) return doneResult;
-
       const blockedResult = sortByBlockedStatus(a, b);
       if (blockedResult !== 0) return blockedResult;
     }
@@ -238,7 +244,7 @@ export const SortingPresets = {
     priorityHandling: 'standard',
     statusHandling: 'standard'
   }),
-  
+
   // Focus on planning and importance
   planning: createUnifiedSorter({
     prioritizeTimers: false,
@@ -246,7 +252,7 @@ export const SortingPresets = {
     priorityHandling: 'standard',
     statusHandling: 'standard'
   }),
-  
+
   // Kanban-style operational view with deadlines
   kanban: createUnifiedSorter({
     prioritizeTimers: true,
@@ -254,7 +260,7 @@ export const SortingPresets = {
     priorityHandling: 'standard',
     statusHandling: 'standard'
   }),
-  
+
   // PlanView style with explicit priority emphasis
   planView: createUnifiedSorter({
     prioritizeTimers: false,

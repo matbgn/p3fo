@@ -1,4 +1,5 @@
 import * as React from "react";
+import { toast } from "sonner";
 import { eventBus } from "@/lib/events";
 import { usePersistence } from "@/hooks/usePersistence";
 import { yTasks, yUserSettings, doc, initializeCollaboration, isCollaborationEnabled } from "@/lib/collaboration";
@@ -1216,6 +1217,13 @@ export function useTasks() {
 
     eventBus.publish("tasksChanged");
     eventBus.publish("timerToggled", taskId);
+
+    // Show toast notification
+    const updatedTask = tasks.find(t => t.id === taskId);
+    const isRunning = updatedTask?.timer?.some(t => t.endTime === 0);
+    if (updatedTask) {
+      toast.success(isRunning ? `Timer started today for "${updatedTask.title}"` : `Timer stopped for "${updatedTask.title}"`);
+    }
   }, []);
 
   const updateTimeEntry = React.useCallback(async (taskId: string, entryIndex: number, newEntry: { startTime: number; endTime: number }) => {

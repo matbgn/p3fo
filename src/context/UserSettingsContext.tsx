@@ -3,13 +3,14 @@ import * as Y from 'yjs';
 import { getRandomUsername } from '@/lib/username-generator';
 import { eventBus } from '@/lib/events';
 import { yUserSettings, isCollaborationEnabled } from '@/lib/collaboration';
-import { MonthlyBalanceData } from '@/lib/persistence-types';
+import { MonthlyBalanceData, UserSettingsEntity } from '@/lib/persistence-types';
 
 export interface UserSettings {
     username: string;
     logo: string; // base64 encoded image or URL
     hasCompletedOnboarding: boolean;
     monthlyBalances: Record<string, MonthlyBalanceData>;
+    cardCompactness: number;
     // Legacy field for import compatibility
     workload_percentage?: number;
 }
@@ -19,6 +20,7 @@ const defaultUserSettings: UserSettings = {
     logo: '',
     hasCompletedOnboarding: false,
     monthlyBalances: {},
+    cardCompactness: 0,
 };
 
 import { UserContext } from './UserContextDefinition';
@@ -51,6 +53,7 @@ const loadUserSettings = async (userId: string): Promise<UserSettings> => {
             logo: settings.logo,
             hasCompletedOnboarding: settings.has_completed_onboarding,
             monthlyBalances: settings.monthly_balances || {},
+            cardCompactness: settings.card_compactness ?? 0,
         };
     } catch (error) {
         console.error('Error loading user settings from persistence:', error);
@@ -67,6 +70,7 @@ interface UserSettingsContextType {
     updateLogo: (newLogo: string) => void;
     completeOnboarding: () => void;
     regenerateUsername: () => void;
+    updateCardCompactness: (compactness: number) => void;
 }
 
 const UserSettingsContext = createContext<UserSettingsContextType | undefined>(undefined);
@@ -115,7 +119,17 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
             try {
                 const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
                 const adapter = await persistence;
-                await adapter.updateUserSettings(userId, userSettings);
+
+                // Map UserSettings to UserSettingsEntity
+                const entityPatch: Partial<UserSettingsEntity> = {
+                    username: userSettings.username,
+                    logo: userSettings.logo,
+                    has_completed_onboarding: userSettings.hasCompletedOnboarding,
+                    monthly_balances: userSettings.monthlyBalances,
+                    card_compactness: userSettings.cardCompactness,
+                };
+
+                await adapter.updateUserSettings(userId, entityPatch);
 
                 // Sync to Yjs for cross-client synchronization
                 if (isCollaborationEnabled()) {
@@ -125,7 +139,8 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                         username: userSettings.username,
                         logo: userSettings.logo,
                         has_completed_onboarding: userSettings.hasCompletedOnboarding,
-                        monthly_balances: userSettings.monthlyBalances
+                        monthly_balances: userSettings.monthlyBalances,
+                        card_compactness: userSettings.cardCompactness
                     });
                 }
             } catch (error) {
@@ -168,6 +183,7 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 if (yjsSettings.username !== currentSettings.username ||
                     yjsSettings.logo !== currentSettings.logo ||
                     yjsSettings.has_completed_onboarding !== currentSettings.hasCompletedOnboarding ||
+                    yjsSettings.card_compactness !== currentSettings.cardCompactness ||
                     monthlyBalancesChanged) {
 
                     console.log('Received user settings update from Yjs:', yjsSettings);
@@ -176,7 +192,8 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                         username: yjsSettings.username,
                         logo: yjsSettings.logo,
                         hasCompletedOnboarding: yjsSettings.has_completed_onboarding,
-                        monthlyBalances: yjsSettings.monthly_balances || {}
+                        monthlyBalances: yjsSettings.monthly_balances || {},
+                        cardCompactness: yjsSettings.card_compactness ?? 0
                     });
                 }
             } else {
@@ -223,6 +240,13 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
         updateUsername(newUsername);
     };
 
+    const updateCardCompactness = (compactness: number) => {
+        setUserSettings(prev => ({
+            ...prev,
+            cardCompactness: compactness,
+        }));
+    };
+
     return (
         <UserSettingsContext.Provider value={{
             userId: userId || '', // Provide empty string if null to match type, though loading handles it
@@ -232,6 +256,7 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
             updateLogo,
             completeOnboarding,
             regenerateUsername,
+            updateCardCompactness,
         }}>
             {children}
         </UserSettingsContext.Provider>

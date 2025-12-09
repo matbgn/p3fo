@@ -6,6 +6,7 @@ import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { useUsers } from "@/hooks/useUsers";
 import { getWorkingDays } from "@/utils/workingdays";
+import { getHistoricalHourlyBalances } from "@/utils/projectedHours";
 import TimetableRecordsCell from "./TimetableRecordsCell";
 
 interface ForecastProps {
@@ -75,6 +76,22 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
     const descId = `${year}-${String(month).padStart(2, '0')}`;
     const vacationsTaken = selectedUser?.monthly_balances?.[descId]?.vacations_hourly_taken || 0;
 
+    // Get Previous Month Balance
+    const monthlyBalances = selectedUser?.monthly_balances || {};
+    const historicalData = getHistoricalHourlyBalances(filteredTasks, settings, 0, monthlyBalances, forecastSettings.userWorkloadPercentage);
+
+    // Find the cumulative balance of the PREVIOUS month
+    // We want the balance up to [year, month-1]
+    let prevYear = year;
+    let prevMonth = month - 1;
+    if (prevMonth === 0) {
+        prevMonth = 12;
+        prevYear -= 1;
+    }
+    const prevDescId = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
+    const prevMonthData = historicalData.find(d => d.desc_id === prevDescId);
+    const previousBalance = prevMonthData ? prevMonthData.cumulative_balance : 0;
+
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
             <Card className="h-28">
@@ -141,6 +158,7 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
                 year={year}
                 month={month}
                 vacationsTaken={vacationsTaken}
+                previousBalance={previousBalance}
             />
         </div>
     );

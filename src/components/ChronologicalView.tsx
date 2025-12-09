@@ -27,6 +27,7 @@ interface ChronologicalViewProps {
   onUpdateUser: (taskId: string, userId: string | undefined) => void;
   onDelete: (taskId: string, entryIndex: number) => void;
   onJumpToTask?: (taskId: string) => void;
+  onToggleTimer?: (taskId: string) => void;
 }
 
 export const ChronologicalView: React.FC<ChronologicalViewProps> = ({
@@ -37,6 +38,7 @@ export const ChronologicalView: React.FC<ChronologicalViewProps> = ({
   onUpdateUser,
   onDelete,
   onJumpToTask,
+  onToggleTimer,
 }) => {
   const { updateTimeEntry, updateCategory } = useTasks();
 
@@ -104,6 +106,7 @@ export const ChronologicalView: React.FC<ChronologicalViewProps> = ({
                 onUpdateUser={onUpdateUser}
                 onDelete={onDelete}
                 onJumpToTask={onJumpToTask}
+                onToggleTimer={onToggleTimer}
               >
                 <TaskHierarchy task={taskMap[entry.taskId]} taskMap={taskMap} />
               </EditableTimeEntry>
