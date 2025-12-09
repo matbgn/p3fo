@@ -5,6 +5,8 @@ import {
     DialogHeader,
     DialogTitle,
     DialogDescription,
+    DialogClose,
+    DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,13 +23,14 @@ import { Switch } from "@/components/ui/switch";
 import { Task, Category, TriageStatus } from "@/hooks/useTasks";
 import { UserSelector } from "./UserSelector";
 import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Play, Pause, Clock2, X } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 import { CategorySelect } from "./CategorySelect";
 import { TaskStatusSelect } from "./TaskStatusSelect";
+import { TimeSheet } from "./TimeSheet";
 
 interface TaskEditModalProps {
     task: Task;
@@ -46,6 +49,7 @@ interface TaskEditModalProps {
     toggleImpact: (id: string) => void;
     toggleMajorIncident: (id: string) => void;
     currentUserId: string | undefined;
+    onToggleTimer?: (id: string) => void;
 }
 
 const DIFFICULTY_OPTIONS: Array<0.5 | 1 | 2 | 3 | 5 | 8> = [0.5, 1, 2, 3, 5, 8];
@@ -67,6 +71,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
     toggleImpact,
     toggleMajorIncident,
     currentUserId,
+    onToggleTimer,
 }) => {
     const { settings } = useCombinedSettings();
     const weekStartsOn = settings.weekStartDay as 0 | 1;
@@ -104,15 +109,72 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto flex flex-col">
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto flex flex-col [&>button]:hidden">
                 <DialogHeader>
-                    <DialogTitle>
+                    <DialogTitle className="flex items-center gap-2">
                         <Input
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
-                            className="text-lg font-bold border-none shadow-none focus-visible:ring-0 px-0"
+                            className="text-lg font-bold border-none shadow-none focus-visible:ring-0 px-0 flex-1"
                             placeholder="Task Title"
                         />
+                        <div className="flex items-center gap-1">
+                            {onToggleTimer && (
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 w-8 p-0"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onToggleTimer(activeTask.id);
+                                    }}
+                                >
+                                    {activeTask.timer?.some(t => t.endTime === 0) ? (
+                                        <Pause className="h-5 w-5 text-primary" />
+                                    ) : (
+                                        <Play className="h-5 w-5 text-muted-foreground hover:text-primary" />
+                                    )}
+                                </Button>
+                            )}
+
+                            <Dialog>
+                                <DialogTrigger asChild>
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-8 w-8 p-0"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        <Clock2 className="h-5 w-5 text-muted-foreground hover:text-primary" />
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col p-0">
+                                    <DialogHeader className="p-6 pb-4">
+                                        <DialogTitle>Time Sheet - {activeTask.title}</DialogTitle>
+                                        <DialogDescription className="sr-only">
+                                            View and edit time entries for task: {activeTask.title}
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="flex-grow overflow-y-auto px-6 pb-6">
+                                        <TimeSheet taskId={activeTask.id} />
+                                    </div>
+                                </DialogContent>
+                            </Dialog>
+
+                            <DialogClose asChild>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-8 w-8 p-0"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onClose();
+                                    }}
+                                >
+                                    <X className="h-5 w-5 text-muted-foreground hover:text-destructive" />
+                                </Button>
+                            </DialogClose>
+                        </div>
                     </DialogTitle>
                     <DialogDescription>
                         Edit task details

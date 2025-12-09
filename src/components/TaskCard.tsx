@@ -898,6 +898,7 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
         toggleUrgent={toggleUrgent}
         toggleImpact={toggleImpact}
         toggleMajorIncident={toggleMajorIncident}
+        onToggleTimer={toggleTimer}
         currentUserId={currentUserId}
       />
     </Card>
