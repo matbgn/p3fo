@@ -153,7 +153,7 @@ export interface FertilizationCard {
   id: string;
   columnId: string;
   content: string;
-  authorId: string;
+  authorId: string | null; // null for anonymous cards
   likedBy: string[]; // Array of userIds who liked the card
   isRevealed: boolean; // For hidden edition
 }

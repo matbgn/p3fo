@@ -5,16 +5,25 @@ import { usePersistence } from '@/hooks/usePersistence';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Lock, Unlock, Eye, EyeOff, Play, RotateCcw, Plus, Trash2, Heart } from 'lucide-react';
+import { Lock, Unlock, Eye, EyeOff, Play, RotateCcw, Plus, Trash2, ThumbsUp, HatGlasses, Minus, Clock, Square } from 'lucide-react';
 import { useTasks } from '@/hooks/useTasks'; // For converting to tasks
+import { UserSelector } from './UserSelector';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 
 // Default columns
 const DEFAULT_COLUMNS: FertilizationColumn[] = [
-    { id: 'facts', title: 'Facts', color: '#F87171', isLocked: false }, // Red
-    { id: 'satisfactions', title: 'Satisfactions', color: '#FACC15', isLocked: true }, // Yellow
-    { id: 'discomfort', title: 'Discomfort', color: '#FB923C', isLocked: true }, // Orange
-    { id: 'levers', title: 'Levers', color: '#4ADE80', isLocked: true }, // Green
-    { id: 'priorities', title: 'Priorities', color: '#60A5FA', isLocked: true }, // Blue
+    { id: 'facts', title: 'Facts', color: '#FFFFFF', isLocked: false },
+    { id: 'satisfactions', title: 'Satisfactions', color: '#FACC15', isLocked: true },
+    { id: 'discomfort', title: 'Discomfort', color: '#030303', isLocked: true },
+    { id: 'levers', title: 'Levers', color: '#4ADE80', isLocked: true },
+    { id: 'priorities', title: 'Priorities', color: '#60A5FA', isLocked: true },
 ];
 
 interface FertilizationViewProps {
@@ -35,6 +44,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
     const [loading, setLoading] = useState(true);
     const [newCardContent, setNewCardContent] = useState('');
     const [activeColumnId, setActiveColumnId] = useState<string | null>(null);
+    const [isAnonymousMode, setIsAnonymousMode] = useState(false);
 
     // Initialize collaboration
     useEffect(() => {
@@ -252,14 +262,14 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
         await saveBoard({ ...boardState, hiddenEdition: !boardState.hiddenEdition });
     };
 
-    const addCard = async (columnId: string) => {
+    const addCard = async (columnId: string, anonymous: boolean = false) => {
         if (!boardState || !newCardContent.trim()) return;
 
         const newCard: FertilizationCard = {
             id: crypto.randomUUID(),
             columnId,
             content: newCardContent,
-            authorId: currentUserId,
+            authorId: anonymous ? null : currentUserId,
             likedBy: [],
             isRevealed: !boardState.hiddenEdition,
         };
@@ -279,6 +289,32 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
             cards: boardState.cards.filter(c => c.id !== cardId),
         });
     };
+
+    const updateCardAuthor = async (cardId: string, authorId: string | null) => {
+        if (!boardState) return;
+        const newCards = boardState.cards.map(c => {
+            if (c.id === cardId) {
+                return { ...c, authorId };
+            }
+            return c;
+        });
+        await saveBoard({ ...boardState, cards: newCards });
+    };
+
+    const updateCardContent = async (cardId: string, content: string) => {
+        if (!boardState) return;
+        const newCards = boardState.cards.map(c => {
+            if (c.id === cardId) {
+                return { ...c, content };
+            }
+            return c;
+        });
+        await saveBoard({ ...boardState, cards: newCards });
+    };
+
+    // State for editing cards
+    const [editingCardId, setEditingCardId] = useState<string | null>(null);
+    const [editingCardContent, setEditingCardContent] = useState('');
 
     const likeCard = async (cardId: string) => {
         if (!boardState) return;
@@ -344,48 +380,77 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
         e.preventDefault();
     };
 
-    const toggleTimer = async () => {
-        if (!boardState || !isModerator) return;
+    const [isTimerDialogOpen, setIsTimerDialogOpen] = useState(false);
+    const [timerMinutes, setTimerMinutes] = useState(5);
+    const [timerSeconds, setTimerSeconds] = useState(0);
 
-        if (boardState.timer?.isRunning) {
-            // Stop timer
-            await saveBoard({
-                ...boardState,
-                timer: {
-                    ...boardState.timer,
-                    isRunning: false,
-                },
-            });
-        } else {
-            // Start timer (default 5 minutes if not set)
-            const duration = boardState.timer?.duration || 300;
-            await saveBoard({
-                ...boardState,
-                timer: {
-                    isRunning: true,
-                    startTime: Date.now(),
-                    duration: duration,
-                },
-            });
-        }
+    const startTimerWithDuration = async () => {
+        if (!boardState || !isModerator) return;
+        const totalSeconds = timerMinutes * 60 + timerSeconds;
+        if (totalSeconds <= 0 || totalSeconds > 3600) return; // Max 1 hour
+
+        await saveBoard({
+            ...boardState,
+            timer: {
+                isRunning: true,
+                startTime: Date.now(),
+                duration: totalSeconds,
+            },
+        });
+        setIsTimerDialogOpen(false);
     };
 
-    const [timeLeft, setTimeLeft] = useState<number | null>(null);
+    const stopTimer = async () => {
+        if (!boardState || !isModerator) return;
+        await saveBoard({
+            ...boardState,
+            timer: {
+                ...boardState.timer!,
+                isRunning: false,
+            },
+        });
+    };
+
+    const [timeLeft, setTimeLeft] = useState<number>(0);
 
     useEffect(() => {
-        if (!boardState?.timer?.isRunning || !boardState.timer.startTime) {
-            setTimeLeft(null);
+        if (!boardState?.timer) {
+            setTimeLeft(0);
             return;
         }
 
-        const interval = setInterval(() => {
+        if (!boardState.timer.isRunning) {
+            // Show the set duration when not running
+            setTimeLeft(boardState.timer.duration || 0);
+            return;
+        }
+
+        // Timer is running - calculate remaining time
+        const calculateRemaining = () => {
             const elapsed = Math.floor((Date.now() - boardState.timer!.startTime!) / 1000);
-            const remaining = boardState.timer!.duration - elapsed;
+            const remaining = Math.max(0, boardState.timer!.duration - elapsed);
+            return remaining;
+        };
+
+        setTimeLeft(calculateRemaining());
+
+        const interval = setInterval(async () => {
+            const remaining = calculateRemaining();
+            setTimeLeft(remaining);
             if (remaining <= 0) {
-                setTimeLeft(0);
-                // Optionally stop timer automatically?
-            } else {
-                setTimeLeft(remaining);
+                clearInterval(interval);
+                // Auto-lock all columns when timer ends (only moderator executes this)
+                if (isModerator && boardState.timer?.isRunning) {
+                    const lockedColumns = boardState.columns.map(col => ({ ...col, isLocked: true }));
+                    await saveBoard({
+                        ...boardState,
+                        columns: lockedColumns,
+                        timer: {
+                            ...boardState.timer,
+                            isRunning: false,
+                        },
+                    });
+                }
             }
         }, 1000);
 
@@ -396,6 +461,19 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
         const m = Math.floor(seconds / 60);
         const s = seconds % 60;
         return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    };
+
+    const adjustMinutes = (delta: number) => {
+        setTimerMinutes(m => Math.min(60, Math.max(0, m + delta)));
+    };
+
+    const adjustSeconds = (delta: number) => {
+        setTimerSeconds(s => {
+            const newVal = s + delta;
+            if (newVal < 0) return 50;
+            if (newVal >= 60) return 0;
+            return newVal;
+        });
     };
 
     if (loading) return <div>Loading...</div>;
@@ -415,17 +493,82 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
             <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold">Fertilization Board</h2>
                 <div className="flex items-center space-x-2">
-                    {boardState.timer?.isRunning && timeLeft !== null && (
-                        <div className="text-xl font-mono font-bold mr-4">
-                            {formatTime(timeLeft)}
-                        </div>
-                    )}
+                    {/* Always show timer countdown */}
+                    <div className={`text-xl font-mono font-bold mr-4 ${boardState.timer?.isRunning && timeLeft <= 10 ? 'text-red-500 animate-pulse' : ''}`}>
+                        {formatTime(timeLeft)}
+                    </div>
                     {isModerator && (
                         <>
-                            <Button variant="outline" size="sm" onClick={toggleTimer}>
-                                {boardState.timer?.isRunning ? <RotateCcw className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
-                                {boardState.timer?.isRunning ? 'Stop Timer' : 'Start 5m Timer'}
-                            </Button>
+                            {boardState.timer?.isRunning ? (
+                                <Button variant="outline" size="sm" onClick={stopTimer}>
+                                    <Square className="mr-2 h-4 w-4" />
+                                    Stop Timer
+                                </Button>
+                            ) : (
+                                <Dialog open={isTimerDialogOpen} onOpenChange={setIsTimerDialogOpen}>
+                                    <DialogTrigger asChild>
+                                        <Button variant="outline" size="sm">
+                                            <Clock className="mr-2 h-4 w-4" />
+                                            Set Timer
+                                        </Button>
+                                    </DialogTrigger>
+                                    <DialogContent className="sm:max-w-md">
+                                        <DialogHeader>
+                                            <DialogTitle>Start/Stop Timer</DialogTitle>
+                                            <DialogDescription>
+                                                Adjust minutes and seconds using the + and - controls, or the Up and Down arrows on keyboard. Max allowed is 1 hour.
+                                            </DialogDescription>
+                                        </DialogHeader>
+                                        <div className="flex justify-center gap-4 py-4">
+                                            <div className="flex flex-col items-center">
+                                                <span className="text-sm text-muted-foreground mb-2">Minutes</span>
+                                                <div className="flex items-center gap-2">
+                                                    <Input
+                                                        type="number"
+                                                        min={0}
+                                                        max={60}
+                                                        value={timerMinutes}
+                                                        onChange={(e) => setTimerMinutes(Math.min(60, Math.max(0, parseInt(e.target.value) || 0)))}
+                                                        className="w-16 text-center"
+                                                    />
+                                                    <div className="flex flex-col">
+                                                        <Button variant="secondary" size="icon" className="h-6 w-6" onClick={() => adjustMinutes(-1)}>
+                                                            <Minus className="h-3 w-3" />
+                                                        </Button>
+                                                        <Button variant="secondary" size="icon" className="h-6 w-6 mt-1" onClick={() => adjustMinutes(1)}>
+                                                            <Plus className="h-3 w-3" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col items-center">
+                                                <span className="text-sm text-muted-foreground mb-2">Seconds</span>
+                                                <div className="flex items-center gap-2">
+                                                    <Input
+                                                        type="number"
+                                                        min={0}
+                                                        max={59}
+                                                        value={timerSeconds}
+                                                        onChange={(e) => setTimerSeconds(Math.min(59, Math.max(0, parseInt(e.target.value) || 0)))}
+                                                        className="w-16 text-center"
+                                                    />
+                                                    <div className="flex flex-col">
+                                                        <Button variant="secondary" size="icon" className="h-6 w-6" onClick={() => adjustSeconds(-10)}>
+                                                            <Minus className="h-3 w-3" />
+                                                        </Button>
+                                                        <Button variant="secondary" size="icon" className="h-6 w-6 mt-1" onClick={() => adjustSeconds(10)}>
+                                                            <Plus className="h-3 w-3" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <Button onClick={startTimerWithDuration} className="w-full">
+                                            Start
+                                        </Button>
+                                    </DialogContent>
+                                </Dialog>
+                            )}
                             <Button variant="outline" size="sm" onClick={toggleHiddenEdition}>
                                 {boardState.hiddenEdition ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
                                 {boardState.hiddenEdition ? 'Hidden Mode' : 'Visible Mode'}
@@ -480,65 +623,145 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
                                                 value={newCardContent}
                                                 onChange={(e) => setNewCardContent(e.target.value)}
                                                 onKeyDown={(e) => {
-                                                    if (e.key === 'Enter') addCard(column.id);
+                                                    if (e.key === 'Enter') addCard(column.id, isAnonymousMode);
                                                     if (e.key === 'Escape') {
                                                         setActiveColumnId(null);
                                                         setNewCardContent('');
+                                                        setIsAnonymousMode(false);
                                                     }
                                                 }}
                                                 placeholder="Type..."
                                             />
-                                            <div className="flex space-x-2">
-                                                <Button size="sm" onClick={() => addCard(column.id)}>Add</Button>
+                                            <div className="flex space-x-1">
+                                                <Button
+                                                    size="sm"
+                                                    className="flex-1"
+                                                    onClick={() => addCard(column.id, isAnonymousMode)}
+                                                >
+                                                    Add {isAnonymousMode ? ' (Anonymously)' : ''}
+                                                </Button>
                                                 <Button size="sm" variant="ghost" onClick={() => {
                                                     setActiveColumnId(null);
                                                     setNewCardContent('');
+                                                    setIsAnonymousMode(false);
                                                 }}>Cancel</Button>
                                             </div>
                                         </div>
                                     ) : (
-                                        <Button
-                                            variant="outline"
-                                            className="w-full border-dashed"
-                                            onClick={() => setActiveColumnId(column.id)}
-                                        >
-                                            <Plus className="mr-2 h-4 w-4" /> Add Card
-                                        </Button>
+                                        <div className="flex w-full rounded-md border border-dashed overflow-hidden">
+                                            <Button
+                                                variant="ghost"
+                                                className="flex-1 rounded-none border-r border-dashed h-9"
+                                                onClick={() => {
+                                                    setActiveColumnId(column.id);
+                                                    setIsAnonymousMode(false);
+                                                }}
+                                                title="Add card with your name"
+                                            >
+                                                <Plus className="h-4 w-4" /> Add Card
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                className="flex-1 rounded-none h-9"
+                                                onClick={() => {
+                                                    setActiveColumnId(column.id);
+                                                    setIsAnonymousMode(true);
+                                                }}
+                                                title="Add anonymous card"
+                                            >
+                                                <Plus className="h-3 w-3" />
+                                                <HatGlasses className="h-4 w-4" />
+                                            </Button>
+                                        </div>
                                     )}
                                 </div>
                             )}
 
                             {boardState.cards
                                 .filter(c => c.columnId === column.id)
-                                .map(card => (
-                                    <div
-                                        key={card.id}
-                                        draggable={!column.isLocked} // Can only drag if column is unlocked? Or maybe always drag? Let's assume unlocked.
-                                        onDragStart={(e) => handleDragStart(e, card.id)}
-                                        className={`p-3 rounded border bg-card shadow-sm ${boardState.hiddenEdition && !card.isRevealed && card.authorId !== currentUserId ? 'blur-sm select-none' : ''}`}
-                                    >
-                                        <div className="flex justify-between items-start">
-                                            <div className="text-sm whitespace-pre-wrap">
-                                                {boardState.hiddenEdition && !card.isRevealed && card.authorId !== currentUserId
-                                                    ? 'Hidden content'
-                                                    : card.content}
+                                .map(card => {
+                                    // Determine if card content should be hidden (blurred)
+                                    // Anonymous cards (authorId === null) are also blurred in hidden mode for everyone
+                                    const isHiddenFromUser = boardState.hiddenEdition && !card.isRevealed && (card.authorId === null || card.authorId !== currentUserId);
+
+                                    return (
+                                        <div
+                                            key={card.id}
+                                            draggable={!column.isLocked && !isHiddenFromUser}
+                                            onDragStart={(e) => isHiddenFromUser ? e.preventDefault() : handleDragStart(e, card.id)}
+                                            className={`p-3 rounded border bg-card shadow-sm ${isHiddenFromUser ? 'blur-sm select-none pointer-events-none' : ''}`}
+                                        >
+                                            <div className="flex justify-between items-start">
+                                                {editingCardId === card.id ? (
+                                                    <Input
+                                                        autoFocus
+                                                        value={editingCardContent}
+                                                        onChange={(e) => setEditingCardContent(e.target.value)}
+                                                        onBlur={() => {
+                                                            if (editingCardContent.trim() !== card.content) {
+                                                                updateCardContent(card.id, editingCardContent.trim());
+                                                            }
+                                                            setEditingCardId(null);
+                                                        }}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                if (editingCardContent.trim() !== card.content) {
+                                                                    updateCardContent(card.id, editingCardContent.trim());
+                                                                }
+                                                                setEditingCardId(null);
+                                                            } else if (e.key === 'Escape') {
+                                                                setEditingCardId(null);
+                                                            }
+                                                        }}
+                                                        className="flex-1 text-sm"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    />
+                                                ) : (
+                                                    <div
+                                                        className={`text-sm whitespace-pre-wrap flex-1 ${!isHiddenFromUser && (card.authorId === currentUserId || (isModerator && !isHiddenFromUser)) ? 'cursor-pointer' : ''}`}
+                                                        onDoubleClick={(e) => {
+                                                            e.stopPropagation();
+                                                            // Allow editing if: owner OR moderator (and card is visible)
+                                                            if (!isHiddenFromUser && (card.authorId === currentUserId || isModerator)) {
+                                                                setEditingCardId(card.id);
+                                                                setEditingCardContent(card.content);
+                                                            }
+                                                        }}
+                                                    >
+                                                        {isHiddenFromUser
+                                                            ? 'Hidden content'
+                                                            : card.content}
+                                                    </div>
+                                                )}
+                                                <div className="flex flex-col space-y-1 ml-2">
+                                                    {!isHiddenFromUser && (card.authorId === currentUserId || isModerator) && (
+                                                        <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-destructive" onClick={() => deleteCard(card.id)}>
+                                                            <Trash2 className="h-3 w-3" />
+                                                        </Button>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div className="flex flex-col space-y-1 ml-2">
-                                                {card.authorId === currentUserId && (
-                                                    <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-destructive" onClick={() => deleteCard(card.id)}>
-                                                        <Trash2 className="h-3 w-3" />
-                                                    </Button>
+                                            <div className="mt-2 flex justify-between items-center">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-6 px-2 text-xs"
+                                                    onClick={() => likeCard(card.id)}
+                                                    disabled={isHiddenFromUser}
+                                                >
+                                                    <ThumbsUp className={`h-3 w-3 mr-1 ${card.likedBy.includes(currentUserId) ? 'fill-current text-blue-500' : ''}`} />
+                                                    {card.likedBy.length}
+                                                </Button>
+                                                {!isHiddenFromUser && (
+                                                    <UserSelector
+                                                        value={card.authorId || ''}
+                                                        onChange={(selectedId) => updateCardAuthor(card.id, selectedId === '' ? null : selectedId)}
+                                                    />
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="mt-2 flex justify-end">
-                                            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => likeCard(card.id)}>
-                                                <Heart className={`h-3 w-3 mr-1 ${card.likedBy.includes(currentUserId) ? 'fill-current text-red-500' : ''}`} />
-                                                {card.likedBy.length}
-                                            </Button>
-                                        </div>
-                                    </div>
-                                ))}
+                                    )
+                                })}
                         </div>
                     </div>
                 ))}
