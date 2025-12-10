@@ -11,6 +11,11 @@ export const yTasks = doc.getMap('tasks');
 // Export shared user settings map for cross-client synchronization
 export const yUserSettings = doc.getMap('userSettings');
 
+// Export shared celebration board maps
+export const yCelebrationState = doc.getMap('celebrationState');
+export const yCelebrationCards = doc.getMap('celebrationCards');
+export const yCelebrationColumns = doc.getMap('celebrationColumns');
+
 // Provider and awareness are nullable - only initialized when NOT in browser-only mode
 export let provider: WebsocketProvider | null = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

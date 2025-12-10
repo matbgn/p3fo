@@ -21,6 +21,10 @@ interface CelebrationViewProps {
     onClose?: () => void;
 }
 
+// Imports for collaboration
+import { doc, isCollaborationEnabled, initializeCollaboration, yCelebrationState, yCelebrationCards, yCelebrationColumns } from '@/lib/collaboration';
+import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
+
 export const CelebrationView: React.FC<CelebrationViewProps> = ({ onClose }) => {
     const persistence = usePersistence();
     const { userId: currentUserId, userSettings } = useUserSettings();
@@ -32,10 +36,126 @@ export const CelebrationView: React.FC<CelebrationViewProps> = ({ onClose }) => 
     const [newCardContent, setNewCardContent] = useState('');
     const [activeColumnId, setActiveColumnId] = useState<string | null>(null);
 
-    // Load board state
+    // Initialize collaboration
+    useEffect(() => {
+        if (!PERSISTENCE_CONFIG.FORCE_BROWSER) {
+            initializeCollaboration();
+        }
+    }, [PERSISTENCE_CONFIG.FORCE_BROWSER]);
+
+    // Sync state to Yjs
+    const syncBoardToYjs = useCallback((state: CelebrationBoardEntity) => {
+        if (!isCollaborationEnabled()) return;
+
+        doc.transact(() => {
+            // Sync State
+            yCelebrationState.set('moderatorId', state.moderatorId);
+            yCelebrationState.set('isSessionActive', state.isSessionActive);
+            yCelebrationState.set('timer', state.timer);
+            yCelebrationState.set('hiddenEdition', state.hiddenEdition);
+
+            // Sync Columns
+            state.columns.forEach(col => {
+                yCelebrationColumns.set(col.id, col);
+            });
+
+            // Sync Cards
+            const currentYCardIds = Array.from(yCelebrationCards.keys());
+            const newCardIds = state.cards.map(c => c.id);
+
+            // Remove deleted cards
+            currentYCardIds.forEach(id => {
+                if (!newCardIds.includes(id as string)) {
+                    yCelebrationCards.delete(id as string);
+                }
+            });
+
+            // Add/Update cards
+            state.cards.forEach(card => {
+                yCelebrationCards.set(card.id, card);
+            });
+        });
+    }, []);
+
+    // Observer for Yjs updates
+    useEffect(() => {
+        if (!isCollaborationEnabled()) return;
+
+        const observer = () => {
+            // Reconstruct state from Yjs
+            const moderatorId = yCelebrationState.get('moderatorId') as string | null;
+            const isSessionActive = yCelebrationState.get('isSessionActive') as boolean;
+            const timer = yCelebrationState.get('timer') as any;
+            const hiddenEdition = yCelebrationState.get('hiddenEdition') as boolean;
+
+            const columns = Array.from(yCelebrationColumns.values()) as CelebrationColumn[];
+            // Sort columns to ensure consistent order (optional but good practice)
+            // We can rely on DEFAULT_COLUMNS order
+            const sortedColumns = DEFAULT_COLUMNS.map(defCol =>
+                columns.find(c => c.id === defCol.id) || defCol
+            );
+
+            const cards = Array.from(yCelebrationCards.values()) as CelebrationCard[];
+
+            // Only update if we have complete data? 
+            // Yjs might be empty initially.
+            if (columns.length > 0) {
+                const newState: CelebrationBoardEntity = {
+                    moderatorId: moderatorId ?? null,
+                    isSessionActive: isSessionActive ?? false,
+                    timer: timer ?? null,
+                    hiddenEdition: hiddenEdition ?? true,
+                    columns: sortedColumns,
+                    cards: cards
+                };
+                setBoardState(newState);
+            }
+        };
+
+        yCelebrationState.observe(observer);
+        yCelebrationCards.observe(observer);
+        yCelebrationColumns.observe(observer);
+
+        return () => {
+            yCelebrationState.unobserve(observer);
+            yCelebrationCards.unobserve(observer);
+            yCelebrationColumns.unobserve(observer);
+        };
+    }, []);
+
+    // Load board state (Initial load)
     useEffect(() => {
         const loadBoard = async () => {
             try {
+                // Check if Yjs has data
+                if (isCollaborationEnabled() && yCelebrationColumns.size > 0) {
+                    // Initial load from Yjs will be handled by observer or we can do it here manually
+                    // The observer runs immediately? No, only on change. 
+                    // So we should manually set state from Yjs if it exists.
+                    const moderatorId = yCelebrationState.get('moderatorId') as string | null;
+                    const isSessionActive = yCelebrationState.get('isSessionActive') as boolean;
+                    const timer = yCelebrationState.get('timer') as any;
+                    const hiddenEdition = yCelebrationState.get('hiddenEdition') as boolean;
+                    const columns = Array.from(yCelebrationColumns.values()) as CelebrationColumn[];
+                    const sortedColumns = DEFAULT_COLUMNS.map(defCol =>
+                        columns.find(c => c.id === defCol.id) || defCol
+                    );
+                    const cards = Array.from(yCelebrationCards.values()) as CelebrationCard[];
+
+                    if (columns.length > 0) {
+                        setBoardState({
+                            moderatorId: moderatorId ?? null,
+                            isSessionActive: isSessionActive ?? false,
+                            timer: timer ?? null,
+                            hiddenEdition: hiddenEdition ?? true,
+                            columns: sortedColumns,
+                            cards: cards
+                        });
+                        setLoading(false);
+                        return;
+                    }
+                }
+
                 let state = await persistence.getCelebrationBoardState();
                 if (!state) {
                     // Initialize new board
@@ -50,6 +170,12 @@ export const CelebrationView: React.FC<CelebrationViewProps> = ({ onClose }) => 
                     await persistence.updateCelebrationBoardState(state);
                 }
                 setBoardState(state);
+
+                // Populate Yjs if it's empty
+                if (isCollaborationEnabled() && yCelebrationColumns.size === 0) {
+                    syncBoardToYjs(state);
+                }
+
             } catch (error) {
                 console.error('Error loading celebration board:', error);
             } finally {
@@ -57,11 +183,12 @@ export const CelebrationView: React.FC<CelebrationViewProps> = ({ onClose }) => 
             }
         };
         loadBoard();
-    }, []);
+    }, [persistence, syncBoardToYjs]);
 
     // Save board state helper
     const saveBoard = async (newState: CelebrationBoardEntity) => {
         setBoardState(newState);
+        syncBoardToYjs(newState);
         await persistence.updateCelebrationBoardState(newState);
     };
 
