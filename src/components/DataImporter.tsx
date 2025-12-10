@@ -94,6 +94,14 @@ const DataImporter: React.FC = () => {
                 };
                 await adapter.updateSettings(appSettings);
               }
+
+              // Import Fertilization Board (or legacy Celebration Board)
+              if (importedData.fertilizationBoard) {
+                await adapter.updateFertilizationBoardState(importedData.fertilizationBoard);
+              } else if (importedData.celebrationBoard) {
+                // Backward compatibility for legacy export
+                await adapter.updateFertilizationBoardState(importedData.celebrationBoard);
+              }
             }
 
             alert('Data imported successfully!');

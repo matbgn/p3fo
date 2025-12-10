@@ -43,10 +43,14 @@ const DataExporter: React.FC = () => {
         region: appSettings.region,
       };
 
+      // Fetch Fertilization Board state
+      const fertilizationBoardState = await adapter.getFertilizationBoardState();
+
       const exportData = {
         tasks,
         scheduledReminders: useReminderStore.getState().scheduledReminders,
         qolSurveyResponses: allQolSurveyResponses, // Export all users' QoL data
+        fertilizationBoard: fertilizationBoardState, // Export Fertilization Board state
         settings: settingsToExport,
         userSettings: {
           userId,
