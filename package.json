@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "preview:gh": "VITE_BASE_URL=/p3fo/ vite preview",
-    "dev:server": "PORT=5172 tsx watch server/index.ts",
+    "dev:server": "cross-env PORT=5172 tsx watch server/index.ts",
     "dev:all": "concurrently \"pnpm dev:server\" \"pnpm dev\"",
     "start:server": "node dist/server/index.js"
   },
@@ -94,6 +94,7 @@
     "@vitejs/plugin-react-swc": "^3.9.0",
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.2.0",
+    "cross-env": "^10.1.0",
     "dotenv": "^17.2.3",
     "eslint": "^9.9.0",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
