@@ -28,6 +28,41 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
   const { userId: currentUserId } = useUserSettings();
   const map = React.useMemo(() => byId(tasks), [tasks]);
 
+  // Focus restoration
+  const [focusTargetId, setFocusTargetId] = React.useState<string | null>(null);
+
+  const handleToggleTimer = (id: string) => {
+    toggleTimer(id);
+    setFocusTargetId(id);
+
+    // If starting the timer (currently not running), highlight and activate the task
+    const task = map[id];
+    // Check if currently running (prior to toggle effect taking place in UI, but logic is async)
+    // Actually toggleTimer is optimistic or fast? 
+    // We check current state. If not running, we are starting.
+    const isRunning = task?.timer?.some(t => t.endTime === 0);
+
+    if (task && !isRunning) {
+      setHighlightedTaskId(id);
+
+      // Also update path to ensure it's selected/expanded
+      const newPath: string[] = [];
+      let current: Task | undefined = task;
+      while (current) {
+        newPath.unshift(current.id);
+        current = current.parentId ? map[current.parentId] : undefined;
+      }
+      setPath(newPath);
+    }
+  };
+
+  React.useEffect(() => {
+    if (focusTargetId && cardRefs.current[focusTargetId]) {
+      cardRefs.current[focusTargetId]?.focus();
+      setFocusTargetId(null);
+    }
+  }, [tasks, focusTargetId]);
+
   const [path, setPath] = React.useState<string[]>([]);
   const [highlightedTaskId, setHighlightedTaskId] = React.useState<string | null>(null);
 
@@ -486,7 +521,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                             }
                           }}
                           isActive={t.id === col.activeId}
-                          isHighlighted={t.id === highlightedTaskId}
+                          isHighlighted={t.id === highlightedTaskId || t.id === col.activeId}
                           isTriageBoard={true}
                           updateStatus={handleChangeStatus}
                           updateDifficulty={updateDifficulty}
@@ -513,7 +548,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                           toggleUrgent={toggleUrgent}
                           toggleImpact={toggleImpact}
                           toggleMajorIncident={toggleMajorIncident}
-                          toggleTimer={toggleTimer}
+                          toggleTimer={handleToggleTimer}
                           toggleDone={(task) => toggleDone(task.id)}
                           reparent={reparent}
                           onToggleOpen={(taskId, toggleAll) => {

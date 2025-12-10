@@ -28,7 +28,7 @@ export const Timetable: React.FC<{
   onJumpToTask?: (taskId: string) => void;
 }> = ({ onJumpToTask }) => {
   const navigate = useNavigate();
-  const { tasks, updateTimeEntry, deleteTimeEntry, updateCategory, updateUser } = useTasks();
+  const { tasks, updateTimeEntry, deleteTimeEntry, updateCategory, updateUser, toggleTimer } = useTasks();
   const { settings } = useCombinedSettings();
   const weekStartsOn = settings.weekStartDay as 0 | 1;
   const weeksComputation = settings.weeksComputation || 4;
@@ -708,7 +708,7 @@ export const Timetable: React.FC<{
                                 </TableRow>
                               )}
 
-                              {/* Individual entries */}
+                              {/* Entries */}
                               {parentEntries.map((entry) => (
                                 <EditableTimeEntry
                                   key={`${entry.taskId}-${entry.index}`}
@@ -719,6 +719,7 @@ export const Timetable: React.FC<{
                                   onUpdateUser={updateUser}
                                   onDelete={deleteTimeEntry}
                                   onJumpToTask={onJumpToTask}
+                                  onToggleTimer={toggleTimer}
                                 />
                               ))}
                             </React.Fragment>
@@ -741,6 +742,7 @@ export const Timetable: React.FC<{
             onUpdateUser={updateUser}
             onDelete={deleteTimeEntry}
             onJumpToTask={onJumpToTask}
+            onToggleTimer={toggleTimer}
           />
         )}
       </div>

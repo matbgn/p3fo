@@ -16,6 +16,7 @@ const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
   has_completed_onboarding: false,
   workload: 60,
   split_time: '13:00',
+  card_compactness: 0,
 };
 
 const DEFAULT_APP_SETTINGS: AppSettingsEntity = {

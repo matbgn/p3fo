@@ -57,17 +57,6 @@ export interface MonthlyBalanceData {
   modified_by?: string;
 }
 
-export interface UserSettingsEntity {
-  userId: string;
-  username: string;
-  logo: string;
-  has_completed_onboarding: boolean;
-  workload?: number;
-  split_time?: string;
-  monthly_balances?: Record<string, MonthlyBalanceData>;
-  timezone?: string;
-}
-
 export interface AppSettingsEntity {
   split_time: number;
   user_workload_percentage: number;
@@ -83,6 +72,18 @@ export interface AppSettingsEntity {
   timezone?: string;
   country?: string;
   region?: string;
+}
+
+export interface UserSettingsEntity {
+  userId: string;
+  username: string;
+  logo: string;
+  has_completed_onboarding: boolean;
+  workload?: number;
+  split_time?: string;
+  monthly_balances?: Record<string, MonthlyBalanceData>;
+  card_compactness?: number;
+  timezone?: string;
 }
 
 export interface QolSurveyResponseEntity {

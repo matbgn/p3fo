@@ -3,7 +3,7 @@ import { Temporal } from '@js-temporal/polyfill';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TableRow, TableCell } from "@/components/ui/table";
-import { Trash2, Pencil, ArrowRight } from "lucide-react";
+import { Trash2, Pencil, ArrowRight, Play, Pause } from "lucide-react";
 import { TaskTag } from "./TaskTag";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { CATEGORIES } from "../data/categories";
@@ -43,8 +43,9 @@ export const EditableTimeEntry: React.FC<{
   onUpdateUser: (taskId: string, userId: string | undefined) => void;
   onDelete: (taskId: string, entryIndex: number) => void;
   onJumpToTask?: (taskId: string) => void;
+  onToggleTimer?: (taskId: string) => void;
   children?: React.ReactNode;
-}> = ({ entry, taskMap, onUpdateTimeEntry, onUpdateTaskCategory, onUpdateUser, onDelete, onJumpToTask, children }) => {
+}> = ({ entry, taskMap, onUpdateTimeEntry, onUpdateTaskCategory, onUpdateUser, onDelete, onJumpToTask, onToggleTimer, children }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editStartTime, setEditStartTime] = useState('');
   const [editEndTime, setEditEndTime] = useState('');
@@ -333,6 +334,8 @@ export const EditableTimeEntry: React.FC<{
     }
   }
 
+
+
   return (
     <TableRow
       className="hover:bg-muted/50"
@@ -394,6 +397,19 @@ export const EditableTimeEntry: React.FC<{
           >
             <Pencil className="h-4 w-4" />
           </Button>
+          {onToggleTimer && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 w-6 p-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleTimer(entry.taskId);
+              }}
+            >
+              {entry.endTime === 0 ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+            </Button>
+          )}
           <Button
             size="sm"
             variant="destructive"
