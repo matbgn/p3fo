@@ -1,24 +1,38 @@
 # Changelog
 
-## v0.8.0 (2025-12-09)
+## v0.9.0 (2025-12-10)
 
 ### Features
 
+- **fertilization:** permit column renaming (bcdf0bb)
+- **fertilization:** add filters (3ada959)
+- **fertilization:** permit anonymous contributions (c14e29e)
+- **fertilization:** add become moderator button (b125451)
+- **fertilization:** WIP start implementing new fertilization tool (704049a)
 - **task modal:** add possibility to start / stop a card from the modal directly (b9c8435)
 - **timetable:** implement direct start/stop button on tasks in timetable (02e32c4)
 - **layout:** introduce persistance of compactness selector on user settings (fbf7d7d)
+
+### Bug Fixes
+
+- **fertilization:** make it live collaborative (04467c1)
+- **tasks board:** do not show done/dropped by default (ac8272c)
+- **tasks board:** sort also the dropped tasks to last position and strike them but not ticked (055f641)
+- **metrics:** correct last and projected hourly balance in forecast view (aeba583)
+- **focus board:** restore the sorting mechanic for tasks done which should be at the end (0fc597a)
+- **focus board:** restore highlight of the current task and ensure that a newly started task becomes the new focus (ac5956c)
+
+---
+
+## v0.8.0 (2025-12-05)
+
+### Features
+
 - **filters:** add auto-expansion of filters when card compactness is full in board views (9b7c0e0)
 - **tasks:** allow creating tasks with an assigned user based on the current filter selection (46703f0)
 - **filters:** make filters section collapsable to follow compactness (198c3ea)
 - **tasks:** add detailed task edit modal (ed1b9f2)
 - **task layout:** add card compactness selector (6275d19)
-
-### Bug Fixes
-
-- **tasks board:** sort also the dropped tasks to last position and strike them but not ticked (055f641)
-- **metrics:** correct last and projected hourly balance in forecast view (aeba583)
-- **focus board:** restore the sorting mechanic for tasks done which should be at the end (0fc597a)
-- **focus board:** restore highlight of the current task and ensure that a newly started task becomes the new focus (ac5956c)
 
 ---
 
