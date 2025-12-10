@@ -81,15 +81,9 @@ class PostgresClient implements DbClient {
         has_completed_onboarding BOOLEAN DEFAULT false,
         workload_percentage REAL DEFAULT 60,
         split_time TEXT DEFAULT '13:00',
-      CREATE TABLE IF NOT EXISTS user_settings (
-        id INTEGER PRIMARY KEY DEFAULT 1,
-        username TEXT NOT NULL,
-        logo TEXT,
-        has_completed_onboarding BOOLEAN DEFAULT false,
-        workload_percentage REAL DEFAULT 60,
-        split_time TEXT DEFAULT '13:00',
         monthly_balances JSONB,
-        timezone TEXT
+        timezone TEXT,
+        card_compactness INTEGER DEFAULT 0
       )
     `);
 
@@ -109,6 +103,9 @@ class PostgresClient implements DbClient {
           END IF;
           IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_settings' AND column_name='timezone') THEN 
             ALTER TABLE user_settings ADD COLUMN timezone TEXT; 
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_settings' AND column_name='card_compactness') THEN 
+            ALTER TABLE user_settings ADD COLUMN card_compactness INTEGER DEFAULT 0; 
           END IF;
         END $$;
       `);
@@ -511,6 +508,7 @@ class PostgresClient implements DbClient {
         split_time: row.split_time,
         monthly_balances: row.monthly_balances || {},
         timezone: row.timezone,
+        card_compactness: row.card_compactness,
       };
     }
     return null;
@@ -521,8 +519,8 @@ class PostgresClient implements DbClient {
     const updated = { ...current, ...data, userId };
 
     await this.pool.query(`
-      INSERT INTO user_settings (id, username, logo, has_completed_onboarding, workload_percentage, split_time, monthly_balances, timezone)
-      VALUES (1, $1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO user_settings (id, username, logo, has_completed_onboarding, workload_percentage, split_time, monthly_balances, timezone, card_compactness)
+      VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8)
       ON CONFLICT (id) DO UPDATE SET
         username = EXCLUDED.username,
         logo = EXCLUDED.logo,
@@ -530,7 +528,8 @@ class PostgresClient implements DbClient {
         workload_percentage = EXCLUDED.workload_percentage,
         split_time = EXCLUDED.split_time,
         monthly_balances = EXCLUDED.monthly_balances,
-        timezone = EXCLUDED.timezone
+        timezone = EXCLUDED.timezone,
+        card_compactness = EXCLUDED.card_compactness
     `, [
       updated.username,
       updated.logo,
@@ -538,7 +537,8 @@ class PostgresClient implements DbClient {
       updated.workload,
       updated.split_time,
       updated.monthly_balances ? JSON.stringify(updated.monthly_balances) : null,
-      updated.timezone
+      updated.timezone,
+      updated.card_compactness
     ]);
 
     return updated;
@@ -625,6 +625,7 @@ class PostgresClient implements DbClient {
       split_time: row.split_time,
       monthly_balances: row.monthly_balances || {},
       timezone: row.timezone,
+      card_compactness: row.card_compactness,
     }));
   }
 
