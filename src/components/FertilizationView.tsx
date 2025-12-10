@@ -1,13 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { FertilizationBoardEntity, FertilizationCard, FertilizationColumn } from '@/lib/persistence-types';
 import { usePersistence } from '@/hooks/usePersistence';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Lock, Unlock, Eye, EyeOff, Play, RotateCcw, Plus, Trash2, ThumbsUp, HatGlasses, Minus, Clock, Square } from 'lucide-react';
+import { Lock, Unlock, Eye, EyeOff, Play, RotateCcw, Plus, Trash2, ThumbsUp, HatGlasses, Minus, Clock, Square, Filter, Search, X, ChevronDown, ChevronRight } from 'lucide-react';
 import { useTasks } from '@/hooks/useTasks'; // For converting to tasks
 import { UserSelector } from './UserSelector';
+import { UserFilterSelector } from './UserFilterSelector';
+import { Label } from '@/components/ui/label';
+import { MultiSelect } from '@/components/ui/multi-select';
 import {
     Dialog,
     DialogContent,
@@ -16,6 +19,12 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import { aStarTextSearch } from '@/lib/a-star-search';
 
 // Default columns
 const DEFAULT_COLUMNS: FertilizationColumn[] = [
@@ -45,6 +54,70 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
     const [newCardContent, setNewCardContent] = useState('');
     const [activeColumnId, setActiveColumnId] = useState<string | null>(null);
     const [isAnonymousMode, setIsAnonymousMode] = useState(false);
+
+    // Filter state
+    const [filterSearchText, setFilterSearchText] = useState('');
+    const [filterUserId, setFilterUserId] = useState<string | null>(null);
+    const [filterColumns, setFilterColumns] = useState<string[]>([]);
+    const [filterMinLikes, setFilterMinLikes] = useState(0);
+    const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(true);
+
+    // Constants for filter
+    const ALL_USERS_VALUE = 'ALL_USERS';
+    const UNASSIGNED_VALUE = 'UNASSIGNED';
+
+    // Check if any filter is active
+    const hasActiveFilters = filterSearchText.trim() !== '' ||
+        filterUserId !== null ||
+        filterColumns.length > 0 ||
+        filterMinLikes > 0;
+
+    // Clear all filters
+    const clearFilters = () => {
+        setFilterSearchText('');
+        setFilterUserId(null);
+        setFilterColumns([]);
+        setFilterMinLikes(0);
+    };
+
+    // Filter cards based on current filters
+    const filteredCards = useMemo(() => {
+        if (!boardState) return [];
+
+        let cards = [...boardState.cards];
+
+        // Apply column filter
+        if (filterColumns.length > 0) {
+            cards = cards.filter(card => filterColumns.includes(card.columnId));
+        }
+
+        // Apply user filter
+        if (filterUserId !== null) {
+            if (filterUserId === UNASSIGNED_VALUE) {
+                // Unassigned means authorId is null or empty string
+                cards = cards.filter(card => card.authorId === null || card.authorId === '');
+            } else {
+                cards = cards.filter(card => card.authorId === filterUserId);
+            }
+        }
+
+        // Apply minimum likes filter
+        if (filterMinLikes > 0) {
+            cards = cards.filter(card => card.likedBy.length >= filterMinLikes);
+        }
+
+        // Apply search filter with A* algorithm
+        if (filterSearchText.trim()) {
+            const searchResults = aStarTextSearch(
+                filterSearchText,
+                cards.map(card => ({ id: card.id, title: card.content }))
+            );
+            const matchingIds = new Set(searchResults.map(r => r.taskId));
+            cards = cards.filter(card => matchingIds.has(card.id));
+        }
+
+        return cards;
+    }, [boardState?.cards, filterSearchText, filterUserId, filterColumns, filterMinLikes]);
 
     // Initialize collaboration
     useEffect(() => {
@@ -587,6 +660,98 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
                 </div>
             </div>
 
+            {/* Collapsible Filters & Controls */}
+            <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="p-0 h-6 w-6"
+                        onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}
+                    >
+                        {isFiltersCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </Button>
+                    <span
+                        className="text-sm font-medium text-muted-foreground cursor-pointer select-none"
+                        onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}
+                    >
+                        Filters & Controls
+                        {hasActiveFilters && (
+                            <span className="ml-2 bg-primary text-primary-foreground rounded-full px-1.5 text-xs">!</span>
+                        )}
+                    </span>
+                </div>
+
+                {!isFiltersCollapsed && (
+                    <div className="flex flex-wrap items-center gap-4 border rounded-lg p-3">
+                        {/* Search */}
+                        <div className="flex items-center gap-2">
+                            <Label>Search:</Label>
+                            <div className="relative">
+                                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search cards..."
+                                    value={filterSearchText}
+                                    onChange={(e) => setFilterSearchText(e.target.value)}
+                                    className="pl-8 w-40"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Vertical separator */}
+                        <div className="h-6 border-l border-gray-300"></div>
+
+                        {/* User Filter */}
+                        <UserFilterSelector
+                            selectedUserId={filterUserId}
+                            onUserChange={setFilterUserId}
+                            className="w-40"
+                        />
+
+                        {/* Vertical separator */}
+                        <div className="h-6 border-l border-gray-300"></div>
+
+                        {/* Column Filter */}
+                        <div className="flex items-center gap-2">
+                            <Label>Column:</Label>
+                            <MultiSelect
+                                options={boardState.columns.map(col => ({ value: col.id, label: col.title }))}
+                                selected={filterColumns}
+                                onChange={setFilterColumns}
+                                placeholder="All columns..."
+                                className="w-40"
+                            />
+                        </div>
+
+                        {/* Vertical separator */}
+                        <div className="h-6 border-l border-gray-300"></div>
+
+                        {/* Min Likes */}
+                        <div className="flex items-center gap-2">
+                            <Label>Min Likes:</Label>
+                            <Input
+                                type="number"
+                                min={0}
+                                value={filterMinLikes}
+                                onChange={(e) => setFilterMinLikes(Math.max(0, parseInt(e.target.value) || 0))}
+                                className="w-16"
+                            />
+                        </div>
+
+                        {hasActiveFilters && (
+                            <>
+                                {/* Vertical separator */}
+                                <div className="h-6 border-l border-gray-300"></div>
+                                <Button variant="outline" size="sm" onClick={clearFilters}>
+                                    <X className="mr-2 h-4 w-4" />
+                                    Clear Filters
+                                </Button>
+                            </>
+                        )}
+                    </div>
+                )}
+            </div>
+
             <div className="flex-grow flex space-x-4 overflow-x-auto">
                 {boardState.columns.map(column => (
                     <div
@@ -677,7 +842,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
                                 </div>
                             )}
 
-                            {boardState.cards
+                            {filteredCards
                                 .filter(c => c.columnId === column.id)
                                 .map(card => {
                                     // Determine if card content should be hidden (blurred)
