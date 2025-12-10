@@ -789,15 +789,26 @@ class SqliteClient implements DbClient {
     return row?.responses ? JSON.parse(row.responses) : null;
   }
 
-  async saveQolSurveyResponse(userId: string, responses: QolSurveyResponseEntity): Promise<void> {
+  async saveQolSurveyResponse(userId: string, data: QolSurveyResponseEntity): Promise<void> {
     this.db.prepare(`
       INSERT INTO qol_survey (user_id, responses)
       VALUES (@userId, @responses)
       ON CONFLICT(user_id) DO UPDATE SET responses = excluded.responses
     `).run({
       userId,
-      responses: JSON.stringify(responses)
+      responses: JSON.stringify(data)
     });
+  }
+
+  async getAllQolSurveyResponses(): Promise<Record<string, QolSurveyResponseEntity>> {
+    const rows = this.db.prepare('SELECT user_id, responses FROM qol_survey').all() as { user_id: string, responses: string }[];
+    const result: Record<string, QolSurveyResponseEntity> = {};
+    for (const row of rows) {
+      if (row.responses) {
+        result[row.user_id] = JSON.parse(row.responses);
+      }
+    }
+    return result;
   }
 
   // Filters
