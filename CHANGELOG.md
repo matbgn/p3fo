@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.9.0 (2025-12-10)
+## v0.10.0 (2025-12-10)
 
 ### Features
 
@@ -9,14 +9,25 @@
 - **fertilization:** permit anonymous contributions (c14e29e)
 - **fertilization:** add become moderator button (b125451)
 - **fertilization:** WIP start implementing new fertilization tool (704049a)
+
+### Bug Fixes
+
+- **fertilization:** restore import / export integrity (d3d797f)
+- **fertilization:** make it live collaborative (04467c1)
+- **tasks board:** do not show done/dropped by default (ac8272c)
+
+---
+
+## v0.9.0 (2025-12-09)
+
+### Features
+
 - **task modal:** add possibility to start / stop a card from the modal directly (b9c8435)
 - **timetable:** implement direct start/stop button on tasks in timetable (02e32c4)
 - **layout:** introduce persistance of compactness selector on user settings (fbf7d7d)
 
 ### Bug Fixes
 
-- **fertilization:** make it live collaborative (04467c1)
-- **tasks board:** do not show done/dropped by default (ac8272c)
 - **tasks board:** sort also the dropped tasks to last position and strike them but not ticked (055f641)
 - **metrics:** correct last and projected hourly balance in forecast view (aeba583)
 - **focus board:** restore the sorting mechanic for tasks done which should be at the end (0fc597a)
