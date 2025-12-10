@@ -170,7 +170,7 @@ create-github-release version:
         echo "Creating new release {{version}}"
         NOTES_FILE=$(mktemp)
         git-sv rn > "$NOTES_FILE"
-        gcli -t github releases create -t "{{version}}" -T "$NOTES_FILE"
+        gcli -t github releases create -t "{{version}}" -c "$(git rev-parse --abbrev-ref HEAD)" -T "$NOTES_FILE"
     fi
 
 # --- Check if BW_SESSION is set (for production tasks)
