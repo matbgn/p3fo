@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.10.1 (2025-12-10)
+
+### Bug Fixes
+
+- **layout:** persist card compactness user preference on server deployments (452699b)
+
+---
+
 ## v0.10.0 (2025-12-10)
 
 ### Features

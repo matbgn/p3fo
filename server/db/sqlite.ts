@@ -58,6 +58,7 @@ interface UserSettingsRow {
   workload?: number; // Added to match entity and migration
   split_time: string;
   monthly_balances: string; // JSON string
+  card_compactness: number;
 }
 
 interface AppSettingsRow {
@@ -128,7 +129,8 @@ class SqliteClient implements DbClient {
         workload_percentage REAL DEFAULT 60,
         workload REAL DEFAULT 60,
         split_time TEXT DEFAULT '13:00',
-        monthly_balances TEXT -- JSON string
+        monthly_balances TEXT, -- JSON string
+        card_compactness INTEGER DEFAULT 0
       )
     `);
 
@@ -140,6 +142,7 @@ class SqliteClient implements DbClient {
       const hasSplitTime = columns.some(c => c.name === 'split_time');
       const hasMonthlyBalances = columns.some(c => c.name === 'monthly_balances');
       const hasTimezone = columns.some(c => c.name === 'timezone');
+      const hasCardCompactness = columns.some(c => c.name === 'card_compactness');
 
       if (!hasWorkloadPercentage) {
         console.log('SQLite: Migrating user_settings, adding workload_percentage');
@@ -168,6 +171,11 @@ class SqliteClient implements DbClient {
       if (!hasTimezone) {
         console.log('SQLite: Migrating user_settings, adding timezone');
         this.db.exec("ALTER TABLE user_settings ADD COLUMN timezone TEXT");
+      }
+
+      if (!hasCardCompactness) {
+        console.log('SQLite: Migrating user_settings, adding card_compactness');
+        this.db.exec("ALTER TABLE user_settings ADD COLUMN card_compactness INTEGER DEFAULT 0");
       }
     } catch (error) {
       console.error('SQLite: Error checking/migrating schema:', error);
@@ -630,6 +638,7 @@ class SqliteClient implements DbClient {
       workload: row.workload ?? row.workload_percentage ?? 60,
       split_time: row.split_time,
       monthly_balances: row.monthly_balances ? JSON.parse(row.monthly_balances) : {},
+      card_compactness: row.card_compactness || 0,
     };
   }
 
@@ -638,8 +647,8 @@ class SqliteClient implements DbClient {
     const updated = { ...current, ...data, userId };
 
     this.db.prepare(`
-      INSERT INTO user_settings (user_id, username, logo, has_completed_onboarding, workload, split_time, monthly_balances, timezone)
-      VALUES (@userId, @username, @logo, @has_completed_onboarding, @workload, @split_time, @monthly_balances, @timezone)
+      INSERT INTO user_settings (user_id, username, logo, has_completed_onboarding, workload, split_time, monthly_balances, timezone, card_compactness)
+      VALUES (@userId, @username, @logo, @has_completed_onboarding, @workload, @split_time, @monthly_balances, @timezone, @card_compactness)
       ON CONFLICT(user_id) DO UPDATE SET
         username = excluded.username,
         logo = excluded.logo,
@@ -647,7 +656,8 @@ class SqliteClient implements DbClient {
         workload = excluded.workload,
         split_time = excluded.split_time,
         monthly_balances = excluded.monthly_balances,
-        timezone = excluded.timezone
+        timezone = excluded.timezone,
+        card_compactness = excluded.card_compactness
     `).run({
       userId: updated.userId,
       username: updated.username,
@@ -657,6 +667,7 @@ class SqliteClient implements DbClient {
       split_time: updated.split_time ?? null,
       monthly_balances: updated.monthly_balances ? JSON.stringify(updated.monthly_balances) : null,
       timezone: updated.timezone ?? null,
+      card_compactness: updated.card_compactness ?? 0,
     });
 
     return updated;
@@ -672,6 +683,7 @@ class SqliteClient implements DbClient {
       workload: row.workload ?? row.workload_percentage ?? 60,
       split_time: row.split_time,
       monthly_balances: row.monthly_balances ? JSON.parse(row.monthly_balances) : {},
+      card_compactness: row.card_compactness || 0,
     }));
   }
 
