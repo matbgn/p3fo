@@ -363,6 +363,21 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
         });
     };
 
+    // State for editing column titles
+    const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
+    const [editingColumnTitle, setEditingColumnTitle] = useState('');
+
+    const updateColumnTitle = async (columnId: string, title: string) => {
+        if (!boardState || !isModerator) return;
+        const newColumns = boardState.columns.map(c => {
+            if (c.id === columnId) {
+                return { ...c, title };
+            }
+            return c;
+        });
+        await saveBoard({ ...boardState, columns: newColumns });
+    };
+
     const updateCardAuthor = async (cardId: string, authorId: string | null) => {
         if (!boardState) return;
         const newCards = boardState.cards.map(c => {
@@ -764,7 +779,44 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
                             className="p-3 font-bold flex justify-between items-center rounded-t-lg"
                             style={{ borderTop: `4px solid ${column.color}` }}
                         >
-                            <span>{column.title}</span>
+                            {editingColumnId === column.id ? (
+                                <Input
+                                    autoFocus
+                                    value={editingColumnTitle}
+                                    onChange={(e) => setEditingColumnTitle(e.target.value)}
+                                    onBlur={() => {
+                                        if (editingColumnTitle.trim() && editingColumnTitle.trim() !== column.title) {
+                                            updateColumnTitle(column.id, editingColumnTitle.trim());
+                                        }
+                                        setEditingColumnId(null);
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            if (editingColumnTitle.trim() && editingColumnTitle.trim() !== column.title) {
+                                                updateColumnTitle(column.id, editingColumnTitle.trim());
+                                            }
+                                            setEditingColumnId(null);
+                                        } else if (e.key === 'Escape') {
+                                            setEditingColumnId(null);
+                                        }
+                                    }}
+                                    className="h-6 px-1 py-0 text-sm font-bold"
+                                    onClick={(e) => e.stopPropagation()}
+                                />
+                            ) : (
+                                <span
+                                    className={isModerator ? 'cursor-pointer' : ''}
+                                    onDoubleClick={(e) => {
+                                        if (isModerator) {
+                                            e.stopPropagation();
+                                            setEditingColumnId(column.id);
+                                            setEditingColumnTitle(column.title);
+                                        }
+                                    }}
+                                >
+                                    {column.title}
+                                </span>
+                            )}
                             <div className="flex items-center space-x-1">
                                 <span className="text-xs text-muted-foreground">
                                     {boardState.cards.filter(c => c.columnId === column.id).length}
