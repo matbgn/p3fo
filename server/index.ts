@@ -343,24 +343,24 @@ app.delete('/api/filters', async (req: Request, res: Response) => {
   }
 });
 
-// Celebration Board routes
-app.get('/api/celebration-board', async (req: Request, res: Response) => {
+// Fertilization Board routes
+app.get('/api/fertilization-board', async (req: Request, res: Response) => {
   try {
-    const state = await db.getCelebrationBoardState();
+    const state = await db.getFertilizationBoardState();
     res.json(state);
   } catch (error: any) {
-    console.error('Error fetching celebration board state:', error);
-    res.status(500).json({ error: 'Failed to fetch celebration board state', details: error.message });
+    console.error('Error fetching fertilization board state:', error);
+    res.status(500).json({ error: 'Failed to fetch fertilization board state', details: error.message });
   }
 });
 
-app.put('/api/celebration-board', async (req: Request, res: Response) => {
+app.put('/api/fertilization-board', async (req: Request, res: Response) => {
   try {
-    await db.updateCelebrationBoardState(req.body);
+    await db.updateFertilizationBoardState(req.body);
     res.json({ success: true });
   } catch (error: any) {
-    console.error('Error updating celebration board state:', error);
-    res.status(500).json({ error: 'Failed to update celebration board state', details: error.message });
+    console.error('Error updating fertilization board state:', error);
+    res.status(500).json({ error: 'Failed to update fertilization board state', details: error.message });
   }
 });
 

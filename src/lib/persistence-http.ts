@@ -1,4 +1,4 @@
-import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, CelebrationBoardEntity } from './persistence-types';
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity } from './persistence-types';
 
 export class HttpApiPersistence implements PersistenceAdapter {
   private baseUrl: string;
@@ -180,13 +180,13 @@ export class HttpApiPersistence implements PersistenceAdapter {
     };
   }
 
-  // Celebration Board
-  async getCelebrationBoardState(): Promise<CelebrationBoardEntity | null> {
-    return this.makeRequest('/api/celebration-board');
+  // Fertilization Board
+  async getFertilizationBoardState(): Promise<FertilizationBoardEntity | null> {
+    return this.makeRequest('/api/fertilization-board');
   }
 
-  async updateCelebrationBoardState(state: CelebrationBoardEntity): Promise<void> {
-    await this.makeRequest('/api/celebration-board', {
+  async updateFertilizationBoardState(state: FertilizationBoardEntity): Promise<void> {
+    await this.makeRequest('/api/fertilization-board', {
       method: 'PUT',
       body: JSON.stringify(state),
     });

@@ -14,7 +14,7 @@ import { useView } from "@/hooks/useView";
 import { COMPACTNESS_ULTRA, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
-import CelebrationView from './CelebrationView'; // Import CelebrationView
+import FertilizationView from './FertilizationView'; // Import FertilizationView
 
 interface PlanViewProps {
   onFocusOnTask: (taskId: string) => void;
@@ -25,7 +25,7 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
   const { userId: currentUserId } = useUserSettings();
 
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<'storyboard' | 'prioritization' | 'celebration'>('storyboard'); // New state for view switching
+  const [activeView, setActiveView] = useState<'storyboard' | 'prioritization' | 'fertilization'>('storyboard'); // New state for view switching
 
   // Track which parents are expanded in PlanView
   const [openParents, setOpenParents] = useState<Record<string, boolean>>({});
@@ -240,10 +240,10 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
           <CardTitle>Plan View</CardTitle>
           <div className="flex space-x-2">
             <Button
-              variant={activeView === 'celebration' ? 'default' : 'outline'}
-              onClick={() => setActiveView('celebration')}
+              variant={activeView === 'fertilization' ? 'default' : 'outline'}
+              onClick={() => setActiveView('fertilization')}
             >
-              Celebration
+              Fertilization
             </Button>
             <Button
               variant={activeView === 'storyboard' ? 'default' : 'outline'}
@@ -260,7 +260,7 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
           </div>
         </div>
 
-        {activeView !== 'celebration' && (
+        {activeView !== 'fertilization' && (
           <>
             <div className="mb-2 flex gap-2">
               <Input
@@ -317,8 +317,8 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
         )}
       </CardHeader>
       <CardContent className="flex-grow overflow-hidden">
-        {activeView === 'celebration' ? (
-          <CelebrationView />
+        {activeView === 'fertilization' ? (
+          <FertilizationView />
         ) : activeView === 'storyboard' ? (
           <div
             className="flex flex-nowrap overflow-x-auto h-full p-2 space-x-4"

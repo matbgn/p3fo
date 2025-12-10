@@ -6,7 +6,7 @@ import {
   AppSettingsEntity,
   QolSurveyResponseEntity,
   FilterStateEntity,
-  CelebrationBoardEntity
+  FertilizationBoardEntity
 } from '../../src/lib/persistence-types.js';
 
 // Default values
@@ -227,13 +227,32 @@ class PostgresClient implements DbClient {
       )
     `);
 
-    // Create celebration_board table (single row)
+    // Create fertilization_board table (single row)
     await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS celebration_board (
+      CREATE TABLE IF NOT EXISTS fertilization_board (
         id INTEGER PRIMARY KEY DEFAULT 1,
         data JSONB -- JSONB for efficient JSON operations
       )
     `);
+
+    // Migration: Renaming celebration_board to fertilization_board
+    // Check if old table exists
+    const tableCheck = await this.pool.query("SELECT to_regclass('celebration_board') as table_exists");
+    if (tableCheck.rows[0].table_exists) {
+      console.log('PostgreSQL: Renaming celebration_board table to fertilization_board');
+      await this.pool.query('ALTER TABLE celebration_board RENAME TO fertilization_board');
+    }
+
+    // Check if data column exists (for fertilization_board)
+    try {
+      const colCheck = await this.pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='fertilization_board' AND column_name='data'");
+      if (colCheck.rows.length === 0) {
+        console.log('PostgreSQL: Migrating fertilization_board, adding data column');
+        await this.pool.query('ALTER TABLE fertilization_board ADD COLUMN data JSONB');
+      }
+    } catch (error) {
+      console.error('PostgreSQL: Error checking/migrating fertilization_board schema:', error);
+    }
   }
 
   async testConnection(): Promise<void> {
@@ -678,18 +697,18 @@ class PostgresClient implements DbClient {
     await this.pool.query('DELETE FROM filters WHERE id = 1');
   }
 
-  // Celebration Board
-  async getCelebrationBoardState(): Promise<CelebrationBoardEntity | null> {
-    const result = await this.pool.query('SELECT data FROM celebration_board WHERE id = 1');
+  // Fertilization Board
+  async getFertilizationBoardState(): Promise<FertilizationBoardEntity | null> {
+    const result = await this.pool.query('SELECT data FROM fertilization_board WHERE id = 1');
     if (result.rows.length > 0 && result.rows[0].data) {
       return result.rows[0].data;
     }
     return null;
   }
 
-  async updateCelebrationBoardState(state: CelebrationBoardEntity): Promise<void> {
+  async updateFertilizationBoardState(state: FertilizationBoardEntity): Promise<void> {
     await this.pool.query(`
-      INSERT INTO celebration_board (id, data)
+      INSERT INTO fertilization_board (id, data)
       VALUES (1, $1)
       ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
     `, [state]);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useUserSettings } from '@/hooks/useUserSettings';
-import { CelebrationBoardEntity, CelebrationCard, CelebrationColumn } from '@/lib/persistence-types';
+import { FertilizationBoardEntity, FertilizationCard, FertilizationColumn } from '@/lib/persistence-types';
 import { usePersistence } from '@/hooks/usePersistence';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +9,7 @@ import { Lock, Unlock, Eye, EyeOff, Play, RotateCcw, Plus, Trash2, Heart } from 
 import { useTasks } from '@/hooks/useTasks'; // For converting to tasks
 
 // Default columns
-const DEFAULT_COLUMNS: CelebrationColumn[] = [
+const DEFAULT_COLUMNS: FertilizationColumn[] = [
     { id: 'facts', title: 'Facts', color: '#F87171', isLocked: false }, // Red
     { id: 'satisfactions', title: 'Satisfactions', color: '#FACC15', isLocked: true }, // Yellow
     { id: 'discomfort', title: 'Discomfort', color: '#FB923C', isLocked: true }, // Orange
@@ -17,21 +17,21 @@ const DEFAULT_COLUMNS: CelebrationColumn[] = [
     { id: 'priorities', title: 'Priorities', color: '#60A5FA', isLocked: true }, // Blue
 ];
 
-interface CelebrationViewProps {
+interface FertilizationViewProps {
     onClose?: () => void;
 }
 
 // Imports for collaboration
-import { doc, isCollaborationEnabled, initializeCollaboration, yCelebrationState, yCelebrationCards, yCelebrationColumns } from '@/lib/collaboration';
+import { doc, isCollaborationEnabled, initializeCollaboration, yFertilizationState, yFertilizationCards, yFertilizationColumns } from '@/lib/collaboration';
 import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
 
-export const CelebrationView: React.FC<CelebrationViewProps> = ({ onClose }) => {
+export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose }) => {
     const persistence = usePersistence();
     const { userId: currentUserId, userSettings } = useUserSettings();
     const username = userSettings.username;
     const { createTask } = useTasks();
 
-    const [boardState, setBoardState] = useState<CelebrationBoardEntity | null>(null);
+    const [boardState, setBoardState] = useState<FertilizationBoardEntity | null>(null);
     const [loading, setLoading] = useState(true);
     const [newCardContent, setNewCardContent] = useState('');
     const [activeColumnId, setActiveColumnId] = useState<string | null>(null);
@@ -44,35 +44,35 @@ export const CelebrationView: React.FC<CelebrationViewProps> = ({ onClose }) => 
     }, [PERSISTENCE_CONFIG.FORCE_BROWSER]);
 
     // Sync state to Yjs
-    const syncBoardToYjs = useCallback((state: CelebrationBoardEntity) => {
+    const syncBoardToYjs = useCallback((state: FertilizationBoardEntity) => {
         if (!isCollaborationEnabled()) return;
 
         doc.transact(() => {
             // Sync State
-            yCelebrationState.set('moderatorId', state.moderatorId);
-            yCelebrationState.set('isSessionActive', state.isSessionActive);
-            yCelebrationState.set('timer', state.timer);
-            yCelebrationState.set('hiddenEdition', state.hiddenEdition);
+            yFertilizationState.set('moderatorId', state.moderatorId);
+            yFertilizationState.set('isSessionActive', state.isSessionActive);
+            yFertilizationState.set('timer', state.timer);
+            yFertilizationState.set('hiddenEdition', state.hiddenEdition);
 
             // Sync Columns
             state.columns.forEach(col => {
-                yCelebrationColumns.set(col.id, col);
+                yFertilizationColumns.set(col.id, col);
             });
 
             // Sync Cards
-            const currentYCardIds = Array.from(yCelebrationCards.keys());
+            const currentYCardIds = Array.from(yFertilizationCards.keys());
             const newCardIds = state.cards.map(c => c.id);
 
             // Remove deleted cards
             currentYCardIds.forEach(id => {
                 if (!newCardIds.includes(id as string)) {
-                    yCelebrationCards.delete(id as string);
+                    yFertilizationCards.delete(id as string);
                 }
             });
 
             // Add/Update cards
             state.cards.forEach(card => {
-                yCelebrationCards.set(card.id, card);
+                yFertilizationCards.set(card.id, card);
             });
         });
     }, []);
@@ -83,24 +83,24 @@ export const CelebrationView: React.FC<CelebrationViewProps> = ({ onClose }) => 
 
         const observer = () => {
             // Reconstruct state from Yjs
-            const moderatorId = yCelebrationState.get('moderatorId') as string | null;
-            const isSessionActive = yCelebrationState.get('isSessionActive') as boolean;
-            const timer = yCelebrationState.get('timer') as any;
-            const hiddenEdition = yCelebrationState.get('hiddenEdition') as boolean;
+            const moderatorId = yFertilizationState.get('moderatorId') as string | null;
+            const isSessionActive = yFertilizationState.get('isSessionActive') as boolean;
+            const timer = yFertilizationState.get('timer') as any;
+            const hiddenEdition = yFertilizationState.get('hiddenEdition') as boolean;
 
-            const columns = Array.from(yCelebrationColumns.values()) as CelebrationColumn[];
+            const columns = Array.from(yFertilizationColumns.values()) as FertilizationColumn[];
             // Sort columns to ensure consistent order (optional but good practice)
             // We can rely on DEFAULT_COLUMNS order
             const sortedColumns = DEFAULT_COLUMNS.map(defCol =>
                 columns.find(c => c.id === defCol.id) || defCol
             );
 
-            const cards = Array.from(yCelebrationCards.values()) as CelebrationCard[];
+            const cards = Array.from(yFertilizationCards.values()) as FertilizationCard[];
 
             // Only update if we have complete data? 
             // Yjs might be empty initially.
             if (columns.length > 0) {
-                const newState: CelebrationBoardEntity = {
+                const newState: FertilizationBoardEntity = {
                     moderatorId: moderatorId ?? null,
                     isSessionActive: isSessionActive ?? false,
                     timer: timer ?? null,
@@ -112,14 +112,14 @@ export const CelebrationView: React.FC<CelebrationViewProps> = ({ onClose }) => 
             }
         };
 
-        yCelebrationState.observe(observer);
-        yCelebrationCards.observe(observer);
-        yCelebrationColumns.observe(observer);
+        yFertilizationState.observe(observer);
+        yFertilizationCards.observe(observer);
+        yFertilizationColumns.observe(observer);
 
         return () => {
-            yCelebrationState.unobserve(observer);
-            yCelebrationCards.unobserve(observer);
-            yCelebrationColumns.unobserve(observer);
+            yFertilizationState.unobserve(observer);
+            yFertilizationCards.unobserve(observer);
+            yFertilizationColumns.unobserve(observer);
         };
     }, []);
 
@@ -128,19 +128,19 @@ export const CelebrationView: React.FC<CelebrationViewProps> = ({ onClose }) => 
         const loadBoard = async () => {
             try {
                 // Check if Yjs has data
-                if (isCollaborationEnabled() && yCelebrationColumns.size > 0) {
+                if (isCollaborationEnabled() && yFertilizationColumns.size > 0) {
                     // Initial load from Yjs will be handled by observer or we can do it here manually
                     // The observer runs immediately? No, only on change. 
                     // So we should manually set state from Yjs if it exists.
-                    const moderatorId = yCelebrationState.get('moderatorId') as string | null;
-                    const isSessionActive = yCelebrationState.get('isSessionActive') as boolean;
-                    const timer = yCelebrationState.get('timer') as any;
-                    const hiddenEdition = yCelebrationState.get('hiddenEdition') as boolean;
-                    const columns = Array.from(yCelebrationColumns.values()) as CelebrationColumn[];
+                    const moderatorId = yFertilizationState.get('moderatorId') as string | null;
+                    const isSessionActive = yFertilizationState.get('isSessionActive') as boolean;
+                    const timer = yFertilizationState.get('timer') as any;
+                    const hiddenEdition = yFertilizationState.get('hiddenEdition') as boolean;
+                    const columns = Array.from(yFertilizationColumns.values()) as FertilizationColumn[];
                     const sortedColumns = DEFAULT_COLUMNS.map(defCol =>
                         columns.find(c => c.id === defCol.id) || defCol
                     );
-                    const cards = Array.from(yCelebrationCards.values()) as CelebrationCard[];
+                    const cards = Array.from(yFertilizationCards.values()) as FertilizationCard[];
 
                     if (columns.length > 0) {
                         setBoardState({
@@ -156,7 +156,7 @@ export const CelebrationView: React.FC<CelebrationViewProps> = ({ onClose }) => 
                     }
                 }
 
-                let state = await persistence.getCelebrationBoardState();
+                let state = await persistence.getFertilizationBoardState();
                 if (!state) {
                     // Initialize new board
                     state = {
@@ -167,17 +167,17 @@ export const CelebrationView: React.FC<CelebrationViewProps> = ({ onClose }) => 
                         timer: null,
                         hiddenEdition: true,
                     };
-                    await persistence.updateCelebrationBoardState(state);
+                    await persistence.updateFertilizationBoardState(state);
                 }
                 setBoardState(state);
 
                 // Populate Yjs if it's empty
-                if (isCollaborationEnabled() && yCelebrationColumns.size === 0) {
+                if (isCollaborationEnabled() && yFertilizationColumns.size === 0) {
                     syncBoardToYjs(state);
                 }
 
             } catch (error) {
-                console.error('Error loading celebration board:', error);
+                console.error('Error loading fertilization board:', error);
             } finally {
                 setLoading(false);
             }
@@ -186,10 +186,10 @@ export const CelebrationView: React.FC<CelebrationViewProps> = ({ onClose }) => 
     }, [persistence, syncBoardToYjs]);
 
     // Save board state helper
-    const saveBoard = async (newState: CelebrationBoardEntity) => {
+    const saveBoard = async (newState: FertilizationBoardEntity) => {
         setBoardState(newState);
         syncBoardToYjs(newState);
-        await persistence.updateCelebrationBoardState(newState);
+        await persistence.updateFertilizationBoardState(newState);
     };
 
     const startSession = async () => {
@@ -244,7 +244,7 @@ export const CelebrationView: React.FC<CelebrationViewProps> = ({ onClose }) => 
     const addCard = async (columnId: string) => {
         if (!boardState || !newCardContent.trim()) return;
 
-        const newCard: CelebrationCard = {
+        const newCard: FertilizationCard = {
             id: crypto.randomUUID(),
             columnId,
             content: newCardContent,
@@ -313,7 +313,7 @@ export const CelebrationView: React.FC<CelebrationViewProps> = ({ onClose }) => 
 
             createTask(card.content, null, currentUserId);
 
-            // Remove from celebration board or keep it?
+            // Remove from fertilization board or keep it?
             // Usually in retro tools, items in "Action Items" (Priorities) are kept there for reference.
             // But if it's transformed into a task, maybe we should just update the columnId.
             // Let's just update the columnId for now, so it shows in the Priorities column.
@@ -392,7 +392,7 @@ export const CelebrationView: React.FC<CelebrationViewProps> = ({ onClose }) => 
     if (!boardState?.isSessionActive) {
         return (
             <div className="flex flex-col items-center justify-center h-full space-y-4">
-                <h2 className="text-2xl font-bold">Celebration Board</h2>
+                <h2 className="text-2xl font-bold">Fertilization Board</h2>
                 <p className="text-muted-foreground">No moderator active. Start a session to become the moderator.</p>
                 <Button onClick={startSession}>Start Session</Button>
             </div>
@@ -402,7 +402,7 @@ export const CelebrationView: React.FC<CelebrationViewProps> = ({ onClose }) => 
     return (
         <div className="h-full flex flex-col space-y-4 p-4">
             <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold">Celebration Board</h2>
+                <h2 className="text-2xl font-bold">Fertilization Board</h2>
                 <div className="flex items-center space-x-2">
                     {boardState.timer?.isRunning && timeLeft !== null && (
                         <div className="text-xl font-mono font-bold mr-4">
@@ -531,4 +531,4 @@ export const CelebrationView: React.FC<CelebrationViewProps> = ({ onClose }) => 
     );
 };
 
-export default CelebrationView;
+export default FertilizationView;

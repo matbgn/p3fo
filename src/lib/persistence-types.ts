@@ -144,12 +144,12 @@ export interface PersistenceAdapter {
   // Metadata
   getMetadata(): Promise<StorageMetadata>;
 
-  // Celebration Board
-  getCelebrationBoardState(): Promise<CelebrationBoardEntity | null>;
-  updateCelebrationBoardState(state: CelebrationBoardEntity): Promise<void>;
+  // Fertilization Board
+  getFertilizationBoardState(): Promise<FertilizationBoardEntity | null>;
+  updateFertilizationBoardState(state: FertilizationBoardEntity): Promise<void>;
 }
 
-export interface CelebrationCard {
+export interface FertilizationCard {
   id: string;
   columnId: string;
   content: string;
@@ -158,18 +158,18 @@ export interface CelebrationCard {
   isRevealed: boolean; // For hidden edition
 }
 
-export interface CelebrationColumn {
+export interface FertilizationColumn {
   id: string;
   title: string;
   color: string; // For UI styling
   isLocked: boolean;
 }
 
-export interface CelebrationBoardEntity {
+export interface FertilizationBoardEntity {
   moderatorId: string | null;
   isSessionActive: boolean;
-  columns: CelebrationColumn[];
-  cards: CelebrationCard[];
+  columns: FertilizationColumn[];
+  cards: FertilizationCard[];
   timer: {
     isRunning: boolean;
     startTime: number | null;
