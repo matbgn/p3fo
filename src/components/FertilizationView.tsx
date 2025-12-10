@@ -218,6 +218,17 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
         await saveBoard(newState);
     };
 
+    const becomeModerator = async () => {
+        if (!boardState) return;
+        if (!confirm('⚠️ Warning: You are about to take over as moderator.\n\nThis should only be done if the current moderator has left the session or is unavailable.\n\nAre you sure you want to become the moderator?')) return;
+
+        const newState = {
+            ...boardState,
+            moderatorId: currentUserId,
+        };
+        await saveBoard(newState);
+    };
+
     const isModerator = boardState?.moderatorId === currentUserId;
 
     const toggleLock = async (columnId: string) => {
@@ -424,6 +435,11 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
                                 Restart Session
                             </Button>
                         </>
+                    )}
+                    {!isModerator && boardState.isSessionActive && (
+                        <Button variant="outline" size="sm" onClick={becomeModerator}>
+                            Become Moderator
+                        </Button>
                     )}
                 </div>
             </div>
