@@ -5,7 +5,8 @@ import {
   UserSettingsEntity,
   AppSettingsEntity,
   QolSurveyResponseEntity,
-  FilterStateEntity
+  FilterStateEntity,
+  FertilizationBoardEntity
 } from '../../src/lib/persistence-types.js';
 
 // Default values
@@ -277,6 +278,37 @@ class SqliteClient implements DbClient {
         data TEXT -- JSON string
       )
     `);
+
+    // Migration: Renaming celebration_board to fertilization_board
+    // Check if old table exists BEFORE creating the new one
+    const celebrationTableExists = this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='celebration_board'").get();
+    if (celebrationTableExists) {
+      console.log('SQLite: Renaming celebration_board table to fertilization_board');
+      // Drop the new table if it was somehow created already (shouldn't happen in normal flow)
+      this.db.exec("DROP TABLE IF EXISTS fertilization_board");
+      this.db.exec("ALTER TABLE celebration_board RENAME TO fertilization_board");
+    } else {
+      // Create fertilization_board table only if it doesn't exist and old table wasn't renamed
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS fertilization_board (
+          id INTEGER PRIMARY KEY DEFAULT 1,
+          data TEXT -- JSON string
+        )
+      `);
+    }
+
+    // Check if data column exists (for fertilization_board)
+    try {
+      const columns = this.db.prepare("PRAGMA table_info(fertilization_board)").all() as { name: string }[];
+      const hasData = columns.some(c => c.name === 'data');
+
+      if (columns.length > 0 && !hasData) {
+        console.log('SQLite: Migrating fertilization_board, adding data column');
+        this.db.exec("ALTER TABLE fertilization_board ADD COLUMN data TEXT");
+      }
+    } catch (error) {
+      console.error('SQLite: Error checking/migrating fertilization_board schema:', error);
+    }
   }
 
   async testConnection(): Promise<void> {
@@ -380,11 +412,11 @@ class SqliteClient implements DbClient {
     console.log('SQLite: Creating task:', newTask);
 
     const stmt = this.db.prepare(`
-     INSERT INTO tasks (id, parent_id, title, created_at, triage_status, urgent, impact, major_incident,
-                        difficulty, timer, category, termination_date, comment, duration_in_minutes, priority, user_id)
-     VALUES (@id, @parent_id, @title, @created_at, @triage_status, @urgent, @impact, @major_incident,
-             @difficulty, @timer, @category, @termination_date, @comment, @duration_in_minutes, @priority, @user_id)
-   `);
+      INSERT INTO tasks (id, parent_id, title, created_at, triage_status, urgent, impact, major_incident,
+                         difficulty, timer, category, termination_date, comment, duration_in_minutes, priority, user_id)
+      VALUES (@id, @parent_id, @title, @created_at, @triage_status, @urgent, @impact, @major_incident,
+              @difficulty, @timer, @category, @termination_date, @comment, @duration_in_minutes, @priority, @user_id)
+    `);
 
     const params = {
       id: newTask.id,
@@ -757,26 +789,15 @@ class SqliteClient implements DbClient {
     return row?.responses ? JSON.parse(row.responses) : null;
   }
 
-  async saveQolSurveyResponse(userId: string, data: QolSurveyResponseEntity): Promise<void> {
+  async saveQolSurveyResponse(userId: string, responses: QolSurveyResponseEntity): Promise<void> {
     this.db.prepare(`
-      INSERT INTO qol_survey (user_id, responses) 
+      INSERT INTO qol_survey (user_id, responses)
       VALUES (@userId, @responses)
       ON CONFLICT(user_id) DO UPDATE SET responses = excluded.responses
     `).run({
       userId,
-      responses: JSON.stringify(data)
+      responses: JSON.stringify(responses)
     });
-  }
-
-  async getAllQolSurveyResponses(): Promise<Record<string, QolSurveyResponseEntity>> {
-    const rows = this.db.prepare('SELECT user_id, responses FROM qol_survey').all() as { user_id: string, responses: string }[];
-    const result: Record<string, QolSurveyResponseEntity> = {};
-    for (const row of rows) {
-      if (row.responses) {
-        result[row.user_id] = JSON.parse(row.responses);
-      }
-    }
-    return result;
   }
 
   // Filters
@@ -797,5 +818,19 @@ class SqliteClient implements DbClient {
 
   async clearFilters(): Promise<void> {
     this.db.prepare('DELETE FROM filters WHERE id = 1').run();
+  }
+
+  // Fertilization Board
+  async getFertilizationBoardState(): Promise<FertilizationBoardEntity | null> {
+    const row = this.db.prepare('SELECT data FROM fertilization_board WHERE id = 1').get() as JsonRow | undefined;
+    return row?.data ? JSON.parse(row.data) : null;
+  }
+
+  async updateFertilizationBoardState(state: FertilizationBoardEntity): Promise<void> {
+    this.db.prepare(`
+      INSERT INTO fertilization_board (id, data)
+      VALUES (1, @data)
+      ON CONFLICT(id) DO UPDATE SET data = excluded.data
+    `).run({ data: JSON.stringify(state) });
   }
 }

@@ -1,4 +1,4 @@
-import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata } from './persistence-types';
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity } from './persistence-types';
 
 // Storage keys
 const TASKS_STORAGE_KEY = 'dyad_task_board_v1';
@@ -6,6 +6,7 @@ const USER_SETTINGS_STORAGE_KEY = 'p3fo_user_settings_v1';
 const APP_SETTINGS_STORAGE_KEY = 'dyad_settings_v1';
 const QOL_SURVEY_STORAGE_KEY = 'qolSurveyResponse';
 const FILTERS_STORAGE_KEY = 'taskFilters';
+const FERTILIZATION_BOARD_STORAGE_KEY = 'fertilizationBoard';
 
 // Default values
 const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
@@ -457,5 +458,32 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       backend: 'local',
       version: '1.0.0',
     };
+  }
+
+  async getFertilizationBoardState(): Promise<FertilizationBoardEntity | null> {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    try {
+      const stored = localStorage.getItem(FERTILIZATION_BOARD_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : null;
+    } catch (error) {
+      console.error('Error reading fertilization board state from localStorage:', error);
+      return null;
+    }
+  }
+
+  async updateFertilizationBoardState(state: FertilizationBoardEntity): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      localStorage.setItem(FERTILIZATION_BOARD_STORAGE_KEY, JSON.stringify(state));
+    } catch (error) {
+      console.error('Error updating fertilization board state in localStorage:', error);
+      throw error;
+    }
   }
 }

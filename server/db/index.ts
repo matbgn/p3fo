@@ -1,5 +1,5 @@
 // Database client interface and factory
-import { TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity } from '../../src/lib/persistence-types.js';
+import { TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, FertilizationBoardEntity } from '../../src/lib/persistence-types.js';
 
 // Define the database client interface
 export interface DbClient {
@@ -38,6 +38,10 @@ export interface DbClient {
   getFilters(): Promise<FilterStateEntity | null>;
   saveFilters(data: FilterStateEntity): Promise<void>;
   clearFilters(): Promise<void>;
+
+  // Fertilization Board
+  getFertilizationBoardState(): Promise<FertilizationBoardEntity | null>;
+  updateFertilizationBoardState(state: FertilizationBoardEntity): Promise<void>;
 }
 
 // Factory function to create database client

@@ -343,6 +343,27 @@ app.delete('/api/filters', async (req: Request, res: Response) => {
   }
 });
 
+// Fertilization Board routes
+app.get('/api/fertilization-board', async (req: Request, res: Response) => {
+  try {
+    const state = await db.getFertilizationBoardState();
+    res.json(state);
+  } catch (error: any) {
+    console.error('Error fetching fertilization board state:', error);
+    res.status(500).json({ error: 'Failed to fetch fertilization board state', details: error.message });
+  }
+});
+
+app.put('/api/fertilization-board', async (req: Request, res: Response) => {
+  try {
+    await db.updateFertilizationBoardState(req.body);
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error updating fertilization board state:', error);
+    res.status(500).json({ error: 'Failed to update fertilization board state', details: error.message });
+  }
+});
+
 // Error handling middleware
 app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
   console.error('Unhandled error:', error);

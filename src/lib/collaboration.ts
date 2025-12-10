@@ -11,6 +11,11 @@ export const yTasks = doc.getMap('tasks');
 // Export shared user settings map for cross-client synchronization
 export const yUserSettings = doc.getMap('userSettings');
 
+// Export shared fertilization board maps
+export const yFertilizationState = doc.getMap('fertilizationState');
+export const yFertilizationCards = doc.getMap('fertilizationCards');
+export const yFertilizationColumns = doc.getMap('fertilizationColumns');
+
 // Provider and awareness are nullable - only initialized when NOT in browser-only mode
 export let provider: WebsocketProvider | null = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

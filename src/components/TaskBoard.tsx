@@ -97,7 +97,16 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
       try {
         const storedFilters = await loadFiltersFromSessionStorage();
         if (storedFilters) {
-          setFilters(storedFilters);
+          // Reset Done/Dropped visibility on mount to prevent unwanted persistence
+          // User requested that these tasks be hidden by default when entering the view
+          const cleanStatus = (storedFilters.status || []).filter(
+            (s) => s !== "Done" && s !== "Dropped"
+          );
+
+          setFilters({
+            ...storedFilters,
+            status: cleanStatus
+          });
         }
       } catch (error) {
         console.error("Error loading filters:", error);
@@ -478,8 +487,6 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                       }
 
                       // Apply category filter
-                      // Tasks without a category should be displayed if any category is selected.
-                      // Tasks with a category should only be displayed if their category is selected.
                       if (filters.category && Array.isArray(filters.category) && filters.category.length > 0 && task.category && !filters.category.includes(task.category)) {
                         return false;
                       }

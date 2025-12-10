@@ -14,6 +14,8 @@ import { useView } from "@/hooks/useView";
 import { COMPACTNESS_ULTRA, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
+import FertilizationView from './FertilizationView'; // Import FertilizationView
+
 interface PlanViewProps {
   onFocusOnTask: (taskId: string) => void;
 }
@@ -23,7 +25,7 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
   const { userId: currentUserId } = useUserSettings();
 
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<'storyboard' | 'prioritization'>('storyboard'); // New state for view switching
+  const [activeView, setActiveView] = useState<'storyboard' | 'prioritization' | 'fertilization'>('storyboard'); // New state for view switching
 
   // Track which parents are expanded in PlanView
   const [openParents, setOpenParents] = useState<Record<string, boolean>>({});
@@ -238,6 +240,12 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
           <CardTitle>Plan View</CardTitle>
           <div className="flex space-x-2">
             <Button
+              variant={activeView === 'fertilization' ? 'default' : 'outline'}
+              onClick={() => setActiveView('fertilization')}
+            >
+              Fertilization
+            </Button>
+            <Button
               variant={activeView === 'storyboard' ? 'default' : 'outline'}
               onClick={() => setActiveView('storyboard')}
             >
@@ -251,60 +259,67 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
             </Button>
           </div>
         </div>
-        <div className="mb-2 flex gap-2">
-          <Input
-            placeholder="Quick add top task..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addTopTask()}
-            className="max-w-md"
-          />
-          <Button onClick={addTopTask} disabled={!input.trim()}>
-            Add
-          </Button>
-        </div>
 
-        <div className="mb-4 flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="p-0 h-6 w-6"
-              onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}
-            >
-              {isFiltersCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </Button>
-            <span className="text-sm font-medium text-muted-foreground cursor-pointer select-none" onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}>
-              Filters & Controls
-            </span>
-          </div>
-
-          {!isFiltersCollapsed && (
-            <div className="flex flex-wrap items-center gap-4 border rounded-lg p-3">
-              <FilterControls
-                filters={filters}
-                setFilters={setFilters}
-                defaultFilters={defaultPlanViewFilters}
+        {activeView !== 'fertilization' && (
+          <>
+            <div className="mb-2 flex gap-2">
+              <Input
+                placeholder="Quick add top task..."
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addTopTask()}
+                className="max-w-md"
               />
-              {/* Vertical separator */}
-              <div className="h-6 border-l border-gray-300 mx-2"></div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Quick time edition:</span>
-                <QuickTimer onJumpToTask={(taskId) => {
-                  // Find the task and focus on it
-                  const task = tasks.find(t => t.id === taskId);
-                  if (task) {
-                    onFocusOnTask(taskId);
-                  }
-                }} />
-              </div>
+              <Button onClick={addTopTask} disabled={!input.trim()}>
+                Add
+              </Button>
             </div>
-          )}
-        </div>
+
+            <div className="mb-4 flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="p-0 h-6 w-6"
+                  onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}
+                >
+                  {isFiltersCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </Button>
+                <span className="text-sm font-medium text-muted-foreground cursor-pointer select-none" onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}>
+                  Filters & Controls
+                </span>
+              </div>
+
+              {!isFiltersCollapsed && (
+                <div className="flex flex-wrap items-center gap-4 border rounded-lg p-3">
+                  <FilterControls
+                    filters={filters}
+                    setFilters={setFilters}
+                    defaultFilters={defaultPlanViewFilters}
+                  />
+                  {/* Vertical separator */}
+                  <div className="h-6 border-l border-gray-300 mx-2"></div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">Quick time edition:</span>
+                    <QuickTimer onJumpToTask={(taskId) => {
+                      // Find the task and focus on it
+                      const task = tasks.find(t => t.id === taskId);
+                      if (task) {
+                        onFocusOnTask(taskId);
+                      }
+                    }} />
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </CardHeader>
       <CardContent className="flex-grow overflow-hidden">
-        {activeView === 'storyboard' ? (
+        {activeView === 'fertilization' ? (
+          <FertilizationView />
+        ) : activeView === 'storyboard' ? (
           <div
             className="flex flex-nowrap overflow-x-auto h-full p-2 space-x-4"
             onDragOver={handleDragOver}

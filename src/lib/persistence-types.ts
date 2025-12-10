@@ -143,4 +143,37 @@ export interface PersistenceAdapter {
 
   // Metadata
   getMetadata(): Promise<StorageMetadata>;
+
+  // Fertilization Board
+  getFertilizationBoardState(): Promise<FertilizationBoardEntity | null>;
+  updateFertilizationBoardState(state: FertilizationBoardEntity): Promise<void>;
+}
+
+export interface FertilizationCard {
+  id: string;
+  columnId: string;
+  content: string;
+  authorId: string | null; // null for anonymous cards
+  likedBy: string[]; // Array of userIds who liked the card
+  isRevealed: boolean; // For hidden edition
+}
+
+export interface FertilizationColumn {
+  id: string;
+  title: string;
+  color: string; // For UI styling
+  isLocked: boolean;
+}
+
+export interface FertilizationBoardEntity {
+  moderatorId: string | null;
+  isSessionActive: boolean;
+  columns: FertilizationColumn[];
+  cards: FertilizationCard[];
+  timer: {
+    isRunning: boolean;
+    startTime: number | null;
+    duration: number; // in seconds
+  } | null;
+  hiddenEdition: boolean; // Global flag for hidden edition mode
 }
