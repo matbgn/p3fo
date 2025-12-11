@@ -73,17 +73,19 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
             <span className="text-sm">Unassigned</span>
           </div>
         </SelectItem>
-        <SelectItem value={currentUserId}>
-          <div className="flex items-center gap-2">
-            <UserAvatar
-              username={userSettings.username}
-              logo={userSettings.logo}
-              size="sm"
-              showTooltip={false}
-            />
-            <span className="text-sm">Myself ({userSettings.username})</span>
-          </div>
-        </SelectItem>
+        {currentUserId && (
+          <SelectItem value={currentUserId}>
+            <div className="flex items-center gap-2">
+              <UserAvatar
+                username={userSettings.username}
+                logo={userSettings.logo}
+                size="sm"
+                showTooltip={false}
+              />
+              <span className="text-sm">Myself ({userSettings.username})</span>
+            </div>
+          </SelectItem>
+        )}
         {/* Show other users from the users list */}
         {users.filter(u => u.userId !== currentUserId).map((user) => (
           <SelectItem key={user.userId} value={user.userId}>

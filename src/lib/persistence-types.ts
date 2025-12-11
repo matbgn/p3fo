@@ -154,7 +154,7 @@ export interface FertilizationCard {
   columnId: string;
   content: string;
   authorId: string | null; // null for anonymous cards
-  likedBy: string[]; // Array of userIds who liked the card
+  votes: Record<string, number>; // UserId -> VoteValue
   isRevealed: boolean; // For hidden edition
 }
 
@@ -164,6 +164,9 @@ export interface FertilizationColumn {
   color: string; // For UI styling
   isLocked: boolean;
 }
+
+export type VotingMode = 'THUMBS_UP' | 'THUMBS_UD_NEUTRAL' | 'POINTS' | 'MAJORITY_JUDGMENT';
+export type VotingPhase = 'IDLE' | 'VOTING' | 'REVEALED';
 
 export interface FertilizationBoardEntity {
   moderatorId: string | null;
@@ -176,4 +179,7 @@ export interface FertilizationBoardEntity {
     duration: number; // in seconds
   } | null;
   hiddenEdition: boolean; // Global flag for hidden edition mode
+  votingMode: VotingMode;
+  votingPhase: VotingPhase;
+  maxPointsPerUser?: number; // Configurable max points for POINTS voting mode
 }

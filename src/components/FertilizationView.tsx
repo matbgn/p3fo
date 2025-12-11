@@ -5,7 +5,7 @@ import { usePersistence } from '@/hooks/usePersistence';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Lock, Unlock, Eye, EyeOff, Play, RotateCcw, Plus, Trash2, ThumbsUp, HatGlasses, Minus, Clock, Square, Filter, Search, X, ChevronDown, ChevronRight } from 'lucide-react';
+import { Lock, Unlock, Eye, EyeOff, Play, RotateCcw, Plus, Trash2, ThumbsUp, HatGlasses, Minus, Clock, Square, Search, X, ChevronDown, ChevronRight, Info } from 'lucide-react';
 import { useTasks } from '@/hooks/useTasks'; // For converting to tasks
 import { UserSelector } from './UserSelector';
 import { UserFilterSelector } from './UserFilterSelector';
@@ -24,7 +24,32 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+    HoverCard,
+    HoverCardContent,
+    HoverCardTrigger,
+} from '@/components/ui/hover-card';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { aStarTextSearch } from '@/lib/a-star-search';
+
+// Voting Constants
+type VotingMode = 'THUMBS_UP' | 'THUMBS_UD_NEUTRAL' | 'POINTS' | 'MAJORITY_JUDGMENT';
+type VotingPhase = 'IDLE' | 'VOTING' | 'REVEALED';
+
+const MJ_SCALE = [
+    { value: -1, label: 'Reject', color: 'bg-red-600', hoverColor: 'hover:bg-red-700', icon: '⛔' },
+    { value: 0, label: 'Insufficient', color: 'bg-orange-500', hoverColor: 'hover:bg-orange-600', icon: '👎' },
+    { value: 1, label: 'Passable', color: 'bg-yellow-400', hoverColor: 'hover:bg-yellow-500', icon: '😐' },
+    { value: 2, label: 'Acceptable', color: 'bg-lime-500', hoverColor: 'hover:bg-lime-600', icon: '🙂' },
+    { value: 3, label: 'Good', color: 'bg-green-600', hoverColor: 'hover:bg-green-700', icon: '👍' },
+    { value: 4, label: 'Excellent', color: 'bg-green-900', hoverColor: 'hover:bg-green-950', icon: '🌟' },
+];
 
 // Default columns
 const DEFAULT_COLUMNS: FertilizationColumn[] = [
@@ -61,6 +86,10 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
     const [filterColumns, setFilterColumns] = useState<string[]>([]);
     const [filterMinLikes, setFilterMinLikes] = useState(0);
     const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(true);
+
+    // Points Voting State
+    const [pointsConfigOpen, setPointsConfigOpen] = useState(false);
+    const [pointsConfigValue, setPointsConfigValue] = useState(10);
 
     // Constants for filter
     const ALL_USERS_VALUE = 'ALL_USERS';
@@ -103,7 +132,11 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
 
         // Apply minimum likes filter
         if (filterMinLikes > 0) {
-            cards = cards.filter(card => card.likedBy.length >= filterMinLikes);
+            // Count "likes" (votes > 0)
+            cards = cards.filter(card => {
+                const positiveVotes = Object.values(card.votes || {}).filter(v => v > 0).length;
+                return positiveVotes >= filterMinLikes;
+            });
         }
 
         // Apply search filter with A* algorithm
@@ -136,6 +169,8 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
             yFertilizationState.set('isSessionActive', state.isSessionActive);
             yFertilizationState.set('timer', state.timer);
             yFertilizationState.set('hiddenEdition', state.hiddenEdition);
+            yFertilizationState.set('votingMode', state.votingMode);
+            yFertilizationState.set('votingPhase', state.votingPhase);
 
             // Sync Columns
             state.columns.forEach(col => {
@@ -155,7 +190,12 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
 
             // Add/Update cards
             state.cards.forEach(card => {
-                yFertilizationCards.set(card.id, card);
+                const existingCard = yFertilizationCards.get(card.id) as FertilizationCard;
+                // Only update if changed to avoid unnecessary re-renders/traffic
+                // Simple equality check for now, can be optimized
+                if (!existingCard || JSON.stringify(existingCard) !== JSON.stringify(card)) {
+                    yFertilizationCards.set(card.id, card);
+                }
             });
         });
     }, []);
@@ -170,6 +210,8 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
             const isSessionActive = yFertilizationState.get('isSessionActive') as boolean;
             const timer = yFertilizationState.get('timer') as any;
             const hiddenEdition = yFertilizationState.get('hiddenEdition') as boolean;
+            const votingMode = (yFertilizationState.get('votingMode') as VotingMode) || 'THUMBS_UP';
+            const votingPhase = (yFertilizationState.get('votingPhase') as VotingPhase) || 'IDLE';
 
             const columns = Array.from(yFertilizationColumns.values()) as FertilizationColumn[];
             // Sort columns to ensure consistent order (optional but good practice)
@@ -188,6 +230,8 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
                     isSessionActive: isSessionActive ?? false,
                     timer: timer ?? null,
                     hiddenEdition: hiddenEdition ?? true,
+                    votingMode,
+                    votingPhase,
                     columns: sortedColumns,
                     cards: cards
                 };
@@ -219,6 +263,8 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
                     const isSessionActive = yFertilizationState.get('isSessionActive') as boolean;
                     const timer = yFertilizationState.get('timer') as any;
                     const hiddenEdition = yFertilizationState.get('hiddenEdition') as boolean;
+                    const votingMode = (yFertilizationState.get('votingMode') as VotingMode) || 'THUMBS_UP';
+                    const votingPhase = (yFertilizationState.get('votingPhase') as VotingPhase) || 'IDLE';
                     const columns = Array.from(yFertilizationColumns.values()) as FertilizationColumn[];
                     const sortedColumns = DEFAULT_COLUMNS.map(defCol =>
                         columns.find(c => c.id === defCol.id) || defCol
@@ -231,6 +277,8 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
                             isSessionActive: isSessionActive ?? false,
                             timer: timer ?? null,
                             hiddenEdition: hiddenEdition ?? true,
+                            votingMode,
+                            votingPhase,
                             columns: sortedColumns,
                             cards: cards
                         });
@@ -249,6 +297,8 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
                         cards: [],
                         timer: null,
                         hiddenEdition: true,
+                        votingMode: 'THUMBS_UP',
+                        votingPhase: 'IDLE',
                     };
                     await persistence.updateFertilizationBoardState(state);
                 }
@@ -289,7 +339,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
         if (!boardState) return;
         if (!confirm('Are you sure you want to restart the session? This will clear all cards.')) return;
 
-        const newState = {
+        const newState: FertilizationBoardEntity = {
             ...boardState,
             isSessionActive: false,
             moderatorId: null,
@@ -297,6 +347,8 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
             columns: DEFAULT_COLUMNS, // Reset locks
             timer: null,
             hiddenEdition: true,
+            votingMode: 'THUMBS_UP',
+            votingPhase: 'IDLE',
         };
         await saveBoard(newState);
     };
@@ -343,7 +395,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
             columnId,
             content: newCardContent,
             authorId: anonymous ? null : currentUserId,
-            likedBy: [],
+            votes: {},
             isRevealed: !boardState.hiddenEdition,
         };
 
@@ -404,24 +456,115 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
     const [editingCardId, setEditingCardId] = useState<string | null>(null);
     const [editingCardContent, setEditingCardContent] = useState('');
 
-    const likeCard = async (cardId: string) => {
+    const voteCard = async (cardId: string, value: number) => {
         if (!boardState) return;
+
+        // Ensure voting is open
+        if (boardState.votingPhase !== 'VOTING') return;
+
         const newCards = boardState.cards.map(c => {
             if (c.id === cardId) {
-                const hasLiked = c.likedBy.includes(currentUserId);
-                let newLikedBy;
-                if (hasLiked) {
-                    // Unlike
-                    newLikedBy = c.likedBy.filter(id => id !== currentUserId);
+                const currentVote = c.votes[currentUserId];
+                const newVotes = { ...c.votes };
+
+                // Toggle behavior for Thumbs Up and Up/Down (if same value selected)
+                // For MJ, no toggle, just selection
+                if (boardState.votingMode !== 'MAJORITY_JUDGMENT' && currentVote === value) {
+                    delete newVotes[currentUserId];
                 } else {
-                    // Like
-                    newLikedBy = [...c.likedBy, currentUserId];
+                    newVotes[currentUserId] = value;
                 }
-                return { ...c, likedBy: newLikedBy };
+
+                return { ...c, votes: newVotes };
             }
             return c;
         });
         await saveBoard({ ...boardState, cards: newCards });
+    };
+
+    // Calculate MJ Median Grade
+    const getMJMedian = (votes: Record<string, number>) => {
+        const values = Object.values(votes).sort((a, b) => a - b);
+        if (values.length === 0) return null;
+
+        // Majority Judgment Median calculation:
+        // If odd number of votes (2n+1), median is at index n.
+        // If even number of votes (2n), median is at index n-1 (lower median).
+        // e.g., 4 votes: indices 0, 1, 2, 3. Median is index 1.
+        // e.g., 5 votes: indices 0, 1, 2, 3, 4. Median is index 2.
+
+        const midIndex = Math.ceil(values.length / 2) - 1;
+        return values[Math.max(0, midIndex)];
+    };
+
+    // Helper to render MJ Distribution
+    const renderMJDistribution = (votes: Record<string, number>) => {
+        const totalVotes = Object.keys(votes).length;
+        if (totalVotes === 0) return <div className="text-sm text-muted-foreground p-2">No votes cast yet.</div>;
+
+        const medianValue = getMJMedian(votes);
+
+        // Calculate distribution
+        const distribution = MJ_SCALE.map(grade => {
+            const count = Object.values(votes).filter(v => v === grade.value).length;
+            const percentage = (count / totalVotes) * 100;
+            return {
+                ...grade,
+                count,
+                percentage
+            };
+        });
+
+        return (
+            <div className="flex flex-col gap-3 min-w-[300px]">
+                {/* Legend */}
+                <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground mb-1">
+                    {MJ_SCALE.map(grade => (
+                        <div key={grade.value} className="flex items-center gap-1">
+                            <div className={`w-3 h-3 rounded ${grade.color}`}></div>
+                            <span>{grade.label}</span>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Stacked Bar */}
+                <div className="relative w-full h-8 flex rounded-md shadow-sm bg-gray-100">
+                    {(() => {
+                        const visibleSegments = distribution.filter(d => d.count > 0);
+                        return visibleSegments.map((item, index) => {
+                            const isMedian = item.value === medianValue;
+                            const isFirst = index === 0;
+                            const isLast = index === visibleSegments.length - 1;
+
+                            return (
+                                <div
+                                    key={item.value}
+                                    className={`h-full flex items-center justify-center relative ${item.color} 
+                                        ${isFirst ? 'rounded-l-md' : ''} 
+                                        ${isLast ? 'rounded-r-md' : ''} 
+                                        ${isMedian ? 'ring-2 ring-white z-20 shadow-lg scale-y-125 mx-0.5 rounded-sm origin-center' : ''}
+                                    `}
+                                    style={{
+                                        width: `${item.percentage}%`,
+                                        /* If median, we want it to visually pop out, so we might need slightly more width or just margin? 
+                                           The margin mx-0.5 adds space around it, which might shift things. 
+                                           Let's stick to scale-y for vertical pop and ring for border. 
+                                           The ring will be visible now that overflow is not hidden. */
+                                    }}
+                                    title={`${item.label}: ${item.count} votes (${item.percentage.toFixed(1)}%)`}
+                                >
+                                    {item.percentage >= 10 && (
+                                        <span className={`text-[10px] font-bold ${[1, 2].includes(item.value) ? 'text-black' : 'text-white'} drop-shadow-md`}>
+                                            {item.percentage.toFixed(1)}%
+                                        </span>
+                                    )}
+                                </div>
+                            );
+                        });
+                    })()}
+                </div>
+            </div>
+        );
     };
 
     const handleDragStart = (e: React.DragEvent, cardId: string) => {
@@ -566,6 +709,63 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
 
     if (loading) return <div>Loading...</div>;
 
+    const handleStartVoting = () => {
+        if (boardState?.votingMode === 'POINTS' && boardState.votingPhase === 'IDLE') {
+            setPointsConfigOpen(true);
+        } else {
+            saveBoard({ ...boardState!, votingPhase: 'VOTING' });
+        }
+    };
+
+    const confirmPointsConfig = async () => {
+        if (!boardState) return;
+        await saveBoard({
+            ...boardState,
+            votingPhase: 'VOTING',
+            maxPointsPerUser: pointsConfigValue
+        });
+        setPointsConfigOpen(false);
+    };
+
+    const calculateUserUsedPoints = (userId: string) => {
+        if (!boardState) return 0;
+        return boardState.cards.reduce((acc, card) => {
+            return acc + (card.votes[userId] || 0);
+        }, 0);
+    };
+
+    const votePoints = async (cardId: string, delta: number) => {
+        if (!boardState || boardState.votingMode !== 'POINTS') return;
+
+        const maxPoints = boardState.maxPointsPerUser || 10;
+        const usedPoints = calculateUserUsedPoints(currentUserId);
+        const card = boardState.cards.find(c => c.id === cardId);
+        if (!card) return;
+
+        const currentCardPoints = card.votes[currentUserId] || 0;
+        const newCardPoints = currentCardPoints + delta;
+
+        // Validation
+        if (newCardPoints < 0) return; // Cannot be negative
+        if (usedPoints - currentCardPoints + newCardPoints > maxPoints) return; // Cannot exceed budget
+
+        const newVotes = { ...card.votes };
+        if (newCardPoints === 0) {
+            delete newVotes[currentUserId];
+        } else {
+            newVotes[currentUserId] = newCardPoints;
+        }
+
+        const newCards = boardState.cards.map(c => {
+            if (c.id === cardId) {
+                return { ...c, votes: newVotes };
+            }
+            return c;
+        });
+
+        await saveBoard({ ...boardState, cards: newCards });
+    };
+
     if (!boardState?.isSessionActive) {
         return (
             <div className="flex flex-col items-center justify-center h-full space-y-4">
@@ -579,7 +779,14 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
     return (
         <div className="h-full flex flex-col space-y-4 p-4">
             <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold">Fertilization Board</h2>
+                <h2 className="text-2xl font-bold flex items-center gap-2">
+                    Fertilization Board
+                    {boardState?.votingMode === 'POINTS' && boardState.votingPhase === 'VOTING' && (
+                        <div className="text-sm font-normal px-3 py-1 bg-primary/10 rounded-full border border-primary/20 text-primary">
+                            Budget: <span className="font-bold">{calculateUserUsedPoints(currentUserId)}</span> / {boardState.maxPointsPerUser || 10} pts
+                        </div>
+                    )}
+                </h2>
                 <div className="flex items-center space-x-2">
                     {/* Always show timer countdown */}
                     <div className={`text-xl font-mono font-bold mr-4 ${boardState.timer?.isRunning && timeLeft <= 10 ? 'text-red-500 animate-pulse' : ''}`}>
@@ -667,6 +874,16 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
                             </Button>
                         </>
                     )}
+
+                    {!isModerator && boardState.isSessionActive && (
+                        <div className="flex items-center gap-2 border-l pl-4 ml-2">
+                            <div className="px-3 py-1 bg-muted rounded-full text-xs font-semibold">
+                                {boardState.votingPhase === 'VOTING' && <span className="text-green-600 flex items-center gap-1"><Play className="h-3 w-3" /> Voting Open</span>}
+                                {boardState.votingPhase === 'IDLE' && <span className="text-muted-foreground">Voting Closed</span>}
+                                {boardState.votingPhase === 'REVEALED' && <span className="text-blue-600 flex items-center gap-1"><Eye className="h-3 w-3" /> Results Revealed</span>}
+                            </div>
+                        </div>
+                    )}
                     {!isModerator && boardState.isSessionActive && (
                         <Button variant="outline" size="sm" onClick={becomeModerator}>
                             Become Moderator
@@ -674,6 +891,71 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
                     )}
                 </div>
             </div>
+
+            {/* Voting Controls - Second Line */}
+            {isModerator && (
+                <div className="flex items-center gap-2 self-end">
+                    <span className="text-sm font-medium mr-1">Voting:</span>
+                    <Select
+                        value={boardState.votingMode}
+                        onValueChange={(val: VotingMode) => saveBoard({ ...boardState, votingMode: val, votingPhase: 'IDLE' })}
+                        disabled={boardState.votingPhase !== 'IDLE'}
+                    >
+                        <SelectTrigger className="w-[180px] h-8">
+                            <SelectValue placeholder="Mode" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="THUMBS_UP">Thumbs Up</SelectItem>
+                            <SelectItem value="THUMBS_UD_NEUTRAL">Up / Down / Neutral</SelectItem>
+                            <SelectItem value="POINTS">Points Budget</SelectItem>
+                            <SelectItem value="MAJORITY_JUDGMENT">Majority Judgment</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    {boardState.votingPhase === 'IDLE' && (
+                        <>
+                            <Button size="sm" onClick={handleStartVoting}>
+                                <Play className="h-3 w-3 mr-1" /> Start Voting
+                            </Button>
+                            <Dialog open={pointsConfigOpen} onOpenChange={setPointsConfigOpen}>
+                                <DialogContent className="sm:max-w-sm">
+                                    <DialogHeader>
+                                        <DialogTitle>Configure Points Budget</DialogTitle>
+                                        <DialogDescription>
+                                            Set the maximum number of points each user can distribute across all cards.
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="flex items-center gap-4 py-4">
+                                        <Label className="text-right">Max Points:</Label>
+                                        <Input
+                                            type="number"
+                                            value={pointsConfigValue}
+                                            onChange={(e) => setPointsConfigValue(Math.max(1, parseInt(e.target.value) || 0))}
+                                            className="col-span-3"
+                                        />
+                                    </div>
+                                    <Button onClick={confirmPointsConfig}>Start Points Voting</Button>
+                                </DialogContent>
+                            </Dialog>
+                        </>
+                    )}
+                    {boardState.votingPhase === 'VOTING' && (
+                        <Button size="sm" variant="secondary" onClick={() => saveBoard({ ...boardState, votingPhase: 'IDLE' })}>
+                            <Square className="h-3 w-3 mr-1" /> Stop Voting
+                        </Button>
+                    )}
+                    {boardState.votingPhase !== 'REVEALED' && (
+                        <Button size="sm" variant="outline" onClick={() => saveBoard({ ...boardState, votingPhase: 'REVEALED' })}>
+                            <Eye className="h-3 w-3 mr-1" /> Reveal Votes
+                        </Button>
+                    )}
+                    {boardState.votingPhase === 'REVEALED' && (
+                        <Button size="sm" variant="outline" onClick={() => saveBoard({ ...boardState, votingPhase: 'IDLE' })}>
+                            <RotateCcw className="h-3 w-3 mr-1" /> Continue Voting
+                        </Button>
+                    )}
+                </div>
+            )}
 
             {/* Collapsible Filters & Controls */}
             <div className="flex flex-col gap-2">
@@ -959,16 +1241,163 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
                                                 </div>
                                             </div>
                                             <div className="mt-2 flex justify-between items-center">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="h-6 px-2 text-xs"
-                                                    onClick={() => likeCard(card.id)}
-                                                    disabled={isHiddenFromUser}
-                                                >
-                                                    <ThumbsUp className={`h-3 w-3 mr-1 ${card.likedBy.includes(currentUserId) ? 'fill-current text-blue-500' : ''}`} />
-                                                    {card.likedBy.length}
-                                                </Button>
+                                                <div className="flex items-center gap-2">
+                                                    {!isHiddenFromUser && boardState.votingPhase === 'VOTING' ? (
+                                                        <div className="flex items-center gap-1">
+                                                            {boardState.votingMode === 'THUMBS_UP' && (
+                                                                <Button
+                                                                    variant={card.votes?.[currentUserId] === 1 ? "default" : "ghost"}
+                                                                    size="sm"
+                                                                    className="h-6 w-6 p-0 rounded-full"
+                                                                    onClick={() => voteCard(card.id, 1)}
+                                                                >
+                                                                    <ThumbsUp className="h-3 w-3" />
+                                                                </Button>
+                                                            )}
+                                                            {boardState.votingMode === 'THUMBS_UD_NEUTRAL' && (
+                                                                <>
+                                                                    <Button
+                                                                        variant={card.votes?.[currentUserId] === 1 ? "default" : "ghost"}
+                                                                        size="sm"
+                                                                        className="h-6 w-6 p-0 rounded-full"
+                                                                        onClick={() => voteCard(card.id, 1)}
+                                                                        title="For"
+                                                                    >
+                                                                        <ThumbsUp className="h-3 w-3" />
+                                                                    </Button>
+                                                                    <Button
+                                                                        variant={card.votes?.[currentUserId] === 0 ? "default" : "ghost"}
+                                                                        size="sm"
+                                                                        className="h-6 w-6 p-0 rounded-full"
+                                                                        onClick={() => voteCard(card.id, 0)}
+                                                                        title="Neutral"
+                                                                    >
+                                                                        <Minus className="h-3 w-3" />
+                                                                    </Button>
+                                                                    <Button
+                                                                        variant={card.votes?.[currentUserId] === -1 ? "default" : "ghost"}
+                                                                        size="sm"
+                                                                        className="h-6 w-6 p-0 rounded-full"
+                                                                        onClick={() => voteCard(card.id, -1)}
+                                                                        title="Against"
+                                                                    >
+                                                                        <ThumbsUp className="h-3 w-3 rotate-180" />
+                                                                    </Button>
+                                                                </>
+                                                            )}
+                                                            {boardState.votingMode === 'POINTS' && (
+                                                                <div className="flex items-center gap-1 bg-muted rounded p-1">
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        className="h-5 w-5 p-0"
+                                                                        onClick={() => votePoints(card.id, -1)}
+                                                                        disabled={(card.votes?.[currentUserId] || 0) <= 0}
+                                                                    >
+                                                                        <Minus className="h-3 w-3" />
+                                                                    </Button>
+                                                                    <span className="text-xs font-mono font-bold w-4 text-center">
+                                                                        {card.votes?.[currentUserId] || 0}
+                                                                    </span>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        className="h-5 w-5 p-0"
+                                                                        onClick={() => votePoints(card.id, 1)}
+
+                                                                        disabled={calculateUserUsedPoints(currentUserId) >= (boardState.maxPointsPerUser || 10)}
+                                                                    >
+                                                                        <Plus className="h-3 w-3" />
+                                                                    </Button>
+                                                                </div>
+                                                            )}
+                                                            {boardState.votingMode === 'MAJORITY_JUDGMENT' && (
+                                                                <Popover>
+                                                                    <PopoverTrigger asChild>
+                                                                        <Button
+                                                                            variant={card.votes?.[currentUserId] !== undefined ? "default" : "outline"}
+                                                                            size="sm"
+                                                                            className="h-6 px-2 text-[10px]"
+                                                                        >
+                                                                            {card.votes?.[currentUserId] !== undefined
+                                                                                ? MJ_SCALE.find(s => s.value === card.votes[currentUserId])?.label
+                                                                                : "Vote"}
+                                                                        </Button>
+                                                                    </PopoverTrigger>
+                                                                    <PopoverContent className="w-auto p-2">
+                                                                        <div className="flex flex-col gap-1">
+                                                                            <span className="text-xs font-semibold mb-1 text-center">Rate this option:</span>
+                                                                            {MJ_SCALE.slice().reverse().map(step => (
+                                                                                <Button
+                                                                                    key={step.value}
+                                                                                    variant="ghost"
+                                                                                    size="sm"
+                                                                                    className={`justify-start h-7 text-xs ${card.votes?.[currentUserId] === step.value ? 'bg-accent' : ''} ${step.hoverColor} hover:text-white`}
+                                                                                    onClick={() => voteCard(card.id, step.value)}
+                                                                                >
+                                                                                    <span className="mr-2">{step.icon}</span>
+                                                                                    {step.label}
+                                                                                </Button>
+                                                                            ))}
+                                                                        </div>
+                                                                    </PopoverContent>
+                                                                </Popover>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex items-center gap-2 text-xs font-medium">
+                                                            {isModerator || boardState.votingPhase === 'REVEALED' ? (
+                                                                <>
+                                                                    {boardState.votingMode === 'THUMBS_UP' && (
+                                                                        <span className="flex items-center text-blue-600">
+                                                                            <span className="flex items-center text-green-600"><ThumbsUp className="h-3 w-3 mr-1" /></span>
+                                                                            {Object.values(card.votes || {}).filter(v => v === 1).length}
+                                                                        </span>
+                                                                    )}
+                                                                    {boardState.votingMode === 'THUMBS_UD_NEUTRAL' && (
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="flex items-center text-green-600"><ThumbsUp className="h-3 w-3 mr-1" />{Object.values(card.votes || {}).filter(v => v === 1).length}</span>
+                                                                            <span className="flex items-center text-gray-500"><Minus className="h-3 w-3 mr-1" />{Object.values(card.votes || {}).filter(v => v === 0).length}</span>
+                                                                            <span className="flex items-center text-red-600"><ThumbsUp className="h-3 w-3 mr-1 rotate-180" />{Object.values(card.votes || {}).filter(v => v === -1).length}</span>
+                                                                        </div>
+                                                                    )}
+                                                                    {boardState.votingMode === 'POINTS' && (
+                                                                        <span className="flex items-center text-green-600 font-bold">
+                                                                            {Object.values(card.votes || {}).reduce((a, b) => a + b, 0)} pts
+                                                                        </span>
+                                                                    )}
+                                                                    {boardState.votingMode === 'MAJORITY_JUDGMENT' && (
+                                                                        <HoverCard openDelay={0} closeDelay={0}>
+                                                                            <HoverCardTrigger asChild>
+                                                                                <div className="flex items-center gap-2 cursor-pointer p-1 rounded hover:bg-muted/50 transition-colors">
+                                                                                    {(() => {
+                                                                                        const median = getMJMedian(card.votes || {});
+                                                                                        if (median === null) return <span className="text-muted-foreground">No votes</span>;
+                                                                                        const grade = MJ_SCALE.find(s => s.value === median);
+                                                                                        return (
+                                                                                            <span className={`px-2 py-0.5 rounded text-white flex items-center gap-1 ${grade?.color || 'bg-gray-500'}`}>
+                                                                                                {grade?.icon} {grade?.label}
+                                                                                                <span className="ml-1 opacity-75 text-[10px]">({Object.keys(card.votes || {}).length})</span>
+                                                                                            </span>
+                                                                                        );
+                                                                                    })()}
+                                                                                </div>
+                                                                            </HoverCardTrigger>
+                                                                            <HoverCardContent className="w-[400px] p-4 bg-gray-50/95 backdrop-blur supports-[backdrop-filter]:bg-gray-50/80">
+                                                                                {renderMJDistribution(card.votes || {})}
+                                                                            </HoverCardContent>
+                                                                        </HoverCard>
+                                                                    )}
+                                                                </>
+                                                            ) : (
+                                                                <span className="text-xs text-muted-foreground italic">
+                                                                    {Object.keys(card.votes || {}).length > 0 ? `${Object.keys(card.votes || {}).length} voters` : 'No votes yet'}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+
                                                 {!isHiddenFromUser && (
                                                     <UserSelector
                                                         value={card.authorId || ''}
@@ -978,12 +1407,11 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
                                             </div>
                                         </div>
                                     )
-                                })}
-                        </div>
+                                })}      </div>
                     </div>
                 ))}
             </div>
-        </div>
+        </div >
     );
 };
 
