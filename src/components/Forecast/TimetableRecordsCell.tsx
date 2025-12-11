@@ -33,8 +33,7 @@ const TimetableRecordsCell: React.FC<TimetableRecordsCellProps> = ({
     const balance = projectedHoursResult.hourlyBalanceProjection;
     const totalProjectedBalance = balance + previousBalance;
     const workloadPercentage = settings.userWorkloadPercentage;
-    // Legacy logic: ratio = balance / workload (where workload is the percentage value, e.g. 60)
-    const ratio = balance / workloadPercentage;
+    const ratio = totalProjectedBalance / workloadPercentage;
 
     const getBadgeColorClass = (r: number) => {
         const absR = Math.abs(r);
