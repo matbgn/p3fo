@@ -1,54 +1,45 @@
 import { Filters } from "@/components/FilterControls";
 
-// Save filters to persistence (sessionStorage or backend)
-export const saveFiltersToSessionStorage = async (filters: Filters) => {
+const FILTER_STORAGE_KEY = "taskFilters";
+
+// Get default filters for new users
+export const getDefaultFilters = (): Filters => ({
+  showUrgent: false,
+  showImpact: false,
+  showMajorIncident: false,
+  status: [],
+  showDone: false,
+  searchText: "",
+  difficulty: [],
+  category: [],
+  selectedUserId: null
+});
+
+// Save filters to localStorage (per-user, persisted across views)
+export const saveFiltersToSessionStorage = async (filters: Filters): Promise<void> => {
   try {
-    const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
-    const adapter = await persistence;
-    await adapter.saveFilters(filters);
+    localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters));
   } catch (error) {
-    console.error("Error saving filters to persistence:", error);
-    // Fallback to sessionStorage
-    try {
-      sessionStorage.setItem("taskFilters", JSON.stringify(filters));
-    } catch (e) {
-      console.error("Error saving filters to sessionStorage:", e);
-    }
+    console.error("Error saving filters to localStorage:", error);
   }
 };
 
-// Load filters from persistence (sessionStorage or backend)
+// Load filters from localStorage (per-user, persisted across views)
 export const loadFiltersFromSessionStorage = async (): Promise<Filters | null> => {
   try {
-    const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
-    const adapter = await persistence;
-    return await adapter.getFilters();
+    const storedFilters = localStorage.getItem(FILTER_STORAGE_KEY);
+    return storedFilters ? JSON.parse(storedFilters) : null;
   } catch (error) {
-    console.error("Error loading filters from persistence:", error);
-    // Fallback to sessionStorage
-    try {
-      const storedFilters = sessionStorage.getItem("taskFilters");
-      return storedFilters ? JSON.parse(storedFilters) : null;
-    } catch (e) {
-      console.error("Error loading filters from sessionStorage:", e);
-      return null;
-    }
+    console.error("Error loading filters from localStorage:", error);
+    return null;
   }
 };
 
-// Clear filters from persistence (sessionStorage or backend)
-export const clearFiltersFromSessionStorage = async () => {
+// Clear filters from localStorage
+export const clearFiltersFromSessionStorage = async (): Promise<void> => {
   try {
-    const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
-    const adapter = await persistence;
-    await adapter.clearFilters();
+    localStorage.removeItem(FILTER_STORAGE_KEY);
   } catch (error) {
-    console.error("Error clearing filters from persistence:", error);
-    // Fallback to sessionStorage
-    try {
-      sessionStorage.removeItem("taskFilters");
-    } catch (e) {
-      console.error("Error clearing filters from sessionStorage:", e);
-    }
+    console.error("Error clearing filters from localStorage:", error);
   }
 };
