@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.11.0 (2026-01-06)
+
+### Features
+
+- **fertilization:** add 3 additional ways to vote (Up/Down/Neutral, with points, Majority Judgment) (e5aa268)
+
+---
+
 ## v0.10.2 (2025-12-11)
 
 ### Bug Fixes
@@ -130,17 +138,5 @@
 ### Features
 
 - introduce monthly balance tracking graph (cdde904)
-
----
-
-## v0.2.0 (2025-11-24)
-
-### Bug Fixes
-
-- **user join:** optimize yjs code on first log (dee9c2b)
-- **task:** fix task title update (9c9827f)
-- **user join:** correct username generation (7de2901)
-- deletion on collaboration (44c9f22)
-- username propagation in collaboration mode (451e5cc)
 
 ---
