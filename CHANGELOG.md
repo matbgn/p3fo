@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.12.0 (2026-01-25)
+
+### Features
+
+- **board:** add Dream Board with time frames and voting system (a308862)
+- **fertilization:** add confirmation dialog and visual linking with auto-navigation (7201b6b)
+- **fertilization:** add card linking, promote-to-backlog, and sort-by-votes (57bad5f)
+
+### Bug Fixes
+
+- **import:** merge user settings and optimize export (aac0032)
+
+---
+
 ## v0.11.0 (2026-01-06)
 
 ### Features
@@ -130,13 +144,5 @@
 - **metrics:** correct `newCapabilitiesTime` cutoff date calculation missing seconds conversion (8902d2b)
 - export all user settings and enable their import for full data restoration (4f8d653)
 - team QoL survey index to be user-specific (99a26c1)
-
----
-
-## v0.3.0 (2025-11-24)
-
-### Features
-
-- introduce monthly balance tracking graph (cdde904)
 
 ---
