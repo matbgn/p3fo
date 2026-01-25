@@ -156,6 +156,8 @@ export interface FertilizationCard {
   authorId: string | null; // null for anonymous cards
   votes: Record<string, number>; // UserId -> VoteValue
   isRevealed: boolean; // For hidden edition
+  linkedCardIds?: string[]; // IDs of linked cards
+  promotedTaskId?: string | null; // ID of task created from this card (for legacy display)
 }
 
 export interface FertilizationColumn {

@@ -5,7 +5,7 @@ import { usePersistence } from '@/hooks/usePersistence';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Lock, Unlock, Eye, EyeOff, Play, RotateCcw, Plus, Trash2, ThumbsUp, HatGlasses, Minus, Clock, Square, Search, X, ChevronDown, ChevronRight, Info } from 'lucide-react';
+import { Lock, Unlock, Eye, EyeOff, Play, RotateCcw, Plus, Trash2, ThumbsUp, HatGlasses, Minus, Clock, Square, Search, X, ChevronDown, ChevronRight, ChevronUp, Info, Link, Unlink, ArrowUpRight } from 'lucide-react';
 import { useTasks } from '@/hooks/useTasks'; // For converting to tasks
 import { UserSelector } from './UserSelector';
 import { UserFilterSelector } from './UserFilterSelector';
@@ -90,6 +90,12 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
     // Points Voting State
     const [pointsConfigOpen, setPointsConfigOpen] = useState(false);
     const [pointsConfigValue, setPointsConfigValue] = useState(10);
+
+    // Linking mode state
+    const [linkingCardId, setLinkingCardId] = useState<string | null>(null);
+
+    // Sort state for each column
+    const [columnSortOrder, setColumnSortOrder] = useState<Record<string, 'none' | 'asc' | 'desc'>>({});
 
     // Constants for filter
     const ALL_USERS_VALUE = 'ALL_USERS';
@@ -455,6 +461,121 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
     // State for editing cards
     const [editingCardId, setEditingCardId] = useState<string | null>(null);
     const [editingCardContent, setEditingCardContent] = useState('');
+
+    // Toggle link between two cards (bidirectional)
+    const toggleLinkCards = async (cardId1: string, cardId2: string) => {
+        if (!boardState || cardId1 === cardId2) return;
+
+        const card1 = boardState.cards.find(c => c.id === cardId1);
+        const card2 = boardState.cards.find(c => c.id === cardId2);
+        if (!card1 || !card2) return;
+
+        const card1Links = card1.linkedCardIds || [];
+        const card2Links = card2.linkedCardIds || [];
+        const isLinked = card1Links.includes(cardId2);
+
+        const newCards = boardState.cards.map(c => {
+            if (c.id === cardId1) {
+                return {
+                    ...c,
+                    linkedCardIds: isLinked
+                        ? card1Links.filter(id => id !== cardId2)
+                        : [...card1Links, cardId2]
+                };
+            }
+            if (c.id === cardId2) {
+                return {
+                    ...c,
+                    linkedCardIds: isLinked
+                        ? card2Links.filter(id => id !== cardId1)
+                        : [...card2Links, cardId1]
+                };
+            }
+            return c;
+        });
+
+        await saveBoard({ ...boardState, cards: newCards });
+    };
+
+    // Get all cards linked to a given card (including transitive links)
+    const getLinkedCardIds = (cardId: string): Set<string> => {
+        if (!boardState) return new Set();
+        const visited = new Set<string>();
+        const toVisit = [cardId];
+
+        while (toVisit.length > 0) {
+            const currentId = toVisit.pop()!;
+            if (visited.has(currentId)) continue;
+            visited.add(currentId);
+
+            const card = boardState.cards.find(c => c.id === currentId);
+            if (card?.linkedCardIds) {
+                for (const linkedId of card.linkedCardIds) {
+                    if (!visited.has(linkedId)) {
+                        toVisit.push(linkedId);
+                    }
+                }
+            }
+        }
+
+        visited.delete(cardId); // Don't include the card itself
+        return visited;
+    };
+
+    // Promote a fertilization card to a task in the backlog
+    const promoteToBacklog = async (cardId: string) => {
+        if (!boardState) return;
+
+        const card = boardState.cards.find(c => c.id === cardId);
+        if (!card) return;
+
+        // Create a task with Backlog status
+        const newTaskId = await createTask(card.content, null, currentUserId);
+
+        // Update the card to store the promoted task ID
+        const newCards = boardState.cards.map(c => {
+            if (c.id === cardId) {
+                return { ...c, promotedTaskId: newTaskId };
+            }
+            return c;
+        });
+
+        await saveBoard({ ...boardState, cards: newCards });
+    };
+
+    // Calculate total votes for a card based on voting mode
+    const calculateCardVoteScore = (card: FertilizationCard): number => {
+        if (!boardState) return 0;
+        const votes = card.votes || {};
+        const values = Object.values(votes);
+        if (values.length === 0) return 0;
+
+        switch (boardState.votingMode) {
+            case 'THUMBS_UP':
+                return values.filter(v => v === 1).length;
+            case 'THUMBS_UD_NEUTRAL':
+                return values.reduce((acc, v) => acc + v, 0);
+            case 'POINTS':
+                return values.reduce((acc, v) => acc + v, 0);
+            case 'MAJORITY_JUDGMENT': {
+                // Use median for MJ
+                const sorted = [...values].sort((a, b) => a - b);
+                const midIndex = Math.ceil(sorted.length / 2) - 1;
+                return sorted[Math.max(0, midIndex)];
+            }
+            default:
+                return 0;
+        }
+    };
+
+    // Toggle sort order for a column
+    const toggleColumnSort = (columnId: string) => {
+        setColumnSortOrder(prev => {
+            const currentOrder = prev[columnId] || 'none';
+            const nextOrder = currentOrder === 'none' ? 'desc' : currentOrder === 'desc' ? 'asc' : 'none';
+            return { ...prev, [columnId]: nextOrder };
+        });
+    };
 
     const voteCard = async (cardId: string, value: number) => {
         if (!boardState) return;
@@ -1049,6 +1170,27 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
                 )}
             </div>
 
+            {/* Linking mode banner */}
+            {linkingCardId && (
+                <div className="bg-blue-100 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 rounded-lg p-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Link className="h-4 w-4 text-blue-600" />
+                        <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                            Linking mode: Click on other cards to link/unlink them
+                        </span>
+                    </div>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setLinkingCardId(null)}
+                        className="border-blue-300 text-blue-700 hover:bg-blue-200 dark:border-blue-600 dark:text-blue-300"
+                    >
+                        <X className="h-4 w-4 mr-1" />
+                        Cancel
+                    </Button>
+                </div>
+            )}
+
             <div className="flex-grow flex space-x-4 overflow-x-auto">
                 {boardState.columns.map(column => (
                     <div
@@ -1103,6 +1245,22 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
                                 <span className="text-xs text-muted-foreground">
                                     {boardState.cards.filter(c => c.columnId === column.id).length}
                                 </span>
+                                {/* Sort by votes button */}
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={() => toggleColumnSort(column.id)}
+                                    title={columnSortOrder[column.id] === 'desc' ? 'Sorted by votes (high to low)' : columnSortOrder[column.id] === 'asc' ? 'Sorted by votes (low to high)' : 'Sort by votes'}
+                                >
+                                    {columnSortOrder[column.id] === 'desc' ? (
+                                        <ChevronDown className="h-3 w-3 text-primary" />
+                                    ) : columnSortOrder[column.id] === 'asc' ? (
+                                        <ChevronUp className="h-3 w-3 text-primary" />
+                                    ) : (
+                                        <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                                    )}
+                                </Button>
                                 {isModerator && (
                                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => toggleLock(column.id)}>
                                         {column.isLocked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
@@ -1178,17 +1336,37 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
 
                             {filteredCards
                                 .filter(c => c.columnId === column.id)
+                                .sort((a, b) => {
+                                    const sortOrder = columnSortOrder[column.id];
+                                    if (!sortOrder || sortOrder === 'none') return 0;
+                                    const scoreA = calculateCardVoteScore(a);
+                                    const scoreB = calculateCardVoteScore(b);
+                                    return sortOrder === 'desc' ? scoreB - scoreA : scoreA - scoreB;
+                                })
                                 .map(card => {
                                     // Determine if card content should be hidden (blurred)
                                     // Anonymous cards (authorId === null) are also blurred in hidden mode for everyone
                                     const isHiddenFromUser = boardState.hiddenEdition && !card.isRevealed && (card.authorId === null || card.authorId !== currentUserId);
 
+                                    // Check if this card is linked to the card being linked
+                                    const isLinkedToLinkingCard = linkingCardId && card.id !== linkingCardId && getLinkedCardIds(linkingCardId).has(card.id);
+                                    const isDirectlyLinked = linkingCardId && card.id !== linkingCardId &&
+                                        (boardState.cards.find(c => c.id === linkingCardId)?.linkedCardIds?.includes(card.id) || false);
+                                    const isLinkingSource = linkingCardId === card.id;
+                                    const hasLinkedCards = (card.linkedCardIds?.length || 0) > 0;
+
                                     return (
                                         <div
                                             key={card.id}
-                                            draggable={!column.isLocked && !isHiddenFromUser}
-                                            onDragStart={(e) => isHiddenFromUser ? e.preventDefault() : handleDragStart(e, card.id)}
-                                            className={`p-3 rounded border bg-card shadow-sm ${isHiddenFromUser ? 'blur-sm select-none pointer-events-none' : ''}`}
+                                            draggable={!column.isLocked && !isHiddenFromUser && !linkingCardId}
+                                            onDragStart={(e) => isHiddenFromUser || linkingCardId ? e.preventDefault() : handleDragStart(e, card.id)}
+                                            onClick={() => {
+                                                // If in linking mode and clicking a different card, toggle link
+                                                if (linkingCardId && card.id !== linkingCardId && !isHiddenFromUser) {
+                                                    toggleLinkCards(linkingCardId, card.id);
+                                                }
+                                            }}
+                                            className={`p-3 rounded border bg-card shadow-sm transition-all duration-200 ${isHiddenFromUser ? 'blur-sm select-none pointer-events-none' : ''} ${isLinkingSource ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''} ${isLinkedToLinkingCard ? 'ring-2 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20' : ''} ${linkingCardId && !isLinkingSource && !isHiddenFromUser ? 'cursor-pointer hover:ring-2 hover:ring-blue-300' : ''}`}
                                         >
                                             <div className="flex justify-between items-start">
                                                 {editingCardId === card.id ? (
@@ -1233,10 +1411,48 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
                                                     </div>
                                                 )}
                                                 <div className="flex flex-col space-y-1 ml-2">
-                                                    {!isHiddenFromUser && (card.authorId === currentUserId || isModerator) && (
-                                                        <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-destructive" onClick={() => deleteCard(card.id)}>
-                                                            <Trash2 className="h-3 w-3" />
-                                                        </Button>
+                                                    {!isHiddenFromUser && (
+                                                        <>
+                                                            {/* Link button */}
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className={`h-4 w-4 ${hasLinkedCards || isLinkingSource ? 'text-blue-500' : 'text-muted-foreground'} hover:text-blue-600`}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setLinkingCardId(linkingCardId === card.id ? null : card.id);
+                                                                }}
+                                                                title={linkingCardId === card.id ? 'Cancel linking' : hasLinkedCards ? `Linked to ${card.linkedCardIds?.length} card(s) - click to manage links` : 'Link to other cards'}
+                                                            >
+                                                                {linkingCardId === card.id ? <Unlink className="h-3 w-3" /> : <Link className="h-3 w-3" />}
+                                                            </Button>
+                                                            {/* Promote to backlog button */}
+                                                            {!card.promotedTaskId && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-4 w-4 text-muted-foreground hover:text-green-600"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        promoteToBacklog(card.id);
+                                                                    }}
+                                                                    title="Promote to backlog"
+                                                                >
+                                                                    <ArrowUpRight className="h-3 w-3" />
+                                                                </Button>
+                                                            )}
+                                                            {card.promotedTaskId && (
+                                                                <span className="text-[10px] text-green-600 font-medium" title="Already promoted to backlog">
+                                                                    <ArrowUpRight className="h-3 w-3 inline" />
+                                                                </span>
+                                                            )}
+                                                            {/* Delete button */}
+                                                            {(card.authorId === currentUserId || isModerator) && (
+                                                                <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); deleteCard(card.id); }}>
+                                                                    <Trash2 className="h-3 w-3" />
+                                                                </Button>
+                                                            )}
+                                                        </>
                                                     )}
                                                 </div>
                                             </div>
@@ -1405,6 +1621,15 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
                                                     />
                                                 )}
                                             </div>
+                                            {/* Linked cards indicator */}
+                                            {!isHiddenFromUser && hasLinkedCards && !linkingCardId && (
+                                                <div className="mt-2 pt-2 border-t border-dashed">
+                                                    <div className="flex items-center gap-1 text-[10px] text-blue-600">
+                                                        <Link className="h-3 w-3" />
+                                                        <span>Linked to {card.linkedCardIds?.length} card(s)</span>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     )
                                 })}      </div>
