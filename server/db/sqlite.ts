@@ -1,12 +1,13 @@
 import { DatabaseSync } from 'node:sqlite';
 import { DbClient } from './index.js';
-import {
+import type {
   TaskEntity,
   UserSettingsEntity,
   AppSettingsEntity,
   QolSurveyResponseEntity,
   FilterStateEntity,
-  FertilizationBoardEntity
+  FertilizationBoardEntity,
+  DreamBoardEntity
 } from '../../src/lib/persistence-types.js';
 
 // Default values
@@ -98,7 +99,7 @@ class SqliteClient implements DbClient {
   async initialize(): Promise<void> {
     // Create tasks table
     this.db.exec(`
-      CREATE TABLE IF NOT EXISTS tasks (
+      CREATE TABLE IF NOT EXISTS tasks(
         id TEXT PRIMARY KEY,
         parent_id TEXT,
         title TEXT NOT NULL,
@@ -115,13 +116,13 @@ class SqliteClient implements DbClient {
         duration_in_minutes INTEGER,
         priority INTEGER,
         user_id TEXT,
-        FOREIGN KEY (parent_id) REFERENCES tasks (id)
+        FOREIGN KEY(parent_id) REFERENCES tasks(id)
       )
     `);
 
     // Create user_settings table (single row)
     this.db.exec(`
-      CREATE TABLE IF NOT EXISTS user_settings (
+      CREATE TABLE IF NOT EXISTS user_settings(
         user_id TEXT PRIMARY KEY,
         username TEXT NOT NULL,
         logo TEXT,
@@ -183,7 +184,7 @@ class SqliteClient implements DbClient {
 
     // Create app_settings table (single row)
     this.db.exec(`
-      CREATE TABLE IF NOT EXISTS app_settings (
+      CREATE TABLE IF NOT EXISTS app_settings(
         id INTEGER PRIMARY KEY DEFAULT 1,
         split_time REAL DEFAULT 40,
         user_workload_percentage REAL DEFAULT 80,
@@ -255,10 +256,10 @@ class SqliteClient implements DbClient {
     const appSettingsCount = this.db.prepare('SELECT COUNT(*) as count FROM app_settings').get() as { count: number };
     if (appSettingsCount.count === 0) {
       this.db.prepare(`
-        INSERT INTO app_settings (id, split_time, user_workload_percentage, weeks_computation, 
-                                  high_impact_task_goal, failure_rate_goal, qli_goal, new_capabilities_goal, hours_to_be_done_by_day) 
-        VALUES (1, @split_time, @user_workload_percentage, @weeks_computation, 
-                @high_impact_task_goal, @failure_rate_goal, @qli_goal, @new_capabilities_goal, @hours_to_be_done_by_day)
+        INSERT INTO app_settings(id, split_time, user_workload_percentage, weeks_computation,
+          high_impact_task_goal, failure_rate_goal, qli_goal, new_capabilities_goal, hours_to_be_done_by_day)
+        VALUES(1, @split_time, @user_workload_percentage, @weeks_computation,
+          @high_impact_task_goal, @failure_rate_goal, @qli_goal, @new_capabilities_goal, @hours_to_be_done_by_day)
       `).run(DEFAULT_APP_SETTINGS as unknown as Record<string, string | number | null>);
     }
 
@@ -273,7 +274,7 @@ class SqliteClient implements DbClient {
     }
 
     this.db.exec(`
-      CREATE TABLE IF NOT EXISTS qol_survey (
+      CREATE TABLE IF NOT EXISTS qol_survey(
         user_id TEXT PRIMARY KEY,
         responses TEXT -- JSON string
       )
@@ -281,7 +282,7 @@ class SqliteClient implements DbClient {
 
     // Create filters table (single row)
     this.db.exec(`
-      CREATE TABLE IF NOT EXISTS filters (
+      CREATE TABLE IF NOT EXISTS filters(
         id INTEGER PRIMARY KEY DEFAULT 1,
         data TEXT -- JSON string
       )
@@ -298,12 +299,20 @@ class SqliteClient implements DbClient {
     } else {
       // Create fertilization_board table only if it doesn't exist and old table wasn't renamed
       this.db.exec(`
-        CREATE TABLE IF NOT EXISTS fertilization_board (
-          id INTEGER PRIMARY KEY DEFAULT 1,
-          data TEXT -- JSON string
+        CREATE TABLE IF NOT EXISTS fertilization_board(
+          id INTEGER PRIMARY KEY,
+          data JSON NOT NULL
         )
       `);
     }
+
+    // Dream Board table
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS dream_board(
+        id INTEGER PRIMARY KEY,
+        data JSON NOT NULL
+      )
+    `);
 
     // Check if data column exists (for fertilization_board)
     try {
@@ -420,10 +429,10 @@ class SqliteClient implements DbClient {
     console.log('SQLite: Creating task:', newTask);
 
     const stmt = this.db.prepare(`
-      INSERT INTO tasks (id, parent_id, title, created_at, triage_status, urgent, impact, major_incident,
-                         difficulty, timer, category, termination_date, comment, duration_in_minutes, priority, user_id)
-      VALUES (@id, @parent_id, @title, @created_at, @triage_status, @urgent, @impact, @major_incident,
-              @difficulty, @timer, @category, @termination_date, @comment, @duration_in_minutes, @priority, @user_id)
+      INSERT INTO tasks(id, parent_id, title, created_at, triage_status, urgent, impact, major_incident,
+        difficulty, timer, category, termination_date, comment, duration_in_minutes, priority, user_id)
+      VALUES(@id, @parent_id, @title, @created_at, @triage_status, @urgent, @impact, @major_incident,
+        @difficulty, @timer, @category, @termination_date, @comment, @duration_in_minutes, @priority, @user_id)
     `);
 
     const params = {
@@ -470,9 +479,9 @@ class SqliteClient implements DbClient {
     const stmt = this.db.prepare(`
       UPDATE tasks
       SET parent_id = @parent_id, title = @title, triage_status = @triage_status, urgent = @urgent,
-          impact = @impact, major_incident = @major_incident, difficulty = @difficulty, timer = @timer,
-          category = @category, termination_date = @termination_date, comment = @comment,
-          duration_in_minutes = @duration_in_minutes, priority = @priority, user_id = @user_id
+        impact = @impact, major_incident = @major_incident, difficulty = @difficulty, timer = @timer,
+        category = @category, termination_date = @termination_date, comment = @comment,
+        duration_in_minutes = @duration_in_minutes, priority = @priority, user_id = @user_id
       WHERE id = @id
     `);
 
@@ -508,14 +517,14 @@ class SqliteClient implements DbClient {
     const deleteRecursive = (taskId: string) => {
       const children = this.db.prepare('SELECT id FROM tasks WHERE parent_id = ?').all(taskId) as { id: string }[];
       if (children.length > 0) {
-        console.log(`SQLite: Deleting children of task ${taskId}:`, children.map(c => c.id));
+        console.log(`SQLite: Deleting children of task ${taskId}: `, children.map(c => c.id));
         for (const child of children) {
           deleteRecursive(child.id);
         }
       }
 
       const result = this.db.prepare('DELETE FROM tasks WHERE id = ?').run(taskId);
-      console.log(`SQLite: Deleted task ${taskId}, result:`, result);
+      console.log(`SQLite: Deleted task ${taskId}, result: `, result);
     };
 
     this.db.exec('BEGIN');
@@ -560,10 +569,10 @@ class SqliteClient implements DbClient {
     this.db.exec('BEGIN');
     try {
       const stmt = this.db.prepare(`
-        INSERT OR REPLACE INTO tasks (id, parent_id, title, created_at, triage_status, urgent, impact, major_incident, 
-                         difficulty, timer, category, termination_date, comment, duration_in_minutes, priority, user_id)
-        VALUES (@id, @parent_id, @title, @created_at, @triage_status, @urgent, @impact, @major_incident,
-                @difficulty, @timer, @category, @termination_date, @comment, @duration_in_minutes, @priority, @user_id)
+        INSERT OR REPLACE INTO tasks(id, parent_id, title, created_at, triage_status, urgent, impact, major_incident,
+          difficulty, timer, category, termination_date, comment, duration_in_minutes, priority, user_id)
+        VALUES(@id, @parent_id, @title, @created_at, @triage_status, @urgent, @impact, @major_incident,
+          @difficulty, @timer, @category, @termination_date, @comment, @duration_in_minutes, @priority, @user_id)
       `);
 
       for (const task of tasks) {
@@ -647,8 +656,8 @@ class SqliteClient implements DbClient {
     const updated = { ...current, ...data, userId };
 
     this.db.prepare(`
-      INSERT INTO user_settings (user_id, username, logo, has_completed_onboarding, workload, split_time, monthly_balances, timezone, card_compactness)
-      VALUES (@userId, @username, @logo, @has_completed_onboarding, @workload, @split_time, @monthly_balances, @timezone, @card_compactness)
+      INSERT INTO user_settings(user_id, username, logo, has_completed_onboarding, workload, split_time, monthly_balances, timezone, card_compactness)
+      VALUES(@userId, @username, @logo, @has_completed_onboarding, @workload, @split_time, @monthly_balances, @timezone, @card_compactness)
       ON CONFLICT(user_id) DO UPDATE SET
         username = excluded.username,
         logo = excluded.logo,
@@ -764,16 +773,16 @@ class SqliteClient implements DbClient {
     this.db.prepare(`
       UPDATE app_settings 
       SET split_time = @split_time, user_workload_percentage = @user_workload_percentage,
-          weeks_computation = @weeks_computation, high_impact_task_goal = @high_impact_task_goal,
-          failure_rate_goal = @failure_rate_goal, qli_goal = @qli_goal,
-          new_capabilities_goal = @new_capabilities_goal,
-          hours_to_be_done_by_day = @hours_to_be_done_by_day,
-          vacation_limit_multiplier = @vacation_limit_multiplier,
-          hourly_balance_limit_upper = @hourly_balance_limit_upper,
-          hourly_balance_limit_lower = @hourly_balance_limit_lower,
-          timezone = @timezone,
-          country = @country,
-          region = @region
+        weeks_computation = @weeks_computation, high_impact_task_goal = @high_impact_task_goal,
+        failure_rate_goal = @failure_rate_goal, qli_goal = @qli_goal,
+        new_capabilities_goal = @new_capabilities_goal,
+        hours_to_be_done_by_day = @hours_to_be_done_by_day,
+        vacation_limit_multiplier = @vacation_limit_multiplier,
+        hourly_balance_limit_upper = @hourly_balance_limit_upper,
+        hourly_balance_limit_lower = @hourly_balance_limit_lower,
+        timezone = @timezone,
+        country = @country,
+        region = @region
       WHERE id = 1
     `).run({
       split_time: updated.split_time,
@@ -790,7 +799,7 @@ class SqliteClient implements DbClient {
       timezone: updated.timezone,
       country: updated.country,
       region: updated.region,
-    } as any);
+    });
 
     return updated;
   }
@@ -803,21 +812,25 @@ class SqliteClient implements DbClient {
 
   async saveQolSurveyResponse(userId: string, data: QolSurveyResponseEntity): Promise<void> {
     this.db.prepare(`
-      INSERT INTO qol_survey (user_id, responses)
-      VALUES (@userId, @responses)
+      INSERT INTO qol_survey(user_id, responses)
+      VALUES(@userId, @responses)
       ON CONFLICT(user_id) DO UPDATE SET responses = excluded.responses
     `).run({
       userId,
-      responses: JSON.stringify(data)
+      responses: JSON.stringify(data),
     });
   }
 
   async getAllQolSurveyResponses(): Promise<Record<string, QolSurveyResponseEntity>> {
-    const rows = this.db.prepare('SELECT user_id, responses FROM qol_survey').all() as { user_id: string, responses: string }[];
+    const rows = this.db.prepare('SELECT user_id, responses FROM qol_survey').all() as { user_id: string; responses: string }[];
     const result: Record<string, QolSurveyResponseEntity> = {};
     for (const row of rows) {
       if (row.responses) {
-        result[row.user_id] = JSON.parse(row.responses);
+        try {
+          result[row.user_id] = JSON.parse(row.responses);
+        } catch (e) {
+          console.error(`Failed to parse QoL response for user ${row.user_id}`, e);
+        }
       }
     }
     return result;
@@ -830,13 +843,11 @@ class SqliteClient implements DbClient {
   }
 
   async saveFilters(data: FilterStateEntity): Promise<void> {
-    // Check if row exists
-    const exists = this.db.prepare('SELECT id FROM filters WHERE id = 1').get();
-    if (exists) {
-      this.db.prepare('UPDATE filters SET data = ? WHERE id = 1').run(JSON.stringify(data));
-    } else {
-      this.db.prepare('INSERT INTO filters (id, data) VALUES (1, ?)').run(JSON.stringify(data));
-    }
+    this.db.prepare(`
+      INSERT INTO filters (id, data)
+      VALUES (1, @data)
+      ON CONFLICT(id) DO UPDATE SET data = excluded.data
+    `).run({ data: JSON.stringify(data) });
   }
 
   async clearFilters(): Promise<void> {
@@ -852,6 +863,20 @@ class SqliteClient implements DbClient {
   async updateFertilizationBoardState(state: FertilizationBoardEntity): Promise<void> {
     this.db.prepare(`
       INSERT INTO fertilization_board (id, data)
+      VALUES (1, @data)
+      ON CONFLICT(id) DO UPDATE SET data = excluded.data
+    `).run({ data: JSON.stringify(state) });
+  }
+
+  // Dream Board
+  async getDreamBoardState(): Promise<DreamBoardEntity | null> {
+    const row = this.db.prepare('SELECT data FROM dream_board WHERE id = 1').get() as JsonRow | undefined;
+    return row?.data ? JSON.parse(row.data) : null;
+  }
+
+  async updateDreamBoardState(state: DreamBoardEntity): Promise<void> {
+    this.db.prepare(`
+      INSERT INTO dream_board (id, data)
       VALUES (1, @data)
       ON CONFLICT(id) DO UPDATE SET data = excluded.data
     `).run({ data: JSON.stringify(state) });

@@ -1,4 +1,4 @@
-import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity } from './persistence-types';
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity } from './persistence-types';
 
 export class HttpApiPersistence implements PersistenceAdapter {
   private baseUrl: string;
@@ -187,6 +187,18 @@ export class HttpApiPersistence implements PersistenceAdapter {
 
   async updateFertilizationBoardState(state: FertilizationBoardEntity): Promise<void> {
     await this.makeRequest('/api/fertilization-board', {
+      method: 'PUT',
+      body: JSON.stringify(state),
+    });
+  }
+
+  // Dream Board
+  async getDreamBoardState(): Promise<DreamBoardEntity | null> {
+    return this.makeRequest('/api/dream-board');
+  }
+
+  async updateDreamBoardState(state: DreamBoardEntity): Promise<void> {
+    await this.makeRequest('/api/dream-board', {
       method: 'PUT',
       body: JSON.stringify(state),
     });

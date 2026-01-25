@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCursors } from '@/hooks/useCursors';
 import { MousePointer2 } from 'lucide-react';
 import { useView } from "@/hooks/useView";
@@ -6,6 +6,20 @@ import { useView } from "@/hooks/useView";
 export const CursorOverlay = () => {
     const cursors = useCursors();
     const { view } = useView();
+    const [isVisible, setIsVisible] = useState(true);
+
+    useEffect(() => {
+        const handleVisibilityChange = (e: CustomEvent<{ visible: boolean }>) => {
+            setIsVisible(e.detail.visible);
+        };
+
+        window.addEventListener('setCursorVisibility', handleVisibilityChange as EventListener);
+        return () => {
+            window.removeEventListener('setCursorVisibility', handleVisibilityChange as EventListener);
+        };
+    }, []);
+
+    if (!isVisible) return null;
 
     return (
         <div className="pointer-events-none fixed inset-0 z-[9999] overflow-hidden">

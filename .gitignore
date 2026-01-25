@@ -48,3 +48,4 @@ dist/
 .agent/tasks.jsonl
 PROMPT.md
 .ralph
+.sop/planning

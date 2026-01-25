@@ -214,7 +214,7 @@ export const Timetable: React.FC<{
       default:
         return { start: undefined, end: undefined };
     }
-  }, [weekStartsOn, weeksComputation]);
+  }, [weekStartsOn, weeksComputation, settings.timezone]);
 
   // Initialize date range for "today" default
   useEffect(() => {

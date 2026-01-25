@@ -164,10 +164,12 @@ export const useCombinedSettings = () => {
             const appUpdates: Partial<AppSettingsEntity> = {};
 
             // Helper to decide where to put the update
-            const addToUser = (key: string, value: any) => {
+            const addToUser = (key: string, value: unknown) => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (userUpdates as any)[key] = value;
             };
-            const addToApp = (key: keyof AppSettingsEntity, value: any) => {
+            const addToApp = (key: keyof AppSettingsEntity, value: unknown) => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (appUpdates as any)[key] = value;
             };
 

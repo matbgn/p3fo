@@ -14,7 +14,8 @@ import { useView } from "@/hooks/useView";
 import { COMPACTNESS_ULTRA, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
-import FertilizationView from './FertilizationView'; // Import FertilizationView
+import { FertilizationView } from './FertilizationView'; // Import FertilizationView
+import { DreamView } from './DreamView'; // Import DreamView
 
 interface PlanViewProps {
   onFocusOnTask: (taskId: string) => void;
@@ -26,7 +27,7 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
   const { setView, setFocusedTaskId } = useView();
 
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<'storyboard' | 'prioritization' | 'fertilization'>('storyboard'); // New state for view switching
+  const [activeView, setActiveView] = useState<'storyboard' | 'prioritization' | 'fertilization' | 'dream'>('storyboard'); // New state for view switching
 
   // Handler to navigate to kanban view and highlight a promoted task
   const handlePromoteToKanban = (taskId: string) => {
@@ -253,10 +254,10 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
               Fertilization
             </Button>
             <Button
-              variant={activeView === 'storyboard' ? 'default' : 'outline'}
-              onClick={() => setActiveView('storyboard')}
+              variant={activeView === 'dream' ? 'default' : 'outline'}
+              onClick={() => setActiveView('dream')}
             >
-              Storyboard
+              Dream
             </Button>
             <Button
               variant={activeView === 'prioritization' ? 'default' : 'outline'}
@@ -264,10 +265,16 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
             >
               Prioritization
             </Button>
+            <Button
+              variant={activeView === 'storyboard' ? 'default' : 'outline'}
+              onClick={() => setActiveView('storyboard')}
+            >
+              Storyboard
+            </Button>
           </div>
         </div>
 
-        {activeView !== 'fertilization' && (
+        {activeView !== 'fertilization' && activeView !== 'dream' && (
           <>
             <div className="mb-2 flex gap-2">
               <Input
@@ -326,6 +333,8 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
       <CardContent className="flex-grow overflow-hidden">
         {activeView === 'fertilization' ? (
           <FertilizationView onPromoteToKanban={handlePromoteToKanban} />
+        ) : activeView === 'dream' ? (
+          <DreamView onPromoteToKanban={handlePromoteToKanban} />
         ) : activeView === 'storyboard' ? (
           <div
             className="flex flex-nowrap overflow-x-auto h-full p-2 space-x-4"

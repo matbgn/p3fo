@@ -38,6 +38,7 @@ const DataImporter: React.FC = () => {
               }
 
               // Helper to deep merge user settings
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const mergeUserSettings = (existing: any, incoming: any) => {
                 const merged = { ...existing, ...incoming };
                 if (existing.monthlyBalances && incoming.monthlyBalances) {
