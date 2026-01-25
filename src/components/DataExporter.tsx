@@ -7,7 +7,7 @@ import { getPersistenceAdapter } from '@/lib/persistence-factory';
 
 const DataExporter: React.FC = () => {
   const { tasks } = useTasks();
-  const { userId, userSettings } = useUserSettings();
+  const { userId } = useUserSettings();
   const [isExporting, setIsExporting] = useState(false);
 
   const handleExport = async () => {
@@ -52,10 +52,8 @@ const DataExporter: React.FC = () => {
         qolSurveyResponses: allQolSurveyResponses, // Export all users' QoL data
         fertilizationBoard: fertilizationBoardState, // Export Fertilization Board state
         settings: settingsToExport,
-        userSettings: {
-          userId,
-          ...userSettings,
-        },
+        activeUserId: userId,
+        // userSettings removed to avoid redundancy
         allUserSettings, // Export all users for full restore
       };
 
