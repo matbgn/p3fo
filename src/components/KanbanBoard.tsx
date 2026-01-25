@@ -48,7 +48,9 @@ const Column: React.FC<{
   updateDurationInMinutes: (id: string, durationInMinutes: number | undefined) => void;
   updateComment: (id: string, comment: string) => void;
   onToggleTimer: (id: string) => void;
-}> = ({ title, cards, tasks, onDropTask, onChangeStatus, onUpdateCategory, onUpdateUser, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onToggleDone, onUpdateDifficulty, onUpdateTitle, onDelete, duplicateTaskStructure, openParents, onToggleParent, onReparent, onFocusOnTask, updateTerminationDate, updateDurationInMinutes, updateComment, onToggleTimer }) => {
+  highlightedTaskId?: string | null;
+  highlightedCardRef?: React.RefObject<HTMLDivElement | null>;
+}> = ({ title, cards, tasks, onDropTask, onChangeStatus, onUpdateCategory, onUpdateUser, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onToggleDone, onUpdateDifficulty, onUpdateTitle, onDelete, duplicateTaskStructure, openParents, onToggleParent, onReparent, onFocusOnTask, updateTerminationDate, updateDurationInMinutes, updateComment, onToggleTimer, highlightedTaskId, highlightedCardRef }) => {
   // Build render blocks: either a single ParentCard/ChildCard or a group block for open parent children
   type Block =
     | { type: "single"; node: React.ReactNode; key: string }
@@ -59,35 +61,39 @@ const Column: React.FC<{
 
   for (const c of cards) {
     if (c.kind === "parent") {
+      const isHighlighted = highlightedTaskId === c.task.id;
       blocks.push({
         type: "single",
         key: `p-${c.task.id}`,
         node: (
-          <TaskCard
-            key={`p-${c.task.id}`}
-            task={c.task}
-            tasks={tasks}
-            updateStatus={onChangeStatus}
-            updateCategory={onUpdateCategory}
-            updateUser={onUpdateUser}
-            open={!!openParents[c.task.id]}
-            onToggleOpen={(id) => onToggleParent(id, true)}
-            toggleUrgent={onToggleUrgent}
-            toggleImpact={onToggleImpact}
-            toggleMajorIncident={onToggleMajorIncident}
-            updateDifficulty={onUpdateDifficulty}
-            updateTitle={onUpdateTitle}
-            deleteTask={onDelete}
-            duplicateTaskStructure={duplicateTaskStructure}
-            toggleDone={() => onToggleDone(c.task)}
-            toggleTimer={onToggleTimer}
-            isTriageBoard={true}
-            reparent={onReparent}
-            onFocusOnTask={onFocusOnTask}
-            updateTerminationDate={updateTerminationDate}
-            updateDurationInMinutes={updateDurationInMinutes}
-            updateComment={updateComment}
-          />
+          <div ref={isHighlighted ? highlightedCardRef : undefined}>
+            <TaskCard
+              key={`p-${c.task.id}`}
+              task={c.task}
+              tasks={tasks}
+              updateStatus={onChangeStatus}
+              updateCategory={onUpdateCategory}
+              updateUser={onUpdateUser}
+              open={!!openParents[c.task.id]}
+              onToggleOpen={(id) => onToggleParent(id, true)}
+              toggleUrgent={onToggleUrgent}
+              toggleImpact={onToggleImpact}
+              toggleMajorIncident={onToggleMajorIncident}
+              updateDifficulty={onUpdateDifficulty}
+              updateTitle={onUpdateTitle}
+              deleteTask={onDelete}
+              duplicateTaskStructure={duplicateTaskStructure}
+              toggleDone={() => onToggleDone(c.task)}
+              toggleTimer={onToggleTimer}
+              isTriageBoard={true}
+              reparent={onReparent}
+              onFocusOnTask={onFocusOnTask}
+              updateTerminationDate={updateTerminationDate}
+              updateDurationInMinutes={updateDurationInMinutes}
+              updateComment={updateComment}
+              isHighlighted={isHighlighted}
+            />
+          </div>
         ),
       });
     } else {
@@ -194,9 +200,38 @@ const Column: React.FC<{
   );
 };
 
-const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ onFocusOnTask }) => {
+const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highlightedTaskId?: string | null }> = ({ onFocusOnTask, highlightedTaskId }) => {
   const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, reparent, toggleDone, toggleTimer, updateTerminationDate, updateDurationInMinutes, updateComment } = useTasks();
   const { userId: currentUserId } = useUserSettings();
+  const { setFocusedTaskId } = useView();
+
+  // Local state to manage highlighting with auto-clear
+  const [localHighlightedTaskId, setLocalHighlightedTaskId] = React.useState<string | null>(null);
+  const highlightedCardRef = React.useRef<HTMLDivElement | null>(null);
+
+  // When highlightedTaskId changes from props, set local state and auto-clear after delay
+  React.useEffect(() => {
+    if (highlightedTaskId) {
+      setLocalHighlightedTaskId(highlightedTaskId);
+      // Auto-clear the highlight after 3 seconds
+      const timer = setTimeout(() => {
+        setLocalHighlightedTaskId(null);
+        setFocusedTaskId(null); // Clear global state too
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [highlightedTaskId, setFocusedTaskId]);
+
+  // Scroll to highlighted card when it appears
+  React.useEffect(() => {
+    if (localHighlightedTaskId && highlightedCardRef.current) {
+      highlightedCardRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+        inline: 'center'
+      });
+    }
+  }, [localHighlightedTaskId]);
 
   const defaultKanbanFilters: Filters = {
     showUrgent: false,
@@ -465,6 +500,8 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void }> = ({ o
             updateTerminationDate={updateTerminationDate}
             updateDurationInMinutes={updateDurationInMinutes}
             updateComment={updateComment}
+            highlightedTaskId={localHighlightedTaskId}
+            highlightedCardRef={highlightedCardRef}
           />
         ))}
       </div>

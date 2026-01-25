@@ -28,9 +28,6 @@ psd
 thumb
 sketch
 
-
-
-
 # End of https://mrkandreev.name/snippets/gitignore-generator/#yarn,react,vite,npm,pnpm
 
 dist/
@@ -43,3 +40,11 @@ dist/
 .env*
 
 .pnpm-store
+
+# Ralph orchestrator
+.agent/summary.md
+.agent/memories.md
+.agent/scratchpad.md
+.agent/tasks.jsonl
+PROMPT.md
+.ralph

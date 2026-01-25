@@ -23,9 +23,16 @@ interface PlanViewProps {
 const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
   const { tasks, updateStatus, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleUrgent, toggleImpact, toggleMajorIncident, toggleDone, toggleTimer, reparent, updateTerminationDate, updateComment, updateDurationInMinutes, updatePriority, createTask } = useTasks();
   const { userId: currentUserId } = useUserSettings();
+  const { setView, setFocusedTaskId } = useView();
 
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<'storyboard' | 'prioritization' | 'fertilization'>('storyboard'); // New state for view switching
+
+  // Handler to navigate to kanban view and highlight a promoted task
+  const handlePromoteToKanban = (taskId: string) => {
+    setFocusedTaskId(taskId); // This will be used by KanbanBoard to highlight
+    setView('kanban');
+  };
 
   // Track which parents are expanded in PlanView
   const [openParents, setOpenParents] = useState<Record<string, boolean>>({});
@@ -318,7 +325,7 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
       </CardHeader>
       <CardContent className="flex-grow overflow-hidden">
         {activeView === 'fertilization' ? (
-          <FertilizationView />
+          <FertilizationView onPromoteToKanban={handlePromoteToKanban} />
         ) : activeView === 'storyboard' ? (
           <div
             className="flex flex-nowrap overflow-x-auto h-full p-2 space-x-4"

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from 'react';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { FertilizationBoardEntity, FertilizationCard, FertilizationColumn } from '@/lib/persistence-types';
 import { usePersistence } from '@/hooks/usePersistence';
@@ -6,6 +6,16 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Lock, Unlock, Eye, EyeOff, Play, RotateCcw, Plus, Trash2, ThumbsUp, HatGlasses, Minus, Clock, Square, Search, X, ChevronDown, ChevronRight, ChevronUp, Info, Link, Unlink, ArrowUpRight } from 'lucide-react';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useTasks } from '@/hooks/useTasks'; // For converting to tasks
 import { UserSelector } from './UserSelector';
 import { UserFilterSelector } from './UserFilterSelector';
@@ -62,13 +72,14 @@ const DEFAULT_COLUMNS: FertilizationColumn[] = [
 
 interface FertilizationViewProps {
     onClose?: () => void;
+    onPromoteToKanban?: (taskId: string) => void;
 }
 
 // Imports for collaboration
 import { doc, isCollaborationEnabled, initializeCollaboration, yFertilizationState, yFertilizationCards, yFertilizationColumns } from '@/lib/collaboration';
 import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
 
-export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose }) => {
+export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, onPromoteToKanban }) => {
     const persistence = usePersistence();
     const { userId: currentUserId, userSettings } = useUserSettings();
     const username = userSettings.username;
@@ -96,6 +107,14 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
 
     // Sort state for each column
     const [columnSortOrder, setColumnSortOrder] = useState<Record<string, 'none' | 'asc' | 'desc'>>({});
+
+    // Promotion confirmation modal state
+    const [promoteDialogOpen, setPromoteDialogOpen] = useState(false);
+    const [cardToPromote, setCardToPromote] = useState<FertilizationCard | null>(null);
+
+    // Ref for the board container (for SVG threading)
+    const boardContainerRef = useRef<HTMLDivElement | null>(null);
+    const [linkLines, setLinkLines] = useState<Array<{ x1: number; y1: number; x2: number; y2: number }>>([]);
 
     // Constants for filter
     const ALL_USERS_VALUE = 'ALL_USERS';
@@ -522,25 +541,39 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
         return visited;
     };
 
-    // Promote a fertilization card to a task in the backlog
-    const promoteToBacklog = async (cardId: string) => {
-        if (!boardState) return;
+    // Open promote confirmation dialog
+    const openPromoteDialog = (card: FertilizationCard) => {
+        setCardToPromote(card);
+        setPromoteDialogOpen(true);
+    };
 
-        const card = boardState.cards.find(c => c.id === cardId);
-        if (!card) return;
+    // Promote a fertilization card to a task in the backlog
+    const promoteToBacklog = async () => {
+        if (!boardState || !cardToPromote) return;
+
+        const card = cardToPromote;
 
         // Create a task with Backlog status
         const newTaskId = await createTask(card.content, null, currentUserId);
 
         // Update the card to store the promoted task ID
         const newCards = boardState.cards.map(c => {
-            if (c.id === cardId) {
+            if (c.id === card.id) {
                 return { ...c, promotedTaskId: newTaskId };
             }
             return c;
         });
 
         await saveBoard({ ...boardState, cards: newCards });
+
+        // Close dialog and reset state
+        setPromoteDialogOpen(false);
+        setCardToPromote(null);
+
+        // Navigate to kanban view and highlight the new task
+        if (onPromoteToKanban) {
+            onPromoteToKanban(newTaskId);
+        }
     };
 
     // Calculate total votes for a card based on voting mode
@@ -576,6 +609,110 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
             return { ...prev, [columnId]: nextOrder };
         });
     };
+
+    // Compute SVG lines between linked cards when in linking mode
+    const recomputeLinkLines = useCallback(() => {
+        const container = boardContainerRef.current;
+        if (!container || !linkingCardId || !boardState) {
+            setLinkLines([]);
+            return;
+        }
+
+        // Get all card elements that are linked to the linking card
+        const linkedCardIds = getLinkedCardIds(linkingCardId);
+        const allLinkedIds = new Set([linkingCardId, ...linkedCardIds]);
+
+        // Find all card elements
+        const cardElements = Array.from(container.querySelectorAll('[data-card-id]')) as HTMLElement[];
+        const linkedElements = cardElements.filter(el => allLinkedIds.has(el.dataset.cardId || ''));
+
+        if (linkedElements.length < 2) {
+            setLinkLines([]);
+            return;
+        }
+
+        // Create lines between the source card and each directly linked card
+        const sourceCard = boardState.cards.find(c => c.id === linkingCardId);
+        const directLinks = sourceCard?.linkedCardIds || [];
+
+        const rectContainer = container.getBoundingClientRect();
+        const lines: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
+
+        const sourceEl = cardElements.find(el => el.dataset.cardId === linkingCardId);
+        if (!sourceEl) {
+            setLinkLines([]);
+            return;
+        }
+
+        for (const linkedId of directLinks) {
+            const linkedEl = cardElements.find(el => el.dataset.cardId === linkedId);
+            if (!linkedEl) continue;
+
+            const ra = sourceEl.getBoundingClientRect();
+            const rb = linkedEl.getBoundingClientRect();
+
+            // Determine which edges to connect based on relative positions
+            let x1: number, y1: number, x2: number, y2: number;
+
+            if (ra.right < rb.left) {
+                // Source is to the left of target
+                x1 = ra.right - rectContainer.left + container.scrollLeft;
+                y1 = ra.top + ra.height / 2 - rectContainer.top + container.scrollTop;
+                x2 = rb.left - rectContainer.left + container.scrollLeft;
+                y2 = rb.top + rb.height / 2 - rectContainer.top + container.scrollTop;
+            } else if (rb.right < ra.left) {
+                // Source is to the right of target
+                x1 = ra.left - rectContainer.left + container.scrollLeft;
+                y1 = ra.top + ra.height / 2 - rectContainer.top + container.scrollTop;
+                x2 = rb.right - rectContainer.left + container.scrollLeft;
+                y2 = rb.top + rb.height / 2 - rectContainer.top + container.scrollTop;
+            } else {
+                // Cards are in the same column - connect vertically
+                const centerX = (ra.left + ra.right) / 2 - rectContainer.left + container.scrollLeft;
+                if (ra.bottom < rb.top) {
+                    x1 = centerX;
+                    y1 = ra.bottom - rectContainer.top + container.scrollTop;
+                    x2 = centerX;
+                    y2 = rb.top - rectContainer.top + container.scrollTop;
+                } else {
+                    x1 = centerX;
+                    y1 = ra.top - rectContainer.top + container.scrollTop;
+                    x2 = centerX;
+                    y2 = rb.bottom - rectContainer.top + container.scrollTop;
+                }
+            }
+
+            lines.push({ x1, y1, x2, y2 });
+        }
+
+        setLinkLines(lines);
+    }, [linkingCardId, boardState]);
+
+    // Recompute lines when linking mode changes or cards change
+    useLayoutEffect(() => {
+        recomputeLinkLines();
+    }, [recomputeLinkLines, filteredCards]);
+
+    // Recompute lines on scroll/resize
+    useEffect(() => {
+        const container = boardContainerRef.current;
+        if (!container) return;
+
+        const onScroll = () => recomputeLinkLines();
+        container.addEventListener('scroll', onScroll, { passive: true });
+
+        const ro = new ResizeObserver(() => recomputeLinkLines());
+        ro.observe(container);
+
+        const onResize = () => recomputeLinkLines();
+        window.addEventListener('resize', onResize);
+
+        return () => {
+            container.removeEventListener('scroll', onScroll);
+            ro.disconnect();
+            window.removeEventListener('resize', onResize);
+        };
+    }, [recomputeLinkLines]);
 
     const voteCard = async (cardId: string, value: number) => {
         if (!boardState) return;
@@ -1191,7 +1328,26 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
                 </div>
             )}
 
-            <div className="flex-grow flex space-x-4 overflow-x-auto">
+            <div className="flex-grow flex space-x-4 overflow-x-auto relative" ref={boardContainerRef}>
+                {/* SVG overlay for link lines */}
+                {linkingCardId && linkLines.length > 0 && (
+                    <svg
+                        className="pointer-events-none absolute top-0 left-0 w-full h-full"
+                        width={boardContainerRef.current?.clientWidth || 0}
+                        height={boardContainerRef.current?.clientHeight || 0}
+                        style={{ overflow: 'visible', zIndex: 10 }}
+                    >
+                        {linkLines.map((l, i) => (
+                            <path
+                                key={i}
+                                d={`M ${l.x1} ${l.y1} C ${l.x1 + 40} ${l.y1}, ${l.x2 - 40} ${l.y2}, ${l.x2} ${l.y2}`}
+                                stroke="#facc15"
+                                strokeWidth="3"
+                                fill="none"
+                            />
+                        ))}
+                    </svg>
+                )}
                 {boardState.columns.map(column => (
                     <div
                         key={column.id}
@@ -1358,6 +1514,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
                                     return (
                                         <div
                                             key={card.id}
+                                            data-card-id={card.id}
                                             draggable={!column.isLocked && !isHiddenFromUser && !linkingCardId}
                                             onDragStart={(e) => isHiddenFromUser || linkingCardId ? e.preventDefault() : handleDragStart(e, card.id)}
                                             onClick={() => {
@@ -1410,7 +1567,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
                                                             : card.content}
                                                     </div>
                                                 )}
-                                                <div className="flex flex-col space-y-1 ml-2">
+                                                <div className="flex flex-row gap-1 ml-2">
                                                     {!isHiddenFromUser && (
                                                         <>
                                                             {/* Link button */}
@@ -1434,7 +1591,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
                                                                     className="h-4 w-4 text-muted-foreground hover:text-green-600"
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
-                                                                        promoteToBacklog(card.id);
+                                                                        openPromoteDialog(card);
                                                                     }}
                                                                     title="Promote to backlog"
                                                                 >
@@ -1636,6 +1793,33 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose })
                     </div>
                 ))}
             </div>
+
+            {/* Promote to Backlog Confirmation Dialog */}
+            <AlertDialog open={promoteDialogOpen} onOpenChange={setPromoteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Promote to Backlog?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will create a new task in the Backlog with the following content:
+                            <div className="mt-2 p-3 bg-muted rounded-md text-foreground font-medium">
+                                {cardToPromote?.content}
+                            </div>
+                            {onPromoteToKanban && (
+                                <div className="mt-2 text-sm">
+                                    You will be redirected to the Kanban view to see the new task.
+                                </div>
+                            )}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setCardToPromote(null)}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={promoteToBacklog} className="bg-green-600 hover:bg-green-700">
+                            <ArrowUpRight className="h-4 w-4 mr-2" />
+                            Promote
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div >
     );
 };
