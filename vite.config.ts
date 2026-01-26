@@ -7,7 +7,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
   return {
     base: env.VITE_BASE_URL || '/',
-    plugins: [dyadComponentTagger(), react()],
+    plugins: [react(), dyadComponentTagger()],
     server: {
       host: true, // This makes the dev server listen on all network interfaces
       allowedHosts: env.VITE_ALLOWED_HOSTS ? env.VITE_ALLOWED_HOSTS.split(',') : [],

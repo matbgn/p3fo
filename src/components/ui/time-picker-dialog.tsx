@@ -45,7 +45,7 @@ export const TimePickerDialog: React.FC<TimePickerProps> = ({
             }
             setMode('hours');
         }
-    }, [isOpen, initialTime]);
+    }, [isOpen, initialTime, settings.timezone]);
 
     const hours = selectedDateTime.hour;
     const minutes = selectedDateTime.minute;

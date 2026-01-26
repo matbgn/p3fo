@@ -6,7 +6,8 @@ import {
   AppSettingsEntity,
   QolSurveyResponseEntity,
   FilterStateEntity,
-  FertilizationBoardEntity
+  FertilizationBoardEntity,
+  DreamBoardEntity
 } from '../../src/lib/persistence-types.js';
 
 // Default values
@@ -15,6 +16,8 @@ const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
   username: 'User',
   logo: '',
   has_completed_onboarding: false,
+  workload: 60,
+  split_time: '13:00',
 };
 
 const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
@@ -132,8 +135,6 @@ class PostgresClient implements DbClient {
         high_impact_task_goal REAL DEFAULT 5,
         failure_rate_goal REAL DEFAULT 10,
         qli_goal REAL DEFAULT 7,
-        failure_rate_goal REAL DEFAULT 10,
-        qli_goal REAL DEFAULT 7,
         new_capabilities_goal REAL DEFAULT 3,
         hours_to_be_done_by_day REAL DEFAULT 8,
         vacation_limit_multiplier REAL DEFAULT 1.5,
@@ -159,8 +160,7 @@ class PostgresClient implements DbClient {
         DEFAULT_APP_SETTINGS.high_impact_task_goal,
         DEFAULT_APP_SETTINGS.failure_rate_goal,
         DEFAULT_APP_SETTINGS.qli_goal,
-        DEFAULT_APP_SETTINGS.new_capabilities_goal,
-        DEFAULT_APP_SETTINGS.hours_to_be_done_by_day
+        DEFAULT_APP_SETTINGS.new_capabilities_goal
       ]);
     }
 
@@ -544,6 +544,41 @@ class PostgresClient implements DbClient {
     return updated;
   }
 
+  async listUsers(): Promise<UserSettingsEntity[]> {
+    const result = await this.pool.query('SELECT * FROM user_settings');
+    return result.rows.map(row => ({
+      userId: row.user_id, // Note: Postgres returns column names as is
+      username: row.username,
+      logo: row.logo,
+      has_completed_onboarding: row.has_completed_onboarding,
+      workload: row.workload_percentage,
+      split_time: row.split_time,
+      monthly_balances: row.monthly_balances || {},
+      timezone: row.timezone,
+      card_compactness: row.card_compactness,
+    }));
+  }
+
+  async migrateUser(oldUserId: string, newUserId: string): Promise<void> {
+    // 1. Migrate tasks
+    await this.pool.query('UPDATE tasks SET user_id = $1 WHERE user_id = $2', [newUserId, oldUserId]);
+
+    // 2. Migrate user settings
+    // Since we only have 1 row in user_settings currently, we don't really "migrate" rows.
+
+    console.log(`PostgreSQL: Migrated data from ${oldUserId} to ${newUserId}`);
+  }
+
+  async deleteUser(userId: string): Promise<void> {
+    await this.pool.query('DELETE FROM qol_survey WHERE user_id = $1', [userId]);
+    await this.pool.query('DELETE FROM user_settings WHERE user_id = $1', [userId]);
+  }
+
+  async clearAllUsers(): Promise<void> {
+    await this.pool.query('DELETE FROM qol_survey');
+    await this.pool.query('DELETE FROM user_settings');
+  }
+
   // App settings
   async getAppSettings(): Promise<AppSettingsEntity> {
     const result = await this.pool.query('SELECT * FROM app_settings WHERE id = 1');
@@ -614,41 +649,6 @@ class PostgresClient implements DbClient {
     return updated;
   }
 
-  async listUsers(): Promise<UserSettingsEntity[]> {
-    const result = await this.pool.query('SELECT * FROM user_settings');
-    return result.rows.map(row => ({
-      userId: row.user_id, // Note: Postgres returns column names as is
-      username: row.username,
-      logo: row.logo,
-      has_completed_onboarding: row.has_completed_onboarding,
-      workload: row.workload_percentage,
-      split_time: row.split_time,
-      monthly_balances: row.monthly_balances || {},
-      timezone: row.timezone,
-      card_compactness: row.card_compactness,
-    }));
-  }
-
-  async migrateUser(oldUserId: string, newUserId: string): Promise<void> {
-    // 1. Migrate tasks
-    await this.pool.query('UPDATE tasks SET user_id = $1 WHERE user_id = $2', [newUserId, oldUserId]);
-
-    // 2. Migrate user settings
-    // Since we only have 1 row in user_settings currently, we don't really "migrate" rows.
-
-    console.log(`PostgreSQL: Migrated data from ${oldUserId} to ${newUserId}`);
-  }
-
-  async deleteUser(userId: string): Promise<void> {
-    await this.pool.query('DELETE FROM qol_survey WHERE user_id = $1', [userId]);
-    await this.pool.query('DELETE FROM user_settings WHERE user_id = $1', [userId]);
-  }
-
-  async clearAllUsers(): Promise<void> {
-    await this.pool.query('DELETE FROM qol_survey');
-    await this.pool.query('DELETE FROM user_settings');
-  }
-
   // QoL survey
   async getQolSurveyResponse(userId: string): Promise<QolSurveyResponseEntity | null> {
     const result = await this.pool.query('SELECT responses FROM qol_survey WHERE user_id = $1', [userId]);
@@ -713,5 +713,15 @@ class PostgresClient implements DbClient {
       VALUES (1, $1)
       ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
     `, [state]);
+  }
+
+  // Dream Board (Not implemented for Postgres yet)
+  async getDreamBoardState(): Promise<DreamBoardEntity | null> {
+    console.warn('PostgresClient: getDreamBoardState not implemented');
+    return null;
+  }
+
+  async updateDreamBoardState(state: DreamBoardEntity): Promise<void> {
+    console.warn('PostgresClient: updateDreamBoardState not implemented');
   }
 }

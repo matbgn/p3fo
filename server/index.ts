@@ -348,9 +348,10 @@ app.get('/api/fertilization-board', async (req: Request, res: Response) => {
   try {
     const state = await db.getFertilizationBoardState();
     res.json(state);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching fertilization board state:', error);
-    res.status(500).json({ error: 'Failed to fetch fertilization board state', details: error.message });
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to fetch fertilization board state', details: message });
   }
 });
 
@@ -358,9 +359,33 @@ app.put('/api/fertilization-board', async (req: Request, res: Response) => {
   try {
     await db.updateFertilizationBoardState(req.body);
     res.json({ success: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating fertilization board state:', error);
-    res.status(500).json({ error: 'Failed to update fertilization board state', details: error.message });
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to update fertilization board state', details: message });
+  }
+});
+
+// Dream Board routes
+app.get('/api/dream-board', async (req: Request, res: Response) => {
+  try {
+    const state = await db.getDreamBoardState();
+    res.json(state);
+  } catch (error: unknown) {
+    console.error('Error fetching dream board state:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to fetch dream board state', details: message });
+  }
+});
+
+app.put('/api/dream-board', async (req: Request, res: Response) => {
+  try {
+    await db.updateDreamBoardState(req.body);
+    res.json({ success: true });
+  } catch (error: unknown) {
+    console.error('Error updating dream board state:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to update dream board state', details: message });
   }
 });
 

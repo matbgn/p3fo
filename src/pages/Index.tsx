@@ -52,7 +52,7 @@ const Index: React.FC = () => {
         {view === "focus" ? (
           <TaskBoard focusedTaskId={focusedTaskId} />
         ) : view === "kanban" ? (
-          <KanbanBoard onFocusOnTask={handleFocusOnTask} />
+          <KanbanBoard onFocusOnTask={handleFocusOnTask} highlightedTaskId={focusedTaskId} />
         ) : view === "timetable" ? (
           <Timetable onJumpToTask={handleFocusOnTask} />
         ) : view === "program" ? (

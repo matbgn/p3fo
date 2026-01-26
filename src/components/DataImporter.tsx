@@ -37,9 +37,22 @@ const DataImporter: React.FC = () => {
                 useReminderStore.getState().checkAndTriggerReminders();
               }
 
+              // Helper to deep merge user settings
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const mergeUserSettings = (existing: any, incoming: any) => {
+                const merged = { ...existing, ...incoming };
+                if (existing.monthlyBalances && incoming.monthlyBalances) {
+                  merged.monthlyBalances = { ...existing.monthlyBalances, ...incoming.monthlyBalances };
+                }
+                return merged;
+              };
+
               // Import User Settings (Single - Legacy/Current Context)
               if (importedData.userSettings && importedData.userSettings.userId) {
-                await adapter.updateUserSettings(importedData.userSettings.userId, importedData.userSettings);
+                const userId = importedData.userSettings.userId;
+                const existing = await adapter.getUserSettings(userId) || {};
+                const merged = mergeUserSettings(existing, importedData.userSettings);
+                await adapter.updateUserSettings(userId, merged);
               }
 
               // Import All User Settings (Full Restore)
@@ -50,9 +63,10 @@ const DataImporter: React.FC = () => {
                     if (user.workload === undefined && user.workload_percentage !== undefined) {
                       user.workload = user.workload_percentage;
                     }
-                    // Ensure new fields are present if available
-                    // (No explicit mapping needed if keys match, but good to be aware)
-                    await adapter.updateUserSettings(user.userId, user);
+
+                    const existing = await adapter.getUserSettings(user.userId) || {};
+                    const merged = mergeUserSettings(existing, user);
+                    await adapter.updateUserSettings(user.userId, merged);
                   }
                 }
               }
@@ -64,7 +78,7 @@ const DataImporter: React.FC = () => {
                 }
               } else if (importedData.qolSurveyResponse) {
                 // Fallback for old format (single user)
-                const targetUserId = importedData.userSettings?.userId;
+                const targetUserId = importedData.userSettings?.userId || importedData.activeUserId;
                 if (targetUserId) {
                   await adapter.saveQolSurveyResponse(targetUserId, importedData.qolSurveyResponse);
                 } else {

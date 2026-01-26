@@ -1,4 +1,4 @@
-import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity } from './persistence-types';
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity } from './persistence-types';
 
 // Storage keys
 const TASKS_STORAGE_KEY = 'dyad_task_board_v1';
@@ -7,6 +7,7 @@ const APP_SETTINGS_STORAGE_KEY = 'dyad_settings_v1';
 const QOL_SURVEY_STORAGE_KEY = 'qolSurveyResponse';
 const FILTERS_STORAGE_KEY = 'taskFilters';
 const FERTILIZATION_BOARD_STORAGE_KEY = 'fertilizationBoard';
+const DREAM_BOARD_STORAGE_KEY = 'dreamBoard';
 
 // Default values
 const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
@@ -483,6 +484,33 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       localStorage.setItem(FERTILIZATION_BOARD_STORAGE_KEY, JSON.stringify(state));
     } catch (error) {
       console.error('Error updating fertilization board state in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async getDreamBoardState(): Promise<DreamBoardEntity | null> {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    try {
+      const stored = localStorage.getItem(DREAM_BOARD_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : null;
+    } catch (error) {
+      console.error('Error reading dream board state from localStorage:', error);
+      return null;
+    }
+  }
+
+  async updateDreamBoardState(state: DreamBoardEntity): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      localStorage.setItem(DREAM_BOARD_STORAGE_KEY, JSON.stringify(state));
+    } catch (error) {
+      console.error('Error updating dream board state in localStorage:', error);
       throw error;
     }
   }

@@ -1,4 +1,5 @@
 
+import { version } from '../../package.json';
 import { useTasks } from '@/hooks/useTasks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -183,6 +184,11 @@ const SettingsPage: React.FC = () => {
           </TabsContent>
 
           <TabsContent value="workspace" className="space-y-8 mt-0">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Version:</span>
+              <span className="font-mono bg-muted px-2 py-0.5 rounded">v{version}</span>
+            </div>
+
             <div>
               <h2 className="text-xl font-semibold mb-4">Metrics Goals</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">

@@ -16,6 +16,11 @@ export const yFertilizationState = doc.getMap('fertilizationState');
 export const yFertilizationCards = doc.getMap('fertilizationCards');
 export const yFertilizationColumns = doc.getMap('fertilizationColumns');
 
+// Export shared dream board maps
+export const yDreamState = doc.getMap('dreamState');
+export const yDreamCards = doc.getMap('dreamCards');
+export const yDreamColumns = doc.getMap('dreamColumns');
+
 // Provider and awareness are nullable - only initialized when NOT in browser-only mode
 export let provider: WebsocketProvider | null = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

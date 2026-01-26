@@ -147,6 +147,10 @@ export interface PersistenceAdapter {
   // Fertilization Board
   getFertilizationBoardState(): Promise<FertilizationBoardEntity | null>;
   updateFertilizationBoardState(state: FertilizationBoardEntity): Promise<void>;
+
+  // Dream Board
+  getDreamBoardState(): Promise<DreamBoardEntity | null>;
+  updateDreamBoardState(state: DreamBoardEntity): Promise<void>;
 }
 
 export interface FertilizationCard {
@@ -156,6 +160,12 @@ export interface FertilizationCard {
   authorId: string | null; // null for anonymous cards
   votes: Record<string, number>; // UserId -> VoteValue
   isRevealed: boolean; // For hidden edition
+  linkedCardIds?: string[]; // IDs of linked cards
+  promotedTaskId?: string | null; // ID of task created from this card (for legacy display)
+}
+
+export interface DreamCard extends FertilizationCard {
+  timeFrame: TimeFrame; // Required for Dreams column cards
 }
 
 export interface FertilizationColumn {
@@ -165,6 +175,9 @@ export interface FertilizationColumn {
   isLocked: boolean;
 }
 
+export type DreamColumn = FertilizationColumn;
+
+export type TimeFrame = '3mo' | '6mo' | '1y' | '2y' | '4y';
 export type VotingMode = 'THUMBS_UP' | 'THUMBS_UD_NEUTRAL' | 'POINTS' | 'MAJORITY_JUDGMENT';
 export type VotingPhase = 'IDLE' | 'VOTING' | 'REVEALED';
 
@@ -182,4 +195,26 @@ export interface FertilizationBoardEntity {
   votingMode: VotingMode;
   votingPhase: VotingPhase;
   maxPointsPerUser?: number; // Configurable max points for POINTS voting mode
+  areCursorsVisible?: boolean; // Control cursor visibility for all users
+  showAllLinks?: boolean; // Control global link visibility
+}
+
+export interface DreamBoardEntity {
+  moderatorId: string | null;
+  isSessionActive: boolean;
+  columns: DreamColumn[];
+  cards: DreamCard[];
+  timer: {
+    isRunning: boolean;
+    startTime: number | null;
+    duration: number; // in seconds
+  } | null;
+  hiddenEdition: boolean; // Global flag for hidden edition mode
+  votingMode: VotingMode;
+  votingPhase: VotingPhase;
+  maxPointsPerUser?: number; // Configurable max points for POINTS voting mode
+  isTimelineExpanded: boolean; // Dream-specific timeline expansion state
+  timeSortDirection: 'nearest' | 'farthest'; // Dream-specific sorting direction
+  areCursorsVisible?: boolean; // Control cursor visibility for all users
+  showAllLinks?: boolean; // Control global link visibility
 }
