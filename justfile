@@ -115,39 +115,39 @@ docker-clean:
   docker compose down -v
 
 # --- Production Deployment Tasks ---
-prod-push: _check-BW_SESSION
-  @echo "Pushing {{PROJECT_NAME}} to production..."
-  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -t push -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit adt-vmg-202
+prod-push host='adt-vmg-202': _check-BW_SESSION
+  @echo "Pushing {{PROJECT_NAME}} to production host {{host}}..."
+  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -t push -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit {{host}}
 
-prod-load: _check-BW_SESSION
-  @echo "Loading {{PROJECT_NAME}} on production..."
-  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -t load -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit adt-vmg-202
+prod-load host='adt-vmg-202': _check-BW_SESSION
+  @echo "Loading {{PROJECT_NAME}} on production host {{host}}..."
+  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -t load -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit {{host}}
 
-prod-restart: _check-BW_SESSION
-  @echo "Restarting {{PROJECT_NAME}} on production..."
-  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -t restart -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit adt-vmg-202
+prod-restart host='adt-vmg-202': _check-BW_SESSION
+  @echo "Restarting {{PROJECT_NAME}} on production host {{host}}..."
+  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -t restart -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit {{host}}
 
-prod-stop: _check-BW_SESSION
-  @echo "Stopping {{PROJECT_NAME}} on production..."
-  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -t stop -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit adt-vmg-202
+prod-stop host='adt-vmg-202': _check-BW_SESSION
+  @echo "Stopping {{PROJECT_NAME}} on production host {{host}}..."
+  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -t stop -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit {{host}}
 
-prod-status: _check-BW_SESSION
-  @echo "Checking {{PROJECT_NAME}} status on production..."
-  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -t status -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit adt-vmg-202
+prod-status host='adt-vmg-202': _check-BW_SESSION
+  @echo "Checking {{PROJECT_NAME}} status on production host {{host}}..."
+  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -t status -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit {{host}}
 
 # --- Full Deploy Task ---
-deploy: _check-BW_SESSION docker-build
-  @echo "Full deployment of {{PROJECT_NAME}}..."
-  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit adt-vmg-202
+deploy host='adt-vmg-202': _check-BW_SESSION docker-build
+  @echo "Full deployment of {{PROJECT_NAME}} on {{host}}..."
+  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit {{host}}
   just finish
 
 # --- Deploy with version ---
-deploy-version version: _check-BW_SESSION
+deploy-version version host='adt-vmg-202': _check-BW_SESSION
   #!/usr/bin/env bash
   VERSION="{{version}}"
   just sync-versions "$VERSION"
   just docker-build "$VERSION"
-  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit adt-vmg-202
+  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit {{host}}
   just finish
 
 # --- Release Task (Complete Release Workflow) ---
