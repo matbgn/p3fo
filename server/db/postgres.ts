@@ -164,6 +164,16 @@ class PostgresClient implements DbClient {
         "data" JSONB
       )
     `);
+
+    // Create indexes for performance optimization
+    // These indexes dramatically improve query performance when filtering by userId, parentId, or triageStatus
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId" ON "tasks"("userId")`);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_tasks_parentId" ON "tasks"("parentId")`);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_tasks_triageStatus" ON "tasks"("triageStatus")`);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_tasks_createdAt" ON "tasks"("createdAt")`);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_tasks_priority" ON "tasks"("priority")`);
+    // Composite index for common filtering patterns (user + status)
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId_triageStatus" ON "tasks"("userId", "triageStatus")`);
   }
 
   private async migrateSchema(): Promise<void> {

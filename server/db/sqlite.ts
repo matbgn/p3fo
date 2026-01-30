@@ -155,6 +155,16 @@ class SqliteClient implements DbClient {
           "data" TEXT NOT NULL -- JSON string
         )
         `);
+
+    // Create indexes for performance optimization
+    // These indexes dramatically improve query performance when filtering by userId, parentId, or triageStatus
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId" ON "tasks"("userId")`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_tasks_parentId" ON "tasks"("parentId")`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_tasks_triageStatus" ON "tasks"("triageStatus")`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_tasks_createdAt" ON "tasks"("createdAt")`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_tasks_priority" ON "tasks"("priority")`);
+    // Composite index for common filtering patterns (user + status)
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId_triageStatus" ON "tasks"("userId", "triageStatus")`);
   }
 
   private migrateSchema(): void {
