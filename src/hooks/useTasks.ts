@@ -104,6 +104,66 @@ if (isCollaborationEnabled()) {
   console.log('Yjs observer disabled (browser-only mode)');
 }
 
+// Helper to convert TaskEntity[] to Task[] with proper parent-child relationships
+const convertEntitiesToTasks = (entities: import('@/lib/persistence-types').TaskEntity[]): Task[] => {
+  const taskMap: { [id: string]: Task } = {};
+
+  // First pass: create all task objects and map them by ID
+  entities.forEach(entity => {
+    const task: Task = {
+      id: entity.id,
+      title: entity.title,
+      parentId: entity.parentId,
+      children: [], // Initialize children array
+      createdAt: new Date(entity.createdAt).getTime(),
+      triageStatus: entity.triageStatus as TriageStatus,
+      urgent: entity.urgent,
+      impact: entity.impact,
+      majorIncident: entity.majorIncident,
+      difficulty: entity.difficulty as 0.5 | 1 | 2 | 3 | 5 | 8,
+      timer: entity.timer,
+      category: entity.category as Category,
+      terminationDate: entity.terminationDate ? new Date(entity.terminationDate).getTime() : undefined,
+      comment: entity.comment || undefined,
+      durationInMinutes: entity.durationInMinutes || undefined,
+      priority: entity.priority || 0,
+      userId: entity.userId || undefined,
+    };
+    taskMap[task.id] = task;
+  });
+
+  // Second pass: populate children arrays
+  Object.values(taskMap).forEach(task => {
+    if (task.parentId && taskMap[task.parentId]) {
+      taskMap[task.parentId].children?.push(task.id);
+    }
+  });
+
+  return Object.values(taskMap);
+};
+
+// Load tasks filtered by userId (for server-side filtering optimization)
+const loadTasksByUser = async (userId?: string | null): Promise<Task[]> => {
+  console.log('=== loadTasksByUser called ===', { userId, timestamp: new Date().toISOString() });
+
+  try {
+    const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+    const adapter = await persistence;
+
+    // Convert UNASSIGNED filter to undefined to get tasks without userId
+    const filterUserId = userId === 'UNASSIGNED' ? undefined : (userId || undefined);
+
+    console.log(`Loading tasks from database with userId filter: ${filterUserId || 'ALL'}`);
+    const entities = await adapter.listTasks(filterUserId);
+    console.log(`Found ${entities.length} tasks in database`);
+
+    return convertEntitiesToTasks(entities);
+  } catch (error) {
+    console.error("Error loading tasks by user:", error);
+    return [];
+  }
+};
+
 const loadTasks = async () => {
   console.log('=== loadTasks called ===', {
     timestamp: new Date().toISOString()
@@ -121,44 +181,8 @@ const loadTasks = async () => {
       console.log('Task IDs in database:', entities.map(e => e.id));
     }
 
-    // Convert TaskEntity[] to Task[]
-    const taskMap: { [id: string]: Task } = {};
-    const topLevelTasks: Task[] = [];
-
-    // First pass: create all task objects and map them by ID
-    entities.forEach(entity => {
-      const task: Task = {
-        id: entity.id,
-        title: entity.title,
-        parentId: entity.parentId,
-        children: [], // Initialize children array
-        createdAt: new Date(entity.createdAt).getTime(),
-        triageStatus: entity.triageStatus as TriageStatus,
-        urgent: entity.urgent,
-        impact: entity.impact,
-        majorIncident: entity.majorIncident,
-        difficulty: entity.difficulty as 0.5 | 1 | 2 | 3 | 5 | 8,
-        timer: entity.timer,
-        category: entity.category as Category,
-        terminationDate: entity.terminationDate ? new Date(entity.terminationDate).getTime() : undefined,
-        comment: entity.comment || undefined,
-        durationInMinutes: entity.durationInMinutes || undefined,
-        priority: entity.priority || 0,
-        userId: entity.userId || undefined,
-      };
-      taskMap[task.id] = task;
-    });
-
-    // Second pass: populate children arrays and identify top-level tasks
-    Object.values(taskMap).forEach(task => {
-      if (task.parentId && taskMap[task.parentId]) {
-        taskMap[task.parentId].children?.push(task.id);
-      } else {
-        topLevelTasks.push(task);
-      }
-    });
-
-    tasks = Object.values(taskMap);
+    // Use shared conversion helper
+    tasks = convertEntitiesToTasks(entities);
     console.log(`Loaded ${tasks.length} tasks into memory`);
 
     // Only sync to Yjs if collaboration is enabled
@@ -1386,6 +1410,19 @@ export function useTasks() {
       }
 
 
+      eventBus.publish("tasksChanged");
+    }, []),
+    // Load tasks filtered by userId for server-side filtering optimization
+    loadTasksByUser: React.useCallback(async (userId?: string | null) => {
+      const filteredTasks = await loadTasksByUser(userId);
+      // Update global tasks array with filtered results
+      tasks = filteredTasks;
+      eventBus.publish("tasksChanged");
+      return filteredTasks;
+    }, []),
+    // Reload all tasks (no filter)
+    reloadTasks: React.useCallback(async () => {
+      await loadTasks();
       eventBus.publish("tasksChanged");
     }, []),
   };

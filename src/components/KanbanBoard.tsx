@@ -201,9 +201,10 @@ const Column: React.FC<{
 };
 
 const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highlightedTaskId?: string | null }> = ({ onFocusOnTask, highlightedTaskId }) => {
-  const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, reparent, toggleDone, toggleTimer, updateTerminationDate, updateDurationInMinutes, updateComment } = useTasks();
+  const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, reparent, toggleDone, toggleTimer, updateTerminationDate, updateDurationInMinutes, updateComment, loadTasksByUser, reloadTasks } = useTasks();
   const { userId: currentUserId } = useUserSettings();
   const { setFocusedTaskId } = useView();
+  const [isLoadingTasks, setIsLoadingTasks] = React.useState(false);
 
   // Local state to manage highlighting with auto-clear
   const [localHighlightedTaskId, setLocalHighlightedTaskId] = React.useState<string | null>(null);
@@ -276,17 +277,50 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
     loadFilters();
   }, []);
 
+  // Server-side filtering: reload tasks when userId filter changes
+  // This dramatically improves performance by fetching only relevant tasks from the database
+  const prevUserIdRef = React.useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    // Skip on initial render (wait for filters to load from session storage)
+    if (loadingFilters) return;
+
+    // Only reload if userId actually changed
+    if (prevUserIdRef.current === filters.selectedUserId) return;
+    prevUserIdRef.current = filters.selectedUserId;
+
+    const loadFilteredTasks = async () => {
+      setIsLoadingTasks(true);
+      try {
+        if (filters.selectedUserId) {
+          // Use server-side filtering for specific user
+          await loadTasksByUser(filters.selectedUserId);
+        } else {
+          // No user filter - reload all tasks
+          await reloadTasks();
+        }
+      } catch (error) {
+        console.error("Error loading filtered tasks:", error);
+      } finally {
+        setIsLoadingTasks(false);
+      }
+    };
+
+    loadFilteredTasks();
+  }, [filters.selectedUserId, loadingFilters, loadTasksByUser, reloadTasks]);
+
   const map = React.useMemo(() => byId(tasks), [tasks]);
   const topTasks = React.useMemo(() => {
     let filtered = tasks.filter((t) => !t.parentId);
 
-    // Apply user filter first
+    // Note: Server-side filtering is now applied via loadTasksByUser.
+    // Client-side filtering below is kept as a fallback for edge cases
+    // and for filtering UNASSIGNED tasks (which need special handling)
     if (filters.selectedUserId) {
       if (filters.selectedUserId === 'UNASSIGNED') {
+        // UNASSIGNED needs client-side filter since server returns tasks with no userId
         filtered = filtered.filter(t => !t.userId || t.userId === 'unassigned');
-      } else {
-        filtered = filtered.filter(t => t.userId === filters.selectedUserId);
       }
+      // For specific userId, server already filtered - no client filter needed
     }
 
     // Apply text search filter using A* algorithm
@@ -478,6 +512,13 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
           </div>
         )}
       </div>
+
+      {isLoadingTasks && (
+        <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
+          Loading tasks...
+        </div>
+      )}
 
       <div className="flex gap-4 pb-4">
         {STATUSES.map((s) => (
