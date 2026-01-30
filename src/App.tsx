@@ -29,6 +29,42 @@ const App = () => {
     return () => clearInterval(interval);
   }, [checkAndTriggerReminders]);
 
+  // Listen for global system commands (like Clear All Data)
+  useEffect(() => {
+    import('@/lib/collaboration').then(({ ySystemState }) => {
+      const observer = () => {
+        const command = ySystemState.get('command') as { type: string, timestamp: number } | undefined;
+        if (command && command.type === 'CLEAR_ALL') {
+          // Check if this command is recent (e.g. within last 10 seconds)
+          // or we could just trust it if we haven't processed it.
+          // Simple approach: if timestamp > startup time, assume it's new.
+          const startupTime = (window as any)._appStartupTime || 0;
+          if (command.timestamp > startupTime) {
+            console.log('Received global CLEAR_ALL command. Wiping data...');
+            // Wipe data
+            localStorage.clear();
+            sessionStorage.clear();
+            window.indexedDB.databases().then(dbs => {
+              dbs.forEach(db => {
+                if (db.name && db.name.includes('p3fo')) window.indexedDB.deleteDatabase(db.name);
+              });
+              window.indexedDB.deleteDatabase('p3fo-yjs-tasks');
+            });
+
+            // Reload to reset state
+            // Give a small delay for DB deletion
+            setTimeout(() => window.location.reload(), 500);
+          }
+        }
+      };
+      ySystemState.observe(observer);
+      // Set startup time to avoid reacting to old commands persisted in Yjs if not cleared
+      (window as any)._appStartupTime = Date.now();
+
+      return () => ySystemState.unobserve(observer);
+    });
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>

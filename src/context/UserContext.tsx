@@ -53,9 +53,9 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         userId: currentUserId,
                         username: getRandomUsername(),
                         logo: '',
-                        has_completed_onboarding: false,
+                        hasCompletedOnboarding: false,
                         workload: 60,
-                        split_time: '13:00',
+                        splitTime: '13:00',
                     };
 
                     settings = await adapter.updateUserSettings(currentUserId, defaultSettings);

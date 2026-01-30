@@ -120,7 +120,7 @@ app.patch('/api/tasks/:id', async (req: Request, res: Response) => {
     res.json(task);
   } catch (error) {
     console.error('API: Error updating task:', error);
-    res.status(500).json({ error: 'Failed to update task' });
+    res.status(500).json({ error: 'Failed to update task', details: (error as Error).message });
   }
 });
 
@@ -130,7 +130,7 @@ app.delete('/api/tasks/:id', async (req: Request, res: Response) => {
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting task:', error);
-    res.status(500).json({ error: 'Failed to delete task' });
+    res.status(500).json({ error: 'Failed to delete task', details: (error as Error).message });
   }
 });
 
@@ -251,6 +251,20 @@ app.post('/api/users/clear', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error clearing users:', error);
     res.status(500).json({ error: 'Failed to clear users' });
+  }
+});
+
+app.post('/api/admin/clear-all-data', async (req: Request, res: Response) => {
+  try {
+    if (db.clearAllData) {
+      await db.clearAllData();
+      res.json({ success: true });
+    } else {
+      res.status(501).json({ error: 'Not implemented' });
+    }
+  } catch (error) {
+    console.error('Error clearing all data:', error);
+    res.status(500).json({ error: 'Failed to clear all data' });
   }
 });
 

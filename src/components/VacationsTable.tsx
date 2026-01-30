@@ -12,7 +12,7 @@ import { VacationsDataPoint } from "@/utils/projectedHours";
 
 interface VacationsTableProps {
     data: VacationsDataPoint[];
-    onUpdate: (descId: string, field: 'workload' | 'vacations_hourly_taken' | 'vacations_hourly_balance', value: number) => void;
+    onUpdate: (descId: string, field: 'workload' | 'vacationsHourlyTaken' | 'vacationsHourlyBalance', value: number) => void;
 }
 
 const EditableCell: React.FC<{
@@ -91,26 +91,26 @@ const VacationsTable: React.FC<VacationsTableProps> = ({ data, onUpdate }) => {
                 </TableHeader>
                 <TableBody>
                     {historyData.map((row) => (
-                        <TableRow key={row.desc_id}>
-                            <TableCell className="font-medium">{row.desc_id}</TableCell>
+                        <TableRow key={row.descId}>
+                            <TableCell className="font-medium">{row.descId}</TableCell>
                             <TableCell>
                                 {/* Workload is read-only in Vacations table */}
                                 <span>{row.workload}</span>
                             </TableCell>
                             <TableCell>
-                                {row.vacations_due.toFixed(1)}
+                                {row.vacationsDue.toFixed(1)}
                             </TableCell>
                             <TableCell>
                                 <EditableCell
-                                    value={row.vacations_hourly_taken}
-                                    onSave={(val) => onUpdate(row.desc_id, 'vacations_hourly_taken', val)}
+                                    value={row.vacationsHourlyTaken}
+                                    onSave={(val) => onUpdate(row.descId, 'vacationsHourlyTaken', val)}
                                     isEditable={true}
                                 />
                             </TableCell>
                             <TableCell>
                                 <EditableCell
-                                    value={row.vacations_hourly_balance}
-                                    onSave={(val) => onUpdate(row.desc_id, 'vacations_hourly_balance', val)}
+                                    value={row.vacationsHourlyBalance}
+                                    onSave={(val) => onUpdate(row.descId, 'vacationsHourlyBalance', val)}
                                     isEditable={true}
                                 />
                             </TableCell>

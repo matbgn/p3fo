@@ -1064,6 +1064,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                         }}
                         renderCard={(card) => (
                             <CardView
+                                key={card.id}
                                 card={card}
                                 isModerator={!!isModerator}
                                 currentUserId={currentUserId}

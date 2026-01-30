@@ -5,10 +5,10 @@ import { usePersistence } from "@/hooks/usePersistence";
 export type QLIData = {
   score: number;
   details: {
-    total_responses: number;
-    favorable_responses: number;
-    valid_responses: number;
-    raw_score: number;
+    totalResponses: number;
+    favorableResponses: number;
+    validResponses: number;
+    rawScore: number;
   };
 };
 
@@ -63,10 +63,10 @@ export function useQLI() {
         const qliData: QLIData = {
           score: roundedScore,
           details: {
-            total_responses: Object.keys(allResponses).length, // Number of users who responded
-            favorable_responses: totalFavorableCount,
-            valid_responses: totalValidResponseCount,
-            raw_score: rawScore
+            totalResponses: Object.keys(allResponses).length, // Number of users who responded
+            favorableResponses: totalFavorableCount,
+            validResponses: totalValidResponseCount,
+            rawScore: rawScore
           }
         };
         setData(qliData);

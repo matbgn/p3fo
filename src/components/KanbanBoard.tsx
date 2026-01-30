@@ -367,7 +367,13 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
     };
 
     for (const parent of topTasks) {
-      acc[parent.triageStatus].push({ kind: "parent", task: parent });
+      const status = (parent.triageStatus || 'Backlog') as TriageStatus;
+      if (acc[status]) {
+        acc[status].push({ kind: "parent", task: parent });
+      } else {
+        // Fallback for completely unknown status, though 'Backlog' should cover it
+        acc['Backlog'].push({ kind: "parent", task: parent });
+      }
     }
     // Recursively find all children and add them to the dataset
     const getAllChildren = (task: Task) => {

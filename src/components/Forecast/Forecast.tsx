@@ -74,10 +74,10 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
 
     // Get vacations taken for the selected month
     const descId = `${year}-${String(month).padStart(2, '0')}`;
-    const vacationsTaken = selectedUser?.monthly_balances?.[descId]?.vacations_hourly_taken || 0;
+    const vacationsTaken = selectedUser?.monthlyBalances?.[descId]?.vacationsHourlyTaken || 0;
 
     // Get Previous Month Balance
-    const monthlyBalances = selectedUser?.monthly_balances || {};
+    const monthlyBalances = selectedUser?.monthlyBalances || {};
     const historicalData = getHistoricalHourlyBalances(filteredTasks, settings, 0, monthlyBalances, forecastSettings.userWorkloadPercentage);
 
     // Find the cumulative balance of the PREVIOUS month
@@ -89,8 +89,8 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
         prevYear -= 1;
     }
     const prevDescId = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
-    const prevMonthData = historicalData.find(d => d.desc_id === prevDescId);
-    const previousBalance = prevMonthData ? prevMonthData.cumulative_balance : 0;
+    const prevMonthData = historicalData.find(d => d.descId === prevDescId);
+    const previousBalance = prevMonthData ? prevMonthData.cumulativeBalance : 0;
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">

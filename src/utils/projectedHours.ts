@@ -202,18 +202,18 @@ export function getProjectedHoursForActualMonth(
 
 export interface DataPoint {
     date: string; // Keep date as it's used in data.push
-    desc_id: string;
+    descId: string;
     workload: number;
-    hourly_balance: number;
-    hours_done: number;
-    hours_due: number; // Keep hours_due as it's used in data.push
+    hourlyBalance: number;
+    hoursDone: number;
+    hoursDue: number; // Keep hours_due as it's used in data.push
     projected: boolean;
-    cumulative_balance: number; // Keep cumulative_balance as it's used in data.push
-    vacations_due?: number; // Added from snippet
-    vacations_hourly_balance?: number; // Added from snippet
-    vacations_hourly_taken?: number; // Added from snippet
-    is_manual?: boolean; // Added from instruction
-    modified_by?: string; // Added from instruction
+    cumulativeBalance: number; // Keep cumulative_balance as it's used in data.push
+    vacationsDue?: number; // Added from snippet
+    vacationsHourlyBalance?: number; // Added from snippet
+    vacationsHourlyTaken?: number; // Added from snippet
+    isManual?: boolean; // Added from instruction
+    modifiedBy?: string; // Added from instruction
 }
 
 // Alias for backward compatibility if needed, though I'll export DataPoint directly
@@ -276,12 +276,12 @@ export function getHistoricalHourlyBalances(
             if (isCurrentMonth) {
                 // For current month, ALWAYS use the projected logic which accounts for remaining working days
                 // This ensures consistency with the Forecast view and ignores potentially stale stored values
-                const vacationsTaken = monthlyBalances[descId]?.vacations_hourly_taken || 0;
+                const vacationsTaken = monthlyBalances[descId]?.vacationsHourlyTaken || 0;
                 const projected = getProjectedHoursForActualMonth(year, month, tasks, effectiveSettings, vacationsTaken);
                 hoursDone = projected.totalTimeExpandedInHours;
-            } else if (monthlyBalances[descId].hours_done !== undefined && monthlyBalances[descId].hours_done !== 0) {
+            } else if (monthlyBalances[descId].hoursDone !== undefined && monthlyBalances[descId].hoursDone !== 0) {
                 // Use manual hours done if present for past months
-                hoursDone = monthlyBalances[descId].hours_done;
+                hoursDone = monthlyBalances[descId].hoursDone;
             } else {
                 hoursDone = calculateHoursDoneFromTasks(tasks, year, month);
             }
@@ -314,15 +314,15 @@ export function getHistoricalHourlyBalances(
 
         data.push({
             date: `${date.toLocaleDateString("default", { month: "short" })} ${year % 100}`,
-            desc_id: descId,
+            descId: descId,
             workload: workload,
-            hourly_balance: Number(currentBalance.toFixed(1)),
-            hours_done: Number(hoursDone.toFixed(1)),
-            hours_due: Number(hoursDue.toFixed(1)),
+            hourlyBalance: Number(currentBalance.toFixed(1)),
+            hoursDone: Number(hoursDone.toFixed(1)),
+            hoursDue: Number(hoursDue.toFixed(1)),
             projected: false,
-            cumulative_balance: Number(cumulativeBalance.toFixed(1)),
-            is_manual: monthlyBalances[descId]?.is_manual,
-            modified_by: monthlyBalances[descId]?.modified_by
+            cumulativeBalance: Number(cumulativeBalance.toFixed(1)),
+            isManual: monthlyBalances[descId]?.isManual,
+            modifiedBy: monthlyBalances[descId]?.modifiedBy
         });
     }
 
@@ -344,13 +344,13 @@ export function getHistoricalHourlyBalances(
 
         data.push({
             date: `${date.toLocaleDateString("default", { month: "short" })} ${year % 100}`,
-            desc_id: descId,
+            descId: descId,
             workload: lastWorkload,
-            hourly_balance: 0,
-            hours_done: Number(hoursDue.toFixed(1)),
-            hours_due: Number(hoursDue.toFixed(1)),
+            hourlyBalance: 0,
+            hoursDone: Number(hoursDue.toFixed(1)),
+            hoursDue: Number(hoursDue.toFixed(1)),
             projected: true,
-            cumulative_balance: Number(projectedBalance.toFixed(1))
+            cumulativeBalance: Number(projectedBalance.toFixed(1))
         });
     }
 
@@ -382,13 +382,13 @@ export function getMonthProjectionVacations(
 
 export type VacationsDataPoint = {
     date: string;
-    desc_id: string;
+    descId: string;
     workload: number;
-    vacations_hourly_balance: number;
-    vacations_hourly_taken: number;
-    vacations_due: number;
+    vacationsHourlyBalance: number;
+    vacationsHourlyTaken: number;
+    vacationsDue: number;
     projected: boolean;
-    cumulative_balance: number;
+    cumulativeBalance: number;
 };
 
 export function getVacationsBalances(
@@ -432,7 +432,7 @@ export function getVacationsBalances(
 
         if (monthlyBalances[descId]) {
             workload = monthlyBalances[descId].workload;
-            vacationsTaken = monthlyBalances[descId].vacations_hourly_taken || 0;
+            vacationsTaken = monthlyBalances[descId].vacationsHourlyTaken || 0;
         } else {
             if (isCurrentMonth) {
                 workload = defaultWorkload;
@@ -444,8 +444,8 @@ export function getVacationsBalances(
         const vacationsDue = getMonthProjectionVacations(year, month, workload / 100, settings.hoursToBeDoneByDay ?? 8, settings.country, settings.region);
 
         let currentBalance = 0;
-        if (monthlyBalances[descId] && monthlyBalances[descId].vacations_hourly_balance !== undefined) {
-            currentBalance = monthlyBalances[descId].vacations_hourly_balance!;
+        if (monthlyBalances[descId] && monthlyBalances[descId].vacationsHourlyBalance !== undefined) {
+            currentBalance = monthlyBalances[descId].vacationsHourlyBalance!;
             cumulativeBalance = currentBalance;
         } else {
             cumulativeBalance += vacationsDue + vacationsTaken;
@@ -454,13 +454,13 @@ export function getVacationsBalances(
 
         data.push({
             date: `${date.toLocaleDateString("default", { month: "short" })} ${year % 100}`,
-            desc_id: descId,
+            descId: descId,
             workload: workload,
-            vacations_hourly_balance: Number(currentBalance.toFixed(1)),
-            vacations_hourly_taken: vacationsTaken,
-            vacations_due: vacationsDue,
+            vacationsHourlyBalance: Number(currentBalance.toFixed(1)),
+            vacationsHourlyTaken: vacationsTaken,
+            vacationsDue: vacationsDue,
             projected: false,
-            cumulative_balance: Number(currentBalance.toFixed(1))
+            cumulativeBalance: Number(currentBalance.toFixed(1))
         });
     }
 
@@ -480,13 +480,13 @@ export function getVacationsBalances(
 
         data.push({
             date: `${date.toLocaleDateString("default", { month: "short" })} ${year % 100}`,
-            desc_id: descId,
+            descId: descId,
             workload: lastWorkload,
-            vacations_hourly_balance: Number(projectedBalance.toFixed(1)),
-            vacations_hourly_taken: 0,
-            vacations_due: vacationsDue,
+            vacationsHourlyBalance: Number(projectedBalance.toFixed(1)),
+            vacationsHourlyTaken: 0,
+            vacationsDue: vacationsDue,
             projected: true,
-            cumulative_balance: Number(projectedBalance.toFixed(1))
+            cumulativeBalance: Number(projectedBalance.toFixed(1))
         });
     }
 

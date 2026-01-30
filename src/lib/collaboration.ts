@@ -21,6 +21,9 @@ export const yDreamState = doc.getMap('dreamState');
 export const yDreamCards = doc.getMap('dreamCards');
 export const yDreamColumns = doc.getMap('dreamColumns');
 
+// Export shared system state (for global commands like Clear All)
+export const ySystemState = doc.getMap('systemState');
+
 // Provider and awareness are nullable - only initialized when NOT in browser-only mode
 export let provider: WebsocketProvider | null = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

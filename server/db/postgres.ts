@@ -15,20 +15,20 @@ const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
   userId: 'default-user',
   username: 'User',
   logo: '',
-  has_completed_onboarding: false,
+  hasCompletedOnboarding: false,
   workload: 60,
-  split_time: '13:00',
+  splitTime: '13:00',
 };
 
 const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
-  split_time: 40,
-  user_workload_percentage: 80,
-  weeks_computation: 4,
-  high_impact_task_goal: 5,
-  failure_rate_goal: 10,
-  qli_goal: 7,
-  new_capabilities_goal: 3,
-  hours_to_be_done_by_day: 8,
+  splitTime: 40,
+  userWorkloadPercentage: 80,
+  weeksComputation: 4,
+  highImpactTaskGoal: 5,
+  failureRateGoal: 10,
+  qliGoal: 7,
+  newCapabilitiesGoal: 3,
+  hoursToBeDoneByDay: 8,
 };
 
 export async function createPostgresClient(connectionString?: string): Promise<DbClient> {
@@ -52,204 +52,214 @@ class PostgresClient implements DbClient {
   constructor(private pool: Pool) { }
 
   async initialize(): Promise<void> {
+    // Migration: Check for legacy schema and migrate if needed
+    await this.migrateSchema();
+
     // Create tasks table
     await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS tasks (
-        id TEXT PRIMARY KEY,
-        parent_id TEXT,
-        title TEXT NOT NULL,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL,
-        triage_status TEXT NOT NULL,
-        urgent BOOLEAN DEFAULT false,
-        impact BOOLEAN DEFAULT false,
-        major_incident BOOLEAN DEFAULT false,
-        difficulty REAL DEFAULT 1,
-        timer JSONB, -- JSONB for efficient JSON operations
-        category TEXT DEFAULT 'General',
-        termination_date TIMESTAMP WITH TIME ZONE,
-        comment TEXT,
-        duration_in_minutes INTEGER,
-        priority INTEGER,
-        user_id TEXT,
-        FOREIGN KEY (parent_id) REFERENCES tasks (id) ON DELETE SET NULL
+      CREATE TABLE IF NOT EXISTS "tasks" (
+        "id" TEXT PRIMARY KEY,
+        "parentId" TEXT,
+        "title" TEXT NOT NULL,
+        "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL,
+        "triageStatus" TEXT NOT NULL,
+        "urgent" BOOLEAN DEFAULT false,
+        "impact" BOOLEAN DEFAULT false,
+        "majorIncident" BOOLEAN DEFAULT false,
+        "difficulty" REAL DEFAULT 1,
+        "timer" JSONB, -- JSONB for efficient JSON operations
+        "category" TEXT DEFAULT 'General',
+        "terminationDate" TIMESTAMP WITH TIME ZONE,
+        "comment" TEXT,
+        "durationInMinutes" INTEGER,
+        "priority" INTEGER,
+        "userId" TEXT,
+        FOREIGN KEY ("parentId") REFERENCES "tasks" ("id") ON DELETE SET NULL
       )
     `);
 
-    // Create user_settings table (single row)
+    // Create userSettings table
     await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS user_settings (
-        id INTEGER PRIMARY KEY DEFAULT 1,
-        username TEXT NOT NULL,
-        logo TEXT,
-        has_completed_onboarding BOOLEAN DEFAULT false,
-        workload_percentage REAL DEFAULT 60,
-        split_time TEXT DEFAULT '13:00',
-        monthly_balances JSONB,
-        timezone TEXT,
-        card_compactness INTEGER DEFAULT 0
+      CREATE TABLE IF NOT EXISTS "userSettings" (
+        "userId" TEXT PRIMARY KEY,
+        "username" TEXT NOT NULL,
+        "logo" TEXT,
+        "hasCompletedOnboarding" BOOLEAN DEFAULT false,
+        "workload" REAL DEFAULT 60,
+        "splitTime" TEXT DEFAULT '13:00',
+        "monthlyBalances" JSONB,
+        "cardCompactness" INTEGER DEFAULT 0,
+        "timezone" TEXT
       )
     `);
 
-    // Migration: Add columns if they don't exist
-    try {
-      await this.pool.query(`
-        DO $$ 
-        BEGIN 
-          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_settings' AND column_name='workload_percentage') THEN 
-            ALTER TABLE user_settings ADD COLUMN workload_percentage REAL DEFAULT 60; 
-          END IF;
-          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_settings' AND column_name='split_time') THEN 
-            ALTER TABLE user_settings ADD COLUMN split_time TEXT DEFAULT '13:00'; 
-          END IF;
-          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_settings' AND column_name='monthly_balances') THEN 
-            ALTER TABLE user_settings ADD COLUMN monthly_balances JSONB; 
-          END IF;
-          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_settings' AND column_name='timezone') THEN 
-            ALTER TABLE user_settings ADD COLUMN timezone TEXT; 
-          END IF;
-          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='user_settings' AND column_name='card_compactness') THEN 
-            ALTER TABLE user_settings ADD COLUMN card_compactness INTEGER DEFAULT 0; 
-          END IF;
-        END $$;
-      `);
-    } catch (error) {
-      console.error('PostgreSQL: Error checking/migrating schema:', error);
-    }
-
-    // Insert default user settings if not exists
-    const userSettingsResult = await this.pool.query('SELECT COUNT(*) as count FROM user_settings');
-    if (parseInt(userSettingsResult.rows[0].count) === 0) {
-      await this.pool.query(`
-        INSERT INTO user_settings (id, username, logo, has_completed_onboarding, workload_percentage, split_time) 
-        VALUES (1, $1, $2, $3, $4, $5)
-      `, [DEFAULT_USER_SETTINGS.username, DEFAULT_USER_SETTINGS.logo, DEFAULT_USER_SETTINGS.has_completed_onboarding, 60, '13:00']);
-    }
-
-    // Create app_settings table (single row)
+    // Create appSettings table
     await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS app_settings (
-        id INTEGER PRIMARY KEY DEFAULT 1,
-        split_time REAL DEFAULT 40,
-        user_workload_percentage REAL DEFAULT 80,
-        weeks_computation REAL DEFAULT 4,
-        high_impact_task_goal REAL DEFAULT 5,
-        failure_rate_goal REAL DEFAULT 10,
-        qli_goal REAL DEFAULT 7,
-        new_capabilities_goal REAL DEFAULT 3,
-        hours_to_be_done_by_day REAL DEFAULT 8,
-        vacation_limit_multiplier REAL DEFAULT 1.5,
-        hourly_balance_limit_upper REAL DEFAULT 0.5,
-        hourly_balance_limit_lower REAL DEFAULT -0.5,
-        timezone TEXT DEFAULT 'Europe/Zurich',
-        country TEXT DEFAULT 'CH',
-        region TEXT DEFAULT 'BE'
+      CREATE TABLE IF NOT EXISTS "appSettings" (
+        "id" INTEGER PRIMARY KEY DEFAULT 1,
+        "splitTime" REAL DEFAULT 40,
+        "userWorkloadPercentage" REAL DEFAULT 80,
+        "weeksComputation" REAL DEFAULT 4,
+        "highImpactTaskGoal" REAL DEFAULT 5,
+        "failureRateGoal" REAL DEFAULT 10,
+        "qliGoal" REAL DEFAULT 7,
+        "newCapabilitiesGoal" REAL DEFAULT 3,
+        "hoursToBeDoneByDay" REAL DEFAULT 8,
+        "vacationLimitMultiplier" REAL DEFAULT 1.5,
+        "hourlyBalanceLimitUpper" REAL DEFAULT 0.5,
+        "hourlyBalanceLimitLower" REAL DEFAULT -0.5,
+        "timezone" TEXT DEFAULT 'Europe/Zurich',
+        "country" TEXT DEFAULT 'CH',
+        "region" TEXT DEFAULT 'BE'
       )
     `);
 
     // Insert default app settings if not exists
-    const appSettingsResult = await this.pool.query('SELECT COUNT(*) as count FROM app_settings');
+    const appSettingsResult = await this.pool.query('SELECT COUNT(*) as count FROM "appSettings"');
     if (parseInt(appSettingsResult.rows[0].count) === 0) {
       await this.pool.query(`
-        INSERT INTO app_settings (id, split_time, user_workload_percentage, weeks_computation, 
-                                  high_impact_task_goal, failure_rate_goal, qli_goal, new_capabilities_goal) 
-        VALUES (1, $1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO "appSettings" ("id", "splitTime", "userWorkloadPercentage", "weeksComputation", 
+                                  "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal", "hoursToBeDoneByDay") 
+        VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8)
       `, [
-        DEFAULT_APP_SETTINGS.split_time,
-        DEFAULT_APP_SETTINGS.user_workload_percentage,
-        DEFAULT_APP_SETTINGS.weeks_computation,
-        DEFAULT_APP_SETTINGS.high_impact_task_goal,
-        DEFAULT_APP_SETTINGS.failure_rate_goal,
-        DEFAULT_APP_SETTINGS.qli_goal,
-        DEFAULT_APP_SETTINGS.new_capabilities_goal
+        DEFAULT_APP_SETTINGS.splitTime,
+        DEFAULT_APP_SETTINGS.userWorkloadPercentage,
+        DEFAULT_APP_SETTINGS.weeksComputation,
+        DEFAULT_APP_SETTINGS.highImpactTaskGoal,
+        DEFAULT_APP_SETTINGS.failureRateGoal,
+        DEFAULT_APP_SETTINGS.qliGoal,
+        DEFAULT_APP_SETTINGS.newCapabilitiesGoal,
+        DEFAULT_APP_SETTINGS.hoursToBeDoneByDay
       ]);
     }
 
-    // Migration: Add columns to app_settings if they don't exist
-    try {
-      await this.pool.query(`
-        DO $$ 
-        BEGIN 
-          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='app_settings' AND column_name='hours_to_be_done_by_day') THEN 
-            ALTER TABLE app_settings ADD COLUMN hours_to_be_done_by_day REAL DEFAULT 8; 
-          END IF;
-          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='app_settings' AND column_name='vacation_limit_multiplier') THEN 
-            ALTER TABLE app_settings ADD COLUMN vacation_limit_multiplier REAL DEFAULT 1.5; 
-          END IF;
-          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='app_settings' AND column_name='hourly_balance_limit_upper') THEN 
-            ALTER TABLE app_settings ADD COLUMN hourly_balance_limit_upper REAL DEFAULT 0.5; 
-          END IF;
-          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='app_settings' AND column_name='hourly_balance_limit_lower') THEN 
-            ALTER TABLE app_settings ADD COLUMN hourly_balance_limit_lower REAL DEFAULT -0.5; 
-          END IF;
-          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='app_settings' AND column_name='timezone') THEN 
-            ALTER TABLE app_settings ADD COLUMN timezone TEXT DEFAULT 'Europe/Zurich'; 
-          END IF;
-          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='app_settings' AND column_name='country') THEN 
-            ALTER TABLE app_settings ADD COLUMN country TEXT DEFAULT 'CH'; 
-          END IF;
-          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='app_settings' AND column_name='region') THEN 
-            ALTER TABLE app_settings ADD COLUMN region TEXT DEFAULT 'BE'; 
-          END IF;
-        END $$;
-      `);
-    } catch (error) {
-      console.error('PostgreSQL: Error checking/migrating app_settings schema:', error);
-    }
+    // Create qolSurvey table
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS "qolSurvey" (
+        "userId" TEXT PRIMARY KEY,
+        "responses" JSONB
+      )
+    `);
 
-    // Create qol_survey table
-    // Check if we need to migrate from the old single-row schema
-    const qolColumns = await this.pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='qol_survey' AND column_name='user_id'");
+    // Create filters table
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS "filters" (
+        "id" INTEGER PRIMARY KEY DEFAULT 1,
+        "data" JSONB
+      )
+    `);
 
-    if (qolColumns.rows.length === 0) {
-      // Check if table exists at all
-      const tableExists = await this.pool.query("SELECT 1 FROM information_schema.tables WHERE table_name='qol_survey'");
-      if (tableExists.rows.length > 0) {
-        console.log('PostgreSQL: Dropping old qol_survey table to migrate to per-user schema');
-        await this.pool.query('DROP TABLE qol_survey');
+    // Create fertilizationBoard table
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS "fertilizationBoard" (
+        "id" INTEGER PRIMARY KEY DEFAULT 1,
+        "data" JSONB
+      )
+    `);
+
+    // Create dreamBoard table
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS "dreamBoard" (
+        "id" INTEGER PRIMARY KEY DEFAULT 1,
+        "data" JSONB
+      )
+    `);
+  }
+
+  private async migrateSchema(): Promise<void> {
+    const runMigration = async (table: string, oldCol: string, newCol: string) => {
+      try {
+        // Check if column exists. Note: table names and column names in information_schema are usually lowercase for unquoted identifiers.
+        // But here we are dealing with renaming from snake_case (likely unquoted creation) to camelCase (quoted).
+        // If table was created as `CREATE TABLE tasks`, it is 'tasks'.
+        // If created as `CREATE TABLE "tasks"`, it is 'tasks' (case sensitive if it had mixed case, but it was just lowercase tasks).
+        // So 'tasks' is safe for table name pattern matching if we assume standard postgres usage.
+
+        // However, correct params for information_schema should be exact string match.
+        // In my previous `postgres.ts`, tables were created as `CREATE TABLE IF NOT EXISTS tasks` (unquoted).
+        // So they are 'tasks' in DB.
+        // NEW tables are `CREATE TABLE IF NOT EXISTS "tasks"` (quoted). This is also 'tasks' effectively.
+        // So checking for 'tasks' is fine.
+
+        const colCheck = await this.pool.query(
+          `SELECT 1 FROM information_schema.columns WHERE table_name=$1 AND column_name=$2`,
+          [table.replace(/"/g, ''), oldCol]
+        );
+
+        const newColCheck = await this.pool.query(
+          `SELECT 1 FROM information_schema.columns WHERE table_name=$1 AND column_name=$2`,
+          [table.replace(/"/g, ''), newCol.replace(/"/g, '')] // Remove quotes for check
+        );
+
+        if (colCheck.rows.length > 0 && newColCheck.rows.length === 0) {
+          console.log(`Migrating ${table}.${oldCol} to ${newCol}...`);
+          await this.pool.query(`ALTER TABLE "${table.replace(/"/g, '')}" RENAME COLUMN "${oldCol}" TO "${newCol}"`);
+        }
+      } catch (e) {
+        console.error(`Error migrating ${table}.${oldCol}:`, e);
       }
-    }
+    };
 
-    await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS qol_survey (
-        user_id TEXT PRIMARY KEY,
-        responses JSONB -- JSONB for efficient JSON operations
-      )
-    `);
-
-    // Create filters table (single row)
-    await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS filters (
-        id INTEGER PRIMARY KEY DEFAULT 1,
-        data JSONB -- JSONB for efficient JSON operations
-      )
-    `);
-
-    // Create fertilization_board table (single row)
-    await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS fertilization_board (
-        id INTEGER PRIMARY KEY DEFAULT 1,
-        data JSONB -- JSONB for efficient JSON operations
-      )
-    `);
-
-    // Migration: Renaming celebration_board to fertilization_board
-    // Check if old table exists
-    const tableCheck = await this.pool.query("SELECT to_regclass('celebration_board') as table_exists");
-    if (tableCheck.rows[0].table_exists) {
-      console.log('PostgreSQL: Renaming celebration_board table to fertilization_board');
-      await this.pool.query('ALTER TABLE celebration_board RENAME TO fertilization_board');
-    }
-
-    // Check if data column exists (for fertilization_board)
-    try {
-      const colCheck = await this.pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='fertilization_board' AND column_name='data'");
-      if (colCheck.rows.length === 0) {
-        console.log('PostgreSQL: Migrating fertilization_board, adding data column');
-        await this.pool.query('ALTER TABLE fertilization_board ADD COLUMN data JSONB');
+    // Rename legacy tables to camelCase if needed
+    const renameTable = async (oldName: string, newName: string) => {
+      try {
+        const exists = await this.pool.query(`SELECT 1 FROM information_schema.tables WHERE table_name=$1`, [oldName]);
+        if (exists.rows.length > 0) {
+          // Check if new table already exists (if so, we might have a conflict or need to merge? For now assume rename is what we want if new doesn't exist)
+          const newExists = await this.pool.query(`SELECT 1 FROM information_schema.tables WHERE table_name=$1`, [newName]);
+          if (newExists.rows.length === 0) {
+            console.log(`Renaming table ${oldName} to ${newName}...`);
+            await this.pool.query(`ALTER TABLE "${oldName}" RENAME TO "${newName}"`);
+          }
+        }
+      } catch (e) {
+        console.error(`Error renaming table ${oldName}:`, e);
       }
-    } catch (error) {
-      console.error('PostgreSQL: Error checking/migrating fertilization_board schema:', error);
-    }
+    };
+
+    // Note: old tables were snake_case e.g. user_settings. New are userSettings.
+    // However, if I used quotes for new tables, they are case sensitive "userSettings". 
+    // "user_settings" vs "userSettings".
+
+    await renameTable('user_settings', 'userSettings');
+    await renameTable('app_settings', 'appSettings');
+    await renameTable('qol_survey', 'qolSurvey');
+    await renameTable('fertilization_board', 'fertilizationBoard');
+    await renameTable('dream_board', 'dreamBoard');
+    await renameTable('celebration_board', 'fertilizationBoard');
+
+    // Tasks columns
+    await runMigration('tasks', 'parent_id', 'parentId');
+    await runMigration('tasks', 'created_at', 'createdAt');
+    await runMigration('tasks', 'triage_status', 'triageStatus');
+    await runMigration('tasks', 'major_incident', 'majorIncident');
+    await runMigration('tasks', 'termination_date', 'terminationDate');
+    await runMigration('tasks', 'duration_in_minutes', 'durationInMinutes');
+    await runMigration('tasks', 'user_id', 'userId');
+
+    // UserSettings columns
+    await runMigration('userSettings', 'user_id', 'userId');
+    await runMigration('userSettings', 'has_completed_onboarding', 'hasCompletedOnboarding');
+    await runMigration('userSettings', 'workload_percentage', 'workload');
+    await runMigration('userSettings', 'split_time', 'splitTime');
+    await runMigration('userSettings', 'monthly_balances', 'monthlyBalances');
+    await runMigration('userSettings', 'card_compactness', 'cardCompactness');
+
+    // AppSettings columns
+    await runMigration('appSettings', 'split_time', 'splitTime');
+    await runMigration('appSettings', 'user_workload_percentage', 'userWorkloadPercentage');
+    await runMigration('appSettings', 'weeks_computation', 'weeksComputation');
+    await runMigration('appSettings', 'high_impact_task_goal', 'highImpactTaskGoal');
+    await runMigration('appSettings', 'failure_rate_goal', 'failureRateGoal');
+    await runMigration('appSettings', 'qli_goal', 'qliGoal');
+    await runMigration('appSettings', 'new_capabilities_goal', 'newCapabilitiesGoal');
+    await runMigration('appSettings', 'hours_to_be_done_by_day', 'hoursToBeDoneByDay');
+    await runMigration('appSettings', 'vacation_limit_multiplier', 'vacationLimitMultiplier');
+    await runMigration('appSettings', 'hourly_balance_limit_upper', 'hourlyBalanceLimitUpper');
+    await runMigration('appSettings', 'hourly_balance_limit_lower', 'hourlyBalanceLimitLower');
+
+    // QolSurvey columns
+    await runMigration('qolSurvey', 'user_id', 'userId');
   }
 
   async testConnection(): Promise<void> {
@@ -266,151 +276,145 @@ class PostgresClient implements DbClient {
   }
 
   // Tasks
-  async getTasks(): Promise<TaskEntity[]> {
-    const result = await this.pool.query(`
-      SELECT * FROM tasks ORDER BY priority DESC NULLS LAST, created_at ASC
-    `);
+  async getTasks(userId?: string): Promise<TaskEntity[]> {
+    let result;
+    if (userId) {
+      result = await this.pool.query(
+        'SELECT * FROM "tasks" WHERE "userId" = $1 ORDER BY "priority" DESC NULLS LAST, "createdAt" ASC',
+        [userId]
+      );
+    } else {
+      result = await this.pool.query(
+        'SELECT * FROM "tasks" ORDER BY "priority" DESC NULLS LAST, "createdAt" ASC'
+      );
+    }
 
     return result.rows.map(row => ({
-      id: row.id,
-      parent_id: row.parent_id,
-      title: row.title,
-      created_at: row.created_at,
-      triage_status: row.triage_status,
-      urgent: row.urgent,
-      impact: row.impact,
-      major_incident: row.major_incident,
-      difficulty: row.difficulty,
+      ...row,
       timer: row.timer || { startTime: null, elapsedTime: 0, isRunning: false },
-      category: row.category,
-      termination_date: row.termination_date,
-      comment: row.comment,
-      duration_in_minutes: row.duration_in_minutes,
-      priority: row.priority,
-      user_id: row.user_id,
     }));
   }
 
   async getTaskById(id: string): Promise<TaskEntity | null> {
-    const result = await this.pool.query('SELECT * FROM tasks WHERE id = $1', [id]);
+    const result = await this.pool.query('SELECT * FROM "tasks" WHERE "id" = $1', [id]);
     if (result.rows.length === 0) return null;
 
     const row = result.rows[0];
     return {
-      id: row.id,
-      parent_id: row.parent_id,
-      title: row.title,
-      created_at: row.created_at,
-      triage_status: row.triage_status,
-      urgent: row.urgent,
-      impact: row.impact,
-      major_incident: row.major_incident,
-      difficulty: row.difficulty,
+      ...row,
       timer: row.timer || { startTime: null, elapsedTime: 0, isRunning: false },
-      category: row.category,
-      termination_date: row.termination_date,
-      comment: row.comment,
-      duration_in_minutes: row.duration_in_minutes,
-      priority: row.priority,
-      user_id: row.user_id,
     };
   }
 
-  async createTask(task: Partial<TaskEntity>): Promise<TaskEntity> {
+  async createTask(input: Partial<TaskEntity>): Promise<TaskEntity> {
     const newTask: TaskEntity = {
-      id: task.id || crypto.randomUUID(),
-      title: task.title || 'New Task',
-      created_at: task.created_at || new Date().toISOString(),
-      triage_status: task.triage_status || 'backlog',
-      urgent: task.urgent || false,
-      impact: task.impact || false,
-      major_incident: task.major_incident || false,
-      difficulty: task.difficulty || 1,
-      timer: task.timer || [],
-      category: task.category || 'General',
-      termination_date: task.termination_date || null,
-      comment: task.comment || null,
-      duration_in_minutes: task.duration_in_minutes || null,
-      priority: task.priority || null,
-      user_id: task.user_id || null,
-      parent_id: task.parent_id || null,
+      id: input.id || crypto.randomUUID(),
+      title: input.title || 'New Task',
+      createdAt: input.createdAt || new Date().toISOString(),
+      triageStatus: input.triageStatus || 'Backlog',
+      urgent: input.urgent || false,
+      impact: input.impact || false,
+      majorIncident: input.majorIncident || false,
+      difficulty: input.difficulty || 1,
+      timer: input.timer || [],
+      category: input.category || 'General',
+      terminationDate: input.terminationDate || null,
+      comment: input.comment || null,
+      durationInMinutes: input.durationInMinutes || null,
+      priority: input.priority || null,
+      userId: input.userId || null,
+      parentId: input.parentId || null,
+      children: input.children || [],
     };
 
     await this.pool.query(`
-      INSERT INTO tasks (id, parent_id, title, created_at, triage_status, urgent, impact, major_incident, 
-                         difficulty, timer, category, termination_date, comment, duration_in_minutes, priority, user_id)
+      INSERT INTO "tasks" ("id", "parentId", "title", "createdAt", "triageStatus", "urgent", "impact", "majorIncident", 
+                         "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId")
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
     `, [
       newTask.id,
-      newTask.parent_id,
+      newTask.parentId,
       newTask.title,
-      newTask.created_at,
-      newTask.triage_status,
+      newTask.createdAt,
+      newTask.triageStatus,
       newTask.urgent,
       newTask.impact,
-      newTask.major_incident,
+      newTask.majorIncident,
       newTask.difficulty,
-      newTask.timer,
+      JSON.stringify(newTask.timer), // Use JSON string/object for JSONB
       newTask.category,
-      newTask.termination_date,
+      newTask.terminationDate,
       newTask.comment,
-      newTask.duration_in_minutes,
+      newTask.durationInMinutes,
       newTask.priority,
-      newTask.user_id,
+      newTask.userId,
     ]);
 
     return newTask;
   }
 
-  async updateTask(id: string, data: Partial<TaskEntity>): Promise<TaskEntity | null> {
-    console.log('PostgreSQL: updateTask called with:', { id, data });
-
+  async updateTask(id: string, patch: Partial<TaskEntity>): Promise<TaskEntity | null> {
     // First get the current task
     const currentTask = await this.getTaskById(id);
     if (!currentTask) {
-      console.error('PostgreSQL: Task not found:', id);
       return null;
     }
 
     // Merge with existing task
-    const updatedTask = { ...currentTask, ...data };
-    console.log('PostgreSQL: Updated task object:', updatedTask);
+    const updatedTask = { ...currentTask, ...patch };
 
     const params = [
-      updatedTask.parent_id,
+      updatedTask.parentId,
       updatedTask.title,
-      updatedTask.triage_status,
+      updatedTask.triageStatus,
       updatedTask.urgent,
       updatedTask.impact,
-      updatedTask.major_incident,
+      updatedTask.majorIncident,
       updatedTask.difficulty,
-      updatedTask.timer,
+      JSON.stringify(updatedTask.timer),
       updatedTask.category,
-      updatedTask.termination_date,
+      updatedTask.terminationDate,
       updatedTask.comment,
-      updatedTask.duration_in_minutes,
+      updatedTask.durationInMinutes,
       updatedTask.priority,
-      updatedTask.user_id,
+      updatedTask.userId,
       id
     ];
 
-    console.log('PostgreSQL: Executing update with params:', JSON.stringify(params, null, 2));
-
-    const result = await this.pool.query(`
-      UPDATE tasks
-      SET parent_id = $1, title = $2, triage_status = $3, urgent = $4,
-          impact = $5, major_incident = $6, difficulty = $7, timer = $8,
-          category = $9, termination_date = $10, comment = $11,
-          duration_in_minutes = $12, priority = $13, user_id = $14
-      WHERE id = $15
+    await this.pool.query(`
+      UPDATE "tasks"
+      SET "parentId" = $1, "title" = $2, "triageStatus" = $3, "urgent" = $4,
+          "impact" = $5, "majorIncident" = $6, "difficulty" = $7, "timer" = $8,
+          "category" = $9, "terminationDate" = $10, "comment" = $11,
+          "durationInMinutes" = $12, "priority" = $13, "userId" = $14
+      WHERE "id" = $15
     `, params);
 
-    console.log('PostgreSQL: Update result:', result);
     return updatedTask;
   }
 
   async deleteTask(id: string): Promise<void> {
-    await this.pool.query('DELETE FROM tasks WHERE id = $1', [id]);
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Delete recursive tasks (Cascade)
+      await client.query(`
+        WITH RECURSIVE descendants AS (
+            SELECT id FROM "tasks" WHERE "id" = $1
+            UNION
+            SELECT t.id FROM "tasks" t
+            INNER JOIN descendants d ON t."parentId" = d.id
+        )
+        DELETE FROM "tasks"
+        WHERE "id" IN (SELECT id FROM descendants)
+      `, [id]);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async bulkUpdateTaskPriorities(items: { id: string; priority: number | undefined }[]): Promise<void> {
@@ -421,7 +425,7 @@ class PostgresClient implements DbClient {
 
       for (const { id, priority } of items) {
         await client.query(
-          'UPDATE tasks SET priority = $1 WHERE id = $2',
+          'UPDATE "tasks" SET "priority" = $1 WHERE "id" = $2',
           [priority, id]
         );
       }
@@ -436,7 +440,7 @@ class PostgresClient implements DbClient {
   }
 
   async clearAllTasks(): Promise<void> {
-    await this.pool.query('DELETE FROM tasks');
+    await this.pool.query('DELETE FROM "tasks"');
   }
 
   async importTasks(tasks: TaskEntity[]): Promise<void> {
@@ -447,41 +451,41 @@ class PostgresClient implements DbClient {
 
       for (const task of tasks) {
         await client.query(`
-          INSERT INTO tasks (id, parent_id, title, created_at, triage_status, urgent, impact, major_incident, 
-                             difficulty, timer, category, termination_date, comment, duration_in_minutes, priority, user_id)
+          INSERT INTO "tasks" ("id", "parentId", "title", "createdAt", "triageStatus", "urgent", "impact", "majorIncident", 
+                             "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId")
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-          ON CONFLICT (id) DO UPDATE SET
-            parent_id = EXCLUDED.parent_id,
-            title = EXCLUDED.title,
-            triage_status = EXCLUDED.triage_status,
-            urgent = EXCLUDED.urgent,
-            impact = EXCLUDED.impact,
-            major_incident = EXCLUDED.major_incident,
-            difficulty = EXCLUDED.difficulty,
-            timer = EXCLUDED.timer,
-            category = EXCLUDED.category,
-            termination_date = EXCLUDED.termination_date,
-            comment = EXCLUDED.comment,
-            duration_in_minutes = EXCLUDED.duration_in_minutes,
-            priority = EXCLUDED.priority,
-            user_id = EXCLUDED.user_id
+          ON CONFLICT ("id") DO UPDATE SET
+            "parentId" = EXCLUDED."parentId",
+            "title" = EXCLUDED."title",
+            "triageStatus" = EXCLUDED."triageStatus",
+            "urgent" = EXCLUDED."urgent",
+            "impact" = EXCLUDED."impact",
+            "majorIncident" = EXCLUDED."majorIncident",
+            "difficulty" = EXCLUDED."difficulty",
+            "timer" = EXCLUDED."timer",
+            "category" = EXCLUDED."category",
+            "terminationDate" = EXCLUDED."terminationDate",
+            "comment" = EXCLUDED."comment",
+            "durationInMinutes" = EXCLUDED."durationInMinutes",
+            "priority" = EXCLUDED."priority",
+            "userId" = EXCLUDED."userId"
         `, [
           task.id,
-          task.parent_id,
+          task.parentId,
           task.title,
-          task.created_at,
-          task.triage_status,
+          task.createdAt,
+          task.triageStatus,
           task.urgent,
           task.impact,
-          task.major_incident,
+          task.majorIncident,
           task.difficulty,
-          task.timer,
+          JSON.stringify(task.timer),
           task.category,
-          task.termination_date,
+          task.terminationDate,
           task.comment,
-          task.duration_in_minutes,
+          task.durationInMinutes,
           task.priority,
-          task.user_id,
+          task.userId,
         ]);
       }
 
@@ -496,19 +500,12 @@ class PostgresClient implements DbClient {
 
   // User settings
   async getUserSettings(userId: string): Promise<UserSettingsEntity | null> {
-    const result = await this.pool.query('SELECT * FROM user_settings WHERE id = 1'); // TODO: Use userId when table supports it
+    const result = await this.pool.query('SELECT * FROM "userSettings" WHERE "userId" = $1', [userId]);
     if (result.rows.length > 0) {
       const row = result.rows[0];
       return {
-        userId: userId, // Return requested userId as we don't store it yet in this table schema
-        username: row.username,
-        logo: row.logo,
-        has_completed_onboarding: row.has_completed_onboarding,
-        workload: row.workload_percentage,
-        split_time: row.split_time,
-        monthly_balances: row.monthly_balances || {},
-        timezone: row.timezone,
-        card_compactness: row.card_compactness,
+        ...row,
+        monthlyBalances: row.monthlyBalances || {},
       };
     }
     return null;
@@ -519,83 +516,76 @@ class PostgresClient implements DbClient {
     const updated = { ...current, ...data, userId };
 
     await this.pool.query(`
-      INSERT INTO user_settings (id, username, logo, has_completed_onboarding, workload_percentage, split_time, monthly_balances, timezone, card_compactness)
-      VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8)
-      ON CONFLICT (id) DO UPDATE SET
-        username = EXCLUDED.username,
-        logo = EXCLUDED.logo,
-        has_completed_onboarding = EXCLUDED.has_completed_onboarding,
-        workload_percentage = EXCLUDED.workload_percentage,
-        split_time = EXCLUDED.split_time,
-        monthly_balances = EXCLUDED.monthly_balances,
-        timezone = EXCLUDED.timezone,
-        card_compactness = EXCLUDED.card_compactness
+      INSERT INTO "userSettings" ("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ON CONFLICT ("userId") DO UPDATE SET
+        "username" = EXCLUDED."username",
+        "logo" = EXCLUDED."logo",
+        "hasCompletedOnboarding" = EXCLUDED."hasCompletedOnboarding",
+        "workload" = EXCLUDED."workload",
+        "splitTime" = EXCLUDED."splitTime",
+        "monthlyBalances" = EXCLUDED."monthlyBalances",
+        "timezone" = EXCLUDED."timezone",
+        "cardCompactness" = EXCLUDED."cardCompactness"
     `, [
+      updated.userId,
       updated.username,
       updated.logo,
-      updated.has_completed_onboarding,
+      updated.hasCompletedOnboarding,
       updated.workload,
-      updated.split_time,
-      updated.monthly_balances ? JSON.stringify(updated.monthly_balances) : null,
+      updated.splitTime,
+      JSON.stringify(updated.monthlyBalances),
       updated.timezone,
-      updated.card_compactness
+      updated.cardCompactness
     ]);
 
     return updated;
   }
 
   async listUsers(): Promise<UserSettingsEntity[]> {
-    const result = await this.pool.query('SELECT * FROM user_settings');
+    const result = await this.pool.query('SELECT * FROM "userSettings"');
     return result.rows.map(row => ({
-      userId: row.user_id, // Note: Postgres returns column names as is
-      username: row.username,
-      logo: row.logo,
-      has_completed_onboarding: row.has_completed_onboarding,
-      workload: row.workload_percentage,
-      split_time: row.split_time,
-      monthly_balances: row.monthly_balances || {},
-      timezone: row.timezone,
-      card_compactness: row.card_compactness,
+      ...row,
+      monthlyBalances: row.monthlyBalances || {},
     }));
   }
 
   async migrateUser(oldUserId: string, newUserId: string): Promise<void> {
     // 1. Migrate tasks
-    await this.pool.query('UPDATE tasks SET user_id = $1 WHERE user_id = $2', [newUserId, oldUserId]);
+    await this.pool.query('UPDATE "tasks" SET "userId" = $1 WHERE "userId" = $2', [newUserId, oldUserId]);
 
     // 2. Migrate user settings
-    // Since we only have 1 row in user_settings currently, we don't really "migrate" rows.
+    const check = await this.pool.query('SELECT "userId" FROM "userSettings" WHERE "userId" = $1', [newUserId]);
+    if (check.rows.length === 0) {
+      await this.pool.query('UPDATE "userSettings" SET "userId" = $1 WHERE "userId" = $2', [newUserId, oldUserId]);
+    } else {
+      await this.pool.query('DELETE FROM "userSettings" WHERE "userId" = $1', [oldUserId]);
+    }
 
     console.log(`PostgreSQL: Migrated data from ${oldUserId} to ${newUserId}`);
   }
 
   async deleteUser(userId: string): Promise<void> {
-    await this.pool.query('DELETE FROM qol_survey WHERE user_id = $1', [userId]);
-    await this.pool.query('DELETE FROM user_settings WHERE user_id = $1', [userId]);
+    await this.pool.query('DELETE FROM "qolSurvey" WHERE "userId" = $1', [userId]);
+    await this.pool.query('DELETE FROM "userSettings" WHERE "userId" = $1', [userId]);
   }
 
   async clearAllUsers(): Promise<void> {
-    await this.pool.query('DELETE FROM qol_survey');
-    await this.pool.query('DELETE FROM user_settings');
+    await this.pool.query('DELETE FROM "qolSurvey"');
+    await this.pool.query('DELETE FROM "userSettings"');
   }
 
   // App settings
   async getAppSettings(): Promise<AppSettingsEntity> {
-    const result = await this.pool.query('SELECT * FROM app_settings WHERE id = 1');
+    const result = await this.pool.query('SELECT * FROM "appSettings" WHERE "id" = 1');
     if (result.rows.length > 0) {
       const row = result.rows[0];
       return {
-        split_time: row.split_time,
-        user_workload_percentage: row.user_workload_percentage,
-        weeks_computation: row.weeks_computation,
-        high_impact_task_goal: row.high_impact_task_goal,
-        failure_rate_goal: row.failure_rate_goal,
-        qli_goal: row.qli_goal,
-        new_capabilities_goal: row.new_capabilities_goal,
-        hours_to_be_done_by_day: row.hours_to_be_done_by_day ?? 8,
-        vacation_limit_multiplier: row.vacation_limit_multiplier ?? 1.5,
-        hourly_balance_limit_upper: row.hourly_balance_limit_upper ?? 0.5,
-        hourly_balance_limit_lower: row.hourly_balance_limit_lower ?? -0.5,
+        ...row,
+        hoursToBeDoneByDay: row.hoursToBeDoneByDay ?? 8,
+        vacationLimitMultiplier: row.vacationLimitMultiplier ?? 1.5,
+        hourlyBalanceLimitUpper: row.hourlyBalanceLimitUpper ?? 0.5,
+        hourlyBalanceLimitLower: row.hourlyBalanceLimitLower ?? -0.5,
         timezone: row.timezone ?? 'Europe/Zurich',
         country: row.country ?? 'CH',
         region: row.region ?? 'BE',
@@ -609,38 +599,38 @@ class PostgresClient implements DbClient {
     const updated = { ...current, ...data };
 
     await this.pool.query(`
-      INSERT INTO app_settings (id, split_time, user_workload_percentage, weeks_computation, 
-                                high_impact_task_goal, failure_rate_goal, qli_goal, new_capabilities_goal,
-                                hours_to_be_done_by_day, vacation_limit_multiplier, hourly_balance_limit_upper,
-                                hourly_balance_limit_lower, timezone, country, region)
+      INSERT INTO "appSettings" ("id", "splitTime", "userWorkloadPercentage", "weeksComputation", 
+                                "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal",
+                                "hoursToBeDoneByDay", "vacationLimitMultiplier", "hourlyBalanceLimitUpper",
+                                "hourlyBalanceLimitLower", "timezone", "country", "region")
       VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-      ON CONFLICT (id) DO UPDATE SET
-        split_time = EXCLUDED.split_time,
-        user_workload_percentage = EXCLUDED.user_workload_percentage,
-        weeks_computation = EXCLUDED.weeks_computation,
-        high_impact_task_goal = EXCLUDED.high_impact_task_goal,
-        failure_rate_goal = EXCLUDED.failure_rate_goal,
-        qli_goal = EXCLUDED.qli_goal,
-        new_capabilities_goal = EXCLUDED.new_capabilities_goal,
-        hours_to_be_done_by_day = EXCLUDED.hours_to_be_done_by_day,
-        vacation_limit_multiplier = EXCLUDED.vacation_limit_multiplier,
-        hourly_balance_limit_upper = EXCLUDED.hourly_balance_limit_upper,
-        hourly_balance_limit_lower = EXCLUDED.hourly_balance_limit_lower,
-        timezone = EXCLUDED.timezone,
-        country = EXCLUDED.country,
-        region = EXCLUDED.region
+      ON CONFLICT ("id") DO UPDATE SET
+        "splitTime" = EXCLUDED."splitTime",
+        "userWorkloadPercentage" = EXCLUDED."userWorkloadPercentage",
+        "weeksComputation" = EXCLUDED."weeksComputation",
+        "highImpactTaskGoal" = EXCLUDED."highImpactTaskGoal",
+        "failureRateGoal" = EXCLUDED."failureRateGoal",
+        "qliGoal" = EXCLUDED."qliGoal",
+        "newCapabilitiesGoal" = EXCLUDED."newCapabilitiesGoal",
+        "hoursToBeDoneByDay" = EXCLUDED."hoursToBeDoneByDay",
+        "vacationLimitMultiplier" = EXCLUDED."vacationLimitMultiplier",
+        "hourlyBalanceLimitUpper" = EXCLUDED."hourlyBalanceLimitUpper",
+        "hourlyBalanceLimitLower" = EXCLUDED."hourlyBalanceLimitLower",
+        "timezone" = EXCLUDED."timezone",
+        "country" = EXCLUDED."country",
+        "region" = EXCLUDED."region"
     `, [
-      updated.split_time,
-      updated.user_workload_percentage,
-      updated.weeks_computation,
-      updated.high_impact_task_goal,
-      updated.failure_rate_goal,
-      updated.qli_goal,
-      updated.new_capabilities_goal,
-      updated.hours_to_be_done_by_day,
-      updated.vacation_limit_multiplier,
-      updated.hourly_balance_limit_upper,
-      updated.hourly_balance_limit_lower,
+      updated.splitTime,
+      updated.userWorkloadPercentage,
+      updated.weeksComputation,
+      updated.highImpactTaskGoal,
+      updated.failureRateGoal,
+      updated.qliGoal,
+      updated.newCapabilitiesGoal,
+      updated.hoursToBeDoneByDay,
+      updated.vacationLimitMultiplier,
+      updated.hourlyBalanceLimitUpper,
+      updated.hourlyBalanceLimitLower,
       updated.timezone,
       updated.country,
       updated.region
@@ -651,7 +641,7 @@ class PostgresClient implements DbClient {
 
   // QoL survey
   async getQolSurveyResponse(userId: string): Promise<QolSurveyResponseEntity | null> {
-    const result = await this.pool.query('SELECT responses FROM qol_survey WHERE user_id = $1', [userId]);
+    const result = await this.pool.query('SELECT "responses" FROM "qolSurvey" WHERE "userId" = $1', [userId]);
     if (result.rows.length > 0 && result.rows[0].responses) {
       return result.rows[0].responses;
     }
@@ -660,18 +650,18 @@ class PostgresClient implements DbClient {
 
   async saveQolSurveyResponse(userId: string, data: QolSurveyResponseEntity): Promise<void> {
     await this.pool.query(`
-      INSERT INTO qol_survey (user_id, responses)
+      INSERT INTO "qolSurvey" ("userId", "responses")
       VALUES ($1, $2)
-      ON CONFLICT (user_id) DO UPDATE SET responses = EXCLUDED.responses
-    `, [userId, data]);
+      ON CONFLICT ("userId") DO UPDATE SET "responses" = EXCLUDED."responses"
+    `, [userId, JSON.stringify(data)]);
   }
 
   async getAllQolSurveyResponses(): Promise<Record<string, QolSurveyResponseEntity>> {
-    const result = await this.pool.query('SELECT user_id, responses FROM qol_survey');
+    const result = await this.pool.query('SELECT "userId", "responses" FROM "qolSurvey"');
     const responses: Record<string, QolSurveyResponseEntity> = {};
     for (const row of result.rows) {
       if (row.responses) {
-        responses[row.user_id] = row.responses;
+        responses[row.userId] = row.responses;
       }
     }
     return responses;
@@ -679,7 +669,7 @@ class PostgresClient implements DbClient {
 
   // Filters
   async getFilters(): Promise<FilterStateEntity | null> {
-    const result = await this.pool.query('SELECT data FROM filters WHERE id = 1');
+    const result = await this.pool.query('SELECT "data" FROM "filters" WHERE "id" = 1');
     if (result.rows.length > 0 && result.rows[0].data) {
       return result.rows[0].data;
     }
@@ -688,19 +678,19 @@ class PostgresClient implements DbClient {
 
   async saveFilters(data: FilterStateEntity): Promise<void> {
     await this.pool.query(`
-      INSERT INTO filters (id, data)
+      INSERT INTO "filters" ("id", "data")
       VALUES (1, $1)
-      ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
-    `, [data]);
+      ON CONFLICT ("id") DO UPDATE SET "data" = EXCLUDED."data"
+    `, [JSON.stringify(data)]);
   }
 
   async clearFilters(): Promise<void> {
-    await this.pool.query('DELETE FROM filters WHERE id = 1');
+    await this.pool.query('DELETE FROM "filters" WHERE "id" = 1');
   }
 
   // Fertilization Board
   async getFertilizationBoardState(): Promise<FertilizationBoardEntity | null> {
-    const result = await this.pool.query('SELECT data FROM fertilization_board WHERE id = 1');
+    const result = await this.pool.query('SELECT "data" FROM "fertilizationBoard" WHERE "id" = 1');
     if (result.rows.length > 0 && result.rows[0].data) {
       return result.rows[0].data;
     }
@@ -709,19 +699,63 @@ class PostgresClient implements DbClient {
 
   async updateFertilizationBoardState(state: FertilizationBoardEntity): Promise<void> {
     await this.pool.query(`
-      INSERT INTO fertilization_board (id, data)
+      INSERT INTO "fertilizationBoard" ("id", "data")
       VALUES (1, $1)
-      ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
-    `, [state]);
+      ON CONFLICT ("id") DO UPDATE SET "data" = EXCLUDED."data"
+    `, [JSON.stringify(state)]);
   }
 
-  // Dream Board (Not implemented for Postgres yet)
+  // Dream Board (Now implemented for Postgres consistent with SQLite)
   async getDreamBoardState(): Promise<DreamBoardEntity | null> {
-    console.warn('PostgresClient: getDreamBoardState not implemented');
+    const result = await this.pool.query('SELECT "data" FROM "dreamBoard" WHERE "id" = 1');
+    if (result.rows.length > 0 && result.rows[0].data) {
+      return result.rows[0].data;
+    }
     return null;
   }
 
   async updateDreamBoardState(state: DreamBoardEntity): Promise<void> {
-    console.warn('PostgresClient: updateDreamBoardState not implemented');
+    await this.pool.query(`
+        INSERT INTO "dreamBoard" ("id", "data")
+        VALUES (1, $1)
+        ON CONFLICT ("id") DO UPDATE SET "data" = EXCLUDED."data"
+      `, [JSON.stringify(state)]);
+  }
+
+  async clearAllData(): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Drop all tables for full schema reset
+      await client.query('DROP TABLE IF EXISTS "tasks" CASCADE');
+      await client.query('DROP TABLE IF EXISTS "userSettings" CASCADE');
+      await client.query('DROP TABLE IF EXISTS "appSettings" CASCADE');
+      await client.query('DROP TABLE IF EXISTS "qolSurvey" CASCADE');
+      await client.query('DROP TABLE IF EXISTS "filters" CASCADE');
+      await client.query('DROP TABLE IF EXISTS "fertilizationBoard" CASCADE');
+      await client.query('DROP TABLE IF EXISTS "dreamBoard" CASCADE');
+
+      // Drop legacy tables if they exist
+      await client.query('DROP TABLE IF EXISTS tasks CASCADE');
+      await client.query('DROP TABLE IF EXISTS user_settings CASCADE');
+      await client.query('DROP TABLE IF EXISTS app_settings CASCADE');
+      await client.query('DROP TABLE IF EXISTS qol_survey CASCADE');
+      await client.query('DROP TABLE IF EXISTS filters CASCADE');
+      await client.query('DROP TABLE IF EXISTS fertilization_board CASCADE');
+      await client.query('DROP TABLE IF EXISTS dream_board CASCADE');
+      await client.query('DROP TABLE IF EXISTS celebration_board CASCADE');
+
+      await client.query('COMMIT');
+
+      // Re-initialize (this will recreate tables with new schema)
+      await this.initialize();
+
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 }

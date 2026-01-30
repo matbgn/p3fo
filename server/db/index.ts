@@ -46,6 +46,9 @@ export interface DbClient {
   // Dream Board
   getDreamBoardState(): Promise<DreamBoardEntity | null>;
   updateDreamBoardState(state: DreamBoardEntity): Promise<void>;
+
+  // System
+  clearAllData(): Promise<void>;
 }
 
 // Factory function to create database client

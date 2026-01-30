@@ -30,45 +30,45 @@ export interface TaskTimer {
 export interface TaskEntity {
   id: string;
   title: string;
-  created_at: string;
-  triage_status: TriageStatus | string;
+  createdAt: string;
+  triageStatus: TriageStatus | string;
   urgent: boolean;
   impact: boolean;
-  major_incident: boolean;
+  majorIncident: boolean;
   difficulty: number;
   timer: { startTime: number; endTime: number }[]; // Match existing app structure
   category: Category | string;
-  termination_date: string | null;
+  terminationDate: string | null;
   comment: string | null;
-  duration_in_minutes: number | null;
+  durationInMinutes: number | null;
   priority: number | null;
-  user_id: string | null;
-  parent_id: string | null; // For hierarchical tasks
+  userId: string | null;
+  parentId: string | null; // For hierarchical tasks
   children?: string[]; // Add children array for hierarchical structure
 }
 
 export interface MonthlyBalanceData {
   workload: number;
-  hourly_balance: number;
-  hours_done: number;
-  vacations_hourly_balance?: number;
-  vacations_hourly_taken?: number;
-  is_manual?: boolean;
-  modified_by?: string;
+  hourlyBalance: number;
+  hoursDone: number;
+  vacationsHourlyBalance?: number;
+  vacationsHourlyTaken?: number;
+  isManual?: boolean;
+  modifiedBy?: string;
 }
 
 export interface AppSettingsEntity {
-  split_time: number;
-  user_workload_percentage: number;
-  weeks_computation: number;
-  high_impact_task_goal: number;
-  failure_rate_goal: number;
-  qli_goal: number;
-  new_capabilities_goal: number;
-  vacation_limit_multiplier?: number;
-  hourly_balance_limit_upper?: number;
-  hourly_balance_limit_lower?: number;
-  hours_to_be_done_by_day?: number;
+  splitTime: number;
+  userWorkloadPercentage: number;
+  weeksComputation: number;
+  highImpactTaskGoal: number;
+  failureRateGoal: number;
+  qliGoal: number;
+  newCapabilitiesGoal: number;
+  vacationLimitMultiplier?: number;
+  hourlyBalanceLimitUpper?: number;
+  hourlyBalanceLimitLower?: number;
+  hoursToBeDoneByDay?: number;
   timezone?: string;
   country?: string;
   region?: string;
@@ -78,11 +78,11 @@ export interface UserSettingsEntity {
   userId: string;
   username: string;
   logo: string;
-  has_completed_onboarding: boolean;
+  hasCompletedOnboarding: boolean;
   workload?: number;
-  split_time?: string;
-  monthly_balances?: Record<string, MonthlyBalanceData>;
-  card_compactness?: number;
+  splitTime?: string;
+  monthlyBalances?: Record<string, MonthlyBalanceData>;
+  cardCompactness?: number;
   timezone?: string;
 }
 
@@ -111,11 +111,11 @@ export interface StorageMetadata {
 export interface PersistenceAdapter {
   // Tasks
   listTasks(userId?: string): Promise<TaskEntity[]>;
-  getTask(id: string): Promise<TaskEntity | null>;
+  getTaskById(id: string): Promise<TaskEntity | null>;
   createTask(input: Partial<TaskEntity>): Promise<TaskEntity>;
   updateTask(id: string, patch: Partial<TaskEntity>): Promise<TaskEntity>;
   deleteTask(id: string): Promise<void>;
-  bulkUpdatePriorities(items: { id: string; priority: number | undefined }[]): Promise<void>;
+  bulkUpdateTaskPriorities(items: { id: string; priority: number | undefined }[]): Promise<void>;
   clearAllTasks(): Promise<void>;
   importTasks(tasks: TaskEntity[]): Promise<void>;
 
@@ -128,8 +128,8 @@ export interface PersistenceAdapter {
   clearAllUsers(): Promise<void>;
 
   // App settings
-  getSettings(): Promise<AppSettingsEntity>;
-  updateSettings(patch: Partial<AppSettingsEntity>): Promise<AppSettingsEntity>;
+  getAppSettings(): Promise<AppSettingsEntity>;
+  updateAppSettings(patch: Partial<AppSettingsEntity>): Promise<AppSettingsEntity>;
 
   // QoL survey
   getQolSurveyResponse(userId: string): Promise<QolSurveyResponseEntity | null>;
@@ -151,6 +151,9 @@ export interface PersistenceAdapter {
   // Dream Board
   getDreamBoardState(): Promise<DreamBoardEntity | null>;
   updateDreamBoardState(state: DreamBoardEntity): Promise<void>;
+
+  // System
+  clearAllData(): Promise<void>;
 }
 
 export interface FertilizationCard {
