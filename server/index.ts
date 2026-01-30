@@ -70,8 +70,15 @@ app.get('/api/health', async (req: Request, res: Response) => {
 app.get('/api/tasks', async (req: Request, res: Response) => {
   try {
     const userId = req.query.user_id as string | undefined;
-    const tasks = await db.getTasks(userId);
-    res.json(tasks);
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
+    const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : undefined;
+
+    const pagination = (limit !== undefined || offset !== undefined)
+      ? { limit, offset }
+      : undefined;
+
+    const result = await db.getTasks(userId, pagination);
+    res.json(result);
   } catch (error) {
     console.error('Error fetching tasks:', error);
     res.status(500).json({ error: 'Failed to fetch tasks' });
@@ -435,8 +442,8 @@ async function startServer() {
     await initializeDb();
 
     // Check if tasks exist, if not, the frontend will call the init-defaults endpoint
-    const tasks = await db.getTasks();
-    if (tasks.length === 0) {
+    const tasksResult = await db.getTasks();
+    if (tasksResult.total === 0) {
       console.log('No tasks found in the database. Frontend will initialize default tasks.');
     }
 

@@ -1,6 +1,18 @@
 // Database client interface and factory
 import { TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, FertilizationBoardEntity, DreamBoardEntity } from '../../src/lib/persistence-types.js';
 
+// Pagination options for queries
+export interface PaginationOptions {
+  limit?: number;
+  offset?: number;
+}
+
+// Paginated response wrapper
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+}
+
 // Define the database client interface
 export interface DbClient {
   initialize(): Promise<void>;
@@ -8,7 +20,7 @@ export interface DbClient {
   close?(): Promise<void>;
 
   // Tasks
-  getTasks(userId?: string): Promise<TaskEntity[]>;
+  getTasks(userId?: string, pagination?: PaginationOptions): Promise<PaginatedResponse<TaskEntity>>;
   getTaskById(id: string): Promise<TaskEntity | null>;
   createTask(task: Partial<TaskEntity>): Promise<TaskEntity>;
   updateTask(id: string, data: Partial<TaskEntity>): Promise<TaskEntity | null>;

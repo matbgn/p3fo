@@ -286,23 +286,45 @@ class PostgresClient implements DbClient {
   }
 
   // Tasks
-  async getTasks(userId?: string): Promise<TaskEntity[]> {
-    let result;
+  async getTasks(userId?: string, pagination?: { limit?: number; offset?: number }): Promise<{ data: TaskEntity[]; total: number }> {
+    // Build count query
+    let countSql = 'SELECT COUNT(*) as count FROM "tasks"';
+    const countParams: any[] = [];
     if (userId) {
-      result = await this.pool.query(
-        'SELECT * FROM "tasks" WHERE "userId" = $1 ORDER BY "priority" DESC NULLS LAST, "createdAt" ASC',
-        [userId]
-      );
-    } else {
-      result = await this.pool.query(
-        'SELECT * FROM "tasks" ORDER BY "priority" DESC NULLS LAST, "createdAt" ASC'
-      );
+      countSql += ' WHERE "userId" = $1';
+      countParams.push(userId);
+    }
+    const countResult = await this.pool.query(countSql, countParams);
+    const total = parseInt(countResult.rows[0].count);
+
+    // Build data query
+    let sql = 'SELECT * FROM "tasks"';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (userId) {
+      sql += ` WHERE "userId" = $${paramIndex++}`;
+      params.push(userId);
+    }
+    sql += ' ORDER BY "priority" DESC NULLS LAST, "createdAt" ASC';
+
+    if (pagination?.limit !== undefined) {
+      sql += ` LIMIT $${paramIndex++}`;
+      params.push(pagination.limit);
+    }
+    if (pagination?.offset !== undefined) {
+      sql += ` OFFSET $${paramIndex++}`;
+      params.push(pagination.offset);
     }
 
-    return result.rows.map(row => ({
+    const result = await this.pool.query(sql, params);
+
+    const data = result.rows.map(row => ({
       ...row,
       timer: row.timer || { startTime: null, elapsedTime: 0, isRunning: false },
     }));
+
+    return { data, total };
   }
 
   async getTaskById(id: string): Promise<TaskEntity | null> {

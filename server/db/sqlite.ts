@@ -244,21 +244,46 @@ class SqliteClient implements DbClient {
   }
 
   // Tasks
-  async getTasks(userId?: string): Promise<TaskEntity[]> {
-    let rows: any[];
+  async getTasks(userId?: string, pagination?: { limit?: number; offset?: number }): Promise<{ data: TaskEntity[]; total: number }> {
+    // Build count query
+    let countSql = 'SELECT COUNT(*) as count FROM "tasks"';
+    const countParams: any[] = [];
     if (userId) {
-      rows = this.db.prepare('SELECT * FROM "tasks" WHERE "userId" = ? ORDER BY "priority" DESC NULLS LAST, "createdAt" ASC').all(userId) as any[];
-    } else {
-      rows = this.db.prepare('SELECT * FROM "tasks" ORDER BY "priority" DESC NULLS LAST, "createdAt" ASC').all() as any[];
+      countSql += ' WHERE "userId" = ?';
+      countParams.push(userId);
+    }
+    const countResult = this.db.prepare(countSql).get(...countParams) as { count: number };
+    const total = countResult.count;
+
+    // Build data query
+    let sql = 'SELECT * FROM "tasks"';
+    const params: any[] = [];
+    if (userId) {
+      sql += ' WHERE "userId" = ?';
+      params.push(userId);
+    }
+    sql += ' ORDER BY "priority" DESC NULLS LAST, "createdAt" ASC';
+
+    if (pagination?.limit !== undefined) {
+      sql += ' LIMIT ?';
+      params.push(pagination.limit);
+    }
+    if (pagination?.offset !== undefined) {
+      sql += ' OFFSET ?';
+      params.push(pagination.offset);
     }
 
-    return rows.map(row => ({
+    const rows = this.db.prepare(sql).all(...params) as any[];
+
+    const data = rows.map(row => ({
       ...row,
       urgent: Boolean(row.urgent),
       impact: Boolean(row.impact),
       majorIncident: Boolean(row.majorIncident),
       timer: row.timer ? JSON.parse(row.timer) : { startTime: null, elapsedTime: 0, isRunning: false },
     }));
+
+    return { data, total };
   }
 
   async getTaskById(id: string): Promise<TaskEntity | null> {
