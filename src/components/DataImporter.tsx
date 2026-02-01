@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { useReminderStore } from '@/hooks/useReminders';
 import { getPersistenceAdapter } from '@/lib/persistence-factory';
 import { QolSurveyResponseEntity } from '@/lib/persistence-types';
+import { yUserSettings, isCollaborationEnabled } from '@/lib/collaboration';
 
 const DataImporter: React.FC = () => {
   const { importTasks } = useTasks();
@@ -60,6 +61,21 @@ const DataImporter: React.FC = () => {
                   };
 
                   await adapter.updateUserSettings(userId, normalizedSettings);
+
+                  // Sync to Yjs for cross-client synchronization
+                  // This ensures other clients receive the imported data and don't
+                  // overwrite it with their stale cached settings
+                  if (isCollaborationEnabled()) {
+                    console.log('Syncing imported user settings to Yjs:', { userId, username: normalizedSettings.username });
+                    yUserSettings.set(userId, {
+                      userId,
+                      username: normalizedSettings.username,
+                      logo: normalizedSettings.logo,
+                      hasCompletedOnboarding: normalizedSettings.hasCompletedOnboarding,
+                      monthlyBalances: normalizedSettings.monthlyBalances || {},
+                      cardCompactness: normalizedSettings.cardCompactness ?? 0
+                    });
+                  }
                 };
 
                 if (Array.isArray(userSettingsData)) {
