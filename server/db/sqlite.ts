@@ -10,6 +10,56 @@ import type {
   DreamBoardEntity
 } from '../../src/lib/persistence-types.js';
 
+// Raw database row types (SQLite stores booleans as 0/1 integers and JSON as strings)
+interface TaskDbRow {
+  id: string;
+  parentId: string | null;
+  title: string;
+  createdAt: string;
+  triageStatus: string;
+  urgent: number;
+  impact: number;
+  majorIncident: number;
+  difficulty: number;
+  timer: string | null;
+  category: string;
+  terminationDate: string | null;
+  comment: string | null;
+  durationInMinutes: number | null;
+  priority: number | null;
+  userId: string | null;
+}
+
+interface UserSettingsDbRow {
+  userId: string;
+  username: string;
+  logo: string;
+  hasCompletedOnboarding: number;
+  workload: number | null;
+  splitTime: string | null;
+  monthlyBalances: string | null;
+  cardCompactness: number | null;
+  timezone: string | null;
+}
+
+interface AppSettingsDbRow {
+  id: number;
+  splitTime: number;
+  userWorkloadPercentage: number;
+  weeksComputation: number;
+  highImpactTaskGoal: number;
+  failureRateGoal: number;
+  qliGoal: number;
+  newCapabilitiesGoal: number;
+  hoursToBeDoneByDay: number | null;
+  vacationLimitMultiplier: number | null;
+  hourlyBalanceLimitUpper: number | null;
+  hourlyBalanceLimitLower: number | null;
+  timezone: string | null;
+  country: string | null;
+  region: string | null;
+}
+
 // Default values
 const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
   userId: 'default-user',
@@ -171,7 +221,7 @@ class SqliteClient implements DbClient {
     const runMigration = (table: string, oldCol: string, newCol: string) => {
       try {
         // Check if column exists
-        const tableInfo = this.db.prepare(`PRAGMA table_info("${table}")`).all() as any[];
+        const tableInfo = this.db.prepare(`PRAGMA table_info("${table}")`).all() as { name: string }[];
         if (tableInfo.some(col => col.name === oldCol) && !tableInfo.some(col => col.name === newCol)) {
           console.log(`Migrating ${table}.${oldCol} to ${newCol}...`);
           this.db.exec(`ALTER TABLE "${table}" RENAME COLUMN "${oldCol}" TO "${newCol}"`);
@@ -247,7 +297,7 @@ class SqliteClient implements DbClient {
   async getTasks(userId?: string, pagination?: { limit?: number; offset?: number }): Promise<{ data: TaskEntity[]; total: number }> {
     // Build count query
     let countSql = 'SELECT COUNT(*) as count FROM "tasks"';
-    const countParams: any[] = [];
+    const countParams: (string | number | null)[] = [];
     if (userId) {
       countSql += ' WHERE "userId" = ?';
       countParams.push(userId);
@@ -257,7 +307,7 @@ class SqliteClient implements DbClient {
 
     // Build data query
     let sql = 'SELECT * FROM "tasks"';
-    const params: any[] = [];
+    const params: (string | number | null)[] = [];
     if (userId) {
       sql += ' WHERE "userId" = ?';
       params.push(userId);
@@ -273,7 +323,7 @@ class SqliteClient implements DbClient {
       params.push(pagination.offset);
     }
 
-    const rows = this.db.prepare(sql).all(...params) as any[];
+    const rows = this.db.prepare(sql).all(...params) as unknown as TaskDbRow[];
 
     const data = rows.map(row => ({
       ...row,
@@ -287,7 +337,7 @@ class SqliteClient implements DbClient {
   }
 
   async getTaskById(id: string): Promise<TaskEntity | null> {
-    const row = this.db.prepare('SELECT * FROM "tasks" WHERE "id" = ?').get(id) as any;
+    const row = this.db.prepare('SELECT * FROM "tasks" WHERE "id" = ?').get(id) as unknown as TaskDbRow | undefined;
     if (!row) {
       return null;
     }
@@ -519,7 +569,7 @@ class SqliteClient implements DbClient {
 
   // User settings
   async getUserSettings(userId: string): Promise<UserSettingsEntity | null> {
-    const row = this.db.prepare('SELECT * FROM "userSettings" WHERE "userId" = ?').get(userId) as any;
+    const row = this.db.prepare('SELECT * FROM "userSettings" WHERE "userId" = ?').get(userId) as unknown as UserSettingsDbRow | undefined;
     if (!row) {
       return null;
     }
@@ -564,7 +614,7 @@ class SqliteClient implements DbClient {
   }
 
   async listUsers(): Promise<UserSettingsEntity[]> {
-    const rows = this.db.prepare('SELECT * FROM "userSettings"').all() as any[];
+    const rows = this.db.prepare('SELECT * FROM "userSettings"').all() as unknown as UserSettingsDbRow[];
     return rows.map(row => ({
       ...row,
       hasCompletedOnboarding: Boolean(row.hasCompletedOnboarding),
@@ -623,7 +673,7 @@ class SqliteClient implements DbClient {
 
   // App settings
   async getAppSettings(): Promise<AppSettingsEntity> {
-    const row = this.db.prepare('SELECT * FROM "appSettings" WHERE "id" = 1').get() as any;
+    const row = this.db.prepare('SELECT * FROM "appSettings" WHERE "id" = 1').get() as unknown as AppSettingsDbRow | undefined;
     if (!row) {
       return DEFAULT_APP_SETTINGS;
     }
