@@ -14,6 +14,12 @@ import NotFound from "./pages/NotFound";
 import { useReminderStore } from "./hooks/useReminders";
 import { ViewProvider } from "@/context/ViewContext";
 
+declare global {
+  interface Window {
+    _appStartupTime?: number;
+  }
+}
+
 const queryClient = new QueryClient();
 
 import { CursorOverlay } from "@/components/CursorOverlay";
@@ -38,7 +44,7 @@ const App = () => {
           // Check if this command is recent (e.g. within last 10 seconds)
           // or we could just trust it if we haven't processed it.
           // Simple approach: if timestamp > startup time, assume it's new.
-          const startupTime = (window as any)._appStartupTime || 0;
+          const startupTime = window._appStartupTime || 0;
           if (command.timestamp > startupTime) {
             console.log('Received global CLEAR_ALL command. Wiping data...');
             // Wipe data
@@ -59,7 +65,7 @@ const App = () => {
       };
       ySystemState.observe(observer);
       // Set startup time to avoid reacting to old commands persisted in Yjs if not cleared
-      (window as any)._appStartupTime = Date.now();
+      window._appStartupTime = Date.now();
 
       return () => ySystemState.unobserve(observer);
     });

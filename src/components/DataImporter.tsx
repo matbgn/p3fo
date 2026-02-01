@@ -4,8 +4,25 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useReminderStore } from '@/hooks/useReminders';
 import { getPersistenceAdapter } from '@/lib/persistence-factory';
-import { QolSurveyResponseEntity } from '@/lib/persistence-types';
+import { QolSurveyResponseEntity, MonthlyBalanceData } from '@/lib/persistence-types';
 import { yUserSettings, isCollaborationEnabled } from '@/lib/collaboration';
+
+interface ImportedUserSettings {
+  userId?: string;
+  user_id?: string;
+  username?: string;
+  logo?: string;
+  hasCompletedOnboarding?: boolean;
+  has_completed_onboarding?: boolean;
+  workload?: number;
+  splitTime?: string;
+  split_time?: string;
+  monthlyBalances?: Record<string, MonthlyBalanceData>;
+  monthly_balances?: Record<string, MonthlyBalanceData>;
+  cardCompactness?: number;
+  card_compactness?: number;
+  timezone?: string;
+}
 
 const DataImporter: React.FC = () => {
   const { importTasks } = useTasks();
@@ -42,7 +59,7 @@ const DataImporter: React.FC = () => {
               const userSettingsData = importedData.allUserSettings || importedData.userSettings;
 
               if (userSettingsData) {
-                const processUserSetting = async (settings: any) => {
+                const processUserSetting = async (settings: ImportedUserSettings) => {
                   if (!settings.userId && !settings.user_id) return;
 
                   const userId = settings.userId || settings.user_id;
@@ -86,8 +103,9 @@ const DataImporter: React.FC = () => {
                   // Map format: userId -> settings
                   for (const [key, settings] of Object.entries(userSettingsData)) {
                     // Ensure settings has userId, if not use key
-                    const s = { ...(settings as any), userId: (settings as any).userId || key };
-                    await processUserSetting(s);
+                    const s = settings as ImportedUserSettings;
+                    const settingsWithUserId: ImportedUserSettings = { ...s, userId: s.userId || key };
+                    await processUserSetting(settingsWithUserId);
                   }
                 }
               }
