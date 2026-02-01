@@ -1,4 +1,5 @@
 import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity } from './persistence-types';
+import { DEFAULT_TASKS_INITIALIZED_KEY } from '@/hooks/useTasks';
 
 export class HttpApiPersistence implements PersistenceAdapter {
   private baseUrl: string;
@@ -215,6 +216,8 @@ export class HttpApiPersistence implements PersistenceAdapter {
     // 2. Clear Browser LocalStorage/SessionStorage
     if (typeof window !== 'undefined') {
       localStorage.clear();
+      // Preserve the initialized flag to prevent default tasks from being recreated
+      localStorage.setItem(DEFAULT_TASKS_INITIALIZED_KEY, 'true');
       sessionStorage.clear();
 
       // 3. Clear IndexedDB (Yjs persistence)

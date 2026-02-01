@@ -61,7 +61,7 @@ export type Task = {
 let tasks: Task[] = [];
 
 // Key for localStorage to track if default tasks have been initialized
-const DEFAULT_TASKS_INITIALIZED_KEY = 'p3fo_default_tasks_initialized';
+export const DEFAULT_TASKS_INITIALIZED_KEY = 'p3fo_default_tasks_initialized';
 
 const byId = (arr: Task[]) => Object.fromEntries(arr.map((t) => [t.id, t]));
 

@@ -13,6 +13,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { useReminderStore } from "./hooks/useReminders";
 import { ViewProvider } from "@/context/ViewContext";
+import { DEFAULT_TASKS_INITIALIZED_KEY } from "./hooks/useTasks";
 
 declare global {
   interface Window {
@@ -49,6 +50,8 @@ const App = () => {
             console.log('Received global CLEAR_ALL command. Wiping data...');
             // Wipe data
             localStorage.clear();
+            // Preserve the initialized flag to prevent default tasks from being recreated
+            localStorage.setItem(DEFAULT_TASKS_INITIALIZED_KEY, 'true');
             sessionStorage.clear();
             window.indexedDB.databases().then(dbs => {
               dbs.forEach(db => {
