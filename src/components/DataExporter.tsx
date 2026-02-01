@@ -53,7 +53,7 @@ const DataExporter: React.FC = () => {
         fertilizationBoard: fertilizationBoardState, // Export Fertilization Board state
         settings: settingsToExport,
         activeUserId: userId,
-        userSettings: allUserSettings, // Export all users for full restore
+        allUserSettings, // Export all users for full restore
       };
 
       const data = JSON.stringify(exportData, null, 2);

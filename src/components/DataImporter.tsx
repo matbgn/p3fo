@@ -37,8 +37,8 @@ const DataImporter: React.FC = () => {
                 useReminderStore.getState().checkAndTriggerReminders();
               }
 
-              // Import User Settings
-              const userSettingsData = importedData.userSettings || importedData.allUserSettings;
+              // Import User Settings (allUserSettings is the new key, userSettings is legacy)
+              const userSettingsData = importedData.allUserSettings || importedData.userSettings;
 
               if (userSettingsData) {
                 const processUserSetting = async (settings: any) => {
