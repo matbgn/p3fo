@@ -289,7 +289,7 @@ class PostgresClient implements DbClient {
   async getTasks(userId?: string, pagination?: { limit?: number; offset?: number }): Promise<{ data: TaskEntity[]; total: number }> {
     // Build count query
     let countSql = 'SELECT COUNT(*) as count FROM "tasks"';
-    const countParams: any[] = [];
+    const countParams: (string | number | boolean | null)[] = [];
     if (userId) {
       countSql += ' WHERE "userId" = $1';
       countParams.push(userId);
@@ -299,7 +299,7 @@ class PostgresClient implements DbClient {
 
     // Build data query
     let sql = 'SELECT * FROM "tasks"';
-    const params: any[] = [];
+    const params: (string | number | boolean | null)[] = [];
     let paramIndex = 1;
 
     if (userId) {
