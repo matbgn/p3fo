@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.12.2 (2026-02-01)
+
+### Bug Fixes
+
+- **lint:** replace any types with proper interfaces in App.tsx and DataImporter.tsx (b4b995b)
+- **lint:** replace any types with specific interfaces in sqlite.ts (67125d9)
+- **lint:** replace any types with specific union types in postgres.ts (e55e3dd)
+- sync imported user settings to Yjs to prevent cache overwrite (7ae7cb2)
+
+---
+
 ## v0.12.1 (2026-01-30)
 
 ---
@@ -114,21 +125,5 @@
 - **timetable:** use Temporal API for consistent date string generation in time entries (b306c7a)
 - **data export:** add missing attributes to export and import (a40868d)
 - **timetable:** fix user selection on timetable entries for current user (e4e02ca)
-
----
-
-## v0.5.0 (2025-12-01)
-
-### Features
-
-- **timetable:** persist data once month is done (001a80b)
-- **forecast:** incorporate vacation hours into projected hours and balance calculations (8b2579b)
-- **forecast:** enhance projected hours calculation with a gliding average combining current and historical pace (3dfdf9e)
-- **timetable:** implement year and month selection in the forecast view (4896e55)
-
-### Bug Fixes
-
-- **forecast:** restore linear progression for the projected hours (c4b8af2)
-- applied effective user workload settings when calculating projected hours for the current month (6774e92)
 
 ---
