@@ -3,6 +3,7 @@ import { version } from '../../package.json';
 import { useTasks } from '@/hooks/useTasks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { getPersistenceAdapter } from '@/lib/persistence-factory';
 import DataExporter from '@/components/DataExporter';
 import DataImporter from '@/components/DataImporter';
 import { useCombinedSettings } from '@/hooks/useCombinedSettings';
@@ -17,10 +18,10 @@ const SettingsPage: React.FC = () => {
   const { settings, updateSettings } = useCombinedSettings();
 
   const handleClearData = async () => {
-    if (window.confirm('Are you sure you want to delete all task data? This action cannot be undone.')) {
-      await clearAllTasks();
-      await clearAllUsers();
-      // Also clear app settings if needed, but for now just tasks and users as requested
+    if (window.confirm('Are you sure you want to delete ALL application data? This action cannot be undone and will remove all tasks, settings, users, and boards.')) {
+      const adapter = await getPersistenceAdapter();
+      await adapter.clearAllData();
+      window.location.reload();
     }
   };
 

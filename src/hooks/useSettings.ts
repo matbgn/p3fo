@@ -25,21 +25,21 @@ const loadSettings = async (): Promise<Settings> => {
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
-    const appSettings = await adapter.getSettings();
-    
+    const appSettings = await adapter.getAppSettings();
+
     // Map AppSettingsEntity to Settings interface
     return {
-      splitTime: appSettings.split_time?.toString() || defaultSettings.splitTime,
-      userWorkloadPercentage: appSettings.user_workload_percentage?.toString() || defaultSettings.userWorkloadPercentage,
-      weeksComputation: appSettings.weeks_computation?.toString() || defaultSettings.weeksComputation,
-      highImpactTaskGoal: appSettings.high_impact_task_goal?.toString() || defaultSettings.highImpactTaskGoal,
-      failureRateGoal: appSettings.failure_rate_goal?.toString() || defaultSettings.failureRateGoal,
-      qliGoal: appSettings.qli_goal?.toString() || defaultSettings.qliGoal,
-      newCapabilitiesGoal: appSettings.new_capabilities_goal?.toString() || defaultSettings.newCapabilitiesGoal,
+      splitTime: appSettings.splitTime?.toString() || defaultSettings.splitTime,
+      userWorkloadPercentage: appSettings.userWorkloadPercentage?.toString() || defaultSettings.userWorkloadPercentage,
+      weeksComputation: appSettings.weeksComputation?.toString() || defaultSettings.weeksComputation,
+      highImpactTaskGoal: appSettings.highImpactTaskGoal?.toString() || defaultSettings.highImpactTaskGoal,
+      failureRateGoal: appSettings.failureRateGoal?.toString() || defaultSettings.failureRateGoal,
+      qliGoal: appSettings.qliGoal?.toString() || defaultSettings.qliGoal,
+      newCapabilitiesGoal: appSettings.newCapabilitiesGoal?.toString() || defaultSettings.newCapabilitiesGoal,
     };
   } catch (error) {
     console.error('Error loading settings from persistence:', error);
-    
+
     // Fallback to localStorage for backward compatibility
     try {
       const storedSettings = localStorage.getItem('dyad_settings_v1');
@@ -49,7 +49,7 @@ const loadSettings = async (): Promise<Settings> => {
     } catch (e) {
       console.error('Error parsing legacy settings:', e);
     }
-    
+
     return defaultSettings;
   }
 };
@@ -65,7 +65,7 @@ export const useSettings = () => {
       setSettings(loadedSettings);
       setLoading(false);
     };
-    
+
     initializeSettings();
   }, []);
 
@@ -74,23 +74,23 @@ export const useSettings = () => {
     const persistSettings = async () => {
       // Don't persist if still loading initial settings
       if (loading) return;
-      
+
       try {
         const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
         const adapter = await persistence;
-        
+
         // Map Settings interface to AppSettingsEntity
         const appSettings: import('@/lib/persistence-types').AppSettingsEntity = {
-          split_time: parseInt(settings.splitTime),
-          user_workload_percentage: parseInt(settings.userWorkloadPercentage),
-          weeks_computation: parseInt(settings.weeksComputation),
-          high_impact_task_goal: parseFloat(settings.highImpactTaskGoal),
-          failure_rate_goal: parseFloat(settings.failureRateGoal),
-          qli_goal: parseFloat(settings.qliGoal),
-          new_capabilities_goal: parseFloat(settings.newCapabilitiesGoal),
+          splitTime: parseInt(settings.splitTime),
+          userWorkloadPercentage: parseInt(settings.userWorkloadPercentage),
+          weeksComputation: parseInt(settings.weeksComputation),
+          highImpactTaskGoal: parseFloat(settings.highImpactTaskGoal),
+          failureRateGoal: parseFloat(settings.failureRateGoal),
+          qliGoal: parseFloat(settings.qliGoal),
+          newCapabilitiesGoal: parseFloat(settings.newCapabilitiesGoal),
         };
-        
-        await adapter.updateSettings(appSettings);
+
+        await adapter.updateAppSettings(appSettings);
       } catch (error) {
         console.error('Error saving settings to persistence:', error);
         // Fallback to localStorage
@@ -101,7 +101,7 @@ export const useSettings = () => {
         }
       }
     };
-    
+
     persistSettings();
   }, [settings, loading]);
 

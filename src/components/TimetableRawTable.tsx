@@ -118,15 +118,15 @@ const TimetableRawTable: React.FC<TimetableRawTableProps> = ({ data, onUpdate, o
             return (
               <TableRow key={index}>
                 <TableCell className="font-medium flex items-center gap-2">
-                  {row.desc_id}
-                  {row.is_manual && (
+                  {row.descId}
+                  {row.isManual && (
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Pen className="h-3 w-3 text-blue-500" />
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p>Edited by {row.modified_by || 'Unknown'}</p>
+                          <p>Edited by {row.modifiedBy || 'Unknown'}</p>
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
@@ -135,18 +135,18 @@ const TimetableRawTable: React.FC<TimetableRawTableProps> = ({ data, onUpdate, o
                 <TableCell>
                   <EditableCell
                     value={row.workload}
-                    onSave={(val) => onUpdate(row.desc_id, "workload", val)}
+                    onSave={(val) => onUpdate(row.descId, "workload", val)}
                     isEditable={isEditable}
                   />
                 </TableCell>
                 <TableCell>
                   {/* Hourly Balance is auto-calculated, not editable */}
-                  <span>{row.hourly_balance.toFixed(1)}</span>
+                  <span>{row.hourlyBalance.toFixed(1)}</span>
                 </TableCell>
                 <TableCell>
                   <EditableCell
-                    value={row.hours_done}
-                    onSave={(val) => onUpdate(row.desc_id, "hours_done", val)}
+                    value={row.hoursDone}
+                    onSave={(val) => onUpdate(row.descId, "hoursDone", val)}
                     isEditable={isEditable}
                   />
                 </TableCell>
@@ -156,7 +156,7 @@ const TimetableRawTable: React.FC<TimetableRawTableProps> = ({ data, onUpdate, o
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
-                      onClick={() => onDelete!(row.desc_id)}
+                      onClick={() => onDelete!(row.descId)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

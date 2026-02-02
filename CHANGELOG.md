@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.12.2 (2026-02-01)
+
+### Bug Fixes
+
+- **lint:** replace any types with proper interfaces in App.tsx and DataImporter.tsx (b4b995b)
+- **lint:** replace any types with specific interfaces in sqlite.ts (67125d9)
+- **lint:** replace any types with specific union types in postgres.ts (e55e3dd)
+- sync imported user settings to Yjs to prevent cache overwrite (7ae7cb2)
+
+---
+
+## v0.12.1 (2026-01-30)
+
+---
+
 ## v0.12.0 (2026-01-25)
 
 ### Features
@@ -110,39 +125,5 @@
 - **timetable:** use Temporal API for consistent date string generation in time entries (b306c7a)
 - **data export:** add missing attributes to export and import (a40868d)
 - **timetable:** fix user selection on timetable entries for current user (e4e02ca)
-
----
-
-## v0.5.0 (2025-12-01)
-
-### Features
-
-- **timetable:** persist data once month is done (001a80b)
-- **forecast:** incorporate vacation hours into projected hours and balance calculations (8b2579b)
-- **forecast:** enhance projected hours calculation with a gliding average combining current and historical pace (3dfdf9e)
-- **timetable:** implement year and month selection in the forecast view (4896e55)
-
-### Bug Fixes
-
-- **forecast:** restore linear progression for the projected hours (c4b8af2)
-- applied effective user workload settings when calculating projected hours for the current month (6774e92)
-
----
-
-## v0.4.0 (2025-11-29)
-
-### Features
-
-- **vacations:** introduce a graph to project and report vacations usage (70368af)
-- **programm view:** add default plan view setting (6c85f16)
-- **user settings:** add a starting day param in settings for Mo VS Su (36a8d1a)
-- **timetable:** add user assignment to time entries, integrate new date range picker, and persist user filters (44ec0e8)
-- centralize user selection in MetricsPage, passing selected userId to Forecast, HourlyBalance, and QoLSurvey components (c0ec060)
-
-### Bug Fixes
-
-- **metrics:** correct `newCapabilitiesTime` cutoff date calculation missing seconds conversion (8902d2b)
-- export all user settings and enable their import for full data restoration (4f8d653)
-- team QoL survey index to be user-specific (99a26c1)
 
 ---

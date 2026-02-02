@@ -75,7 +75,7 @@ const TimetableChart: React.FC<TimetableChartProps> = ({ data, limitUpper, limit
               <Legend verticalAlign="top" height={36} />
               <Area
                 type="linear"
-                dataKey="hourly_balance"
+                dataKey="hourlyBalance"
                 name="Hours Delta per each Month"
                 stroke="#2563eb"
                 strokeWidth={2}
@@ -83,7 +83,7 @@ const TimetableChart: React.FC<TimetableChartProps> = ({ data, limitUpper, limit
               />
               <Area
                 type="linear"
-                dataKey="cumulative_balance"
+                dataKey="cumulativeBalance"
                 name="Cummulative Hourly Balance"
                 stroke="#059669"
                 strokeWidth={2}

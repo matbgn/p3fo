@@ -1,4 +1,5 @@
 import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity } from './persistence-types';
+import { DEFAULT_TASKS_INITIALIZED_KEY } from '@/hooks/useTasks';
 
 export class HttpApiPersistence implements PersistenceAdapter {
   private baseUrl: string;
@@ -32,10 +33,12 @@ export class HttpApiPersistence implements PersistenceAdapter {
   // Tasks
   async listTasks(userId?: string): Promise<TaskEntity[]> {
     const endpoint = userId ? `/api/tasks?user_id=${encodeURIComponent(userId)}` : '/api/tasks';
-    return this.makeRequest(endpoint);
+    const result = await this.makeRequest(endpoint);
+    // Backend returns { data: TaskEntity[], total: number }
+    return result.data;
   }
 
-  async getTask(id: string): Promise<TaskEntity | null> {
+  async getTaskById(id: string): Promise<TaskEntity | null> {
     return this.makeRequest(`/api/tasks/${id}`);
   }
 
@@ -59,7 +62,7 @@ export class HttpApiPersistence implements PersistenceAdapter {
     });
   }
 
-  async bulkUpdatePriorities(items: { id: string; priority: number | undefined }[]): Promise<void> {
+  async bulkUpdateTaskPriorities(items: { id: string; priority: number | undefined }[]): Promise<void> {
     await this.makeRequest('/api/tasks/bulk-priorities', {
       method: 'POST',
       body: JSON.stringify({ items }),
@@ -123,11 +126,11 @@ export class HttpApiPersistence implements PersistenceAdapter {
   }
 
   // App settings
-  async getSettings(): Promise<AppSettingsEntity> {
+  async getAppSettings(): Promise<AppSettingsEntity> {
     return this.makeRequest('/api/settings');
   }
 
-  async updateSettings(patch: Partial<AppSettingsEntity>): Promise<AppSettingsEntity> {
+  async updateAppSettings(patch: Partial<AppSettingsEntity>): Promise<AppSettingsEntity> {
     return this.makeRequest('/api/settings', {
       method: 'PATCH',
       body: JSON.stringify(patch),
@@ -202,5 +205,50 @@ export class HttpApiPersistence implements PersistenceAdapter {
       method: 'PUT',
       body: JSON.stringify(state),
     });
+  }
+
+  async clearAllData(): Promise<void> {
+    // 1. Clear Server Data
+    await this.makeRequest('/api/admin/clear-all-data', {
+      method: 'POST',
+    });
+
+    // 2. Clear Browser LocalStorage/SessionStorage
+    if (typeof window !== 'undefined') {
+      localStorage.clear();
+      // Preserve the initialized flag to prevent default tasks from being recreated
+      localStorage.setItem(DEFAULT_TASKS_INITIALIZED_KEY, 'true');
+      sessionStorage.clear();
+
+      // 3. Clear IndexedDB (Yjs persistence)
+      try {
+        const dbs = await window.indexedDB.databases();
+        dbs.forEach(db => {
+          if (db.name && db.name.includes('p3fo') || db.name === 'item') { // 'item' is default for localforage sometimes, but p3fo-yjs-tasks is key
+            window.indexedDB.deleteDatabase(db.name);
+          }
+        });
+        // Specifically delete the known one
+        window.indexedDB.deleteDatabase('p3fo-yjs-tasks');
+        console.log('Cleared browser storage and IndexedDB');
+      } catch (e) {
+        console.error('Error clearing IndexedDB:', e);
+      }
+    }
+
+    // 4. Broadcast Clear Command to other clients
+    // We import these dynamically to avoid circular dependencies if any, 
+    // or just assume standard import at top if possible.
+    // For now, let's assume we can import at module level.
+    // But since this is a class method, let's use the valid imports.
+    try {
+      const { doc, ySystemState } = await import('./collaboration');
+      doc.transact(() => {
+        ySystemState.set('command', { type: 'CLEAR_ALL', timestamp: Date.now() });
+      });
+      console.log('Broadcasted CLEAR_ALL command');
+    } catch (e) {
+      console.error('Error broadcasting clear command:', e);
+    }
   }
 }

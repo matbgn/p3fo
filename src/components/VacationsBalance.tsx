@@ -21,7 +21,7 @@ const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
     const [monthsBack, setMonthsBack] = useState(6);
 
     const selectedUser = users.find((u) => u.userId === userId);
-    const monthlyBalances = selectedUser?.monthly_balances || {};
+    const monthlyBalances = selectedUser?.monthlyBalances || {};
 
     const userWorkload = selectedUser?.workload ?? settings.userWorkloadPercentage;
 
@@ -44,15 +44,15 @@ const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
                 ? selectedUser.username
                 : userSettings.username || "Select User";
 
-    const handleUpdate = async (descId: string, field: 'workload' | 'vacations_hourly_taken' | 'vacations_hourly_balance', value: number) => {
+    const handleUpdate = async (descId: string, field: 'workload' | 'vacationsHourlyTaken' | 'vacationsHourlyBalance', value: number) => {
         if (!userId || userId === "unassigned") return;
 
         const currentBalance = monthlyBalances[descId] || {
             workload: settings.userWorkloadPercentage,
-            hourly_balance: 0,
-            hours_done: 0,
-            vacations_hourly_balance: 0,
-            vacations_hourly_taken: 0
+            hourlyBalance: 0,
+            hoursDone: 0,
+            vacationsHourlyBalance: 0,
+            vacationsHourlyTaken: 0
         };
 
         const updatedBalance: MonthlyBalanceData = {
@@ -60,17 +60,17 @@ const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
             [field]: value,
         };
 
-        // Recalculate vacations_hourly_balance if workload or vacations_hourly_taken changed
+        // Recalculate vacationsHourlyBalance if workload or vacationsHourlyTaken changed
         // Logic: Balance = Previous Balance + Due - Taken?
         // No, Vacations Balance is usually cumulative.
         // But here we are updating a specific month.
         // If we update a month, we just store the value.
         // The cumulative calculation happens in `getVacationsBalances`.
-        // BUT `getVacationsBalances` uses `vacations_hourly_balance` from DB if present!
+        // BUT `getVacationsBalances` uses `vacationsHourlyBalance` from DB if present!
         // So if we store it, we override the calculation.
-        // If we want the calculation to be dynamic based on Due/Taken, we should perhaps NOT store `vacations_hourly_balance`?
+        // If we want the calculation to be dynamic based on Due/Taken, we should perhaps NOT store `vacationsHourlyBalance`?
         // Or we must recalculate it correctly here.
-        // But `vacations_hourly_balance` is cumulative. It depends on previous months.
+        // But `vacationsHourlyBalance` is cumulative. It depends on previous months.
         // If I edit month X, I can't easily calculate its cumulative balance without knowing month X-1.
         // `getVacationsBalances` does the chain calculation.
         // If I store a hardcoded balance for month X, `getVacationsBalances` uses it and continues from there.
@@ -83,7 +83,7 @@ const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
         // But I don't have the previous balance here easily.
 
         // However, looking at `HourlyBalance` logic I just wrote:
-        // `updatedBalance.hourly_balance = hoursDone - hoursDue;`
+        // `updatedBalance.hourlyBalance = hoursDone - hoursDue;`
         // This is NOT cumulative. This is monthly delta.
         // `getHistoricalHourlyBalances` sums them up.
 
@@ -91,15 +91,15 @@ const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
         // `getVacationsBalances`:
         // `cumulativeBalance += vacationsDue + vacationsTaken;`
         // `currentBalance = cumulativeBalance;`
-        // IF `monthlyBalances[descId].vacations_hourly_balance` exists, it uses it as `currentBalance` (cumulative).
+        // IF `monthlyBalances[descId].vacationsHourlyBalance` exists, it uses it as `currentBalance` (cumulative).
 
-        // So `vacations_hourly_balance` in DB is CUMULATIVE?
+        // So `vacationsHourlyBalance` in DB is CUMULATIVE?
         // If so, editing "Taken" for one month should update the cumulative balance for that month AND all future months?
         // That's complex.
 
-        // Maybe `vacations_hourly_balance` in DB is NOT cumulative?
+        // Maybe `vacationsHourlyBalance` in DB is NOT cumulative?
         // Let's check `getVacationsBalances` again.
-        // `if (monthlyBalances[descId].vacations_hourly_balance !== undefined) { currentBalance = ...; cumulativeBalance = currentBalance; }`
+        // `if (monthlyBalances[descId].vacationsHourlyBalance !== undefined) { currentBalance = ...; cumulativeBalance = currentBalance; }`
         // Yes, it treats it as the absolute cumulative balance at that point.
 
         // If the user edits "Taken", they are changing the delta.
@@ -109,18 +109,18 @@ const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
 
         // If I look at `VacationsTable`, the "Balance" column is NOT editable.
         // So the user cannot manually set the balance.
-        // So `vacations_hourly_balance` in DB should probably NOT be set by this `handleUpdate`?
+        // So `vacationsHourlyBalance` in DB should probably NOT be set by this `handleUpdate`?
         // If `VacationsTable` calls `onUpdate` only for "Taken" and "Workload".
-        // Then `field` is never `vacations_hourly_balance`.
-        // So `updatedBalance` will have the old `vacations_hourly_balance`.
-        // If we want to revert to auto-calculation, we should REMOVE `vacations_hourly_balance` from the DB entry?
+        // Then `field` is never `vacationsHourlyBalance`.
+        // So `updatedBalance` will have the old `vacationsHourlyBalance`.
+        // If we want to revert to auto-calculation, we should REMOVE `vacationsHourlyBalance` from the DB entry?
         // Yes! If I change "Taken", I want the system to recalculate Balance.
-        // Since Balance is derived cumulatively, I should probably `delete updatedBalance.vacations_hourly_balance`.
+        // Since Balance is derived cumulatively, I should probably `delete updatedBalance.vacationsHourlyBalance`.
 
         // If the user manually updates the balance, we keep it.
         // If they update workload or taken, we remove the manual balance to allow auto-recalculation.
-        if (field === 'workload' || field === 'vacations_hourly_taken') {
-            delete updatedBalance.vacations_hourly_balance;
+        if (field === 'workload' || field === 'vacationsHourlyTaken') {
+            delete updatedBalance.vacationsHourlyBalance;
         }
 
         const updatedMonthlyBalances = {
@@ -128,7 +128,7 @@ const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
             [descId]: updatedBalance,
         };
 
-        await updateUser(userId, { monthly_balances: updatedMonthlyBalances });
+        await updateUser(userId, { monthlyBalances: updatedMonthlyBalances });
     };
 
     const handleAddPastRecord = async () => {
@@ -139,7 +139,7 @@ const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
         let targetYear, targetMonth;
 
         if (oldestEntry) {
-            const [y, m] = oldestEntry.desc_id.split('-').map(Number);
+            const [y, m] = oldestEntry.descId.split('-').map(Number);
             const date = new Date(y, m - 1 - 1, 1);
             targetYear = date.getFullYear();
             targetMonth = date.getMonth() + 1;
@@ -155,10 +155,10 @@ const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
         // Create entry with 0 workload
         const newBalance: MonthlyBalanceData = {
             workload: 0,
-            hourly_balance: 0,
-            hours_done: 0,
-            vacations_hourly_balance: 0,
-            vacations_hourly_taken: 0
+            hourlyBalance: 0,
+            hoursDone: 0,
+            vacationsHourlyBalance: 0,
+            vacationsHourlyTaken: 0
         };
 
         const updatedMonthlyBalances = {
@@ -166,7 +166,7 @@ const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
             [descId]: newBalance,
         };
 
-        await updateUser(userId, { monthly_balances: updatedMonthlyBalances });
+        await updateUser(userId, { monthlyBalances: updatedMonthlyBalances });
     };
 
     return (

@@ -51,9 +51,9 @@ const loadUserSettings = async (userId: string): Promise<UserSettings> => {
         return {
             username: settings.username,
             logo: settings.logo,
-            hasCompletedOnboarding: settings.has_completed_onboarding,
-            monthlyBalances: settings.monthly_balances || {},
-            cardCompactness: settings.card_compactness ?? 0,
+            hasCompletedOnboarding: settings.hasCompletedOnboarding,
+            monthlyBalances: settings.monthlyBalances || {},
+            cardCompactness: settings.cardCompactness ?? 0,
         };
     } catch (error) {
         console.error('Error loading user settings from persistence:', error);
@@ -124,9 +124,9 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 const entityPatch: Partial<UserSettingsEntity> = {
                     username: userSettings.username,
                     logo: userSettings.logo,
-                    has_completed_onboarding: userSettings.hasCompletedOnboarding,
-                    monthly_balances: userSettings.monthlyBalances,
-                    card_compactness: userSettings.cardCompactness,
+                    hasCompletedOnboarding: userSettings.hasCompletedOnboarding,
+                    monthlyBalances: userSettings.monthlyBalances,
+                    cardCompactness: userSettings.cardCompactness,
                 };
 
                 await adapter.updateUserSettings(userId, entityPatch);
@@ -138,9 +138,9 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                         userId,
                         username: userSettings.username,
                         logo: userSettings.logo,
-                        has_completed_onboarding: userSettings.hasCompletedOnboarding,
-                        monthly_balances: userSettings.monthlyBalances,
-                        card_compactness: userSettings.cardCompactness
+                        hasCompletedOnboarding: userSettings.hasCompletedOnboarding,
+                        monthlyBalances: userSettings.monthlyBalances,
+                        cardCompactness: userSettings.cardCompactness
                     });
                 }
             } catch (error) {
@@ -178,12 +178,12 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
             if (yjsSettings) {
                 const currentSettings = userSettingsRef.current;
-                const monthlyBalancesChanged = JSON.stringify(yjsSettings.monthly_balances || {}) !== JSON.stringify(currentSettings.monthlyBalances);
+                const monthlyBalancesChanged = JSON.stringify(yjsSettings.monthlyBalances || {}) !== JSON.stringify(currentSettings.monthlyBalances);
 
                 if (yjsSettings.username !== currentSettings.username ||
                     yjsSettings.logo !== currentSettings.logo ||
-                    yjsSettings.has_completed_onboarding !== currentSettings.hasCompletedOnboarding ||
-                    yjsSettings.card_compactness !== currentSettings.cardCompactness ||
+                    yjsSettings.hasCompletedOnboarding !== currentSettings.hasCompletedOnboarding ||
+                    yjsSettings.cardCompactness !== currentSettings.cardCompactness ||
                     monthlyBalancesChanged) {
 
                     console.log('Received user settings update from Yjs:', yjsSettings);
@@ -191,9 +191,9 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                     setUserSettings({
                         username: yjsSettings.username,
                         logo: yjsSettings.logo,
-                        hasCompletedOnboarding: yjsSettings.has_completed_onboarding,
-                        monthlyBalances: yjsSettings.monthly_balances || {},
-                        cardCompactness: yjsSettings.card_compactness ?? 0
+                        hasCompletedOnboarding: yjsSettings.hasCompletedOnboarding,
+                        monthlyBalances: yjsSettings.monthlyBalances || {},
+                        cardCompactness: yjsSettings.cardCompactness ?? 0
                     });
                 }
             } else {

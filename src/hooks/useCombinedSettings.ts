@@ -83,22 +83,22 @@ export const useCombinedSettings = () => {
         const loadSettings = async () => {
             try {
                 // Load global app settings
-                const appSettings = await persistence.getSettings();
+                const appSettings = await persistence.getAppSettings();
 
                 // Start with global settings
                 const merged: CombinedSettings = {
                     // Convert app settings to combined format
-                    splitTime: appSplitTimeToString(appSettings.split_time || 40),
-                    userWorkloadPercentage: appSettings.user_workload_percentage || 60,
-                    weeksComputation: appSettings.weeks_computation || 4,
-                    highImpactTaskGoal: appSettings.high_impact_task_goal || 3.63,
-                    failureRateGoal: appSettings.failure_rate_goal || 5,
-                    qliGoal: appSettings.qli_goal || 60,
-                    newCapabilitiesGoal: appSettings.new_capabilities_goal || 57.98,
-                    vacationLimitMultiplier: appSettings.vacation_limit_multiplier || 1.5,
-                    hourlyBalanceLimitUpper: appSettings.hourly_balance_limit_upper || 0.5,
-                    hourlyBalanceLimitLower: appSettings.hourly_balance_limit_lower || -0.5,
-                    hoursToBeDoneByDay: appSettings.hours_to_be_done_by_day || 8,
+                    splitTime: appSplitTimeToString(appSettings.splitTime || 40),
+                    userWorkloadPercentage: appSettings.userWorkloadPercentage || 60,
+                    weeksComputation: appSettings.weeksComputation || 4,
+                    highImpactTaskGoal: appSettings.highImpactTaskGoal || 3.63,
+                    failureRateGoal: appSettings.failureRateGoal || 5,
+                    qliGoal: appSettings.qliGoal || 60,
+                    newCapabilitiesGoal: appSettings.newCapabilitiesGoal || 57.98,
+                    vacationLimitMultiplier: appSettings.vacationLimitMultiplier || 1.5,
+                    hourlyBalanceLimitUpper: appSettings.hourlyBalanceLimitUpper || 0.5,
+                    hourlyBalanceLimitLower: appSettings.hourlyBalanceLimitLower || -0.5,
+                    hoursToBeDoneByDay: appSettings.hoursToBeDoneByDay || 8,
                     weekStartDay: 1,
                     defaultPlanView: 'week',
                     timezone: appSettings.timezone || 'Europe/Zurich',
@@ -108,8 +108,8 @@ export const useCombinedSettings = () => {
 
                 // Override with user-specific settings if they exist
                 if (userSettings) {
-                    if (userSettings.split_time) {
-                        merged.splitTime = userSettings.split_time;
+                    if (userSettings.splitTime) {
+                        merged.splitTime = userSettings.splitTime;
                     }
                     if (userSettings.workload !== undefined) {
                         merged.userWorkloadPercentage = userSettings.workload;
@@ -160,7 +160,7 @@ export const useCombinedSettings = () => {
 
         try {
             // Separate user-specific updates from global updates
-            const userUpdates: { split_time?: string; workload?: number; timezone?: string } = {};
+            const userUpdates: { splitTime?: string; workload?: number; timezone?: string } = {};
             const appUpdates: Partial<AppSettingsEntity> = {};
 
             // Helper to decide where to put the update
@@ -176,16 +176,16 @@ export const useCombinedSettings = () => {
             // Route updates to appropriate storage
             if (updates.splitTime !== undefined) {
                 if (userSettings) {
-                    addToUser('split_time', updates.splitTime);
+                    addToUser('splitTime', updates.splitTime);
                 } else {
-                    addToApp('split_time', stringToAppSplitTime(updates.splitTime));
+                    addToApp('splitTime', stringToAppSplitTime(updates.splitTime));
                 }
             }
             if (updates.userWorkloadPercentage !== undefined) {
                 if (userSettings) {
                     addToUser('workload', updates.userWorkloadPercentage);
                 } else {
-                    addToApp('user_workload_percentage', updates.userWorkloadPercentage);
+                    addToApp('userWorkloadPercentage', updates.userWorkloadPercentage);
                 }
             }
 
@@ -201,15 +201,15 @@ export const useCombinedSettings = () => {
             }
 
             // Global-only settings (always app)
-            if (updates.weeksComputation !== undefined) addToApp('weeks_computation', updates.weeksComputation);
-            if (updates.highImpactTaskGoal !== undefined) addToApp('high_impact_task_goal', updates.highImpactTaskGoal);
-            if (updates.failureRateGoal !== undefined) addToApp('failure_rate_goal', updates.failureRateGoal);
-            if (updates.qliGoal !== undefined) addToApp('qli_goal', updates.qliGoal);
-            if (updates.newCapabilitiesGoal !== undefined) addToApp('new_capabilities_goal', updates.newCapabilitiesGoal);
-            if (updates.vacationLimitMultiplier !== undefined) addToApp('vacation_limit_multiplier', updates.vacationLimitMultiplier);
-            if (updates.hourlyBalanceLimitUpper !== undefined) addToApp('hourly_balance_limit_upper', updates.hourlyBalanceLimitUpper);
-            if (updates.hourlyBalanceLimitLower !== undefined) addToApp('hourly_balance_limit_lower', updates.hourlyBalanceLimitLower);
-            if (updates.hoursToBeDoneByDay !== undefined) addToApp('hours_to_be_done_by_day', updates.hoursToBeDoneByDay);
+            if (updates.weeksComputation !== undefined) addToApp('weeksComputation', updates.weeksComputation);
+            if (updates.highImpactTaskGoal !== undefined) addToApp('highImpactTaskGoal', updates.highImpactTaskGoal);
+            if (updates.failureRateGoal !== undefined) addToApp('failureRateGoal', updates.failureRateGoal);
+            if (updates.qliGoal !== undefined) addToApp('qliGoal', updates.qliGoal);
+            if (updates.newCapabilitiesGoal !== undefined) addToApp('newCapabilitiesGoal', updates.newCapabilitiesGoal);
+            if (updates.vacationLimitMultiplier !== undefined) addToApp('vacationLimitMultiplier', updates.vacationLimitMultiplier);
+            if (updates.hourlyBalanceLimitUpper !== undefined) addToApp('hourlyBalanceLimitUpper', updates.hourlyBalanceLimitUpper);
+            if (updates.hourlyBalanceLimitLower !== undefined) addToApp('hourlyBalanceLimitLower', updates.hourlyBalanceLimitLower);
+            if (updates.hoursToBeDoneByDay !== undefined) addToApp('hoursToBeDoneByDay', updates.hoursToBeDoneByDay);
 
             // Scoped settings (Timezone, Country, Region)
             if (updates.timezone !== undefined) {
@@ -240,8 +240,8 @@ export const useCombinedSettings = () => {
 
             // Save app settings updates if any
             if (Object.keys(appUpdates).length > 0) {
-                const currentAppSettings = await persistence.getSettings();
-                await persistence.updateSettings({
+                const currentAppSettings = await persistence.getAppSettings();
+                await persistence.updateAppSettings({
                     ...currentAppSettings,
                     ...appUpdates,
                 });
@@ -249,19 +249,19 @@ export const useCombinedSettings = () => {
         } catch (error) {
             console.error('Error saving combined settings:', error);
             // Revert optimistic update on error
-            const appSettings = await persistence.getSettings();
+            const appSettings = await persistence.getAppSettings();
             const merged: CombinedSettings = {
-                splitTime: userSettings?.split_time || appSplitTimeToString(appSettings.split_time || 40),
-                userWorkloadPercentage: userSettings?.workload || appSettings.user_workload_percentage || 60,
-                weeksComputation: appSettings.weeks_computation || 4,
-                highImpactTaskGoal: appSettings.high_impact_task_goal || 3.63,
-                failureRateGoal: appSettings.failure_rate_goal || 5,
-                qliGoal: appSettings.qli_goal || 60,
-                newCapabilitiesGoal: appSettings.new_capabilities_goal || 57.98,
-                vacationLimitMultiplier: appSettings.vacation_limit_multiplier || 1.5,
-                hourlyBalanceLimitUpper: appSettings.hourly_balance_limit_upper || 0.5,
-                hourlyBalanceLimitLower: appSettings.hourly_balance_limit_lower || -0.5,
-                hoursToBeDoneByDay: appSettings.hours_to_be_done_by_day || 8,
+                splitTime: userSettings?.splitTime || appSplitTimeToString(appSettings.splitTime || 40),
+                userWorkloadPercentage: userSettings?.workload || appSettings.userWorkloadPercentage || 60,
+                weeksComputation: appSettings.weeksComputation || 4,
+                highImpactTaskGoal: appSettings.highImpactTaskGoal || 3.63,
+                failureRateGoal: appSettings.failureRateGoal || 5,
+                qliGoal: appSettings.qliGoal || 60,
+                newCapabilitiesGoal: appSettings.newCapabilitiesGoal || 57.98,
+                vacationLimitMultiplier: appSettings.vacationLimitMultiplier || 1.5,
+                hourlyBalanceLimitUpper: appSettings.hourlyBalanceLimitUpper || 0.5,
+                hourlyBalanceLimitLower: appSettings.hourlyBalanceLimitLower || -0.5,
+                hoursToBeDoneByDay: appSettings.hoursToBeDoneByDay || 8,
                 weekStartDay: settings.weekStartDay, // Keep current local state
                 defaultPlanView: settings.defaultPlanView,
                 timezone: appSettings.timezone || 'Europe/Zurich',

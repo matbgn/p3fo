@@ -4,7 +4,25 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useReminderStore } from '@/hooks/useReminders';
 import { getPersistenceAdapter } from '@/lib/persistence-factory';
-import { QolSurveyResponseEntity } from '@/lib/persistence-types';
+import { QolSurveyResponseEntity, MonthlyBalanceData } from '@/lib/persistence-types';
+import { yUserSettings, isCollaborationEnabled } from '@/lib/collaboration';
+
+interface ImportedUserSettings {
+  userId?: string;
+  user_id?: string;
+  username?: string;
+  logo?: string;
+  hasCompletedOnboarding?: boolean;
+  has_completed_onboarding?: boolean;
+  workload?: number;
+  splitTime?: string;
+  split_time?: string;
+  monthlyBalances?: Record<string, MonthlyBalanceData>;
+  monthly_balances?: Record<string, MonthlyBalanceData>;
+  cardCompactness?: number;
+  card_compactness?: number;
+  timezone?: string;
+}
 
 const DataImporter: React.FC = () => {
   const { importTasks } = useTasks();
@@ -27,86 +45,93 @@ const DataImporter: React.FC = () => {
 
             if (Array.isArray(importedData)) {
               // Old format: just an array of tasks
-              importTasks(importedData);
+              await importTasks(importedData);
             } else if (importedData.tasks) {
               // New format
-              importTasks(importedData.tasks);
+              await importTasks(importedData.tasks);
 
               if (importedData.scheduledReminders) {
                 useReminderStore.getState().setScheduledReminders(importedData.scheduledReminders);
                 useReminderStore.getState().checkAndTriggerReminders();
               }
 
-              // Helper to deep merge user settings
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const mergeUserSettings = (existing: any, incoming: any) => {
-                const merged = { ...existing, ...incoming };
-                if (existing.monthlyBalances && incoming.monthlyBalances) {
-                  merged.monthlyBalances = { ...existing.monthlyBalances, ...incoming.monthlyBalances };
-                }
-                return merged;
-              };
+              // Import User Settings (allUserSettings is the new key, userSettings is legacy)
+              const userSettingsData = importedData.allUserSettings || importedData.userSettings;
 
-              // Import User Settings (Single - Legacy/Current Context)
-              if (importedData.userSettings && importedData.userSettings.userId) {
-                const userId = importedData.userSettings.userId;
-                const existing = await adapter.getUserSettings(userId) || {};
-                const merged = mergeUserSettings(existing, importedData.userSettings);
-                await adapter.updateUserSettings(userId, merged);
-              }
+              if (userSettingsData) {
+                const processUserSetting = async (settings: ImportedUserSettings) => {
+                  if (!settings.userId && !settings.user_id) return;
 
-              // Import All User Settings (Full Restore)
-              if (importedData.allUserSettings && Array.isArray(importedData.allUserSettings)) {
-                for (const user of importedData.allUserSettings) {
-                  if (user.userId) {
-                    // Handle legacy workload_percentage
-                    if (user.workload === undefined && user.workload_percentage !== undefined) {
-                      user.workload = user.workload_percentage;
-                    }
+                  const userId = settings.userId || settings.user_id;
 
-                    const existing = await adapter.getUserSettings(user.userId) || {};
-                    const merged = mergeUserSettings(existing, user);
-                    await adapter.updateUserSettings(user.userId, merged);
+                  // Normalize legacy snake_case to camelCase
+                  const normalizedSettings = {
+                    userId,
+                    username: settings.username,
+                    logo: settings.logo,
+                    hasCompletedOnboarding: settings.hasCompletedOnboarding ?? settings.has_completed_onboarding,
+                    workload: settings.workload,
+                    splitTime: settings.splitTime ?? settings.split_time,
+                    monthlyBalances: settings.monthlyBalances ?? settings.monthly_balances,
+                    cardCompactness: settings.cardCompactness ?? settings.card_compactness,
+                    timezone: settings.timezone,
+                  };
+
+                  await adapter.updateUserSettings(userId, normalizedSettings);
+
+                  // Sync to Yjs for cross-client synchronization
+                  // This ensures other clients receive the imported data and don't
+                  // overwrite it with their stale cached settings
+                  if (isCollaborationEnabled()) {
+                    console.log('Syncing imported user settings to Yjs:', { userId, username: normalizedSettings.username });
+                    yUserSettings.set(userId, {
+                      userId,
+                      username: normalizedSettings.username,
+                      logo: normalizedSettings.logo,
+                      hasCompletedOnboarding: normalizedSettings.hasCompletedOnboarding,
+                      monthlyBalances: normalizedSettings.monthlyBalances || {},
+                      cardCompactness: normalizedSettings.cardCompactness ?? 0
+                    });
+                  }
+                };
+
+                if (Array.isArray(userSettingsData)) {
+                  for (const settings of userSettingsData) {
+                    await processUserSetting(settings);
+                  }
+                } else {
+                  // Map format: userId -> settings
+                  for (const [key, settings] of Object.entries(userSettingsData)) {
+                    // Ensure settings has userId, if not use key
+                    const s = settings as ImportedUserSettings;
+                    const settingsWithUserId: ImportedUserSettings = { ...s, userId: s.userId || key };
+                    await processUserSetting(settingsWithUserId);
                   }
                 }
               }
 
-              // Import QoL Survey Responses (new format: all users)
-              if (importedData.qolSurveyResponses) {
-                for (const [userId, response] of Object.entries(importedData.qolSurveyResponses)) {
-                  await adapter.saveQolSurveyResponse(userId, response as QolSurveyResponseEntity);
-                }
-              } else if (importedData.qolSurveyResponse) {
-                // Fallback for old format (single user)
-                const targetUserId = importedData.userSettings?.userId || importedData.activeUserId;
-                if (targetUserId) {
-                  await adapter.saveQolSurveyResponse(targetUserId, importedData.qolSurveyResponse);
-                } else {
-                  console.warn("No userId found in imported data for QoL survey response. Skipping.");
-                }
-              }
+              // ...
 
               // Import App Settings
               if (importedData.settings) {
                 // Map export format back to entity format if needed, or assume compatible
-                // The export format used camelCase keys (userWorkloadPercentage), but entity uses snake_case (user_workload_percentage)
-                // We need to map them back.
+                // Both export and entity now use camelCase
                 const appSettings = {
-                  user_workload_percentage: importedData.settings.userWorkloadPercentage ? Number(importedData.settings.userWorkloadPercentage) : undefined,
-                  weeks_computation: importedData.settings.weeksComputation ? Number(importedData.settings.weeksComputation) : undefined,
-                  high_impact_task_goal: importedData.settings.highImpactTaskGoal ? Number(importedData.settings.highImpactTaskGoal) : undefined,
-                  failure_rate_goal: importedData.settings.failureRateGoal ? Number(importedData.settings.failureRateGoal) : undefined,
-                  qli_goal: importedData.settings.qliGoal ? Number(importedData.settings.qliGoal) : undefined,
-                  new_capabilities_goal: importedData.settings.newCapabilitiesGoal ? Number(importedData.settings.newCapabilitiesGoal) : undefined,
-                  vacation_limit_multiplier: importedData.settings.vacationLimitMultiplier ? Number(importedData.settings.vacationLimitMultiplier) : undefined,
-                  hourly_balance_limit_upper: importedData.settings.hourlyBalanceLimitUpper ? Number(importedData.settings.hourlyBalanceLimitUpper) : undefined,
-                  hourly_balance_limit_lower: importedData.settings.hourlyBalanceLimitLower ? Number(importedData.settings.hourlyBalanceLimitLower) : undefined,
-                  hours_to_be_done_by_day: importedData.settings.hoursToBeDoneByDay ? Number(importedData.settings.hoursToBeDoneByDay) : undefined,
+                  userWorkloadPercentage: importedData.settings.userWorkloadPercentage ? Number(importedData.settings.userWorkloadPercentage) : undefined,
+                  weeksComputation: importedData.settings.weeksComputation ? Number(importedData.settings.weeksComputation) : undefined,
+                  highImpactTaskGoal: importedData.settings.highImpactTaskGoal ? Number(importedData.settings.highImpactTaskGoal) : undefined,
+                  failureRateGoal: importedData.settings.failureRateGoal ? Number(importedData.settings.failureRateGoal) : undefined,
+                  qliGoal: importedData.settings.qliGoal ? Number(importedData.settings.qliGoal) : undefined,
+                  newCapabilitiesGoal: importedData.settings.newCapabilitiesGoal ? Number(importedData.settings.newCapabilitiesGoal) : undefined,
+                  vacationLimitMultiplier: importedData.settings.vacationLimitMultiplier ? Number(importedData.settings.vacationLimitMultiplier) : undefined,
+                  hourlyBalanceLimitUpper: importedData.settings.hourlyBalanceLimitUpper ? Number(importedData.settings.hourlyBalanceLimitUpper) : undefined,
+                  hourlyBalanceLimitLower: importedData.settings.hourlyBalanceLimitLower ? Number(importedData.settings.hourlyBalanceLimitLower) : undefined,
+                  hoursToBeDoneByDay: importedData.settings.hoursToBeDoneByDay ? Number(importedData.settings.hoursToBeDoneByDay) : undefined,
                   timezone: importedData.settings.timezone,
                   country: importedData.settings.country,
                   region: importedData.settings.region,
                 };
-                await adapter.updateSettings(appSettings);
+                await adapter.updateAppSettings(appSettings);
               }
 
               // Import Fertilization Board (or legacy Celebration Board)
@@ -115,6 +140,29 @@ const DataImporter: React.FC = () => {
               } else if (importedData.celebrationBoard) {
                 // Backward compatibility for legacy export
                 await adapter.updateFertilizationBoardState(importedData.celebrationBoard);
+              }
+
+              // Import QoL Survey Responses
+              // Check for the correct key from DataExporter (qolSurveyResponses)
+              // Also support legacy/alternative keys (qolSurvey, qol_survey)
+              const qolData = importedData.qolSurveyResponses || importedData.qolSurvey || importedData.qol_survey;
+
+              if (qolData) {
+                for (const [userId, responses] of Object.entries(qolData)) {
+                  await adapter.saveQolSurveyResponse(userId, responses as QolSurveyResponseEntity);
+                }
+              }
+
+              // RESTORE ACTIVE USER IDENTITY
+              if (importedData.activeUserId) {
+                console.log('Restoring active user ID from import:', importedData.activeUserId);
+                // Set cookie and localStorage to the active user ID from the backup
+                // This ensures that after reload, the app initializes with this user
+
+                // We need to dynamically import js-cookie since it is not imported at the top
+                const Cookies = (await import('js-cookie')).default;
+                Cookies.set('p3fo_user_id', importedData.activeUserId, { expires: 365 * 10 });
+                localStorage.setItem('p3fo_user_id', importedData.activeUserId);
               }
             }
 

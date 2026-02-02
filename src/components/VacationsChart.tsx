@@ -59,8 +59,8 @@ const VacationsChart: React.FC<VacationsChartProps> = ({ data, limitMultiplier }
     const chartData = data.map(d => ({
         ...d,
         limit: (d.workload * limitMultiplier),
-        balance_history: !d.projected ? d.vacations_hourly_balance : 0,
-        balance_projected: d.projected ? d.vacations_hourly_balance : 0
+        balance_history: !d.projected ? d.vacationsHourlyBalance : 0,
+        balance_projected: d.projected ? d.vacationsHourlyBalance : 0
     }));
     return (
         <ResponsiveContainer width="100%" height="100%" minHeight={400}>

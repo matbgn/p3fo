@@ -14,21 +14,21 @@ const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
   userId: 'default-user',
   username: 'User',
   logo: '',
-  has_completed_onboarding: false,
+  hasCompletedOnboarding: false,
   workload: 60,
-  split_time: '13:00',
-  card_compactness: 0,
+  splitTime: '13:00',
+  cardCompactness: 0,
 };
 
 const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
-  split_time: 40,
-  user_workload_percentage: 80,
-  weeks_computation: 4,
-  high_impact_task_goal: 5,
-  failure_rate_goal: 10,
-  qli_goal: 7,
-  new_capabilities_goal: 3,
-  hours_to_be_done_by_day: 8,
+  splitTime: 40,
+  userWorkloadPercentage: 80,
+  weeksComputation: 4,
+  highImpactTaskGoal: 5,
+  failureRateGoal: 10,
+  qliGoal: 7,
+  newCapabilitiesGoal: 3,
+  hoursToBeDoneByDay: 8,
 };
 
 export class BrowserJsonPersistence implements PersistenceAdapter {
@@ -43,7 +43,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
 
       // Filter by userId if provided
       if (userId) {
-        return allTasks.filter((task: TaskEntity) => task.user_id === userId);
+        return allTasks.filter((task: TaskEntity) => task.userId === userId);
       }
 
       return allTasks;
@@ -53,7 +53,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
   }
 
-  async getTask(id: string): Promise<TaskEntity | null> {
+  async getTaskById(id: string): Promise<TaskEntity | null> {
     if (typeof window === 'undefined') {
       return null;
     }
@@ -77,20 +77,20 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       const newTask: TaskEntity = {
         id: input.id || crypto.randomUUID(),
         title: input.title || 'New Task',
-        created_at: input.created_at || new Date().toISOString(),
-        triage_status: input.triage_status || 'backlog',
+        createdAt: input.createdAt || new Date().toISOString(),
+        triageStatus: input.triageStatus || 'Backlog',
         urgent: input.urgent || false,
         impact: input.impact || false,
-        major_incident: input.major_incident || false,
+        majorIncident: input.majorIncident || false,
         difficulty: input.difficulty || 1,
         timer: input.timer || [],
         category: input.category || 'General',
-        termination_date: input.termination_date || null,
+        terminationDate: input.terminationDate || null,
         comment: input.comment || null,
-        duration_in_minutes: input.duration_in_minutes || null,
+        durationInMinutes: input.durationInMinutes || null,
         priority: input.priority || null,
-        user_id: input.user_id || null,
-        parent_id: input.parent_id || null,
+        userId: input.userId || null,
+        parentId: input.parentId || null,
         children: input.children || [],
       };
 
@@ -140,7 +140,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
   }
 
-  async bulkUpdatePriorities(items: { id: string; priority: number | undefined }[]): Promise<void> {
+  async bulkUpdateTaskPriorities(items: { id: string; priority: number | undefined }[]): Promise<void> {
     if (typeof window === 'undefined') {
       return;
     }
@@ -266,8 +266,8 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       let tasksChanged = false;
 
       tasks.forEach(task => {
-        if (task.user_id === oldUserId) {
-          task.user_id = newUserId;
+        if (task.userId === oldUserId) {
+          task.userId = newUserId;
           tasksChanged = true;
         }
       });
@@ -332,7 +332,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
   }
 
-  async getSettings(): Promise<AppSettingsEntity> {
+  async getAppSettings(): Promise<AppSettingsEntity> {
     if (typeof window === 'undefined') {
       return DEFAULT_APP_SETTINGS;
     }
@@ -346,13 +346,13 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
   }
 
-  async updateSettings(patch: Partial<AppSettingsEntity>): Promise<AppSettingsEntity> {
+  async updateAppSettings(patch: Partial<AppSettingsEntity>): Promise<AppSettingsEntity> {
     if (typeof window === 'undefined') {
       return DEFAULT_APP_SETTINGS;
     }
 
     try {
-      const current = await this.getSettings();
+      const current = await this.getAppSettings();
       const updated = { ...current, ...patch };
       localStorage.setItem(APP_SETTINGS_STORAGE_KEY, JSON.stringify(updated));
       return updated;
@@ -511,6 +511,36 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       localStorage.setItem(DREAM_BOARD_STORAGE_KEY, JSON.stringify(state));
     } catch (error) {
       console.error('Error updating dream board state in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async clearAllData(): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      // Clear all known keys
+      localStorage.removeItem(TASKS_STORAGE_KEY);
+      localStorage.removeItem(APP_SETTINGS_STORAGE_KEY);
+      localStorage.removeItem(FERTILIZATION_BOARD_STORAGE_KEY);
+      localStorage.removeItem(DREAM_BOARD_STORAGE_KEY);
+      sessionStorage.removeItem(FILTERS_STORAGE_KEY);
+
+      // Clear dynamic keys (users and QoL surveys)
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith(`${USER_SETTINGS_STORAGE_KEY}_`) || key.startsWith(`${QOL_SURVEY_STORAGE_KEY}_`))) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+
+      console.log('All application data cleared from localStorage');
+    } catch (error) {
+      console.error('Error clearing all data from localStorage:', error);
       throw error;
     }
   }

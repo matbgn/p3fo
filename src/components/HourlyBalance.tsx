@@ -34,7 +34,7 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
                 : tasks;
 
     const selectedUser = users.find((u) => u.userId === userId);
-    const monthlyBalances = React.useMemo(() => selectedUser?.monthly_balances || {}, [selectedUser]);
+    const monthlyBalances = React.useMemo(() => selectedUser?.monthlyBalances || {}, [selectedUser]);
 
     // Use selected user's workload if available, otherwise fallback to settings (which is current user's or default)
     // We need to pass this to getHistoricalHourlyBalances
@@ -87,17 +87,17 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
             const vacationsTaken = 0;
 
             const projected = getHistoricalHourlyBalances(filteredTasks, settings, 0, monthlyBalances, userWorkload)
-                .find(d => d.desc_id === prevDescId);
+                .find(d => d.descId === prevDescId);
 
             // If we found the data point (which we should as getHistoricalHourlyBalances generates it)
             if (projected) {
                 const newBalance: MonthlyBalanceData = {
                     workload: projected.workload,
-                    hourly_balance: projected.hourly_balance,
-                    hours_done: projected.hours_done,
-                    vacations_hourly_taken: projected.vacations_hourly_taken,
-                    vacations_hourly_balance: projected.vacations_hourly_balance,
-                    is_manual: false
+                    hourlyBalance: projected.hourlyBalance,
+                    hoursDone: projected.hoursDone,
+                    vacationsHourlyTaken: projected.vacationsHourlyTaken,
+                    vacationsHourlyBalance: projected.vacationsHourlyBalance,
+                    isManual: false
                 };
 
                 const updatedMonthlyBalances = {
@@ -106,7 +106,7 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
                 };
 
                 // Save it
-                updateUser(userId, { monthly_balances: updatedMonthlyBalances });
+                updateUser(userId, { monthlyBalances: updatedMonthlyBalances });
             }
         }
     }, [userId, selectedUser, monthlyBalances, filteredTasks, settings, userWorkload, updateUser]);
@@ -118,33 +118,33 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
 
         const currentBalance = monthlyBalances[descId] || {
             workload: 0,
-            hourly_balance: 0,
-            hours_done: 0,
+            hourlyBalance: 0,
+            hoursDone: 0,
         };
 
         const updatedBalance: MonthlyBalanceData = {
             ...currentBalance,
             [field]: value,
-            is_manual: true,
-            modified_by: currentUserId // Track who modified it (current logged in user)
+            isManual: true,
+            modifiedBy: currentUserId // Track who modified it (current logged in user)
         };
 
-        // Recalculate hourly_balance if workload or hours_done changed
-        if (field === 'workload' || field === 'hours_done') {
+        // Recalculate hourlyBalance if workload or hours_done changed
+        if (field === 'workload' || field === 'hoursDone') {
             const [year, month] = descId.split('-').map(Number);
             const workingDays = getWorkingDays(year, month);
             const workload = field === 'workload' ? value : updatedBalance.workload;
-            const hoursDone = field === 'hours_done' ? value : updatedBalance.hours_done;
+            const hoursDone = field === 'hoursDone' ? value : updatedBalance.hoursDone;
             const hoursDue = workingDays * 8 * (workload / 100);
-            updatedBalance.hourly_balance = hoursDone - hoursDue;
+            updatedBalance.hourlyBalance = hoursDone - hoursDue;
         }
 
         // Ensure all fields are present if creating new entry
         if (!monthlyBalances[descId]) {
             // Logic handled by default values above and recalculation
             if (updatedBalance.workload === undefined) updatedBalance.workload = 0;
-            if (updatedBalance.hours_done === undefined) updatedBalance.hours_done = 0;
-            if (updatedBalance.hourly_balance === undefined) updatedBalance.hourly_balance = 0;
+            if (updatedBalance.hoursDone === undefined) updatedBalance.hoursDone = 0;
+            if (updatedBalance.hourlyBalance === undefined) updatedBalance.hourlyBalance = 0;
         }
 
         const updatedMonthlyBalances = {
@@ -152,7 +152,7 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
             [descId]: updatedBalance,
         };
 
-        await updateUser(userId, { monthly_balances: updatedMonthlyBalances });
+        await updateUser(userId, { monthlyBalances: updatedMonthlyBalances });
     };
 
     const handleDelete = async (descId: string) => {
@@ -161,7 +161,7 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
         const updatedMonthlyBalances = { ...monthlyBalances };
         delete updatedMonthlyBalances[descId];
 
-        await updateUser(userId, { monthly_balances: updatedMonthlyBalances });
+        await updateUser(userId, { monthlyBalances: updatedMonthlyBalances });
     };
 
     const handleAddPastRecord = async () => {
@@ -172,7 +172,7 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
         let targetYear, targetMonth;
 
         if (oldestEntry) {
-            const [y, m] = oldestEntry.desc_id.split('-').map(Number);
+            const [y, m] = oldestEntry.descId.split('-').map(Number);
             // Go back one month
             const date = new Date(y, m - 1 - 1, 1); // Month is 0-indexed in Date, but m is 1-indexed. So m-1 is current month index. m-2 is previous.
             targetYear = date.getFullYear();
@@ -190,8 +190,8 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
         // Create entry with 0 workload as requested
         const newBalance: MonthlyBalanceData = {
             workload: 0,
-            hourly_balance: 0,
-            hours_done: 0
+            hourlyBalance: 0,
+            hoursDone: 0
         };
 
         const updatedMonthlyBalances = {
@@ -199,7 +199,7 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
             [descId]: newBalance,
         };
 
-        await updateUser(userId, { monthly_balances: updatedMonthlyBalances });
+        await updateUser(userId, { monthlyBalances: updatedMonthlyBalances });
     };
 
     return (

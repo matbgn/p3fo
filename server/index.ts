@@ -70,8 +70,15 @@ app.get('/api/health', async (req: Request, res: Response) => {
 app.get('/api/tasks', async (req: Request, res: Response) => {
   try {
     const userId = req.query.user_id as string | undefined;
-    const tasks = await db.getTasks(userId);
-    res.json(tasks);
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
+    const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : undefined;
+
+    const pagination = (limit !== undefined || offset !== undefined)
+      ? { limit, offset }
+      : undefined;
+
+    const result = await db.getTasks(userId, pagination);
+    res.json(result);
   } catch (error) {
     console.error('Error fetching tasks:', error);
     res.status(500).json({ error: 'Failed to fetch tasks' });
@@ -120,7 +127,7 @@ app.patch('/api/tasks/:id', async (req: Request, res: Response) => {
     res.json(task);
   } catch (error) {
     console.error('API: Error updating task:', error);
-    res.status(500).json({ error: 'Failed to update task' });
+    res.status(500).json({ error: 'Failed to update task', details: (error as Error).message });
   }
 });
 
@@ -130,7 +137,7 @@ app.delete('/api/tasks/:id', async (req: Request, res: Response) => {
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting task:', error);
-    res.status(500).json({ error: 'Failed to delete task' });
+    res.status(500).json({ error: 'Failed to delete task', details: (error as Error).message });
   }
 });
 
@@ -251,6 +258,20 @@ app.post('/api/users/clear', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error clearing users:', error);
     res.status(500).json({ error: 'Failed to clear users' });
+  }
+});
+
+app.post('/api/admin/clear-all-data', async (req: Request, res: Response) => {
+  try {
+    if (db.clearAllData) {
+      await db.clearAllData();
+      res.json({ success: true });
+    } else {
+      res.status(501).json({ error: 'Not implemented' });
+    }
+  } catch (error) {
+    console.error('Error clearing all data:', error);
+    res.status(500).json({ error: 'Failed to clear all data' });
   }
 });
 
@@ -421,8 +442,8 @@ async function startServer() {
     await initializeDb();
 
     // Check if tasks exist, if not, the frontend will call the init-defaults endpoint
-    const tasks = await db.getTasks();
-    if (tasks.length === 0) {
+    const tasksResult = await db.getTasks();
+    if (tasksResult.total === 0) {
       console.log('No tasks found in the database. Frontend will initialize default tasks.');
     }
 

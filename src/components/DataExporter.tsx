@@ -18,7 +18,7 @@ const DataExporter: React.FC = () => {
       const adapter = await getPersistenceAdapter();
 
       // Fetch app settings from persistence
-      const appSettings = await adapter.getSettings();
+      const appSettings = await adapter.getAppSettings();
 
       // Fetch ALL QoL survey responses from persistence (for all users)
       const allQolSurveyResponses = await adapter.getAllQolSurveyResponses() || {};
@@ -28,16 +28,16 @@ const DataExporter: React.FC = () => {
 
       // Map app settings to export format
       const settingsToExport = {
-        userWorkloadPercentage: appSettings.user_workload_percentage?.toString(),
-        weeksComputation: appSettings.weeks_computation?.toString(),
-        highImpactTaskGoal: appSettings.high_impact_task_goal?.toString(),
-        failureRateGoal: appSettings.failure_rate_goal?.toString(),
-        qliGoal: appSettings.qli_goal?.toString(),
-        newCapabilitiesGoal: appSettings.new_capabilities_goal?.toString(),
-        vacationLimitMultiplier: appSettings.vacation_limit_multiplier?.toString(),
-        hourlyBalanceLimitUpper: appSettings.hourly_balance_limit_upper?.toString(),
-        hourlyBalanceLimitLower: appSettings.hourly_balance_limit_lower?.toString(),
-        hoursToBeDoneByDay: appSettings.hours_to_be_done_by_day?.toString(),
+        userWorkloadPercentage: appSettings.userWorkloadPercentage?.toString(),
+        weeksComputation: appSettings.weeksComputation?.toString(),
+        highImpactTaskGoal: appSettings.highImpactTaskGoal?.toString(),
+        failureRateGoal: appSettings.failureRateGoal?.toString(),
+        qliGoal: appSettings.qliGoal?.toString(),
+        newCapabilitiesGoal: appSettings.newCapabilitiesGoal?.toString(),
+        vacationLimitMultiplier: appSettings.vacationLimitMultiplier?.toString(),
+        hourlyBalanceLimitUpper: appSettings.hourlyBalanceLimitUpper?.toString(),
+        hourlyBalanceLimitLower: appSettings.hourlyBalanceLimitLower?.toString(),
+        hoursToBeDoneByDay: appSettings.hoursToBeDoneByDay?.toString(),
         timezone: appSettings.timezone,
         country: appSettings.country,
         region: appSettings.region,
@@ -53,7 +53,6 @@ const DataExporter: React.FC = () => {
         fertilizationBoard: fertilizationBoardState, // Export Fertilization Board state
         settings: settingsToExport,
         activeUserId: userId,
-        // userSettings removed to avoid redundancy
         allUserSettings, // Export all users for full restore
       };
 

@@ -10,79 +10,78 @@ import type {
   DreamBoardEntity
 } from '../../src/lib/persistence-types.js';
 
+// Raw database row types (SQLite stores booleans as 0/1 integers and JSON as strings)
+interface TaskDbRow {
+  id: string;
+  parentId: string | null;
+  title: string;
+  createdAt: string;
+  triageStatus: string;
+  urgent: number;
+  impact: number;
+  majorIncident: number;
+  difficulty: number;
+  timer: string | null;
+  category: string;
+  terminationDate: string | null;
+  comment: string | null;
+  durationInMinutes: number | null;
+  priority: number | null;
+  userId: string | null;
+}
+
+interface UserSettingsDbRow {
+  userId: string;
+  username: string;
+  logo: string;
+  hasCompletedOnboarding: number;
+  workload: number | null;
+  splitTime: string | null;
+  monthlyBalances: string | null;
+  cardCompactness: number | null;
+  timezone: string | null;
+}
+
+interface AppSettingsDbRow {
+  id: number;
+  splitTime: number;
+  userWorkloadPercentage: number;
+  weeksComputation: number;
+  highImpactTaskGoal: number;
+  failureRateGoal: number;
+  qliGoal: number;
+  newCapabilitiesGoal: number;
+  hoursToBeDoneByDay: number | null;
+  vacationLimitMultiplier: number | null;
+  hourlyBalanceLimitUpper: number | null;
+  hourlyBalanceLimitLower: number | null;
+  timezone: string | null;
+  country: string | null;
+  region: string | null;
+}
+
 // Default values
 const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
   userId: 'default-user',
   username: 'User',
   logo: '',
-  has_completed_onboarding: false,
+  hasCompletedOnboarding: false,
   workload: 60,
-  split_time: '13:00',
+  splitTime: '13:00',
 };
 
 const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
-  split_time: 40,
-  user_workload_percentage: 80,
-  weeks_computation: 4,
-  high_impact_task_goal: 5,
-  failure_rate_goal: 10,
-  qli_goal: 7,
-  new_capabilities_goal: 3,
-  hours_to_be_done_by_day: 8,
+  splitTime: 40,
+  userWorkloadPercentage: 80,
+  weeksComputation: 4,
+  highImpactTaskGoal: 5,
+  failureRateGoal: 10,
+  qliGoal: 7,
+  newCapabilitiesGoal: 3,
+  hoursToBeDoneByDay: 8,
 };
 
-interface TaskRow {
-  id: string;
-  parent_id: string | null;
-  title: string;
-  created_at: string;
-  triage_status: string;
-  urgent: number;
-  impact: number;
-  major_incident: number;
-  difficulty: number;
-  timer: string | null;
-  category: string;
-  termination_date: string | null;
-  comment: string | null;
-  duration_in_minutes: number | null;
-  priority: number | null;
-  user_id: string | null;
-}
 
-interface UserSettingsRow {
-  user_id: string;
-  username: string;
-  logo: string;
-  has_completed_onboarding: number;
-  workload_percentage: number;
-  workload?: number; // Added to match entity and migration
-  split_time: string;
-  monthly_balances: string; // JSON string
-  card_compactness: number;
-}
-
-interface AppSettingsRow {
-  split_time: number;
-  user_workload_percentage: number;
-  weeks_computation: number;
-  high_impact_task_goal: number;
-  failure_rate_goal: number;
-  qli_goal: number;
-  new_capabilities_goal: number;
-  hours_to_be_done_by_day: number;
-  vacation_limit_multiplier?: number;
-  hourly_balance_limit_upper?: number;
-  hourly_balance_limit_lower?: number;
-  timezone?: string;
-  country?: string;
-  region?: string;
-}
-
-interface JsonRow {
-  data?: string;
-  responses?: string;
-}
 
 export async function createSqliteClient(dbFile: string = './p3fo.db'): Promise<DbClient> {
   const db = new DatabaseSync(dbFile);
@@ -97,235 +96,193 @@ class SqliteClient implements DbClient {
   constructor(private db: DatabaseSync) { }
 
   async initialize(): Promise<void> {
+    // Migration: Check for legacy schema and migrate if needed
+    try {
+      this.migrateSchema();
+    } catch (error) {
+      console.error('Migration failed:', error);
+      // Continue initialization, as migration might be partial or already done
+    }
+
     // Create tasks table
     this.db.exec(`
-      CREATE TABLE IF NOT EXISTS tasks(
-        id TEXT PRIMARY KEY,
-        parent_id TEXT,
-        title TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        triage_status TEXT NOT NULL,
-        urgent BOOLEAN DEFAULT 0,
-        impact BOOLEAN DEFAULT 0,
-        major_incident BOOLEAN DEFAULT 0,
-        difficulty REAL DEFAULT 1,
-        timer TEXT, -- JSON string
-        category TEXT DEFAULT 'General',
-        termination_date TEXT,
-        comment TEXT,
-        duration_in_minutes INTEGER,
-        priority INTEGER,
-        user_id TEXT,
-        FOREIGN KEY(parent_id) REFERENCES tasks(id)
+      CREATE TABLE IF NOT EXISTS "tasks" (
+        "id" TEXT PRIMARY KEY,
+        "parentId" TEXT,
+        "title" TEXT NOT NULL,
+        "createdAt" TEXT NOT NULL,
+        "triageStatus" TEXT NOT NULL,
+        "urgent" BOOLEAN DEFAULT 0,
+        "impact" BOOLEAN DEFAULT 0,
+        "majorIncident" BOOLEAN DEFAULT 0,
+        "difficulty" REAL DEFAULT 1,
+        "timer" TEXT, -- JSON string
+        "category" TEXT DEFAULT 'General',
+        "terminationDate" TEXT,
+        "comment" TEXT,
+        "durationInMinutes" INTEGER,
+        "priority" INTEGER,
+        "userId" TEXT,
+        FOREIGN KEY("parentId") REFERENCES "tasks"("id")
       )
     `);
 
-    // Create user_settings table (single row)
+    // Create userSettings table
     this.db.exec(`
-      CREATE TABLE IF NOT EXISTS user_settings(
-        user_id TEXT PRIMARY KEY,
-        username TEXT NOT NULL,
-        logo TEXT,
-        has_completed_onboarding BOOLEAN DEFAULT 0,
-        workload_percentage REAL DEFAULT 60,
-        workload REAL DEFAULT 60,
-        split_time TEXT DEFAULT '13:00',
-        monthly_balances TEXT, -- JSON string
-        card_compactness INTEGER DEFAULT 0
+      CREATE TABLE IF NOT EXISTS "userSettings" (
+        "userId" TEXT PRIMARY KEY,
+        "username" TEXT NOT NULL,
+        "logo" TEXT,
+        "hasCompletedOnboarding" BOOLEAN DEFAULT 0,
+        "workload" REAL DEFAULT 60,
+        "splitTime" TEXT DEFAULT '13:00',
+        "monthlyBalances" TEXT, -- JSON string
+        "cardCompactness" INTEGER DEFAULT 0,
+        "timezone" TEXT
       )
     `);
 
-    // Migration: Add columns if they don't exist
-    try {
-      const columns = this.db.prepare("PRAGMA table_info(user_settings)").all() as { name: string }[];
-      const hasWorkloadPercentage = columns.some(c => c.name === 'workload_percentage');
-      const hasWorkload = columns.some(c => c.name === 'workload');
-      const hasSplitTime = columns.some(c => c.name === 'split_time');
-      const hasMonthlyBalances = columns.some(c => c.name === 'monthly_balances');
-      const hasTimezone = columns.some(c => c.name === 'timezone');
-      const hasCardCompactness = columns.some(c => c.name === 'card_compactness');
-
-      if (!hasWorkloadPercentage) {
-        console.log('SQLite: Migrating user_settings, adding workload_percentage');
-        this.db.exec("ALTER TABLE user_settings ADD COLUMN workload_percentage REAL DEFAULT 60");
-      }
-
-      if (!hasWorkload) {
-        console.log('SQLite: Migrating user_settings, adding workload');
-        this.db.exec("ALTER TABLE user_settings ADD COLUMN workload REAL DEFAULT 60");
-        // Migrate data from workload_percentage if it exists
-        if (hasWorkloadPercentage) {
-          this.db.exec("UPDATE user_settings SET workload = workload_percentage WHERE workload IS NULL");
-        }
-      }
-
-      if (!hasSplitTime) {
-        console.log('SQLite: Migrating user_settings, adding split_time');
-        this.db.exec("ALTER TABLE user_settings ADD COLUMN split_time TEXT DEFAULT '13:00'");
-      }
-
-      if (!hasMonthlyBalances) {
-        console.log('SQLite: Migrating user_settings, adding monthly_balances');
-        this.db.exec("ALTER TABLE user_settings ADD COLUMN monthly_balances TEXT");
-      }
-
-      if (!hasTimezone) {
-        console.log('SQLite: Migrating user_settings, adding timezone');
-        this.db.exec("ALTER TABLE user_settings ADD COLUMN timezone TEXT");
-      }
-
-      if (!hasCardCompactness) {
-        console.log('SQLite: Migrating user_settings, adding card_compactness');
-        this.db.exec("ALTER TABLE user_settings ADD COLUMN card_compactness INTEGER DEFAULT 0");
-      }
-    } catch (error) {
-      console.error('SQLite: Error checking/migrating schema:', error);
-    }
-
-    // Create app_settings table (single row)
+    // Create appSettings table
     this.db.exec(`
-      CREATE TABLE IF NOT EXISTS app_settings(
-        id INTEGER PRIMARY KEY DEFAULT 1,
-        split_time REAL DEFAULT 40,
-        user_workload_percentage REAL DEFAULT 80,
-        weeks_computation REAL DEFAULT 4,
-        high_impact_task_goal REAL DEFAULT 5,
-        failure_rate_goal REAL DEFAULT 10,
-        qli_goal REAL DEFAULT 7,
-        new_capabilities_goal REAL DEFAULT 3,
-        hours_to_be_done_by_day REAL DEFAULT 8,
-        vacation_limit_multiplier REAL DEFAULT 1.5,
-        hourly_balance_limit_upper REAL DEFAULT 0.5,
-        hourly_balance_limit_lower REAL DEFAULT -0.5,
-        timezone TEXT DEFAULT 'Europe/Zurich',
-        country TEXT DEFAULT 'CH',
-        region TEXT DEFAULT 'BE'
+      CREATE TABLE IF NOT EXISTS "appSettings" (
+        "id" INTEGER PRIMARY KEY DEFAULT 1,
+        "splitTime" REAL DEFAULT 40,
+        "userWorkloadPercentage" REAL DEFAULT 80,
+        "weeksComputation" REAL DEFAULT 4,
+        "highImpactTaskGoal" REAL DEFAULT 5,
+        "failureRateGoal" REAL DEFAULT 10,
+        "qliGoal" REAL DEFAULT 7,
+        "newCapabilitiesGoal" REAL DEFAULT 3,
+        "hoursToBeDoneByDay" REAL DEFAULT 8,
+        "vacationLimitMultiplier" REAL DEFAULT 1.5,
+        "hourlyBalanceLimitUpper" REAL DEFAULT 0.5,
+        "hourlyBalanceLimitLower" REAL DEFAULT -0.5,
+        "timezone" TEXT DEFAULT 'Europe/Zurich',
+        "country" TEXT DEFAULT 'CH',
+        "region" TEXT DEFAULT 'BE'
       )
     `);
-
-    // Migration: Add hours_to_be_done_by_day to app_settings if it doesn't exist
-    try {
-      const appColumns = this.db.prepare("PRAGMA table_info(app_settings)").all() as { name: string }[];
-      const hasHoursToBeDone = appColumns.some(c => c.name === 'hours_to_be_done_by_day');
-      const hasVacationLimit = appColumns.some(c => c.name === 'vacation_limit_multiplier');
-      const hasHourlyUpper = appColumns.some(c => c.name === 'hourly_balance_limit_upper');
-      const hasHourlyLower = appColumns.some(c => c.name === 'hourly_balance_limit_lower');
-      const hasAppTimezone = appColumns.some(c => c.name === 'timezone');
-      const hasAppCountry = appColumns.some(c => c.name === 'country');
-      const hasAppRegion = appColumns.some(c => c.name === 'region');
-
-      if (!hasHoursToBeDone) {
-        console.log('SQLite: Migrating app_settings, adding hours_to_be_done_by_day');
-        this.db.exec("ALTER TABLE app_settings ADD COLUMN hours_to_be_done_by_day REAL DEFAULT 8");
-      }
-
-      if (!hasVacationLimit) {
-        console.log('SQLite: Migrating app_settings, adding vacation_limit_multiplier');
-        this.db.exec("ALTER TABLE app_settings ADD COLUMN vacation_limit_multiplier REAL DEFAULT 1.5");
-      }
-
-      if (!hasHourlyUpper) {
-        console.log('SQLite: Migrating app_settings, adding hourly_balance_limit_upper');
-        this.db.exec("ALTER TABLE app_settings ADD COLUMN hourly_balance_limit_upper REAL DEFAULT 0.5");
-      }
-
-      if (!hasHourlyLower) {
-        console.log('SQLite: Migrating app_settings, adding hourly_balance_limit_lower');
-        this.db.exec("ALTER TABLE app_settings ADD COLUMN hourly_balance_limit_lower REAL DEFAULT -0.5");
-      }
-
-      if (!hasAppTimezone) {
-        console.log('SQLite: Migrating app_settings, adding timezone');
-        this.db.exec("ALTER TABLE app_settings ADD COLUMN timezone TEXT DEFAULT 'Europe/Zurich'");
-      }
-
-      if (!hasAppCountry) {
-        console.log('SQLite: Migrating app_settings, adding country');
-        this.db.exec("ALTER TABLE app_settings ADD COLUMN country TEXT DEFAULT 'CH'");
-      }
-
-      if (!hasAppRegion) {
-        console.log('SQLite: Migrating app_settings, adding region');
-        this.db.exec("ALTER TABLE app_settings ADD COLUMN region TEXT DEFAULT 'BE'");
-      }
-    } catch (error) {
-      console.error('SQLite: Error checking/migrating app_settings schema:', error);
-    }
 
     // Insert default app settings if not exists
-    const appSettingsCount = this.db.prepare('SELECT COUNT(*) as count FROM app_settings').get() as { count: number };
+    const appSettingsCount = this.db.prepare('SELECT COUNT(*) as count FROM "appSettings"').get() as { count: number };
     if (appSettingsCount.count === 0) {
       this.db.prepare(`
-        INSERT INTO app_settings(id, split_time, user_workload_percentage, weeks_computation,
-          high_impact_task_goal, failure_rate_goal, qli_goal, new_capabilities_goal, hours_to_be_done_by_day)
-        VALUES(1, @split_time, @user_workload_percentage, @weeks_computation,
-          @high_impact_task_goal, @failure_rate_goal, @qli_goal, @new_capabilities_goal, @hours_to_be_done_by_day)
+        INSERT INTO "appSettings"("id", "splitTime", "userWorkloadPercentage", "weeksComputation",
+          "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal", "hoursToBeDoneByDay")
+        VALUES(1, @splitTime, @userWorkloadPercentage, @weeksComputation,
+          @highImpactTaskGoal, @failureRateGoal, @qliGoal, @newCapabilitiesGoal, @hoursToBeDoneByDay)
       `).run(DEFAULT_APP_SETTINGS as unknown as Record<string, string | number | null>);
     }
 
-    // Create qol_survey table
-    // Check if we need to migrate from the old single-row schema
-    const qolColumns = this.db.prepare("PRAGMA table_info(qol_survey)").all() as { name: string }[];
-    const hasUserId = qolColumns.some(c => c.name === 'user_id');
-
-    if (qolColumns.length > 0 && !hasUserId) {
-      console.log('SQLite: Dropping old qol_survey table to migrate to per-user schema');
-      this.db.exec('DROP TABLE qol_survey');
-    }
-
+    // Create qolSurvey table
     this.db.exec(`
-      CREATE TABLE IF NOT EXISTS qol_survey(
-        user_id TEXT PRIMARY KEY,
-        responses TEXT -- JSON string
-      )
-    `);
-
-    // Create filters table (single row)
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS filters(
-        id INTEGER PRIMARY KEY DEFAULT 1,
-        data TEXT -- JSON string
-      )
-    `);
-
-    // Migration: Renaming celebration_board to fertilization_board
-    // Check if old table exists BEFORE creating the new one
-    const celebrationTableExists = this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='celebration_board'").get();
-    if (celebrationTableExists) {
-      console.log('SQLite: Renaming celebration_board table to fertilization_board');
-      // Drop the new table if it was somehow created already (shouldn't happen in normal flow)
-      this.db.exec("DROP TABLE IF EXISTS fertilization_board");
-      this.db.exec("ALTER TABLE celebration_board RENAME TO fertilization_board");
-    } else {
-      // Create fertilization_board table only if it doesn't exist and old table wasn't renamed
-      this.db.exec(`
-        CREATE TABLE IF NOT EXISTS fertilization_board(
-          id INTEGER PRIMARY KEY,
-          data JSON NOT NULL
+      CREATE TABLE IF NOT EXISTS "qolSurvey" (
+          "userId" TEXT PRIMARY KEY,
+          "responses" TEXT -- JSON string
         )
-      `);
-    }
+        `);
+
+    // Create filters table
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS "filters" (
+          "id" INTEGER PRIMARY KEY DEFAULT 1,
+          "data" TEXT -- JSON string
+        )
+        `);
+
+    // Create fertilizationBoard table
+    this.db.exec(`
+        CREATE TABLE IF NOT EXISTS "fertilizationBoard" (
+          "id" INTEGER PRIMARY KEY,
+          "data" TEXT NOT NULL -- JSON string
+        )
+        `);
 
     // Dream Board table
     this.db.exec(`
-      CREATE TABLE IF NOT EXISTS dream_board(
-        id INTEGER PRIMARY KEY,
-        data JSON NOT NULL
-      )
-    `);
+      CREATE TABLE IF NOT EXISTS "dreamBoard" (
+          "id" INTEGER PRIMARY KEY,
+          "data" TEXT NOT NULL -- JSON string
+        )
+        `);
 
-    // Check if data column exists (for fertilization_board)
-    try {
-      const columns = this.db.prepare("PRAGMA table_info(fertilization_board)").all() as { name: string }[];
-      const hasData = columns.some(c => c.name === 'data');
+    // Create indexes for performance optimization
+    // These indexes dramatically improve query performance when filtering by userId, parentId, or triageStatus
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId" ON "tasks"("userId")`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_tasks_parentId" ON "tasks"("parentId")`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_tasks_triageStatus" ON "tasks"("triageStatus")`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_tasks_createdAt" ON "tasks"("createdAt")`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_tasks_priority" ON "tasks"("priority")`);
+    // Composite index for common filtering patterns (user + status)
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId_triageStatus" ON "tasks"("userId", "triageStatus")`);
+  }
 
-      if (columns.length > 0 && !hasData) {
-        console.log('SQLite: Migrating fertilization_board, adding data column');
-        this.db.exec("ALTER TABLE fertilization_board ADD COLUMN data TEXT");
+  private migrateSchema(): void {
+    const runMigration = (table: string, oldCol: string, newCol: string) => {
+      try {
+        // Check if column exists
+        const tableInfo = this.db.prepare(`PRAGMA table_info("${table}")`).all() as { name: string }[];
+        if (tableInfo.some(col => col.name === oldCol) && !tableInfo.some(col => col.name === newCol)) {
+          console.log(`Migrating ${table}.${oldCol} to ${newCol}...`);
+          this.db.exec(`ALTER TABLE "${table}" RENAME COLUMN "${oldCol}" TO "${newCol}"`);
+        }
+      } catch (e) {
+        // Ignore if table doesn't exist or other errors
       }
-    } catch (error) {
-      console.error('SQLite: Error checking/migrating fertilization_board schema:', error);
-    }
+    };
+
+    // Rename legacy tables to camelCase if needed
+    const renameTable = (oldName: string, newName: string) => {
+      try {
+        const exists = this.db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(oldName);
+        if (exists) {
+          console.log(`Renaming table ${oldName} to ${newName}...`);
+          this.db.exec(`ALTER TABLE "${oldName}" RENAME TO "${newName}"`);
+        }
+      } catch (e) {
+        console.error(`Error renaming table ${oldName}:`, e);
+      }
+    };
+
+    renameTable('user_settings', 'userSettings');
+    renameTable('app_settings', 'appSettings');
+    renameTable('qol_survey', 'qolSurvey');
+    renameTable('fertilization_board', 'fertilizationBoard');
+    renameTable('dream_board', 'dreamBoard');
+    renameTable('celebration_board', 'fertilizationBoard');
+
+    // Tasks columns
+    runMigration('tasks', 'parent_id', 'parentId');
+    runMigration('tasks', 'created_at', 'createdAt');
+    runMigration('tasks', 'triage_status', 'triageStatus');
+    runMigration('tasks', 'major_incident', 'majorIncident');
+    runMigration('tasks', 'termination_date', 'terminationDate');
+    runMigration('tasks', 'duration_in_minutes', 'durationInMinutes');
+    runMigration('tasks', 'user_id', 'userId');
+
+    // UserSettings columns
+    runMigration('userSettings', 'user_id', 'userId');
+    runMigration('userSettings', 'has_completed_onboarding', 'hasCompletedOnboarding');
+    runMigration('userSettings', 'workload_percentage', 'workload');
+    runMigration('userSettings', 'split_time', 'splitTime');
+    runMigration('userSettings', 'monthly_balances', 'monthlyBalances');
+    runMigration('userSettings', 'card_compactness', 'cardCompactness');
+
+    // AppSettings columns
+    runMigration('appSettings', 'split_time', 'splitTime');
+    runMigration('appSettings', 'user_workload_percentage', 'userWorkloadPercentage');
+    runMigration('appSettings', 'weeks_computation', 'weeksComputation');
+    runMigration('appSettings', 'high_impact_task_goal', 'highImpactTaskGoal');
+    runMigration('appSettings', 'failure_rate_goal', 'failureRateGoal');
+    runMigration('appSettings', 'qli_goal', 'qliGoal');
+    runMigration('appSettings', 'new_capabilities_goal', 'newCapabilitiesGoal');
+    runMigration('appSettings', 'hours_to_be_done_by_day', 'hoursToBeDoneByDay');
+    runMigration('appSettings', 'vacation_limit_multiplier', 'vacationLimitMultiplier');
+    runMigration('appSettings', 'hourly_balance_limit_upper', 'hourlyBalanceLimitUpper');
+    runMigration('appSettings', 'hourly_balance_limit_lower', 'hourlyBalanceLimitLower');
+
+    // QolSurvey columns
+    runMigration('qolSurvey', 'user_id', 'userId');
   }
 
   async testConnection(): Promise<void> {
@@ -337,199 +294,182 @@ class SqliteClient implements DbClient {
   }
 
   // Tasks
-  async getTasks(userId?: string): Promise<TaskEntity[]> {
-    let query = 'SELECT * FROM tasks';
-    const params: (string | number)[] = [];
-
+  async getTasks(userId?: string, pagination?: { limit?: number; offset?: number }): Promise<{ data: TaskEntity[]; total: number }> {
+    // Build count query
+    let countSql = 'SELECT COUNT(*) as count FROM "tasks"';
+    const countParams: (string | number | null)[] = [];
     if (userId) {
-      query += ' WHERE user_id = ?';
+      countSql += ' WHERE "userId" = ?';
+      countParams.push(userId);
+    }
+    const countResult = this.db.prepare(countSql).get(...countParams) as { count: number };
+    const total = countResult.count;
+
+    // Build data query
+    let sql = 'SELECT * FROM "tasks"';
+    const params: (string | number | null)[] = [];
+    if (userId) {
+      sql += ' WHERE "userId" = ?';
       params.push(userId);
     }
+    sql += ' ORDER BY "priority" DESC NULLS LAST, "createdAt" ASC';
 
-    query += ' ORDER BY priority DESC, created_at ASC';
+    if (pagination?.limit !== undefined) {
+      sql += ' LIMIT ?';
+      params.push(pagination.limit);
+    }
+    if (pagination?.offset !== undefined) {
+      sql += ' OFFSET ?';
+      params.push(pagination.offset);
+    }
 
-    const rows = this.db.prepare(query).all(...params) as unknown as TaskRow[];
+    const rows = this.db.prepare(sql).all(...params) as unknown as TaskDbRow[];
 
-    return rows.map(row => ({
-      id: row.id,
-      parent_id: row.parent_id,
-      title: row.title,
-      created_at: row.created_at,
-      triage_status: row.triage_status,
+    const data = rows.map(row => ({
+      ...row,
       urgent: Boolean(row.urgent),
       impact: Boolean(row.impact),
-      major_incident: Boolean(row.major_incident),
-      difficulty: row.difficulty,
-      timer: row.timer ? JSON.parse(row.timer) : [],
-      category: row.category,
-      termination_date: row.termination_date,
-      comment: row.comment,
-      duration_in_minutes: row.duration_in_minutes,
-      priority: row.priority,
-      user_id: row.user_id,
+      majorIncident: Boolean(row.majorIncident),
+      timer: row.timer ? JSON.parse(row.timer) : { startTime: null, elapsedTime: 0, isRunning: false },
     }));
+
+    return { data, total };
   }
 
   async getTaskById(id: string): Promise<TaskEntity | null> {
-    console.log('SQLite: getTaskById called with id:', id);
-
-    const row = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as unknown as TaskRow | undefined;
-    console.log('SQLite: getTaskById result:', row);
-
+    const row = this.db.prepare('SELECT * FROM "tasks" WHERE "id" = ?').get(id) as unknown as TaskDbRow | undefined;
     if (!row) {
-      console.log('SQLite: Task not found in database:', id);
       return null;
     }
-
-    const task = {
-      id: row.id,
-      parent_id: row.parent_id,
-      title: row.title,
-      created_at: row.created_at,
-      triage_status: row.triage_status,
+    return {
+      ...row,
       urgent: Boolean(row.urgent),
       impact: Boolean(row.impact),
-      major_incident: Boolean(row.major_incident),
-      difficulty: row.difficulty,
-      timer: row.timer ? JSON.parse(row.timer) : [],
-      category: row.category,
-      termination_date: row.termination_date,
-      comment: row.comment,
-      duration_in_minutes: row.duration_in_minutes,
-      priority: row.priority,
-      user_id: row.user_id,
+      majorIncident: Boolean(row.majorIncident),
+      timer: row.timer ? JSON.parse(row.timer) : { startTime: null, elapsedTime: 0, isRunning: false },
     };
-
-    console.log('SQLite: Task found:', task);
-    return task;
   }
 
-  async createTask(task: Partial<TaskEntity>): Promise<TaskEntity> {
-    console.log('SQLite: createTask called with:', task);
-
+  async createTask(input: Partial<TaskEntity>): Promise<TaskEntity> {
     const newTask: TaskEntity = {
-      id: task.id || crypto.randomUUID(),
-      title: task.title || 'New Task',
-      created_at: task.created_at || new Date().toISOString(),
-      triage_status: task.triage_status || 'backlog',
-      urgent: task.urgent || false,
-      impact: task.impact || false,
-      major_incident: task.major_incident || false,
-      difficulty: task.difficulty || 1,
-      timer: task.timer || [],
-      category: task.category || 'General',
-      termination_date: task.termination_date || null,
-      comment: task.comment || null,
-      duration_in_minutes: task.duration_in_minutes || null,
-      priority: task.priority || null,
-      user_id: task.user_id || null,
-      parent_id: task.parent_id || null,
+      id: input.id || crypto.randomUUID(),
+      title: input.title || 'New Task',
+      createdAt: input.createdAt || new Date().toISOString(),
+      triageStatus: input.triageStatus || 'Backlog',
+      urgent: input.urgent || false,
+      impact: input.impact || false,
+      majorIncident: input.majorIncident || false,
+      difficulty: input.difficulty || 1,
+      timer: input.timer || [],
+      category: input.category || 'General',
+      terminationDate: input.terminationDate || null,
+      comment: input.comment || null,
+      durationInMinutes: input.durationInMinutes || null,
+      priority: input.priority || null,
+      userId: input.userId || null,
+      parentId: input.parentId || null,
+      children: input.children || [],
     };
-
-    console.log('SQLite: Creating task:', newTask);
-
-    const stmt = this.db.prepare(`
-      INSERT INTO tasks(id, parent_id, title, created_at, triage_status, urgent, impact, major_incident,
-        difficulty, timer, category, termination_date, comment, duration_in_minutes, priority, user_id)
-      VALUES(@id, @parent_id, @title, @created_at, @triage_status, @urgent, @impact, @major_incident,
-        @difficulty, @timer, @category, @termination_date, @comment, @duration_in_minutes, @priority, @user_id)
-    `);
 
     const params = {
       id: newTask.id,
-      parent_id: newTask.parent_id,
+      parentId: newTask.parentId,
       title: newTask.title,
-      created_at: newTask.created_at,
-      triage_status: newTask.triage_status,
+      createdAt: newTask.createdAt,
+      triageStatus: newTask.triageStatus,
       urgent: newTask.urgent ? 1 : 0,
       impact: newTask.impact ? 1 : 0,
-      major_incident: newTask.major_incident ? 1 : 0,
+      majorIncident: newTask.majorIncident ? 1 : 0,
       difficulty: newTask.difficulty,
       timer: JSON.stringify(newTask.timer),
       category: newTask.category,
-      termination_date: newTask.termination_date,
+      terminationDate: newTask.terminationDate,
       comment: newTask.comment,
-      duration_in_minutes: newTask.duration_in_minutes,
+      durationInMinutes: newTask.durationInMinutes,
       priority: newTask.priority,
-      user_id: newTask.user_id,
+      userId: newTask.userId,
     };
 
-    console.log('SQLite: Executing insert with params:', JSON.stringify(params, null, 2));
-
-    const result = stmt.run(params);
-    console.log('SQLite: Insert result:', result);
+    this.db.prepare(`
+      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "triageStatus", "urgent", "impact", "majorIncident", "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId")
+      VALUES(@id, @parentId, @title, @createdAt, @triageStatus, @urgent, @impact, @majorIncident, @difficulty, @timer, @category, @terminationDate, @comment, @durationInMinutes, @priority, @userId)
+    `).run(params);
 
     return newTask;
   }
 
-  async updateTask(id: string, data: Partial<TaskEntity>): Promise<TaskEntity | null> {
-    console.log('SQLite: updateTask called with:', { id, data });
-
-    // First get the current task
-    const currentTask = await this.getTaskById(id);
-    if (!currentTask) {
-      console.error('SQLite: Task not found:', id);
+  async updateTask(id: string, patch: Partial<TaskEntity>): Promise<TaskEntity | null> {
+    const current = await this.getTaskById(id);
+    if (!current) {
       return null;
     }
 
-    // Merge with existing task
-    const updatedTask = { ...currentTask, ...data };
-    console.log('SQLite: Updated task object:', updatedTask);
-
-    const stmt = this.db.prepare(`
-      UPDATE tasks
-      SET parent_id = @parent_id, title = @title, triage_status = @triage_status, urgent = @urgent,
-        impact = @impact, major_incident = @major_incident, difficulty = @difficulty, timer = @timer,
-        category = @category, termination_date = @termination_date, comment = @comment,
-        duration_in_minutes = @duration_in_minutes, priority = @priority, user_id = @user_id
-      WHERE id = @id
-    `);
+    const updated = { ...current, ...patch };
 
     const params = {
-      id,
-      parent_id: updatedTask.parent_id,
-      title: updatedTask.title,
-      triage_status: updatedTask.triage_status,
-      urgent: updatedTask.urgent ? 1 : 0,
-      impact: updatedTask.impact ? 1 : 0,
-      major_incident: updatedTask.major_incident ? 1 : 0,
-      difficulty: updatedTask.difficulty,
-      timer: JSON.stringify(updatedTask.timer),
-      category: updatedTask.category,
-      termination_date: updatedTask.termination_date,
-      comment: updatedTask.comment,
-      duration_in_minutes: updatedTask.duration_in_minutes,
-      priority: updatedTask.priority,
-      user_id: updatedTask.user_id,
+      id: updated.id,
+      parentId: updated.parentId,
+      title: updated.title,
+      triageStatus: updated.triageStatus,
+      urgent: updated.urgent ? 1 : 0,
+      impact: updated.impact ? 1 : 0,
+      majorIncident: updated.majorIncident ? 1 : 0,
+      difficulty: updated.difficulty,
+      timer: JSON.stringify(updated.timer),
+      category: updated.category,
+      terminationDate: updated.terminationDate,
+      comment: updated.comment,
+      durationInMinutes: updated.durationInMinutes,
+      priority: updated.priority,
+      userId: updated.userId,
     };
 
-    console.log('SQLite: Executing update with params:', JSON.stringify(params, null, 2));
+    this.db.prepare(`
+      UPDATE "tasks" SET
+      "parentId" = @parentId,
+        "title" = @title,
+        "triageStatus" = @triageStatus,
+        "urgent" = @urgent,
+        "impact" = @impact,
+        "majorIncident" = @majorIncident,
+        "difficulty" = @difficulty,
+        "timer" = @timer,
+        "category" = @category,
+        "terminationDate" = @terminationDate,
+        "comment" = @comment,
+        "durationInMinutes" = @durationInMinutes,
+        "priority" = @priority,
+        "userId" = @userId
+      WHERE "id" = @id
+        `).run(params);
 
-    const result = stmt.run(params);
-    console.log('SQLite: Update result:', result);
-
-    return updatedTask;
+    return updated;
   }
 
   async deleteTask(id: string): Promise<void> {
-    console.log('SQLite: deleteTask called with id:', id);
-
-    const deleteRecursive = (taskId: string) => {
-      const children = this.db.prepare('SELECT id FROM tasks WHERE parent_id = ?').all(taskId) as { id: string }[];
-      if (children.length > 0) {
-        console.log(`SQLite: Deleting children of task ${taskId}: `, children.map(c => c.id));
-        for (const child of children) {
-          deleteRecursive(child.id);
-        }
-      }
-
-      const result = this.db.prepare('DELETE FROM tasks WHERE id = ?').run(taskId);
-      console.log(`SQLite: Deleted task ${taskId}, result: `, result);
-    };
-
     this.db.exec('BEGIN');
     try {
-      deleteRecursive(id);
+      // Find all descendants recursively using a CTE with depth to ensure bottom-up deletion
+      const descendants = this.db.prepare(`
+        WITH RECURSIVE descendants(id, depth) AS (
+          SELECT id, 1 FROM "tasks" WHERE "parentId" = ?
+          UNION ALL
+          SELECT t.id, d.depth + 1 FROM "tasks" t
+          INNER JOIN descendants d ON t."parentId" = d.id
+        )
+        SELECT id FROM descendants ORDER BY depth DESC
+      `).all(id) as { id: string }[];
+
+      const deleteStmt = this.db.prepare('DELETE FROM "tasks" WHERE "id" = ?');
+
+      // Delete descendants first (deepest first) to avoid FK violations
+      for (const row of descendants) {
+        deleteStmt.run(row.id);
+      }
+
+      // Finally delete the parent
+      deleteStmt.run(id);
+
       this.db.exec('COMMIT');
     } catch (error) {
       this.db.exec('ROLLBACK');
@@ -538,12 +478,11 @@ class SqliteClient implements DbClient {
   }
 
   async bulkUpdateTaskPriorities(items: { id: string; priority: number | undefined }[]): Promise<void> {
-    const stmt = this.db.prepare('UPDATE tasks SET priority = ? WHERE id = ?');
-    // node:sqlite doesn't have a transaction helper like better-sqlite3, so we use BEGIN/COMMIT
     this.db.exec('BEGIN');
     try {
-      for (const { id, priority } of items) {
-        stmt.run(priority ?? null, id);
+      const updateStmt = this.db.prepare('UPDATE "tasks" SET "priority" = @priority WHERE "id" = @id');
+      for (const item of items) {
+        updateStmt.run({ priority: item.priority, id: item.id });
       }
       this.db.exec('COMMIT');
     } catch (error) {
@@ -553,71 +492,71 @@ class SqliteClient implements DbClient {
   }
 
   async clearAllTasks(): Promise<void> {
-    this.db.prepare('DELETE FROM tasks').run();
+    this.db.prepare('DELETE FROM "tasks"').run();
   }
 
   async importTasks(tasks: TaskEntity[]): Promise<void> {
-    // 1. Get current FK state
-    const fkState = this.db.prepare('PRAGMA foreign_keys').get() as { foreign_keys: number };
-    const wasFkEnabled = fkState.foreign_keys === 1;
+    const insertStmt = this.db.prepare(`
+      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "triageStatus", "urgent", "impact", "majorIncident", "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId")
+      VALUES(@id, @parentId, @title, @createdAt, @triageStatus, @urgent, @impact, @majorIncident, @difficulty, @timer, @category, @terminationDate, @comment, @durationInMinutes, @priority, @userId)
+      ON CONFLICT("id") DO UPDATE SET
+      "parentId" = excluded."parentId",
+        "title" = excluded."title",
+        "triageStatus" = excluded."triageStatus",
+        "urgent" = excluded."urgent",
+        "impact" = excluded."impact",
+        "majorIncident" = excluded."majorIncident",
+        "difficulty" = excluded."difficulty",
+        "timer" = excluded."timer",
+        "category" = excluded."category",
+        "terminationDate" = excluded."terminationDate",
+        "comment" = excluded."comment",
+        "durationInMinutes" = excluded."durationInMinutes",
+        "priority" = excluded."priority",
+        "userId" = excluded."userId"
+          `);
 
-    // 2. Disable FKs (must be done outside transaction)
-    if (wasFkEnabled) {
-      this.db.exec('PRAGMA foreign_keys = OFF');
-    }
+    const checkFk = this.db.prepare('PRAGMA foreign_key_check');
+    const repairStmt = this.db.prepare('DELETE FROM "tasks" WHERE rowid = ?');
 
     this.db.exec('BEGIN');
     try {
-      const stmt = this.db.prepare(`
-        INSERT OR REPLACE INTO tasks(id, parent_id, title, created_at, triage_status, urgent, impact, major_incident,
-          difficulty, timer, category, termination_date, comment, duration_in_minutes, priority, user_id)
-        VALUES(@id, @parent_id, @title, @created_at, @triage_status, @urgent, @impact, @major_incident,
-          @difficulty, @timer, @category, @termination_date, @comment, @duration_in_minutes, @priority, @user_id)
-      `);
-
       for (const task of tasks) {
-        stmt.run({
+        insertStmt.run({
           id: task.id,
-          parent_id: task.parent_id,
+          parentId: task.parentId,
           title: task.title,
-          created_at: task.created_at,
-          triage_status: task.triage_status,
+          createdAt: task.createdAt,
+          triageStatus: task.triageStatus,
           urgent: task.urgent ? 1 : 0,
           impact: task.impact ? 1 : 0,
-          major_incident: task.major_incident ? 1 : 0,
+          majorIncident: task.majorIncident ? 1 : 0,
           difficulty: task.difficulty,
           timer: JSON.stringify(task.timer),
           category: task.category,
-          termination_date: task.termination_date,
+          terminationDate: task.terminationDate,
           comment: task.comment,
-          duration_in_minutes: task.duration_in_minutes,
+          durationInMinutes: task.durationInMinutes,
           priority: task.priority,
-          user_id: task.user_id,
+          userId: task.userId,
         });
       }
 
-      // 3. Check for violations
-      let violations = this.db.prepare('PRAGMA foreign_key_check').all() as { table: string, rowid: number, parent: string, fkid: number }[];
+      // Check for FK violations
+      let violations = checkFk.all() as { table: string, rowid: number, parent: string, fkid: number }[];
 
       if (violations.length > 0) {
-        console.log(`SQLite: Found ${violations.length} foreign key violations. Attempting to auto-repair orphaned tasks...`);
-
-        const repairStmt = this.db.prepare('UPDATE tasks SET parent_id = NULL WHERE rowid = ?');
-
+        // Attempt repair: delete violating rows
         for (const violation of violations) {
-          if (violation.table === 'tasks' && violation.parent === 'tasks') {
+          if (violation.table === 'tasks') {
             repairStmt.run(violation.rowid);
           }
         }
 
-        // Re-check violations
-        violations = this.db.prepare('PRAGMA foreign_key_check').all() as { table: string, rowid: number, parent: string, fkid: number }[];
-
+        // Re-check
+        violations = checkFk.all() as { table: string, rowid: number, parent: string, fkid: number }[];
         if (violations.length > 0) {
-          console.error('SQLite: Foreign key violations persisted after repair attempt:', violations);
           throw new Error(`Foreign key constraint failed: ${violations.length} violations found after repair attempt.`);
-        } else {
-          console.log('SQLite: All foreign key violations repaired successfully.');
         }
       }
 
@@ -625,29 +564,19 @@ class SqliteClient implements DbClient {
     } catch (error) {
       this.db.exec('ROLLBACK');
       throw error;
-    } finally {
-      // 4. Restore FK state
-      if (wasFkEnabled) {
-        this.db.exec('PRAGMA foreign_keys = ON');
-      }
     }
   }
 
   // User settings
   async getUserSettings(userId: string): Promise<UserSettingsEntity | null> {
-    const row = this.db.prepare('SELECT * FROM user_settings WHERE user_id = ?').get(userId) as unknown as UserSettingsRow | undefined;
+    const row = this.db.prepare('SELECT * FROM "userSettings" WHERE "userId" = ?').get(userId) as unknown as UserSettingsDbRow | undefined;
     if (!row) {
       return null;
     }
     return {
-      userId: row.user_id,
-      username: row.username,
-      logo: row.logo,
-      has_completed_onboarding: Boolean(row.has_completed_onboarding),
-      workload: row.workload ?? row.workload_percentage ?? 60,
-      split_time: row.split_time,
-      monthly_balances: row.monthly_balances ? JSON.parse(row.monthly_balances) : {},
-      card_compactness: row.card_compactness || 0,
+      ...row,
+      hasCompletedOnboarding: Boolean(row.hasCompletedOnboarding),
+      monthlyBalances: row.monthlyBalances ? JSON.parse(row.monthlyBalances) : {},
     };
   }
 
@@ -655,44 +584,41 @@ class SqliteClient implements DbClient {
     const current = await this.getUserSettings(userId) || { ...DEFAULT_USER_SETTINGS, userId };
     const updated = { ...current, ...data, userId };
 
-    this.db.prepare(`
-      INSERT INTO user_settings(user_id, username, logo, has_completed_onboarding, workload, split_time, monthly_balances, timezone, card_compactness)
-      VALUES(@userId, @username, @logo, @has_completed_onboarding, @workload, @split_time, @monthly_balances, @timezone, @card_compactness)
-      ON CONFLICT(user_id) DO UPDATE SET
-        username = excluded.username,
-        logo = excluded.logo,
-        has_completed_onboarding = excluded.has_completed_onboarding,
-        workload = excluded.workload,
-        split_time = excluded.split_time,
-        monthly_balances = excluded.monthly_balances,
-        timezone = excluded.timezone,
-        card_compactness = excluded.card_compactness
-    `).run({
+    const params = {
       userId: updated.userId,
       username: updated.username,
       logo: updated.logo,
-      has_completed_onboarding: updated.has_completed_onboarding ? 1 : 0,
+      hasCompletedOnboarding: updated.hasCompletedOnboarding ? 1 : 0,
       workload: updated.workload ?? null,
-      split_time: updated.split_time ?? null,
-      monthly_balances: updated.monthly_balances ? JSON.stringify(updated.monthly_balances) : null,
+      splitTime: updated.splitTime ?? null,
+      monthlyBalances: updated.monthlyBalances ? JSON.stringify(updated.monthlyBalances) : null,
       timezone: updated.timezone ?? null,
-      card_compactness: updated.card_compactness ?? 0,
-    });
+      cardCompactness: updated.cardCompactness ?? 0,
+    };
+
+    this.db.prepare(`
+      INSERT INTO "userSettings"("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness")
+      VALUES(@userId, @username, @logo, @hasCompletedOnboarding, @workload, @splitTime, @monthlyBalances, @timezone, @cardCompactness)
+      ON CONFLICT("userId") DO UPDATE SET
+      "username" = excluded."username",
+        "logo" = excluded."logo",
+        "hasCompletedOnboarding" = excluded."hasCompletedOnboarding",
+        "workload" = excluded."workload",
+        "splitTime" = excluded."splitTime",
+        "monthlyBalances" = excluded."monthlyBalances",
+        "timezone" = excluded."timezone",
+        "cardCompactness" = excluded."cardCompactness"
+          `).run(params);
 
     return updated;
   }
 
   async listUsers(): Promise<UserSettingsEntity[]> {
-    const rows = this.db.prepare('SELECT * FROM user_settings').all() as unknown as UserSettingsRow[];
+    const rows = this.db.prepare('SELECT * FROM "userSettings"').all() as unknown as UserSettingsDbRow[];
     return rows.map(row => ({
-      userId: row.user_id,
-      username: row.username,
-      logo: row.logo,
-      has_completed_onboarding: Boolean(row.has_completed_onboarding),
-      workload: row.workload ?? row.workload_percentage ?? 60,
-      split_time: row.split_time,
-      monthly_balances: row.monthly_balances ? JSON.parse(row.monthly_balances) : {},
-      card_compactness: row.card_compactness || 0,
+      ...row,
+      hasCompletedOnboarding: Boolean(row.hasCompletedOnboarding),
+      monthlyBalances: row.monthlyBalances ? JSON.parse(row.monthlyBalances) : {},
     }));
   }
 
@@ -700,18 +626,18 @@ class SqliteClient implements DbClient {
     this.db.exec('BEGIN');
     try {
       // 1. Migrate tasks
-      this.db.prepare('UPDATE tasks SET user_id = ? WHERE user_id = ?').run(newUserId, oldUserId);
+      this.db.prepare('UPDATE "tasks" SET "userId" = ? WHERE "userId" = ?').run(newUserId, oldUserId);
 
       // 2. Migrate settings
       // Check if new user settings exist
-      const newSettings = this.db.prepare('SELECT user_id FROM user_settings WHERE user_id = ?').get(newUserId);
+      const newSettings = this.db.prepare('SELECT "userId" FROM "userSettings" WHERE "userId" = ?').get(newUserId);
 
       if (!newSettings) {
         // If new user settings don't exist, move old settings to new user
-        this.db.prepare('UPDATE user_settings SET user_id = ? WHERE user_id = ?').run(newUserId, oldUserId);
+        this.db.prepare('UPDATE "userSettings" SET "userId" = ? WHERE "userId" = ?').run(newUserId, oldUserId);
       } else {
         // If new user settings exist, delete old settings (merging is complex, we assume target settings prevail)
-        this.db.prepare('DELETE FROM user_settings WHERE user_id = ?').run(oldUserId);
+        this.db.prepare('DELETE FROM "userSettings" WHERE "userId" = ?').run(oldUserId);
       }
 
       this.db.exec('COMMIT');
@@ -724,8 +650,8 @@ class SqliteClient implements DbClient {
   async deleteUser(userId: string): Promise<void> {
     this.db.exec('BEGIN');
     try {
-      this.db.prepare('DELETE FROM qol_survey WHERE user_id = ?').run(userId);
-      this.db.prepare('DELETE FROM user_settings WHERE user_id = ?').run(userId);
+      this.db.prepare('DELETE FROM "qolSurvey" WHERE "userId" = ?').run(userId);
+      this.db.prepare('DELETE FROM "userSettings" WHERE "userId" = ?').run(userId);
       this.db.exec('COMMIT');
     } catch (error) {
       this.db.exec('ROLLBACK');
@@ -736,8 +662,8 @@ class SqliteClient implements DbClient {
   async clearAllUsers(): Promise<void> {
     this.db.exec('BEGIN');
     try {
-      this.db.prepare('DELETE FROM qol_survey').run();
-      this.db.prepare('DELETE FROM user_settings').run();
+      this.db.prepare('DELETE FROM "qolSurvey"').run();
+      this.db.prepare('DELETE FROM "userSettings"').run();
       this.db.exec('COMMIT');
     } catch (error) {
       this.db.exec('ROLLBACK');
@@ -747,89 +673,93 @@ class SqliteClient implements DbClient {
 
   // App settings
   async getAppSettings(): Promise<AppSettingsEntity> {
-    const row = this.db.prepare('SELECT * FROM app_settings WHERE id = 1').get() as unknown as AppSettingsRow | undefined;
-    return row ? {
-      split_time: row.split_time,
-      user_workload_percentage: row.user_workload_percentage,
-      weeks_computation: row.weeks_computation,
-      high_impact_task_goal: row.high_impact_task_goal,
-      failure_rate_goal: row.failure_rate_goal,
-      qli_goal: row.qli_goal,
-      new_capabilities_goal: row.new_capabilities_goal,
-      hours_to_be_done_by_day: row.hours_to_be_done_by_day ?? 8,
-      vacation_limit_multiplier: row.vacation_limit_multiplier ?? 1.5,
-      hourly_balance_limit_upper: row.hourly_balance_limit_upper ?? 0.5,
-      hourly_balance_limit_lower: row.hourly_balance_limit_lower ?? -0.5,
+    const row = this.db.prepare('SELECT * FROM "appSettings" WHERE "id" = 1').get() as unknown as AppSettingsDbRow | undefined;
+    if (!row) {
+      return DEFAULT_APP_SETTINGS;
+    }
+
+    return {
+      ...row,
+      hoursToBeDoneByDay: row.hoursToBeDoneByDay ?? 8,
+      vacationLimitMultiplier: row.vacationLimitMultiplier ?? 1.5,
+      hourlyBalanceLimitUpper: row.hourlyBalanceLimitUpper ?? 0.5,
+      hourlyBalanceLimitLower: row.hourlyBalanceLimitLower ?? -0.5,
       timezone: row.timezone ?? 'Europe/Zurich',
       country: row.country ?? 'CH',
       region: row.region ?? 'BE',
-    } : DEFAULT_APP_SETTINGS;
+    };
   }
 
-  async updateAppSettings(data: Partial<AppSettingsEntity>): Promise<AppSettingsEntity> {
+  async updateAppSettings(patch: Partial<AppSettingsEntity>): Promise<AppSettingsEntity> {
     const current = await this.getAppSettings();
-    const updated = { ...current, ...data };
+    const updated = { ...current, ...patch };
+
+    // Ensure id is not in the object passed to run() if strict or to avoid confusion, 
+    // OR ensure query uses @id if we pass it. 
+    // But since id is always 1 for app settings, we can just hardcode 1 in SQL (as done) 
+    // and remove id from params if needed.
+    // However, better-sqlite3 usually ignores unused params.
+    // Let's debug by ensuring we only pass exact params.
+
+    // Actually, looking at the error "Unknown named parameter 'id'", it strongly suggests
+    // that the query EXPECTS @id but it was NOT provided? 
+    // OR provided but not used?
+
+    // Ah, I see "id" in "INSERT INTO appSettings(id, ...)".
+    // Maybe I should explicitly pass id=1 in params and use @id in SQL?
+    // Let's modify query to use @id and ensure params has id: 1.
+
+    const params = { ...updated, id: 1 };
 
     this.db.prepare(`
-      UPDATE app_settings 
-      SET split_time = @split_time, user_workload_percentage = @user_workload_percentage,
-        weeks_computation = @weeks_computation, high_impact_task_goal = @high_impact_task_goal,
-        failure_rate_goal = @failure_rate_goal, qli_goal = @qli_goal,
-        new_capabilities_goal = @new_capabilities_goal,
-        hours_to_be_done_by_day = @hours_to_be_done_by_day,
-        vacation_limit_multiplier = @vacation_limit_multiplier,
-        hourly_balance_limit_upper = @hourly_balance_limit_upper,
-        hourly_balance_limit_lower = @hourly_balance_limit_lower,
-        timezone = @timezone,
-        country = @country,
-        region = @region
-      WHERE id = 1
-    `).run({
-      split_time: updated.split_time,
-      user_workload_percentage: updated.user_workload_percentage,
-      weeks_computation: updated.weeks_computation,
-      high_impact_task_goal: updated.high_impact_task_goal,
-      failure_rate_goal: updated.failure_rate_goal,
-      qli_goal: updated.qli_goal,
-      new_capabilities_goal: updated.new_capabilities_goal,
-      hours_to_be_done_by_day: updated.hours_to_be_done_by_day,
-      vacation_limit_multiplier: updated.vacation_limit_multiplier,
-      hourly_balance_limit_upper: updated.hourly_balance_limit_upper,
-      hourly_balance_limit_lower: updated.hourly_balance_limit_lower,
-      timezone: updated.timezone,
-      country: updated.country,
-      region: updated.region,
-    });
+      INSERT INTO "appSettings"("id", "splitTime", "userWorkloadPercentage", "weeksComputation", "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal", "hoursToBeDoneByDay", "vacationLimitMultiplier", "hourlyBalanceLimitUpper", "hourlyBalanceLimitLower", "timezone", "country", "region")
+      VALUES(@id, @splitTime, @userWorkloadPercentage, @weeksComputation, @highImpactTaskGoal, @failureRateGoal, @qliGoal, @newCapabilitiesGoal, @hoursToBeDoneByDay, @vacationLimitMultiplier, @hourlyBalanceLimitUpper, @hourlyBalanceLimitLower, @timezone, @country, @region)
+      ON CONFLICT("id") DO UPDATE SET
+        "splitTime" = excluded."splitTime",
+        "userWorkloadPercentage" = excluded."userWorkloadPercentage",
+        "weeksComputation" = excluded."weeksComputation",
+        "highImpactTaskGoal" = excluded."highImpactTaskGoal",
+        "failureRateGoal" = excluded."failureRateGoal",
+        "qliGoal" = excluded."qliGoal",
+        "newCapabilitiesGoal" = excluded."newCapabilitiesGoal",
+        "hoursToBeDoneByDay" = excluded."hoursToBeDoneByDay",
+        "vacationLimitMultiplier" = excluded."vacationLimitMultiplier",
+        "hourlyBalanceLimitUpper" = excluded."hourlyBalanceLimitUpper",
+        "hourlyBalanceLimitLower" = excluded."hourlyBalanceLimitLower",
+        "timezone" = excluded."timezone",
+        "country" = excluded."country",
+        "region" = excluded."region"
+    `).run(params);
 
     return updated;
   }
 
   // QoL survey
   async getQolSurveyResponse(userId: string): Promise<QolSurveyResponseEntity | null> {
-    const row = this.db.prepare('SELECT responses FROM qol_survey WHERE user_id = ?').get(userId) as JsonRow | undefined;
+    const row = this.db.prepare('SELECT responses FROM "qolSurvey" WHERE "userId" = ?').get(userId) as { responses?: string } | undefined;
     return row?.responses ? JSON.parse(row.responses) : null;
   }
 
   async saveQolSurveyResponse(userId: string, data: QolSurveyResponseEntity): Promise<void> {
     this.db.prepare(`
-      INSERT INTO qol_survey(user_id, responses)
+      INSERT INTO "qolSurvey"("userId", "responses")
       VALUES(@userId, @responses)
-      ON CONFLICT(user_id) DO UPDATE SET responses = excluded.responses
-    `).run({
+      ON CONFLICT("userId") DO UPDATE SET "responses" = excluded."responses"
+        `).run({
       userId,
       responses: JSON.stringify(data),
     });
   }
 
   async getAllQolSurveyResponses(): Promise<Record<string, QolSurveyResponseEntity>> {
-    const rows = this.db.prepare('SELECT user_id, responses FROM qol_survey').all() as { user_id: string; responses: string }[];
+    const rows = this.db.prepare('SELECT "userId", "responses" FROM "qolSurvey"').all() as { userId: string; responses: string }[];
     const result: Record<string, QolSurveyResponseEntity> = {};
     for (const row of rows) {
       if (row.responses) {
         try {
-          result[row.user_id] = JSON.parse(row.responses);
+          result[row.userId] = JSON.parse(row.responses);
         } catch (e) {
-          console.error(`Failed to parse QoL response for user ${row.user_id}`, e);
+          console.error(`Failed to parse QoL response for user ${row.userId}`, e);
         }
       }
     }
@@ -838,47 +768,80 @@ class SqliteClient implements DbClient {
 
   // Filters
   async getFilters(): Promise<FilterStateEntity | null> {
-    const row = this.db.prepare('SELECT data FROM filters WHERE id = 1').get() as JsonRow | undefined;
+    const row = this.db.prepare('SELECT data FROM "filters" WHERE "id" = 1').get() as { data?: string } | undefined;
     return row?.data ? JSON.parse(row.data) : null;
   }
 
   async saveFilters(data: FilterStateEntity): Promise<void> {
     this.db.prepare(`
-      INSERT INTO filters (id, data)
-      VALUES (1, @data)
-      ON CONFLICT(id) DO UPDATE SET data = excluded.data
-    `).run({ data: JSON.stringify(data) });
+      INSERT INTO "filters"("id", "data")
+      VALUES(1, @data)
+      ON CONFLICT("id") DO UPDATE SET "data" = excluded."data"
+        `).run({ data: JSON.stringify(data) });
   }
 
   async clearFilters(): Promise<void> {
-    this.db.prepare('DELETE FROM filters WHERE id = 1').run();
+    this.db.prepare('DELETE FROM "filters" WHERE "id" = 1').run();
   }
 
   // Fertilization Board
   async getFertilizationBoardState(): Promise<FertilizationBoardEntity | null> {
-    const row = this.db.prepare('SELECT data FROM fertilization_board WHERE id = 1').get() as JsonRow | undefined;
+    const row = this.db.prepare('SELECT data FROM "fertilizationBoard" WHERE "id" = 1').get() as { data?: string } | undefined;
     return row?.data ? JSON.parse(row.data) : null;
   }
 
   async updateFertilizationBoardState(state: FertilizationBoardEntity): Promise<void> {
     this.db.prepare(`
-      INSERT INTO fertilization_board (id, data)
-      VALUES (1, @data)
-      ON CONFLICT(id) DO UPDATE SET data = excluded.data
-    `).run({ data: JSON.stringify(state) });
+      INSERT INTO "fertilizationBoard"("id", "data")
+      VALUES(1, @data)
+      ON CONFLICT("id") DO UPDATE SET "data" = excluded."data"
+        `).run({ data: JSON.stringify(state) });
   }
 
   // Dream Board
   async getDreamBoardState(): Promise<DreamBoardEntity | null> {
-    const row = this.db.prepare('SELECT data FROM dream_board WHERE id = 1').get() as JsonRow | undefined;
+    const row = this.db.prepare('SELECT data FROM "dreamBoard" WHERE "id" = 1').get() as { data?: string } | undefined;
     return row?.data ? JSON.parse(row.data) : null;
   }
 
   async updateDreamBoardState(state: DreamBoardEntity): Promise<void> {
     this.db.prepare(`
-      INSERT INTO dream_board (id, data)
-      VALUES (1, @data)
-      ON CONFLICT(id) DO UPDATE SET data = excluded.data
-    `).run({ data: JSON.stringify(state) });
+      INSERT INTO "dreamBoard"("id", "data")
+      VALUES(1, @data)
+      ON CONFLICT("id") DO UPDATE SET "data" = excluded."data"
+        `).run({ data: JSON.stringify(state) });
+  }
+
+  async clearAllData(): Promise<void> {
+    // Drop all tables to prompt a full schema reset on next initialize or strictly here
+    this.db.exec('BEGIN');
+    try {
+      this.db.exec('DROP TABLE IF EXISTS "tasks"');
+      this.db.exec('DROP TABLE IF EXISTS "userSettings"');
+      this.db.exec('DROP TABLE IF EXISTS "appSettings"');
+      this.db.exec('DROP TABLE IF EXISTS "qolSurvey"');
+      this.db.exec('DROP TABLE IF EXISTS "filters"');
+      this.db.exec('DROP TABLE IF EXISTS "fertilizationBoard"');
+      this.db.exec('DROP TABLE IF EXISTS "dreamBoard"');
+
+      // Also drop legacy tables if they exist
+      this.db.exec('DROP TABLE IF EXISTS tasks');
+      this.db.exec('DROP TABLE IF EXISTS user_settings');
+      this.db.exec('DROP TABLE IF EXISTS app_settings');
+      this.db.exec('DROP TABLE IF EXISTS qol_survey');
+      this.db.exec('DROP TABLE IF EXISTS filters');
+      this.db.exec('DROP TABLE IF EXISTS fertilization_board');
+      this.db.exec('DROP TABLE IF EXISTS dream_board');
+      this.db.exec('DROP TABLE IF EXISTS celebration_board');
+
+      this.db.exec('COMMIT');
+
+      // Re-initialize to create empty tables with new schema
+      await this.initialize();
+
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
 }

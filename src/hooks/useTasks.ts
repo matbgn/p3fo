@@ -61,7 +61,7 @@ export type Task = {
 let tasks: Task[] = [];
 
 // Key for localStorage to track if default tasks have been initialized
-const DEFAULT_TASKS_INITIALIZED_KEY = 'p3fo_default_tasks_initialized';
+export const DEFAULT_TASKS_INITIALIZED_KEY = 'p3fo_default_tasks_initialized';
 
 const byId = (arr: Task[]) => Object.fromEntries(arr.map((t) => [t.id, t]));
 
@@ -104,6 +104,66 @@ if (isCollaborationEnabled()) {
   console.log('Yjs observer disabled (browser-only mode)');
 }
 
+// Helper to convert TaskEntity[] to Task[] with proper parent-child relationships
+const convertEntitiesToTasks = (entities: import('@/lib/persistence-types').TaskEntity[]): Task[] => {
+  const taskMap: { [id: string]: Task } = {};
+
+  // First pass: create all task objects and map them by ID
+  entities.forEach(entity => {
+    const task: Task = {
+      id: entity.id,
+      title: entity.title,
+      parentId: entity.parentId,
+      children: [], // Initialize children array
+      createdAt: new Date(entity.createdAt).getTime(),
+      triageStatus: entity.triageStatus as TriageStatus,
+      urgent: entity.urgent,
+      impact: entity.impact,
+      majorIncident: entity.majorIncident,
+      difficulty: entity.difficulty as 0.5 | 1 | 2 | 3 | 5 | 8,
+      timer: entity.timer,
+      category: entity.category as Category,
+      terminationDate: entity.terminationDate ? new Date(entity.terminationDate).getTime() : undefined,
+      comment: entity.comment || undefined,
+      durationInMinutes: entity.durationInMinutes || undefined,
+      priority: entity.priority || 0,
+      userId: entity.userId || undefined,
+    };
+    taskMap[task.id] = task;
+  });
+
+  // Second pass: populate children arrays
+  Object.values(taskMap).forEach(task => {
+    if (task.parentId && taskMap[task.parentId]) {
+      taskMap[task.parentId].children?.push(task.id);
+    }
+  });
+
+  return Object.values(taskMap);
+};
+
+// Load tasks filtered by userId (for server-side filtering optimization)
+const loadTasksByUser = async (userId?: string | null): Promise<Task[]> => {
+  console.log('=== loadTasksByUser called ===', { userId, timestamp: new Date().toISOString() });
+
+  try {
+    const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+    const adapter = await persistence;
+
+    // Convert UNASSIGNED filter to undefined to get tasks without userId
+    const filterUserId = userId === 'UNASSIGNED' ? undefined : (userId || undefined);
+
+    console.log(`Loading tasks from database with userId filter: ${filterUserId || 'ALL'}`);
+    const entities = await adapter.listTasks(filterUserId);
+    console.log(`Found ${entities.length} tasks in database`);
+
+    return convertEntitiesToTasks(entities);
+  } catch (error) {
+    console.error("Error loading tasks by user:", error);
+    return [];
+  }
+};
+
 const loadTasks = async () => {
   console.log('=== loadTasks called ===', {
     timestamp: new Date().toISOString()
@@ -121,63 +181,29 @@ const loadTasks = async () => {
       console.log('Task IDs in database:', entities.map(e => e.id));
     }
 
-    // Convert TaskEntity[] to Task[]
-    const taskMap: { [id: string]: Task } = {};
-    const topLevelTasks: Task[] = [];
-
-    // First pass: create all task objects and map them by ID
-    entities.forEach(entity => {
-      const task: Task = {
-        id: entity.id,
-        title: entity.title,
-        parentId: entity.parent_id,
-        children: [], // Initialize children array
-        createdAt: new Date(entity.created_at).getTime(),
-        triageStatus: entity.triage_status as TriageStatus,
-        urgent: entity.urgent,
-        impact: entity.impact,
-        majorIncident: entity.major_incident,
-        difficulty: entity.difficulty as 0.5 | 1 | 2 | 3 | 5 | 8,
-        timer: entity.timer,
-        category: entity.category as Category,
-        terminationDate: entity.termination_date ? new Date(entity.termination_date).getTime() : undefined,
-        comment: entity.comment || undefined,
-        durationInMinutes: entity.duration_in_minutes || undefined,
-        priority: entity.priority || 0,
-        userId: entity.user_id || undefined,
-      };
-      taskMap[task.id] = task;
-    });
-
-    // Second pass: populate children arrays and identify top-level tasks
-    Object.values(taskMap).forEach(task => {
-      if (task.parentId && taskMap[task.parentId]) {
-        taskMap[task.parentId].children?.push(task.id);
-      } else {
-        topLevelTasks.push(task);
-      }
-    });
-
-    tasks = Object.values(taskMap);
+    // Use shared conversion helper
+    tasks = convertEntitiesToTasks(entities);
     console.log(`Loaded ${tasks.length} tasks into memory`);
 
     // Only sync to Yjs if collaboration is enabled
     if (isCollaborationEnabled()) {
-      // Sync loaded tasks to Yjs if Yjs is empty
-      if (yTasks.size === 0 && tasks.length > 0) {
-        console.log('Initializing Yjs with loaded tasks');
-        doc.transact(() => {
-          tasks.forEach(task => {
-            yTasks.set(task.id, task);
-          });
+      // Prioritize Server State: Sync DB tasks to Yjs
+      console.log('Synchronizing Yjs with Server state (Server is reference)');
+      doc.transact(() => {
+        // 1. Remove tasks from Yjs that are not in the Server DB
+        const dbTaskIds = new Set(tasks.map(t => t.id));
+        const yTaskKeys = Array.from(yTasks.keys());
+        yTaskKeys.forEach(key => {
+          if (!dbTaskIds.has(key)) {
+            yTasks.delete(key);
+          }
         });
-      } else if (yTasks.size > 0) {
-        // If Yjs has data, it might be more up to date or from other clients
-        // For now, let's merge or prefer Yjs? 
-        // Simplest strategy: If Yjs has data, use it.
-        console.log('Yjs has data, using Yjs data');
-        tasks = Array.from(yTasks.values()) as Task[];
-      }
+
+        // 2. Update/Add tasks from Server DB to Yjs
+        tasks.forEach(task => {
+          yTasks.set(task.id, task);
+        });
+      });
     }
 
     // If no tasks, initialize defaults (but only if not already initialized)
@@ -404,7 +430,7 @@ const reparent = async (taskId: string, newParentId: string | null) => {
     // Update the reparented task
     const updatedTask = tasks.find(t => t.id === taskId);
     if (updatedTask) {
-      const entity = { ...taskToEntity(updatedTask), parent_id: newParentId };
+      const entity = { ...taskToEntity(updatedTask), parentId: newParentId };
       await adapter.updateTask(taskId, entity);
     }
 
@@ -654,7 +680,7 @@ const toggleMajorIncident = async (taskId: string) => {
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
-    const entity = { ...taskToEntity(task), major_incident: newValue };
+    const entity = { ...taskToEntity(task), majorIncident: newValue };
     await adapter.updateTask(taskId, entity);
   } catch (error) {
     console.error("Error toggling major incident:", error);
@@ -756,7 +782,7 @@ const updateUser = async (taskId: string, userId: string | undefined) => {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
 
-    const entity = { ...taskToEntity(task), user_id: userIdForDb };
+    const entity = { ...taskToEntity(task), userId: userIdForDb };
 
     console.log('Calling adapter.updateTask with entity:', JSON.stringify(entity, null, 2));
     const result = await adapter.updateTask(taskId, entity);
@@ -797,7 +823,7 @@ const updateTerminationDate = async (taskId: string, terminationDate: number | u
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
-    const entity = { ...taskToEntity(task), termination_date: terminationDate ? new Date(terminationDate).toISOString() : null };
+    const entity = { ...taskToEntity(task), terminationDate: terminationDate ? new Date(terminationDate).toISOString() : null };
     await adapter.updateTask(taskId, entity);
   } catch (error) {
     console.error("Error updating termination date:", error);
@@ -1104,25 +1130,7 @@ export function useTasks() {
       const adapter = await persistence;
 
       // Convert Task[] to TaskEntity[]
-      const entities = importedTasks.map(task => ({
-        id: task.id,
-        title: task.title,
-        created_at: new Date(task.createdAt).toISOString(),
-        triage_status: task.triageStatus,
-        urgent: task.urgent || false,
-        impact: task.impact || false,
-        major_incident: task.majorIncident || false,
-        difficulty: task.difficulty || 1,
-        timer: task.timer || [],
-        category: task.category || 'General',
-        termination_date: task.terminationDate ? new Date(task.terminationDate).toISOString() : null,
-        comment: task.comment || null,
-        duration_in_minutes: task.durationInMinutes || null,
-        priority: task.priority || null,
-        user_id: task.userId || null,
-        parent_id: task.parentId || null,
-        children: task.children || [],
-      }));
+      const entities = tasksToEntities(importedTasks);
 
       await adapter.importTasks(entities);
     } catch (error) {
@@ -1341,7 +1349,7 @@ export function useTasks() {
         const adapter = await persistence;
         const updatedTask = tasks.find(t => t.id === taskId);
         if (updatedTask) {
-          const entity = { ...taskToEntity(updatedTask), duration_in_minutes: durationInMinutes };
+          const entity = { ...taskToEntity(updatedTask), durationInMinutes: durationInMinutes };
           await adapter.updateTask(taskId, entity);
         }
       } catch (error) {
@@ -1402,6 +1410,19 @@ export function useTasks() {
       }
 
 
+      eventBus.publish("tasksChanged");
+    }, []),
+    // Load tasks filtered by userId for server-side filtering optimization
+    loadTasksByUser: React.useCallback(async (userId?: string | null) => {
+      const filteredTasks = await loadTasksByUser(userId);
+      // Update global tasks array with filtered results
+      tasks = filteredTasks;
+      eventBus.publish("tasksChanged");
+      return filteredTasks;
+    }, []),
+    // Reload all tasks (no filter)
+    reloadTasks: React.useCallback(async () => {
+      await loadTasks();
       eventBus.publish("tasksChanged");
     }, []),
   };
