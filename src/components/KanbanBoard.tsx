@@ -427,7 +427,12 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
     for (const parent of topTasks) {
       const allChildren = getAllChildren(parent);
       for (const child of allChildren) {
-        acc[child.triageStatus].push({ kind: "child", task: child, parent });
+        const childStatus = (child.triageStatus || 'Backlog') as TriageStatus;
+        if (acc[childStatus]) {
+          acc[childStatus].push({ kind: "child", task: child, parent });
+        } else {
+          acc['Backlog'].push({ kind: "child", task: child, parent });
+        }
       }
     }
 

@@ -93,7 +93,11 @@ if (isCollaborationEnabled()) {
   console.log('Setting up Yjs observer for task synchronization');
   yTasks.observe(() => {
     console.log('Yjs tasks updated');
-    const newTasks = Array.from(yTasks.values()) as Task[];
+    const newTasks = (Array.from(yTasks.values()) as Task[]).map(t => ({
+      ...t,
+      triageStatus: t.triageStatus || "Backlog",
+      children: t.children || [],
+    }));
 
     // Always update, even if empty (e.g., all tasks deleted)
     // This ensures deletions to empty state trigger UI updates
@@ -116,11 +120,11 @@ const convertEntitiesToTasks = (entities: import('@/lib/persistence-types').Task
       parentId: entity.parentId,
       children: [], // Initialize children array
       createdAt: new Date(entity.createdAt).getTime(),
-      triageStatus: entity.triageStatus as TriageStatus,
+      triageStatus: (entity.triageStatus as TriageStatus) || "Backlog",
       urgent: entity.urgent,
       impact: entity.impact,
       majorIncident: entity.majorIncident,
-      difficulty: entity.difficulty as 0.5 | 1 | 2 | 3 | 5 | 8,
+      difficulty: (entity.difficulty as 0.5 | 1 | 2 | 3 | 5 | 8) || 1,
       timer: entity.timer,
       category: entity.category as Category,
       terminationDate: entity.terminationDate ? new Date(entity.terminationDate).getTime() : undefined,
