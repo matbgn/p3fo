@@ -1,9 +1,32 @@
 import * as React from "react";
 import { eventBus } from "@/lib/events";
 import { CircleEntity, CircleNodeType, CircleNodeModifier } from "@/lib/persistence-types";
+import { doc, isCollaborationEnabled, initializeCollaboration, yCircles } from "@/lib/collaboration";
 
 // Module-level state for circles
 let circles: CircleEntity[] = [];
+
+// Sync circles to Yjs for real-time collaboration
+const syncCirclesToYjs = () => {
+  if (!isCollaborationEnabled()) return;
+  doc.transact(() => {
+    const currentIds = Array.from(yCircles.keys()) as string[];
+    const newIds = circles.map(c => c.id);
+    // Remove deleted circles
+    currentIds.forEach(id => {
+      if (!newIds.includes(id)) {
+        yCircles.delete(id);
+      }
+    });
+    // Add/update circles
+    circles.forEach(circle => {
+      const existing = yCircles.get(circle.id) as CircleEntity | undefined;
+      if (!existing || JSON.stringify(existing) !== JSON.stringify(circle)) {
+        yCircles.set(circle.id, circle);
+      }
+    });
+  });
+};
 
 // Helper to convert raw API response to CircleEntity with proper types
 const parseCircleEntity = (data: unknown): CircleEntity => {
@@ -17,6 +40,9 @@ const parseCircleEntity = (data: unknown): CircleEntity => {
     color: raw.color as string | undefined,
     size: raw.size as number | undefined,
     description: raw.description as string | undefined,
+    purpose: raw.purpose as string | undefined,
+    domains: raw.domains as string | undefined,
+    accountabilities: raw.accountabilities as string | undefined,
     order: raw.order as number | undefined,
     createdAt: raw.createdAt as string,
     updatedAt: raw.updatedAt as string,
@@ -26,6 +52,13 @@ const parseCircleEntity = (data: unknown): CircleEntity => {
 // Load circles from the API
 const loadCircles = async (): Promise<CircleEntity[]> => {
   try {
+    // Check if Yjs has data first (collaborative mode takes precedence)
+    if (isCollaborationEnabled() && yCircles.size > 0) {
+      circles = Array.from(yCircles.values()) as CircleEntity[];
+      eventBus.publish("circlesChanged");
+      return circles;
+    }
+
     const response = await fetch("/api/circles");
     if (!response.ok) {
       throw new Error(`Failed to load circles: ${response.statusText}`);
@@ -33,6 +66,8 @@ const loadCircles = async (): Promise<CircleEntity[]> => {
     const data = await response.json();
     circles = (data as unknown[]).map(parseCircleEntity);
     eventBus.publish("circlesChanged");
+    // Sync loaded circles to Yjs for other clients
+    syncCirclesToYjs();
     return circles;
   } catch (error) {
     console.error("Error loading circles:", error);
@@ -54,6 +89,7 @@ const createCircle = async (input: Partial<CircleEntity>): Promise<CircleEntity 
     const newCircle = parseCircleEntity(await response.json());
     circles = [...circles, newCircle];
     eventBus.publish("circlesChanged");
+    syncCirclesToYjs();
     return newCircle;
   } catch (error) {
     console.error("Error creating circle:", error);
@@ -82,6 +118,7 @@ const updateCircle = async (
     const updatedCircle = parseCircleEntity(await response.json());
     circles = circles.map((c) => (c.id === id ? updatedCircle : c));
     eventBus.publish("circlesChanged");
+    syncCirclesToYjs();
     return updatedCircle;
   } catch (error) {
     console.error("Error updating circle:", error);
@@ -109,6 +146,7 @@ const deleteCircle = async (id: string): Promise<boolean> => {
     collectDescendants(id);
     circles = circles.filter((c) => !idsToRemove.has(c.id));
     eventBus.publish("circlesChanged");
+    syncCirclesToYjs();
     return true;
   } catch (error) {
     console.error("Error deleting circle:", error);
@@ -127,6 +165,7 @@ const clearAllCircles = async (): Promise<boolean> => {
     }
     circles = [];
     eventBus.publish("circlesChanged");
+    syncCirclesToYjs();
     return true;
   } catch (error) {
     console.error("Error clearing circles:", error);
@@ -153,6 +192,9 @@ export interface CircleTreeNode {
   color?: string;
   size: number;
   description?: string;
+  purpose?: string;
+  domains?: string;
+  accountabilities?: string;
   children?: CircleTreeNode[];
   // D3 computed properties (added by pack layout)
   x?: number;
@@ -174,6 +216,9 @@ const buildCircleTree = (parentId: string | null = null): CircleTreeNode[] => {
       color: circle.color,
       size: circle.size ?? 1,
       description: circle.description,
+      purpose: circle.purpose,
+      domains: circle.domains,
+      accountabilities: circle.accountabilities,
       children: buildCircleTree(circle.id),
     }));
 };
@@ -188,7 +233,12 @@ loadCircles();
 export function useCircles() {
   const [, setForceRender] = React.useState({});
 
-  // Subscribe to circles changes
+  // Initialize collaboration on mount
+  React.useEffect(() => {
+    initializeCollaboration();
+  }, []);
+
+  // Subscribe to circles changes (local eventBus)
   React.useEffect(() => {
     const onCirclesChanged = () => {
       setForceRender({});
@@ -196,6 +246,22 @@ export function useCircles() {
     eventBus.subscribe("circlesChanged", onCirclesChanged);
     return () => {
       eventBus.unsubscribe("circlesChanged", onCirclesChanged);
+    };
+  }, []);
+
+  // Subscribe to Yjs changes (remote clients)
+  React.useEffect(() => {
+    if (!isCollaborationEnabled()) return;
+
+    const observer = () => {
+      // Reconstruct state from Yjs
+      circles = Array.from(yCircles.values()) as CircleEntity[];
+      eventBus.publish("circlesChanged");
+    };
+
+    yCircles.observe(observer);
+    return () => {
+      yCircles.unobserve(observer);
     };
   }, []);
 

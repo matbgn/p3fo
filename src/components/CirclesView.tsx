@@ -5,6 +5,7 @@ import { CircleNodeType } from '@/lib/persistence-types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -165,6 +166,9 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
   const [editNodeType, setEditNodeType] = useState<CircleNodeType>('role');
   const [editColor, setEditColor] = useState('#FFCC00');
   const [editDescription, setEditDescription] = useState('');
+  const [editPurpose, setEditPurpose] = useState('');
+  const [editDomains, setEditDomains] = useState('');
+  const [editAccountabilities, setEditAccountabilities] = useState('');
 
   // Move dialog state
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
@@ -237,7 +241,16 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     const packedNodes = buildPackedTree();
     setNodes(packedNodes);
 
-    if (packedNodes.length > 0 && !currentNode) {
+    // If we have a currentNode selected, find it in the new tree and update with fresh data
+    if (currentNode && currentNode.id !== 'virtual-root') {
+      const updatedNode = packedNodes.find(n => n.id === currentNode.id);
+      if (updatedNode) {
+        setCurrentNode(updatedNode);
+      } else if (packedNodes.length > 0) {
+        // Node was deleted, select root
+        setCurrentNode(packedNodes[0]);
+      }
+    } else if (packedNodes.length > 0 && !currentNode) {
       setCurrentNode(packedNodes[0]);
     }
 
@@ -573,13 +586,19 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
       nodeType: editNodeType,
       color: editNodeType === 'role' ? editColor : undefined,
       description: editDescription || undefined,
+      purpose: editPurpose || undefined,
+      domains: editDomains || undefined,
+      accountabilities: editAccountabilities || undefined,
     });
 
     setEditDialogOpen(false);
     setEditName('');
     setEditDescription('');
+    setEditPurpose('');
+    setEditDomains('');
+    setEditAccountabilities('');
     refreshVisualization();
-  }, [editName, editNodeType, editColor, editDescription, currentNode, createCircle, refreshVisualization]);
+  }, [editName, editNodeType, editColor, editDescription, editPurpose, editDomains, editAccountabilities, currentNode, createCircle, refreshVisualization]);
 
   // Edit current node
   const handleEditNode = useCallback(async () => {
@@ -590,11 +609,14 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
       nodeType: editNodeType,
       color: editNodeType === 'role' ? editColor : undefined,
       description: editDescription || undefined,
+      purpose: editPurpose || undefined,
+      domains: editDomains || undefined,
+      accountabilities: editAccountabilities || undefined,
     });
 
     setEditDialogOpen(false);
     refreshVisualization();
-  }, [editName, editNodeType, editColor, editDescription, currentNode, updateCircle, refreshVisualization]);
+  }, [editName, editNodeType, editColor, editDescription, editPurpose, editDomains, editAccountabilities, currentNode, updateCircle, refreshVisualization]);
 
   // Delete current node
   const handleDeleteNode = useCallback(async () => {
@@ -631,6 +653,9 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     setEditNodeType('role');
     setEditColor('#FFCC00');
     setEditDescription('');
+    setEditPurpose('');
+    setEditDomains('');
+    setEditAccountabilities('');
     setEditDialogOpen(true);
   }, []);
 
@@ -643,6 +668,9 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     setEditNodeType(currentNode.nodeType);
     setEditColor(currentNode.color || '#FFCC00');
     setEditDescription(currentNode.description || '');
+    setEditPurpose(currentNode.purpose || '');
+    setEditDomains(currentNode.domains || '');
+    setEditAccountabilities(currentNode.accountabilities || '');
     setEditDialogOpen(true);
   }, [currentNode]);
 
@@ -887,11 +915,11 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
               {treePanelOpen && (
                 <>
                   <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
-                    <div className="h-full border-r bg-muted/30">
+                    <div className="h-full border-r bg-muted/30 flex flex-col">
                       <div className="p-2 border-b bg-muted/50">
                         <h3 className="text-sm font-medium text-muted-foreground">Organization Tree</h3>
                       </div>
-                      <ScrollArea className="h-[calc(100%-37px)]">
+                      <ScrollArea className="flex-1 min-h-0">
                         <div className="p-1">
                           {getTreeRoot() && (
                             <TreeNodeItem
@@ -905,6 +933,36 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                           )}
                         </div>
                       </ScrollArea>
+                      {/* Node Detail Section */}
+                      {currentNode && currentNode.id !== 'virtual-root' && (
+                        <div className="border-t bg-background p-3 max-h-[40%] overflow-auto">
+                          <h4 className="font-semibold text-base mb-2">{currentNode.name}</h4>
+                          {currentNode.purpose && (
+                            <div className="mb-2">
+                              <span className="text-xs font-medium text-muted-foreground">Purpose:</span>
+                              <p className="text-sm whitespace-pre-wrap">{currentNode.purpose}</p>
+                            </div>
+                          )}
+                          {currentNode.domains && (
+                            <div className="mb-2">
+                              <span className="text-xs font-medium text-muted-foreground">Domains:</span>
+                              <p className="text-sm whitespace-pre-wrap">{currentNode.domains}</p>
+                            </div>
+                          )}
+                          {currentNode.accountabilities && (
+                            <div className="mb-2">
+                              <span className="text-xs font-medium text-muted-foreground">Accountabilities:</span>
+                              <p className="text-sm whitespace-pre-wrap">{currentNode.accountabilities}</p>
+                            </div>
+                          )}
+                          {!currentNode.purpose && !currentNode.domains && !currentNode.accountabilities && currentNode.description && (
+                            <p className="text-sm text-muted-foreground">{currentNode.description}</p>
+                          )}
+                          {!currentNode.purpose && !currentNode.domains && !currentNode.accountabilities && !currentNode.description && (
+                            <p className="text-sm text-muted-foreground italic">No details defined. Click Edit to add.</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </ResizablePanel>
                   <ResizableHandle withHandle />
@@ -1004,6 +1062,36 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
                   placeholder="Optional description..."
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="purpose">Purpose</Label>
+                <Textarea
+                  id="purpose"
+                  value={editPurpose}
+                  onChange={(e) => setEditPurpose(e.target.value)}
+                  placeholder="What is this role's reason for being?"
+                  rows={3}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="domains">Domains of Authority</Label>
+                <Textarea
+                  id="domains"
+                  value={editDomains}
+                  onChange={(e) => setEditDomains(e.target.value)}
+                  placeholder="What does this role have control over?"
+                  rows={3}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="accountabilities">Accountabilities</Label>
+                <Textarea
+                  id="accountabilities"
+                  value={editAccountabilities}
+                  onChange={(e) => setEditAccountabilities(e.target.value)}
+                  placeholder="What is expected from this role?"
+                  rows={3}
                 />
               </div>
             </div>

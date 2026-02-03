@@ -236,6 +236,9 @@ export interface CircleEntity {
   color?: string; // Custom color (mainly for roles), e.g., "#FF6600"
   size?: number; // Size weight for layout calculation
   description?: string; // Optional description/purpose
+  purpose?: string; // Raison d'être - the purpose/reason for being of this role
+  domains?: string; // Domains of authority - what this role has control over
+  accountabilities?: string; // Attendus - expectations and accountabilities
   order?: number; // Display order among siblings
   createdAt: string;
   updatedAt: string;
