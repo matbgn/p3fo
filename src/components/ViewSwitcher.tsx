@@ -7,21 +7,20 @@ import {
   Settings,
   History,
   LayoutDashboard,
-  ChartNoAxesGantt,
+  CircleDot,
   PartyPopper,
   Sparkles,
-  CircleDot,
 } from 'lucide-react';
 import { useCursors } from '@/hooks/useCursors';
 import { Badge } from './ui/badge';
 
 interface ViewSwitcherProps {
-  value: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "plan" | "dream" | "celebration" | "circles";
-  onChange: (view: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "plan" | "dream" | "celebration" | "circles") => void;
+  value: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "plan" | "dream" | "celebration";
+  onChange: (view: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "plan" | "dream" | "celebration") => void;
 }
 
 interface ViewOption {
-  id: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "plan" | "dream" | "celebration" | "circles";
+  id: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "plan" | "dream" | "celebration";
   label: string;
   icon: React.ReactNode;
 }
@@ -42,8 +41,7 @@ export function ViewSwitcher({ value, onChange }: ViewSwitcherProps) {
   const views: ViewOption[] = [
     { id: 'celebration', label: 'Celebration', icon: <PartyPopper className="w-4 h-4" /> },
     { id: 'dream', label: 'Dream', icon: <Sparkles className="w-4 h-4" /> },
-    { id: 'plan', label: 'Plan', icon: <ChartNoAxesGantt className="w-4 h-4" /> },
-    { id: 'circles', label: 'Circles', icon: <CircleDot className="w-4 h-4" /> },
+    { id: 'plan', label: 'Plan', icon: <CircleDot className="w-4 h-4" /> },
     { id: 'program', label: 'Program', icon: <Calendar className="w-4 h-4" /> },
     { id: 'kanban', label: 'Project', icon: <LayoutDashboard className="w-4 h-4" /> },
     { id: 'focus', label: 'Focus', icon: <ListChecks className="w-4 h-4" /> },
