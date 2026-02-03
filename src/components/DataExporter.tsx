@@ -6,7 +6,7 @@ import { useUserSettings } from '@/hooks/useUserSettings';
 import { getPersistenceAdapter } from '@/lib/persistence-factory';
 
 const DataExporter: React.FC = () => {
-  const { tasks } = useTasks();
+  const { allTasks: tasks } = useTasks();
   const { userId } = useUserSettings();
   const [isExporting, setIsExporting] = useState(false);
 

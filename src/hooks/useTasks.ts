@@ -18,7 +18,7 @@ if (typeof crypto.randomUUID !== 'function') {
   };
 }
 
-export type TriageStatus = "Backlog" | "Ready" | "WIP" | "Blocked" | "Done" | "Dropped";
+export type TriageStatus = "Backlog" | "Ready" | "WIP" | "Blocked" | "Done" | "Dropped" | "Archived";
 
 export type Category =
   | "Marketing"
@@ -59,6 +59,7 @@ export type Task = {
 };
 
 let tasks: Task[] = [];
+let allTasks: Task[] = [];
 
 // Key for localStorage to track if default tasks have been initialized
 export const DEFAULT_TASKS_INITIALIZED_KEY = 'p3fo_default_tasks_initialized';
@@ -73,6 +74,12 @@ const syncTaskToYjs = (taskId: string, task: Task) => {
 };
 
 const updateTaskInTasks = (taskId: string, updater: (task: Task) => Task) => {
+  allTasks = allTasks.map(t => {
+    if (t.id === taskId) {
+      return updater(t);
+    }
+    return t;
+  });
   tasks = tasks.map(t => {
     if (t.id === taskId) {
       const updated = updater(t);
@@ -102,6 +109,7 @@ if (isCollaborationEnabled()) {
     // Always update, even if empty (e.g., all tasks deleted)
     // This ensures deletions to empty state trigger UI updates
     tasks = newTasks;
+    allTasks = newTasks;
     eventBus.publish("tasksChanged");
   });
 } else {
@@ -186,7 +194,9 @@ const loadTasks = async () => {
     }
 
     // Use shared conversion helper
-    tasks = convertEntitiesToTasks(entities);
+    const loadedTasks = convertEntitiesToTasks(entities);
+    tasks = loadedTasks;
+    allTasks = loadedTasks;
     console.log(`Loaded ${tasks.length} tasks into memory`);
 
     // Only sync to Yjs if collaboration is enabled
@@ -259,6 +269,7 @@ const loadTasks = async () => {
           };
         });
         tasks = parsed;
+        allTasks = parsed;
         console.log('Loaded tasks from localStorage fallback');
       } catch (e) {
         console.error("Error parsing legacy tasks:", e);
@@ -336,6 +347,7 @@ const createTask = async (title: string, parentId: string | null, userId?: strin
 
     // Update local state
     tasks = [...tasks, t];
+    allTasks = [...allTasks, t];
     syncTaskToYjs(t.id, t);
     console.log('Local state updated with new task');
 
@@ -370,6 +382,7 @@ const createTask = async (title: string, parentId: string | null, userId?: strin
     console.error('Error creating task:', error);
     // Fallback to old method
     tasks = [...tasks, t];
+    allTasks = [...allTasks, t];
     if (parentId) {
       tasks = tasks.map(currentTask => {
         if (currentTask.id === parentId) {
@@ -408,7 +421,19 @@ const reparent = async (taskId: string, newParentId: string | null) => {
 
   const oldParentId = task.parentId ?? null;
 
-  // Update local state
+  // Update local allTasks state
+  allTasks = allTasks.map(t => {
+    if (t.id === taskId) {
+      return { ...t, parentId: newParentId };
+    } else if (t.id === oldParentId) {
+      return { ...t, children: (t.children || []).filter(id => id !== taskId) };
+    } else if (t.id === newParentId) {
+      return { ...t, children: Array.from(new Set([...(t.children || []), taskId])) };
+    }
+    return t;
+  });
+
+  // Update local tasks state
   tasks = tasks.map(t => {
     if (t.id === taskId) {
       const updated = { ...t, parentId: newParentId };
@@ -515,7 +540,24 @@ const updateStatus = async (taskId: string, status: TriageStatus) => {
     getAllChildren(taskId);
   }
 
-  // Update local state
+  // Update local allTasks state
+  allTasks = allTasks.map(t => {
+    if (tasksToUpdate.has(t.id)) {
+      const updatedTask = {
+        ...t,
+        triageStatus: status,
+        terminationDate: status === 'Done' ? Date.now() : undefined
+      };
+      if (status === "Blocked") {
+        const minBacklogPriority = getMinBacklogPriority();
+        updatedTask.priority = minBacklogPriority;
+      }
+      return updatedTask;
+    }
+    return t;
+  });
+
+  // Update local tasks state
   tasks = tasks.map(t => {
     if (tasksToUpdate.has(t.id)) {
       const updatedTask = {
@@ -950,8 +992,15 @@ export function useTasks() {
 
     // Update local state
     tasks = tasks.filter((t) => !childrenIds.has(t.id));
+    allTasks = allTasks.filter((t) => !childrenIds.has(t.id));
 
     if (taskToDelete.parentId) {
+      allTasks = allTasks.map(t => {
+        if (t.id === taskToDelete.parentId) {
+          return { ...t, children: (t.children || []).filter(id => id !== taskId) };
+        }
+        return t;
+      });
       tasks = tasks.map(t => {
         if (t.id === taskToDelete.parentId) {
           return { ...t, children: (t.children || []).filter(id => id !== taskId) };
@@ -1030,6 +1079,7 @@ export function useTasks() {
             const duplicatedChild = duplicateTask(childTask, newId);
             duplicatedChildren.push(duplicatedChild.id);
             tasks = [...tasks, duplicatedChild];
+            allTasks = [...allTasks, duplicatedChild];
           }
         });
         duplicatedTask.children = duplicatedChildren;
@@ -1041,9 +1091,19 @@ export function useTasks() {
     // Start duplication process
     const duplicatedTask = duplicateTask(originalTask, originalTask.parentId);
     tasks = [...tasks, duplicatedTask];
+    allTasks = [...allTasks, duplicatedTask];
 
     // Update parent's children array if the duplicated task has a parent
     if (originalTask.parentId) {
+      allTasks = allTasks.map(t => {
+        if (t.id === originalTask.parentId) {
+          return {
+            ...t,
+            children: [...(t.children || []), duplicatedTask.id]
+          };
+        }
+        return t;
+      });
       tasks = tasks.map(t => {
         if (t.id === originalTask.parentId) {
           return {
@@ -1086,6 +1146,7 @@ export function useTasks() {
 
   const clearAllTasks = React.useCallback(async () => {
     tasks = [];
+    allTasks = [];
 
     // Clear Yjs state
     doc.transact(() => {
@@ -1127,6 +1188,7 @@ export function useTasks() {
 
   const importTasks = React.useCallback(async (importedTasks: Task[]) => {
     tasks = importedTasks;
+    allTasks = importedTasks;
 
     // Persist to backend
     try {
@@ -1293,6 +1355,7 @@ export function useTasks() {
   }, []);
 
   return {
+    allTasks,
     tasks,
     createTask,
     reparent,
@@ -1322,6 +1385,7 @@ export function useTasks() {
       if (!task) return;
 
       // Update local state
+      allTasks = allTasks.map(t => t.id === taskId ? { ...t, comment: comment } : t);
       updateTaskInTasks(taskId, (t) => ({ ...t, comment: comment }));
 
       // Persist to backend
@@ -1345,6 +1409,7 @@ export function useTasks() {
       if (!task) return;
 
       // Update local state
+      allTasks = allTasks.map(t => t.id === taskId ? { ...t, durationInMinutes: durationInMinutes } : t);
       updateTaskInTasks(taskId, (t) => ({ ...t, durationInMinutes: durationInMinutes }));
 
       // Persist to backend
@@ -1368,6 +1433,7 @@ export function useTasks() {
       if (!task) return;
 
       // Update local state
+      allTasks = allTasks.map(t => t.id === taskId ? { ...t, priority: priority } : t);
       updateTaskInTasks(taskId, (t) => ({ ...t, priority: priority }));
 
       // Persist to backend
@@ -1388,6 +1454,14 @@ export function useTasks() {
     }, []),
     updatePrioritiesBulk: React.useCallback(async (updatedTasks: { id: string; priority: number | undefined }[]) => {
       // Update local state
+      allTasks = allTasks.map(task => {
+        const updatedTask = updatedTasks.find(t => t.id === task.id);
+        if (updatedTask) {
+          return { ...task, priority: updatedTask.priority };
+        }
+        return task;
+      });
+
       tasks = tasks.map(task => {
         const updatedTask = updatedTasks.find(t => t.id === task.id);
         if (updatedTask) {

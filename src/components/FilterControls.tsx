@@ -126,7 +126,8 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
             { value: "WIP", label: "WIP" },
             { value: "Blocked", label: "Blocked" },
             { value: "Done", label: "Done" },
-            { value: "Dropped", label: "Dropped" }
+            { value: "Dropped", label: "Dropped" },
+            { value: "Archived", label: "Archived" }
           ]}
           selected={filters.status || []}
           onChange={(selected) => updateAndPersistFilters({ ...filters, status: selected as TriageStatus[] })}
