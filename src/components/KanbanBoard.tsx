@@ -15,13 +15,18 @@ import { QuickTimer } from "@/components/QuickTimer";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { useView } from "@/hooks/useView";
 import { COMPACTNESS_ULTRA, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Archive } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 
 type BoardCard =
   | { kind: "parent"; task: Task }
   | { kind: "child"; task: Task; parent: Task };
 
-const STATUSES: TriageStatus[] = ["Backlog", "Ready", "WIP", "Blocked", "Done", "Dropped"];
+const STATUSES: TriageStatus[] = ["Backlog", "Ready", "WIP", "Blocked", "Done", "Dropped", "Archived"];
 
 // Column renders a mixture of single cards and grouped children for expanded parents
 const Column: React.FC<{
@@ -50,7 +55,11 @@ const Column: React.FC<{
   onToggleTimer: (id: string) => void;
   highlightedTaskId?: string | null;
   highlightedCardRef?: React.RefObject<HTMLDivElement | null>;
-}> = ({ title, cards, tasks, onDropTask, onChangeStatus, onUpdateCategory, onUpdateUser, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onToggleDone, onUpdateDifficulty, onUpdateTitle, onDelete, duplicateTaskStructure, openParents, onToggleParent, onReparent, onFocusOnTask, updateTerminationDate, updateDurationInMinutes, updateComment, onToggleTimer, highlightedTaskId, highlightedCardRef }) => {
+  onArchive?: (title: TriageStatus) => void;
+}> = ({ title, cards, tasks, onDropTask, onChangeStatus, onUpdateCategory, onUpdateUser, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onToggleDone, onUpdateDifficulty, onUpdateTitle, onDelete, duplicateTaskStructure, openParents, onToggleParent, onReparent, onFocusOnTask, updateTerminationDate, updateDurationInMinutes, updateComment, onToggleTimer, highlightedTaskId, highlightedCardRef, onArchive }) => {
+  // Calculate total difficulty points for this column
+  const totalDifficulty = cards.reduce((sum, card) => sum + (card.task.difficulty || 0), 0);
+
   // Build render blocks: either a single ParentCard/ChildCard or a group block for open parent children
   type Block =
     | { type: "single"; node: React.ReactNode; key: string }
@@ -150,7 +159,28 @@ const Column: React.FC<{
 
   return (
     <Card className="w-80 shrink-0 overflow-hidden">
-      <div className="px-3 py-2 border-b text-sm font-medium">{title === "WIP" ? "Work in Progress [MAX 5/p]" : title}</div>
+      <div className="px-3 py-2 border-b text-sm font-medium flex items-center justify-between">
+        <span>{title === "WIP" ? "Work in Progress [MAX 5/p]" : title}</span>
+        <div className="flex items-center gap-2">
+          {totalDifficulty > 0 && (
+            <Badge variant="secondary" className="ml-2">
+              {totalDifficulty} pts
+            </Badge>
+          )}
+          {(title === "Done" || title === "Dropped") && cards.length > 0 && onArchive && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs"
+              onClick={() => onArchive(title)}
+              title={`Archive all ${cards.length} cards in ${title}`}
+            >
+              <Archive className="h-3 w-3 mr-1" />
+              Archive ({cards.length})
+            </Button>
+          )}
+        </div>
+      </div>
       <div className="p-2 space-y-2 min-h-[320px]" onDragOver={onDragOver} onDrop={onDrop}>
         {finalBlocks.length === 0 ? (
           <div className="text-xs text-muted-foreground px-2 py-6">No tasks</div>
@@ -204,7 +234,13 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
   const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, reparent, toggleDone, toggleTimer, updateTerminationDate, updateDurationInMinutes, updateComment, loadTasksByUser, reloadTasks } = useTasks();
   const { userId: currentUserId } = useUserSettings();
   const { setFocusedTaskId } = useView();
+  const { settings } = useCombinedSettings();
   const [isLoadingTasks, setIsLoadingTasks] = React.useState(false);
+
+  // Archive dialog state
+  const [archiveDialogOpen, setArchiveDialogOpen] = React.useState(false);
+  const [archiveColumnTitle, setArchiveColumnTitle] = React.useState<TriageStatus | null>(null);
+  const [archiveOnlyOldCards, setArchiveOnlyOldCards] = React.useState(false);
 
   // Local state to manage highlighting with auto-clear
   const [localHighlightedTaskId, setLocalHighlightedTaskId] = React.useState<string | null>(null);
@@ -398,6 +434,7 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
       Blocked: [],
       Done: [],
       Dropped: [],
+      Archived: [],
     };
 
     for (const parent of topTasks) {
@@ -462,6 +499,48 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
     const assignedUserId = filters.selectedUserId && filters.selectedUserId !== 'UNASSIGNED' ? filters.selectedUserId : undefined;
     createTask(v, null, assignedUserId);
     setInput("");
+  };
+
+  // Archive handlers
+  const handleArchiveClick = (columnTitle: TriageStatus) => {
+    setArchiveColumnTitle(columnTitle);
+    setArchiveOnlyOldCards(false);
+    setArchiveDialogOpen(true);
+  };
+
+  const handleConfirmArchive = () => {
+    if (!archiveColumnTitle) return;
+
+    const weeksComputation = settings.weeksComputation || 4;
+    const cutoffDate = Date.now() - (weeksComputation * 7 * 24 * 60 * 60 * 1000);
+
+    // Get all cards in the column
+    const cardsToArchive = grouped[archiveColumnTitle];
+    let archivedCount = 0;
+
+    cardsToArchive.forEach((card) => {
+      const task = card.task;
+      const taskDate = task.terminationDate || task.createdAt;
+
+      // If archiveOnlyOldCards is checked, only archive tasks older than weeksComputation
+      if (!archiveOnlyOldCards || taskDate < cutoffDate) {
+        updateStatus(task.id, "Archived");
+        archivedCount++;
+      }
+    });
+
+    setArchiveDialogOpen(false);
+    setArchiveColumnTitle(null);
+
+    // Show success message
+    if (archivedCount > 0) {
+      console.log(`Archived ${archivedCount} tasks from ${archiveColumnTitle}`);
+    }
+  };
+
+  const handleCancelArchive = () => {
+    setArchiveDialogOpen(false);
+    setArchiveColumnTitle(null);
   };
 
   return (
@@ -554,9 +633,47 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
             updateComment={updateComment}
             highlightedTaskId={localHighlightedTaskId}
             highlightedCardRef={highlightedCardRef}
+            onArchive={handleArchiveClick}
           />
         ))}
       </div>
+
+      {/* Archive Confirmation Dialog */}
+      <Dialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Archive Tasks</DialogTitle>
+            <DialogDescription>
+              Archive all tasks from the {archiveColumnTitle} column.
+              {grouped[archiveColumnTitle || "Done"]?.length > 0 && (
+                <span className="block mt-2">
+                  This will archive {grouped[archiveColumnTitle || "Done"].length} tasks.
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="archive-old-only"
+                checked={archiveOnlyOldCards}
+                onCheckedChange={(checked) => setArchiveOnlyOldCards(!!checked)}
+              />
+              <Label htmlFor="archive-old-only">
+                Only archive cards older than {settings.weeksComputation || 4} weeks
+              </Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCancelArchive}>
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmArchive} variant="default">
+              Archive
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

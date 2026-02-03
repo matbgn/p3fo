@@ -18,7 +18,7 @@ if (typeof crypto.randomUUID !== 'function') {
   };
 }
 
-export type TriageStatus = "Backlog" | "Ready" | "WIP" | "Blocked" | "Done" | "Dropped";
+export type TriageStatus = "Backlog" | "Ready" | "WIP" | "Blocked" | "Done" | "Dropped" | "Archived";
 
 export type Category =
   | "Marketing"

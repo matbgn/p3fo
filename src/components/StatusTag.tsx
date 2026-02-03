@@ -12,6 +12,7 @@ const statusColors: Record<TriageStatus, string> = {
   Blocked: "bg-red-500",
   Done: "bg-green-500",
   Dropped: "bg-purple-500",
+  Archived: "bg-gray-600",
 };
 
 const statusLabels: Record<TriageStatus, string> = {
@@ -21,6 +22,7 @@ const statusLabels: Record<TriageStatus, string> = {
   Blocked: "Blocked",
   Done: "Done",
   Dropped: "Dropped",
+  Archived: "Archived",
 };
 
 export const StatusTag: React.FC<StatusTagProps> = ({ status }) => {
