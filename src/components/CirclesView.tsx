@@ -256,6 +256,11 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     const centerY = height / 2;
     const newColorMap = new Map<string, CircleTreeNode>();
 
+    // Reset color index at the start of hidden canvas drawing to ensure consistent mapping
+    if (hidden) {
+      colorIndex.current = 1;
+    }
+
     // Clear canvas
     ctx.fillStyle = '#f5f5f5';
     ctx.fillRect(0, 0, width, height);
@@ -498,9 +503,11 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
   // Handle canvas click
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const hiddenCanvas = hiddenCanvasRef.current;
-    if (!hiddenCanvas) return;
+    const visibleCanvas = canvasRef.current;
+    if (!hiddenCanvas || !visibleCanvas) return;
 
-    const rect = hiddenCanvas.getBoundingClientRect();
+    // Use visible canvas rect for mouse coordinates (hidden canvas has display:none so its rect is zero)
+    const rect = visibleCanvas.getBoundingClientRect();
     const scaleX = hiddenCanvas.width / rect.width;
     const scaleY = hiddenCanvas.height / rect.height;
     const mouseX = (e.clientX - rect.left) * scaleX;
@@ -533,9 +540,11 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
   // Handle canvas mouse move (hover)
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const hiddenCanvas = hiddenCanvasRef.current;
-    if (!hiddenCanvas) return;
+    const visibleCanvas = canvasRef.current;
+    if (!hiddenCanvas || !visibleCanvas) return;
 
-    const rect = hiddenCanvas.getBoundingClientRect();
+    // Use visible canvas rect for mouse coordinates (hidden canvas has display:none so its rect is zero)
+    const rect = visibleCanvas.getBoundingClientRect();
     const scaleX = hiddenCanvas.width / rect.width;
     const scaleY = hiddenCanvas.height / rect.height;
     const mouseX = (e.clientX - rect.left) * scaleX;
