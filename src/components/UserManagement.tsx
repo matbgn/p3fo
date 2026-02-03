@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 
 export const UserManagement: React.FC = () => {
     const { users, loading: usersLoading, deleteUser } = useUsers();
-    const { tasks } = useTasks();
+    const { allTasks: tasks } = useTasks();
 
     // Calculate task counts per user
     const userTaskCounts = useMemo(() => {

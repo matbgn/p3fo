@@ -496,6 +496,15 @@ class SqliteClient implements DbClient {
   }
 
   async importTasks(tasks: TaskEntity[]): Promise<void> {
+    // 1. Get current FK state
+    const fkState = this.db.prepare('PRAGMA foreign_keys').get() as { foreign_keys: number };
+    const wasFkEnabled = fkState.foreign_keys === 1;
+
+    // 2. Disable FKs (must be done outside transaction)
+    if (wasFkEnabled) {
+      this.db.exec('PRAGMA foreign_keys = OFF');
+    }
+
     const insertStmt = this.db.prepare(`
       INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "triageStatus", "urgent", "impact", "majorIncident", "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId")
       VALUES(@id, @parentId, @title, @createdAt, @triageStatus, @urgent, @impact, @majorIncident, @difficulty, @timer, @category, @terminationDate, @comment, @durationInMinutes, @priority, @userId)
@@ -517,7 +526,7 @@ class SqliteClient implements DbClient {
           `);
 
     const checkFk = this.db.prepare('PRAGMA foreign_key_check');
-    const repairStmt = this.db.prepare('DELETE FROM "tasks" WHERE rowid = ?');
+    const repairStmt = this.db.prepare('UPDATE "tasks" SET "parentId" = NULL WHERE rowid = ?');
 
     this.db.exec('BEGIN');
     try {
@@ -542,21 +551,26 @@ class SqliteClient implements DbClient {
         });
       }
 
-      // Check for FK violations
+      // 3. Check for violations
       let violations = checkFk.all() as { table: string, rowid: number, parent: string, fkid: number }[];
 
       if (violations.length > 0) {
-        // Attempt repair: delete violating rows
+        console.log(`SQLite: Found ${violations.length} foreign key violations. Attempting to auto-repair orphaned tasks...`);
+
         for (const violation of violations) {
-          if (violation.table === 'tasks') {
+          if (violation.table === 'tasks' && violation.parent === 'tasks') {
             repairStmt.run(violation.rowid);
           }
         }
 
-        // Re-check
+        // Re-check violations
         violations = checkFk.all() as { table: string, rowid: number, parent: string, fkid: number }[];
+
         if (violations.length > 0) {
+          console.error('SQLite: Foreign key violations persisted after repair attempt:', violations);
           throw new Error(`Foreign key constraint failed: ${violations.length} violations found after repair attempt.`);
+        } else {
+          console.log('SQLite: All foreign key violations repaired successfully.');
         }
       }
 
@@ -564,6 +578,11 @@ class SqliteClient implements DbClient {
     } catch (error) {
       this.db.exec('ROLLBACK');
       throw error;
+    } finally {
+      // 4. Restore FK state
+      if (wasFkEnabled) {
+        this.db.exec('PRAGMA foreign_keys = ON');
+      }
     }
   }
 
