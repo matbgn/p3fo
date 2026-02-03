@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.13.0 (2026-02-03)
+
+### Features
+
+- **kanban board:** add difficulty points badge and bulk archive functionality (622a0c1)
+
+### Bug Fixes
+
+- **import/export:** add allTasks state and improve SQLite import/export reliability (688c530)
+- **kanban:** handle invalid triageStatus values gracefully (180fd3d)
+- prevent default tasks recreation after clearing all data (882f054)
+
+---
+
 ## v0.12.2 (2026-02-01)
 
 ### Bug Fixes
@@ -109,21 +123,5 @@
 ### Bug Fixes
 
 - **metrics:** fix calculation on high impact tasks done (adf5575)
-
----
-
-## v0.6.0 (2025-12-03)
-
-### Features
-
-- **settings:** reorganize time & hours settings out of goal metrics stuff (e05f782)
-- **timetable:** introduce a new workspace setting to set the hours due (7e1384e)
-
-### Bug Fixes
-
-- add user-specific timezone setting and refactor settings persistence with scope (a0de78c)
-- **timetable:** use Temporal API for consistent date string generation in time entries (b306c7a)
-- **data export:** add missing attributes to export and import (a40868d)
-- **timetable:** fix user selection on timetable entries for current user (e4e02ca)
 
 ---
