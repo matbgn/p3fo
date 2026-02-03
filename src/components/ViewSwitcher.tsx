@@ -6,21 +6,21 @@ import {
   BarChart3,
   Settings,
   History,
-
   LayoutDashboard,
-  ListTodo,
-  ChartNoAxesGantt, // Add ChartNoAxesGantt icon
+  ChartNoAxesGantt,
+  PartyPopper,
+  Sparkles,
 } from 'lucide-react';
 import { useCursors } from '@/hooks/useCursors';
 import { Badge } from './ui/badge';
 
 interface ViewSwitcherProps {
-  value: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "plan"; // Add "plan"
-  onChange: (view: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "plan") => void; // Add "plan"
+  value: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "plan" | "dream" | "celebration";
+  onChange: (view: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "plan" | "dream" | "celebration") => void;
 }
 
 interface ViewOption {
-  id: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "plan"; // Add "plan"
+  id: "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "plan" | "dream" | "celebration";
   label: string;
   icon: React.ReactNode;
 }
@@ -39,12 +39,13 @@ export function ViewSwitcher({ value, onChange }: ViewSwitcherProps) {
   }, [cursors]);
 
   const views: ViewOption[] = [
-    { id: 'plan', label: 'Plan', icon: <ChartNoAxesGantt className="w-4 h-4" /> }, // Move Plan view to first and change icon
+    { id: 'celebration', label: 'Celebration', icon: <PartyPopper className="w-4 h-4" /> },
+    { id: 'dream', label: 'Dream', icon: <Sparkles className="w-4 h-4" /> },
+    { id: 'plan', label: 'Plan', icon: <ChartNoAxesGantt className="w-4 h-4" /> },
     { id: 'program', label: 'Program', icon: <Calendar className="w-4 h-4" /> },
     { id: 'kanban', label: 'Project', icon: <LayoutDashboard className="w-4 h-4" /> },
     { id: 'focus', label: 'Focus', icon: <ListChecks className="w-4 h-4" /> },
     { id: 'timetable', label: 'Timetable', icon: <History className="w-4 h-4" /> },
-
     { id: 'metrics', label: 'Metrics', icon: <BarChart3 className="w-4 h-4" /> },
     { id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" /> },
   ];

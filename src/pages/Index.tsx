@@ -9,7 +9,9 @@ import SettingsPage from "./SettingsPage";
 import MetricsPage from "./MetricsPage";
 
 import { addReminder } from "@/utils/reminders";
-import PlanView from "@/components/PlanView"; // Import PlanView
+import PlanView from "@/components/PlanView";
+import CelebrationView from "@/components/CelebrationView";
+import DreamTopView from "@/components/DreamTopView";
 import { Button } from "@/components/ui/button";
 import { useView } from "@/hooks/useView";
 
@@ -59,6 +61,10 @@ const Index: React.FC = () => {
           <ProgramView onFocusOnTask={handleFocusOnTask} />
         ) : view === "plan" ? (
           <PlanView onFocusOnTask={handleFocusOnTask} />
+        ) : view === "celebration" ? (
+          <CelebrationView onFocusOnTask={handleFocusOnTask} />
+        ) : view === "dream" ? (
+          <DreamTopView onFocusOnTask={handleFocusOnTask} />
         ) : view === "metrics" ? (
           <MetricsPage />
         ) : (
