@@ -154,6 +154,10 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
   const [nodes, setNodes] = useState<CircleTreeNode[]>([]);
   const [colorToNode, setColorToNode] = useState<Map<string, CircleTreeNode>>(new Map());
 
+  // Animation state for smooth zoom transitions
+  const [isAnimating, setIsAnimating] = useState(false);
+  const animationRef = useRef<number | null>(null);
+
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editMode, setEditMode] = useState<'add' | 'edit'>('add');
@@ -421,21 +425,75 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     }
   }, [nodes, dimensions, zoomInfo, currentNode, hoveredNode, genColor]);
 
-  // Zoom to a node
+  // Cubic in-out easing function
+  const easeInOutCubic = (t: number): number => {
+    return t < 0.5
+      ? 4 * t * t * t
+      : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  };
+
+  // Zoom to a node with smooth animation using d3.interpolateZoom
   const zoomToNode = useCallback((node: CircleTreeNode) => {
     if (node.x === undefined || node.y === undefined || node.r === undefined) return;
 
-    // Calculate scale to make the target node fill ~45% of the view (or more for leaves)
+    // Cancel any ongoing animation
+    if (animationRef.current !== null) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+
+    // Calculate target scale to make the target node fill ~45% of the view (or more for leaves)
     const viewDiameter = Math.min(dimensions.width, dimensions.height) * 0.9;
     const zoomFactor = node.nodeType === 'role' || (node.children && node.children.length < 2) ? 2 : 1;
+    const targetScale = (viewDiameter / (node.r * 2)) * 0.45 * zoomFactor;
 
-    setZoomInfo({
-      centerX: node.x,
-      centerY: node.y,
-      scale: (viewDiameter / (node.r * 2)) * 0.45 * zoomFactor,
-    });
+    // Calculate viewport as [centerX, centerY, viewSize] for interpolateZoom
+    // viewSize = diameter / scale (how much of the layout is visible)
+    const vOld: [number, number, number] = [
+      zoomInfo.centerX,
+      zoomInfo.centerY,
+      viewDiameter / zoomInfo.scale,
+    ];
+    const vNew: [number, number, number] = [
+      node.x,
+      node.y,
+      viewDiameter / targetScale,
+    ];
+
+    // Use d3.interpolateZoom for smooth transitions
+    const interpolator = d3.interpolateZoom(vOld, vNew);
+
+    // Animation duration based on interpolator suggestion (clamped)
+    const duration = Math.max(300, Math.min(interpolator.duration, 750));
+
+    setIsAnimating(true);
     setCurrentNode(node);
-  }, [dimensions]);
+
+    const startTime = performance.now();
+
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const t = Math.min(elapsed / duration, 1);
+      const easedT = easeInOutCubic(t);
+
+      const v = interpolator(easedT);
+
+      setZoomInfo({
+        centerX: v[0],
+        centerY: v[1],
+        scale: viewDiameter / v[2],
+      });
+
+      if (t < 1) {
+        animationRef.current = requestAnimationFrame(animate);
+      } else {
+        setIsAnimating(false);
+        animationRef.current = null;
+      }
+    };
+
+    animationRef.current = requestAnimationFrame(animate);
+  }, [dimensions, zoomInfo]);
 
   // Handle canvas click
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -633,18 +691,38 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     loadCircles();
   }, [loadCircles]);
 
-  // Handle resize
+  // Cleanup animation on unmount
   useEffect(() => {
-    const updateDimensions = () => {
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        setDimensions({ width: rect.width, height: rect.height });
+    return () => {
+      if (animationRef.current !== null) {
+        cancelAnimationFrame(animationRef.current);
       }
     };
+  }, []);
 
+  // Handle resize - use ResizeObserver to detect panel and window resize
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const updateDimensions = () => {
+      const rect = container.getBoundingClientRect();
+      setDimensions({ width: rect.width, height: rect.height });
+    };
+
+    // Initial dimensions
     updateDimensions();
-    window.addEventListener('resize', updateDimensions);
-    return () => window.removeEventListener('resize', updateDimensions);
+
+    // ResizeObserver detects all size changes (window resize, panel resize, etc.)
+    const resizeObserver = new ResizeObserver(() => {
+      updateDimensions();
+    });
+
+    resizeObserver.observe(container);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
   }, []);
 
   // Rebuild tree when circles or dimensions change
@@ -833,7 +911,11 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                     className="cursor-pointer"
                     onClick={handleCanvasClick}
                     onMouseMove={handleCanvasMouseMove}
-                    style={{ width: '100%', height: '100%' }}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      pointerEvents: isAnimating ? 'none' : 'auto',
+                    }}
                   />
                   <canvas
                     ref={hiddenCanvasRef}
