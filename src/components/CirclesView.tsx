@@ -839,7 +839,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
   }, [currentNode, circles]);
 
   return (
-    <div style={{ height: 'calc(100vh - 200px)', width: '100%', overflow: 'hidden' }}>
+    <div style={{ height: 'calc(100vh - 240px)', width: '100%', overflow: 'hidden' }}>
       <Card className="h-full flex flex-col">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <div className="flex items-center gap-4">

@@ -30,20 +30,17 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
     </div>
   );
 
-  // Render Circles view
+  // Render Circles view - no Card wrapper since CirclesView has its own
   if (activeView === 'circles') {
     return (
-      <Card className="h-full flex flex-col">
-        <CardHeader className="flex flex-col space-y-4 pb-2">
-          <div className="flex flex-row items-center justify-between">
-            <CardTitle>Circles View</CardTitle>
-            <ViewToggleButtons />
-          </div>
-        </CardHeader>
-        <CardContent className="flex-grow overflow-hidden p-0">
+      <div className="h-full flex flex-col">
+        <div className="flex flex-row items-center justify-end pb-2">
+          <ViewToggleButtons />
+        </div>
+        <div className="flex-grow overflow-hidden">
           <CirclesView onFocusOnTask={onFocusOnTask} />
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     );
   }
 
