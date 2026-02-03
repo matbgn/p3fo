@@ -7,7 +7,10 @@ import type {
   QolSurveyResponseEntity,
   FilterStateEntity,
   FertilizationBoardEntity,
-  DreamBoardEntity
+  DreamBoardEntity,
+  CircleEntity,
+  CircleNodeType,
+  CircleNodeModifier
 } from '../../src/lib/persistence-types.js';
 
 // Raw database row types (SQLite stores booleans as 0/1 integers and JSON as strings)
@@ -58,6 +61,20 @@ interface AppSettingsDbRow {
   timezone: string | null;
   country: string | null;
   region: string | null;
+}
+
+interface CircleDbRow {
+  id: string;
+  name: string;
+  parentId: string | null;
+  nodeType: string;
+  modifier: string | null;
+  color: string | null;
+  size: number | null;
+  description: string | null;
+  order: number | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // Default values
@@ -206,6 +223,24 @@ class SqliteClient implements DbClient {
         )
         `);
 
+    // Circles table (EasyCIRCLE - organizational structure visualization)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS "circles" (
+        "id" TEXT PRIMARY KEY,
+        "name" TEXT NOT NULL,
+        "parentId" TEXT,
+        "nodeType" TEXT NOT NULL, -- 'organization', 'circle', 'group', 'role'
+        "modifier" TEXT, -- 'template', 'hierarchy'
+        "color" TEXT, -- Custom color for roles, e.g., "#FF6600"
+        "size" REAL, -- Size weight for layout calculation
+        "description" TEXT, -- Optional description/purpose
+        "order" INTEGER, -- Display order among siblings
+        "createdAt" TEXT NOT NULL,
+        "updatedAt" TEXT NOT NULL,
+        FOREIGN KEY("parentId") REFERENCES "circles"("id")
+      )
+    `);
+
     // Create indexes for performance optimization
     // These indexes dramatically improve query performance when filtering by userId, parentId, or triageStatus
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId" ON "tasks"("userId")`);
@@ -215,6 +250,10 @@ class SqliteClient implements DbClient {
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_tasks_priority" ON "tasks"("priority")`);
     // Composite index for common filtering patterns (user + status)
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId_triageStatus" ON "tasks"("userId", "triageStatus")`);
+
+    // Circles indexes
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_circles_parentId" ON "circles"("parentId")`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_circles_nodeType" ON "circles"("nodeType")`);
   }
 
   private migrateSchema(): void {
@@ -831,6 +870,139 @@ class SqliteClient implements DbClient {
         `).run({ data: JSON.stringify(state) });
   }
 
+  // Circles (EasyCIRCLE)
+  async getCircles(): Promise<CircleEntity[]> {
+    const rows = this.db.prepare('SELECT * FROM "circles" ORDER BY "order" ASC NULLS LAST, "createdAt" ASC').all() as unknown as CircleDbRow[];
+    return rows.map(row => ({
+      ...row,
+      nodeType: row.nodeType as CircleNodeType,
+      modifier: row.modifier as CircleNodeModifier | undefined,
+    }));
+  }
+
+  async getCircleById(id: string): Promise<CircleEntity | null> {
+    const row = this.db.prepare('SELECT * FROM "circles" WHERE "id" = ?').get(id) as unknown as CircleDbRow | undefined;
+    if (!row) {
+      return null;
+    }
+    return {
+      ...row,
+      nodeType: row.nodeType as CircleNodeType,
+      modifier: row.modifier as CircleNodeModifier | undefined,
+    };
+  }
+
+  async createCircle(input: Partial<CircleEntity>): Promise<CircleEntity> {
+    const now = new Date().toISOString();
+    const newCircle: CircleEntity = {
+      id: input.id || crypto.randomUUID(),
+      name: input.name || 'New Circle',
+      parentId: input.parentId || null,
+      nodeType: input.nodeType || 'circle',
+      modifier: input.modifier,
+      color: input.color,
+      size: input.size,
+      description: input.description,
+      order: input.order,
+      createdAt: input.createdAt || now,
+      updatedAt: input.updatedAt || now,
+    };
+
+    const params = {
+      id: newCircle.id,
+      name: newCircle.name,
+      parentId: newCircle.parentId,
+      nodeType: newCircle.nodeType,
+      modifier: newCircle.modifier ?? null,
+      color: newCircle.color ?? null,
+      size: newCircle.size ?? null,
+      description: newCircle.description ?? null,
+      order: newCircle.order ?? null,
+      createdAt: newCircle.createdAt,
+      updatedAt: newCircle.updatedAt,
+    };
+
+    this.db.prepare(`
+      INSERT INTO "circles"("id", "name", "parentId", "nodeType", "modifier", "color", "size", "description", "order", "createdAt", "updatedAt")
+      VALUES(@id, @name, @parentId, @nodeType, @modifier, @color, @size, @description, @order, @createdAt, @updatedAt)
+    `).run(params);
+
+    return newCircle;
+  }
+
+  async updateCircle(id: string, patch: Partial<CircleEntity>): Promise<CircleEntity | null> {
+    const current = await this.getCircleById(id);
+    if (!current) {
+      return null;
+    }
+
+    const updated = { ...current, ...patch, updatedAt: new Date().toISOString() };
+
+    const params = {
+      id: updated.id,
+      name: updated.name,
+      parentId: updated.parentId,
+      nodeType: updated.nodeType,
+      modifier: updated.modifier ?? null,
+      color: updated.color ?? null,
+      size: updated.size ?? null,
+      description: updated.description ?? null,
+      order: updated.order ?? null,
+      updatedAt: updated.updatedAt,
+    };
+
+    this.db.prepare(`
+      UPDATE "circles" SET
+        "name" = @name,
+        "parentId" = @parentId,
+        "nodeType" = @nodeType,
+        "modifier" = @modifier,
+        "color" = @color,
+        "size" = @size,
+        "description" = @description,
+        "order" = @order,
+        "updatedAt" = @updatedAt
+      WHERE "id" = @id
+    `).run(params);
+
+    return updated;
+  }
+
+  async deleteCircle(id: string): Promise<void> {
+    this.db.exec('BEGIN');
+    try {
+      // Find all descendants recursively using a CTE with depth to ensure bottom-up deletion
+      const descendants = this.db.prepare(`
+        WITH RECURSIVE descendants(id, depth) AS (
+          SELECT id, 1 FROM "circles" WHERE "parentId" = ?
+          UNION ALL
+          SELECT c.id, d.depth + 1 FROM "circles" c
+          INNER JOIN descendants d ON c."parentId" = d.id
+        )
+        SELECT id FROM descendants ORDER BY depth DESC
+      `).all(id) as { id: string }[];
+
+      const deleteStmt = this.db.prepare('DELETE FROM "circles" WHERE "id" = ?');
+
+      // Delete descendants first (deepest first) to avoid FK violations
+      for (const row of descendants) {
+        deleteStmt.run(row.id);
+      }
+
+      // Finally delete the parent
+      deleteStmt.run(id);
+
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  async clearAllCircles(): Promise<void> {
+    this.db.prepare('DELETE FROM "circles"').run();
+  }
+
   async clearAllData(): Promise<void> {
     // Drop all tables to prompt a full schema reset on next initialize or strictly here
     this.db.exec('BEGIN');
@@ -842,6 +1014,7 @@ class SqliteClient implements DbClient {
       this.db.exec('DROP TABLE IF EXISTS "filters"');
       this.db.exec('DROP TABLE IF EXISTS "fertilizationBoard"');
       this.db.exec('DROP TABLE IF EXISTS "dreamBoard"');
+      this.db.exec('DROP TABLE IF EXISTS "circles"');
 
       // Also drop legacy tables if they exist
       this.db.exec('DROP TABLE IF EXISTS tasks');
