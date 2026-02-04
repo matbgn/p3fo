@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.14.0 (2026-02-04)
+
+### Features
+
+- **circles:** add description fields and real-time collaboration (abf100e)
+- **circles:** add smooth zoom animation and fix resize skewing (9de10d5)
+- **circles:** add basic circles editor visualization with D3.js (9fc1d9d)
+- **views:** add Celebration and Dream as top-level views (0e6fa25)
+
+### Bug Fixes
+
+- **circles:** resolve canvas interaction and color mapping issues (aee838d)
+
+---
+
 ## v0.13.0 (2026-02-03)
 
 ### Features
@@ -111,17 +126,5 @@
 - **filters:** make filters section collapsable to follow compactness (198c3ea)
 - **tasks:** add detailed task edit modal (ed1b9f2)
 - **task layout:** add card compactness selector (6275d19)
-
----
-
-## v0.7.0 (2025-12-04)
-
-### Features
-
-- **timetable:** introduce 'Since X weeks' predefined date range (c8a9b06)
-
-### Bug Fixes
-
-- **metrics:** fix calculation on high impact tasks done (adf5575)
 
 ---

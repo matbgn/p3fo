@@ -1,5 +1,5 @@
 // Database client interface and factory
-import { TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, FertilizationBoardEntity, DreamBoardEntity } from '../../src/lib/persistence-types.js';
+import { TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, FertilizationBoardEntity, DreamBoardEntity, CircleEntity } from '../../src/lib/persistence-types.js';
 
 // Pagination options for queries
 export interface PaginationOptions {
@@ -58,6 +58,14 @@ export interface DbClient {
   // Dream Board
   getDreamBoardState(): Promise<DreamBoardEntity | null>;
   updateDreamBoardState(state: DreamBoardEntity): Promise<void>;
+
+  // Circles (EasyCIRCLE)
+  getCircles(): Promise<CircleEntity[]>;
+  getCircleById(id: string): Promise<CircleEntity | null>;
+  createCircle(circle: Partial<CircleEntity>): Promise<CircleEntity>;
+  updateCircle(id: string, data: Partial<CircleEntity>): Promise<CircleEntity | null>;
+  deleteCircle(id: string): Promise<void>;
+  clearAllCircles(): Promise<void>;
 
   // System
   clearAllData(): Promise<void>;

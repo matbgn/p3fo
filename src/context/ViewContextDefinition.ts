@@ -7,8 +7,9 @@ export type ViewType =
     | "program"
     | "settings"
     | "metrics"
-
-    | "plan";
+    | "plan"
+    | "dream"
+    | "celebration";
 
 export const COMPACTNESS_ULTRA = 0;
 export const COMPACTNESS_COMPACT = 1;

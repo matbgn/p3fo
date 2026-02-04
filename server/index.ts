@@ -410,6 +410,79 @@ app.put('/api/dream-board', async (req: Request, res: Response) => {
   }
 });
 
+// Circles routes (EasyCIRCLE)
+app.get('/api/circles', async (req: Request, res: Response) => {
+  try {
+    const circles = await db.getCircles();
+    res.json(circles);
+  } catch (error: unknown) {
+    console.error('Error fetching circles:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to fetch circles', details: message });
+  }
+});
+
+app.post('/api/circles', async (req: Request, res: Response) => {
+  try {
+    const circle = await db.createCircle(req.body);
+    res.status(201).json(circle);
+  } catch (error: unknown) {
+    console.error('Error creating circle:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to create circle', details: message });
+  }
+});
+
+app.get('/api/circles/:id', async (req: Request, res: Response) => {
+  try {
+    const circle = await db.getCircleById(req.params.id);
+    if (!circle) {
+      return res.status(404).json({ error: 'Circle not found' });
+    }
+    res.json(circle);
+  } catch (error: unknown) {
+    console.error('Error fetching circle:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to fetch circle', details: message });
+  }
+});
+
+app.patch('/api/circles/:id', async (req: Request, res: Response) => {
+  try {
+    const circle = await db.updateCircle(req.params.id, req.body);
+    if (!circle) {
+      return res.status(404).json({ error: 'Circle not found' });
+    }
+    res.json(circle);
+  } catch (error: unknown) {
+    console.error('Error updating circle:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to update circle', details: message });
+  }
+});
+
+app.delete('/api/circles/:id', async (req: Request, res: Response) => {
+  try {
+    await db.deleteCircle(req.params.id);
+    res.status(204).send();
+  } catch (error: unknown) {
+    console.error('Error deleting circle:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to delete circle', details: message });
+  }
+});
+
+app.post('/api/circles/clear', async (req: Request, res: Response) => {
+  try {
+    await db.clearAllCircles();
+    res.json({ success: true });
+  } catch (error: unknown) {
+    console.error('Error clearing circles:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to clear circles', details: message });
+  }
+});
+
 // Error handling middleware
 app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
   console.error('Unhandled error:', error);

@@ -7,7 +7,10 @@ import {
   QolSurveyResponseEntity,
   FilterStateEntity,
   FertilizationBoardEntity,
-  DreamBoardEntity
+  DreamBoardEntity,
+  CircleEntity,
+  CircleNodeType,
+  CircleNodeModifier
 } from '../../src/lib/persistence-types.js';
 
 // Default values
@@ -165,6 +168,24 @@ class PostgresClient implements DbClient {
       )
     `);
 
+    // Circles table (EasyCIRCLE - organizational structure visualization)
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS "circles" (
+        "id" TEXT PRIMARY KEY,
+        "name" TEXT NOT NULL,
+        "parentId" TEXT,
+        "nodeType" TEXT NOT NULL, -- 'organization', 'circle', 'group', 'role'
+        "modifier" TEXT, -- 'template', 'hierarchy'
+        "color" TEXT, -- Custom color for roles, e.g., "#FF6600"
+        "size" REAL, -- Size weight for layout calculation
+        "description" TEXT, -- Optional description/purpose
+        "order" INTEGER, -- Display order among siblings
+        "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL,
+        "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL,
+        FOREIGN KEY ("parentId") REFERENCES "circles" ("id") ON DELETE SET NULL
+      )
+    `);
+
     // Create indexes for performance optimization
     // These indexes dramatically improve query performance when filtering by userId, parentId, or triageStatus
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId" ON "tasks"("userId")`);
@@ -174,6 +195,10 @@ class PostgresClient implements DbClient {
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_tasks_priority" ON "tasks"("priority")`);
     // Composite index for common filtering patterns (user + status)
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId_triageStatus" ON "tasks"("userId", "triageStatus")`);
+
+    // Circles indexes
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_circles_parentId" ON "circles"("parentId")`);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_circles_nodeType" ON "circles"("nodeType")`);
   }
 
   private async migrateSchema(): Promise<void> {
@@ -754,6 +779,121 @@ class PostgresClient implements DbClient {
       `, [JSON.stringify(state)]);
   }
 
+  // Circles (EasyCIRCLE)
+  async getCircles(): Promise<CircleEntity[]> {
+    const result = await this.pool.query('SELECT * FROM "circles" ORDER BY "order" ASC NULLS LAST, "createdAt" ASC');
+    return result.rows.map(row => ({
+      ...row,
+      nodeType: row.nodeType as CircleNodeType,
+      modifier: row.modifier as CircleNodeModifier | undefined,
+    }));
+  }
+
+  async getCircleById(id: string): Promise<CircleEntity | null> {
+    const result = await this.pool.query('SELECT * FROM "circles" WHERE "id" = $1', [id]);
+    if (result.rows.length === 0) return null;
+
+    const row = result.rows[0];
+    return {
+      ...row,
+      nodeType: row.nodeType as CircleNodeType,
+      modifier: row.modifier as CircleNodeModifier | undefined,
+    };
+  }
+
+  async createCircle(input: Partial<CircleEntity>): Promise<CircleEntity> {
+    const now = new Date().toISOString();
+    const newCircle: CircleEntity = {
+      id: input.id || crypto.randomUUID(),
+      name: input.name || 'New Circle',
+      parentId: input.parentId || null,
+      nodeType: input.nodeType || 'circle',
+      modifier: input.modifier,
+      color: input.color,
+      size: input.size,
+      description: input.description,
+      order: input.order,
+      createdAt: input.createdAt || now,
+      updatedAt: input.updatedAt || now,
+    };
+
+    await this.pool.query(`
+      INSERT INTO "circles" ("id", "name", "parentId", "nodeType", "modifier", "color", "size", "description", "order", "createdAt", "updatedAt")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    `, [
+      newCircle.id,
+      newCircle.name,
+      newCircle.parentId,
+      newCircle.nodeType,
+      newCircle.modifier ?? null,
+      newCircle.color ?? null,
+      newCircle.size ?? null,
+      newCircle.description ?? null,
+      newCircle.order ?? null,
+      newCircle.createdAt,
+      newCircle.updatedAt,
+    ]);
+
+    return newCircle;
+  }
+
+  async updateCircle(id: string, patch: Partial<CircleEntity>): Promise<CircleEntity | null> {
+    const current = await this.getCircleById(id);
+    if (!current) {
+      return null;
+    }
+
+    const updated = { ...current, ...patch, updatedAt: new Date().toISOString() };
+
+    await this.pool.query(`
+      UPDATE "circles"
+      SET "name" = $1, "parentId" = $2, "nodeType" = $3, "modifier" = $4,
+          "color" = $5, "size" = $6, "description" = $7, "order" = $8, "updatedAt" = $9
+      WHERE "id" = $10
+    `, [
+      updated.name,
+      updated.parentId,
+      updated.nodeType,
+      updated.modifier ?? null,
+      updated.color ?? null,
+      updated.size ?? null,
+      updated.description ?? null,
+      updated.order ?? null,
+      updated.updatedAt,
+      id
+    ]);
+
+    return updated;
+  }
+
+  async deleteCircle(id: string): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Delete recursive circles (Cascade)
+      await client.query(`
+        WITH RECURSIVE descendants AS (
+            SELECT id FROM "circles" WHERE "id" = $1
+            UNION
+            SELECT c.id FROM "circles" c
+            INNER JOIN descendants d ON c."parentId" = d.id
+        )
+        DELETE FROM "circles"
+        WHERE "id" IN (SELECT id FROM descendants)
+      `, [id]);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async clearAllCircles(): Promise<void> {
+    await this.pool.query('DELETE FROM "circles"');
+  }
+
   async clearAllData(): Promise<void> {
     const client = await this.pool.connect();
     try {
@@ -767,6 +907,7 @@ class PostgresClient implements DbClient {
       await client.query('DROP TABLE IF EXISTS "filters" CASCADE');
       await client.query('DROP TABLE IF EXISTS "fertilizationBoard" CASCADE');
       await client.query('DROP TABLE IF EXISTS "dreamBoard" CASCADE');
+      await client.query('DROP TABLE IF EXISTS "circles" CASCADE');
 
       // Drop legacy tables if they exist
       await client.query('DROP TABLE IF EXISTS tasks CASCADE');

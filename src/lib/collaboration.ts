@@ -21,6 +21,9 @@ export const yDreamState = doc.getMap('dreamState');
 export const yDreamCards = doc.getMap('dreamCards');
 export const yDreamColumns = doc.getMap('dreamColumns');
 
+// Export shared circles map for real-time sync
+export const yCircles = doc.getMap('circles');
+
 // Export shared system state (for global commands like Clear All)
 export const ySystemState = doc.getMap('systemState');
 
