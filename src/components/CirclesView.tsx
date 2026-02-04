@@ -25,6 +25,16 @@ import { Plus, Edit, Trash2, Move, Home, ChevronRight, ChevronDown, Circle, User
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface CirclesViewProps {
   onFocusOnTask?: (taskId: string) => void;
@@ -175,6 +185,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
   // Move dialog state
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [moveTargetId, setMoveTargetId] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   // Tree panel state
   const [treePanelOpen, setTreePanelOpen] = useState(true);
@@ -634,23 +645,33 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     refreshVisualization();
   }, [editName, editNodeType, editColor, editDescription, editPurpose, editDomains, editAccountabilities, currentNode, updateCircle, refreshVisualization]);
 
-  // Delete current node
-  const handleDeleteNode = useCallback(async () => {
+  // Open delete dialog
+  const handleDeleteNode = useCallback(() => {
+    console.log('[DEBUG] handleDeleteNode called. currentNode:', currentNode);
+    if (!currentNode || currentNode.id === 'virtual-root') {
+      console.log('[DEBUG] handleDeleteNode aborted: null or virtual-root');
+      return;
+    }
+    setDeleteDialogOpen(true);
+  }, [currentNode]);
+
+  // Confirm delete
+  const handleDeleteConfirm = useCallback(async () => {
     if (!currentNode || currentNode.id === 'virtual-root') return;
 
-    if (confirm(`Delete "${currentNode.name}" and all its children?`)) {
-      const parentNode = currentNode.parent;
-      await deleteCircle(currentNode.id);
+    console.log('[DEBUG] Confirmed delete via Dialog. Calling deleteCircle with id:', currentNode.id);
+    const parentNode = currentNode.parent;
+    await deleteCircle(currentNode.id);
 
-      if (parentNode) {
-        setCurrentNode(parentNode);
-      } else {
-        setCurrentNode(null);
-      }
-      // Note: refreshVisualization is called automatically by useEffect watching circles,
-      // but calling it manually ensures immediate update on the current client
-      refreshVisualization();
+    if (parentNode) {
+      setCurrentNode(parentNode);
+    } else {
+      setCurrentNode(null);
     }
+    // Note: refreshVisualization is called automatically by useEffect watching circles,
+    // but calling it manually ensures immediate update on the current client
+    refreshVisualization();
+    setDeleteDialogOpen(false);
   }, [currentNode, deleteCircle, refreshVisualization]);
 
   // Move current node
@@ -1154,6 +1175,25 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete "{currentNode?.name}" and all its child circles/roles.
+                This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Move Dialog */}
         <Dialog open={moveDialogOpen} onOpenChange={setMoveDialogOpen}>
