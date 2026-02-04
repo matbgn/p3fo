@@ -8,6 +8,11 @@ let circles: CircleEntity[] = [];
 
 // Sync circles to Yjs for real-time collaboration
 const syncCirclesToYjs = () => {
+  // Try to initialize if not already enabled (e.g. after HMR or lazy load)
+  if (!isCollaborationEnabled()) {
+    initializeCollaboration();
+  }
+
   if (!isCollaborationEnabled()) return;
   doc.transact(() => {
     const currentIds = Array.from(yCircles.keys()) as string[];

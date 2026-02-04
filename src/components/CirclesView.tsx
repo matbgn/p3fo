@@ -158,6 +158,8 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
   // Animation state for smooth zoom transitions
   const [isAnimating, setIsAnimating] = useState(false);
   const animationRef = useRef<number | null>(null);
+  // Ref to track currentNode for use in callbacks without stale closure
+  const currentNodeRef = useRef<CircleTreeNode | null>(null);
 
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -241,23 +243,31 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     const packedNodes = buildPackedTree();
     setNodes(packedNodes);
 
+    if (packedNodes.length === 0) {
+      setCurrentNode(null);
+      return;
+    }
+
+    // Use ref to access current node without stale closure
+    const currentNodeValue = currentNodeRef.current;
+
     // If we have a currentNode selected, find it in the new tree and update with fresh data
-    if (currentNode && currentNode.id !== 'virtual-root') {
-      const updatedNode = packedNodes.find(n => n.id === currentNode.id);
+    if (currentNodeValue && currentNodeValue.id !== 'virtual-root') {
+      const updatedNode = packedNodes.find(n => n.id === currentNodeValue.id);
       if (updatedNode) {
         setCurrentNode(updatedNode);
       } else if (packedNodes.length > 0) {
         // Node was deleted, select root
         setCurrentNode(packedNodes[0]);
       }
-    } else if (packedNodes.length > 0 && !currentNode) {
+    } else if (packedNodes.length > 0 && !currentNodeValue) {
       setCurrentNode(packedNodes[0]);
     }
 
     // Reset color mapping
     colorIndex.current = 1;
     setColorToNode(new Map());
-  }, [buildPackedTree, currentNode]);
+  }, [buildPackedTree]);
 
   // Draw the canvas
   const drawCanvas = useCallback((
@@ -577,8 +587,10 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
   const handleAddNode = useCallback(async () => {
     if (!editName.trim()) return;
 
-    // When currentNode is null (empty state) or virtual-root, create at root level
-    const parentId = !currentNode || currentNode.id === 'virtual-root' ? null : currentNode.id;
+    // When currentNode is null (empty state), virtual-root, no circles exist, or adding an organization, create at root level
+    // Organizations should always be at root level
+    const shouldBeRoot = !currentNode || currentNode.id === 'virtual-root' || circles.length === 0 || editNodeType === 'organization';
+    const parentId = shouldBeRoot ? null : currentNode.id;
 
     await createCircle({
       name: editName.trim(),
@@ -597,8 +609,10 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     setEditPurpose('');
     setEditDomains('');
     setEditAccountabilities('');
+    // Note: refreshVisualization is called automatically by useEffect watching circles, 
+    // but calling it manually ensures immediate update on the current client
     refreshVisualization();
-  }, [editName, editNodeType, editColor, editDescription, editPurpose, editDomains, editAccountabilities, currentNode, createCircle, refreshVisualization]);
+  }, [editName, editNodeType, editColor, editDescription, editPurpose, editDomains, editAccountabilities, currentNode, circles, createCircle, refreshVisualization]);
 
   // Edit current node
   const handleEditNode = useCallback(async () => {
@@ -615,6 +629,8 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     });
 
     setEditDialogOpen(false);
+    // Note: refreshVisualization is called automatically by useEffect watching circles,
+    // but calling it manually ensures immediate update on the current client
     refreshVisualization();
   }, [editName, editNodeType, editColor, editDescription, editPurpose, editDomains, editAccountabilities, currentNode, updateCircle, refreshVisualization]);
 
@@ -628,7 +644,11 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
 
       if (parentNode) {
         setCurrentNode(parentNode);
+      } else {
+        setCurrentNode(null);
       }
+      // Note: refreshVisualization is called automatically by useEffect watching circles,
+      // but calling it manually ensures immediate update on the current client
       refreshVisualization();
     }
   }, [currentNode, deleteCircle, refreshVisualization]);
@@ -643,6 +663,8 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
 
     setMoveDialogOpen(false);
     setMoveTargetId(null);
+    // Note: refreshVisualization is called automatically by useEffect watching circles,
+    // but calling it manually ensures immediate update on the current client
     refreshVisualization();
   }, [currentNode, moveTargetId, updateCircle, refreshVisualization]);
 
@@ -650,14 +672,15 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
   const openAddDialog = useCallback(() => {
     setEditMode('add');
     setEditName('');
-    setEditNodeType('role');
+    // Default to organization if no circles exist, otherwise role
+    setEditNodeType(circles.length === 0 ? 'organization' : 'role');
     setEditColor('#FFCC00');
     setEditDescription('');
     setEditPurpose('');
     setEditDomains('');
     setEditAccountabilities('');
     setEditDialogOpen(true);
-  }, []);
+  }, [circles.length]);
 
   // Open edit dialog
   const openEditDialog = useCallback(() => {
@@ -708,6 +731,11 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     if (nodes.length === 0) return null;
     return nodes[0]; // The packed tree root
   }, [nodes]);
+
+  // Keep currentNodeRef in sync with currentNode for use in callbacks without stale closure
+  useEffect(() => {
+    currentNodeRef.current = currentNode;
+  }, [currentNode]);
 
   // Auto-expand parent nodes when current node changes
   useEffect(() => {
@@ -786,10 +814,15 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
           // If already zoomed to a specific node, update that node's position
           const targetNode = currentNode && nodes.find(n => n.id === currentNode.id);
           if (targetNode && targetNode.x !== undefined && targetNode.y !== undefined) {
+            // If tracking root, ensure we see the whole thing (reset scale to 1)
+            // Otherwise maintain current zoom level
+            const isRoot = targetNode.id === root.id;
+
             return {
               ...prev,
               centerX: targetNode.x,
               centerY: targetNode.y,
+              scale: isRoot ? 1 : prev.scale,
             };
           }
           return {
@@ -937,29 +970,40 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                       {currentNode && currentNode.id !== 'virtual-root' && (
                         <div className="border-t bg-background p-3 max-h-[40%] overflow-auto">
                           <h4 className="font-semibold text-base mb-2">{currentNode.name}</h4>
-                          {currentNode.purpose && (
+                          {/* Purpose, domains, and accountabilities are only for roles */}
+                          {currentNode.nodeType === 'role' && (
+                            <>
+                              {currentNode.purpose && (
+                                <div className="mb-2">
+                                  <span className="text-xs font-medium text-muted-foreground">Purpose:</span>
+                                  <p className="text-sm whitespace-pre-wrap">{currentNode.purpose}</p>
+                                </div>
+                              )}
+                              {currentNode.domains && (
+                                <div className="mb-2">
+                                  <span className="text-xs font-medium text-muted-foreground">Domains:</span>
+                                  <p className="text-sm whitespace-pre-wrap">{currentNode.domains}</p>
+                                </div>
+                              )}
+                              {currentNode.accountabilities && (
+                                <div className="mb-2">
+                                  <span className="text-xs font-medium text-muted-foreground">Accountabilities:</span>
+                                  <p className="text-sm whitespace-pre-wrap">{currentNode.accountabilities}</p>
+                                </div>
+                              )}
+                            </>
+                          )}
+                          {currentNode.description && (
                             <div className="mb-2">
-                              <span className="text-xs font-medium text-muted-foreground">Purpose:</span>
-                              <p className="text-sm whitespace-pre-wrap">{currentNode.purpose}</p>
+                              <span className="text-xs font-medium text-muted-foreground">Description:</span>
+                              <p className="text-sm whitespace-pre-wrap">{currentNode.description}</p>
                             </div>
                           )}
-                          {currentNode.domains && (
-                            <div className="mb-2">
-                              <span className="text-xs font-medium text-muted-foreground">Domains:</span>
-                              <p className="text-sm whitespace-pre-wrap">{currentNode.domains}</p>
-                            </div>
-                          )}
-                          {currentNode.accountabilities && (
-                            <div className="mb-2">
-                              <span className="text-xs font-medium text-muted-foreground">Accountabilities:</span>
-                              <p className="text-sm whitespace-pre-wrap">{currentNode.accountabilities}</p>
-                            </div>
-                          )}
-                          {!currentNode.purpose && !currentNode.domains && !currentNode.accountabilities && currentNode.description && (
-                            <p className="text-sm text-muted-foreground">{currentNode.description}</p>
-                          )}
-                          {!currentNode.purpose && !currentNode.domains && !currentNode.accountabilities && !currentNode.description && (
+                          {currentNode.nodeType === 'role' && !currentNode.purpose && !currentNode.domains && !currentNode.accountabilities && !currentNode.description && (
                             <p className="text-sm text-muted-foreground italic">No details defined. Click Edit to add.</p>
+                          )}
+                          {currentNode.nodeType !== 'role' && !currentNode.description && (
+                            <p className="text-sm text-muted-foreground italic">No description defined. Click Edit to add.</p>
                           )}
                         </div>
                       )}
@@ -970,7 +1014,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
               )}
               {/* Circle Canvas Panel */}
               <ResizablePanel defaultSize={treePanelOpen ? 75 : 100}>
-                <div className="relative w-full h-full p-2" ref={containerRef}>
+                <div className="relative w-full h-full" ref={containerRef}>
                   <canvas
                     ref={canvasRef}
                     width={dimensions.width}
@@ -1064,36 +1108,41 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                   placeholder="Optional description..."
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="purpose">Purpose</Label>
-                <Textarea
-                  id="purpose"
-                  value={editPurpose}
-                  onChange={(e) => setEditPurpose(e.target.value)}
-                  placeholder="What is this role's reason for being?"
-                  rows={3}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="domains">Domains of Authority</Label>
-                <Textarea
-                  id="domains"
-                  value={editDomains}
-                  onChange={(e) => setEditDomains(e.target.value)}
-                  placeholder="What does this role have control over?"
-                  rows={3}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="accountabilities">Accountabilities</Label>
-                <Textarea
-                  id="accountabilities"
-                  value={editAccountabilities}
-                  onChange={(e) => setEditAccountabilities(e.target.value)}
-                  placeholder="What is expected from this role?"
-                  rows={3}
-                />
-              </div>
+              {/* Purpose, domains, and accountabilities are only for roles */}
+              {editNodeType === 'role' && (
+                <>
+                  <div className="grid gap-2">
+                    <Label htmlFor="purpose">Purpose</Label>
+                    <Textarea
+                      id="purpose"
+                      value={editPurpose}
+                      onChange={(e) => setEditPurpose(e.target.value)}
+                      placeholder="What is this role's reason for being?"
+                      rows={3}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="domains">Domains of Authority</Label>
+                    <Textarea
+                      id="domains"
+                      value={editDomains}
+                      onChange={(e) => setEditDomains(e.target.value)}
+                      placeholder="What does this role have control over?"
+                      rows={3}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="accountabilities">Accountabilities</Label>
+                    <Textarea
+                      id="accountabilities"
+                      value={editAccountabilities}
+                      onChange={(e) => setEditAccountabilities(e.target.value)}
+                      placeholder="What is expected from this role?"
+                      rows={3}
+                    />
+                  </div>
+                </>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
