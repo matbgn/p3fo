@@ -3,7 +3,7 @@ import TimetableChart from "./TimetableChart";
 import TimetableRawTable from "./TimetableRawTable";
 import { getHistoricalHourlyBalances, DataPoint } from "@/utils/projectedHours";
 import { getWorkingDays } from "@/utils/workingdays";
-import { useTasks } from "@/hooks/useTasks";
+import { useAllTasks } from "@/hooks/useAllTasks";
 import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 import { useUsers } from "@/hooks/useUsers";
 import { useUserSettings } from "@/hooks/useUserSettings";
@@ -15,7 +15,7 @@ interface HourlyBalanceProps {
 }
 
 const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
-    const { tasks } = useTasks();
+    const { tasks } = useAllTasks();
     const { settings } = useCombinedSettings();
     const { users, updateUser } = useUsers();
     const { userSettings, userId: currentUserId } = useUserSettings();

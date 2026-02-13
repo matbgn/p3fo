@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useTasks } from "@/hooks/useTasks";
+import { useAllTasks } from "@/hooks/useAllTasks";
 import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { useUsers } from "@/hooks/useUsers";
@@ -14,7 +14,7 @@ interface ForecastProps {
 }
 
 const Forecast: React.FC<ForecastProps> = ({ userId }) => {
-    const { tasks } = useTasks();
+    const { tasks } = useAllTasks();
     const { settings } = useCombinedSettings();
     const { userSettings } = useUserSettings();
     const { users } = useUsers();

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useReminderStore } from '@/hooks/useReminders';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { getPersistenceAdapter } from '@/lib/persistence-factory';
+import { convertEntitiesToTasks } from '@/lib/task-conversions';
 
 const DataExporter: React.FC = () => {
   const { allTasks: tasks } = useTasks();
@@ -16,6 +17,10 @@ const DataExporter: React.FC = () => {
 
       // Get persistence adapter to fetch current data
       const adapter = await getPersistenceAdapter();
+
+      // Fetch ALL tasks from persistence (ignoring current user filter)
+      const allTaskEntities = await adapter.listTasks();
+      const allTasks = convertEntitiesToTasks(allTaskEntities);
 
       // Fetch app settings from persistence
       const appSettings = await adapter.getAppSettings();
@@ -47,7 +52,7 @@ const DataExporter: React.FC = () => {
       const fertilizationBoardState = await adapter.getFertilizationBoardState();
 
       const exportData = {
-        tasks,
+        tasks: allTasks,
         scheduledReminders: useReminderStore.getState().scheduledReminders,
         qolSurveyResponses: allQolSurveyResponses, // Export all users' QoL data
         fertilizationBoard: fertilizationBoardState, // Export Fertilization Board state

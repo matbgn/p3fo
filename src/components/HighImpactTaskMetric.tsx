@@ -1,11 +1,11 @@
 import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useTasks } from "@/hooks/useTasks";
+import { useTaskMetrics } from "@/hooks/useTaskMetrics";
 import { useCombinedSettings } from "@/hooks/useCombinedSettings";
-import { calculateHighImpactTaskFrequency, getCompletedHighImpactTasks } from "@/lib/metrics";
+import { calculateHighImpactTaskFrequency } from "@/lib/metrics";
 
 const HighImpactTaskMetric: React.FC = () => {
-  const { tasks } = useTasks();
+  const { tasks, taskMap, highImpactMap } = useTaskMetrics();
   const { settings } = useCombinedSettings();
 
   // Get settings from the combined hook
@@ -13,8 +13,7 @@ const HighImpactTaskMetric: React.FC = () => {
   const weeksComputation = settings.weeksComputation;
   const highImpactTaskGoal = settings.highImpactTaskGoal;
 
-  const completedTasks = getCompletedHighImpactTasks(tasks, weeksComputation);
-  const frequency = calculateHighImpactTaskFrequency(tasks, weeksComputation, workloadPercentage);
+  const frequency = calculateHighImpactTaskFrequency(tasks, weeksComputation, workloadPercentage, taskMap, highImpactMap);
 
   // Format frequency
   const formattedFrequency = (frequency).toFixed(1);

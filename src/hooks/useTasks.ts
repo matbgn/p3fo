@@ -4,7 +4,7 @@ import { eventBus } from "@/lib/events";
 import { usePersistence } from "@/hooks/usePersistence";
 import { yTasks, yUserSettings, doc, initializeCollaboration, isCollaborationEnabled } from "@/lib/collaboration";
 import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
-import { taskToEntity, tasksToEntities } from "@/lib/task-conversions";
+import { taskToEntity, tasksToEntities, convertEntitiesToTasks } from "@/lib/task-conversions";
 
 
 // Polyfill for crypto.randomUUID if not available
@@ -58,7 +58,10 @@ export type Task = {
   userId?: string; // User assigned to this task
 };
 
+
 let tasks: Task[] = [];
+let isFiltered = false;
+
 
 // Key for localStorage to track if default tasks have been initialized
 export const DEFAULT_TASKS_INITIALIZED_KEY = 'p3fo_default_tasks_initialized';
@@ -104,43 +107,7 @@ if (isCollaborationEnabled()) {
   });
 }
 
-// Helper to convert TaskEntity[] to Task[] with proper parent-child relationships
-const convertEntitiesToTasks = (entities: import('@/lib/persistence-types').TaskEntity[]): Task[] => {
-  const taskMap: { [id: string]: Task } = {};
 
-  // First pass: create all task objects and map them by ID
-  entities.forEach(entity => {
-    const task: Task = {
-      id: entity.id,
-      title: entity.title,
-      parentId: entity.parentId,
-      children: [], // Initialize children array
-      createdAt: new Date(entity.createdAt).getTime(),
-      triageStatus: (entity.triageStatus as TriageStatus) || "Backlog",
-      urgent: entity.urgent,
-      impact: entity.impact,
-      majorIncident: entity.majorIncident,
-      difficulty: (entity.difficulty as 0.5 | 1 | 2 | 3 | 5 | 8) || 1,
-      timer: entity.timer,
-      category: entity.category as Category,
-      terminationDate: entity.terminationDate ? new Date(entity.terminationDate).getTime() : undefined,
-      comment: entity.comment || undefined,
-      durationInMinutes: entity.durationInMinutes || undefined,
-      priority: entity.priority || 0,
-      userId: entity.userId || undefined,
-    };
-    taskMap[task.id] = task;
-  });
-
-  // Second pass: populate children arrays
-  Object.values(taskMap).forEach(task => {
-    if (task.parentId && taskMap[task.parentId]) {
-      taskMap[task.parentId].children?.push(task.id);
-    }
-  });
-
-  return Object.values(taskMap);
-};
 
 // Load tasks filtered by userId (for server-side filtering optimization)
 const loadTasksByUser = async (userId?: string | null): Promise<Task[]> => {
@@ -171,6 +138,7 @@ async function loadTasks() {
     // Use shared conversion helper
     const loadedTasks = convertEntitiesToTasks(entities);
     tasks = loadedTasks;
+    isFiltered = false;
 
     // Only sync to Yjs if collaboration is enabled
     if (isCollaborationEnabled()) {
@@ -1230,6 +1198,7 @@ export function useTasks() {
     clearAllTasks,
     clearAllUsers,
     importTasks,
+    isFiltered,
     calculateTotalTime: (taskId: string) => calculateTotalTime(taskId, tasks),
     calculateTotalDifficulty: (taskId: string) => calculateTotalDifficulty(taskId, tasks),
     toggleTimer,
@@ -1351,6 +1320,7 @@ export function useTasks() {
       const filteredTasks = await loadTasksByUser(userId);
       // Update global tasks array with filtered results
       tasks = filteredTasks;
+      isFiltered = true;
       eventBus.publish("tasksChanged");
       return filteredTasks;
     }, []),

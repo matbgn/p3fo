@@ -16,20 +16,39 @@ const isHighImpactOrHasHighImpactAncestor = (task: Task, taskMap: Record<string,
   return false;
 };
 
-// Get tasks completed in the last N weeks
-export const getCompletedHighImpactTasks = (tasks: Task[], weeks: number = 4): Task[] => {
-  const cutoffDate = Date.now() - (weeks * 7 * 24 * 60 * 60 * 1000);
-
-  // Create a map for easy ancestor lookup
-  const taskMap = tasks.reduce((acc, task) => {
+// Create a map of task IDs to task objects for easy lookup
+export const createTaskMap = (tasks: Task[]): Record<string, Task> => {
+  return tasks.reduce((acc, task) => {
     acc[task.id] = task;
     return acc;
   }, {} as Record<string, Task>);
+};
+
+// Create a map of task IDs to boolean indicating if they are high impact or have a high impact ancestor
+export const createHighImpactMap = (tasks: Task[], taskMap: Record<string, Task>): Record<string, boolean> => {
+  return tasks.reduce((acc, task) => {
+    acc[task.id] = isHighImpactOrHasHighImpactAncestor(task, taskMap);
+    return acc;
+  }, {} as Record<string, boolean>);
+};
+
+// Get tasks completed in the last N weeks
+export const getCompletedHighImpactTasks = (
+  tasks: Task[],
+  weeks: number = 4,
+  taskMap?: Record<string, Task>,
+  highImpactMap?: Record<string, boolean>
+): Task[] => {
+  const cutoffDate = Date.now() - (weeks * 7 * 24 * 60 * 60 * 1000);
+
+  // Use provided map or create a new one if not provided (backward compatibility)
+  const mapIndex = taskMap || createTaskMap(tasks);
+  const impactMap = highImpactMap || createHighImpactMap(tasks, mapIndex);
 
   return tasks.filter(task =>
     task.triageStatus === 'Done' &&
     task.createdAt >= cutoffDate &&
-    isHighImpactOrHasHighImpactAncestor(task, taskMap)
+    impactMap[task.id]
   );
 };
 
@@ -47,9 +66,11 @@ export const getMajorIncidents = (tasks: Task[], weeks: number = 4): Task[] => {
 export const calculateHighImpactTaskFrequency = (
   tasks: Task[],
   weeks: number = 4,
-  workloadPercentage: number = 0.6
+  workloadPercentage: number = 0.6,
+  taskMap?: Record<string, Task>,
+  highImpactMap?: Record<string, boolean>
 ): number => {
-  const completedHighImpactTasks = getCompletedHighImpactTasks(tasks, weeks);
+  const completedHighImpactTasks = getCompletedHighImpactTasks(tasks, weeks, taskMap, highImpactMap);
 
   if (weeks === 0) {
     return 0;
@@ -100,15 +121,15 @@ export const calculateTotalTimeForTasks = (tasks: Task[], taskIds: string[]): nu
 // Calculate time spent on new capabilities
 export const calculateTimeSpentOnNewCapabilities = (
   tasks: Task[],
-  weeks: number = 4
+  weeks: number = 4,
+  taskMap?: Record<string, Task>,
+  highImpactMap?: Record<string, boolean>
 ): { totalTime: number; newCapabilitiesTime: number; percentage: number } => {
   const cutoffDate = Date.now() - (weeks * 7 * 24 * 60 * 60 * 1000);
 
-  // Create a map of task IDs to task objects for easy lookup
-  const taskMap = tasks.reduce((acc, task) => {
-    acc[task.id] = task;
-    return acc;
-  }, {} as Record<string, Task>);
+  // Use provided map or create a new one if not provided (backward compatibility)
+  const mapIndex = taskMap || createTaskMap(tasks);
+  const impactMap = highImpactMap || createHighImpactMap(tasks, mapIndex);
 
   // Find all timer entries that overlap with the computation period (last N weeks)
   const allTimerEntriesInPeriod = tasks.flatMap(task =>
@@ -142,7 +163,7 @@ export const calculateTimeSpentOnNewCapabilities = (
 
   // Find timer entries for tasks that have an impact ancestor (including the task itself)
   const newCapabilitiesEntries = allTimerEntriesInPeriod.filter(({ task }) => {
-    return isHighImpactOrHasHighImpactAncestor(task, taskMap);
+    return impactMap[task.id];
   });
 
   // Calculate time spent on new capabilities (tasks with impact ancestors) in the period

@@ -1,11 +1,11 @@
 import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useTasks } from "@/hooks/useTasks";
+import { useTaskMetrics } from "@/hooks/useTaskMetrics";
 import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 import { calculateFailureRate } from "@/lib/metrics";
 
 const FailureRateMetric: React.FC = () => {
-  const { tasks } = useTasks();
+  const { tasks } = useTaskMetrics();
   const { settings } = useCombinedSettings();
 
   // Get settings from combined settings
