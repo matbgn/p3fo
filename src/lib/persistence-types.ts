@@ -84,6 +84,8 @@ export interface UserSettingsEntity {
   monthlyBalances?: Record<string, MonthlyBalanceData>;
   cardCompactness?: number;
   timezone?: string;
+  weekStartDay?: 0 | 1;
+  defaultPlanView?: 'week' | 'month';
 }
 
 export interface QolSurveyResponseEntity {

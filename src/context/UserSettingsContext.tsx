@@ -13,6 +13,11 @@ export interface UserSettings {
     cardCompactness: number;
     // Legacy field for import compatibility
     workload_percentage?: number;
+    // New fields
+    splitTime?: string;
+    timezone?: string;
+    weekStartDay?: 0 | 1;
+    defaultPlanView?: 'week' | 'month';
 }
 
 const defaultUserSettings: UserSettings = {
@@ -21,6 +26,7 @@ const defaultUserSettings: UserSettings = {
     hasCompletedOnboarding: false,
     monthlyBalances: {},
     cardCompactness: 0,
+    // Defaults for new fields are undefined to fall back to global settings
 };
 
 import { UserContext } from './UserContextDefinition';
@@ -54,6 +60,10 @@ const loadUserSettings = async (userId: string): Promise<UserSettings> => {
             hasCompletedOnboarding: settings.hasCompletedOnboarding,
             monthlyBalances: settings.monthlyBalances || {},
             cardCompactness: settings.cardCompactness ?? 0,
+            splitTime: settings.splitTime,
+            timezone: settings.timezone,
+            weekStartDay: settings.weekStartDay,
+            defaultPlanView: settings.defaultPlanView,
         };
     } catch (error) {
         console.error('Error loading user settings from persistence:', error);
@@ -127,6 +137,10 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                     hasCompletedOnboarding: userSettings.hasCompletedOnboarding,
                     monthlyBalances: userSettings.monthlyBalances,
                     cardCompactness: userSettings.cardCompactness,
+                    splitTime: userSettings.splitTime,
+                    timezone: userSettings.timezone,
+                    weekStartDay: userSettings.weekStartDay,
+                    defaultPlanView: userSettings.defaultPlanView,
                 };
 
                 await adapter.updateUserSettings(userId, entityPatch);
@@ -140,7 +154,11 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                         logo: userSettings.logo,
                         hasCompletedOnboarding: userSettings.hasCompletedOnboarding,
                         monthlyBalances: userSettings.monthlyBalances,
-                        cardCompactness: userSettings.cardCompactness
+                        cardCompactness: userSettings.cardCompactness,
+                        splitTime: userSettings.splitTime,
+                        timezone: userSettings.timezone,
+                        weekStartDay: userSettings.weekStartDay,
+                        defaultPlanView: userSettings.defaultPlanView,
                     });
                 }
             } catch (error) {
@@ -184,6 +202,7 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                     yjsSettings.logo !== currentSettings.logo ||
                     yjsSettings.hasCompletedOnboarding !== currentSettings.hasCompletedOnboarding ||
                     yjsSettings.cardCompactness !== currentSettings.cardCompactness ||
+                    yjsSettings.timezone !== currentSettings.timezone ||
                     monthlyBalancesChanged) {
 
                     console.log('Received user settings update from Yjs:', yjsSettings);
@@ -193,7 +212,11 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                         logo: yjsSettings.logo,
                         hasCompletedOnboarding: yjsSettings.hasCompletedOnboarding,
                         monthlyBalances: yjsSettings.monthlyBalances || {},
-                        cardCompactness: yjsSettings.cardCompactness ?? 0
+                        cardCompactness: yjsSettings.cardCompactness ?? 0,
+                        splitTime: yjsSettings.splitTime,
+                        timezone: yjsSettings.timezone,
+                        weekStartDay: yjsSettings.weekStartDay,
+                        defaultPlanView: yjsSettings.defaultPlanView,
                     });
                 }
             } else {

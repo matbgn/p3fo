@@ -43,6 +43,8 @@ interface UserSettingsDbRow {
   monthlyBalances: string | null;
   cardCompactness: number | null;
   timezone: string | null;
+  weekStartDay: number | null;
+  defaultPlanView: string | null;
 }
 
 interface AppSettingsDbRow {
@@ -155,7 +157,9 @@ class SqliteClient implements DbClient {
         "splitTime" TEXT DEFAULT '13:00',
         "monthlyBalances" TEXT, -- JSON string
         "cardCompactness" INTEGER DEFAULT 0,
-        "timezone" TEXT
+        "timezone" TEXT,
+        "weekStartDay" INTEGER,
+        "defaultPlanView" TEXT
       )
     `);
 
@@ -266,9 +270,21 @@ class SqliteClient implements DbClient {
           this.db.exec(`ALTER TABLE "${table}" RENAME COLUMN "${oldCol}" TO "${newCol}"`);
         }
       } catch (e) {
-        // Ignore if table doesn't exist or other errors
       }
     };
+
+    // Helper to add new columns if they don't exist
+    const addColumn = (table: string, colName: string, colType: string) => {
+      try {
+        const tableInfo = this.db.prepare(`PRAGMA table_info("${table}")`).all() as { name: string }[];
+        if (!tableInfo.some(col => col.name === colName)) {
+          console.log(`Adding column ${table}.${colName}...`);
+          this.db.exec(`ALTER TABLE "${table}" ADD COLUMN "${colName}" ${colType}`);
+        }
+      } catch (e) {
+        console.error(`Error adding column ${table}.${colName}:`, e);
+      }
+    }
 
     // Rename legacy tables to camelCase if needed
     const renameTable = (oldName: string, newName: string) => {
@@ -306,6 +322,10 @@ class SqliteClient implements DbClient {
     runMigration('userSettings', 'split_time', 'splitTime');
     runMigration('userSettings', 'monthly_balances', 'monthlyBalances');
     runMigration('userSettings', 'card_compactness', 'cardCompactness');
+
+    // Add new columns for UserSettings
+    addColumn('userSettings', 'weekStartDay', 'INTEGER');
+    addColumn('userSettings', 'defaultPlanView', 'TEXT');
 
     // AppSettings columns
     runMigration('appSettings', 'split_time', 'splitTime');
@@ -635,6 +655,8 @@ class SqliteClient implements DbClient {
       ...row,
       hasCompletedOnboarding: Boolean(row.hasCompletedOnboarding),
       monthlyBalances: row.monthlyBalances ? JSON.parse(row.monthlyBalances) : {},
+      weekStartDay: row.weekStartDay as 0 | 1 | undefined,
+      defaultPlanView: row.defaultPlanView as 'week' | 'month' | undefined,
     };
   }
 
@@ -652,11 +674,13 @@ class SqliteClient implements DbClient {
       monthlyBalances: updated.monthlyBalances ? JSON.stringify(updated.monthlyBalances) : null,
       timezone: updated.timezone ?? null,
       cardCompactness: updated.cardCompactness ?? 0,
+      weekStartDay: updated.weekStartDay ?? null,
+      defaultPlanView: updated.defaultPlanView ?? null
     };
 
     this.db.prepare(`
-      INSERT INTO "userSettings"("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness")
-      VALUES(@userId, @username, @logo, @hasCompletedOnboarding, @workload, @splitTime, @monthlyBalances, @timezone, @cardCompactness)
+      INSERT INTO "userSettings"("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness", "weekStartDay", "defaultPlanView")
+      VALUES(@userId, @username, @logo, @hasCompletedOnboarding, @workload, @splitTime, @monthlyBalances, @timezone, @cardCompactness, @weekStartDay, @defaultPlanView)
       ON CONFLICT("userId") DO UPDATE SET
       "username" = excluded."username",
         "logo" = excluded."logo",
@@ -665,7 +689,9 @@ class SqliteClient implements DbClient {
         "splitTime" = excluded."splitTime",
         "monthlyBalances" = excluded."monthlyBalances",
         "timezone" = excluded."timezone",
-        "cardCompactness" = excluded."cardCompactness"
+        "cardCompactness" = excluded."cardCompactness",
+        "weekStartDay" = excluded."weekStartDay",
+        "defaultPlanView" = excluded."defaultPlanView"
           `).run(params);
 
     return updated;
@@ -677,6 +703,8 @@ class SqliteClient implements DbClient {
       ...row,
       hasCompletedOnboarding: Boolean(row.hasCompletedOnboarding),
       monthlyBalances: row.monthlyBalances ? JSON.parse(row.monthlyBalances) : {},
+      weekStartDay: row.weekStartDay as 0 | 1 | undefined,
+      defaultPlanView: row.defaultPlanView as 'week' | 'month' | undefined,
     }));
   }
 

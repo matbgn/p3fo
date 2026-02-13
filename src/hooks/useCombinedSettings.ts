@@ -114,27 +114,29 @@ export const useCombinedSettings = () => {
                     if (userSettings.workload !== undefined) {
                         merged.userWorkloadPercentage = userSettings.workload;
                     }
+
+                    // Timezone: User Settings > Local Storage > App Settings (Default)
                     if (userSettings.timezone) {
                         merged.timezone = userSettings.timezone;
+                    } else {
+                        const local = localStorage.getItem('timezone');
+                        if (local) merged.timezone = local;
                     }
-                    // We'll store weekStartDay in userSettings as a generic preference if possible, 
-                    // but since the schema might not support it yet, we'll rely on local state/defaults for now 
-                    // or assume it's added to the userSettings object if the backend supports it.
-                    // For this implementation, we will persist it in localStorage as a fallback if not in userSettings,
-                    // or just keep it in memory if we can't change the backend schema easily.
-                    // However, the prompt implies we should add it. Let's assume we can add it to userSettings 
-                    // or use a workaround. Since I can't easily change the backend schema without seeing it,
 
-                    // Actually, let's check if we can add it to the UserSettings type. 
-                    // I'll assume for now we can't easily change the DB schema in this step without more info.
-                    // But I need to persist it. I'll use localStorage for `weekStartDay` specifically for this user.
-                    const localWeekStart = localStorage.getItem(`weekStartDay_${userSettings.userId}`);
-                    if (localWeekStart) {
-                        merged.weekStartDay = parseInt(localWeekStart) as 0 | 1;
+                    // WeekStartDay: User Settings > Local Storage > Default (1)
+                    if (userSettings.weekStartDay !== undefined) {
+                        merged.weekStartDay = userSettings.weekStartDay;
+                    } else {
+                        const local = localStorage.getItem('weekStartDay');
+                        if (local) merged.weekStartDay = parseInt(local) as 0 | 1;
                     }
-                    const storedDefaultPlanView = localStorage.getItem(`defaultPlanView_${userSettings.userId}`);
-                    if (storedDefaultPlanView) {
-                        merged.defaultPlanView = storedDefaultPlanView as 'week' | 'month';
+
+                    // DefaultPlanView: User Settings > Local Storage > Default ('week')
+                    if (userSettings.defaultPlanView) {
+                        merged.defaultPlanView = userSettings.defaultPlanView;
+                    } else {
+                        const local = localStorage.getItem('defaultPlanView');
+                        if (local) merged.defaultPlanView = local as 'week' | 'month';
                     }
                 }
 
@@ -150,6 +152,60 @@ export const useCombinedSettings = () => {
         loadSettings();
     }, [persistence, userSettings]);
 
+    // Migration Effect: Persist settings to DB if missing in UserSettings
+    // This ensures that:
+    // 1. Legacy localStorage settings are migrated
+    // 2. Default settings are "pinned" to the user profile so they appear in exports
+    useEffect(() => {
+        if (!loading && userSettings) {
+            const updates: Parameters<typeof updateUserSettings>[0] = {}; // Use UserSettings type
+            let hasUpdates = false;
+
+            if (!userSettings.timezone) {
+                // Try localStorage first
+                const local = localStorage.getItem('timezone');
+                if (local) {
+                    updates.timezone = local;
+                } else {
+                    // Fallback to current effective setting (pinning)
+                    // This ensures the value is explicit in the DB and Export
+                    if (settings.timezone) updates.timezone = settings.timezone;
+                }
+                hasUpdates = true;
+            }
+
+            if (userSettings.weekStartDay === undefined) {
+                const local = localStorage.getItem('weekStartDay');
+                if (local) {
+                    updates.weekStartDay = parseInt(local) as 0 | 1;
+                } else {
+                    // Pin current effective setting
+                    if (settings.weekStartDay !== undefined) updates.weekStartDay = settings.weekStartDay;
+                }
+                hasUpdates = true;
+            }
+
+            if (!userSettings.defaultPlanView) {
+                const local = localStorage.getItem('defaultPlanView');
+                if (local) {
+                    updates.defaultPlanView = local as 'week' | 'month';
+                } else {
+                    // Pin current effective setting
+                    if (settings.defaultPlanView) updates.defaultPlanView = settings.defaultPlanView;
+                }
+                hasUpdates = true;
+            }
+
+            if (hasUpdates && Object.keys(updates).length > 0) {
+                console.log('Migrating/Pinning settings to user persistence:', updates);
+                // We use a timeout to avoid immediate state updates during render cycles if triggered excessively
+                setTimeout(() => {
+                    updateUserSettings({ ...userSettings, ...updates });
+                }, 0);
+            }
+        }
+    }, [loading, userSettings, settings, updateUserSettings]);
+
     /**
      * Update settings. User-specific fields (splitTime, userWorkloadPercentage) are saved
      * to user settings. Global fields are saved to app settings.
@@ -160,7 +216,7 @@ export const useCombinedSettings = () => {
 
         try {
             // Separate user-specific updates from global updates
-            const userUpdates: { splitTime?: string; workload?: number; timezone?: string } = {};
+            const userUpdates: { splitTime?: string; workload?: number; timezone?: string; weekStartDay?: 0 | 1; defaultPlanView?: 'week' | 'month' } = {};
             const appUpdates: Partial<AppSettingsEntity> = {};
 
             // Helper to decide where to put the update
@@ -191,12 +247,16 @@ export const useCombinedSettings = () => {
 
             if (updates.weekStartDay !== undefined) {
                 if (userSettings) {
-                    localStorage.setItem(`weekStartDay_${userSettings.userId}`, updates.weekStartDay.toString());
+                    addToUser('weekStartDay', updates.weekStartDay);
+                    // Also update localStorage for redundancy/legacy
+                    localStorage.setItem('weekStartDay', updates.weekStartDay.toString());
                 }
             }
             if (updates.defaultPlanView !== undefined) {
                 if (userSettings) {
-                    localStorage.setItem(`defaultPlanView_${userSettings.userId}`, updates.defaultPlanView);
+                    addToUser('defaultPlanView', updates.defaultPlanView);
+                    // Also update localStorage
+                    localStorage.setItem('defaultPlanView', updates.defaultPlanView);
                 }
             }
 
@@ -215,11 +275,10 @@ export const useCombinedSettings = () => {
             if (updates.timezone !== undefined) {
                 if (scope === 'user' && userSettings) {
                     addToUser('timezone', updates.timezone);
+                    localStorage.setItem('timezone', updates.timezone);
                 } else if (scope === 'global' || !userSettings) {
                     addToApp('timezone', updates.timezone);
                 } else {
-                    // Default behavior if scope not specified but user logged in:
-                    // For now, assume global if not specified, to match previous behavior of workspace settings
                     addToApp('timezone', updates.timezone);
                 }
             }
@@ -249,26 +308,7 @@ export const useCombinedSettings = () => {
         } catch (error) {
             console.error('Error saving combined settings:', error);
             // Revert optimistic update on error
-            const appSettings = await persistence.getAppSettings();
-            const merged: CombinedSettings = {
-                splitTime: userSettings?.splitTime || appSplitTimeToString(appSettings.splitTime || 40),
-                userWorkloadPercentage: userSettings?.workload || appSettings.userWorkloadPercentage || 60,
-                weeksComputation: appSettings.weeksComputation || 4,
-                highImpactTaskGoal: appSettings.highImpactTaskGoal || 3.63,
-                failureRateGoal: appSettings.failureRateGoal || 5,
-                qliGoal: appSettings.qliGoal || 60,
-                newCapabilitiesGoal: appSettings.newCapabilitiesGoal || 57.98,
-                vacationLimitMultiplier: appSettings.vacationLimitMultiplier || 1.5,
-                hourlyBalanceLimitUpper: appSettings.hourlyBalanceLimitUpper || 0.5,
-                hourlyBalanceLimitLower: appSettings.hourlyBalanceLimitLower || -0.5,
-                hoursToBeDoneByDay: appSettings.hoursToBeDoneByDay || 8,
-                weekStartDay: settings.weekStartDay, // Keep current local state
-                defaultPlanView: settings.defaultPlanView,
-                timezone: appSettings.timezone || 'Europe/Zurich',
-                country: appSettings.country || 'CH',
-                region: appSettings.region || 'BE',
-            };
-            setSettings(merged);
+            setSettings(settings); // Reset to previous state
         }
     };
 

@@ -92,7 +92,9 @@ class PostgresClient implements DbClient {
         "splitTime" TEXT DEFAULT '13:00',
         "monthlyBalances" JSONB,
         "cardCompactness" INTEGER DEFAULT 0,
-        "timezone" TEXT
+        "timezone" TEXT,
+        "weekStartDay" INTEGER,
+        "defaultPlanView" TEXT
       )
     `);
 
@@ -235,6 +237,22 @@ class PostgresClient implements DbClient {
       }
     };
 
+    const addColumn = async (table: string, colName: string, colType: string) => {
+      try {
+        const colCheck = await this.pool.query(
+          `SELECT 1 FROM information_schema.columns WHERE table_name=$1 AND column_name=$2`,
+          [table.replace(/"/g, ''), colName.replace(/"/g, '')]
+        );
+
+        if (colCheck.rows.length === 0) {
+          console.log(`Adding column ${table}.${colName}...`);
+          await this.pool.query(`ALTER TABLE "${table.replace(/"/g, '')}" ADD COLUMN "${colName}" ${colType}`);
+        }
+      } catch (e) {
+        console.error(`Error adding column ${table}.${colName}:`, e);
+      }
+    };
+
     // Rename legacy tables to camelCase if needed
     const renameTable = async (oldName: string, newName: string) => {
       try {
@@ -279,6 +297,10 @@ class PostgresClient implements DbClient {
     await runMigration('userSettings', 'split_time', 'splitTime');
     await runMigration('userSettings', 'monthly_balances', 'monthlyBalances');
     await runMigration('userSettings', 'card_compactness', 'cardCompactness');
+
+    // Add new columns for UserSettings
+    await addColumn('userSettings', 'weekStartDay', 'INTEGER');
+    await addColumn('userSettings', 'defaultPlanView', 'TEXT');
 
     // AppSettings columns
     await runMigration('appSettings', 'split_time', 'splitTime');
@@ -563,6 +585,8 @@ class PostgresClient implements DbClient {
       return {
         ...row,
         monthlyBalances: row.monthlyBalances || {},
+        weekStartDay: row.weekStartDay,
+        defaultPlanView: row.defaultPlanView,
       };
     }
     return null;
@@ -573,8 +597,8 @@ class PostgresClient implements DbClient {
     const updated = { ...current, ...data, userId };
 
     await this.pool.query(`
-      INSERT INTO "userSettings" ("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO "userSettings" ("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness", "weekStartDay", "defaultPlanView")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       ON CONFLICT ("userId") DO UPDATE SET
         "username" = EXCLUDED."username",
         "logo" = EXCLUDED."logo",
@@ -583,7 +607,9 @@ class PostgresClient implements DbClient {
         "splitTime" = EXCLUDED."splitTime",
         "monthlyBalances" = EXCLUDED."monthlyBalances",
         "timezone" = EXCLUDED."timezone",
-        "cardCompactness" = EXCLUDED."cardCompactness"
+        "cardCompactness" = EXCLUDED."cardCompactness",
+        "weekStartDay" = EXCLUDED."weekStartDay",
+        "defaultPlanView" = EXCLUDED."defaultPlanView"
     `, [
       updated.userId,
       updated.username,
@@ -593,7 +619,9 @@ class PostgresClient implements DbClient {
       updated.splitTime,
       JSON.stringify(updated.monthlyBalances),
       updated.timezone,
-      updated.cardCompactness
+      updated.cardCompactness,
+      updated.weekStartDay ?? null,
+      updated.defaultPlanView ?? null
     ]);
 
     return updated;

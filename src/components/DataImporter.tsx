@@ -22,6 +22,8 @@ interface ImportedUserSettings {
   cardCompactness?: number;
   card_compactness?: number;
   timezone?: string;
+  weekStartDay?: 0 | 1;
+  defaultPlanView?: 'week' | 'month';
 }
 
 const DataImporter: React.FC = () => {
@@ -75,6 +77,8 @@ const DataImporter: React.FC = () => {
                     monthlyBalances: settings.monthlyBalances ?? settings.monthly_balances,
                     cardCompactness: settings.cardCompactness ?? settings.card_compactness,
                     timezone: settings.timezone,
+                    weekStartDay: settings.weekStartDay,
+                    defaultPlanView: settings.defaultPlanView,
                   };
 
                   await adapter.updateUserSettings(userId, normalizedSettings);
@@ -90,7 +94,11 @@ const DataImporter: React.FC = () => {
                       logo: normalizedSettings.logo,
                       hasCompletedOnboarding: normalizedSettings.hasCompletedOnboarding,
                       monthlyBalances: normalizedSettings.monthlyBalances || {},
-                      cardCompactness: normalizedSettings.cardCompactness ?? 0
+                      cardCompactness: normalizedSettings.cardCompactness ?? 0,
+                      splitTime: normalizedSettings.splitTime,
+                      timezone: normalizedSettings.timezone,
+                      weekStartDay: normalizedSettings.weekStartDay,
+                      defaultPlanView: normalizedSettings.defaultPlanView,
                     });
                   }
                 };
