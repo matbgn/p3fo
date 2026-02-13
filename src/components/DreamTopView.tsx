@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DreamView } from './DreamView';
 import { useViewNavigation, useViewDisplay } from '@/hooks/useView';
 import { useTasks, Task } from '@/hooks/useTasks';
+import { useAllTasks } from '@/hooks/useAllTasks';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TaskCard } from './TaskCard';
@@ -24,7 +25,8 @@ type ActiveView = 'dream' | 'storyboard' | 'prioritization';
 const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
   const { setView, setFocusedTaskId } = useViewNavigation();
   const { cardCompactness } = useViewDisplay();
-  const { tasks, updateStatus, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleUrgent, toggleImpact, toggleMajorIncident, toggleDone, toggleTimer, reparent, updateTerminationDate, updateComment, updateDurationInMinutes, updatePriority, createTask } = useTasks();
+  const { updateStatus, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleUrgent, toggleImpact, toggleMajorIncident, toggleDone, toggleTimer, reparent, updateTerminationDate, updateComment, updateDurationInMinutes, updatePriority, createTask } = useTasks();
+  const { tasks } = useAllTasks();
   const { userId: currentUserId } = useUserSettings();
 
   const [activeView, setActiveView] = useState<ActiveView>('dream');

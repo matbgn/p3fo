@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Plus, CornerDownRight, FolderTree, Printer, Filter, ChevronDown, ChevronRight } from "lucide-react";
 import { FilterControls, Filters } from "./FilterControls";
 import { useTasks, Task, TriageStatus } from "@/hooks/useTasks";
+import { useAllTasks } from "@/hooks/useAllTasks";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { QuickTimer } from "@/components/QuickTimer";
 import { aStarTextSearch } from "@/lib/a-star-search";
@@ -25,7 +26,8 @@ type Column = {
 };
 
 const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId }) => {
-  const { tasks, createTask, reparent, updateStatus, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleDone, updateTaskTimer, toggleTimer, updateTimeEntry, updateCategory, updateComment, updateTerminationDate, updateDurationInMinutes } = useTasks();
+  const { createTask, reparent, updateStatus, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleDone, updateTaskTimer, toggleTimer, updateTimeEntry, updateCategory, updateComment, updateTerminationDate, updateDurationInMinutes } = useTasks();
+  const { tasks } = useAllTasks();
   const { userId: currentUserId } = useUserSettings();
   const map = React.useMemo(() => byId(tasks), [tasks]);
 

@@ -10,6 +10,7 @@ import {
   ResizableHandle,
 } from '@/components/ui/resizable';
 import { useTasks, Task } from '@/hooks/useTasks';
+import { useAllTasks } from '@/hooks/useAllTasks';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { useCombinedSettings } from '@/hooks/useCombinedSettings';
 import { TaskCard } from './TaskCard';
@@ -84,7 +85,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
     }
   }, [view]); // Re-scroll if view changes
   const {
-    tasks,
+    // tasks, // We use tasks from useAllTasks instead
     updateStatus,
     updateDifficulty,
     updateCategory,
@@ -102,6 +103,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
     updateComment,
     updateDurationInMinutes, // Add updateDurationInMinutes here
   } = useTasks();
+  const { tasks } = useAllTasks(); // Use useAllTasks to get unfiltered tasks
   const { userId: currentUserId } = useUserSettings();
 
   const parentTasks = tasks.filter(
