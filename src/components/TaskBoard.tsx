@@ -209,15 +209,25 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
     }
 
     const rootItems = tasks.filter((t) => !t.parentId).sort(sortTasks.taskboard);
-    cols.push({ parentId: null, items: rootItems, activeId: path[0] });
+
+    // Apply Focus Mode: If a root task is selected (path[0]), only show that task
+    const filteredRootItems = path[0] ? rootItems.filter(t => t.id === path[0]) : rootItems;
+
+    cols.push({ parentId: null, items: filteredRootItems, activeId: path[0] });
 
     path.forEach((taskId, idx) => {
       const t = map[taskId];
       if (!t) return;
       // Show all children to ensure tasks from other columns are visible
-      const children = ((t.children || [])
+      let children = ((t.children || [])
         .map((id) => map[id])
         .filter(Boolean) as Task[]).sort(sortTasks.taskboard);
+
+      // Apply Focus Mode: If a child is selected in this column (path[idx + 1]), only show that child
+      if (path[idx + 1]) {
+        children = children.filter(c => c.id === path[idx + 1]);
+      }
+
       cols.push({
         parentId: t.id,
         items: children,
@@ -225,10 +235,18 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
       });
     });
     return cols;
-    return cols;
   }, [tasks, map, path, filters]);
 
   const handleActivate = (colIndex: number, id: string) => {
+    // Implement Toggle Off:
+    // If clicking the currently active task in this column, deselect it (and all consecutive paths)
+    if (path[colIndex] === id) {
+      const newPath = path.slice(0, colIndex);
+      setPath(newPath);
+      setHighlightedTaskId(null);
+      return;
+    }
+
     const newPath = path.slice(0, colIndex);
     newPath[colIndex] = id;
     setPath(newPath);
