@@ -59,7 +59,6 @@ export type Task = {
 };
 
 let tasks: Task[] = [];
-let allTasks: Task[] = [];
 
 // Key for localStorage to track if default tasks have been initialized
 export const DEFAULT_TASKS_INITIALIZED_KEY = 'p3fo_default_tasks_initialized';
@@ -74,12 +73,6 @@ const syncTaskToYjs = (taskId: string, task: Task) => {
 };
 
 const updateTaskInTasks = (taskId: string, updater: (task: Task) => Task) => {
-  allTasks = allTasks.map(t => {
-    if (t.id === taskId) {
-      return updater(t);
-    }
-    return t;
-  });
   tasks = tasks.map(t => {
     if (t.id === taskId) {
       const updated = updater(t);
@@ -97,9 +90,7 @@ if (!PERSISTENCE_CONFIG.FORCE_BROWSER) {
 
 // Observer for Yjs updates - only set up if collaboration is enabled
 if (isCollaborationEnabled()) {
-  console.log('Setting up Yjs observer for task synchronization');
   yTasks.observe(() => {
-    console.log('Yjs tasks updated');
     const newTasks = (Array.from(yTasks.values()) as Task[]).map(t => ({
       ...t,
       triageStatus: t.triageStatus || "Backlog",
@@ -109,11 +100,8 @@ if (isCollaborationEnabled()) {
     // Always update, even if empty (e.g., all tasks deleted)
     // This ensures deletions to empty state trigger UI updates
     tasks = newTasks;
-    allTasks = newTasks;
     eventBus.publish("tasksChanged");
   });
-} else {
-  console.log('Yjs observer disabled (browser-only mode)');
 }
 
 // Helper to convert TaskEntity[] to Task[] with proper parent-child relationships
@@ -156,7 +144,6 @@ const convertEntitiesToTasks = (entities: import('@/lib/persistence-types').Task
 
 // Load tasks filtered by userId (for server-side filtering optimization)
 const loadTasksByUser = async (userId?: string | null): Promise<Task[]> => {
-  console.log('=== loadTasksByUser called ===', { userId, timestamp: new Date().toISOString() });
 
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
@@ -165,9 +152,7 @@ const loadTasksByUser = async (userId?: string | null): Promise<Task[]> => {
     // Convert UNASSIGNED filter to undefined to get tasks without userId
     const filterUserId = userId === 'UNASSIGNED' ? undefined : (userId || undefined);
 
-    console.log(`Loading tasks from database with userId filter: ${filterUserId || 'ALL'}`);
     const entities = await adapter.listTasks(filterUserId);
-    console.log(`Found ${entities.length} tasks in database`);
 
     return convertEntitiesToTasks(entities);
   } catch (error) {
@@ -176,33 +161,20 @@ const loadTasksByUser = async (userId?: string | null): Promise<Task[]> => {
   }
 };
 
-const loadTasks = async () => {
-  console.log('=== loadTasks called ===', {
-    timestamp: new Date().toISOString()
-  });
+async function loadTasks() {
 
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
-    console.log('Loading tasks from database...');
     const entities = await adapter.listTasks();
-    console.log(`Found ${entities.length} tasks in database`);
-
-    // Log all task IDs found in database
-    if (entities.length > 0) {
-      console.log('Task IDs in database:', entities.map(e => e.id));
-    }
 
     // Use shared conversion helper
     const loadedTasks = convertEntitiesToTasks(entities);
     tasks = loadedTasks;
-    allTasks = loadedTasks;
-    console.log(`Loaded ${tasks.length} tasks into memory`);
 
     // Only sync to Yjs if collaboration is enabled
     if (isCollaborationEnabled()) {
       // Prioritize Server State: Sync DB tasks to Yjs
-      console.log('Synchronizing Yjs with Server state (Server is reference)');
       doc.transact(() => {
         // 1. Remove tasks from Yjs that are not in the Server DB
         const dbTaskIds = new Set(tasks.map(t => t.id));
@@ -225,26 +197,17 @@ const loadTasks = async () => {
       const alreadyInitialized = localStorage.getItem(DEFAULT_TASKS_INITIALIZED_KEY);
 
       if (!alreadyInitialized) {
-        console.log('No tasks found, calling server to initialize default tasks');
         try {
           const response = await fetch('/api/tasks/init-defaults', { method: 'POST' });
           const result = await response.json();
           if (result.success) {
-            console.log('Server acknowledged default tasks initialization. Creating tasks on frontend.');
             await initializeDefaultTasks();
-            // Mark as initialized so we don't recreate them if user deletes all tasks
             localStorage.setItem(DEFAULT_TASKS_INITIALIZED_KEY, 'true');
-          } else {
-            console.error('Server failed to acknowledge default tasks initialization:', result.error);
           }
         } catch (error) {
           console.error('Error calling init-defaults endpoint:', error);
         }
-      } else {
-        console.log('Default tasks already initialized previously, skipping creation');
       }
-    } else {
-      console.log('Tasks loaded successfully');
     }
   } catch (error) {
     console.error("Error loading tasks from persistence:", error);
@@ -269,8 +232,7 @@ const loadTasks = async () => {
           };
         });
         tasks = parsed;
-        allTasks = parsed;
-        console.log('Loaded tasks from localStorage fallback');
+        tasks = parsed;
       } catch (e) {
         console.error("Error parsing legacy tasks:", e);
         await initializeDefaultTasks();
@@ -279,26 +241,17 @@ const loadTasks = async () => {
       await initializeDefaultTasks();
     }
   }
-};
+}
 
-const initializeDefaultTasks = async () => {
-  console.log('=== initializeDefaultTasks called ===');
-
-  console.log('Creating default tasks in database...');
-
+async function initializeDefaultTasks() {
   // Create task A (top level)
   const taskAId = await createTask("Plan vacation", null);
-  console.log('Created task A:', taskAId);
 
   // Create task B (child of A)
   const taskBId = await createTask("Research", taskAId);
-  console.log('Created task B:', taskBId);
 
   // Create task C (child of B)
-  const taskCId = await createTask("Find accommodations", taskBId);
-  console.log('Created task C:', taskCId);
-
-  console.log('All default tasks created successfully in database');
+  await createTask("Find accommodations", taskBId);
 };
 
 // Load tasks on module initialization
@@ -306,13 +259,8 @@ loadTasks();
 
 
 
-const createTask = async (title: string, parentId: string | null, userId?: string) => {
-  console.log('=== createTask called ===', {
-    title,
-    parentId,
-    timestamp: new Date().toISOString()
-  });
 
+async function createTask(title: string, parentId: string | null, userId?: string) {
   const t: Task = {
     id: crypto.randomUUID(),
     title: title.trim(),
@@ -332,8 +280,6 @@ const createTask = async (title: string, parentId: string | null, userId?: strin
     userId: userId, // Assign user if provided
   };
 
-  console.log('Creating task:', t);
-
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
@@ -341,18 +287,13 @@ const createTask = async (title: string, parentId: string | null, userId?: strin
     // Create task entity using centralized conversion function
     const entity = taskToEntity(t);
 
-    console.log('Calling adapter.createTask with entity:', JSON.stringify(entity, null, 2));
-    const result = await adapter.createTask(entity);
-    console.log('Backend create successful, result:', result);
+    await adapter.createTask(entity);
 
     // Update local state
     tasks = [...tasks, t];
-    allTasks = [...allTasks, t];
     syncTaskToYjs(t.id, t);
-    console.log('Local state updated with new task');
 
     if (parentId) {
-      console.log('Updating parent task:', parentId);
       tasks = tasks.map(currentTask => {
         if (currentTask.id === parentId) {
           const updatedParent = {
@@ -382,7 +323,6 @@ const createTask = async (title: string, parentId: string | null, userId?: strin
     console.error('Error creating task:', error);
     // Fallback to old method
     tasks = [...tasks, t];
-    allTasks = [...allTasks, t];
     if (parentId) {
       tasks = tasks.map(currentTask => {
         if (currentTask.id === parentId) {
@@ -403,7 +343,6 @@ const createTask = async (title: string, parentId: string | null, userId?: strin
     eventBus.publish("tasksChanged");
   }
 
-  console.log('createTask completed, returning task ID:', t.id);
   return t.id;
 };
 
@@ -420,18 +359,6 @@ const reparent = async (taskId: string, newParentId: string | null) => {
   }
 
   const oldParentId = task.parentId ?? null;
-
-  // Update local allTasks state
-  allTasks = allTasks.map(t => {
-    if (t.id === taskId) {
-      return { ...t, parentId: newParentId };
-    } else if (t.id === oldParentId) {
-      return { ...t, children: (t.children || []).filter(id => id !== taskId) };
-    } else if (t.id === newParentId) {
-      return { ...t, children: Array.from(new Set([...(t.children || []), taskId])) };
-    }
-    return t;
-  });
 
   // Update local tasks state
   tasks = tasks.map(t => {
@@ -502,7 +429,7 @@ const reparent = async (taskId: string, newParentId: string | null) => {
 let isUpdatingDueToChildCompletion = false;
 
 // Helper function to find the minimum priority among backlog tasks
-const getMinBacklogPriority = (): number => {
+function getMinBacklogPriority(): number {
   const backlogTasks = tasks.filter(t => t.triageStatus === "Backlog");
   if (backlogTasks.length === 0) return 0;
 
@@ -514,7 +441,7 @@ const getMinBacklogPriority = (): number => {
   return priorities.length > 0 ? Math.min(...priorities) - 1 : -1;
 };
 
-const updateStatus = async (taskId: string, status: TriageStatus) => {
+async function updateStatus(taskId: string, status: TriageStatus) {
   const taskMap = byId(tasks);
   const task = taskMap[taskId];
   if (!task) return;
@@ -539,23 +466,6 @@ const updateStatus = async (taskId: string, status: TriageStatus) => {
     };
     getAllChildren(taskId);
   }
-
-  // Update local allTasks state
-  allTasks = allTasks.map(t => {
-    if (tasksToUpdate.has(t.id)) {
-      const updatedTask = {
-        ...t,
-        triageStatus: status,
-        terminationDate: status === 'Done' ? Date.now() : undefined
-      };
-      if (status === "Blocked") {
-        const minBacklogPriority = getMinBacklogPriority();
-        updatedTask.priority = minBacklogPriority;
-      }
-      return updatedTask;
-    }
-    return t;
-  });
 
   // Update local tasks state
   tasks = tasks.map(t => {
@@ -632,7 +542,7 @@ const toggleDone = (taskId: string) => {
 };
 
 // Function to check if all subtasks of a parent are done/dropped and update parent status accordingly
-const checkParentTaskCompletion = (parentId: string) => {
+function checkParentTaskCompletion(parentId: string) {
   const parentTask = tasks.find(t => t.id === parentId);
   if (!parentTask || !parentTask.children || parentTask.children.length === 0) {
     return; // No children to check
@@ -779,69 +689,39 @@ const updateCategory = async (taskId: string, category: Category | undefined) =>
 
 };
 
-const updateUser = async (taskId: string, userId: string | undefined) => {
-  console.log('=== updateUser called ===', {
-    taskId,
-    userId,
-    timestamp: new Date().toISOString()
-  });
-
+async function updateUser(taskId: string, userId: string | undefined) {
   const task = tasks.find(t => t.id === taskId);
   if (!task) {
     console.error('Task not found:', taskId);
     return;
   }
 
-  console.log('Current task state:', {
-    id: task.id,
-    title: task.title,
-    currentUserId: task.userId
-  });
-
-  // Ensure userId is undefined if empty string, or null for DB
   const normalizedUserId = userId === '' ? undefined : userId;
-  const userIdForDb = normalizedUserId || null;
-  console.log('Normalized userId:', normalizedUserId, 'userIdForDb:', userIdForDb);
 
   // Update local state and sync to Yjs atomically
   const updatedTask = { ...task, userId: normalizedUserId };
 
-  tasks = tasks.map(t => {
-    if (t.id === taskId) {
-      return updatedTask;
-    }
-    return t;
-  });
+  tasks = tasks.map(t => t.id === taskId ? updatedTask : t);
 
   // Sync to Yjs using atomic transaction for better consistency
   if (isCollaborationEnabled()) {
-    console.log('Syncing to Yjs with transaction');
     doc.transact(() => {
       yTasks.set(taskId, updatedTask);
     });
   }
-
-  console.log('Local state and Yjs updated successfully');
 
   // Persist to backend
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
 
-    const entity = { ...taskToEntity(task), userId: userIdForDb };
+    const entity = { ...taskToEntity(task), userId: normalizedUserId || null };
 
-    console.log('Calling adapter.updateTask with entity:', JSON.stringify(entity, null, 2));
-    const result = await adapter.updateTask(taskId, entity);
-    console.log('Backend update successful, result:', result);
+    await adapter.updateTask(taskId, entity);
   } catch (error) {
     console.error('Error updating user in backend:', error);
     // Revert local state on error
-    tasks = tasks.map(t => {
-      if (t.id === taskId) {
-        return task; // Revert to original
-      }
-      return t;
-    });
+    tasks = tasks.map(t => t.id === taskId ? task : t);
 
     // Revert Yjs on error
     if (isCollaborationEnabled()) {
@@ -850,15 +730,11 @@ const updateUser = async (taskId: string, userId: string | undefined) => {
       });
     }
 
-    console.log('Local state and Yjs reverted due to error');
     throw error;
   }
 
-
   eventBus.publish("tasksChanged");
-  console.log('updateUser completed successfully');
 };
-
 const updateTerminationDate = async (taskId: string, terminationDate: number | undefined) => {
   const task = tasks.find(t => t.id === taskId);
   if (!task) return;
@@ -992,15 +868,8 @@ export function useTasks() {
 
     // Update local state
     tasks = tasks.filter((t) => !childrenIds.has(t.id));
-    allTasks = allTasks.filter((t) => !childrenIds.has(t.id));
 
     if (taskToDelete.parentId) {
-      allTasks = allTasks.map(t => {
-        if (t.id === taskToDelete.parentId) {
-          return { ...t, children: (t.children || []).filter(id => id !== taskId) };
-        }
-        return t;
-      });
       tasks = tasks.map(t => {
         if (t.id === taskToDelete.parentId) {
           return { ...t, children: (t.children || []).filter(id => id !== taskId) };
@@ -1011,7 +880,6 @@ export function useTasks() {
 
     // Sync deletions to Yjs for cross-client propagation
     if (isCollaborationEnabled()) {
-      console.log('Syncing task deletions to Yjs:', Array.from(childrenIds));
       doc.transact(() => {
         for (const id of childrenIds) {
           yTasks.delete(id);
@@ -1079,7 +947,6 @@ export function useTasks() {
             const duplicatedChild = duplicateTask(childTask, newId);
             duplicatedChildren.push(duplicatedChild.id);
             tasks = [...tasks, duplicatedChild];
-            allTasks = [...allTasks, duplicatedChild];
           }
         });
         duplicatedTask.children = duplicatedChildren;
@@ -1091,19 +958,9 @@ export function useTasks() {
     // Start duplication process
     const duplicatedTask = duplicateTask(originalTask, originalTask.parentId);
     tasks = [...tasks, duplicatedTask];
-    allTasks = [...allTasks, duplicatedTask];
 
     // Update parent's children array if the duplicated task has a parent
     if (originalTask.parentId) {
-      allTasks = allTasks.map(t => {
-        if (t.id === originalTask.parentId) {
-          return {
-            ...t,
-            children: [...(t.children || []), duplicatedTask.id]
-          };
-        }
-        return t;
-      });
       tasks = tasks.map(t => {
         if (t.id === originalTask.parentId) {
           return {
@@ -1146,7 +1003,6 @@ export function useTasks() {
 
   const clearAllTasks = React.useCallback(async () => {
     tasks = [];
-    allTasks = [];
 
     // Clear Yjs state
     doc.transact(() => {
@@ -1188,7 +1044,7 @@ export function useTasks() {
 
   const importTasks = React.useCallback(async (importedTasks: Task[]) => {
     tasks = importedTasks;
-    allTasks = importedTasks;
+    // allTasks alias maintained via return for backward compat
 
     // Persist to backend
     try {
@@ -1355,7 +1211,7 @@ export function useTasks() {
   }, []);
 
   return {
-    allTasks,
+    allTasks: tasks,
     tasks,
     createTask,
     reparent,
@@ -1385,7 +1241,7 @@ export function useTasks() {
       if (!task) return;
 
       // Update local state
-      allTasks = allTasks.map(t => t.id === taskId ? { ...t, comment: comment } : t);
+      // Update handled by updateTaskInTasks below
       updateTaskInTasks(taskId, (t) => ({ ...t, comment: comment }));
 
       // Persist to backend
@@ -1409,7 +1265,7 @@ export function useTasks() {
       if (!task) return;
 
       // Update local state
-      allTasks = allTasks.map(t => t.id === taskId ? { ...t, durationInMinutes: durationInMinutes } : t);
+      // Update handled by updateTaskInTasks below
       updateTaskInTasks(taskId, (t) => ({ ...t, durationInMinutes: durationInMinutes }));
 
       // Persist to backend
@@ -1433,7 +1289,7 @@ export function useTasks() {
       if (!task) return;
 
       // Update local state
-      allTasks = allTasks.map(t => t.id === taskId ? { ...t, priority: priority } : t);
+      // Update handled by updateTaskInTasks below
       updateTaskInTasks(taskId, (t) => ({ ...t, priority: priority }));
 
       // Persist to backend
@@ -1454,7 +1310,7 @@ export function useTasks() {
     }, []),
     updatePrioritiesBulk: React.useCallback(async (updatedTasks: { id: string; priority: number | undefined }[]) => {
       // Update local state
-      allTasks = allTasks.map(task => {
+      tasks = tasks.map(task => {
         const updatedTask = updatedTasks.find(t => t.id === task.id);
         if (updatedTask) {
           return { ...task, priority: updatedTask.priority };

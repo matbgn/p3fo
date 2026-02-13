@@ -13,7 +13,7 @@ import { sortTasks } from "@/utils/taskSorting";
 import { QuickTimer } from "@/components/QuickTimer";
 
 import { useUserSettings } from "@/hooks/useUserSettings";
-import { useView } from "@/hooks/useView";
+import { useViewNavigation, useViewDisplay } from "@/hooks/useView";
 import { COMPACTNESS_ULTRA, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
 import { ChevronDown, ChevronRight, Archive } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -26,9 +26,12 @@ type BoardCard =
   | { kind: "parent"; task: Task }
   | { kind: "child"; task: Task; parent: Task };
 
+import { LazyCard } from "./LazyCard";
+
 const STATUSES: TriageStatus[] = ["Backlog", "Ready", "WIP", "Blocked", "Done", "Dropped", "Archived"];
 
 // Column renders a mixture of single cards and grouped children for expanded parents
+// Wrapped in React.memo to only re-render when its specific cards/props change
 const Column: React.FC<{
   title: TriageStatus;
   cards: BoardCard[];
@@ -56,7 +59,7 @@ const Column: React.FC<{
   highlightedTaskId?: string | null;
   highlightedCardRef?: React.RefObject<HTMLDivElement | null>;
   onArchive?: (title: TriageStatus) => void;
-}> = ({ title, cards, tasks, onDropTask, onChangeStatus, onUpdateCategory, onUpdateUser, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onToggleDone, onUpdateDifficulty, onUpdateTitle, onDelete, duplicateTaskStructure, openParents, onToggleParent, onReparent, onFocusOnTask, updateTerminationDate, updateDurationInMinutes, updateComment, onToggleTimer, highlightedTaskId, highlightedCardRef, onArchive }) => {
+}> = React.memo(({ title, cards, tasks, onDropTask, onChangeStatus, onUpdateCategory, onUpdateUser, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onToggleDone, onUpdateDifficulty, onUpdateTitle, onDelete, duplicateTaskStructure, openParents, onToggleParent, onReparent, onFocusOnTask, updateTerminationDate, updateDurationInMinutes, updateComment, onToggleTimer, highlightedTaskId, highlightedCardRef, onArchive }) => {
   // Calculate total difficulty points for this column
   const totalDifficulty = cards.reduce((sum, card) => sum + (card.task.difficulty || 0), 0);
 
@@ -187,9 +190,9 @@ const Column: React.FC<{
         ) : (
           finalBlocks.map((blk) =>
             blk.type === "single" ? (
-              <div key={blk.key}>{blk.node}</div>
+              <LazyCard key={blk.key}>{blk.node}</LazyCard>
             ) : (
-              <div
+              <LazyCard
                 key={blk.key}
                 className="rounded-md border border-blue-300/60 bg-blue-50/50 dark:bg-blue-950/20 p-2 space-y-2"
               >
@@ -221,21 +224,68 @@ const Column: React.FC<{
                     updateComment={updateComment}
                   />
                 ))}
-              </div>
+              </LazyCard>
             ),
           )
         )}
       </div>
     </Card>
   );
-};
+});
+
+// Isolated quick-add input to prevent full board re-renders on every keystroke
+const QuickAddInput: React.FC<{ onAdd: (title: string, userId?: string) => void; selectedUserId?: string }> = React.memo(({ onAdd, selectedUserId }) => {
+  const [input, setInput] = React.useState("");
+  const addTopTask = () => {
+    const v = input.trim();
+    if (!v) return;
+    const assignedUserId = selectedUserId && selectedUserId !== 'UNASSIGNED' ? selectedUserId : undefined;
+    onAdd(v, assignedUserId);
+    setInput("");
+  };
+  return (
+    <div className="mb-4 flex gap-2">
+      <Input
+        placeholder="Quick add top task..."
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && addTopTask()}
+        className="max-w-md"
+      />
+      <Button onClick={addTopTask} disabled={!input.trim()}>
+        Add
+      </Button>
+    </div>
+  );
+});
 
 const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highlightedTaskId?: string | null }> = ({ onFocusOnTask, highlightedTaskId }) => {
   const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, reparent, toggleDone, toggleTimer, updateTerminationDate, updateDurationInMinutes, updateComment, loadTasksByUser, reloadTasks } = useTasks();
   const { userId: currentUserId } = useUserSettings();
-  const { setFocusedTaskId } = useView();
+  const { setFocusedTaskId } = useViewNavigation();
   const { settings } = useCombinedSettings();
   const [isLoadingTasks, setIsLoadingTasks] = React.useState(false);
+
+  // Stable callback references for Column props (prevents Column/TaskCard re-renders)
+  const handleDropTask = React.useCallback((id: string, status: TriageStatus) => {
+    updateStatus(id, status);
+  }, [updateStatus]);
+
+  const handleChangeStatus = React.useCallback((id: string, status: TriageStatus) => {
+    updateStatus(id, status);
+  }, [updateStatus]);
+
+  const handleUpdateCategory = React.useCallback((id: string, category: Category) => {
+    updateCategory(id, category);
+  }, [updateCategory]);
+
+  const handleUpdateUser = React.useCallback((id: string, userId: string | undefined) => {
+    updateUser(id, userId === 'current-user' ? currentUserId : userId);
+  }, [updateUser, currentUserId]);
+
+  const handleToggleDone = React.useCallback((task: Task) => {
+    toggleDone(task.id);
+  }, [toggleDone]);
 
   // Archive dialog state
   const [archiveDialogOpen, setArchiveDialogOpen] = React.useState(false);
@@ -282,7 +332,7 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
 
   const [filters, setFilters] = React.useState<Filters>(defaultKanbanFilters);
   const [loadingFilters, setLoadingFilters] = React.useState(true);
-  const { cardCompactness } = useView();
+  const { cardCompactness } = useViewDisplay();
   const [isFiltersCollapsed, setIsFiltersCollapsed] = React.useState(false);
 
   // Auto-collapse filters when switching to Ultra Compact mode
@@ -405,22 +455,17 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
     });
   };
 
-  // Force re-render when timer updates or tasks change
+  // Force re-render when timer updates
+  // Note: tasksChanged is already handled by useTasks() hook — no duplicate listener needed
   const [, setForceRender] = React.useState({});
   React.useEffect(() => {
     const onTimerToggled = () => {
       setForceRender({});
     };
 
-    const onTasksChanged = () => {
-      setForceRender({});
-    };
-
     eventBus.subscribe("timerToggled", onTimerToggled);
-    eventBus.subscribe("tasksChanged", onTasksChanged);
     return () => {
       eventBus.unsubscribe("timerToggled", onTimerToggled);
-      eventBus.unsubscribe("tasksChanged", onTasksChanged);
     };
   }, []);
 
@@ -491,15 +536,10 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
     return acc;
   }, [topTasks, map]); // Removed tasks as dependency as topTasks and map are derived from it
 
-  // Quick add
-  const [input, setInput] = React.useState("");
-  const addTopTask = () => {
-    const v = input.trim();
-    if (!v) return;
-    const assignedUserId = filters.selectedUserId && filters.selectedUserId !== 'UNASSIGNED' ? filters.selectedUserId : undefined;
-    createTask(v, null, assignedUserId);
-    setInput("");
-  };
+  // Quick add handler (used by extracted QuickAddInput component)
+  const handleQuickAdd = React.useCallback((title: string, userId?: string) => {
+    createTask(title, null, userId);
+  }, [createTask]);
 
   // Archive handlers
   const handleArchiveClick = (columnTitle: TriageStatus) => {
@@ -545,18 +585,7 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
 
   return (
     <div className="w-full overflow-x-auto">
-      <div className="mb-4 flex gap-2">
-        <Input
-          placeholder="Quick add top task..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && addTopTask()}
-          className="max-w-md"
-        />
-        <Button onClick={addTopTask} disabled={!input.trim()}>
-          Add
-        </Button>
-      </div>
+      <QuickAddInput onAdd={handleQuickAdd} selectedUserId={filters.selectedUserId} />
 
       <div className="mb-4 flex flex-col gap-2">
         <div className="flex items-center gap-2">
@@ -611,14 +640,14 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
             title={s}
             cards={grouped[s]}
             tasks={tasks}
-            onDropTask={(id, status) => updateStatus(id, status)}
-            onChangeStatus={(id, status) => updateStatus(id, status)}
-            onUpdateCategory={(id, category) => updateCategory(id, category)}
-            onUpdateUser={(id, userId) => updateUser(id, userId === 'current-user' ? currentUserId : userId)}
+            onDropTask={handleDropTask}
+            onChangeStatus={handleChangeStatus}
+            onUpdateCategory={handleUpdateCategory}
+            onUpdateUser={handleUpdateUser}
             onToggleUrgent={toggleUrgent}
             onToggleImpact={toggleImpact}
             onToggleMajorIncident={toggleMajorIncident}
-            onToggleDone={(task: Task) => toggleDone(task.id)}
+            onToggleDone={handleToggleDone}
             onUpdateDifficulty={updateDifficulty}
             onUpdateTitle={updateTitle}
             onDelete={deleteTask}

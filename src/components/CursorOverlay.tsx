@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useCursors } from '@/hooks/useCursors';
 import { MousePointer2 } from 'lucide-react';
-import { useView } from "@/hooks/useView";
+import { useViewNavigation } from "@/hooks/useView";
 
 export const CursorOverlay = () => {
     const cursors = useCursors();
-    const { view } = useView();
+    const { view } = useViewNavigation();
     const [isVisible, setIsVisible] = useState(true);
 
     useEffect(() => {

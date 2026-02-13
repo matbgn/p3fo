@@ -1,13 +1,13 @@
 import React from 'react';
 import { FertilizationView } from './FertilizationView';
-import { useView } from '@/hooks/useView';
+import { useViewNavigation } from '@/hooks/useView';
 
 interface CelebrationViewProps {
   onFocusOnTask: (taskId: string) => void;
 }
 
 const CelebrationView: React.FC<CelebrationViewProps> = ({ onFocusOnTask }) => {
-  const { setView, setFocusedTaskId } = useView();
+  const { setView, setFocusedTaskId } = useViewNavigation();
 
   const handlePromoteToKanban = (taskId: string) => {
     setFocusedTaskId(taskId);

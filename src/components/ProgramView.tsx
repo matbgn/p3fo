@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { LazyCard } from './LazyCard';
 import { AlertTriangle, CircleDot, Flame } from 'lucide-react';
 
 
@@ -246,7 +247,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
                 return a.createdAt - b.createdAt;
               })
               .map(task => (
-                <div key={task.id} className="w-64">
+                <LazyCard key={task.id} className="w-64">
                   <TaskCard
                     task={task}
                     tasks={tasks}
@@ -266,9 +267,9 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
                     onFocusOnTask={onFocusOnTask}
                     updateTerminationDate={updateTerminationDate}
                     updateComment={updateComment}
-                    updateDurationInMinutes={updateDurationInMinutes} // Pass updateDurationInMinutes here
+                    updateDurationInMinutes={updateDurationInMinutes}
                   />
-                </div>
+                </LazyCard>
               ))}
           </CardContent>
         </Card>
