@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useTasks, Category, TriageStatus } from "@/hooks/useTasks";
+import { useAllTasks } from "@/hooks/useAllTasks";
 import { CATEGORIES } from "@/data/categories";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -28,7 +29,10 @@ export const Timetable: React.FC<{
   onJumpToTask?: (taskId: string) => void;
 }> = ({ onJumpToTask }) => {
   const navigate = useNavigate();
-  const { tasks, updateTimeEntry, deleteTimeEntry, updateCategory, updateUser, toggleTimer } = useTasks();
+  const { tasks: allTasks } = useAllTasks();
+  const { updateTimeEntry, deleteTimeEntry, updateCategory, updateUser, toggleTimer } = useTasks();
+  // We use allTasks for the list, but we need to ensure we don't conflict with useTasks
+  const tasks = allTasks;
   const { settings } = useCombinedSettings();
   const weekStartsOn = settings.weekStartDay as 0 | 1;
   const weeksComputation = settings.weeksComputation || 4;
