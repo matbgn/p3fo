@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import TaskBoard from "@/components/TaskBoard";
 import KanbanBoard from "@/components/KanbanBoard";
 import { MadeWithDyad } from "@/components/made-with-dyad";
-import { ViewSwitcher } from "@/components/ViewSwitcher";
+import { ViewSwitcher, ViewSwitcherUtilities } from "@/components/ViewSwitcher";
 import { Timetable } from "@/components/Timetable";
 import ProgramView from "@/components/ProgramView";
 import SettingsPage from "./SettingsPage";
@@ -84,7 +84,11 @@ const Index: React.FC = () => {
             </div>
             <div className="flex flex-col items-end gap-2">
               <ViewSwitcher value={view} onChange={handleViewChange} />
-              <CompactnessSelector />
+              <div className="flex items-center gap-2">
+                <ViewSwitcherUtilities value={view} onChange={handleViewChange} />
+                <div className="w-px h-5 bg-gray-300" />
+                <CompactnessSelector />
+              </div>
             </div>
           </div>
         </div>
