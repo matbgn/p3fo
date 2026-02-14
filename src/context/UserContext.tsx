@@ -110,7 +110,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    // Change user ID and migrate data
+    // Change user ID — discard current data and adopt target UUID's workspace
     const changeUserId = async (newUserId: string) => {
         if (!userId) {
             throw new Error('Cannot change user ID: no current user ID');
@@ -120,33 +120,21 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setLoading(true);
             const adapter = await getPersistenceAdapter();
 
-            // Migrate data
+            // Discard old user's data
             await adapter.migrateUser(userId, newUserId);
 
-            // Update cookie
+            // Update cookie and localStorage to point to new UUID
             Cookies.set(USER_ID_COOKIE_NAME, newUserId, { expires: COOKIE_EXPIRY_DAYS });
+            localStorage.setItem('p3fo_user_id', newUserId);
 
-            // Update state
-            setUserId(newUserId);
+            console.log(`Successfully switched from ${userId} to ${newUserId}`);
 
-            // Reload settings for new user
-            const settings = await adapter.getUserSettings(newUserId);
-            if (settings) {
-                setUserSettings(settings);
-            } else {
-                // Should not happen if migration worked, but just in case
-                await refreshUserSettings();
-            }
-
-            console.log(`Successfully changed user ID from ${userId} to ${newUserId}`);
-
-            // Emit event so other components can refresh (e.g. UserManagement)
-            eventBus.publish('userSettingsChanged');
+            // Reload the page to cleanly re-initialize with new UUID context
+            window.location.reload();
         } catch (error) {
             console.error('Error changing user ID:', error);
-            throw error;
-        } finally {
             setLoading(false);
+            throw error;
         }
     };
 

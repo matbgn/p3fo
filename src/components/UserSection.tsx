@@ -3,8 +3,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Shuffle, Edit2, User, Upload, Fingerprint } from "lucide-react";
+import { Shuffle, Edit2, User, Upload, Fingerprint, AlertTriangle } from "lucide-react";
 import { useUserSettings } from "@/hooks/useUserSettings";
+import { useTasks } from "@/hooks/useTasks";
 import { UserContext } from "@/context/UserContextDefinition";
 import { cn } from "@/lib/utils";
 import { eventBus } from "@/lib/events";
@@ -12,6 +13,8 @@ import { eventBus } from "@/lib/events";
 export function UserSection() {
   const { userSettings, updateUsername, updateLogo, regenerateUsername } = useUserSettings();
   const userContext = useContext(UserContext);
+  const { tasks } = useTasks();
+  const currentUserTaskCount = tasks.filter(t => t.userId === userContext?.userId).length;
 
   const [isEditing, setIsEditing] = useState(false);
   const [isChangingUuid, setIsChangingUuid] = useState(false);
@@ -177,10 +180,10 @@ export function UserSection() {
               ) : (
                 <div className="space-y-2">
                   <div className="text-sm font-medium">
-                    Migrate to UUID
+                    Switch UUID
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Enter a previous UUID to recover data
+                    Enter another UUID to adopt its workspace
                   </div>
                 </div>
               )}
@@ -270,6 +273,14 @@ export function UserSection() {
                   className="text-sm font-mono"
                   autoFocus
                 />
+                {currentUserTaskCount > 0 && (
+                  <div className="flex items-start gap-2 rounded-md bg-amber-500/10 border border-amber-500/30 p-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      You have <strong>{currentUserTaskCount}</strong> task{currentUserTaskCount !== 1 ? 's' : ''}. Switching UUID will <strong>discard</strong> your current workspace in favor of the target UUID.
+                    </p>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <Button
                     variant="default"
@@ -278,7 +289,7 @@ export function UserSection() {
                     onClick={handleMigrateUuid}
                     disabled={!tempUuid.trim() || tempUuid === userContext?.userId}
                   >
-                    Migrate
+                    Switch
                   </Button>
                   <Button
                     variant="outline"

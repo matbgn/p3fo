@@ -711,22 +711,14 @@ class SqliteClient implements DbClient {
   async migrateUser(oldUserId: string, newUserId: string): Promise<void> {
     this.db.exec('BEGIN');
     try {
-      // 1. Migrate tasks
-      this.db.prepare('UPDATE "tasks" SET "userId" = ? WHERE "userId" = ?').run(newUserId, oldUserId);
+      // 1. Delete old user's tasks (target UUID's tasks are the source of truth)
+      this.db.prepare('DELETE FROM "tasks" WHERE "userId" = ?').run(oldUserId);
 
-      // 2. Migrate settings
-      // Check if new user settings exist
-      const newSettings = this.db.prepare('SELECT "userId" FROM "userSettings" WHERE "userId" = ?').get(newUserId);
-
-      if (!newSettings) {
-        // If new user settings don't exist, move old settings to new user
-        this.db.prepare('UPDATE "userSettings" SET "userId" = ? WHERE "userId" = ?').run(newUserId, oldUserId);
-      } else {
-        // If new user settings exist, delete old settings (merging is complex, we assume target settings prevail)
-        this.db.prepare('DELETE FROM "userSettings" WHERE "userId" = ?').run(oldUserId);
-      }
+      // 2. Delete old user settings (target UUID's settings prevail)
+      this.db.prepare('DELETE FROM "userSettings" WHERE "userId" = ?').run(oldUserId);
 
       this.db.exec('COMMIT');
+      console.log(`SQLite: Switched from ${oldUserId} to ${newUserId} (old user data discarded)`);
     } catch (error) {
       this.db.exec('ROLLBACK');
       throw error;

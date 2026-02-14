@@ -636,18 +636,13 @@ class PostgresClient implements DbClient {
   }
 
   async migrateUser(oldUserId: string, newUserId: string): Promise<void> {
-    // 1. Migrate tasks
-    await this.pool.query('UPDATE "tasks" SET "userId" = $1 WHERE "userId" = $2', [newUserId, oldUserId]);
+    // 1. Delete old user's tasks (target UUID's tasks are the source of truth)
+    await this.pool.query('DELETE FROM "tasks" WHERE "userId" = $1', [oldUserId]);
 
-    // 2. Migrate user settings
-    const check = await this.pool.query('SELECT "userId" FROM "userSettings" WHERE "userId" = $1', [newUserId]);
-    if (check.rows.length === 0) {
-      await this.pool.query('UPDATE "userSettings" SET "userId" = $1 WHERE "userId" = $2', [newUserId, oldUserId]);
-    } else {
-      await this.pool.query('DELETE FROM "userSettings" WHERE "userId" = $1', [oldUserId]);
-    }
+    // 2. Delete old user settings (target UUID's settings prevail)
+    await this.pool.query('DELETE FROM "userSettings" WHERE "userId" = $1', [oldUserId]);
 
-    console.log(`PostgreSQL: Migrated data from ${oldUserId} to ${newUserId}`);
+    console.log(`PostgreSQL: Switched from ${oldUserId} to ${newUserId} (old user data discarded)`);
   }
 
   async deleteUser(userId: string): Promise<void> {
