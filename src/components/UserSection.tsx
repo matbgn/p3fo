@@ -10,6 +10,7 @@ import { useUsers } from "@/hooks/useUsers";
 import { UserContext } from "@/context/UserContextDefinition";
 import { cn } from "@/lib/utils";
 import { eventBus } from "@/lib/events";
+import { generateTrigram } from "@/utils/userTrigrams";
 
 export function UserSection() {
   const { userSettings, updateUsername, updateLogo, regenerateUsername } = useUserSettings();
@@ -123,7 +124,8 @@ export function UserSection() {
   };
 
   const currentUser = users.find(u => u.userId === userContext?.userId);
-  const displayInitial = (currentUser as any)?.trigram || userSettings.username.split(' ').map(name => name[0]).join('').toUpperCase().slice(0, 2);
+  // Fallback to generating a trigram on the fly if user not found in list yet
+  const displayInitial = (currentUser as any)?.trigram || generateTrigram(userSettings.username.split(' ')[0], userSettings.username.split(' ').slice(1).join(' ') || '');
 
   return (
     <Popover>
