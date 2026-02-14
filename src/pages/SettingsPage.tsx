@@ -26,9 +26,9 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleSettingChange = (key: keyof typeof settings, value: string | number[] | number, scope?: 'user' | 'global') => {
+  const handleSettingChange = (key: keyof typeof settings, value: string | Record<string, number> | number, scope?: 'user' | 'global') => {
     if (key === 'preferredWorkingDays') {
-      updateSettings({ [key]: value as number[] }, scope);
+      updateSettings({ [key]: value as Record<string, number> }, scope);
       return;
     }
 

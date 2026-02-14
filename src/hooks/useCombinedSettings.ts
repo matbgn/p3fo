@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { usePersistence } from "@/hooks/usePersistence";
 import { AppSettingsEntity } from '@/lib/persistence-types';
+import { normalizePreferredDays } from '@/utils/scheduler-utils';
 
 /**
  * Combined settings interface that merges global and user-specific settings
@@ -25,7 +26,7 @@ export interface CombinedSettings {
     // User preference
     weekStartDay: 0 | 1; // 0 for Sunday, 1 for Monday
     defaultPlanView: 'week' | 'month';
-    preferredWorkingDays: number[]; // Array of days (0-6)
+    preferredWorkingDays: Record<string, number>; // Map of day (0-6) -> capacity (0-1)
     timezone: string; // Timezone identifier (e.g., 'Europe/Zurich')
     country: string; // Country code for holidays (e.g., 'CH')
     region: string; // Region code for holidays (e.g., 'BE')
@@ -64,7 +65,7 @@ const defaultCombinedSettings: CombinedSettings = {
     hoursToBeDoneByDay: 8,
     weekStartDay: 1, // Default to Monday
     defaultPlanView: 'week',
-    preferredWorkingDays: [1, 2, 3, 4, 5], // Default Mon-Fri
+    preferredWorkingDays: { '1': 1, '2': 1, '3': 1, '4': 1, '5': 1 }, // Default Mon-Fri
     timezone: 'Europe/Zurich', // Default timezone
     country: 'CH', // Default country for holidays
     region: 'BE', // Default region for holidays
@@ -106,7 +107,7 @@ export const useCombinedSettings = () => {
                     timezone: appSettings.timezone || 'Europe/Zurich',
                     country: appSettings.country || 'CH',
                     region: appSettings.region || 'BE',
-                    preferredWorkingDays: [1, 2, 3, 4, 5], // Default
+                    preferredWorkingDays: { '1': 1, '2': 1, '3': 1, '4': 1, '5': 1 }, // Default
                 };
 
                 // Override with user-specific settings if they exist
@@ -142,9 +143,15 @@ export const useCombinedSettings = () => {
                         if (local) merged.defaultPlanView = local as 'week' | 'month';
                     }
 
-                    // PreferredWorkingDays: User Settings > Default ([1,2,3,4,5])
+                    // PreferredWorkingDays: User Settings > Default
                     if (userSettings.preferredWorkingDays) {
-                        merged.preferredWorkingDays = userSettings.preferredWorkingDays;
+                        const normalized = normalizePreferredDays(userSettings.preferredWorkingDays);
+                        // Convert number keys to string keys for Record<string, number>
+                        const stringKeyed: Record<string, number> = {};
+                        Object.entries(normalized).forEach(([k, v]) => {
+                            stringKeyed[k] = v;
+                        });
+                        merged.preferredWorkingDays = stringKeyed;
                     }
                 }
 
@@ -230,7 +237,7 @@ export const useCombinedSettings = () => {
 
         try {
             // Separate user-specific updates from global updates
-            const userUpdates: { splitTime?: string; workload?: number; timezone?: string; weekStartDay?: 0 | 1; defaultPlanView?: 'week' | 'month'; preferredWorkingDays?: number[] } = {};
+            const userUpdates: { splitTime?: string; workload?: number; timezone?: string; weekStartDay?: 0 | 1; defaultPlanView?: 'week' | 'month'; preferredWorkingDays?: Record<string, number> } = {};
             const appUpdates: Partial<AppSettingsEntity> = {};
 
             // Helper to decide where to put the update
