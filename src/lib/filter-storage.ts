@@ -7,6 +7,7 @@ export const getDefaultFilters = (): Filters => ({
   showUrgent: false,
   showImpact: false,
   showMajorIncident: false,
+  showSprintTarget: false,
   status: [],
   showDone: false,
   searchText: "",

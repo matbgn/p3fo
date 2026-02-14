@@ -1,8 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import * as Y from 'yjs';
 import { UserSettingsEntity } from '@/lib/persistence-types';
 import { eventBus } from '@/lib/events';
-import { yUserSettings, isCollaborationEnabled } from '@/lib/collaboration';
+import { yUserSettings, isCollaborationEnabled, doc } from '@/lib/collaboration';
+import { assignTrigrams } from '@/utils/userTrigrams';
+
+export interface UserWithTrigram extends UserSettingsEntity {
+    trigram: string;
+}
 
 export const useUsers = () => {
     const [users, setUsers] = useState<UserSettingsEntity[]>([]);
@@ -68,8 +73,15 @@ export const useUsers = () => {
             // Refresh the list
             await fetchUsers();
 
-            // Notify others
+            // Notify others (local)
             eventBus.publish('userSettingsChanged');
+
+            // Sync to Yjs (remote)
+            if (isCollaborationEnabled()) {
+                doc.transact(() => {
+                    yUserSettings.delete(userId);
+                });
+            }
         } catch (error) {
             console.error('Error deleting user:', error);
             throw error;
@@ -80,18 +92,36 @@ export const useUsers = () => {
         try {
             const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
             const adapter = await persistence;
-            await adapter.updateUserSettings(userId, patch);
+            const updatedUser = await adapter.updateUserSettings(userId, patch);
 
             // Refresh the list
             await fetchUsers();
 
-            // Notify others
+            // Notify others (local)
             eventBus.publish('userSettingsChanged');
+
+            // Sync to Yjs (remote)
+            if (isCollaborationEnabled()) {
+                doc.transact(() => {
+                    yUserSettings.set(userId, updatedUser);
+                });
+            }
         } catch (error) {
             console.error('Error updating user:', error);
             throw error;
         }
     };
 
-    return { users, loading, refreshUsers: fetchUsers, deleteUser, updateUser };
+    // Calculate trigrams efficiently
+    const usersWithTrigrams = useMemo(() => {
+        const trigramMap = assignTrigrams(users);
+        return users.map(u => ({
+            ...u,
+            // Prefer the persisted trigram if it exists (which assignTrigrams also respects for collision)
+            // But we always take what assignTrigrams returned to ensure consistency/fallback
+            trigram: u.trigram || trigramMap[u.userId] || '???'
+        })) as UserWithTrigram[];
+    }, [users]);
+
+    return { users: usersWithTrigrams, loading, refreshUsers: fetchUsers, deleteUser, updateUser };
 };

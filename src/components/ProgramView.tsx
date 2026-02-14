@@ -24,13 +24,13 @@ import { LazyCard } from './LazyCard';
 import { AlertTriangle, CircleDot, Flame } from 'lucide-react';
 
 
-
 interface ProgramViewProps {
   onFocusOnTask: (taskId: string) => void;
+  onEditTask: (task: Task) => void;
 }
 
-const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
-  const [selectedTask, setSelectedTask] = React.useState<Task | null>(null);
+const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) => {
+  // const [selectedTask, setSelectedTask] = React.useState<Task | null>(null); // Lifted to parent
   const calendarRef = useRef<Calendar>(null); // Ref for the Calendar component
 
   const { settings } = useCombinedSettings();
@@ -38,27 +38,6 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
   const defaultPlanView = settings.defaultPlanView || 'week';
 
   const [view, setView] = React.useState<View>(defaultPlanView);
-
-  // Update view when defaultPlanView setting changes, but only if it hasn't been manually changed?
-  // Or just set initial state. The requirement is "change default view".
-  // So initial state is enough. However, if the user changes the setting while on the page, 
-  // it might be nice to update it. But usually "default" means "on load".
-  // Let's stick to initial state for now, but since we're using a hook, 
-  // if we want it to react to setting changes we'd need a useEffect.
-  // Given the user flow (change setting -> go to plan view), initial state is key.
-  // But if they are already on the view, changing the setting elsewhere won't affect them until reload/re-nav.
-  // Let's add a useEffect to sync it if the user wants immediate feedback, 
-  // but standard behavior for "default" is usually just initial.
-  // Let's just use the prop in useState which only runs once, 
-  // BUT we need to make sure it updates if the component re-mounts.
-  // Actually, let's use a useEffect to update the view if the setting changes, 
-  // so they can see the effect immediately if they have two windows open or something.
-  // No, that might be annoying if they manually changed the view.
-  // Let's stick to initializing it.
-
-  // Wait, `useState(defaultPlanView)` only initializes once.
-  // If `defaultPlanView` changes (e.g. settings loaded late), we might want to update it.
-  // `useCombinedSettings` has a loading state.
 
   useEffect(() => {
     if (defaultPlanView) {
@@ -85,7 +64,6 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
     }
   }, [view]); // Re-scroll if view changes
   const {
-    // tasks, // We use tasks from useAllTasks instead
     updateStatus,
     updateDifficulty,
     updateCategory,
@@ -96,12 +74,13 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
     toggleUrgent,
     toggleImpact,
     toggleMajorIncident,
+    toggleSprintTarget,
     toggleDone,
     toggleTimer,
     reparent,
     updateTerminationDate,
     updateComment,
-    updateDurationInMinutes, // Add updateDurationInMinutes here
+    updateDurationInMinutes,
   } = useTasks();
   const { tasks } = useAllTasks(); // Use useAllTasks to get unfiltered tasks
   const { userId: currentUserId } = useUserSettings();
@@ -176,7 +155,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
               view={view as View}
               onView={v => setView(v)}
               views={['week', 'month']}
-              onSelectEvent={(event) => setSelectedTask(event.resource)}
+              onSelectEvent={(event) => onEditTask(event.resource)}
               defaultView="week"
               defaultDate={new Date()}
               scrollToTime={new Date(0, 0, 0, 4, 0, 0)} // Scroll to 4 PM by default
@@ -199,6 +178,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
                   borderColor: 'transparent',
                   borderRadius: '4px',
                   color: 'white',
+                  fontSize: '0.75rem',
                 }
               })}
               components={{
@@ -263,6 +243,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
                     toggleUrgent={toggleUrgent}
                     toggleImpact={toggleImpact}
                     toggleMajorIncident={toggleMajorIncident}
+                    toggleSprintTarget={toggleSprintTarget}
                     toggleDone={() => toggleDone(task.id)}
                     toggleTimer={toggleTimer}
                     reparent={reparent}
@@ -276,36 +257,6 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
           </CardContent>
         </Card>
       </ResizablePanel>
-      {selectedTask && (
-        <Dialog open={!!selectedTask} onOpenChange={() => setSelectedTask(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Edit Task</DialogTitle>
-            </DialogHeader>
-            <TaskCard
-              task={selectedTask}
-              tasks={tasks}
-              updateStatus={updateStatus}
-              updateDifficulty={updateDifficulty}
-              updateCategory={updateCategory}
-              updateTitle={updateTitle}
-              updateUser={(id, userId) => updateUser(id, userId === 'current-user' ? currentUserId : userId)}
-              deleteTask={deleteTask}
-              duplicateTaskStructure={duplicateTaskStructure}
-              toggleUrgent={toggleUrgent}
-              toggleImpact={toggleImpact}
-              toggleMajorIncident={toggleMajorIncident}
-              toggleDone={() => toggleDone(selectedTask.id)}
-              toggleTimer={toggleTimer}
-              reparent={reparent}
-              onFocusOnTask={onFocusOnTask}
-              updateTerminationDate={updateTerminationDate}
-              updateComment={updateComment}
-              updateDurationInMinutes={updateDurationInMinutes}
-            />
-          </DialogContent>
-        </Dialog>
-      )}
     </ResizablePanelGroup>
   );
 };

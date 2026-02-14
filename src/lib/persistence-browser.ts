@@ -1,4 +1,4 @@
-import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity } from './persistence-types';
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, ReminderEntity } from './persistence-types';
 
 // Storage keys
 const TASKS_STORAGE_KEY = 'dyad_task_board_v1';
@@ -8,6 +8,7 @@ const QOL_SURVEY_STORAGE_KEY = 'qolSurveyResponse';
 const FILTERS_STORAGE_KEY = 'taskFilters';
 const FERTILIZATION_BOARD_STORAGE_KEY = 'fertilizationBoard';
 const DREAM_BOARD_STORAGE_KEY = 'dreamBoard';
+const REMINDERS_STORAGE_KEY = 'p3fo_reminders_v1';
 
 // Default values
 const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
@@ -82,6 +83,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
         urgent: input.urgent || false,
         impact: input.impact || false,
         majorIncident: input.majorIncident || false,
+        sprintTarget: input.sprintTarget || false,
         difficulty: input.difficulty || 1,
         timer: input.timer || [],
         category: input.category || 'General',
@@ -495,6 +497,141 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
   }
 
+  // Reminders
+  async listReminders(userId?: string): Promise<ReminderEntity[]> {
+    if (typeof window === 'undefined') {
+      return [];
+    }
+
+    try {
+      const stored = localStorage.getItem(REMINDERS_STORAGE_KEY);
+      const allReminders = stored ? JSON.parse(stored) : [];
+
+      // Filter by userId if provided
+      if (userId) {
+        return allReminders.filter((reminder: ReminderEntity) => reminder.userId === userId);
+      }
+
+      return allReminders;
+    } catch (error) {
+      console.error('Error reading reminders from localStorage:', error);
+      return [];
+    }
+  }
+
+  async getReminderById(id: string): Promise<ReminderEntity | null> {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    try {
+      const reminders = await this.listReminders();
+      return reminders.find(reminder => reminder.id === id) || null;
+    } catch (error) {
+      console.error('Error getting reminder from localStorage:', error);
+      return null;
+    }
+  }
+
+  async createReminder(input: Partial<ReminderEntity>): Promise<ReminderEntity> {
+    if (typeof window === 'undefined') {
+      throw new Error('Cannot create reminder in non-browser environment');
+    }
+
+    try {
+      const reminders = await this.listReminders();
+      const now = new Date().toISOString();
+      const newReminder: ReminderEntity = {
+        id: input.id || crypto.randomUUID(),
+        userId: input.userId!,
+        taskId: input.taskId,
+        title: input.title!,
+        description: input.description,
+        read: input.read ?? false,
+        persistent: input.persistent ?? false,
+        triggerDate: input.triggerDate,
+        offsetMinutes: input.offsetMinutes,
+        snoozeDurationMinutes: input.snoozeDurationMinutes,
+        originalTriggerDate: input.originalTriggerDate,
+        state: input.state || 'scheduled',
+        createdAt: input.createdAt || now,
+        updatedAt: input.updatedAt || now,
+      };
+
+      reminders.push(newReminder);
+      localStorage.setItem(REMINDERS_STORAGE_KEY, JSON.stringify(reminders));
+      return newReminder;
+    } catch (error) {
+      console.error('Error creating reminder in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async updateReminder(id: string, patch: Partial<ReminderEntity>): Promise<ReminderEntity> {
+    if (typeof window === 'undefined') {
+      throw new Error('Cannot update reminder in non-browser environment');
+    }
+
+    try {
+      const reminders = await this.listReminders();
+      const index = reminders.findIndex(reminder => reminder.id === id);
+
+      if (index === -1) {
+        throw new Error(`Reminder with id ${id} not found`);
+      }
+
+      reminders[index] = { ...reminders[index], ...patch, updatedAt: new Date().toISOString() };
+      localStorage.setItem(REMINDERS_STORAGE_KEY, JSON.stringify(reminders));
+      return reminders[index];
+    } catch (error) {
+      console.error('Error updating reminder in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async deleteReminder(id: string): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      const reminders = await this.listReminders();
+      const filteredReminders = reminders.filter(reminder => reminder.id !== id);
+      localStorage.setItem(REMINDERS_STORAGE_KEY, JSON.stringify(filteredReminders));
+    } catch (error) {
+      console.error('Error deleting reminder from localStorage:', error);
+      throw error;
+    }
+  }
+
+  async deleteRemindersByTaskId(taskId: string): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      const reminders = await this.listReminders();
+      const filteredReminders = reminders.filter(reminder => reminder.taskId !== taskId);
+      localStorage.setItem(REMINDERS_STORAGE_KEY, JSON.stringify(filteredReminders));
+    } catch (error) {
+      console.error('Error deleting reminders by taskId from localStorage:', error);
+      throw error;
+    }
+  }
+
+  async clearAllReminders(): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      localStorage.removeItem(REMINDERS_STORAGE_KEY);
+    } catch (error) {
+      console.error('Error clearing reminders from localStorage:', error);
+      throw error;
+    }
+  }
+
   async clearAllData(): Promise<void> {
     if (typeof window === 'undefined') {
       return;
@@ -506,6 +643,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       localStorage.removeItem(APP_SETTINGS_STORAGE_KEY);
       localStorage.removeItem(FERTILIZATION_BOARD_STORAGE_KEY);
       localStorage.removeItem(DREAM_BOARD_STORAGE_KEY);
+      localStorage.removeItem(REMINDERS_STORAGE_KEY);
       sessionStorage.removeItem(FILTERS_STORAGE_KEY);
 
       // Clear dynamic keys (users and QoL surveys)

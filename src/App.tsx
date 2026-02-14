@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { NotificationCenter } from "./components/NotificationCenter";
+import { NotificationManager } from "./components/NotificationManager";
 import { UserSection } from "./components/UserSection";
 import { PersistenceProvider } from "@/lib/PersistenceProvider";
 import { UserProvider } from "@/context/UserContext";
@@ -28,13 +29,8 @@ import { CursorOverlay } from "@/components/CursorOverlay";
 const App = () => {
   const { checkAndTriggerReminders } = useReminderStore();
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      checkAndTriggerReminders();
-    }, 1000 * 60); // Check every minute
+  // Notification logic is now handled by NotificationManager
 
-    return () => clearInterval(interval);
-  }, [checkAndTriggerReminders]);
 
   // Listen for global system commands (like Clear All Data)
   useEffect(() => {
@@ -84,6 +80,7 @@ const App = () => {
                 <Toaster />
                 <Sonner />
                 <CursorOverlay />
+                <NotificationManager />
                 <div className="relative">
                   <BrowserRouter basename={import.meta.env.VITE_BASE_URL || "/p3fo"} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
                     <Routes>

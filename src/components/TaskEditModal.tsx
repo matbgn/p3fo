@@ -31,6 +31,7 @@ import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 import { CategorySelect } from "./CategorySelect";
 import { TaskStatusSelect } from "./TaskStatusSelect";
 import { TimeSheet } from "./TimeSheet";
+import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
 
 interface TaskEditModalProps {
     task: Task;
@@ -48,6 +49,7 @@ interface TaskEditModalProps {
     toggleUrgent: (id: string) => void;
     toggleImpact: (id: string) => void;
     toggleMajorIncident: (id: string) => void;
+    toggleSprintTarget: (id: string) => void;
     currentUserId: string | undefined;
     onToggleTimer?: (id: string) => void;
 }
@@ -70,6 +72,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
     toggleUrgent,
     toggleImpact,
     toggleMajorIncident,
+    toggleSprintTarget,
     currentUserId,
     onToggleTimer,
 }) => {
@@ -83,6 +86,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
     const [title, setTitle] = React.useState(activeTask.title);
     const [comment, setComment] = React.useState(activeTask.comment || "");
     const [duration, setDuration] = React.useState(activeTask.durationInMinutes?.toString() || "");
+    const [timePickerOpen, setTimePickerOpen] = React.useState(false);
 
     // Reset active task when the prop task changes (e.g. if modal is reopened for a different task)
     React.useEffect(() => {
@@ -288,37 +292,55 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
 
                         <div className="flex flex-col gap-2">
                             <Label>Termination Date</Label>
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        variant={"outline"}
-                                        className={cn(
-                                            "w-full justify-start text-left font-normal",
-                                            !activeTask.terminationDate && "text-muted-foreground"
-                                        )}
-                                    >
-                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {activeTask.terminationDate ? format(new Date(activeTask.terminationDate), "PPP") : <span>Pick a date</span>}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0">
-                                    <Calendar
-                                        mode="single"
-                                        selected={activeTask.terminationDate ? new Date(activeTask.terminationDate) : undefined}
-                                        onSelect={(date) => {
-                                            if (date) {
-                                                const current = activeTask.terminationDate ? new Date(activeTask.terminationDate) : new Date();
-                                                date.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
-                                                updateTerminationDate(activeTask.id, date.getTime());
-                                            } else {
-                                                updateTerminationDate(activeTask.id, undefined);
-                                            }
-                                        }}
-                                        initialFocus
-                                        weekStartsOn={weekStartsOn}
-                                    />
-                                </PopoverContent>
-                            </Popover>
+                            <div className="flex gap-2">
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant={"outline"}
+                                            className={cn(
+                                                "w-full justify-start text-left font-normal flex-1",
+                                                !activeTask.terminationDate && "text-muted-foreground"
+                                            )}
+                                        >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {activeTask.terminationDate ? format(new Date(activeTask.terminationDate), "PPP") : <span>Pick a date</span>}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0">
+                                        <Calendar
+                                            mode="single"
+                                            selected={activeTask.terminationDate ? new Date(activeTask.terminationDate) : undefined}
+                                            onSelect={(date) => {
+                                                if (date) {
+                                                    const current = activeTask.terminationDate ? new Date(activeTask.terminationDate) : new Date();
+                                                    date.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
+                                                    updateTerminationDate(activeTask.id, date.getTime());
+                                                } else {
+                                                    updateTerminationDate(activeTask.id, undefined);
+                                                }
+                                            }}
+                                            initialFocus
+                                            weekStartsOn={weekStartsOn}
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+                                <Button
+                                    variant="outline"
+                                    className={cn(
+                                        "px-3",
+                                        activeTask.terminationDate && "text-blue-500"
+                                    )}
+                                    onClick={() => setTimePickerOpen(true)}
+                                    title="Set time"
+                                >
+                                    <Clock2 className="h-4 w-4" />
+                                </Button>
+                            </div>
+                            {activeTask.terminationDate && (
+                                <div className="text-sm text-muted-foreground">
+                                    {format(new Date(activeTask.terminationDate), "p")}
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex flex-col gap-2">
@@ -352,6 +374,10 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
                                 <Label htmlFor="incident" className="cursor-pointer">Incident</Label>
                                 <Switch id="incident" checked={activeTask.majorIncident} onCheckedChange={() => toggleMajorIncident(activeTask.id)} />
                             </div>
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="sprintTarget" className="cursor-pointer">Sprint Target</Label>
+                                <Switch id="sprintTarget" checked={activeTask.sprintTarget} onCheckedChange={() => toggleSprintTarget(activeTask.id)} />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -361,6 +387,16 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
                     <Button onClick={handleSave}>Save & Close</Button>
                 </div>
             </DialogContent>
+
+            {/* Time Picker Dialog for termination date */}
+            <TimePickerDialog
+                isOpen={timePickerOpen}
+                onClose={() => setTimePickerOpen(false)}
+                initialTime={activeTask.terminationDate || Date.now()}
+                onTimeChange={(timestamp) => {
+                    updateTerminationDate(activeTask.id, timestamp);
+                }}
+            />
         </Dialog>
     );
 };

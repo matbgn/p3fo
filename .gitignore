@@ -49,3 +49,4 @@ dist/
 PROMPT.md
 .ralph
 .sop/planning
+.worktrees/

@@ -6,12 +6,15 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Shuffle, Edit2, User, Upload, Fingerprint, AlertTriangle } from "lucide-react";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { useTasks } from "@/hooks/useTasks";
+import { useUsers } from "@/hooks/useUsers";
 import { UserContext } from "@/context/UserContextDefinition";
 import { cn } from "@/lib/utils";
 import { eventBus } from "@/lib/events";
+import { generateTrigram } from "@/utils/userTrigrams";
 
 export function UserSection() {
-  const { userSettings, updateUsername, updateLogo, regenerateUsername } = useUserSettings();
+  const { userSettings, updateUsername, updateLogo, regenerateUsername, updateTrigram } = useUserSettings();
+  const { users } = useUsers();
   const userContext = useContext(UserContext);
   const { tasks } = useTasks();
   const currentUserTaskCount = tasks.filter(t => t.userId === userContext?.userId).length;
@@ -35,6 +38,15 @@ export function UserSection() {
       setTempUuid(userContext.userId);
     }
   }, [isChangingUuid, userContext?.userId]);
+
+  // Automatically persist calculated trigram if missing in settings
+  const currentUserWithTrigram = users.find(u => u.userId === userContext?.userId);
+  React.useEffect(() => {
+    if (!userSettings.trigram && currentUserWithTrigram && (currentUserWithTrigram as any).trigram && (currentUserWithTrigram as any).trigram !== '???') {
+      console.log('Persisting calculated trigram for current user:', (currentUserWithTrigram as any).trigram);
+      updateTrigram((currentUserWithTrigram as any).trigram);
+    }
+  }, [userSettings.trigram, currentUserWithTrigram, updateTrigram]);
 
   if (!userSettings) return null;
 
@@ -120,7 +132,9 @@ export function UserSection() {
     regenerateUsername();
   };
 
-  const displayInitial = userSettings.username.split(' ').map(name => name[0]).join('').toUpperCase().slice(0, 2);
+  const currentUser = users.find(u => u.userId === userContext?.userId);
+  // Use persisted or calculated trigram
+  const displayInitial = userSettings.trigram || (currentUser as any)?.trigram || generateTrigram(userSettings.username.split(' ')[0], userSettings.username.split(' ').slice(1).join(' ') || '');
 
   return (
     <Popover>

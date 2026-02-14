@@ -1,6 +1,6 @@
 import { useReminderStore, Reminder } from "@/hooks/useReminders";
 
-export const addReminder = (reminder: Omit<Reminder, "id" | "read"> & { triggerDate?: string; taskId?: string; offsetMinutes?: number }) => {
+export const addReminder = (reminder: Omit<Reminder, "id" | "read" | "state"> & { triggerDate?: string; taskId?: string; offsetMinutes?: number }) => {
   const finalReminder = { ...reminder };
 
   if (reminder.triggerDate && reminder.offsetMinutes !== undefined && reminder.offsetMinutes > 0) {

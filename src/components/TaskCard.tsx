@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { GripVertical, Folder, AlertTriangle, CircleDot, Trash2, Clock2, Play, Pause, ChevronDown, ChevronRight, Flame, FileText, BellRing, CalendarIcon, User } from "lucide-react";
+import { GripVertical, Folder, AlertTriangle, CircleDot, Trash2, Clock2, Clock, Play, Pause, ChevronDown, ChevronRight, Flame, FileText, BellRing, CalendarIcon, User, Crosshair } from "lucide-react";
 import { TaskStatusSelect } from "./TaskStatusSelect";
 import { useTasks, Task, Category, TriageStatus } from "@/hooks/useTasks";
 import { Badge } from "@/components/ui/badge";
@@ -32,10 +32,10 @@ import { formatDuration } from '@/lib/format-utils';
 import { format } from "date-fns";
 import { addReminder } from "@/utils/reminders";
 import { useReminderStore } from "@/hooks/useReminders";
-import { UserAvatar } from "./UserAvatar";
 import { UserSelector } from "./UserSelector";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { Calendar } from "@/components/ui/calendar";
+import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
 import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 import { useViewDisplay } from "@/hooks/useView";
 import { COMPACTNESS_ULTRA, COMPACTNESS_COMPACT, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
@@ -211,6 +211,7 @@ interface TaskCardProps {
   toggleUrgent: (id: string) => void;
   toggleImpact: (id: string) => void;
   toggleMajorIncident: (id: string) => void;
+  toggleSprintTarget: (id: string) => void;
   toggleDone: (task: Task) => void;
   toggleTimer: (id: string) => void;
   reparent: (id: string, parentId: string | null) => void;
@@ -238,6 +239,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
     toggleUrgent,
     toggleImpact,
     toggleMajorIncident,
+    toggleSprintTarget,
     toggleDone,
     toggleTimer,
     reparent,
@@ -263,9 +265,10 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
   const [isDatePickerOpen, setIsDatePickerOpen] = React.useState(false);
   const [offsetMinutes, setOffsetMinutes] = React.useState(-1); // Default to -1 (No reminder)
   const [isDateTimeBlockOpen, setIsDateTimeBlockOpen] = React.useState(false); // New state for date/time block
-  const [isReminderActive, setIsReminderActive] = React.useState(false); // New state for reminder active status
+  const [timePickerOpen, setTimePickerOpen] = React.useState(false); // State for time picker dialog
+  const [reminderStatus, setReminderStatus] = React.useState<'none' | 'scheduled' | 'triggered'>('none'); // Update state to enum
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false); // New state for full edit modal
-  const { scheduledReminders, updateScheduledReminderTriggerDate, dismissReminder } = useReminderStore();
+  const { scheduledReminders, reminders, updateScheduledReminderTriggerDate, dismissReminder } = useReminderStore();
   const { userSettings, userId: currentUserId } = useUserSettings();
   const { settings } = useCombinedSettings();
   const weekStartsOn = settings.weekStartDay as 0 | 1;
@@ -290,20 +293,30 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
     );
     if (existingReminder?.offsetMinutes !== undefined) {
       setOffsetMinutes(existingReminder.offsetMinutes);
-      setIsReminderActive(true); // Set to true if a reminder exists
+      setReminderStatus('scheduled'); // Optimistic update
     } else {
       setOffsetMinutes(-1); // "No reminder"
-      setIsReminderActive(false); // Set to false if no reminder exists
+      // Don't reset status here, main effect will handle it
     }
   }, [task.id, task.terminationDate, scheduledReminders]);
 
   React.useEffect(() => {
     // Check if there's any active reminder for the current task
-    const activeReminder = scheduledReminders.some(
+    const hasScheduled = scheduledReminders.some(
       (r) => r.taskId === task.id && r.triggerDate && new Date(r.triggerDate) > new Date()
     );
-    setIsReminderActive(activeReminder);
-  }, [task.id, scheduledReminders]);
+    // Also check for triggered but unread reminders
+    const hasTriggered = reminders.some(
+      (r) => r.taskId === task.id && !r.read
+    );
+    if (hasTriggered) {
+      setReminderStatus('triggered');
+    } else if (hasScheduled) {
+      setReminderStatus('scheduled');
+    } else {
+      setReminderStatus('none');
+    }
+  }, [task.id, scheduledReminders, reminders]);
 
   const handleCardDoubleClick = (e: React.MouseEvent) => {
     // Prevent opening if clicking on interactive elements that might bubble up
@@ -545,21 +558,18 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                   weekStartsOn={weekStartsOn}
                 />
                 <div className="p-3 border-t border-border">
-                  <Input
-                    type="time"
-                    value={task.terminationDate ? format(new Date(task.terminationDate), "HH:mm") : ""}
-                    onChange={(e) => {
-                      if (task.terminationDate && e.target.value) {
-                        const [hours, minutes] = e.target.value.split(':').map(Number);
-                        const newDate = new Date(task.terminationDate);
-                        newDate.setHours(hours, minutes);
-                        const newTimestamp = newDate.getTime();
-                        updateTerminationDate(task.id, newTimestamp);
-                        updateScheduledReminderTriggerDate(task.id, newDate.toISOString(), offsetMinutes);
-                      }
-                    }}
-                    className="w-full"
-                  />
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => setTimePickerOpen(true)}
+                  >
+                    <Clock className="mr-2 h-4 w-4" />
+                    {task.terminationDate ? (
+                      format(new Date(task.terminationDate), "HH:mm")
+                    ) : (
+                      <span className="text-muted-foreground">Set time...</span>
+                    )}
+                  </Button>
                 </div>
               </PopoverContent>
             </Popover>
@@ -587,7 +597,10 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                   className="h-6 w-6 p-0"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <BellRing className={`h-4 w-4 ${isReminderActive ? "text-blue-500" : "text-gray-400"}`} />
+                  <BellRing className={`h-4 w-4 ${reminderStatus === 'triggered' ? "text-red-500 fill-red-500" :
+                      reminderStatus === 'scheduled' ? "text-blue-500 fill-blue-500" :
+                        "text-gray-400"
+                    }`} />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-40 p-0">
@@ -598,7 +611,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                     setOffsetMinutes(newOffset);
                     if (newOffset === -1) { // "No reminder" selected
                       dismissReminder(task.id); // Dismiss any existing reminder for this task
-                      setIsReminderActive(false); // Set reminder to inactive
+                      // let effect update status
                     } else if (task.terminationDate) {
                       // Check if a reminder with the same taskId and originalTriggerDate already exists
                       const existingReminder = scheduledReminders.find(
@@ -619,7 +632,6 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                           offsetMinutes: newOffset,
                         });
                       }
-                      setIsReminderActive(true); // Set reminder to active
                     }
                   }}
                 >
@@ -717,17 +729,57 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
       {/* Subtasks toggle - show in ALL modes (Ultra, Compact, Full) */}
       {hasSubtasks && onToggleOpen && (
         <div className="flex justify-between items-center mt-2">
-          <button
-            className="inline-flex items-center text-xs px-2 py-1 rounded-md border hover:bg-accent/60 transition"
-            onClick={(e) => {
-              e.stopPropagation(); // Prevent onActivate from being called
-              onToggleOpen(task.id, true);
-            }}
-            aria-pressed={open}
-          >
-            {open ? <ChevronDown className="h-4 w-4 mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
-            Subtasks
-          </button>
+          <div className="flex flex-col gap-2">
+            <button
+              className="inline-flex items-center text-xs px-2 py-1 rounded-md border hover:bg-accent/60 transition w-fit"
+              onClick={(e) => {
+                e.stopPropagation(); // Prevent onActivate from being called
+                onToggleOpen(task.id, true);
+              }}
+              aria-pressed={open}
+            >
+              {open ? <ChevronDown className="h-4 w-4 mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
+              Subtasks
+            </button>
+            <div className="flex flex-wrap gap-1">
+              {task.urgent && (
+                <Badge
+                  variant="destructive"
+                  className="cursor-default"
+                >
+                  <AlertTriangle className="h-3 w-3 mr-1" />
+                  Urgent
+                </Badge>
+              )}
+              {task.impact && (
+                <Badge
+                  variant="secondary"
+                  className="bg-yellow-500 hover:bg-yellow-600 text-yellow-900 cursor-default"
+                >
+                  <CircleDot className="h-3 w-3 mr-1" />
+                  High Impact
+                </Badge>
+              )}
+              {task.majorIncident && (
+                <Badge
+                  variant="destructive"
+                  className="bg-red-700 hover:bg-red-800 text-white cursor-default"
+                >
+                  <Flame className="h-3 w-3 mr-1" />
+                  Incident on Delivery
+                </Badge>
+              )}
+              {task.sprintTarget && (
+                <Badge
+                  variant="secondary"
+                  className="bg-violet-500 hover:bg-violet-600 text-violet-100 cursor-default"
+                >
+                  <Crosshair className="h-3 w-3 mr-1" />
+                  Sprint Target
+                </Badge>
+              )}
+            </div>
+          </div>
           <UserSelector
             value={task.userId || ''}
             onChange={(selectedId) => updateUser(task.id, selectedId === 'current-user' ? currentUserId : selectedId)}
@@ -763,6 +815,15 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
               >
                 <Flame className="h-3 w-3 mr-1" />
                 Incident on Delivery
+              </Badge>
+            )}
+            {task.sprintTarget && !task.parentId && (
+              <Badge
+                variant="secondary"
+                className="bg-violet-500 hover:bg-violet-600 text-violet-100 mb-2 cursor-default"
+              >
+                <Crosshair className="h-3 w-3 mr-1" />
+                Sprint Target
               </Badge>
             )}
           </div>
@@ -830,6 +891,17 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                     }}
                   >
                     <Flame className={`h-4 w-4 ${task.majorIncident ? "text-red-700" : "text-gray-400"}`} />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleSprintTarget(task.id);
+                    }}
+                  >
+                    <Crosshair className={`h-4 w-4 ${task.sprintTarget ? "text-violet-500" : "text-gray-400"}`} />
                   </Button>
                   <Button
                     size="sm"
@@ -914,10 +986,21 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
           toggleUrgent={toggleUrgent}
           toggleImpact={toggleImpact}
           toggleMajorIncident={toggleMajorIncident}
+          toggleSprintTarget={toggleSprintTarget}
           onToggleTimer={toggleTimer}
           currentUserId={currentUserId}
         />
       )}
+      {/* Time Picker Dialog for termination date time */}
+      <TimePickerDialog
+        isOpen={timePickerOpen}
+        onClose={() => setTimePickerOpen(false)}
+        initialTime={task.terminationDate || Date.now()}
+        onTimeChange={(timestamp) => {
+          updateTerminationDate(task.id, timestamp);
+          updateScheduledReminderTriggerDate(task.id, new Date(timestamp).toISOString(), offsetMinutes);
+        }}
+      />
     </Card>
   );
 }));

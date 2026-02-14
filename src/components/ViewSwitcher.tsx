@@ -154,7 +154,7 @@ export function ViewSwitcher({ value, onChange, utilityItems, rightItems }: View
     const availableForItems = availableForPills - OVERFLOW_BTN_WIDTH;
     const fitCount = Math.max(1, Math.floor(availableForItems / ITEM_COMPACT_WIDTH));
     setVisibleCount(Math.min(fitCount, allViews.length));
-  }, []);
+  }, [utilityItems]);
 
   useEffect(() => {
     calculateLayout();

@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.15.0 (2026-02-14)
+
+### Features
+
+- **tasks:** add Sprint Target togglable label with filtering (f6b1a4d)
+- **users:** persist trigrams in user settings for stability (5ba57c7)
+- **users:** add standardized trigram identification system (c51cbcd)
+- **ressources:** add resource scheduler with preferred working days (40df2a3)
+- **board:** add focus mode and toggle off functionality in task board (da44e9b)
+
+### Bug Fixes
+
+- **reminders:** correct reminder system severall way (f37b657)
+- **dreamview:** create task and highlight it in storyboard upon dream card promotion (55eda27)
+- **storyboard:** filter archived tasks and add attribute badges (4058e71)
+- **settings:** support capacity-based preferred working days (84be9c9)
+- **users:** use generateTrigram for fallback display initial (afa09c5)
+- **user:** change UUID switch to discard current workspace (954ab82)
+- **forecast:** make hourly balance badge thresholds related (3896851)
+- **settings:** add weekStartDay and defaultPlanView user preferences (d81e18c)
+- **circles:** make deletion more reliable by using shadcn modal (7c659a0)
+- **circles:** enhance circles editor with node type handling and UI improvements (65ccea7)
+
+---
+
 ## v0.14.0 (2026-02-04)
 
 ### Features
@@ -114,17 +139,5 @@
 - **metrics:** correct last and projected hourly balance in forecast view (aeba583)
 - **focus board:** restore the sorting mechanic for tasks done which should be at the end (0fc597a)
 - **focus board:** restore highlight of the current task and ensure that a newly started task becomes the new focus (ac5956c)
-
----
-
-## v0.8.0 (2025-12-05)
-
-### Features
-
-- **filters:** add auto-expansion of filters when card compactness is full in board views (9b7c0e0)
-- **tasks:** allow creating tasks with an assigned user based on the current filter selection (46703f0)
-- **filters:** make filters section collapsable to follow compactness (198c3ea)
-- **tasks:** add detailed task edit modal (ed1b9f2)
-- **task layout:** add card compactness selector (6275d19)
 
 ---

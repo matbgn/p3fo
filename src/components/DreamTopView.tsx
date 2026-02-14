@@ -23,9 +23,9 @@ interface DreamTopViewProps {
 type ActiveView = 'dream' | 'storyboard' | 'prioritization';
 
 const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
-  const { setView, setFocusedTaskId } = useViewNavigation();
+  const { setView, setFocusedTaskId, focusedTaskId } = useViewNavigation();
   const { cardCompactness } = useViewDisplay();
-  const { updateStatus, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleUrgent, toggleImpact, toggleMajorIncident, toggleDone, toggleTimer, reparent, updateTerminationDate, updateComment, updateDurationInMinutes, updatePriority, createTask } = useTasks();
+  const { updateStatus, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleUrgent, toggleImpact, toggleMajorIncident, toggleSprintTarget, toggleDone, toggleTimer, reparent, updateTerminationDate, updateComment, updateDurationInMinutes, updatePriority, createTask } = useTasks();
   const { tasks } = useAllTasks();
   const { userId: currentUserId } = useUserSettings();
 
@@ -40,6 +40,7 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
     showUrgent: false,
     showImpact: false,
     showMajorIncident: false,
+    showSprintTarget: false,
     status: ["Backlog", "Ready", "WIP", "Blocked"],
     searchText: "",
     difficulty: [],
@@ -50,8 +51,16 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
 
   const handlePromoteToKanban = (taskId: string) => {
     setFocusedTaskId(taskId);
-    setView('kanban');
+    // Navigate to storyboard view within Dream view instead of global Kanban
+    setActiveView('storyboard');
   };
+
+  // Auto-switch to storyboard when focusedTaskId is set (e.g., after promoting from fertilization/dream)
+  useEffect(() => {
+    if (focusedTaskId && activeView !== 'storyboard') {
+      setActiveView('storyboard');
+    }
+  }, [focusedTaskId]);
 
   // Auto-collapse filters when switching to Ultra Compact mode
   // Auto-expand filters when switching to Full mode
@@ -92,7 +101,7 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
 
   const prioritizedTasks = React.useMemo(() => {
     return tasks
-      .filter(task => !task.parentId && task.triageStatus !== 'Done' && task.triageStatus !== 'Dropped')
+      .filter(task => !task.parentId && task.triageStatus !== 'Done' && task.triageStatus !== 'Dropped' && task.triageStatus !== 'Archived')
       .filter(task => {
         if (filters.searchText?.trim()) {
           const searchText = filters.searchText.toLowerCase();
@@ -110,6 +119,10 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
         }
 
         if (filters.showMajorIncident && !task.majorIncident) {
+          return false;
+        }
+
+        if (filters.showSprintTarget && !task.sprintTarget) {
           return false;
         }
 
@@ -348,6 +361,7 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
                     <TaskCard
                       task={task}
                       tasks={tasks}
+                      isHighlighted={task.id === focusedTaskId}
                       updateStatus={updateStatus}
                       updateDifficulty={updateDifficulty}
                       updateCategory={updateCategory}
@@ -358,6 +372,7 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
                       toggleUrgent={toggleUrgent}
                       toggleImpact={toggleImpact}
                       toggleMajorIncident={toggleMajorIncident}
+                      toggleSprintTarget={toggleSprintTarget}
                       toggleDone={() => toggleDone(task.id)}
                       toggleTimer={toggleTimer}
                       reparent={reparent}
@@ -383,6 +398,7 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
                             <TaskCard
                               task={child}
                               tasks={tasks}
+                              isHighlighted={child.id === focusedTaskId}
                               updateStatus={updateStatus}
                               updateDifficulty={updateDifficulty}
                               updateCategory={updateCategory}
@@ -393,6 +409,7 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
                               toggleUrgent={toggleUrgent}
                               toggleImpact={toggleImpact}
                               toggleMajorIncident={toggleMajorIncident}
+                              toggleSprintTarget={toggleSprintTarget}
                               toggleDone={() => toggleDone(child.id)}
                               toggleTimer={toggleTimer}
                               reparent={reparent}

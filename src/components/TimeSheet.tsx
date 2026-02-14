@@ -2,7 +2,6 @@ import React from 'react';
 import { useTasks } from '@/hooks/useTasks';
 import { useAllTasks } from '@/hooks/useAllTasks';
 import { Button } from './ui/button';
-import { Input } from './ui/input';
 import { Trash2, CalendarIcon, Clock } from 'lucide-react';
 import { Temporal } from '@js-temporal/polyfill';
 import './TimeSheet.css';
@@ -156,27 +155,13 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
                     />
                     <div className="p-3 border-t border-border flex flex-col gap-2">
                       <div className="flex gap-2 items-center">
-                        <Input
-                          id={`start-time-${index}`}
-                          type="time"
-                          value={entry.startTime ? format(new Date(entry.startTime), "HH:mm:ss") : ""}
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              const [hours, minutes, seconds] = e.target.value.split(':').map(Number);
-                              const newDate = entry.startTime ? new Date(entry.startTime) : new Date();
-                              newDate.setHours(hours, minutes, seconds || 0);
-                              handleUpdate(index, { ...entry, startTime: newDate.getTime() });
-                            }
-                          }}
-                          step="1"
-                          className="flex-1"
-                        />
                         <Button
-                          variant="ghost"
-                          size="icon"
+                          variant="outline"
+                          className="flex-1 justify-start text-left font-normal"
                           onClick={() => openTimePicker(index, 'start', entry.startTime)}
                         >
-                          <Clock className="h-4 w-4" />
+                          <Clock className="mr-2 h-4 w-4" />
+                          {entry.startTime ? format(new Date(entry.startTime), "HH:mm:ss") : "Select time"}
                         </Button>
                       </div>
                     </div>
@@ -225,30 +210,18 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
                       weekStartsOn={weekStartsOn}
                     />
                     <div className="p-3 border-t border-border flex flex-col gap-2">
-                      <div className="flex gap-2 items-center">
-                        <Input
-                          id={`end-time-${index}`}
-                          type="time"
-                          value={entry.endTime && entry.endTime > 0 ? format(new Date(entry.endTime), "HH:mm:ss") : ""}
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              const [hours, minutes, seconds] = e.target.value.split(':').map(Number);
-                              const newDate = entry.endTime && entry.endTime > 0 ? new Date(entry.endTime) : new Date();
-                              newDate.setHours(hours, minutes, seconds || 0);
-                              handleUpdate(index, { ...entry, endTime: newDate.getTime() });
-                            }
-                          }}
-                          step="1"
-                          className="flex-1"
-                        />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openTimePicker(index, 'end', entry.endTime || Date.now())}
-                        >
-                          <Clock className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start"
+                        onClick={() => openTimePicker(index, 'end', entry.endTime || Date.now())}
+                      >
+                        <Clock className="mr-2 h-4 w-4" />
+                        {entry.endTime && entry.endTime > 0 ? (
+                          format(new Date(entry.endTime), "HH:mm:ss")
+                        ) : (
+                          <span className="text-muted-foreground">Set time...</span>
+                        )}
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"

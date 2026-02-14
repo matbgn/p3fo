@@ -35,6 +35,7 @@ export interface TaskEntity {
   urgent: boolean;
   impact: boolean;
   majorIncident: boolean;
+  sprintTarget: boolean;
   difficulty: number;
   timer: { startTime: number; endTime: number }[]; // Match existing app structure
   category: Category | string;
@@ -86,6 +87,8 @@ export interface UserSettingsEntity {
   timezone?: string;
   weekStartDay?: 0 | 1;
   defaultPlanView?: 'week' | 'month';
+  preferredWorkingDays?: number[] | Record<string, number>; // Legacy array or new map (day -> percentage)
+  trigram?: string;
 }
 
 export interface QolSurveyResponseEntity {
@@ -97,6 +100,7 @@ export interface FilterStateEntity {
   showUrgent: boolean;
   showImpact: boolean;
   showMajorIncident: boolean;
+  showSprintTarget: boolean;
   status: TriageStatus[];
   showDone?: boolean;
   searchText?: string;
@@ -153,6 +157,15 @@ export interface PersistenceAdapter {
   // Dream Board
   getDreamBoardState(): Promise<DreamBoardEntity | null>;
   updateDreamBoardState(state: DreamBoardEntity): Promise<void>;
+
+  // Reminders
+  listReminders(userId?: string): Promise<ReminderEntity[]>;
+  getReminderById(id: string): Promise<ReminderEntity | null>;
+  createReminder(input: Partial<ReminderEntity>): Promise<ReminderEntity>;
+  updateReminder(id: string, patch: Partial<ReminderEntity>): Promise<ReminderEntity>;
+  deleteReminder(id: string): Promise<void>;
+  deleteRemindersByTaskId(taskId: string): Promise<void>;
+  clearAllReminders(): Promise<void>;
 
   // System
   clearAllData(): Promise<void>;
@@ -242,6 +255,23 @@ export interface CircleEntity {
   domains?: string; // Domains of authority - what this role has control over
   accountabilities?: string; // Attendus - expectations and accountabilities
   order?: number; // Display order among siblings
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ReminderEntity {
+  id: string;
+  userId: string;
+  taskId?: string;
+  title: string;
+  description?: string;
+  read: boolean;
+  persistent: boolean;
+  triggerDate?: string; // ISO date string for scheduling
+  offsetMinutes?: number;
+  snoozeDurationMinutes?: number;
+  originalTriggerDate?: string;
+  state: 'scheduled' | 'triggered' | 'read' | 'dismissed';
   createdAt: string;
   updatedAt: string;
 }

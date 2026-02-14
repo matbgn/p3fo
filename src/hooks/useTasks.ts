@@ -5,6 +5,7 @@ import { usePersistence } from "@/hooks/usePersistence";
 import { yTasks, yUserSettings, doc, initializeCollaboration, isCollaborationEnabled } from "@/lib/collaboration";
 import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
 import { taskToEntity, tasksToEntities, convertEntitiesToTasks } from "@/lib/task-conversions";
+import { useReminderStore } from "./useReminders";
 
 
 // Polyfill for crypto.randomUUID if not available
@@ -48,6 +49,7 @@ export type Task = {
   urgent?: boolean;
   impact?: boolean;
   majorIncident?: boolean;
+  sprintTarget?: boolean;
   difficulty?: 0.5 | 1 | 2 | 3 | 5 | 8; // Added difficulty property
   timer?: { startTime: number; endTime: number }[];
   category?: Category;
@@ -615,6 +617,28 @@ const toggleMajorIncident = async (taskId: string) => {
 
 };
 
+const toggleSprintTarget = async (taskId: string) => {
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
+
+  const newValue = !task.sprintTarget;
+  updateTaskInTasks(taskId, (t) => ({ ...t, sprintTarget: newValue }));
+
+  // Persist to backend
+  try {
+    const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+    const adapter = await persistence;
+    const entity = { ...taskToEntity(task), sprintTarget: newValue };
+    await adapter.updateTask(taskId, entity);
+  } catch (error) {
+    console.error("Error toggling sprint target:", error);
+  }
+
+
+  eventBus.publish("tasksChanged");
+
+};
+
 const updateDifficulty = async (taskId: string, difficulty: 0.5 | 1 | 2 | 3 | 5 | 8) => {
   const task = tasks.find(t => t.id === taskId);
   if (!task) return;
@@ -836,6 +860,12 @@ export function useTasks() {
 
     // Update local state
     tasks = tasks.filter((t) => !childrenIds.has(t.id));
+
+    // Clean up reminders for all deleted tasks (including children)
+    const reminderStore = useReminderStore.getState();
+    for (const id of childrenIds) {
+      reminderStore.deleteRemindersByTaskId(id);
+    }
 
     if (taskToDelete.parentId) {
       tasks = tasks.map(t => {
@@ -1190,6 +1220,7 @@ export function useTasks() {
     toggleUrgent,
     toggleImpact,
     toggleMajorIncident,
+    toggleSprintTarget,
     updateDifficulty,
     updateTitle,
     deleteTask,

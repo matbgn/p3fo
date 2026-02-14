@@ -4,11 +4,12 @@ import KanbanBoard from "@/components/KanbanBoard";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { ViewSwitcher } from "@/components/ViewSwitcher";
 import { Timetable } from "@/components/Timetable";
-import ProgramView from "@/components/ProgramView";
+import ProgramTopView from "@/components/ProgramTopView";
 import SettingsPage from "./SettingsPage";
 import MetricsPage from "./MetricsPage";
 
-import { addReminder } from "@/utils/reminders";
+
+import { useUserSettingsContext } from "@/context/UserSettingsContext";
 import PlanView from "@/components/PlanView";
 import CelebrationView from "@/components/CelebrationView";
 import DreamTopView from "@/components/DreamTopView";
@@ -23,6 +24,7 @@ import { UserSection } from "@/components/UserSection";
 // content-visibility:hidden tells the browser to skip layout+paint for hidden subtrees.
 // This is far cheaper than display:none which forces full layout recalculation on toggle.
 const hiddenStyle: React.CSSProperties = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contentVisibility: "hidden" as any,
   position: "absolute",
   width: 0,
@@ -34,6 +36,7 @@ const activeStyle: React.CSSProperties = {};
 
 const Index: React.FC = () => {
   const { view, setView, focusedTaskId, handleFocusOnTask } = useViewNavigation();
+  const { userSettings } = useUserSettingsContext();
 
   // Track which views have been mounted (lazy-mount on first visit, keep-alive after)
   const [mountedViews, setMountedViews] = React.useState<Set<string>>(() => new Set([view]));
@@ -51,20 +54,14 @@ const Index: React.FC = () => {
     setView(newView);
   }, [setView]);
 
-  useEffect(() => {
-    addReminder({
-      title: "Welcome to P3Fo!",
-      description: "Don't forget to set up your first task.",
-      persistent: true,
-    });
-  }, []);
+
 
   // Memoize each view element so switching tabs doesn't reconcile them.
   // Each element is re-created only when its own dependencies change, not when `view` changes.
   const focusView = React.useMemo(() => <TaskBoard focusedTaskId={focusedTaskId} />, [focusedTaskId]);
   const kanbanView = React.useMemo(() => <KanbanBoard onFocusOnTask={handleFocusOnTask} highlightedTaskId={focusedTaskId} />, [handleFocusOnTask, focusedTaskId]);
   const timetableView = React.useMemo(() => <Timetable onJumpToTask={handleFocusOnTask} />, [handleFocusOnTask]);
-  const programView = React.useMemo(() => <ProgramView onFocusOnTask={handleFocusOnTask} />, [handleFocusOnTask]);
+  const programView = React.useMemo(() => <ProgramTopView onFocusOnTask={handleFocusOnTask} />, [handleFocusOnTask]);
   const planView = React.useMemo(() => <PlanView onFocusOnTask={handleFocusOnTask} />, [handleFocusOnTask]);
   const celebrationView = React.useMemo(() => <CelebrationView onFocusOnTask={handleFocusOnTask} />, [handleFocusOnTask]);
   const dreamView = React.useMemo(() => <DreamTopView onFocusOnTask={handleFocusOnTask} />, [handleFocusOnTask]);

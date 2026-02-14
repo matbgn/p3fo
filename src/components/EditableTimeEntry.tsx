@@ -200,28 +200,18 @@ export const EditableTimeEntry: React.FC<{
                 initialFocus
                 weekStartsOn={weekStartsOn}
               />
-              <div className="p-3 border-t border-border flex gap-2 items-center">
-                <Input
-                  id={`edit-start-time-${entry.taskId}-${entry.index}`}
-                  type="time"
-                  value={editStartTime ? format(new Date(editStartTime), "HH:mm:ss") : ""}
-                  onChange={(e) => {
-                    if (editStartTime && e.target.value) {
-                      const [hours, minutes, seconds] = e.target.value.split(':').map(Number);
-                      const newDate = new Date(editStartTime);
-                      newDate.setHours(hours, minutes, seconds || 0);
-                      setEditStartTime(format(newDate, "yyyy-MM-dd'T'HH:mm:ss"));
-                    }
-                  }}
-                  step="1"
-                  className="flex-1"
-                />
+              <div className="p-3 border-t border-border">
                 <Button
-                  variant="ghost"
-                  size="icon"
+                  variant="outline"
+                  className="w-full justify-start"
                   onClick={() => openTimePicker('start', editStartTime ? new Date(editStartTime).getTime() : Date.now())}
                 >
-                  <Clock className="h-4 w-4" />
+                  <Clock className="mr-2 h-4 w-4" />
+                  {editStartTime ? (
+                    format(new Date(editStartTime), "HH:mm:ss")
+                  ) : (
+                    <span className="text-muted-foreground">Set time...</span>
+                  )}
                 </Button>
               </div>
             </PopoverContent>
@@ -260,30 +250,18 @@ export const EditableTimeEntry: React.FC<{
                 weekStartsOn={weekStartsOn}
               />
               <div className="p-3 border-t border-border flex flex-col gap-2">
-                <div className="flex gap-2 items-center">
-                  <Input
-                    id={`edit-end-time-${entry.taskId}-${entry.index}`}
-                    type="time"
-                    value={editEndTime ? format(new Date(editEndTime), "HH:mm:ss") : ""}
-                    onChange={(e) => {
-                      if (editEndTime && e.target.value) {
-                        const [hours, minutes, seconds] = e.target.value.split(':').map(Number);
-                        const newDate = new Date(editEndTime);
-                        newDate.setHours(hours, minutes, seconds || 0);
-                        setEditEndTime(format(newDate, "yyyy-MM-dd'T'HH:mm:ss"));
-                      }
-                    }}
-                    step="1"
-                    className="flex-1"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => openTimePicker('end', editEndTime ? new Date(editEndTime).getTime() : Date.now())}
-                  >
-                    <Clock className="h-4 w-4" />
-                  </Button>
-                </div>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => openTimePicker('end', editEndTime ? new Date(editEndTime).getTime() : Date.now())}
+                >
+                  <Clock className="mr-2 h-4 w-4" />
+                  {editEndTime ? (
+                    format(new Date(editEndTime), "HH:mm:ss")
+                  ) : (
+                    <span className="text-muted-foreground">Set time...</span>
+                  )}
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -349,6 +327,7 @@ export const EditableTimeEntry: React.FC<{
             impact={task?.impact}
             urgent={task?.urgent}
             majorIncident={task?.majorIncident}
+            sprintTarget={task?.sprintTarget}
           />
         </div>
         {children}
@@ -359,12 +338,17 @@ export const EditableTimeEntry: React.FC<{
           (() => {
             const isCurrentUser = task.userId === currentUserId;
             const otherUser = !isCurrentUser ? users.find((u) => u.userId === task.userId) : null;
+            const currentUserFromList = users.find(u => u.userId === currentUserId);
+            const trigram = isCurrentUser
+              ? (currentUserFromList as any)?.trigram
+              : (otherUser as any)?.trigram;
             return (
               <UserAvatar
                 username={isCurrentUser ? userSettings.username : otherUser?.username || 'Unknown'}
                 logo={isCurrentUser ? userSettings.logo : otherUser?.logo}
                 size="sm"
                 showTooltip={true}
+                trigram={trigram}
               />
             );
           })()

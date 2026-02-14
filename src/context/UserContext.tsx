@@ -73,6 +73,44 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         initializeUser();
     }, []);
 
+    // Listen for external settings changes and reload
+    useEffect(() => {
+        const handleSettingsChanged = async () => {
+            if (!userId) return;
+            await refreshUserSettings();
+        };
+
+        eventBus.subscribe('userSettingsChanged', handleSettingsChanged);
+
+        return () => {
+            eventBus.unsubscribe('userSettingsChanged', handleSettingsChanged);
+        };
+    }, [userId]);
+
+    // Listen for Yjs user settings changes
+    useEffect(() => {
+        if (!userId) return;
+
+        import('@/lib/collaboration').then(({ yUserSettings, isCollaborationEnabled }) => {
+            if (!isCollaborationEnabled()) return;
+
+            const handleYjsChange = (event: any) => {
+                if (event.transaction.local) return;
+
+                // Check if our user was updated
+                if (event.keysChanged && event.keysChanged.has(userId)) {
+                    console.log('UserContext: Received Yjs update for current user');
+                    refreshUserSettings();
+                }
+            };
+
+            yUserSettings.observe(handleYjsChange);
+
+            // Cleanup fn
+            return () => yUserSettings.unobserve(handleYjsChange);
+        });
+    }, [userId]);
+
     // Update user settings
     const updateUserSettings = async (patch: Partial<UserSettingsEntity>) => {
         if (!userId) {
@@ -86,6 +124,16 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             // Emit event so other components can refresh
             eventBus.publish('userSettingsChanged');
+
+            // Sync to Yjs
+            import('@/lib/collaboration').then(({ yUserSettings, isCollaborationEnabled, doc }) => {
+                if (isCollaborationEnabled()) {
+                    doc.transact(() => {
+                        yUserSettings.set(userId, updated);
+                    });
+                }
+            });
+
         } catch (error) {
             console.error('Error updating user settings:', error);
             throw error;

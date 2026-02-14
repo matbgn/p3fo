@@ -293,6 +293,7 @@ export const CardView: React.FC<CardViewProps> = ({
                                     logo={users.find(u => u.userId === card.authorId)?.logo}
                                     size="sm"
                                     className="h-5 w-5 mr-1 hover:ring-2 hover:ring-ring transition-all"
+                                    trigram={(users.find(u => u.userId === card.authorId) as any)?.trigram}
                                 />
                             ) : (
                                 <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-muted-foreground mr-1 hover:bg-muted/80 transition-colors" title="Anonymous">
@@ -310,13 +311,25 @@ export const CardView: React.FC<CardViewProps> = ({
                                 Unassigned
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onUpdateAuthor(currentUserId); }}>
-                                <UserAvatar username={userSettings.username} logo={userSettings.logo} size="sm" className="h-4 w-4 mr-2" />
+                                <UserAvatar
+                                    username={userSettings.username}
+                                    logo={userSettings.logo}
+                                    size="sm"
+                                    className="h-4 w-4 mr-2"
+                                    trigram={(users.find(u => u.userId === currentUserId) as any)?.trigram}
+                                />
                                 Myself ({userSettings.username})
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             {users.filter(u => u.userId !== currentUserId).map(user => (
                                 <DropdownMenuItem key={user.userId} onClick={(e) => { e.stopPropagation(); onUpdateAuthor(user.userId); }}>
-                                    <UserAvatar username={user.username} logo={user.logo} size="sm" className="h-4 w-4 mr-2" />
+                                    <UserAvatar
+                                        username={user.username}
+                                        logo={user.logo}
+                                        size="sm"
+                                        className="h-4 w-4 mr-2"
+                                        trigram={(user as any).trigram}
+                                    />
                                     {user.username}
                                 </DropdownMenuItem>
                             ))}

@@ -34,6 +34,7 @@ export const TaskHierarchy: React.FC<TaskHierarchyProps> = ({ task, taskMap }) =
             impact={p.impact}
             urgent={p.urgent}
             majorIncident={p.majorIncident}
+            sprintTarget={p.sprintTarget}
           />
           {index < hierarchy.length - 1 && <span className="mx-1">{'>'}</span>}
         </React.Fragment>
