@@ -36,10 +36,24 @@ const TimetableRecordsCell: React.FC<TimetableRecordsCellProps> = ({
     const ratio = totalProjectedBalance / workloadPercentage;
 
     const getBadgeColorClass = (r: number) => {
-        const absR = Math.abs(r);
-        if (absR > 0.5) return "bg-red-100 text-red-700 hover:bg-red-200"; // Red
-        if (absR > 0.3) return "bg-amber-100 text-amber-700 hover:bg-amber-200"; // Amber
-        return "bg-green-100 text-green-700 hover:bg-green-200"; // Green
+        const upperLimit = settings.hourlyBalanceLimitUpper;
+        const lowerLimit = settings.hourlyBalanceLimitLower;
+
+        // Check Red Zone
+        if (r > upperLimit || r < lowerLimit) {
+            return "bg-red-100 text-red-700 hover:bg-red-200";
+        }
+
+        // Check Amber Zone (60% of limit)
+        // Warning zone is between 60% and 100% of the limit
+        const upperWarning = upperLimit * 0.6;
+        const lowerWarning = lowerLimit * 0.6;
+
+        if (r > upperWarning || r < lowerWarning) {
+            return "bg-amber-100 text-amber-700 hover:bg-amber-200";
+        }
+
+        return "bg-green-100 text-green-700 hover:bg-green-200";
     };
 
     return (

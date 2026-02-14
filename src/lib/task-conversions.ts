@@ -8,8 +8,51 @@
  * Security: All data sanitized (|| operators ensure no undefined values leak to DB)
  */
 
-import type { Task } from '@/hooks/useTasks';
+import type { Task, TriageStatus, Category } from '@/hooks/useTasks';
 import type { TaskEntity } from './persistence-types';
+
+/**
+ * Converts a TaskEntity to a Task object for frontend use.
+ * 
+ * @param entity - The TaskEntity from global storage
+ * @returns Task object ready for frontend use
+ */
+export const convertEntitiesToTasks = (entities: TaskEntity[]): Task[] => {
+    const taskMap: { [id: string]: Task } = {};
+
+    // First pass: create all task objects and map them by ID
+    entities.forEach(entity => {
+        const task: Task = {
+            id: entity.id,
+            title: entity.title,
+            parentId: entity.parentId,
+            children: [], // Initialize children array
+            createdAt: new Date(entity.createdAt).getTime(),
+            triageStatus: (entity.triageStatus as TriageStatus) || "Backlog",
+            urgent: entity.urgent,
+            impact: entity.impact,
+            majorIncident: entity.majorIncident,
+            difficulty: (entity.difficulty as 0.5 | 1 | 2 | 3 | 5 | 8) || 1,
+            timer: entity.timer,
+            category: entity.category as Category,
+            terminationDate: entity.terminationDate ? new Date(entity.terminationDate).getTime() : undefined,
+            comment: entity.comment || undefined,
+            durationInMinutes: entity.durationInMinutes || undefined,
+            priority: entity.priority || 0,
+            userId: entity.userId || undefined,
+        };
+        taskMap[task.id] = task;
+    });
+
+    // Second pass: populate children arrays
+    Object.values(taskMap).forEach(task => {
+        if (task.parentId && taskMap[task.parentId]) {
+            taskMap[task.parentId].children?.push(task.id);
+        }
+    });
+
+    return Object.values(taskMap);
+};
 
 /**
  * Converts a Task object to a TaskEntity for persistence.

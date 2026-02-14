@@ -37,7 +37,7 @@ import { UserSelector } from "./UserSelector";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { Calendar } from "@/components/ui/calendar";
 import { useCombinedSettings } from "@/hooks/useCombinedSettings";
-import { useView } from "@/hooks/useView";
+import { useViewDisplay } from "@/hooks/useView";
 import { COMPACTNESS_ULTRA, COMPACTNESS_COMPACT, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
 import { TaskEditModal } from "./TaskEditModal";
 
@@ -95,7 +95,7 @@ const EditableTitle: React.FC<{
   title: string;
   done?: boolean;
   onUpdateTitle: (title: string) => void;
-}> = ({ title, done, onUpdateTitle }) => {
+}> = React.memo(({ title, done, onUpdateTitle }) => {
   const [isEditing, setIsEditing] = React.useState(false);
   const [editValue, setEditValue] = React.useState(title);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -157,7 +157,7 @@ const EditableTitle: React.FC<{
       </b>
     </span>
   );
-};
+});
 
 
 const DIFFICULTY_OPTIONS: Array<0.5 | 1 | 2 | 3 | 5 | 8> = [0.5, 1, 2, 3, 5, 8];
@@ -224,7 +224,7 @@ interface TaskCardProps {
   disableReparenting?: boolean; // New prop to disable reparenting on drop
 }
 
-export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
+export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProps>((
   {
     task,
     tasks,
@@ -255,6 +255,7 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
   },
   ref
 ) => {
+  const [isHovered, setIsHovered] = React.useState(false);
   const [isTimeSheetOpen, setIsTimeSheetOpen] = React.useState(false);
   const [isCommentModalOpen, setIsCommentModalOpen] = React.useState(false);
   const [commentText, setCommentText] = React.useState(task.comment || "");
@@ -268,7 +269,7 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
   const { userSettings, userId: currentUserId } = useUserSettings();
   const { settings } = useCombinedSettings();
   const weekStartsOn = settings.weekStartDay as 0 | 1;
-  const { cardCompactness } = useView();
+  const { cardCompactness } = useViewDisplay();
 
   const isUltraCompact = cardCompactness === COMPACTNESS_ULTRA;
   const isCompact = cardCompactness === COMPACTNESS_COMPACT;
@@ -357,6 +358,8 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
 
   return (
     <Card
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       ref={ref}
       className={cn(
         `mb-2 transition-all duration-200 hover:shadow-md ${isActive ? "ring-2 ring-primary" : ""} ${isHighlighted ? "ring-2 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20" : ""}`,
@@ -454,31 +457,32 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
             >
               {task.timer?.some(e => !e.endTime) ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
             </Button>
-            <Dialog open={isTimeSheetOpen} onOpenChange={setIsTimeSheetOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 w-6 p-0"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                  }}
-                >
-                  <Clock2 className="h-4 w-4" />
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col p-0" aria-describedby={undefined}>
-                <DialogHeader className="p-6 pb-4">
-                  <DialogTitle>Time Sheet - {task.title}</DialogTitle>
-                  <DialogDescription className="sr-only">
-                    View and edit time entries for task: {task.title}
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="flex-grow overflow-y-auto px-6 pb-6">
-                  <TimeSheet taskId={task.id} />
-                </div>
-              </DialogContent>
-            </Dialog>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 w-6 p-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsTimeSheetOpen(true);
+              }}
+            >
+              <Clock2 className="h-4 w-4" />
+            </Button>
+            {isTimeSheetOpen && (
+              <Dialog open={isTimeSheetOpen} onOpenChange={setIsTimeSheetOpen}>
+                <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col p-0" aria-describedby={undefined}>
+                  <DialogHeader className="p-6 pb-4">
+                    <DialogTitle>Time Sheet - {task.title}</DialogTitle>
+                    <DialogDescription className="sr-only">
+                      View and edit time entries for task: {task.title}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="flex-grow overflow-y-auto px-6 pb-6">
+                    <TimeSheet taskId={task.id} />
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
           </div>
         )}
         {/* Date picker toggle - show in Compact and Full */}
@@ -660,52 +664,54 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
         />
         {/* Comment icon - show in Compact and Full */}
         {!isUltraCompact && (
-          <Dialog open={isCommentModalOpen} onOpenChange={setIsCommentModalOpen}>
-            <DialogTrigger asChild>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 w-6 p-0 shrink-0"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsCommentModalOpen(true);
-                }}
-              >
-                <FileText className={`h-4 w-4 ${task.comment ? "text-blue-500" : "text-gray-400"}`} />
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md" aria-describedby={undefined}>
-              <DialogHeader>
-                <DialogTitle>Edit Comment - {task.title}</DialogTitle>
-                <DialogDescription className="sr-only">
-                  Edit comment for task: {task.title}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <label htmlFor="comment" className="sr-only">Comment</label>
-                  <textarea
-                    id="comment"
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    placeholder="Add a comment..."
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end">
-                <Button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    updateComment(task.id, commentText);
-                    setIsCommentModalOpen(false);
-                  }}
-                >
-                  Save Comment
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 w-6 p-0 shrink-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsCommentModalOpen(true);
+              }}
+            >
+              <FileText className={`h-4 w-4 ${task.comment ? "text-blue-500" : "text-gray-400"}`} />
+            </Button>
+            {isCommentModalOpen && (
+              <Dialog open={isCommentModalOpen} onOpenChange={setIsCommentModalOpen}>
+                <DialogContent className="max-w-md" aria-describedby={undefined}>
+                  <DialogHeader>
+                    <DialogTitle>Edit Comment - {task.title}</DialogTitle>
+                    <DialogDescription className="sr-only">
+                      Edit comment for task: {task.title}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                      <label htmlFor="comment" className="sr-only">Comment</label>
+                      <textarea
+                        id="comment"
+                        value={commentText}
+                        onChange={(e) => setCommentText(e.target.value)}
+                        className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        placeholder="Add a comment..."
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        updateComment(task.id, commentText);
+                        setIsCommentModalOpen(false);
+                      }}
+                    >
+                      Save Comment
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+          </>
         )}
       </div>
       {/* Subtasks toggle - show in ALL modes (Ultra, Compact, Full) */}
@@ -789,118 +795,129 @@ export const TaskCard = React.forwardRef<HTMLDivElement, TaskCardProps>((
             <TaskStatusSelect value={task.triageStatus} onChange={(s) => updateStatus(task.id, s)} />
           </div>
           {!task.parentId && isFull && (
-            <div className="flex gap-1">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 w-6 p-0"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleUrgent(task.id);
-                }}
-              >
-                <AlertTriangle className={`h-4 w-4 ${task.urgent ? "text-red-500" : "text-gray-400"}`} />
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 w-6 p-0"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleImpact(task.id);
-                }}
-              >
-                <CircleDot className={`h-4 w-4 ${task.impact ? "text-yellow-500" : "text-gray-400"}`} />
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 w-6 p-0"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleMajorIncident(task.id);
-                }}
-              >
-                <Flame className={`h-4 w-4 ${task.majorIncident ? "text-red-700" : "text-gray-400"}`} />
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 w-6 p-0"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  duplicateTaskStructure(task.id);
-                }}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                  <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-                  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-                </svg>
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 w-6 p-0 hover:text-red-500"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  deleteTask(task.id);
-                }}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+            <div className={`flex gap-1 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
+              {isHovered && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleUrgent(task.id);
+                    }}
+                  >
+                    <AlertTriangle className={`h-4 w-4 ${task.urgent ? "text-red-500" : "text-gray-400"}`} />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleImpact(task.id);
+                    }}
+                  >
+                    <CircleDot className={`h-4 w-4 ${task.impact ? "text-yellow-500" : "text-gray-400"}`} />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleMajorIncident(task.id);
+                    }}
+                  >
+                    <Flame className={`h-4 w-4 ${task.majorIncident ? "text-red-700" : "text-gray-400"}`} />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      duplicateTaskStructure(task.id);
+                    }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                      <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                    </svg>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0 hover:text-red-500"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteTask(task.id);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
             </div>
           )}
           {task.parentId && (
-            <div className="flex gap-1">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 w-6 p-0"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  duplicateTaskStructure(task.id);
-                }}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                  <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-                  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-                </svg>
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 w-6 p-0 hover:text-red-500"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  deleteTask(task.id);
-                }}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+            <div className={`flex gap-1 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
+              {isHovered && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      duplicateTaskStructure(task.id);
+                    }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                      <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                    </svg>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0 hover:text-red-500"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteTask(task.id);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+
+                </>
+              )}
             </div>
           )}
         </div>
       )}
-      {/* Task Edit Modal */}
-      <TaskEditModal
-        task={task}
-        tasks={tasks}
-        isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-        updateTitle={updateTitle}
-        updateComment={updateComment}
-        updateStatus={updateStatus}
-        updateCategory={updateCategory}
-        updateDifficulty={updateDifficulty}
-        updateUser={updateUser}
-        updateTerminationDate={updateTerminationDate}
-        updateDurationInMinutes={updateDurationInMinutes}
-        toggleUrgent={toggleUrgent}
-        toggleImpact={toggleImpact}
-        toggleMajorIncident={toggleMajorIncident}
-        onToggleTimer={toggleTimer}
-        currentUserId={currentUserId}
-      />
+      {/* Task Edit Modal - only mount when opened to save DOM */}
+      {isEditModalOpen && (
+        <TaskEditModal
+          task={task}
+          tasks={tasks}
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          updateTitle={updateTitle}
+          updateComment={updateComment}
+          updateStatus={updateStatus}
+          updateCategory={updateCategory}
+          updateDifficulty={updateDifficulty}
+          updateUser={updateUser}
+          updateTerminationDate={updateTerminationDate}
+          updateDurationInMinutes={updateDurationInMinutes}
+          toggleUrgent={toggleUrgent}
+          toggleImpact={toggleImpact}
+          toggleMajorIncident={toggleMajorIncident}
+          onToggleTimer={toggleTimer}
+          currentUserId={currentUserId}
+        />
+      )}
     </Card>
   );
-});
+}));

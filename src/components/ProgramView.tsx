@@ -10,6 +10,7 @@ import {
   ResizableHandle,
 } from '@/components/ui/resizable';
 import { useTasks, Task } from '@/hooks/useTasks';
+import { useAllTasks } from '@/hooks/useAllTasks';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { useCombinedSettings } from '@/hooks/useCombinedSettings';
 import { TaskCard } from './TaskCard';
@@ -19,6 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { LazyCard } from './LazyCard';
 import { AlertTriangle, CircleDot, Flame } from 'lucide-react';
 
 
@@ -83,7 +85,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
     }
   }, [view]); // Re-scroll if view changes
   const {
-    tasks,
+    // tasks, // We use tasks from useAllTasks instead
     updateStatus,
     updateDifficulty,
     updateCategory,
@@ -101,6 +103,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
     updateComment,
     updateDurationInMinutes, // Add updateDurationInMinutes here
   } = useTasks();
+  const { tasks } = useAllTasks(); // Use useAllTasks to get unfiltered tasks
   const { userId: currentUserId } = useUserSettings();
 
   const parentTasks = tasks.filter(
@@ -246,7 +249,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
                 return a.createdAt - b.createdAt;
               })
               .map(task => (
-                <div key={task.id} className="w-64">
+                <LazyCard key={task.id} className="w-64">
                   <TaskCard
                     task={task}
                     tasks={tasks}
@@ -266,9 +269,9 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask }) => {
                     onFocusOnTask={onFocusOnTask}
                     updateTerminationDate={updateTerminationDate}
                     updateComment={updateComment}
-                    updateDurationInMinutes={updateDurationInMinutes} // Pass updateDurationInMinutes here
+                    updateDurationInMinutes={updateDurationInMinutes}
                   />
-                </div>
+                </LazyCard>
               ))}
           </CardContent>
         </Card>

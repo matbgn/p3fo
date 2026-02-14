@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTasks } from '@/hooks/useTasks';
+import { useAllTasks } from '@/hooks/useAllTasks';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Trash2, CalendarIcon, Clock } from 'lucide-react';
@@ -19,7 +20,8 @@ interface TimeSheetProps {
 
 
 export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
-  const { tasks, updateTimeEntry, deleteTimeEntry } = useTasks();
+  const { tasks } = useAllTasks();
+  const { updateTimeEntry, deleteTimeEntry } = useTasks();
   const { settings } = useCombinedSettings();
   const weekStartsOn = settings.weekStartDay as 0 | 1;
   const task = tasks.find(t => t.id === taskId);

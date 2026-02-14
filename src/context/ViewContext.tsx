@@ -1,6 +1,9 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { useState, ReactNode, useEffect, useMemo } from 'react';
 
-import { ViewContext, ViewType, ViewContextType, COMPACTNESS_FULL, COMPACTNESS_ULTRA } from './ViewContextDefinition';
+import {
+    ViewNavigationContext, ViewDisplayContext, ViewContext,
+    ViewType, COMPACTNESS_ULTRA
+} from './ViewContextDefinition';
 
 import { useUserSettings } from "@/hooks/useUserSettings";
 
@@ -19,19 +22,37 @@ export const ViewProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [userSettings.cardCompactness, loading]);
 
-    const handleFocusOnTask = (taskId: string) => {
+    const handleFocusOnTask = React.useCallback((taskId: string) => {
         setView("focus");
         setFocusedTaskId(taskId);
-    };
+    }, []);
 
-    const setCardCompactness = (value: number) => {
+    const setCardCompactness = React.useCallback((value: number) => {
         setLocalCardCompactness(value);
         updateCardCompactness(value);
-    };
+    }, [updateCardCompactness]);
+
+    // Memoize context values to prevent unnecessary re-renders
+    const navValue = useMemo(() => ({
+        view, setView, focusedTaskId, setFocusedTaskId, handleFocusOnTask,
+    }), [view, focusedTaskId, handleFocusOnTask]);
+
+    const displayValue = useMemo(() => ({
+        cardCompactness, setCardCompactness,
+    }), [cardCompactness, setCardCompactness]);
+
+    // Legacy combined context value (for any remaining consumers during migration)
+    const legacyValue = useMemo(() => ({
+        ...navValue, ...displayValue,
+    }), [navValue, displayValue]);
 
     return (
-        <ViewContext.Provider value={{ view, setView, focusedTaskId, setFocusedTaskId, handleFocusOnTask, cardCompactness, setCardCompactness }}>
-            {children}
-        </ViewContext.Provider>
+        <ViewNavigationContext.Provider value={navValue}>
+            <ViewDisplayContext.Provider value={displayValue}>
+                <ViewContext.Provider value={legacyValue}>
+                    {children}
+                </ViewContext.Provider>
+            </ViewDisplayContext.Provider>
+        </ViewNavigationContext.Provider>
     );
 };

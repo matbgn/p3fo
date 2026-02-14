@@ -7,7 +7,10 @@ import {
   QolSurveyResponseEntity,
   FilterStateEntity,
   FertilizationBoardEntity,
-  DreamBoardEntity
+  DreamBoardEntity,
+  CircleEntity,
+  CircleNodeType,
+  CircleNodeModifier
 } from '../../src/lib/persistence-types.js';
 
 // Default values
@@ -89,7 +92,9 @@ class PostgresClient implements DbClient {
         "splitTime" TEXT DEFAULT '13:00',
         "monthlyBalances" JSONB,
         "cardCompactness" INTEGER DEFAULT 0,
-        "timezone" TEXT
+        "timezone" TEXT,
+        "weekStartDay" INTEGER,
+        "defaultPlanView" TEXT
       )
     `);
 
@@ -165,6 +170,24 @@ class PostgresClient implements DbClient {
       )
     `);
 
+    // Circles table (EasyCIRCLE - organizational structure visualization)
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS "circles" (
+        "id" TEXT PRIMARY KEY,
+        "name" TEXT NOT NULL,
+        "parentId" TEXT,
+        "nodeType" TEXT NOT NULL, -- 'organization', 'circle', 'group', 'role'
+        "modifier" TEXT, -- 'template', 'hierarchy'
+        "color" TEXT, -- Custom color for roles, e.g., "#FF6600"
+        "size" REAL, -- Size weight for layout calculation
+        "description" TEXT, -- Optional description/purpose
+        "order" INTEGER, -- Display order among siblings
+        "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL,
+        "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL,
+        FOREIGN KEY ("parentId") REFERENCES "circles" ("id") ON DELETE SET NULL
+      )
+    `);
+
     // Create indexes for performance optimization
     // These indexes dramatically improve query performance when filtering by userId, parentId, or triageStatus
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId" ON "tasks"("userId")`);
@@ -174,6 +197,10 @@ class PostgresClient implements DbClient {
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_tasks_priority" ON "tasks"("priority")`);
     // Composite index for common filtering patterns (user + status)
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId_triageStatus" ON "tasks"("userId", "triageStatus")`);
+
+    // Circles indexes
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_circles_parentId" ON "circles"("parentId")`);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_circles_nodeType" ON "circles"("nodeType")`);
   }
 
   private async migrateSchema(): Promise<void> {
@@ -207,6 +234,22 @@ class PostgresClient implements DbClient {
         }
       } catch (e) {
         console.error(`Error migrating ${table}.${oldCol}:`, e);
+      }
+    };
+
+    const addColumn = async (table: string, colName: string, colType: string) => {
+      try {
+        const colCheck = await this.pool.query(
+          `SELECT 1 FROM information_schema.columns WHERE table_name=$1 AND column_name=$2`,
+          [table.replace(/"/g, ''), colName.replace(/"/g, '')]
+        );
+
+        if (colCheck.rows.length === 0) {
+          console.log(`Adding column ${table}.${colName}...`);
+          await this.pool.query(`ALTER TABLE "${table.replace(/"/g, '')}" ADD COLUMN "${colName}" ${colType}`);
+        }
+      } catch (e) {
+        console.error(`Error adding column ${table}.${colName}:`, e);
       }
     };
 
@@ -254,6 +297,10 @@ class PostgresClient implements DbClient {
     await runMigration('userSettings', 'split_time', 'splitTime');
     await runMigration('userSettings', 'monthly_balances', 'monthlyBalances');
     await runMigration('userSettings', 'card_compactness', 'cardCompactness');
+
+    // Add new columns for UserSettings
+    await addColumn('userSettings', 'weekStartDay', 'INTEGER');
+    await addColumn('userSettings', 'defaultPlanView', 'TEXT');
 
     // AppSettings columns
     await runMigration('appSettings', 'split_time', 'splitTime');
@@ -538,6 +585,8 @@ class PostgresClient implements DbClient {
       return {
         ...row,
         monthlyBalances: row.monthlyBalances || {},
+        weekStartDay: row.weekStartDay,
+        defaultPlanView: row.defaultPlanView,
       };
     }
     return null;
@@ -548,8 +597,8 @@ class PostgresClient implements DbClient {
     const updated = { ...current, ...data, userId };
 
     await this.pool.query(`
-      INSERT INTO "userSettings" ("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO "userSettings" ("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness", "weekStartDay", "defaultPlanView")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       ON CONFLICT ("userId") DO UPDATE SET
         "username" = EXCLUDED."username",
         "logo" = EXCLUDED."logo",
@@ -558,7 +607,9 @@ class PostgresClient implements DbClient {
         "splitTime" = EXCLUDED."splitTime",
         "monthlyBalances" = EXCLUDED."monthlyBalances",
         "timezone" = EXCLUDED."timezone",
-        "cardCompactness" = EXCLUDED."cardCompactness"
+        "cardCompactness" = EXCLUDED."cardCompactness",
+        "weekStartDay" = EXCLUDED."weekStartDay",
+        "defaultPlanView" = EXCLUDED."defaultPlanView"
     `, [
       updated.userId,
       updated.username,
@@ -568,7 +619,9 @@ class PostgresClient implements DbClient {
       updated.splitTime,
       JSON.stringify(updated.monthlyBalances),
       updated.timezone,
-      updated.cardCompactness
+      updated.cardCompactness,
+      updated.weekStartDay ?? null,
+      updated.defaultPlanView ?? null
     ]);
 
     return updated;
@@ -583,18 +636,13 @@ class PostgresClient implements DbClient {
   }
 
   async migrateUser(oldUserId: string, newUserId: string): Promise<void> {
-    // 1. Migrate tasks
-    await this.pool.query('UPDATE "tasks" SET "userId" = $1 WHERE "userId" = $2', [newUserId, oldUserId]);
+    // 1. Delete old user's tasks (target UUID's tasks are the source of truth)
+    await this.pool.query('DELETE FROM "tasks" WHERE "userId" = $1', [oldUserId]);
 
-    // 2. Migrate user settings
-    const check = await this.pool.query('SELECT "userId" FROM "userSettings" WHERE "userId" = $1', [newUserId]);
-    if (check.rows.length === 0) {
-      await this.pool.query('UPDATE "userSettings" SET "userId" = $1 WHERE "userId" = $2', [newUserId, oldUserId]);
-    } else {
-      await this.pool.query('DELETE FROM "userSettings" WHERE "userId" = $1', [oldUserId]);
-    }
+    // 2. Delete old user settings (target UUID's settings prevail)
+    await this.pool.query('DELETE FROM "userSettings" WHERE "userId" = $1', [oldUserId]);
 
-    console.log(`PostgreSQL: Migrated data from ${oldUserId} to ${newUserId}`);
+    console.log(`PostgreSQL: Switched from ${oldUserId} to ${newUserId} (old user data discarded)`);
   }
 
   async deleteUser(userId: string): Promise<void> {
@@ -754,6 +802,121 @@ class PostgresClient implements DbClient {
       `, [JSON.stringify(state)]);
   }
 
+  // Circles (EasyCIRCLE)
+  async getCircles(): Promise<CircleEntity[]> {
+    const result = await this.pool.query('SELECT * FROM "circles" ORDER BY "order" ASC NULLS LAST, "createdAt" ASC');
+    return result.rows.map(row => ({
+      ...row,
+      nodeType: row.nodeType as CircleNodeType,
+      modifier: row.modifier as CircleNodeModifier | undefined,
+    }));
+  }
+
+  async getCircleById(id: string): Promise<CircleEntity | null> {
+    const result = await this.pool.query('SELECT * FROM "circles" WHERE "id" = $1', [id]);
+    if (result.rows.length === 0) return null;
+
+    const row = result.rows[0];
+    return {
+      ...row,
+      nodeType: row.nodeType as CircleNodeType,
+      modifier: row.modifier as CircleNodeModifier | undefined,
+    };
+  }
+
+  async createCircle(input: Partial<CircleEntity>): Promise<CircleEntity> {
+    const now = new Date().toISOString();
+    const newCircle: CircleEntity = {
+      id: input.id || crypto.randomUUID(),
+      name: input.name || 'New Circle',
+      parentId: input.parentId || null,
+      nodeType: input.nodeType || 'circle',
+      modifier: input.modifier,
+      color: input.color,
+      size: input.size,
+      description: input.description,
+      order: input.order,
+      createdAt: input.createdAt || now,
+      updatedAt: input.updatedAt || now,
+    };
+
+    await this.pool.query(`
+      INSERT INTO "circles" ("id", "name", "parentId", "nodeType", "modifier", "color", "size", "description", "order", "createdAt", "updatedAt")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    `, [
+      newCircle.id,
+      newCircle.name,
+      newCircle.parentId,
+      newCircle.nodeType,
+      newCircle.modifier ?? null,
+      newCircle.color ?? null,
+      newCircle.size ?? null,
+      newCircle.description ?? null,
+      newCircle.order ?? null,
+      newCircle.createdAt,
+      newCircle.updatedAt,
+    ]);
+
+    return newCircle;
+  }
+
+  async updateCircle(id: string, patch: Partial<CircleEntity>): Promise<CircleEntity | null> {
+    const current = await this.getCircleById(id);
+    if (!current) {
+      return null;
+    }
+
+    const updated = { ...current, ...patch, updatedAt: new Date().toISOString() };
+
+    await this.pool.query(`
+      UPDATE "circles"
+      SET "name" = $1, "parentId" = $2, "nodeType" = $3, "modifier" = $4,
+          "color" = $5, "size" = $6, "description" = $7, "order" = $8, "updatedAt" = $9
+      WHERE "id" = $10
+    `, [
+      updated.name,
+      updated.parentId,
+      updated.nodeType,
+      updated.modifier ?? null,
+      updated.color ?? null,
+      updated.size ?? null,
+      updated.description ?? null,
+      updated.order ?? null,
+      updated.updatedAt,
+      id
+    ]);
+
+    return updated;
+  }
+
+  async deleteCircle(id: string): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Delete recursive circles (Cascade)
+      await client.query(`
+        WITH RECURSIVE descendants AS (
+            SELECT id FROM "circles" WHERE "id" = $1
+            UNION
+            SELECT c.id FROM "circles" c
+            INNER JOIN descendants d ON c."parentId" = d.id
+        )
+        DELETE FROM "circles"
+        WHERE "id" IN (SELECT id FROM descendants)
+      `, [id]);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async clearAllCircles(): Promise<void> {
+    await this.pool.query('DELETE FROM "circles"');
+  }
+
   async clearAllData(): Promise<void> {
     const client = await this.pool.connect();
     try {
@@ -767,6 +930,7 @@ class PostgresClient implements DbClient {
       await client.query('DROP TABLE IF EXISTS "filters" CASCADE');
       await client.query('DROP TABLE IF EXISTS "fertilizationBoard" CASCADE');
       await client.query('DROP TABLE IF EXISTS "dreamBoard" CASCADE');
+      await client.query('DROP TABLE IF EXISTS "circles" CASCADE');
 
       // Drop legacy tables if they exist
       await client.query('DROP TABLE IF EXISTS tasks CASCADE');

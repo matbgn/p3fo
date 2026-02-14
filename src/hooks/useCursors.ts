@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { awareness } from '@/lib/collaboration';
 import { useUserSettings } from '@/hooks/useUserSettings';
-import { useView } from "@/hooks/useView";
+import { useViewNavigation } from "@/hooks/useView";
 
 // Define the cursor state structure
 export type CursorState = {
@@ -32,7 +32,7 @@ const getRandomColor = () => colors[Math.floor(Math.random() * colors.length)];
 export const useCursors = () => {
     const [cursors, setCursors] = useState<Map<number, CursorState>>(new Map());
     const { userSettings } = useUserSettings();
-    const { view } = useView();
+    const { view } = useViewNavigation();
     const [userColor] = useState(getRandomColor());
 
     useEffect(() => {

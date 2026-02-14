@@ -261,35 +261,15 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
 
     try {
-      // 1. Migrate tasks
+      // 1. Delete old user's tasks (target UUID's tasks are the source of truth)
       const tasks = await this.listTasks();
-      let tasksChanged = false;
+      const filteredTasks = tasks.filter(task => task.userId !== oldUserId);
+      localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(filteredTasks));
 
-      tasks.forEach(task => {
-        if (task.userId === oldUserId) {
-          task.userId = newUserId;
-          tasksChanged = true;
-        }
-      });
+      // 2. Delete old user settings (target UUID's settings prevail)
+      localStorage.removeItem(`${USER_SETTINGS_STORAGE_KEY}_${oldUserId}`);
 
-      if (tasksChanged) {
-        localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
-      }
-
-      // 2. Migrate settings
-      const oldSettings = await this.getUserSettings(oldUserId);
-      if (oldSettings) {
-        // Save as new user settings, updating the ID
-        await this.updateUserSettings(newUserId, {
-          ...oldSettings,
-          userId: newUserId
-        });
-
-        // Remove old settings
-        localStorage.removeItem(`${USER_SETTINGS_STORAGE_KEY}_${oldUserId}`);
-      }
-
-      console.log(`Migrated data from ${oldUserId} to ${newUserId}`);
+      console.log(`Switched from ${oldUserId} to ${newUserId} (old user data discarded)`);
     } catch (error) {
       console.error('Error migrating user data:', error);
       throw error;

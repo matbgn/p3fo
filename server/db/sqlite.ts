@@ -7,7 +7,10 @@ import type {
   QolSurveyResponseEntity,
   FilterStateEntity,
   FertilizationBoardEntity,
-  DreamBoardEntity
+  DreamBoardEntity,
+  CircleEntity,
+  CircleNodeType,
+  CircleNodeModifier
 } from '../../src/lib/persistence-types.js';
 
 // Raw database row types (SQLite stores booleans as 0/1 integers and JSON as strings)
@@ -40,6 +43,8 @@ interface UserSettingsDbRow {
   monthlyBalances: string | null;
   cardCompactness: number | null;
   timezone: string | null;
+  weekStartDay: number | null;
+  defaultPlanView: string | null;
 }
 
 interface AppSettingsDbRow {
@@ -58,6 +63,20 @@ interface AppSettingsDbRow {
   timezone: string | null;
   country: string | null;
   region: string | null;
+}
+
+interface CircleDbRow {
+  id: string;
+  name: string;
+  parentId: string | null;
+  nodeType: string;
+  modifier: string | null;
+  color: string | null;
+  size: number | null;
+  description: string | null;
+  order: number | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // Default values
@@ -138,7 +157,9 @@ class SqliteClient implements DbClient {
         "splitTime" TEXT DEFAULT '13:00',
         "monthlyBalances" TEXT, -- JSON string
         "cardCompactness" INTEGER DEFAULT 0,
-        "timezone" TEXT
+        "timezone" TEXT,
+        "weekStartDay" INTEGER,
+        "defaultPlanView" TEXT
       )
     `);
 
@@ -206,6 +227,24 @@ class SqliteClient implements DbClient {
         )
         `);
 
+    // Circles table (EasyCIRCLE - organizational structure visualization)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS "circles" (
+        "id" TEXT PRIMARY KEY,
+        "name" TEXT NOT NULL,
+        "parentId" TEXT,
+        "nodeType" TEXT NOT NULL, -- 'organization', 'circle', 'group', 'role'
+        "modifier" TEXT, -- 'template', 'hierarchy'
+        "color" TEXT, -- Custom color for roles, e.g., "#FF6600"
+        "size" REAL, -- Size weight for layout calculation
+        "description" TEXT, -- Optional description/purpose
+        "order" INTEGER, -- Display order among siblings
+        "createdAt" TEXT NOT NULL,
+        "updatedAt" TEXT NOT NULL,
+        FOREIGN KEY("parentId") REFERENCES "circles"("id")
+      )
+    `);
+
     // Create indexes for performance optimization
     // These indexes dramatically improve query performance when filtering by userId, parentId, or triageStatus
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId" ON "tasks"("userId")`);
@@ -215,6 +254,10 @@ class SqliteClient implements DbClient {
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_tasks_priority" ON "tasks"("priority")`);
     // Composite index for common filtering patterns (user + status)
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId_triageStatus" ON "tasks"("userId", "triageStatus")`);
+
+    // Circles indexes
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_circles_parentId" ON "circles"("parentId")`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_circles_nodeType" ON "circles"("nodeType")`);
   }
 
   private migrateSchema(): void {
@@ -227,9 +270,21 @@ class SqliteClient implements DbClient {
           this.db.exec(`ALTER TABLE "${table}" RENAME COLUMN "${oldCol}" TO "${newCol}"`);
         }
       } catch (e) {
-        // Ignore if table doesn't exist or other errors
       }
     };
+
+    // Helper to add new columns if they don't exist
+    const addColumn = (table: string, colName: string, colType: string) => {
+      try {
+        const tableInfo = this.db.prepare(`PRAGMA table_info("${table}")`).all() as { name: string }[];
+        if (!tableInfo.some(col => col.name === colName)) {
+          console.log(`Adding column ${table}.${colName}...`);
+          this.db.exec(`ALTER TABLE "${table}" ADD COLUMN "${colName}" ${colType}`);
+        }
+      } catch (e) {
+        console.error(`Error adding column ${table}.${colName}:`, e);
+      }
+    }
 
     // Rename legacy tables to camelCase if needed
     const renameTable = (oldName: string, newName: string) => {
@@ -267,6 +322,10 @@ class SqliteClient implements DbClient {
     runMigration('userSettings', 'split_time', 'splitTime');
     runMigration('userSettings', 'monthly_balances', 'monthlyBalances');
     runMigration('userSettings', 'card_compactness', 'cardCompactness');
+
+    // Add new columns for UserSettings
+    addColumn('userSettings', 'weekStartDay', 'INTEGER');
+    addColumn('userSettings', 'defaultPlanView', 'TEXT');
 
     // AppSettings columns
     runMigration('appSettings', 'split_time', 'splitTime');
@@ -596,6 +655,8 @@ class SqliteClient implements DbClient {
       ...row,
       hasCompletedOnboarding: Boolean(row.hasCompletedOnboarding),
       monthlyBalances: row.monthlyBalances ? JSON.parse(row.monthlyBalances) : {},
+      weekStartDay: row.weekStartDay as 0 | 1 | undefined,
+      defaultPlanView: row.defaultPlanView as 'week' | 'month' | undefined,
     };
   }
 
@@ -613,11 +674,13 @@ class SqliteClient implements DbClient {
       monthlyBalances: updated.monthlyBalances ? JSON.stringify(updated.monthlyBalances) : null,
       timezone: updated.timezone ?? null,
       cardCompactness: updated.cardCompactness ?? 0,
+      weekStartDay: updated.weekStartDay ?? null,
+      defaultPlanView: updated.defaultPlanView ?? null
     };
 
     this.db.prepare(`
-      INSERT INTO "userSettings"("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness")
-      VALUES(@userId, @username, @logo, @hasCompletedOnboarding, @workload, @splitTime, @monthlyBalances, @timezone, @cardCompactness)
+      INSERT INTO "userSettings"("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness", "weekStartDay", "defaultPlanView")
+      VALUES(@userId, @username, @logo, @hasCompletedOnboarding, @workload, @splitTime, @monthlyBalances, @timezone, @cardCompactness, @weekStartDay, @defaultPlanView)
       ON CONFLICT("userId") DO UPDATE SET
       "username" = excluded."username",
         "logo" = excluded."logo",
@@ -626,7 +689,9 @@ class SqliteClient implements DbClient {
         "splitTime" = excluded."splitTime",
         "monthlyBalances" = excluded."monthlyBalances",
         "timezone" = excluded."timezone",
-        "cardCompactness" = excluded."cardCompactness"
+        "cardCompactness" = excluded."cardCompactness",
+        "weekStartDay" = excluded."weekStartDay",
+        "defaultPlanView" = excluded."defaultPlanView"
           `).run(params);
 
     return updated;
@@ -638,28 +703,22 @@ class SqliteClient implements DbClient {
       ...row,
       hasCompletedOnboarding: Boolean(row.hasCompletedOnboarding),
       monthlyBalances: row.monthlyBalances ? JSON.parse(row.monthlyBalances) : {},
+      weekStartDay: row.weekStartDay as 0 | 1 | undefined,
+      defaultPlanView: row.defaultPlanView as 'week' | 'month' | undefined,
     }));
   }
 
   async migrateUser(oldUserId: string, newUserId: string): Promise<void> {
     this.db.exec('BEGIN');
     try {
-      // 1. Migrate tasks
-      this.db.prepare('UPDATE "tasks" SET "userId" = ? WHERE "userId" = ?').run(newUserId, oldUserId);
+      // 1. Delete old user's tasks (target UUID's tasks are the source of truth)
+      this.db.prepare('DELETE FROM "tasks" WHERE "userId" = ?').run(oldUserId);
 
-      // 2. Migrate settings
-      // Check if new user settings exist
-      const newSettings = this.db.prepare('SELECT "userId" FROM "userSettings" WHERE "userId" = ?').get(newUserId);
-
-      if (!newSettings) {
-        // If new user settings don't exist, move old settings to new user
-        this.db.prepare('UPDATE "userSettings" SET "userId" = ? WHERE "userId" = ?').run(newUserId, oldUserId);
-      } else {
-        // If new user settings exist, delete old settings (merging is complex, we assume target settings prevail)
-        this.db.prepare('DELETE FROM "userSettings" WHERE "userId" = ?').run(oldUserId);
-      }
+      // 2. Delete old user settings (target UUID's settings prevail)
+      this.db.prepare('DELETE FROM "userSettings" WHERE "userId" = ?').run(oldUserId);
 
       this.db.exec('COMMIT');
+      console.log(`SQLite: Switched from ${oldUserId} to ${newUserId} (old user data discarded)`);
     } catch (error) {
       this.db.exec('ROLLBACK');
       throw error;
@@ -831,6 +890,139 @@ class SqliteClient implements DbClient {
         `).run({ data: JSON.stringify(state) });
   }
 
+  // Circles (EasyCIRCLE)
+  async getCircles(): Promise<CircleEntity[]> {
+    const rows = this.db.prepare('SELECT * FROM "circles" ORDER BY "order" ASC NULLS LAST, "createdAt" ASC').all() as unknown as CircleDbRow[];
+    return rows.map(row => ({
+      ...row,
+      nodeType: row.nodeType as CircleNodeType,
+      modifier: row.modifier as CircleNodeModifier | undefined,
+    }));
+  }
+
+  async getCircleById(id: string): Promise<CircleEntity | null> {
+    const row = this.db.prepare('SELECT * FROM "circles" WHERE "id" = ?').get(id) as unknown as CircleDbRow | undefined;
+    if (!row) {
+      return null;
+    }
+    return {
+      ...row,
+      nodeType: row.nodeType as CircleNodeType,
+      modifier: row.modifier as CircleNodeModifier | undefined,
+    };
+  }
+
+  async createCircle(input: Partial<CircleEntity>): Promise<CircleEntity> {
+    const now = new Date().toISOString();
+    const newCircle: CircleEntity = {
+      id: input.id || crypto.randomUUID(),
+      name: input.name || 'New Circle',
+      parentId: input.parentId || null,
+      nodeType: input.nodeType || 'circle',
+      modifier: input.modifier,
+      color: input.color,
+      size: input.size,
+      description: input.description,
+      order: input.order,
+      createdAt: input.createdAt || now,
+      updatedAt: input.updatedAt || now,
+    };
+
+    const params = {
+      id: newCircle.id,
+      name: newCircle.name,
+      parentId: newCircle.parentId,
+      nodeType: newCircle.nodeType,
+      modifier: newCircle.modifier ?? null,
+      color: newCircle.color ?? null,
+      size: newCircle.size ?? null,
+      description: newCircle.description ?? null,
+      order: newCircle.order ?? null,
+      createdAt: newCircle.createdAt,
+      updatedAt: newCircle.updatedAt,
+    };
+
+    this.db.prepare(`
+      INSERT INTO "circles"("id", "name", "parentId", "nodeType", "modifier", "color", "size", "description", "order", "createdAt", "updatedAt")
+      VALUES(@id, @name, @parentId, @nodeType, @modifier, @color, @size, @description, @order, @createdAt, @updatedAt)
+    `).run(params);
+
+    return newCircle;
+  }
+
+  async updateCircle(id: string, patch: Partial<CircleEntity>): Promise<CircleEntity | null> {
+    const current = await this.getCircleById(id);
+    if (!current) {
+      return null;
+    }
+
+    const updated = { ...current, ...patch, updatedAt: new Date().toISOString() };
+
+    const params = {
+      id: updated.id,
+      name: updated.name,
+      parentId: updated.parentId,
+      nodeType: updated.nodeType,
+      modifier: updated.modifier ?? null,
+      color: updated.color ?? null,
+      size: updated.size ?? null,
+      description: updated.description ?? null,
+      order: updated.order ?? null,
+      updatedAt: updated.updatedAt,
+    };
+
+    this.db.prepare(`
+      UPDATE "circles" SET
+        "name" = @name,
+        "parentId" = @parentId,
+        "nodeType" = @nodeType,
+        "modifier" = @modifier,
+        "color" = @color,
+        "size" = @size,
+        "description" = @description,
+        "order" = @order,
+        "updatedAt" = @updatedAt
+      WHERE "id" = @id
+    `).run(params);
+
+    return updated;
+  }
+
+  async deleteCircle(id: string): Promise<void> {
+    this.db.exec('BEGIN');
+    try {
+      // Find all descendants recursively using a CTE with depth to ensure bottom-up deletion
+      const descendants = this.db.prepare(`
+        WITH RECURSIVE descendants(id, depth) AS (
+          SELECT id, 1 FROM "circles" WHERE "parentId" = ?
+          UNION ALL
+          SELECT c.id, d.depth + 1 FROM "circles" c
+          INNER JOIN descendants d ON c."parentId" = d.id
+        )
+        SELECT id FROM descendants ORDER BY depth DESC
+      `).all(id) as { id: string }[];
+
+      const deleteStmt = this.db.prepare('DELETE FROM "circles" WHERE "id" = ?');
+
+      // Delete descendants first (deepest first) to avoid FK violations
+      for (const row of descendants) {
+        deleteStmt.run(row.id);
+      }
+
+      // Finally delete the parent
+      deleteStmt.run(id);
+
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  async clearAllCircles(): Promise<void> {
+    this.db.prepare('DELETE FROM "circles"').run();
+  }
+
   async clearAllData(): Promise<void> {
     // Drop all tables to prompt a full schema reset on next initialize or strictly here
     this.db.exec('BEGIN');
@@ -842,6 +1034,7 @@ class SqliteClient implements DbClient {
       this.db.exec('DROP TABLE IF EXISTS "filters"');
       this.db.exec('DROP TABLE IF EXISTS "fertilizationBoard"');
       this.db.exec('DROP TABLE IF EXISTS "dreamBoard"');
+      this.db.exec('DROP TABLE IF EXISTS "circles"');
 
       // Also drop legacy tables if they exist
       this.db.exec('DROP TABLE IF EXISTS tasks');

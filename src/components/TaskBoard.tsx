@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Plus, CornerDownRight, FolderTree, Printer, Filter, ChevronDown, ChevronRight } from "lucide-react";
 import { FilterControls, Filters } from "./FilterControls";
 import { useTasks, Task, TriageStatus } from "@/hooks/useTasks";
+import { useAllTasks } from "@/hooks/useAllTasks";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { QuickTimer } from "@/components/QuickTimer";
 import { aStarTextSearch } from "@/lib/a-star-search";
@@ -12,9 +13,10 @@ import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
 import { sortTasks } from "@/utils/taskSorting";
 
 import { TaskCard } from "./TaskCard";
+import { LazyCard } from "./LazyCard";
 
 import { byId } from "@/lib/utils";
-import { useView } from "@/hooks/useView";
+import { useViewDisplay } from "@/hooks/useView";
 import { COMPACTNESS_ULTRA, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
 
 type Column = {
@@ -24,7 +26,8 @@ type Column = {
 };
 
 const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId }) => {
-  const { tasks, createTask, reparent, updateStatus, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleDone, updateTaskTimer, toggleTimer, updateTimeEntry, updateCategory, updateComment, updateTerminationDate, updateDurationInMinutes } = useTasks();
+  const { createTask, reparent, updateStatus, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleDone, updateTaskTimer, toggleTimer, updateTimeEntry, updateCategory, updateComment, updateTerminationDate, updateDurationInMinutes } = useTasks();
+  const { tasks } = useAllTasks();
   const { userId: currentUserId } = useUserSettings();
   const map = React.useMemo(() => byId(tasks), [tasks]);
 
@@ -78,7 +81,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
 
   const [filters, setFilters] = React.useState<Filters>(defaultTaskBoardFilters);
   const [loadingFilters, setLoadingFilters] = React.useState(true);
-  const { cardCompactness } = useView();
+  const { cardCompactness } = useViewDisplay();
   const [isFiltersCollapsed, setIsFiltersCollapsed] = React.useState(false);
 
   // Auto-collapse filters when switching to Ultra Compact mode
@@ -206,15 +209,25 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
     }
 
     const rootItems = tasks.filter((t) => !t.parentId).sort(sortTasks.taskboard);
-    cols.push({ parentId: null, items: rootItems, activeId: path[0] });
+
+    // Apply Focus Mode: If a root task is selected (path[0]), only show that task
+    const filteredRootItems = path[0] ? rootItems.filter(t => t.id === path[0]) : rootItems;
+
+    cols.push({ parentId: null, items: filteredRootItems, activeId: path[0] });
 
     path.forEach((taskId, idx) => {
       const t = map[taskId];
       if (!t) return;
       // Show all children to ensure tasks from other columns are visible
-      const children = ((t.children || [])
+      let children = ((t.children || [])
         .map((id) => map[id])
         .filter(Boolean) as Task[]).sort(sortTasks.taskboard);
+
+      // Apply Focus Mode: If a child is selected in this column (path[idx + 1]), only show that child
+      if (path[idx + 1]) {
+        children = children.filter(c => c.id === path[idx + 1]);
+      }
+
       cols.push({
         parentId: t.id,
         items: children,
@@ -222,10 +235,18 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
       });
     });
     return cols;
-    return cols;
   }, [tasks, map, path, filters]);
 
   const handleActivate = (colIndex: number, id: string) => {
+    // Implement Toggle Off:
+    // If clicking the currently active task in this column, deselect it (and all consecutive paths)
+    if (path[colIndex] === id) {
+      const newPath = path.slice(0, colIndex);
+      setPath(newPath);
+      setHighlightedTaskId(null);
+      return;
+    }
+
     const newPath = path.slice(0, colIndex);
     newPath[colIndex] = id;
     setPath(newPath);
@@ -245,6 +266,20 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
       updateStatus(taskId, status);
     },
     [updateStatus],
+  );
+
+  const handleUpdateUser = React.useCallback(
+    (id: string, userId: string | undefined) => {
+      updateUser(id, userId === 'current-user' ? currentUserId : userId);
+    },
+    [updateUser, currentUserId],
+  );
+
+  const handleToggleDone = React.useCallback(
+    (task: Task) => {
+      toggleDone(task.id);
+    },
+    [toggleDone],
   );
 
   // Thread drawing
@@ -506,90 +541,91 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                       <div className="text-xs text-muted-foreground px-2 py-6">No items yet.</div>
                     ) : (
                       fullyFilteredItems.map((t) => (
-                        <TaskCard
-                          ref={(el) => (cardRefs.current[t.id] = el)}
-                          key={t.id}
-                          task={t}
-                          tasks={tasks}
-                          onActivate={() => {
-                            if (col.parentId === "search-results") {
-                              // Clear search, set path to reveal ancestry, and highlight
-                              setFilters(prev => ({ ...prev, searchText: "" }));
-                              const newPath: string[] = [];
-                              let current: Task | undefined = t;
-                              while (current) {
-                                newPath.unshift(current.id);
-                                current = current.parentId ? map[current.parentId] : undefined;
-                              }
-                              setPath(newPath);
-                              setHighlightedTaskId(t.id); // Highlight the clicked task
-                            } else {
-                              handleActivate(i, t.id);
-                            }
-                          }}
-                          isActive={t.id === col.activeId}
-                          isHighlighted={t.id === highlightedTaskId || t.id === col.activeId}
-                          isTriageBoard={true}
-                          updateStatus={handleChangeStatus}
-                          updateDifficulty={updateDifficulty}
-                          updateCategory={updateCategory}
-                          updateTitle={async (id, title) => {
-                            const parentId = await updateTitle(id, title); // Call useTasks' updateTitle
-                            if (parentId) {
-                              // If the updated task had a parent, re-activate the parent's path
-                              const parentTask = map[parentId];
-                              if (parentTask) {
+                        <LazyCard key={t.id}>
+                          <TaskCard
+                            ref={(el) => (cardRefs.current[t.id] = el)}
+                            task={t}
+                            tasks={tasks}
+                            onActivate={() => {
+                              if (col.parentId === "search-results") {
+                                // Clear search, set path to reveal ancestry, and highlight
+                                setFilters(prev => ({ ...prev, searchText: "" }));
                                 const newPath: string[] = [];
-                                let current: Task | undefined = parentTask;
+                                let current: Task | undefined = t;
                                 while (current) {
                                   newPath.unshift(current.id);
                                   current = current.parentId ? map[current.parentId] : undefined;
                                 }
-                                setPath(newPath); // Set path to parent's path
+                                setPath(newPath);
+                                setHighlightedTaskId(t.id); // Highlight the clicked task
+                              } else {
+                                handleActivate(i, t.id);
                               }
-                            }
-                          }}
-                          updateUser={(id, userId) => updateUser(id, userId === 'current-user' ? currentUserId : userId)}
-                          deleteTask={deleteTask}
-                          duplicateTaskStructure={duplicateTaskStructure}
-                          toggleUrgent={toggleUrgent}
-                          toggleImpact={toggleImpact}
-                          toggleMajorIncident={toggleMajorIncident}
-                          toggleTimer={handleToggleTimer}
-                          toggleDone={(task) => toggleDone(task.id)}
-                          reparent={reparent}
-                          onToggleOpen={(taskId, toggleAll) => {
-                            const task = map[taskId];
-                            if (task && task.children && task.children.length > 0) {
-                              // Jump to the first child and highlight it
-                              const firstChildId = task.children[0];
-
-                              // Build full path to parent and then to first child
-                              const newPath: string[] = [];
-                              let current: Task | undefined = task;
-                              while (current) {
-                                newPath.unshift(current.id);
-                                current = current.parentId ? map[current.parentId] : undefined;
+                            }}
+                            isActive={t.id === col.activeId}
+                            isHighlighted={t.id === highlightedTaskId || t.id === col.activeId}
+                            isTriageBoard={true}
+                            updateStatus={handleChangeStatus}
+                            updateDifficulty={updateDifficulty}
+                            updateCategory={updateCategory}
+                            updateTitle={async (id, title) => {
+                              const parentId = await updateTitle(id, title); // Call useTasks' updateTitle
+                              if (parentId) {
+                                // If the updated task had a parent, re-activate the parent's path
+                                const parentTask = map[parentId];
+                                if (parentTask) {
+                                  const newPath: string[] = [];
+                                  let current: Task | undefined = parentTask;
+                                  while (current) {
+                                    newPath.unshift(current.id);
+                                    current = current.parentId ? map[current.parentId] : undefined;
+                                  }
+                                  setPath(newPath); // Set path to parent's path
+                                }
                               }
-                              // Add first child to the end
-                              newPath.push(firstChildId);
+                            }}
+                            updateUser={handleUpdateUser}
+                            deleteTask={deleteTask}
+                            duplicateTaskStructure={duplicateTaskStructure}
+                            toggleUrgent={toggleUrgent}
+                            toggleImpact={toggleImpact}
+                            toggleMajorIncident={toggleMajorIncident}
+                            toggleTimer={handleToggleTimer}
+                            toggleDone={handleToggleDone}
+                            reparent={reparent}
+                            onToggleOpen={(taskId, toggleAll) => {
+                              const task = map[taskId];
+                              if (task && task.children && task.children.length > 0) {
+                                // Jump to the first child and highlight it
+                                const firstChildId = task.children[0];
 
-                              setPath(newPath);
-                              setHighlightedTaskId(firstChildId); // Highlight the first child
+                                // Build full path to parent and then to first child
+                                const newPath: string[] = [];
+                                let current: Task | undefined = task;
+                                while (current) {
+                                  newPath.unshift(current.id);
+                                  current = current.parentId ? map[current.parentId] : undefined;
+                                }
+                                // Add first child to the end
+                                newPath.push(firstChildId);
 
-                              // Scroll to the highlighted child after a short delay
-                              setTimeout(() => {
-                                cardRefs.current[firstChildId]?.scrollIntoView({
-                                  behavior: "smooth",
-                                  block: "center",
-                                });
-                              }, 100);
-                            }
-                          }}
-                          updateComment={updateComment}
-                          updateTerminationDate={updateTerminationDate}
-                          updateDurationInMinutes={updateDurationInMinutes}
-                        />
+                                setPath(newPath);
+                                setHighlightedTaskId(firstChildId); // Highlight the first child
+
+                                // Scroll to the highlighted child after a short delay
+                                setTimeout(() => {
+                                  cardRefs.current[firstChildId]?.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                }, 100);
+                              }
+                            }}
+                            updateComment={updateComment}
+                            updateTerminationDate={updateTerminationDate}
+                            updateDurationInMinutes={updateDurationInMinutes}
+                          />
+                        </LazyCard>
                       ))
                     );
                   })()}

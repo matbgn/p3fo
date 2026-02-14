@@ -85,10 +85,6 @@ const App = () => {
                 <Sonner />
                 <CursorOverlay />
                 <div className="relative">
-                  <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
-                    <NotificationCenter />
-                    <UserSection />
-                  </div>
                   <BrowserRouter basename={import.meta.env.VITE_BASE_URL || "/p3fo"} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
                     <Routes>
                       <Route path="/" element={<Index />} />

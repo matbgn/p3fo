@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { useUsers } from '@/hooks/useUsers';
-import { useTasks } from '@/hooks/useTasks';
+import { useAllTasks } from '@/hooks/useAllTasks';
 import { Button } from '@/components/ui/button';
 import { Trash2, User } from 'lucide-react';
 import {
@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 
 export const UserManagement: React.FC = () => {
     const { users, loading: usersLoading, deleteUser } = useUsers();
-    const { allTasks: tasks } = useTasks();
+    const { tasks } = useAllTasks();
 
     // Calculate task counts per user
     const userTaskCounts = useMemo(() => {

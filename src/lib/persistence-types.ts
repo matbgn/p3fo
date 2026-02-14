@@ -84,6 +84,8 @@ export interface UserSettingsEntity {
   monthlyBalances?: Record<string, MonthlyBalanceData>;
   cardCompactness?: number;
   timezone?: string;
+  weekStartDay?: 0 | 1;
+  defaultPlanView?: 'week' | 'month';
 }
 
 export interface QolSurveyResponseEntity {
@@ -220,4 +222,26 @@ export interface DreamBoardEntity {
   timeSortDirection: 'nearest' | 'farthest'; // Dream-specific sorting direction
   areCursorsVisible?: boolean; // Control cursor visibility for all users
   showAllLinks?: boolean; // Control global link visibility
+}
+
+// Circles (EasyCIRCLE) - Organizational structure visualization
+// Based on OMO2 holon types: 1=Role, 2=Circle, 3=Group, 4=Organization
+export type CircleNodeType = 'organization' | 'circle' | 'group' | 'role';
+export type CircleNodeModifier = 'template' | 'hierarchy';
+
+export interface CircleEntity {
+  id: string;
+  name: string;
+  parentId: string | null;
+  nodeType: CircleNodeType;
+  modifier?: CircleNodeModifier; // 'template' for predefined roles, 'hierarchy' for octagon display
+  color?: string; // Custom color (mainly for roles), e.g., "#FF6600"
+  size?: number; // Size weight for layout calculation
+  description?: string; // Optional description/purpose
+  purpose?: string; // Raison d'être - the purpose/reason for being of this role
+  domains?: string; // Domains of authority - what this role has control over
+  accountabilities?: string; // Attendus - expectations and accountabilities
+  order?: number; // Display order among siblings
+  createdAt: string;
+  updatedAt: string;
 }

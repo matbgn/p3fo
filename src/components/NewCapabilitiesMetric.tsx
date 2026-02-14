@@ -1,18 +1,18 @@
 import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useTasks } from "@/hooks/useTasks";
+import { useTaskMetrics } from "@/hooks/useTaskMetrics";
 import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 import { calculateTimeSpentOnNewCapabilities } from "@/lib/metrics";
 
 const NewCapabilitiesMetric: React.FC = () => {
-  const { tasks } = useTasks();
+  const { tasks, taskMap, highImpactMap } = useTaskMetrics();
   const { settings } = useCombinedSettings();
 
   // Get settings from combined settings
   const weeksComputation = settings.weeksComputation;
   const goal = settings.newCapabilitiesGoal;
 
-  const { percentage } = calculateTimeSpentOnNewCapabilities(tasks, weeksComputation);
+  const { percentage } = calculateTimeSpentOnNewCapabilities(tasks, weeksComputation, taskMap, highImpactMap);
 
   // Format percentage
   const formattedPercentage = percentage.toFixed(1);
