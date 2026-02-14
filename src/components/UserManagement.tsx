@@ -88,7 +88,7 @@ export const UserManagement: React.FC = () => {
                                                 <Avatar className="h-8 w-8">
                                                     <AvatarImage src={user.logo} alt={user.username} />
                                                     <AvatarFallback>
-                                                        {user.username.slice(0, 2).toUpperCase()}
+                                                        {(user as any).trigram || user.username.slice(0, 2).toUpperCase()}
                                                     </AvatarFallback>
                                                 </Avatar>
                                                 <span className="font-medium">{user.username}</span>

@@ -16,7 +16,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, User as UserIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/UserAvatar';
 import { DaySelector } from '@/components/ui/day-selector';
 
 interface ResourcesSchedulerProps {
@@ -58,7 +58,10 @@ const ResourcesScheduler: React.FC<ResourcesSchedulerProps> = ({ onFocusOnTask, 
             id: u.userId,
             name: u.username || 'Unknown User',
             avatar: u.logo,
-            initials: u.username ? u.username.substring(0, 2).toUpperCase() : '??',
+            // Use the pre-calculated trigram from the user object (added in useUsers hook)
+            // We use 'any' cast here as a safety net if types aren't picked up immediately, 
+            // but effectively we are consuming the standardized trigram.
+            initials: (u as any).trigram || '???',
             preferredWorkingDays: u.preferredWorkingDays || [1, 2, 3, 4, 5]
         }));
         return list;
@@ -267,10 +270,13 @@ const ResourcesScheduler: React.FC<ResourcesSchedulerProps> = ({ onFocusOnTask, 
                                     className="flex items-center gap-3 px-4 border-b hover:bg-muted/50 transition-colors"
                                     style={{ height: ROW_HEIGHT }}
                                 >
-                                    <Avatar className="h-8 w-8">
-                                        <AvatarImage src={user.avatar} />
-                                        <AvatarFallback>{user.initials}</AvatarFallback>
-                                    </Avatar>
+                                    <UserAvatar
+                                        username={user.name}
+                                        logo={user.avatar}
+                                        size="md"
+                                        trigram={user.initials}
+                                        className="h-8 w-8"
+                                    />
                                     <div className="min-w-0 flex-1">
                                         <div className="text-sm font-medium truncate">{user.name}</div>
                                         <div className="flex flex-col gap-1 mt-1">

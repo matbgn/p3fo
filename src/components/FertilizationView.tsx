@@ -44,7 +44,6 @@ import { doc, isCollaborationEnabled, initializeCollaboration, yFertilizationSta
 import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { useBoardTimer } from '@/hooks/useBoardTimer';
-import { UserAvatar } from '@/components/UserAvatar';
 
 // Voting Constants
 type VotingMode = 'THUMBS_UP' | 'THUMBS_UD_NEUTRAL' | 'POINTS' | 'MAJORITY_JUDGMENT';

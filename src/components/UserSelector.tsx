@@ -33,6 +33,7 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
   };
 
   const otherUser = value && !isCurrentUser ? getUserById(value) : null;
+  const currentUserFromList = users.find(u => u.userId === currentUserId);
 
   return (
     <Select value={value || 'unassigned'} onValueChange={(val) => onChange(val === 'unassigned' ? undefined : val)}>
@@ -44,6 +45,7 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
               logo={userSettings.logo}
               size="sm"
               showTooltip={false}
+              trigram={(currentUserFromList as any)?.trigram}
             />
           ) : otherUser ? (
             <UserAvatar
@@ -51,6 +53,7 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
               logo={otherUser.logo}
               size="sm"
               showTooltip={false}
+              trigram={(otherUser as any).trigram}
             />
           ) : value && value !== 'unassigned' ? (
             // Fallback if user not found in list (shouldn't happen normally)
@@ -81,6 +84,7 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
                 logo={userSettings.logo}
                 size="sm"
                 showTooltip={false}
+                trigram={(currentUserFromList as any)?.trigram}
               />
               <span className="text-sm">Myself ({userSettings.username})</span>
             </div>
@@ -95,6 +99,7 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
                 logo={user.logo}
                 size="sm"
                 showTooltip={false}
+                trigram={(user as any).trigram}
               />
               <span className="text-sm">{user.username}</span>
             </div>

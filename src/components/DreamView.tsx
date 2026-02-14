@@ -35,7 +35,6 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
-import { UserAvatar } from '@/components/UserAvatar';
 
 import { aStarTextSearch } from '@/lib/a-star-search';
 

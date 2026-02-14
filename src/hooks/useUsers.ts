@@ -1,8 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import * as Y from 'yjs';
 import { UserSettingsEntity } from '@/lib/persistence-types';
 import { eventBus } from '@/lib/events';
 import { yUserSettings, isCollaborationEnabled, doc } from '@/lib/collaboration';
+import { assignTrigrams } from '@/utils/userTrigrams';
+
+export interface UserWithTrigram extends UserSettingsEntity {
+    trigram: string;
+}
 
 export const useUsers = () => {
     const [users, setUsers] = useState<UserSettingsEntity[]>([]);
@@ -107,5 +112,14 @@ export const useUsers = () => {
         }
     };
 
-    return { users, loading, refreshUsers: fetchUsers, deleteUser, updateUser };
+    // Calculate trigrams efficiently
+    const usersWithTrigrams = useMemo(() => {
+        const trigramMap = assignTrigrams(users);
+        return users.map(u => ({
+            ...u,
+            trigram: trigramMap[u.userId] || '???'
+        })) as UserWithTrigram[];
+    }, [users]);
+
+    return { users: usersWithTrigrams, loading, refreshUsers: fetchUsers, deleteUser, updateUser };
 };

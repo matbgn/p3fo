@@ -6,12 +6,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Shuffle, Edit2, User, Upload, Fingerprint, AlertTriangle } from "lucide-react";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { useTasks } from "@/hooks/useTasks";
+import { useUsers } from "@/hooks/useUsers";
 import { UserContext } from "@/context/UserContextDefinition";
 import { cn } from "@/lib/utils";
 import { eventBus } from "@/lib/events";
 
 export function UserSection() {
   const { userSettings, updateUsername, updateLogo, regenerateUsername } = useUserSettings();
+  const { users } = useUsers();
   const userContext = useContext(UserContext);
   const { tasks } = useTasks();
   const currentUserTaskCount = tasks.filter(t => t.userId === userContext?.userId).length;
@@ -120,7 +122,8 @@ export function UserSection() {
     regenerateUsername();
   };
 
-  const displayInitial = userSettings.username.split(' ').map(name => name[0]).join('').toUpperCase().slice(0, 2);
+  const currentUser = users.find(u => u.userId === userContext?.userId);
+  const displayInitial = (currentUser as any)?.trigram || userSettings.username.split(' ').map(name => name[0]).join('').toUpperCase().slice(0, 2);
 
   return (
     <Popover>

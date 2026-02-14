@@ -359,12 +359,17 @@ export const EditableTimeEntry: React.FC<{
           (() => {
             const isCurrentUser = task.userId === currentUserId;
             const otherUser = !isCurrentUser ? users.find((u) => u.userId === task.userId) : null;
+            const currentUserFromList = users.find(u => u.userId === currentUserId);
+            const trigram = isCurrentUser
+              ? (currentUserFromList as any)?.trigram
+              : (otherUser as any)?.trigram;
             return (
               <UserAvatar
                 username={isCurrentUser ? userSettings.username : otherUser?.username || 'Unknown'}
                 logo={isCurrentUser ? userSettings.logo : otherUser?.logo}
                 size="sm"
                 showTooltip={true}
+                trigram={trigram}
               />
             );
           })()

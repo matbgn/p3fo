@@ -32,7 +32,6 @@ import { formatDuration } from '@/lib/format-utils';
 import { format } from "date-fns";
 import { addReminder } from "@/utils/reminders";
 import { useReminderStore } from "@/hooks/useReminders";
-import { UserAvatar } from "./UserAvatar";
 import { UserSelector } from "./UserSelector";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { Calendar } from "@/components/ui/calendar";
