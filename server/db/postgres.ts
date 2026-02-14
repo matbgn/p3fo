@@ -10,7 +10,8 @@ import {
   DreamBoardEntity,
   CircleEntity,
   CircleNodeType,
-  CircleNodeModifier
+  CircleNodeModifier,
+  ReminderEntity
 } from '../../src/lib/persistence-types.js';
 
 // Default values
@@ -191,6 +192,27 @@ class PostgresClient implements DbClient {
       )
     `);
 
+    // Reminders table
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS "reminders" (
+        "id" TEXT PRIMARY KEY,
+        "userId" TEXT NOT NULL,
+        "taskId" TEXT,
+        "title" TEXT NOT NULL,
+        "description" TEXT,
+        "read" BOOLEAN DEFAULT false,
+        "persistent" BOOLEAN DEFAULT false,
+        "triggerDate" TIMESTAMP WITH TIME ZONE,
+        "offsetMinutes" INTEGER,
+        "snoozeDurationMinutes" INTEGER,
+        "originalTriggerDate" TIMESTAMP WITH TIME ZONE,
+        "state" TEXT DEFAULT 'scheduled' CHECK ("state" IN ('scheduled', 'triggered', 'read', 'dismissed')),
+        "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL,
+        "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL,
+        FOREIGN KEY ("taskId") REFERENCES "tasks" ("id") ON DELETE CASCADE
+      )
+    `);
+
     // Create indexes for performance optimization
     // These indexes dramatically improve query performance when filtering by userId, parentId, or triageStatus
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId" ON "tasks"("userId")`);
@@ -204,6 +226,12 @@ class PostgresClient implements DbClient {
     // Circles indexes
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_circles_parentId" ON "circles"("parentId")`);
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_circles_nodeType" ON "circles"("nodeType")`);
+
+    // Reminders indexes
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_reminders_userId" ON "reminders"("userId")`);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_reminders_taskId" ON "reminders"("taskId")`);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_reminders_state" ON "reminders"("state")`);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_reminders_triggerDate" ON "reminders"("triggerDate")`);
   }
 
   private async migrateSchema(): Promise<void> {
@@ -938,6 +966,140 @@ class PostgresClient implements DbClient {
     await this.pool.query('DELETE FROM "circles"');
   }
 
+  // Reminders
+  async listReminders(userId?: string): Promise<ReminderEntity[]> {
+    let sql = 'SELECT * FROM "reminders"';
+    const params: (string | number)[] = [];
+    
+    if (userId) {
+      sql += ' WHERE "userId" = $1';
+      params.push(userId);
+    }
+    
+    sql += ' ORDER BY "createdAt" DESC';
+    
+    const result = await this.pool.query(sql, params);
+    return result.rows.map(row => this.mapReminderRowToEntity(row));
+  }
+
+  async getReminderById(id: string): Promise<ReminderEntity | null> {
+    const result = await this.pool.query('SELECT * FROM "reminders" WHERE "id" = $1', [id]);
+    if (result.rows.length === 0) return null;
+    return this.mapReminderRowToEntity(result.rows[0]);
+  }
+
+  async createReminder(input: Partial<ReminderEntity>): Promise<ReminderEntity> {
+    const now = new Date().toISOString();
+    const reminder: ReminderEntity = {
+      id: input.id || crypto.randomUUID(),
+      userId: input.userId!,
+      taskId: input.taskId,
+      title: input.title!,
+      description: input.description,
+      read: input.read ?? false,
+      persistent: input.persistent ?? false,
+      triggerDate: input.triggerDate,
+      offsetMinutes: input.offsetMinutes,
+      snoozeDurationMinutes: input.snoozeDurationMinutes,
+      originalTriggerDate: input.originalTriggerDate,
+      state: input.state || 'scheduled',
+      createdAt: input.createdAt || now,
+      updatedAt: input.updatedAt || now,
+    };
+
+    await this.pool.query(`
+      INSERT INTO "reminders"("id", "userId", "taskId", "title", "description", "read", "persistent",
+        "triggerDate", "offsetMinutes", "snoozeDurationMinutes", "originalTriggerDate", "state", "createdAt", "updatedAt")
+      VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+    `, [
+      reminder.id,
+      reminder.userId,
+      reminder.taskId ?? null,
+      reminder.title,
+      reminder.description ?? null,
+      reminder.read,
+      reminder.persistent,
+      reminder.triggerDate ?? null,
+      reminder.offsetMinutes ?? null,
+      reminder.snoozeDurationMinutes ?? null,
+      reminder.originalTriggerDate ?? null,
+      reminder.state,
+      reminder.createdAt,
+      reminder.updatedAt,
+    ]);
+
+    return reminder;
+  }
+
+  async updateReminder(id: string, patch: Partial<ReminderEntity>): Promise<ReminderEntity> {
+    const current = await this.getReminderById(id);
+    if (!current) {
+      throw new Error(`Reminder with id ${id} not found`);
+    }
+
+    const updated = { ...current, ...patch, updatedAt: new Date().toISOString() };
+
+    await this.pool.query(`
+      UPDATE "reminders" SET
+        "title" = $1,
+        "description" = $2,
+        "read" = $3,
+        "persistent" = $4,
+        "triggerDate" = $5,
+        "offsetMinutes" = $6,
+        "snoozeDurationMinutes" = $7,
+        "originalTriggerDate" = $8,
+        "state" = $9,
+        "updatedAt" = $10
+      WHERE "id" = $11
+    `, [
+      updated.title,
+      updated.description ?? null,
+      updated.read,
+      updated.persistent,
+      updated.triggerDate ?? null,
+      updated.offsetMinutes ?? null,
+      updated.snoozeDurationMinutes ?? null,
+      updated.originalTriggerDate ?? null,
+      updated.state,
+      updated.updatedAt,
+      updated.id,
+    ]);
+
+    return updated;
+  }
+
+  async deleteReminder(id: string): Promise<void> {
+    await this.pool.query('DELETE FROM "reminders" WHERE "id" = $1', [id]);
+  }
+
+  async deleteRemindersByTaskId(taskId: string): Promise<void> {
+    await this.pool.query('DELETE FROM "reminders" WHERE "taskId" = $1', [taskId]);
+  }
+
+  async clearAllReminders(): Promise<void> {
+    await this.pool.query('DELETE FROM "reminders"');
+  }
+
+  private mapReminderRowToEntity(row: any): ReminderEntity {
+    return {
+      id: row.id,
+      userId: row.userId,
+      taskId: row.taskId ?? undefined,
+      title: row.title,
+      description: row.description ?? undefined,
+      read: row.read,
+      persistent: row.persistent,
+      triggerDate: row.triggerDate ?? undefined,
+      offsetMinutes: row.offsetMinutes ?? undefined,
+      snoozeDurationMinutes: row.snoozeDurationMinutes ?? undefined,
+      originalTriggerDate: row.originalTriggerDate ?? undefined,
+      state: row.state,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
   async clearAllData(): Promise<void> {
     const client = await this.pool.connect();
     try {
@@ -952,6 +1114,7 @@ class PostgresClient implements DbClient {
       await client.query('DROP TABLE IF EXISTS "fertilizationBoard" CASCADE');
       await client.query('DROP TABLE IF EXISTS "dreamBoard" CASCADE');
       await client.query('DROP TABLE IF EXISTS "circles" CASCADE');
+      await client.query('DROP TABLE IF EXISTS "reminders" CASCADE');
 
       // Drop legacy tables if they exist
       await client.query('DROP TABLE IF EXISTS tasks CASCADE');

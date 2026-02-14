@@ -8,7 +8,8 @@ import ProgramTopView from "@/components/ProgramTopView";
 import SettingsPage from "./SettingsPage";
 import MetricsPage from "./MetricsPage";
 
-import { addReminder } from "@/utils/reminders";
+
+import { useUserSettingsContext } from "@/context/UserSettingsContext";
 import PlanView from "@/components/PlanView";
 import CelebrationView from "@/components/CelebrationView";
 import DreamTopView from "@/components/DreamTopView";
@@ -35,6 +36,7 @@ const activeStyle: React.CSSProperties = {};
 
 const Index: React.FC = () => {
   const { view, setView, focusedTaskId, handleFocusOnTask } = useViewNavigation();
+  const { userSettings } = useUserSettingsContext();
 
   // Track which views have been mounted (lazy-mount on first visit, keep-alive after)
   const [mountedViews, setMountedViews] = React.useState<Set<string>>(() => new Set([view]));
@@ -52,13 +54,7 @@ const Index: React.FC = () => {
     setView(newView);
   }, [setView]);
 
-  useEffect(() => {
-    addReminder({
-      title: "Welcome to P3Fo!",
-      description: "Don't forget to set up your first task.",
-      persistent: true,
-    });
-  }, []);
+
 
   // Memoize each view element so switching tabs doesn't reconcile them.
   // Each element is re-created only when its own dependencies change, not when `view` changes.

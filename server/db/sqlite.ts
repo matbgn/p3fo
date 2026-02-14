@@ -10,7 +10,8 @@ import type {
   DreamBoardEntity,
   CircleEntity,
   CircleNodeType,
-  CircleNodeModifier
+  CircleNodeModifier,
+  ReminderEntity
 } from '../../src/lib/persistence-types.js';
 
 // Raw database row types (SQLite stores booleans as 0/1 integers and JSON as strings)
@@ -78,6 +79,23 @@ interface CircleDbRow {
   size: number | null;
   description: string | null;
   order: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ReminderDbRow {
+  id: string;
+  userId: string;
+  taskId: string | null;
+  title: string;
+  description: string | null;
+  read: number;
+  persistent: number;
+  triggerDate: string | null;
+  offsetMinutes: number | null;
+  snoozeDurationMinutes: number | null;
+  originalTriggerDate: string | null;
+  state: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -251,6 +269,27 @@ class SqliteClient implements DbClient {
       )
     `);
 
+    // Reminders table
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS "reminders" (
+        "id" TEXT PRIMARY KEY,
+        "userId" TEXT NOT NULL,
+        "taskId" TEXT,
+        "title" TEXT NOT NULL,
+        "description" TEXT,
+        "read" BOOLEAN DEFAULT 0,
+        "persistent" BOOLEAN DEFAULT 0,
+        "triggerDate" TEXT,
+        "offsetMinutes" INTEGER,
+        "snoozeDurationMinutes" INTEGER,
+        "originalTriggerDate" TEXT,
+        "state" TEXT DEFAULT 'scheduled' CHECK("state" IN ('scheduled', 'triggered', 'read', 'dismissed')),
+        "createdAt" TEXT NOT NULL,
+        "updatedAt" TEXT NOT NULL,
+        FOREIGN KEY("taskId") REFERENCES "tasks"("id") ON DELETE CASCADE
+      )
+    `);
+
     // Create indexes for performance optimization
     // These indexes dramatically improve query performance when filtering by userId, parentId, or triageStatus
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId" ON "tasks"("userId")`);
@@ -264,6 +303,12 @@ class SqliteClient implements DbClient {
     // Circles indexes
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_circles_parentId" ON "circles"("parentId")`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_circles_nodeType" ON "circles"("nodeType")`);
+
+    // Reminders indexes
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_reminders_userId" ON "reminders"("userId")`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_reminders_taskId" ON "reminders"("taskId")`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_reminders_state" ON "reminders"("state")`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_reminders_triggerDate" ON "reminders"("triggerDate")`);
   }
 
   private migrateSchema(): void {
@@ -1051,6 +1096,141 @@ class SqliteClient implements DbClient {
     this.db.prepare('DELETE FROM "circles"').run();
   }
 
+  // Reminders
+  async listReminders(userId?: string): Promise<ReminderEntity[]> {
+    let sql = 'SELECT * FROM "reminders"';
+    const params: (string | number)[] = [];
+    
+    if (userId) {
+      sql += ' WHERE "userId" = ?';
+      params.push(userId);
+    }
+    
+    sql += ' ORDER BY "createdAt" DESC';
+    
+    const rows = this.db.prepare(sql).all(...params) as unknown as ReminderDbRow[];
+    return rows.map(row => this.mapReminderDbRowToEntity(row));
+  }
+
+  async getReminderById(id: string): Promise<ReminderEntity | null> {
+    const row = this.db.prepare('SELECT * FROM "reminders" WHERE "id" = ?').get(id) as unknown as ReminderDbRow | undefined;
+    if (!row) return null;
+    return this.mapReminderDbRowToEntity(row);
+  }
+
+  async createReminder(input: Partial<ReminderEntity>): Promise<ReminderEntity> {
+    const now = new Date().toISOString();
+    const reminder: ReminderEntity = {
+      id: input.id || crypto.randomUUID(),
+      userId: input.userId!,
+      taskId: input.taskId,
+      title: input.title!,
+      description: input.description,
+      read: input.read ?? false,
+      persistent: input.persistent ?? false,
+      triggerDate: input.triggerDate,
+      offsetMinutes: input.offsetMinutes,
+      snoozeDurationMinutes: input.snoozeDurationMinutes,
+      originalTriggerDate: input.originalTriggerDate,
+      state: input.state || 'scheduled',
+      createdAt: input.createdAt || now,
+      updatedAt: input.updatedAt || now,
+    };
+
+    this.db.prepare(`
+      INSERT INTO "reminders"("id", "userId", "taskId", "title", "description", "read", "persistent",
+        "triggerDate", "offsetMinutes", "snoozeDurationMinutes", "originalTriggerDate", "state", "createdAt", "updatedAt")
+      VALUES(@id, @userId, @taskId, @title, @description, @read, @persistent,
+        @triggerDate, @offsetMinutes, @snoozeDurationMinutes, @originalTriggerDate, @state, @createdAt, @updatedAt)
+    `).run({
+      id: reminder.id,
+      userId: reminder.userId,
+      taskId: reminder.taskId ?? null,
+      title: reminder.title,
+      description: reminder.description ?? null,
+      read: reminder.read ? 1 : 0,
+      persistent: reminder.persistent ? 1 : 0,
+      triggerDate: reminder.triggerDate ?? null,
+      offsetMinutes: reminder.offsetMinutes ?? null,
+      snoozeDurationMinutes: reminder.snoozeDurationMinutes ?? null,
+      originalTriggerDate: reminder.originalTriggerDate ?? null,
+      state: reminder.state,
+      createdAt: reminder.createdAt,
+      updatedAt: reminder.updatedAt,
+    });
+
+    return reminder;
+  }
+
+  async updateReminder(id: string, patch: Partial<ReminderEntity>): Promise<ReminderEntity> {
+    const current = await this.getReminderById(id);
+    if (!current) {
+      throw new Error(`Reminder with id ${id} not found`);
+    }
+
+    const updated = { ...current, ...patch, updatedAt: new Date().toISOString() };
+
+    this.db.prepare(`
+      UPDATE "reminders" SET
+        "title" = @title,
+        "description" = @description,
+        "read" = @read,
+        "persistent" = @persistent,
+        "triggerDate" = @triggerDate,
+        "offsetMinutes" = @offsetMinutes,
+        "snoozeDurationMinutes" = @snoozeDurationMinutes,
+        "originalTriggerDate" = @originalTriggerDate,
+        "state" = @state,
+        "updatedAt" = @updatedAt
+      WHERE "id" = @id
+    `).run({
+      id: updated.id,
+      title: updated.title,
+      description: updated.description ?? null,
+      read: updated.read ? 1 : 0,
+      persistent: updated.persistent ? 1 : 0,
+      triggerDate: updated.triggerDate ?? null,
+      offsetMinutes: updated.offsetMinutes ?? null,
+      snoozeDurationMinutes: updated.snoozeDurationMinutes ?? null,
+      originalTriggerDate: updated.originalTriggerDate ?? null,
+      state: updated.state,
+      updatedAt: updated.updatedAt,
+    });
+
+    return updated;
+  }
+
+  async deleteReminder(id: string): Promise<void> {
+    this.db.prepare('DELETE FROM "reminders" WHERE "id" = ?').run(id);
+  }
+
+  async deleteRemindersByTaskId(taskId: string): Promise<void> {
+    this.db.prepare('DELETE FROM "reminders" WHERE "taskId" = ?').run(taskId);
+  }
+
+  async clearAllReminders(): Promise<void> {
+    this.db.prepare('DELETE FROM "reminders"').run();
+  }
+
+  private mapReminderDbRowToEntity(row: ReminderDbRow): ReminderEntity {
+    return {
+      id: row.id,
+      userId: row.userId,
+      taskId: row.taskId ?? undefined,
+      title: row.title,
+      description: row.description ?? undefined,
+      read: row.read === 1,
+      persistent: row.persistent === 1,
+      triggerDate: row.triggerDate ?? undefined,
+      offsetMinutes: row.offsetMinutes ?? undefined,
+      snoozeDurationMinutes: row.snoozeDurationMinutes ?? undefined,
+      originalTriggerDate: row.originalTriggerDate ?? undefined,
+      state: row.state as 'scheduled' | 'triggered' | 'read' | 'dismissed',
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
   async clearAllData(): Promise<void> {
     // Drop all tables to prompt a full schema reset on next initialize or strictly here
     this.db.exec('BEGIN');
@@ -1063,6 +1243,7 @@ class SqliteClient implements DbClient {
       this.db.exec('DROP TABLE IF EXISTS "fertilizationBoard"');
       this.db.exec('DROP TABLE IF EXISTS "dreamBoard"');
       this.db.exec('DROP TABLE IF EXISTS "circles"');
+      this.db.exec('DROP TABLE IF EXISTS "reminders"');
 
       // Also drop legacy tables if they exist
       this.db.exec('DROP TABLE IF EXISTS tasks');

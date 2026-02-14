@@ -264,9 +264,9 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
   const [isDatePickerOpen, setIsDatePickerOpen] = React.useState(false);
   const [offsetMinutes, setOffsetMinutes] = React.useState(-1); // Default to -1 (No reminder)
   const [isDateTimeBlockOpen, setIsDateTimeBlockOpen] = React.useState(false); // New state for date/time block
-  const [isReminderActive, setIsReminderActive] = React.useState(false); // New state for reminder active status
+  const [reminderStatus, setReminderStatus] = React.useState<'none' | 'scheduled' | 'triggered'>('none'); // Update state to enum
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false); // New state for full edit modal
-  const { scheduledReminders, updateScheduledReminderTriggerDate, dismissReminder } = useReminderStore();
+  const { scheduledReminders, reminders, updateScheduledReminderTriggerDate, dismissReminder } = useReminderStore();
   const { userSettings, userId: currentUserId } = useUserSettings();
   const { settings } = useCombinedSettings();
   const weekStartsOn = settings.weekStartDay as 0 | 1;
@@ -291,20 +291,30 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
     );
     if (existingReminder?.offsetMinutes !== undefined) {
       setOffsetMinutes(existingReminder.offsetMinutes);
-      setIsReminderActive(true); // Set to true if a reminder exists
+      setReminderStatus('scheduled'); // Optimistic update
     } else {
       setOffsetMinutes(-1); // "No reminder"
-      setIsReminderActive(false); // Set to false if no reminder exists
+      // Don't reset status here, main effect will handle it
     }
   }, [task.id, task.terminationDate, scheduledReminders]);
 
   React.useEffect(() => {
     // Check if there's any active reminder for the current task
-    const activeReminder = scheduledReminders.some(
+    const hasScheduled = scheduledReminders.some(
       (r) => r.taskId === task.id && r.triggerDate && new Date(r.triggerDate) > new Date()
     );
-    setIsReminderActive(activeReminder);
-  }, [task.id, scheduledReminders]);
+    // Also check for triggered but unread reminders
+    const hasTriggered = reminders.some(
+      (r) => r.taskId === task.id && !r.read
+    );
+    if (hasTriggered) {
+      setReminderStatus('triggered');
+    } else if (hasScheduled) {
+      setReminderStatus('scheduled');
+    } else {
+      setReminderStatus('none');
+    }
+  }, [task.id, scheduledReminders, reminders]);
 
   const handleCardDoubleClick = (e: React.MouseEvent) => {
     // Prevent opening if clicking on interactive elements that might bubble up
@@ -588,7 +598,10 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                   className="h-6 w-6 p-0"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <BellRing className={`h-4 w-4 ${isReminderActive ? "text-blue-500" : "text-gray-400"}`} />
+                  <BellRing className={`h-4 w-4 ${reminderStatus === 'triggered' ? "text-red-500 fill-red-500" :
+                      reminderStatus === 'scheduled' ? "text-blue-500 fill-blue-500" :
+                        "text-gray-400"
+                    }`} />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-40 p-0">
@@ -599,7 +612,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                     setOffsetMinutes(newOffset);
                     if (newOffset === -1) { // "No reminder" selected
                       dismissReminder(task.id); // Dismiss any existing reminder for this task
-                      setIsReminderActive(false); // Set reminder to inactive
+                      // let effect update status
                     } else if (task.terminationDate) {
                       // Check if a reminder with the same taskId and originalTriggerDate already exists
                       const existingReminder = scheduledReminders.find(

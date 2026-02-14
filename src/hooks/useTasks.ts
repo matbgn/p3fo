@@ -5,6 +5,7 @@ import { usePersistence } from "@/hooks/usePersistence";
 import { yTasks, yUserSettings, doc, initializeCollaboration, isCollaborationEnabled } from "@/lib/collaboration";
 import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
 import { taskToEntity, tasksToEntities, convertEntitiesToTasks } from "@/lib/task-conversions";
+import { useReminderStore } from "./useReminders";
 
 
 // Polyfill for crypto.randomUUID if not available
@@ -859,6 +860,12 @@ export function useTasks() {
 
     // Update local state
     tasks = tasks.filter((t) => !childrenIds.has(t.id));
+
+    // Clean up reminders for all deleted tasks (including children)
+    const reminderStore = useReminderStore.getState();
+    for (const id of childrenIds) {
+      reminderStore.deleteRemindersByTaskId(id);
+    }
 
     if (taskToDelete.parentId) {
       tasks = tasks.map(t => {
