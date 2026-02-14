@@ -44,6 +44,7 @@ import { BoardHeader, FilterState } from './planView/BoardHeader';
 import { BoardColumn } from './planView/BoardColumn';
 import { CardView } from './planView/CardView';
 import { useBoardTimer } from '@/hooks/useBoardTimer';
+import { useTasks } from '@/hooks/useTasks';
 import { useUsers } from '@/hooks/useUsers';
 
 // Imports for collaboration
@@ -178,6 +179,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
   const persistence = usePersistence();
   const { userId: currentUserId, userSettings } = useUserSettings();
   const { users } = useUsers();
+  const { createTask } = useTasks();
 
   const [boardState, setBoardState] = useState<DreamBoardEntity | null>(null);
   const [loading, setLoading] = useState(true);
@@ -876,9 +878,11 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
   }, [recomputeLinkLines]);
 
 
-  const promoteToBacklog = () => {
+  const promoteToBacklog = async () => {
     if (cardToPromote && onPromoteToKanban) {
-      onPromoteToKanban(cardToPromote.id);
+      // Create a new task from the dream card content
+      const newTaskId = await createTask(cardToPromote.content, null, currentUserId);
+      onPromoteToKanban(newTaskId);
       setPromoteDialogOpen(false);
       setCardToPromote(null);
     }

@@ -11,7 +11,8 @@ const CelebrationView: React.FC<CelebrationViewProps> = ({ onFocusOnTask }) => {
 
   const handlePromoteToKanban = (taskId: string) => {
     setFocusedTaskId(taskId);
-    setView('kanban');
+    // Navigate to Dream view which has storyboard for highlighting
+    setView('dream');
   };
 
   return (
