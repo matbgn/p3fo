@@ -117,7 +117,9 @@ export const useUsers = () => {
         const trigramMap = assignTrigrams(users);
         return users.map(u => ({
             ...u,
-            trigram: trigramMap[u.userId] || '???'
+            // Prefer the persisted trigram if it exists (which assignTrigrams also respects for collision)
+            // But we always take what assignTrigrams returned to ensure consistency/fallback
+            trigram: u.trigram || trigramMap[u.userId] || '???'
         })) as UserWithTrigram[];
     }, [users]);
 

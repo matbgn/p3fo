@@ -109,7 +109,7 @@ export const generateTrigram = (
  * However, since this runs on the client, if the list order changes, trigrams might flip for colliding users.
  * Ideally, we sort users by ID or creation date before assigning to maximize stability.
  */
-export const assignTrigrams = (users: { userId: string; username: string }[]): Record<string, string> => {
+export const assignTrigrams = (users: { userId: string; username: string; trigram?: string }[]): Record<string, string> => {
     // Sort logic to ensure stability
     // We assume userId is stable.
     const sorted = [...users].sort((a, b) => a.userId.localeCompare(b.userId));
@@ -117,7 +117,18 @@ export const assignTrigrams = (users: { userId: string; username: string }[]): R
     const mapping: Record<string, string> = {};
     const taken = new Set<string>();
 
+    // Pass 1: Reserve existing persisted trigrams
     for (const u of sorted) {
+        if (u.trigram) {
+            mapping[u.userId] = u.trigram;
+            taken.add(u.trigram);
+        }
+    }
+
+    // Pass 2: Assign trigrams to users who don't have one yet
+    for (const u of sorted) {
+        if (mapping[u.userId]) continue; // Already handled in Pass 1
+
         // Extract names. Assumption: username is "First Last"
         const parts = u.username.split(' ');
         let firstName = parts[0] || "";
@@ -134,6 +145,5 @@ export const assignTrigrams = (users: { userId: string; username: string }[]): R
         taken.add(trigram);
     }
 
-    // Re-map to return in original order? No, just a ID map.
     return mapping;
 };

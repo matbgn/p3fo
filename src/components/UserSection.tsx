@@ -13,7 +13,7 @@ import { eventBus } from "@/lib/events";
 import { generateTrigram } from "@/utils/userTrigrams";
 
 export function UserSection() {
-  const { userSettings, updateUsername, updateLogo, regenerateUsername } = useUserSettings();
+  const { userSettings, updateUsername, updateLogo, regenerateUsername, updateTrigram } = useUserSettings();
   const { users } = useUsers();
   const userContext = useContext(UserContext);
   const { tasks } = useTasks();
@@ -38,6 +38,15 @@ export function UserSection() {
       setTempUuid(userContext.userId);
     }
   }, [isChangingUuid, userContext?.userId]);
+
+  // Automatically persist calculated trigram if missing in settings
+  const currentUserWithTrigram = users.find(u => u.userId === userContext?.userId);
+  React.useEffect(() => {
+    if (!userSettings.trigram && currentUserWithTrigram && (currentUserWithTrigram as any).trigram && (currentUserWithTrigram as any).trigram !== '???') {
+      console.log('Persisting calculated trigram for current user:', (currentUserWithTrigram as any).trigram);
+      updateTrigram((currentUserWithTrigram as any).trigram);
+    }
+  }, [userSettings.trigram, currentUserWithTrigram, updateTrigram]);
 
   if (!userSettings) return null;
 
@@ -124,8 +133,8 @@ export function UserSection() {
   };
 
   const currentUser = users.find(u => u.userId === userContext?.userId);
-  // Fallback to generating a trigram on the fly if user not found in list yet
-  const displayInitial = (currentUser as any)?.trigram || generateTrigram(userSettings.username.split(' ')[0], userSettings.username.split(' ').slice(1).join(' ') || '');
+  // Use persisted or calculated trigram
+  const displayInitial = userSettings.trigram || (currentUser as any)?.trigram || generateTrigram(userSettings.username.split(' ')[0], userSettings.username.split(' ').slice(1).join(' ') || '');
 
   return (
     <Popover>

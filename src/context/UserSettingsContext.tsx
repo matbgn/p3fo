@@ -4,6 +4,7 @@ import { getRandomUsername } from '@/lib/username-generator';
 import { eventBus } from '@/lib/events';
 import { yUserSettings, isCollaborationEnabled } from '@/lib/collaboration';
 import { MonthlyBalanceData, UserSettingsEntity } from '@/lib/persistence-types';
+import { UserContext } from './UserContextDefinition';
 
 export interface UserSettings {
     username: string;
@@ -19,6 +20,7 @@ export interface UserSettings {
     weekStartDay?: 0 | 1;
     defaultPlanView?: 'week' | 'month';
     preferredWorkingDays?: number[];
+    trigram?: string;
 }
 
 const defaultUserSettings: UserSettings = {
@@ -27,18 +29,12 @@ const defaultUserSettings: UserSettings = {
     hasCompletedOnboarding: false,
     monthlyBalances: {},
     cardCompactness: 0,
+    trigram: undefined,
     // Defaults for new fields are undefined to fall back to global settings
 };
 
-import { UserContext } from './UserContextDefinition';
-
-// ... (imports remain the same)
-
-// Remove getUserId function as we'll use UserContext
-
 // Load user settings from persistence
 const loadUserSettings = async (userId: string): Promise<UserSettings> => {
-    // ... (implementation remains the same)
     try {
         const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
         const adapter = await persistence;
@@ -66,10 +62,10 @@ const loadUserSettings = async (userId: string): Promise<UserSettings> => {
             weekStartDay: settings.weekStartDay,
             defaultPlanView: settings.defaultPlanView,
             preferredWorkingDays: settings.preferredWorkingDays as number[] | undefined,
+            trigram: settings.trigram,
         };
     } catch (error) {
         console.error('Error loading user settings from persistence:', error);
-        // ... (fallback logic remains the same)
         return defaultUserSettings;
     }
 };
@@ -84,6 +80,7 @@ interface UserSettingsContextType {
     regenerateUsername: () => void;
     updateCardCompactness: (compactness: number) => void;
     updatePreferredWorkingDays: (days: number[]) => void;
+    updateTrigram: (trigram: string) => void;
 }
 
 const UserSettingsContext = createContext<UserSettingsContextType | undefined>(undefined);
@@ -145,6 +142,7 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                     weekStartDay: userSettings.weekStartDay,
                     defaultPlanView: userSettings.defaultPlanView,
                     preferredWorkingDays: userSettings.preferredWorkingDays,
+                    trigram: userSettings.trigram,
                 };
 
                 await adapter.updateUserSettings(userId, entityPatch);
@@ -162,8 +160,10 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                         splitTime: userSettings.splitTime,
                         timezone: userSettings.timezone,
                         weekStartDay: userSettings.weekStartDay,
+                        yearStartDay: userSettings.weekStartDay,
                         defaultPlanView: userSettings.defaultPlanView,
                         preferredWorkingDays: userSettings.preferredWorkingDays,
+                        trigram: userSettings.trigram,
                     });
                 }
             } catch (error) {
@@ -193,7 +193,6 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }
 
         const handleYjsUserSettingsChange = (event: Y.YMapEvent<unknown>) => {
-            // ... (Yjs logic remains the same, just use userId from scope)
             if (event.transaction.local) return;
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -208,6 +207,7 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                     yjsSettings.hasCompletedOnboarding !== currentSettings.hasCompletedOnboarding ||
                     yjsSettings.cardCompactness !== currentSettings.cardCompactness ||
                     yjsSettings.timezone !== currentSettings.timezone ||
+                    yjsSettings.trigram !== currentSettings.trigram ||
                     monthlyBalancesChanged) {
 
                     console.log('Received user settings update from Yjs:', yjsSettings);
@@ -223,6 +223,7 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                         weekStartDay: yjsSettings.weekStartDay,
                         defaultPlanView: yjsSettings.defaultPlanView,
                         preferredWorkingDays: yjsSettings.preferredWorkingDays,
+                        trigram: yjsSettings.trigram,
                     });
                 }
             } else {
@@ -283,6 +284,13 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }));
     };
 
+    const updateTrigram = (trigram: string) => {
+        setUserSettings(prev => ({
+            ...prev,
+            trigram: trigram,
+        }));
+    };
+
     return (
         <UserSettingsContext.Provider value={{
             userId: userId || '', // Provide empty string if null to match type, though loading handles it
@@ -294,6 +302,7 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
             regenerateUsername,
             updateCardCompactness,
             updatePreferredWorkingDays,
+            updateTrigram
         }}>
             {children}
         </UserSettingsContext.Provider>

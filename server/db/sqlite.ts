@@ -46,6 +46,7 @@ interface UserSettingsDbRow {
   weekStartDay: number | null;
   defaultPlanView: string | null;
   preferredWorkingDays: string | null;
+  trigram: string | null;
 }
 
 interface AppSettingsDbRow {
@@ -161,7 +162,8 @@ class SqliteClient implements DbClient {
         "timezone" TEXT,
         "weekStartDay" INTEGER,
         "defaultPlanView" TEXT,
-        "preferredWorkingDays" TEXT -- JSON string
+        "preferredWorkingDays" TEXT, -- JSON string
+        "trigram" TEXT
       )
     `);
 
@@ -330,6 +332,7 @@ class SqliteClient implements DbClient {
     addColumn('userSettings', 'weekStartDay', 'INTEGER');
     addColumn('userSettings', 'defaultPlanView', 'TEXT');
     addColumn('userSettings', 'preferredWorkingDays', 'TEXT');
+    addColumn('userSettings', 'trigram', 'TEXT');
 
     // AppSettings columns
     runMigration('appSettings', 'split_time', 'splitTime');
@@ -662,6 +665,7 @@ class SqliteClient implements DbClient {
       weekStartDay: row.weekStartDay as 0 | 1 | undefined,
       defaultPlanView: row.defaultPlanView as 'week' | 'month' | undefined,
       preferredWorkingDays: row.preferredWorkingDays ? JSON.parse(row.preferredWorkingDays) : undefined,
+      trigram: row.trigram || undefined,
     };
   }
 
@@ -681,12 +685,13 @@ class SqliteClient implements DbClient {
       cardCompactness: updated.cardCompactness ?? 0,
       weekStartDay: updated.weekStartDay ?? null,
       defaultPlanView: updated.defaultPlanView ?? null,
-      preferredWorkingDays: updated.preferredWorkingDays ? JSON.stringify(updated.preferredWorkingDays) : null
+      preferredWorkingDays: updated.preferredWorkingDays ? JSON.stringify(updated.preferredWorkingDays) : null,
+      trigram: updated.trigram ?? null
     };
 
     this.db.prepare(`
-      INSERT INTO "userSettings"("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness", "weekStartDay", "defaultPlanView", "preferredWorkingDays")
-      VALUES(@userId, @username, @logo, @hasCompletedOnboarding, @workload, @splitTime, @monthlyBalances, @timezone, @cardCompactness, @weekStartDay, @defaultPlanView, @preferredWorkingDays)
+      INSERT INTO "userSettings"("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness", "weekStartDay", "defaultPlanView", "preferredWorkingDays", "trigram")
+      VALUES(@userId, @username, @logo, @hasCompletedOnboarding, @workload, @splitTime, @monthlyBalances, @timezone, @cardCompactness, @weekStartDay, @defaultPlanView, @preferredWorkingDays, @trigram)
       ON CONFLICT("userId") DO UPDATE SET
       "username" = excluded."username",
         "logo" = excluded."logo",
@@ -698,7 +703,8 @@ class SqliteClient implements DbClient {
         "cardCompactness" = excluded."cardCompactness",
         "weekStartDay" = excluded."weekStartDay",
         "defaultPlanView" = excluded."defaultPlanView",
-        "preferredWorkingDays" = excluded."preferredWorkingDays"
+        "preferredWorkingDays" = excluded."preferredWorkingDays",
+        "trigram" = excluded."trigram"
           `).run(params);
 
     return updated;
@@ -713,6 +719,7 @@ class SqliteClient implements DbClient {
       weekStartDay: row.weekStartDay as 0 | 1 | undefined,
       defaultPlanView: row.defaultPlanView as 'week' | 'month' | undefined,
       preferredWorkingDays: row.preferredWorkingDays ? JSON.parse(row.preferredWorkingDays) : undefined,
+      trigram: row.trigram || undefined,
     }));
   }
 

@@ -95,7 +95,8 @@ class PostgresClient implements DbClient {
         "timezone" TEXT,
         "weekStartDay" INTEGER,
         "defaultPlanView" TEXT,
-        "preferredWorkingDays" JSONB
+        "preferredWorkingDays" JSONB,
+        "trigram" TEXT
       )
     `);
 
@@ -303,6 +304,7 @@ class PostgresClient implements DbClient {
     await addColumn('userSettings', 'weekStartDay', 'INTEGER');
     await addColumn('userSettings', 'defaultPlanView', 'TEXT');
     await addColumn('userSettings', 'preferredWorkingDays', 'JSONB');
+    await addColumn('userSettings', 'trigram', 'TEXT');
 
     // AppSettings columns
     await runMigration('appSettings', 'split_time', 'splitTime');
@@ -590,6 +592,7 @@ class PostgresClient implements DbClient {
         weekStartDay: row.weekStartDay,
         defaultPlanView: row.defaultPlanView,
         preferredWorkingDays: row.preferredWorkingDays || undefined,
+        trigram: row.trigram || undefined,
       };
     }
     return null;
@@ -600,8 +603,8 @@ class PostgresClient implements DbClient {
     const updated = { ...current, ...data, userId };
 
     await this.pool.query(`
-      INSERT INTO "userSettings" ("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness", "weekStartDay", "defaultPlanView", "preferredWorkingDays")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      INSERT INTO "userSettings" ("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness", "weekStartDay", "defaultPlanView", "preferredWorkingDays", "trigram")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       ON CONFLICT ("userId") DO UPDATE SET
         "username" = EXCLUDED."username",
         "logo" = EXCLUDED."logo",
@@ -613,7 +616,8 @@ class PostgresClient implements DbClient {
         "cardCompactness" = EXCLUDED."cardCompactness",
         "weekStartDay" = EXCLUDED."weekStartDay",
         "defaultPlanView" = EXCLUDED."defaultPlanView",
-        "preferredWorkingDays" = EXCLUDED."preferredWorkingDays"
+        "preferredWorkingDays" = EXCLUDED."preferredWorkingDays",
+        "trigram" = EXCLUDED."trigram"
     `, [
       updated.userId,
       updated.username,
@@ -626,7 +630,8 @@ class PostgresClient implements DbClient {
       updated.cardCompactness,
       updated.weekStartDay ?? null,
       updated.defaultPlanView ?? null,
-      updated.preferredWorkingDays ? JSON.stringify(updated.preferredWorkingDays) : null
+      updated.preferredWorkingDays ? JSON.stringify(updated.preferredWorkingDays) : null,
+      updated.trigram ?? null
     ]);
 
     return updated;
@@ -638,6 +643,7 @@ class PostgresClient implements DbClient {
       ...row,
       monthlyBalances: row.monthlyBalances || {},
       preferredWorkingDays: row.preferredWorkingDays || undefined,
+      trigram: row.trigram || undefined,
     }));
   }
 
