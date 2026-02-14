@@ -48,6 +48,7 @@ interface TaskEditModalProps {
     toggleUrgent: (id: string) => void;
     toggleImpact: (id: string) => void;
     toggleMajorIncident: (id: string) => void;
+    toggleSprintTarget: (id: string) => void;
     currentUserId: string | undefined;
     onToggleTimer?: (id: string) => void;
 }
@@ -70,6 +71,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
     toggleUrgent,
     toggleImpact,
     toggleMajorIncident,
+    toggleSprintTarget,
     currentUserId,
     onToggleTimer,
 }) => {
@@ -351,6 +353,10 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
                             <div className="flex items-center justify-between">
                                 <Label htmlFor="incident" className="cursor-pointer">Incident</Label>
                                 <Switch id="incident" checked={activeTask.majorIncident} onCheckedChange={() => toggleMajorIncident(activeTask.id)} />
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="sprintTarget" className="cursor-pointer">Sprint Target</Label>
+                                <Switch id="sprintTarget" checked={activeTask.sprintTarget} onCheckedChange={() => toggleSprintTarget(activeTask.id)} />
                             </div>
                         </div>
                     </div>

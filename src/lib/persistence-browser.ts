@@ -82,6 +82,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
         urgent: input.urgent || false,
         impact: input.impact || false,
         majorIncident: input.majorIncident || false,
+        sprintTarget: input.sprintTarget || false,
         difficulty: input.difficulty || 1,
         timer: input.timer || [],
         category: input.category || 'General',

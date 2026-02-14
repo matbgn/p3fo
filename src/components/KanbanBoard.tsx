@@ -43,6 +43,7 @@ const Column: React.FC<{
   onToggleUrgent: (id: string) => void;
   onToggleImpact: (id: string) => void;
   onToggleMajorIncident: (id: string) => void;
+  onToggleSprintTarget: (id: string) => void;
   onToggleDone: (task: Task) => void;
   onUpdateDifficulty: (id: string, difficulty: 0.5 | 1 | 2 | 3 | 5 | 8) => void;
   onUpdateTitle: (id: string, title: string) => void;
@@ -59,7 +60,7 @@ const Column: React.FC<{
   highlightedTaskId?: string | null;
   highlightedCardRef?: React.RefObject<HTMLDivElement | null>;
   onArchive?: (title: TriageStatus) => void;
-}> = React.memo(({ title, cards, tasks, onDropTask, onChangeStatus, onUpdateCategory, onUpdateUser, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onToggleDone, onUpdateDifficulty, onUpdateTitle, onDelete, duplicateTaskStructure, openParents, onToggleParent, onReparent, onFocusOnTask, updateTerminationDate, updateDurationInMinutes, updateComment, onToggleTimer, highlightedTaskId, highlightedCardRef, onArchive }) => {
+}> = React.memo(({ title, cards, tasks, onDropTask, onChangeStatus, onUpdateCategory, onUpdateUser, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onToggleSprintTarget, onToggleDone, onUpdateDifficulty, onUpdateTitle, onDelete, duplicateTaskStructure, openParents, onToggleParent, onReparent, onFocusOnTask, updateTerminationDate, updateDurationInMinutes, updateComment, onToggleTimer, highlightedTaskId, highlightedCardRef, onArchive }) => {
   // Calculate total difficulty points for this column
   const totalDifficulty = cards.reduce((sum, card) => sum + (card.task.difficulty || 0), 0);
 
@@ -91,6 +92,7 @@ const Column: React.FC<{
               toggleUrgent={onToggleUrgent}
               toggleImpact={onToggleImpact}
               toggleMajorIncident={onToggleMajorIncident}
+              toggleSprintTarget={onToggleSprintTarget}
               updateDifficulty={onUpdateDifficulty}
               updateTitle={onUpdateTitle}
               deleteTask={onDelete}
@@ -210,6 +212,7 @@ const Column: React.FC<{
                     toggleUrgent={onToggleUrgent}
                     toggleImpact={onToggleImpact}
                     toggleMajorIncident={onToggleMajorIncident}
+                    toggleSprintTarget={onToggleSprintTarget}
                     updateDifficulty={onUpdateDifficulty}
                     updateTitle={onUpdateTitle}
                     deleteTask={onDelete}
@@ -260,7 +263,7 @@ const QuickAddInput: React.FC<{ onAdd: (title: string, userId?: string) => void;
 });
 
 const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highlightedTaskId?: string | null }> = ({ onFocusOnTask, highlightedTaskId }) => {
-  const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, reparent, toggleDone, toggleTimer, updateTerminationDate, updateDurationInMinutes, updateComment, loadTasksByUser, reloadTasks } = useTasks();
+  const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, toggleSprintTarget, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, reparent, toggleDone, toggleTimer, updateTerminationDate, updateDurationInMinutes, updateComment, loadTasksByUser, reloadTasks } = useTasks();
   const { userId: currentUserId } = useUserSettings();
   const { setFocusedTaskId } = useViewNavigation();
   const { settings } = useCombinedSettings();
@@ -324,6 +327,7 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
     showUrgent: false,
     showImpact: false,
     showMajorIncident: false,
+    showSprintTarget: false,
     status: ["Backlog", "Ready", "WIP", "Blocked", "Done", "Dropped"], // All statuses selected by default
     searchText: "",
     difficulty: [],
@@ -419,6 +423,7 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
     if (filters.showUrgent) filtered = filtered.filter(t => t.urgent);
     if (filters.showImpact) filtered = filtered.filter(t => t.impact);
     if (filters.showMajorIncident) filtered = filtered.filter(t => t.majorIncident);
+    if (filters.showSprintTarget) filtered = filtered.filter(t => t.sprintTarget);
     if (filters.difficulty && Array.isArray(filters.difficulty) && filters.difficulty.length > 0) {
       filtered = filtered.filter(t => filters.difficulty.includes(t.difficulty));
     }
@@ -647,6 +652,7 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
             onToggleUrgent={toggleUrgent}
             onToggleImpact={toggleImpact}
             onToggleMajorIncident={toggleMajorIncident}
+            onToggleSprintTarget={toggleSprintTarget}
             onToggleDone={handleToggleDone}
             onUpdateDifficulty={updateDifficulty}
             onUpdateTitle={updateTitle}

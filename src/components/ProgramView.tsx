@@ -74,6 +74,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) 
     toggleUrgent,
     toggleImpact,
     toggleMajorIncident,
+    toggleSprintTarget,
     toggleDone,
     toggleTimer,
     reparent,
@@ -242,6 +243,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) 
                     toggleUrgent={toggleUrgent}
                     toggleImpact={toggleImpact}
                     toggleMajorIncident={toggleMajorIncident}
+                    toggleSprintTarget={toggleSprintTarget}
                     toggleDone={() => toggleDone(task.id)}
                     toggleTimer={toggleTimer}
                     reparent={reparent}

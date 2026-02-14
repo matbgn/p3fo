@@ -23,6 +23,7 @@ interface TaskDbRow {
   urgent: number;
   impact: number;
   majorIncident: number;
+  sprintTarget: number;
   difficulty: number;
   timer: string | null;
   category: string;
@@ -136,6 +137,7 @@ class SqliteClient implements DbClient {
         "urgent" BOOLEAN DEFAULT 0,
         "impact" BOOLEAN DEFAULT 0,
         "majorIncident" BOOLEAN DEFAULT 0,
+        "sprintTarget" BOOLEAN DEFAULT 0,
         "difficulty" REAL DEFAULT 1,
         "timer" TEXT, -- JSON string
         "category" TEXT DEFAULT 'General',
@@ -328,6 +330,9 @@ class SqliteClient implements DbClient {
     runMigration('userSettings', 'monthly_balances', 'monthlyBalances');
     runMigration('userSettings', 'card_compactness', 'cardCompactness');
 
+    // Add sprintTarget column to tasks
+    addColumn('tasks', 'sprintTarget', 'BOOLEAN DEFAULT 0');
+
     // Add new columns for UserSettings
     addColumn('userSettings', 'weekStartDay', 'INTEGER');
     addColumn('userSettings', 'defaultPlanView', 'TEXT');
@@ -396,6 +401,7 @@ class SqliteClient implements DbClient {
       urgent: Boolean(row.urgent),
       impact: Boolean(row.impact),
       majorIncident: Boolean(row.majorIncident),
+      sprintTarget: Boolean(row.sprintTarget),
       timer: row.timer ? JSON.parse(row.timer) : { startTime: null, elapsedTime: 0, isRunning: false },
     }));
 
@@ -412,6 +418,7 @@ class SqliteClient implements DbClient {
       urgent: Boolean(row.urgent),
       impact: Boolean(row.impact),
       majorIncident: Boolean(row.majorIncident),
+      sprintTarget: Boolean(row.sprintTarget),
       timer: row.timer ? JSON.parse(row.timer) : { startTime: null, elapsedTime: 0, isRunning: false },
     };
   }
@@ -425,6 +432,7 @@ class SqliteClient implements DbClient {
       urgent: input.urgent || false,
       impact: input.impact || false,
       majorIncident: input.majorIncident || false,
+      sprintTarget: input.sprintTarget || false,
       difficulty: input.difficulty || 1,
       timer: input.timer || [],
       category: input.category || 'General',
@@ -446,6 +454,7 @@ class SqliteClient implements DbClient {
       urgent: newTask.urgent ? 1 : 0,
       impact: newTask.impact ? 1 : 0,
       majorIncident: newTask.majorIncident ? 1 : 0,
+      sprintTarget: newTask.sprintTarget ? 1 : 0,
       difficulty: newTask.difficulty,
       timer: JSON.stringify(newTask.timer),
       category: newTask.category,
@@ -457,8 +466,8 @@ class SqliteClient implements DbClient {
     };
 
     this.db.prepare(`
-      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "triageStatus", "urgent", "impact", "majorIncident", "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId")
-      VALUES(@id, @parentId, @title, @createdAt, @triageStatus, @urgent, @impact, @majorIncident, @difficulty, @timer, @category, @terminationDate, @comment, @durationInMinutes, @priority, @userId)
+      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget", "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId")
+      VALUES(@id, @parentId, @title, @createdAt, @triageStatus, @urgent, @impact, @majorIncident, @sprintTarget, @difficulty, @timer, @category, @terminationDate, @comment, @durationInMinutes, @priority, @userId)
     `).run(params);
 
     return newTask;
@@ -480,6 +489,7 @@ class SqliteClient implements DbClient {
       urgent: updated.urgent ? 1 : 0,
       impact: updated.impact ? 1 : 0,
       majorIncident: updated.majorIncident ? 1 : 0,
+      sprintTarget: updated.sprintTarget ? 1 : 0,
       difficulty: updated.difficulty,
       timer: JSON.stringify(updated.timer),
       category: updated.category,
@@ -498,6 +508,7 @@ class SqliteClient implements DbClient {
         "urgent" = @urgent,
         "impact" = @impact,
         "majorIncident" = @majorIncident,
+        "sprintTarget" = @sprintTarget,
         "difficulty" = @difficulty,
         "timer" = @timer,
         "category" = @category,
@@ -572,8 +583,8 @@ class SqliteClient implements DbClient {
     }
 
     const insertStmt = this.db.prepare(`
-      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "triageStatus", "urgent", "impact", "majorIncident", "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId")
-      VALUES(@id, @parentId, @title, @createdAt, @triageStatus, @urgent, @impact, @majorIncident, @difficulty, @timer, @category, @terminationDate, @comment, @durationInMinutes, @priority, @userId)
+      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget", "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId")
+      VALUES(@id, @parentId, @title, @createdAt, @triageStatus, @urgent, @impact, @majorIncident, @sprintTarget, @difficulty, @timer, @category, @terminationDate, @comment, @durationInMinutes, @priority, @userId)
       ON CONFLICT("id") DO UPDATE SET
       "parentId" = excluded."parentId",
         "title" = excluded."title",
@@ -581,6 +592,7 @@ class SqliteClient implements DbClient {
         "urgent" = excluded."urgent",
         "impact" = excluded."impact",
         "majorIncident" = excluded."majorIncident",
+        "sprintTarget" = excluded."sprintTarget",
         "difficulty" = excluded."difficulty",
         "timer" = excluded."timer",
         "category" = excluded."category",
@@ -606,6 +618,7 @@ class SqliteClient implements DbClient {
           urgent: task.urgent ? 1 : 0,
           impact: task.impact ? 1 : 0,
           majorIncident: task.majorIncident ? 1 : 0,
+          sprintTarget: task.sprintTarget ? 1 : 0,
           difficulty: task.difficulty,
           timer: JSON.stringify(task.timer),
           category: task.category,

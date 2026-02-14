@@ -64,6 +64,7 @@ export const Timetable: React.FC<{
   const [showUrgent, setShowUrgent] = useState(false);
   const [showImpact, setShowImpact] = useState(false);
   const [showMajorIncident, setShowMajorIncident] = useState(false);
+  const [showSprintTarget, setShowSprintTarget] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedStatuses, setSelectedStatuses] = useState<TriageStatus[]>([]);
 
@@ -76,6 +77,7 @@ export const Timetable: React.FC<{
         if (filters.showUrgent) setShowUrgent(filters.showUrgent);
         if (filters.showImpact) setShowImpact(filters.showImpact);
         if (filters.showMajorIncident) setShowMajorIncident(filters.showMajorIncident);
+        if (filters.showSprintTarget) setShowSprintTarget(filters.showSprintTarget);
         if (filters.category) setSelectedCategories(filters.category);
         if (filters.status) setSelectedStatuses(filters.status);
       }
@@ -103,12 +105,13 @@ export const Timetable: React.FC<{
         showUrgent,
         showImpact,
         showMajorIncident,
+        showSprintTarget,
         category: selectedCategories,
         status: selectedStatuses
       });
     };
     save();
-  }, [selectedUserId, showUrgent, showImpact, showMajorIncident, selectedCategories, selectedStatuses]);
+  }, [selectedUserId, showUrgent, showImpact, showMajorIncident, showSprintTarget, selectedCategories, selectedStatuses]);
 
   // Helper to calculate date range for a given preset
   const calculateDateRange = React.useCallback((rangeValue: string) => {
@@ -358,6 +361,26 @@ export const Timetable: React.FC<{
       }
     }
 
+    // Sprint Target filter
+    if (showSprintTarget) {
+      let currentTaskForSprintTarget = task;
+      let foundSprintTargetAncestor = false;
+      while (currentTaskForSprintTarget) {
+        if (currentTaskForSprintTarget.sprintTarget) {
+          foundSprintTargetAncestor = true;
+          break;
+        }
+        if (currentTaskForSprintTarget.parentId) {
+          currentTaskForSprintTarget = taskMap[currentTaskForSprintTarget.parentId];
+        } else {
+          break;
+        }
+      }
+      if (!foundSprintTargetAncestor) {
+        return false;
+      }
+    }
+
     // User filter
     if (selectedUserId) {
       if (selectedUserId === 'UNASSIGNED') {
@@ -574,6 +597,13 @@ export const Timetable: React.FC<{
               onCheckedChange={(checked) => setShowMajorIncident(!!checked)}
             />
             <label htmlFor="show-major-incident" className="text-sm font-medium">Incident on Delivery</label>
+
+            <Checkbox
+              id="show-sprint-target"
+              checked={showSprintTarget}
+              onCheckedChange={(checked) => setShowSprintTarget(!!checked)}
+            />
+            <label htmlFor="show-sprint-target" className="text-sm font-medium">Sprint Target</label>
           </div>
         </div>
 
@@ -588,8 +618,7 @@ export const Timetable: React.FC<{
             setShowUrgent(false);
             setShowImpact(false);
             setShowMajorIncident(false);
-            setShowImpact(false);
-            setShowMajorIncident(false);
+            setShowSprintTarget(false);
             handleUserChange(null);
             setTimeChunk("all");
             // No need to clear from session storage for Timetable
@@ -675,6 +704,7 @@ export const Timetable: React.FC<{
                                 impact={topParentTask?.impact}
                                 urgent={topParentTask?.urgent}
                                 majorIncident={topParentTask?.majorIncident}
+                                sprintTarget={topParentTask?.sprintTarget}
                               />
                             </div>
                           </TableCell>
@@ -701,6 +731,7 @@ export const Timetable: React.FC<{
                                         impact={parentTask.impact}
                                         urgent={parentTask.urgent}
                                         majorIncident={parentTask.majorIncident}
+                                        sprintTarget={parentTask.sprintTarget}
                                       />
                                     </div>
                                   </TableCell>

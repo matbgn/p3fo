@@ -30,6 +30,7 @@ const ProgramTopView: React.FC<ProgramTopViewProps> = ({ onFocusOnTask }) => {
         toggleUrgent,
         toggleImpact,
         toggleMajorIncident,
+        toggleSprintTarget,
         toggleDone,
         toggleTimer,
         reparent,
@@ -89,6 +90,7 @@ const ProgramTopView: React.FC<ProgramTopViewProps> = ({ onFocusOnTask }) => {
                     toggleUrgent={toggleUrgent}
                     toggleImpact={toggleImpact}
                     toggleMajorIncident={toggleMajorIncident}
+                    toggleSprintTarget={toggleSprintTarget}
                     onToggleTimer={toggleTimer}
                     updateTerminationDate={updateTerminationDate}
                     updateComment={updateComment}

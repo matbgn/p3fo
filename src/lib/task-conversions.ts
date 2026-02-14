@@ -32,6 +32,7 @@ export const convertEntitiesToTasks = (entities: TaskEntity[]): Task[] => {
             urgent: entity.urgent,
             impact: entity.impact,
             majorIncident: entity.majorIncident,
+            sprintTarget: entity.sprintTarget,
             difficulty: (entity.difficulty as 0.5 | 1 | 2 | 3 | 5 | 8) || 1,
             timer: entity.timer,
             category: entity.category as Category,
@@ -69,6 +70,7 @@ export const taskToEntity = (task: Task): TaskEntity => ({
     urgent: task.urgent || false,
     impact: task.impact || false,
     majorIncident: task.majorIncident || false,
+    sprintTarget: task.sprintTarget || false,
     difficulty: task.difficulty || 1,
     timer: task.timer || [],
     category: task.category || 'General',
@@ -119,6 +121,7 @@ export const taskPatchToEntity = (
     if (patch.urgent !== undefined) entity.urgent = patch.urgent;
     if (patch.impact !== undefined) entity.impact = patch.impact;
     if (patch.majorIncident !== undefined) entity.majorIncident = patch.majorIncident;
+    if (patch.sprintTarget !== undefined) entity.sprintTarget = patch.sprintTarget;
     if (patch.difficulty !== undefined) entity.difficulty = patch.difficulty;
     if (patch.timer !== undefined) entity.timer = patch.timer;
     if (patch.category !== undefined) entity.category = patch.category;

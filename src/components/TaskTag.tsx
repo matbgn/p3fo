@@ -1,23 +1,25 @@
 import React from "react";
-import { AlertTriangle, CircleDot, Flame } from "lucide-react";
+import { AlertTriangle, CircleDot, Flame, Crosshair } from "lucide-react";
 
 interface TaskTagProps {
   impact?: boolean;
   urgent?: boolean;
   majorIncident?: boolean;
+  sprintTarget?: boolean;
   size?: "sm" | "md";
 }
 
-export const TaskTag: React.FC<TaskTagProps> = ({ 
-  impact = false, 
-  urgent = false, 
+export const TaskTag: React.FC<TaskTagProps> = ({
+  impact = false,
+  urgent = false,
   majorIncident = false,
+  sprintTarget = false,
   size = "md"
 }) => {
   const sizeClasses = size === "sm" ? "h-3 w-3" : "h-4 w-4";
   const gapClass = size === "sm" ? "gap-0.5" : "gap-1";
-  
-  if (!impact && !urgent && !majorIncident) {
+
+  if (!impact && !urgent && !majorIncident && !sprintTarget) {
     return null;
   }
 
@@ -31,6 +33,9 @@ export const TaskTag: React.FC<TaskTagProps> = ({
       )}
       {majorIncident && (
         <Flame className={`${sizeClasses} text-red-700`} />
+      )}
+      {sprintTarget && (
+        <Crosshair className={`${sizeClasses} text-violet-500`} />
       )}
     </div>
   );

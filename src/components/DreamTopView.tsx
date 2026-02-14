@@ -25,7 +25,7 @@ type ActiveView = 'dream' | 'storyboard' | 'prioritization';
 const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
   const { setView, setFocusedTaskId } = useViewNavigation();
   const { cardCompactness } = useViewDisplay();
-  const { updateStatus, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleUrgent, toggleImpact, toggleMajorIncident, toggleDone, toggleTimer, reparent, updateTerminationDate, updateComment, updateDurationInMinutes, updatePriority, createTask } = useTasks();
+  const { updateStatus, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleUrgent, toggleImpact, toggleMajorIncident, toggleSprintTarget, toggleDone, toggleTimer, reparent, updateTerminationDate, updateComment, updateDurationInMinutes, updatePriority, createTask } = useTasks();
   const { tasks } = useAllTasks();
   const { userId: currentUserId } = useUserSettings();
 
@@ -40,6 +40,7 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
     showUrgent: false,
     showImpact: false,
     showMajorIncident: false,
+    showSprintTarget: false,
     status: ["Backlog", "Ready", "WIP", "Blocked"],
     searchText: "",
     difficulty: [],
@@ -110,6 +111,10 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
         }
 
         if (filters.showMajorIncident && !task.majorIncident) {
+          return false;
+        }
+
+        if (filters.showSprintTarget && !task.sprintTarget) {
           return false;
         }
 
@@ -358,6 +363,7 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
                       toggleUrgent={toggleUrgent}
                       toggleImpact={toggleImpact}
                       toggleMajorIncident={toggleMajorIncident}
+                      toggleSprintTarget={toggleSprintTarget}
                       toggleDone={() => toggleDone(task.id)}
                       toggleTimer={toggleTimer}
                       reparent={reparent}
@@ -393,6 +399,7 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
                               toggleUrgent={toggleUrgent}
                               toggleImpact={toggleImpact}
                               toggleMajorIncident={toggleMajorIncident}
+                              toggleSprintTarget={toggleSprintTarget}
                               toggleDone={() => toggleDone(child.id)}
                               toggleTimer={toggleTimer}
                               reparent={reparent}

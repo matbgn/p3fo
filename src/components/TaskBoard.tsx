@@ -26,7 +26,7 @@ type Column = {
 };
 
 const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId }) => {
-  const { createTask, reparent, updateStatus, toggleUrgent, toggleImpact, toggleMajorIncident, updateDifficulty, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleDone, updateTaskTimer, toggleTimer, updateTimeEntry, updateCategory, updateComment, updateTerminationDate, updateDurationInMinutes } = useTasks();
+  const { createTask, reparent, updateStatus, toggleUrgent, toggleImpact, toggleMajorIncident, toggleSprintTarget, updateDifficulty, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleDone, updateTaskTimer, toggleTimer, updateTimeEntry, updateCategory, updateComment, updateTerminationDate, updateDurationInMinutes } = useTasks();
   const { tasks } = useAllTasks();
   const { userId: currentUserId } = useUserSettings();
   const map = React.useMemo(() => byId(tasks), [tasks]);
@@ -73,6 +73,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
     showUrgent: false,
     showImpact: false,
     showMajorIncident: false,
+    showSprintTarget: false,
     status: ["Backlog", "Ready", "WIP", "Blocked"], // All non-Done, non-Dropped statuses by default
     searchText: "",
     difficulty: [],
@@ -516,6 +517,11 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                         return false;
                       }
 
+                      // 4b. Apply sprint target filter
+                      if (filters.showSprintTarget && !task.sprintTarget) {
+                        return false;
+                      }
+
                       // Apply difficulty filter
                       if (filters.difficulty && Array.isArray(filters.difficulty) && filters.difficulty.length > 0 && !filters.difficulty.includes(task.difficulty)) {
                         return false;
@@ -590,6 +596,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                             toggleUrgent={toggleUrgent}
                             toggleImpact={toggleImpact}
                             toggleMajorIncident={toggleMajorIncident}
+                            toggleSprintTarget={toggleSprintTarget}
                             toggleTimer={handleToggleTimer}
                             toggleDone={handleToggleDone}
                             reparent={reparent}

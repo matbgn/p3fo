@@ -48,6 +48,7 @@ export type Task = {
   urgent?: boolean;
   impact?: boolean;
   majorIncident?: boolean;
+  sprintTarget?: boolean;
   difficulty?: 0.5 | 1 | 2 | 3 | 5 | 8; // Added difficulty property
   timer?: { startTime: number; endTime: number }[];
   category?: Category;
@@ -608,6 +609,28 @@ const toggleMajorIncident = async (taskId: string) => {
     await adapter.updateTask(taskId, entity);
   } catch (error) {
     console.error("Error toggling major incident:", error);
+  }
+
+
+  eventBus.publish("tasksChanged");
+
+};
+
+const toggleSprintTarget = async (taskId: string) => {
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
+
+  const newValue = !task.sprintTarget;
+  updateTaskInTasks(taskId, (t) => ({ ...t, sprintTarget: newValue }));
+
+  // Persist to backend
+  try {
+    const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+    const adapter = await persistence;
+    const entity = { ...taskToEntity(task), sprintTarget: newValue };
+    await adapter.updateTask(taskId, entity);
+  } catch (error) {
+    console.error("Error toggling sprint target:", error);
   }
 
 
@@ -1190,6 +1213,7 @@ export function useTasks() {
     toggleUrgent,
     toggleImpact,
     toggleMajorIncident,
+    toggleSprintTarget,
     updateDifficulty,
     updateTitle,
     deleteTask,

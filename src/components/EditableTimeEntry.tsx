@@ -349,6 +349,7 @@ export const EditableTimeEntry: React.FC<{
             impact={task?.impact}
             urgent={task?.urgent}
             majorIncident={task?.majorIncident}
+            sprintTarget={task?.sprintTarget}
           />
         </div>
         {children}

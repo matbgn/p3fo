@@ -35,6 +35,7 @@ export interface TaskEntity {
   urgent: boolean;
   impact: boolean;
   majorIncident: boolean;
+  sprintTarget: boolean;
   difficulty: number;
   timer: { startTime: number; endTime: number }[]; // Match existing app structure
   category: Category | string;
@@ -99,6 +100,7 @@ export interface FilterStateEntity {
   showUrgent: boolean;
   showImpact: boolean;
   showMajorIncident: boolean;
+  showSprintTarget: boolean;
   status: TriageStatus[];
   showDone?: boolean;
   searchText?: string;

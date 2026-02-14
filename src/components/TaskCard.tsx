@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { GripVertical, Folder, AlertTriangle, CircleDot, Trash2, Clock2, Play, Pause, ChevronDown, ChevronRight, Flame, FileText, BellRing, CalendarIcon, User } from "lucide-react";
+import { GripVertical, Folder, AlertTriangle, CircleDot, Trash2, Clock2, Play, Pause, ChevronDown, ChevronRight, Flame, FileText, BellRing, CalendarIcon, User, Crosshair } from "lucide-react";
 import { TaskStatusSelect } from "./TaskStatusSelect";
 import { useTasks, Task, Category, TriageStatus } from "@/hooks/useTasks";
 import { Badge } from "@/components/ui/badge";
@@ -210,6 +210,7 @@ interface TaskCardProps {
   toggleUrgent: (id: string) => void;
   toggleImpact: (id: string) => void;
   toggleMajorIncident: (id: string) => void;
+  toggleSprintTarget: (id: string) => void;
   toggleDone: (task: Task) => void;
   toggleTimer: (id: string) => void;
   reparent: (id: string, parentId: string | null) => void;
@@ -237,6 +238,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
     toggleUrgent,
     toggleImpact,
     toggleMajorIncident,
+    toggleSprintTarget,
     toggleDone,
     toggleTimer,
     reparent,
@@ -756,6 +758,15 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                   Incident on Delivery
                 </Badge>
               )}
+              {task.sprintTarget && (
+                <Badge
+                  variant="secondary"
+                  className="bg-violet-500 hover:bg-violet-600 text-violet-100 cursor-default"
+                >
+                  <Crosshair className="h-3 w-3 mr-1" />
+                  Sprint Target
+                </Badge>
+              )}
             </div>
           </div>
           <UserSelector
@@ -793,6 +804,15 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
               >
                 <Flame className="h-3 w-3 mr-1" />
                 Incident on Delivery
+              </Badge>
+            )}
+            {task.sprintTarget && !task.parentId && (
+              <Badge
+                variant="secondary"
+                className="bg-violet-500 hover:bg-violet-600 text-violet-100 mb-2 cursor-default"
+              >
+                <Crosshair className="h-3 w-3 mr-1" />
+                Sprint Target
               </Badge>
             )}
           </div>
@@ -860,6 +880,17 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                     }}
                   >
                     <Flame className={`h-4 w-4 ${task.majorIncident ? "text-red-700" : "text-gray-400"}`} />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleSprintTarget(task.id);
+                    }}
+                  >
+                    <Crosshair className={`h-4 w-4 ${task.sprintTarget ? "text-violet-500" : "text-gray-400"}`} />
                   </Button>
                   <Button
                     size="sm"
@@ -944,6 +975,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
           toggleUrgent={toggleUrgent}
           toggleImpact={toggleImpact}
           toggleMajorIncident={toggleMajorIncident}
+          toggleSprintTarget={toggleSprintTarget}
           onToggleTimer={toggleTimer}
           currentUserId={currentUserId}
         />

@@ -69,6 +69,7 @@ class PostgresClient implements DbClient {
         "urgent" BOOLEAN DEFAULT false,
         "impact" BOOLEAN DEFAULT false,
         "majorIncident" BOOLEAN DEFAULT false,
+        "sprintTarget" BOOLEAN DEFAULT false,
         "difficulty" REAL DEFAULT 1,
         "timer" JSONB, -- JSONB for efficient JSON operations
         "category" TEXT DEFAULT 'General',
@@ -300,6 +301,9 @@ class PostgresClient implements DbClient {
     await runMigration('userSettings', 'monthly_balances', 'monthlyBalances');
     await runMigration('userSettings', 'card_compactness', 'cardCompactness');
 
+    // Add sprintTarget column to tasks
+    await addColumn('tasks', 'sprintTarget', 'BOOLEAN DEFAULT false');
+
     // Add new columns for UserSettings
     await addColumn('userSettings', 'weekStartDay', 'INTEGER');
     await addColumn('userSettings', 'defaultPlanView', 'TEXT');
@@ -398,6 +402,7 @@ class PostgresClient implements DbClient {
       urgent: input.urgent || false,
       impact: input.impact || false,
       majorIncident: input.majorIncident || false,
+      sprintTarget: input.sprintTarget || false,
       difficulty: input.difficulty || 1,
       timer: input.timer || [],
       category: input.category || 'General',
@@ -411,9 +416,9 @@ class PostgresClient implements DbClient {
     };
 
     await this.pool.query(`
-      INSERT INTO "tasks" ("id", "parentId", "title", "createdAt", "triageStatus", "urgent", "impact", "majorIncident", 
+      INSERT INTO "tasks" ("id", "parentId", "title", "createdAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget",
                          "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
     `, [
       newTask.id,
       newTask.parentId,
@@ -423,6 +428,7 @@ class PostgresClient implements DbClient {
       newTask.urgent,
       newTask.impact,
       newTask.majorIncident,
+      newTask.sprintTarget,
       newTask.difficulty,
       JSON.stringify(newTask.timer), // Use JSON string/object for JSONB
       newTask.category,
@@ -453,6 +459,7 @@ class PostgresClient implements DbClient {
       updatedTask.urgent,
       updatedTask.impact,
       updatedTask.majorIncident,
+      updatedTask.sprintTarget,
       updatedTask.difficulty,
       JSON.stringify(updatedTask.timer),
       updatedTask.category,
@@ -467,10 +474,10 @@ class PostgresClient implements DbClient {
     await this.pool.query(`
       UPDATE "tasks"
       SET "parentId" = $1, "title" = $2, "triageStatus" = $3, "urgent" = $4,
-          "impact" = $5, "majorIncident" = $6, "difficulty" = $7, "timer" = $8,
-          "category" = $9, "terminationDate" = $10, "comment" = $11,
-          "durationInMinutes" = $12, "priority" = $13, "userId" = $14
-      WHERE "id" = $15
+          "impact" = $5, "majorIncident" = $6, "sprintTarget" = $7, "difficulty" = $8, "timer" = $9,
+          "category" = $10, "terminationDate" = $11, "comment" = $12,
+          "durationInMinutes" = $13, "priority" = $14, "userId" = $15
+      WHERE "id" = $16
     `, params);
 
     return updatedTask;
@@ -534,9 +541,9 @@ class PostgresClient implements DbClient {
 
       for (const task of tasks) {
         await client.query(`
-          INSERT INTO "tasks" ("id", "parentId", "title", "createdAt", "triageStatus", "urgent", "impact", "majorIncident", 
+          INSERT INTO "tasks" ("id", "parentId", "title", "createdAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget",
                              "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId")
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
           ON CONFLICT ("id") DO UPDATE SET
             "parentId" = EXCLUDED."parentId",
             "title" = EXCLUDED."title",
@@ -544,6 +551,7 @@ class PostgresClient implements DbClient {
             "urgent" = EXCLUDED."urgent",
             "impact" = EXCLUDED."impact",
             "majorIncident" = EXCLUDED."majorIncident",
+            "sprintTarget" = EXCLUDED."sprintTarget",
             "difficulty" = EXCLUDED."difficulty",
             "timer" = EXCLUDED."timer",
             "category" = EXCLUDED."category",
@@ -561,6 +569,7 @@ class PostgresClient implements DbClient {
           task.urgent,
           task.impact,
           task.majorIncident,
+          task.sprintTarget,
           task.difficulty,
           JSON.stringify(task.timer),
           task.category,

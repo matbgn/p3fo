@@ -13,6 +13,7 @@ export type Filters = {
   showUrgent: boolean;
   showImpact: boolean;
   showMajorIncident: boolean;
+  showSprintTarget: boolean;
   status: TriageStatus[];
   showDone?: boolean;
   searchText?: string;
@@ -46,6 +47,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
       showUrgent: false,
       showImpact: false,
       showMajorIncident: false,
+      showSprintTarget: false,
       status: [],
       showDone: false,
       searchText: "",
@@ -115,6 +117,15 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
           onCheckedChange={(checked) => updateAndPersistFilters({ ...filters, showMajorIncident: !!checked })}
         />
         <Label htmlFor="show-major-incident">Incident on Delivery</Label>
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <Checkbox
+          id="show-sprint-target"
+          checked={filters.showSprintTarget}
+          onCheckedChange={(checked) => updateAndPersistFilters({ ...filters, showSprintTarget: !!checked })}
+        />
+        <Label htmlFor="show-sprint-target">Sprint Target</Label>
       </div>
 
       <div className="flex items-center space-x-2">
