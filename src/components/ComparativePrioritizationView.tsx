@@ -27,6 +27,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
     showUrgent: false,
     showImpact: false,
     showMajorIncident: false,
+    showSprintTarget: false,
     status: [],
     searchText: "",
     difficulty: [],

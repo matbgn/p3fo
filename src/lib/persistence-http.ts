@@ -1,4 +1,4 @@
-import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity } from './persistence-types';
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, ReminderEntity } from './persistence-types';
 import { DEFAULT_TASKS_INITIALIZED_KEY } from '@/hooks/useTasks';
 
 export class HttpApiPersistence implements PersistenceAdapter {
@@ -204,6 +204,49 @@ export class HttpApiPersistence implements PersistenceAdapter {
     await this.makeRequest('/api/dream-board', {
       method: 'PUT',
       body: JSON.stringify(state),
+    });
+  }
+
+  // Reminders
+  async listReminders(userId?: string): Promise<ReminderEntity[]> {
+    const endpoint = userId ? `/api/reminders?user_id=${encodeURIComponent(userId)}` : '/api/reminders';
+    const result = await this.makeRequest(endpoint);
+    return result.data || [];
+  }
+
+  async getReminderById(id: string): Promise<ReminderEntity | null> {
+    return this.makeRequest(`/api/reminders/${id}`);
+  }
+
+  async createReminder(input: Partial<ReminderEntity>): Promise<ReminderEntity> {
+    return this.makeRequest('/api/reminders', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  async updateReminder(id: string, patch: Partial<ReminderEntity>): Promise<ReminderEntity> {
+    return this.makeRequest(`/api/reminders/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  }
+
+  async deleteReminder(id: string): Promise<void> {
+    await this.makeRequest(`/api/reminders/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async deleteRemindersByTaskId(taskId: string): Promise<void> {
+    await this.makeRequest(`/api/reminders/task/${taskId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async clearAllReminders(): Promise<void> {
+    await this.makeRequest('/api/reminders/clear', {
+      method: 'POST',
     });
   }
 

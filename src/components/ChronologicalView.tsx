@@ -46,6 +46,7 @@ export const ChronologicalView: React.FC<ChronologicalViewProps> = ({
     showUrgent: false,
     showImpact: false,
     showMajorIncident: false,
+    showSprintTarget: false,
     status: [],
     searchText: "",
     difficulty: [],
