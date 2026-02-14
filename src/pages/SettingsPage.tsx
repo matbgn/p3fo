@@ -12,6 +12,7 @@ import { UserManagement } from '@/components/UserManagement';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CompactnessSelector } from '@/components/CompactnessSelector';
+import { DaySelector } from '@/components/ui/day-selector';
 
 const SettingsPage: React.FC = () => {
   const { clearAllTasks, clearAllUsers } = useTasks();
@@ -25,13 +26,18 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleSettingChange = (key: keyof typeof settings, value: string, scope?: 'user' | 'global') => {
+  const handleSettingChange = (key: keyof typeof settings, value: string | number[] | number, scope?: 'user' | 'global') => {
+    if (key === 'preferredWorkingDays') {
+      updateSettings({ [key]: value as number[] }, scope);
+      return;
+    }
+
     if (key === 'splitTime' || key === 'defaultPlanView' || key === 'timezone' || key === 'country' || key === 'region') {
-      updateSettings({ [key]: value }, scope);
+      updateSettings({ [key]: value as string }, scope);
     } else {
-      const numValue = parseFloat(value);
-      if (!isNaN(numValue)) {
-        // we know the key matches and value is number
+      const numValue = typeof value === 'string' ? parseFloat(value) : value as number;
+      // check if it is number
+      if (typeof numValue === 'number' && !isNaN(numValue)) {
         updateSettings({ [key]: numValue }, scope);
       }
     }
@@ -154,6 +160,21 @@ const SettingsPage: React.FC = () => {
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
                     Adjust the compactness of task cards.
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="block text-sm font-medium mb-1">
+                    Preferred Working Days
+                  </Label>
+                  <div className="mt-2">
+                    <DaySelector
+                      value={settings.preferredWorkingDays}
+                      onChange={(val) => handleSettingChange('preferredWorkingDays', val)}
+                    />
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Select the days you typically work.
                   </p>
                 </div>
               </div>

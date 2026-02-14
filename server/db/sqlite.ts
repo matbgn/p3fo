@@ -45,6 +45,7 @@ interface UserSettingsDbRow {
   timezone: string | null;
   weekStartDay: number | null;
   defaultPlanView: string | null;
+  preferredWorkingDays: string | null;
 }
 
 interface AppSettingsDbRow {
@@ -159,7 +160,8 @@ class SqliteClient implements DbClient {
         "cardCompactness" INTEGER DEFAULT 0,
         "timezone" TEXT,
         "weekStartDay" INTEGER,
-        "defaultPlanView" TEXT
+        "defaultPlanView" TEXT,
+        "preferredWorkingDays" TEXT -- JSON string
       )
     `);
 
@@ -270,6 +272,7 @@ class SqliteClient implements DbClient {
           this.db.exec(`ALTER TABLE "${table}" RENAME COLUMN "${oldCol}" TO "${newCol}"`);
         }
       } catch (e) {
+        // ignore
       }
     };
 
@@ -326,6 +329,7 @@ class SqliteClient implements DbClient {
     // Add new columns for UserSettings
     addColumn('userSettings', 'weekStartDay', 'INTEGER');
     addColumn('userSettings', 'defaultPlanView', 'TEXT');
+    addColumn('userSettings', 'preferredWorkingDays', 'TEXT');
 
     // AppSettings columns
     runMigration('appSettings', 'split_time', 'splitTime');
@@ -657,6 +661,7 @@ class SqliteClient implements DbClient {
       monthlyBalances: row.monthlyBalances ? JSON.parse(row.monthlyBalances) : {},
       weekStartDay: row.weekStartDay as 0 | 1 | undefined,
       defaultPlanView: row.defaultPlanView as 'week' | 'month' | undefined,
+      preferredWorkingDays: row.preferredWorkingDays ? JSON.parse(row.preferredWorkingDays) : undefined,
     };
   }
 
@@ -675,12 +680,13 @@ class SqliteClient implements DbClient {
       timezone: updated.timezone ?? null,
       cardCompactness: updated.cardCompactness ?? 0,
       weekStartDay: updated.weekStartDay ?? null,
-      defaultPlanView: updated.defaultPlanView ?? null
+      defaultPlanView: updated.defaultPlanView ?? null,
+      preferredWorkingDays: updated.preferredWorkingDays ? JSON.stringify(updated.preferredWorkingDays) : null
     };
 
     this.db.prepare(`
-      INSERT INTO "userSettings"("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness", "weekStartDay", "defaultPlanView")
-      VALUES(@userId, @username, @logo, @hasCompletedOnboarding, @workload, @splitTime, @monthlyBalances, @timezone, @cardCompactness, @weekStartDay, @defaultPlanView)
+      INSERT INTO "userSettings"("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness", "weekStartDay", "defaultPlanView", "preferredWorkingDays")
+      VALUES(@userId, @username, @logo, @hasCompletedOnboarding, @workload, @splitTime, @monthlyBalances, @timezone, @cardCompactness, @weekStartDay, @defaultPlanView, @preferredWorkingDays)
       ON CONFLICT("userId") DO UPDATE SET
       "username" = excluded."username",
         "logo" = excluded."logo",
@@ -691,7 +697,8 @@ class SqliteClient implements DbClient {
         "timezone" = excluded."timezone",
         "cardCompactness" = excluded."cardCompactness",
         "weekStartDay" = excluded."weekStartDay",
-        "defaultPlanView" = excluded."defaultPlanView"
+        "defaultPlanView" = excluded."defaultPlanView",
+        "preferredWorkingDays" = excluded."preferredWorkingDays"
           `).run(params);
 
     return updated;
@@ -705,6 +712,7 @@ class SqliteClient implements DbClient {
       monthlyBalances: row.monthlyBalances ? JSON.parse(row.monthlyBalances) : {},
       weekStartDay: row.weekStartDay as 0 | 1 | undefined,
       defaultPlanView: row.defaultPlanView as 'week' | 'month' | undefined,
+      preferredWorkingDays: row.preferredWorkingDays ? JSON.parse(row.preferredWorkingDays) : undefined,
     }));
   }
 

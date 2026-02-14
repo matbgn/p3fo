@@ -18,6 +18,7 @@ export interface UserSettings {
     timezone?: string;
     weekStartDay?: 0 | 1;
     defaultPlanView?: 'week' | 'month';
+    preferredWorkingDays?: number[];
 }
 
 const defaultUserSettings: UserSettings = {
@@ -64,6 +65,7 @@ const loadUserSettings = async (userId: string): Promise<UserSettings> => {
             timezone: settings.timezone,
             weekStartDay: settings.weekStartDay,
             defaultPlanView: settings.defaultPlanView,
+            preferredWorkingDays: settings.preferredWorkingDays as number[] | undefined,
         };
     } catch (error) {
         console.error('Error loading user settings from persistence:', error);
@@ -81,6 +83,7 @@ interface UserSettingsContextType {
     completeOnboarding: () => void;
     regenerateUsername: () => void;
     updateCardCompactness: (compactness: number) => void;
+    updatePreferredWorkingDays: (days: number[]) => void;
 }
 
 const UserSettingsContext = createContext<UserSettingsContextType | undefined>(undefined);
@@ -141,6 +144,7 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                     timezone: userSettings.timezone,
                     weekStartDay: userSettings.weekStartDay,
                     defaultPlanView: userSettings.defaultPlanView,
+                    preferredWorkingDays: userSettings.preferredWorkingDays,
                 };
 
                 await adapter.updateUserSettings(userId, entityPatch);
@@ -159,6 +163,7 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                         timezone: userSettings.timezone,
                         weekStartDay: userSettings.weekStartDay,
                         defaultPlanView: userSettings.defaultPlanView,
+                        preferredWorkingDays: userSettings.preferredWorkingDays,
                     });
                 }
             } catch (error) {
@@ -217,6 +222,7 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                         timezone: yjsSettings.timezone,
                         weekStartDay: yjsSettings.weekStartDay,
                         defaultPlanView: yjsSettings.defaultPlanView,
+                        preferredWorkingDays: yjsSettings.preferredWorkingDays,
                     });
                 }
             } else {
@@ -270,6 +276,13 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }));
     };
 
+    const updatePreferredWorkingDays = (days: number[]) => {
+        setUserSettings(prev => ({
+            ...prev,
+            preferredWorkingDays: days,
+        }));
+    };
+
     return (
         <UserSettingsContext.Provider value={{
             userId: userId || '', // Provide empty string if null to match type, though loading handles it
@@ -280,6 +293,7 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
             completeOnboarding,
             regenerateUsername,
             updateCardCompactness,
+            updatePreferredWorkingDays,
         }}>
             {children}
         </UserSettingsContext.Provider>

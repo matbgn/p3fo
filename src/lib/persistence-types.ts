@@ -86,6 +86,7 @@ export interface UserSettingsEntity {
   timezone?: string;
   weekStartDay?: 0 | 1;
   defaultPlanView?: 'week' | 'month';
+  preferredWorkingDays?: number[] | Record<string, number>; // Legacy array or new map (day -> percentage)
 }
 
 export interface QolSurveyResponseEntity {

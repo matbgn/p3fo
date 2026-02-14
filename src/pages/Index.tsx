@@ -4,7 +4,7 @@ import KanbanBoard from "@/components/KanbanBoard";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { ViewSwitcher } from "@/components/ViewSwitcher";
 import { Timetable } from "@/components/Timetable";
-import ProgramView from "@/components/ProgramView";
+import ProgramTopView from "@/components/ProgramTopView";
 import SettingsPage from "./SettingsPage";
 import MetricsPage from "./MetricsPage";
 
@@ -23,6 +23,7 @@ import { UserSection } from "@/components/UserSection";
 // content-visibility:hidden tells the browser to skip layout+paint for hidden subtrees.
 // This is far cheaper than display:none which forces full layout recalculation on toggle.
 const hiddenStyle: React.CSSProperties = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contentVisibility: "hidden" as any,
   position: "absolute",
   width: 0,
@@ -64,7 +65,7 @@ const Index: React.FC = () => {
   const focusView = React.useMemo(() => <TaskBoard focusedTaskId={focusedTaskId} />, [focusedTaskId]);
   const kanbanView = React.useMemo(() => <KanbanBoard onFocusOnTask={handleFocusOnTask} highlightedTaskId={focusedTaskId} />, [handleFocusOnTask, focusedTaskId]);
   const timetableView = React.useMemo(() => <Timetable onJumpToTask={handleFocusOnTask} />, [handleFocusOnTask]);
-  const programView = React.useMemo(() => <ProgramView onFocusOnTask={handleFocusOnTask} />, [handleFocusOnTask]);
+  const programView = React.useMemo(() => <ProgramTopView onFocusOnTask={handleFocusOnTask} />, [handleFocusOnTask]);
   const planView = React.useMemo(() => <PlanView onFocusOnTask={handleFocusOnTask} />, [handleFocusOnTask]);
   const celebrationView = React.useMemo(() => <CelebrationView onFocusOnTask={handleFocusOnTask} />, [handleFocusOnTask]);
   const dreamView = React.useMemo(() => <DreamTopView onFocusOnTask={handleFocusOnTask} />, [handleFocusOnTask]);
