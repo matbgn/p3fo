@@ -17,7 +17,7 @@ type ActiveView = 'calendar' | 'resources';
 
 const ProgramTopView: React.FC<ProgramTopViewProps> = ({ onFocusOnTask }) => {
     const [activeView, setActiveView] = useState<ActiveView>('calendar');
-    const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+    const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
     const {
         updateStatus,
@@ -40,6 +40,12 @@ const ProgramTopView: React.FC<ProgramTopViewProps> = ({ onFocusOnTask }) => {
     } = useTasks();
     const { tasks } = useAllTasks();
     const { userId: currentUserId } = useUserSettings();
+
+    // Get fresh task from store based on selectedTaskId to ensure UI stays in sync
+    const selectedTask = React.useMemo(() => {
+        if (!selectedTaskId) return null;
+        return tasks.find(t => t.id === selectedTaskId) || null;
+    }, [selectedTaskId, tasks]);
 
     const ViewToggleButtons = () => (
         <div className="flex space-x-2">
@@ -69,9 +75,9 @@ const ProgramTopView: React.FC<ProgramTopViewProps> = ({ onFocusOnTask }) => {
 
                 <div className="flex-1 overflow-hidden">
                     {activeView === 'calendar' ? (
-                        <ProgramView onFocusOnTask={onFocusOnTask} onEditTask={setSelectedTask} />
+                        <ProgramView onFocusOnTask={onFocusOnTask} onEditTask={(task) => setSelectedTaskId(task.id)} />
                     ) : (
-                        <ResourcesScheduler onFocusOnTask={onFocusOnTask} onEditTask={setSelectedTask} />
+                        <ResourcesScheduler onFocusOnTask={onFocusOnTask} onEditTask={(task) => setSelectedTaskId(task.id)} />
                     )}
                 </div>
             </div>
@@ -81,7 +87,7 @@ const ProgramTopView: React.FC<ProgramTopViewProps> = ({ onFocusOnTask }) => {
                     task={selectedTask}
                     tasks={tasks}
                     isOpen={!!selectedTask}
-                    onClose={() => setSelectedTask(null)}
+                    onClose={() => setSelectedTaskId(null)}
                     updateStatus={updateStatus}
                     updateDifficulty={updateDifficulty}
                     updateCategory={updateCategory}
