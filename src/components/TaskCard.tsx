@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { GripVertical, Folder, AlertTriangle, CircleDot, Trash2, Clock2, Play, Pause, ChevronDown, ChevronRight, Flame, FileText, BellRing, CalendarIcon, User, Crosshair } from "lucide-react";
+import { GripVertical, Folder, AlertTriangle, CircleDot, Trash2, Clock2, Clock, Play, Pause, ChevronDown, ChevronRight, Flame, FileText, BellRing, CalendarIcon, User, Crosshair } from "lucide-react";
 import { TaskStatusSelect } from "./TaskStatusSelect";
 import { useTasks, Task, Category, TriageStatus } from "@/hooks/useTasks";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +35,7 @@ import { useReminderStore } from "@/hooks/useReminders";
 import { UserSelector } from "./UserSelector";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { Calendar } from "@/components/ui/calendar";
+import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
 import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 import { useViewDisplay } from "@/hooks/useView";
 import { COMPACTNESS_ULTRA, COMPACTNESS_COMPACT, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
@@ -264,6 +265,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
   const [isDatePickerOpen, setIsDatePickerOpen] = React.useState(false);
   const [offsetMinutes, setOffsetMinutes] = React.useState(-1); // Default to -1 (No reminder)
   const [isDateTimeBlockOpen, setIsDateTimeBlockOpen] = React.useState(false); // New state for date/time block
+  const [timePickerOpen, setTimePickerOpen] = React.useState(false); // State for time picker dialog
   const [reminderStatus, setReminderStatus] = React.useState<'none' | 'scheduled' | 'triggered'>('none'); // Update state to enum
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false); // New state for full edit modal
   const { scheduledReminders, reminders, updateScheduledReminderTriggerDate, dismissReminder } = useReminderStore();
@@ -556,21 +558,18 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                   weekStartsOn={weekStartsOn}
                 />
                 <div className="p-3 border-t border-border">
-                  <Input
-                    type="time"
-                    value={task.terminationDate ? format(new Date(task.terminationDate), "HH:mm") : ""}
-                    onChange={(e) => {
-                      if (task.terminationDate && e.target.value) {
-                        const [hours, minutes] = e.target.value.split(':').map(Number);
-                        const newDate = new Date(task.terminationDate);
-                        newDate.setHours(hours, minutes);
-                        const newTimestamp = newDate.getTime();
-                        updateTerminationDate(task.id, newTimestamp);
-                        updateScheduledReminderTriggerDate(task.id, newDate.toISOString(), offsetMinutes);
-                      }
-                    }}
-                    className="w-full"
-                  />
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => setTimePickerOpen(true)}
+                  >
+                    <Clock className="mr-2 h-4 w-4" />
+                    {task.terminationDate ? (
+                      format(new Date(task.terminationDate), "HH:mm")
+                    ) : (
+                      <span className="text-muted-foreground">Set time...</span>
+                    )}
+                  </Button>
                 </div>
               </PopoverContent>
             </Popover>
@@ -633,7 +632,6 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                           offsetMinutes: newOffset,
                         });
                       }
-                      setIsReminderActive(true); // Set reminder to active
                     }
                   }}
                 >
@@ -993,6 +991,16 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
           currentUserId={currentUserId}
         />
       )}
+      {/* Time Picker Dialog for termination date time */}
+      <TimePickerDialog
+        isOpen={timePickerOpen}
+        onClose={() => setTimePickerOpen(false)}
+        initialTime={task.terminationDate || Date.now()}
+        onTimeChange={(timestamp) => {
+          updateTerminationDate(task.id, timestamp);
+          updateScheduledReminderTriggerDate(task.id, new Date(timestamp).toISOString(), offsetMinutes);
+        }}
+      />
     </Card>
   );
 }));

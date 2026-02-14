@@ -13,10 +13,28 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CompactnessSelector } from '@/components/CompactnessSelector';
 import { DaySelector } from '@/components/ui/day-selector';
+import { Clock } from 'lucide-react';
+import { TimePickerDialog } from '@/components/ui/time-picker-dialog';
+import { useState } from 'react';
 
 const SettingsPage: React.FC = () => {
   const { clearAllTasks, clearAllUsers } = useTasks();
   const { settings, updateSettings } = useCombinedSettings();
+  const [timePickerOpen, setTimePickerOpen] = useState(false);
+
+  // Helper to convert "HH:mm" string to timestamp for time picker
+  const splitTimeToTimestamp = (timeStr: string): number => {
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const date = new Date();
+    date.setHours(hours, minutes, 0, 0);
+    return date.getTime();
+  };
+
+  // Helper to convert timestamp back to "HH:mm" format
+  const timestampToSplitTime = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  };
 
   const handleClearData = async () => {
     if (window.confirm('Are you sure you want to delete ALL application data? This action cannot be undone and will remove all tasks, settings, users, and boards.')) {
@@ -73,16 +91,18 @@ const SettingsPage: React.FC = () => {
                 <div>
                   <Label htmlFor="split-time">Day Split Time</Label>
                   <div className="mt-2">
-                    <Input
-                      id="split-time"
-                      type="time"
-                      value={settings.splitTime}
-                      onChange={(e) => handleSettingChange('splitTime', e.target.value)}
-                    />
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Set the time used to split the day into two halves for the timetable view.
-                    </p>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start"
+                      onClick={() => setTimePickerOpen(true)}
+                    >
+                      <Clock className="mr-2 h-4 w-4" />
+                      {settings.splitTime || "Set time..."}
+                    </Button>
                   </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Set the time used to split the day into two halves for the timetable view.
+                  </p>
                 </div>
 
                 <div>
@@ -452,6 +472,15 @@ const SettingsPage: React.FC = () => {
           </TabsContent>
         </div>
       </Tabs>
+      {/* Time Picker Dialog for split time */}
+      <TimePickerDialog
+        isOpen={timePickerOpen}
+        onClose={() => setTimePickerOpen(false)}
+        initialTime={splitTimeToTimestamp(settings.splitTime || "12:00")}
+        onTimeChange={(timestamp) => {
+          handleSettingChange('splitTime', timestampToSplitTime(timestamp));
+        }}
+      />
     </div>
   );
 };
