@@ -23,7 +23,7 @@ interface DreamTopViewProps {
 type ActiveView = 'dream' | 'storyboard' | 'prioritization';
 
 const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
-  const { setView, setFocusedTaskId } = useViewNavigation();
+  const { setView, setFocusedTaskId, focusedTaskId } = useViewNavigation();
   const { cardCompactness } = useViewDisplay();
   const { updateStatus, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleUrgent, toggleImpact, toggleMajorIncident, toggleSprintTarget, toggleDone, toggleTimer, reparent, updateTerminationDate, updateComment, updateDurationInMinutes, updatePriority, createTask } = useTasks();
   const { tasks } = useAllTasks();
@@ -51,8 +51,16 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
 
   const handlePromoteToKanban = (taskId: string) => {
     setFocusedTaskId(taskId);
-    setView('kanban');
+    // Navigate to storyboard view within Dream view instead of global Kanban
+    setActiveView('storyboard');
   };
+
+  // Auto-switch to storyboard when focusedTaskId is set (e.g., after promoting from fertilization/dream)
+  useEffect(() => {
+    if (focusedTaskId && activeView !== 'storyboard') {
+      setActiveView('storyboard');
+    }
+  }, [focusedTaskId]);
 
   // Auto-collapse filters when switching to Ultra Compact mode
   // Auto-expand filters when switching to Full mode
@@ -353,6 +361,7 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
                     <TaskCard
                       task={task}
                       tasks={tasks}
+                      isHighlighted={task.id === focusedTaskId}
                       updateStatus={updateStatus}
                       updateDifficulty={updateDifficulty}
                       updateCategory={updateCategory}
@@ -389,6 +398,7 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
                             <TaskCard
                               task={child}
                               tasks={tasks}
+                              isHighlighted={child.id === focusedTaskId}
                               updateStatus={updateStatus}
                               updateDifficulty={updateDifficulty}
                               updateCategory={updateCategory}
