@@ -92,7 +92,7 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
 
   const prioritizedTasks = React.useMemo(() => {
     return tasks
-      .filter(task => !task.parentId && task.triageStatus !== 'Done' && task.triageStatus !== 'Dropped')
+      .filter(task => !task.parentId && task.triageStatus !== 'Done' && task.triageStatus !== 'Dropped' && task.triageStatus !== 'Archived')
       .filter(task => {
         if (filters.searchText?.trim()) {
           const searchText = filters.searchText.toLowerCase();

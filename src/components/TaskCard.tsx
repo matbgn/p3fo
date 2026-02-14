@@ -716,17 +716,48 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
       {/* Subtasks toggle - show in ALL modes (Ultra, Compact, Full) */}
       {hasSubtasks && onToggleOpen && (
         <div className="flex justify-between items-center mt-2">
-          <button
-            className="inline-flex items-center text-xs px-2 py-1 rounded-md border hover:bg-accent/60 transition"
-            onClick={(e) => {
-              e.stopPropagation(); // Prevent onActivate from being called
-              onToggleOpen(task.id, true);
-            }}
-            aria-pressed={open}
-          >
-            {open ? <ChevronDown className="h-4 w-4 mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
-            Subtasks
-          </button>
+          <div className="flex flex-col gap-2">
+            <button
+              className="inline-flex items-center text-xs px-2 py-1 rounded-md border hover:bg-accent/60 transition w-fit"
+              onClick={(e) => {
+                e.stopPropagation(); // Prevent onActivate from being called
+                onToggleOpen(task.id, true);
+              }}
+              aria-pressed={open}
+            >
+              {open ? <ChevronDown className="h-4 w-4 mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
+              Subtasks
+            </button>
+            <div className="flex flex-wrap gap-1">
+              {task.urgent && (
+                <Badge
+                  variant="destructive"
+                  className="cursor-default"
+                >
+                  <AlertTriangle className="h-3 w-3 mr-1" />
+                  Urgent
+                </Badge>
+              )}
+              {task.impact && (
+                <Badge
+                  variant="secondary"
+                  className="bg-yellow-500 hover:bg-yellow-600 text-yellow-900 cursor-default"
+                >
+                  <CircleDot className="h-3 w-3 mr-1" />
+                  High Impact
+                </Badge>
+              )}
+              {task.majorIncident && (
+                <Badge
+                  variant="destructive"
+                  className="bg-red-700 hover:bg-red-800 text-white cursor-default"
+                >
+                  <Flame className="h-3 w-3 mr-1" />
+                  Incident on Delivery
+                </Badge>
+              )}
+            </div>
+          </div>
           <UserSelector
             value={task.userId || ''}
             onChange={(selectedId) => updateUser(task.id, selectedId === 'current-user' ? currentUserId : selectedId)}
