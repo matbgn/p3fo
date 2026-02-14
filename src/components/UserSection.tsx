@@ -125,8 +125,8 @@ export function UserSection() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" className="flex items-center gap-2 px-2">
-          <Avatar className="h-8 w-8">
+        <Button variant="ghost" className="flex items-center gap-2 px-2 min-w-0">
+          <Avatar className="h-8 w-8 shrink-0">
             <AvatarImage
               src={userSettings.logo}
               alt={userSettings.username}
@@ -136,7 +136,7 @@ export function UserSection() {
               {displayInitial}
             </AvatarFallback>
           </Avatar>
-          <div className="text-sm font-medium max-w-[120px] truncate">
+          <div className="text-sm font-medium truncate">
             {userSettings.username}
           </div>
         </Button>
