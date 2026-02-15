@@ -127,6 +127,23 @@ const SettingsPage: React.FC = () => {
 
                 <div>
                   <Label className="block text-sm font-medium mb-1">
+                    User Trigram
+                  </Label>
+                  <Input
+                    type="text"
+                    maxLength={3}
+                    value={settings.trigram || ''}
+                    onChange={(e) => handleSettingChange('trigram', e.target.value.toUpperCase())}
+                    className="w-24 mt-2 uppercase"
+                    placeholder="XYZ"
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Your 3-letter identifier (e.g., MAB)
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="block text-sm font-medium mb-1">
                     Start of Week
                   </Label>
                   <RadioGroup

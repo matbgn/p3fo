@@ -1,8 +1,9 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useUsers } from '@/hooks/useUsers';
 import { useAllTasks } from '@/hooks/useAllTasks';
 import { Button } from '@/components/ui/button';
-import { Trash2, User } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Trash2, User, Check, X } from 'lucide-react';
 import {
     Table,
     TableBody,
@@ -15,8 +16,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
 export const UserManagement: React.FC = () => {
-    const { users, loading: usersLoading, deleteUser } = useUsers();
+    const { users, loading: usersLoading, deleteUser, updateUser } = useUsers();
     const { tasks } = useAllTasks();
+    const [editingTrigram, setEditingTrigram] = useState<string | null>(null);
+    const [editValue, setEditValue] = useState("");
 
     // Calculate task counts per user
     const userTaskCounts = useMemo(() => {
@@ -48,6 +51,26 @@ export const UserManagement: React.FC = () => {
         }
     };
 
+    const startEditing = (userId: string, currentTrigram: string) => {
+        setEditingTrigram(userId);
+        setEditValue(currentTrigram);
+    };
+
+    const cancelEditing = () => {
+        setEditingTrigram(null);
+        setEditValue("");
+    };
+
+    const saveTrigram = async (userId: string) => {
+        try {
+            await updateUser(userId, { trigram: editValue });
+            setEditingTrigram(null);
+        } catch (error) {
+            console.error('Failed to update trigram:', error);
+            alert('Failed to update trigram. Please try again.');
+        }
+    };
+
     if (usersLoading) {
         return <div className="text-center py-4">Loading users...</div>;
     }
@@ -64,6 +87,7 @@ export const UserManagement: React.FC = () => {
                     <TableHeader>
                         <TableRow>
                             <TableHead>User</TableHead>
+                            <TableHead>Trigram</TableHead>
                             <TableHead>User ID</TableHead>
                             <TableHead className="text-center">Assigned Tasks</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
@@ -93,6 +117,37 @@ export const UserManagement: React.FC = () => {
                                                 </Avatar>
                                                 <span className="font-medium">{user.username}</span>
                                             </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            {editingTrigram === user.userId ? (
+                                                <div className="flex items-center gap-1">
+                                                    <Input
+                                                        value={editValue}
+                                                        onChange={(e) => setEditValue(e.target.value.toUpperCase().slice(0, 3))}
+                                                        className="w-16 h-8 font-mono uppercase"
+                                                        maxLength={3}
+                                                        autoFocus
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') saveTrigram(user.userId);
+                                                            if (e.key === 'Escape') cancelEditing();
+                                                        }}
+                                                    />
+                                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => saveTrigram(user.userId)}>
+                                                        <Check className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={cancelEditing}>
+                                                        <X className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            ) : (
+                                                <div
+                                                    className="font-mono bg-muted/50 px-2 py-1 rounded w-fit cursor-pointer hover:bg-muted"
+                                                    onDoubleClick={() => startEditing(user.userId, (user as any).trigram || '???')}
+                                                    title="Double-click to edit"
+                                                >
+                                                    {(user as any).trigram || '???'}
+                                                </div>
+                                            )}
                                         </TableCell>
                                         <TableCell className="font-mono text-xs text-muted-foreground">
                                             {user.userId}

@@ -30,6 +30,7 @@ export interface CombinedSettings {
     timezone: string; // Timezone identifier (e.g., 'Europe/Zurich')
     country: string; // Country code for holidays (e.g., 'CH')
     region: string; // Region code for holidays (e.g., 'BE')
+    trigram?: string; // User trigram (e.g., 'MAB')
 }
 
 /**
@@ -69,6 +70,7 @@ const defaultCombinedSettings: CombinedSettings = {
     timezone: 'Europe/Zurich', // Default timezone
     country: 'CH', // Default country for holidays
     region: 'BE', // Default region for holidays
+    trigram: undefined,
 };
 
 /**
@@ -108,6 +110,7 @@ export const useCombinedSettings = () => {
                     country: appSettings.country || 'CH',
                     region: appSettings.region || 'BE',
                     preferredWorkingDays: { '1': 1, '2': 1, '3': 1, '4': 1, '5': 1 }, // Default
+                    trigram: undefined,
                 };
 
                 // Override with user-specific settings if they exist
@@ -117,6 +120,9 @@ export const useCombinedSettings = () => {
                     }
                     if (userSettings.workload !== undefined) {
                         merged.userWorkloadPercentage = userSettings.workload;
+                    }
+                    if (userSettings.trigram) {
+                        merged.trigram = userSettings.trigram;
                     }
 
                     // Timezone: User Settings > Local Storage > App Settings (Default)
@@ -237,7 +243,7 @@ export const useCombinedSettings = () => {
 
         try {
             // Separate user-specific updates from global updates
-            const userUpdates: { splitTime?: string; workload?: number; timezone?: string; weekStartDay?: 0 | 1; defaultPlanView?: 'week' | 'month'; preferredWorkingDays?: Record<string, number> } = {};
+            const userUpdates: { splitTime?: string; workload?: number; timezone?: string; weekStartDay?: 0 | 1; defaultPlanView?: 'week' | 'month'; preferredWorkingDays?: Record<string, number>; trigram?: string } = {};
             const appUpdates: Partial<AppSettingsEntity> = {};
 
             // Helper to decide where to put the update
@@ -263,6 +269,12 @@ export const useCombinedSettings = () => {
                     addToUser('workload', updates.userWorkloadPercentage);
                 } else {
                     addToApp('userWorkloadPercentage', updates.userWorkloadPercentage);
+                }
+            }
+
+            if (updates.trigram !== undefined) {
+                if (userSettings) {
+                    addToUser('trigram', updates.trigram);
                 }
             }
 
