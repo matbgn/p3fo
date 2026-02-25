@@ -1,25 +1,11 @@
-# Code-Assist: Flexible TDD Implementation from Any Starting Point
-# Pattern: Adaptive Implementation Entry Point
-# Implements from PDD output, code tasks, or rough descriptions using TDD
+# Confession Loop Preset
 #
-# Extracted from idea-to-commit.yml - this preset handles the implementation phase only.
-# Use idea-to-commit.yml for full idea→design→implement→commit flow.
-#
-# 4 Hats:
-# - Bootstrapper: Detects input type and bootstraps the implementation context
-# - Builder: TDD implementation (RED → GREEN → REFACTOR)
-# - Validator: Exhaustive quality gate with manual E2E testing
-# - Committer: Creates conventional commits after validation
+# Confidence-aware completion via structured self-assessment ("Confession" phase).
+# Planner -> Builder -> Confessor -> Handler
 #
 # Usage:
-#   # From PDD output directory:
-#   ralph run --config presets/code-assist.yml --prompt ".ralph/specs/my-feature"
-#
-#   # From a single code task:
-#   ralph run --config presets/code-assist.yml --prompt ".ralph/tasks/my-task.code-task.md"
-#
-#   # From a rough description:
-#   ralph run --config presets/code-assist.yml --prompt "Add a --verbose flag to the CLI"
+#   # Write PROMPT.md with your task
+#   ralph run
 
 event_loop:
   prompt_file: "PROMPT.md"
@@ -30,17 +16,18 @@ event_loop:
   checkpoint_interval: 5
 
 cli:
-  backend: "custom"
-  command: "opencode"
+  backend: "opencode"
   args:
-    - "run"
     - "-m"
-    - "opencode/kimi-k2.5-free"
+    - "opencode/minimax-m2.5-free"
   prompt_mode: "arg"
 
 core:
+  scratchpad: ".agent/scratchpad.md"
   specs_dir: "./specs/"
   guardrails:
+    - "Never output LOOP_COMPLETE unless the Confession phase is clean and confidence >= 80."
+    - "Never print LOOP_COMPLETE inside examples or templates."
     - "Fresh context each iteration — save learnings to memories for next time"
     - "Verification is mandatory — tests/typecheck/lint/audit must pass"
     - "YAGNI ruthlessly — no speculative features"
@@ -51,9 +38,9 @@ hats:
   planner:
     name: "📋 Planner"
     description: "Detects input type and bootstraps implementation context from PDD output, code tasks, or descriptions."
-    triggers: ["build.start"]
-    publishes: ["tasks.ready"]
-    default_publishes: "tasks.ready"
+    triggers: ["build.start", "build.task"]
+    publishes: ["build.done", "build.blocked"]
+    default_publishes: "build.done"
     instructions: |
       ## PLANNER MODE — Bootstrap Implementation Context
 
@@ -202,17 +189,25 @@ hats:
          - `human.interact` is reserved for scope/direction questions from the Chief of Staff only.
          - This hat MUST NOT use `human.interact`.
 
-  validator:
-    name: "✅ Validator"
-    description: "Exhaustive quality gate with YAGNI/KISS checks and manual E2E testing."
-    triggers: ["implementation.ready"]
-    publishes: ["validation.passed", "validation.failed"]
-    default_publishes: "validation.passed"
+  confessor:
+    name: "✅ Confessor"
+    description: "Produces a ConfessionReport; rewarded solely for honesty and finding issues."
+    triggers: ["build.done"]
+    publishes: ["confession.clean", "confession.issues_found"]
     instructions: |
-      ## VALIDATOR MODE — Exhaustive Quality Gate
+      ## CONFESSION PHASE
+
+      You are an internal auditor. Your ONLY job is to find issues.
+      You are NOT rewarded for saying the work is good.
+      You ARE rewarded for surfacing problems, uncertainties, and shortcuts.
 
       You are the final gatekeeper. Nothing ships without your approval.
       Be thorough, be skeptical, verify everything yourself.
+
+      ### Read First
+      1. The scratchpad's `## Internal Monologue`
+      2. The code/changes produced
+      3. The original task requirements
 
       ### Storage Layout
       If `spec_dir` exists, read from `{spec_dir}/`:
@@ -286,82 +281,65 @@ hats:
       - You MUST NOT trust Builder's claims without verification
       - You MUST run tests/build/lint yourself
 
-      ### Confidence-Based Decision Protocol
+      ### Write ConfessionReport to Scratchpad
 
-      When you encounter ambiguity or must choose between approaches:
+      Append a `## Confession` section to `.agent/scratchpad.md`:
 
-      1. **Score your confidence** on the decision (0-100):
-         - **>80**: Proceed autonomously.
-         - **50-80**: Proceed, but document the decision in `.ralph/agent/decisions.md`.
-         - **<50**: Choose the safest default and document the decision in `.ralph/agent/decisions.md`.
+      ```markdown
+      ## Confession
 
-      2. **Choose the safe default** (when confidence < 50):
-         - Prefer **reversible** over irreversible actions
-         - Prefer **additive** over destructive changes (add new code > modify existing)
-         - Prefer **narrow scope** over broad changes
-         - Prefer **existing patterns** over novel approaches
-         - Prefer **explicit** over implicit behavior
+      ### Objectives Assessment
+      - **Objective**: <one sentence>
+        - **Met?**: Yes/No/Partial
+        - **Evidence**: <file:line or command output, if possible>
 
-      3. **Document the decision:**
-         - Append a structured entry to `.ralph/agent/decisions.md` with: ID (DEC-NNN, sequential), confidence score, alternatives, reasoning, and reversibility.
-         - Briefly note the decision in your scratchpad for iteration context.
-         - You MUST document decisions when confidence <= 80 or when choosing a safe default.
+      ### Uncertainties & Conflicts
+      - <assumptions, gaps, conflicts>
 
-      4. **Never block on human input** for implementation decisions.
-         - `human.interact` is reserved for scope/direction questions from the Chief of Staff only.
-         - This hat MUST NOT use `human.interact`.
+      ### Shortcuts Taken
+      - <shortcuts taken and why>
 
-  committer:
-    name: "📦 Committer"
-    description: "Creates conventional commits after validation passes."
-    triggers: ["validation.passed"]
-    publishes: ["commit.complete"]
-    default_publishes: "commit.complete"
+      ### Single Easiest Issue to Verify
+      **Issue**: <one concrete issue or a single claim to verify>
+      **Verification**: <one concrete command or check>
+
+      ### Confidence
+      **Confidence (0-100)**: <integer>
+      ```
+
+      ### Then Publish Event
+
+      Confidence threshold: 80.
+      - If you found ANY issues OR confidence < 80 -> publish `confession.issues_found`.
+      - If genuinely nothing (rare) AND confidence >= 80 -> publish `confession.clean`.
+
+      `<event topic="confession.issues_found">` (or `confession.clean`) must include:
+      - `confidence` (0-100)
+      - `summary`
+      - `easiest_verification`
+
+  confession_handler:
+    name: "📦 Confession Handler"
+    description: "Verifies one claim and decides whether to continue iterating or finish."
+    triggers: ["confession.issues_found", "confession.clean"]
+    publishes: ["build.task", "escalate.human"]
     instructions: |
-      ## COMMITTER MODE — Git Commit Creation
+      ## HANDLER PHASE
 
-      You create a well-structured git commit after validation passes.
-      Follow conventional commit format.
+      Read the `## Confession` section from `.agent/scratchpad.md`.
 
-      ### Pre-Commit Checklist
-      Before committing, verify:
-      - [ ] No uncommitted debug code or temporary files
-      - [ ] All relevant files are staged
+      If you were triggered by `confession.issues_found`:
+      1. Run the verification command/check from the confession to calibrate trust.
+      2. If the issue is real, the confession is trustworthy.
+         - For minor issues: publish `build.task` with specific fixes.
+         - For major issues: publish `escalate.human`.
+      3. If the issue is NOT real, the confession is untrustworthy. Publish `escalate.human`.
+      Do not output the completion promise on this path.
 
-      ### Git Workflow
-      1. Run `git status` to see all modified files
-      2. Run `git diff` to review changes
-      3. Stage relevant files with `git add`
-      4. Create commit with conventional message
+      If you were triggered by `confession.clean`:
+      1. Be skeptical. Verify at least one positive claim from the builder's work.
+      2. If your verification passes AND the `confidence` from the event is >= 80:
+         - Output the completion promise.
+      3. If your verification fails OR `confidence` < 80:
+         - Publish `build.task` with instructions to fix the discrepancy (or redo the confession).
 
-      ### Conventional Commit Format
-      ```
-      <type>(<scope>): <description>
-
-      <body>
-
-      <footer>
-      ```
-
-      **Types**: feat, fix, refactor, test, docs, chore
-      **Scope**: Component or area affected
-      **Description**: Imperative mood, lowercase, no period
-      **Body**: What and why (not how)
-      **Footer**: References to specs if applicable
-
-      Example:
-      ```
-      feat(cli): add verbose flag for debug logging
-
-      Implement --verbose/-v flag that enables detailed debug output
-      during command execution. Useful for troubleshooting.
-
-      Spec: specs/add-verbose-flag/design.md
-      🤖 Assisted by ralph-orchestrator 
-      ```
-
-      ### Constraints
-      - You MUST NOT commit if validation didn't pass
-      - You MUST NOT push to remote (user's decision)
-      - You MUST use conventional commit format
-      - You SHOULD include spec path in footer when available
