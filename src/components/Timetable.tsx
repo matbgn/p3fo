@@ -17,6 +17,7 @@ import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 import { UserFilterSelector } from "@/components/UserFilterSelector";
 
 import { loadFiltersFromSessionStorage, saveFiltersToSessionStorage } from "@/lib/filter-storage";
+import { getDefaultFilters } from "@/lib/filter-merge";
 import { Filters } from "@/components/FilterControls";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { DateRange } from "react-day-picker";
@@ -88,16 +89,7 @@ export const Timetable: React.FC<{
   // Persist filters when they change
   useEffect(() => {
     const save = async () => {
-      const currentFilters = await loadFiltersFromSessionStorage() || {
-        showUrgent: false,
-        showImpact: false,
-        showMajorIncident: false,
-        status: [],
-        showDone: false,
-        searchText: "",
-        difficulty: [],
-        category: []
-      } as Filters;
+      const currentFilters = await getDefaultFilters();
 
       await saveFiltersToSessionStorage({
         ...currentFilters,

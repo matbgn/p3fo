@@ -9,6 +9,7 @@ import { eventBus } from "@/lib/events";
 import { FilterControls, Filters } from "./FilterControls";
 import { aStarTextSearch } from "@/lib/a-star-search";
 import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
+import { getDefaultFilters, validateFilters } from "@/lib/filter-merge";
 import { sortTasks } from "@/utils/taskSorting";
 import { QuickTimer } from "@/components/QuickTimer";
 
@@ -323,21 +324,25 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
     }
   }, [localHighlightedTaskId]);
 
-  const defaultKanbanFilters: Filters = {
-    showUrgent: false,
-    showImpact: false,
-    showMajorIncident: false,
-    showSprintTarget: false,
-    status: ["Backlog", "Ready", "WIP", "Blocked", "Done", "Dropped"], // All statuses selected by default
-    searchText: "",
-    difficulty: [],
-    category: []
-  };
-
-  const [filters, setFilters] = React.useState<Filters>(defaultKanbanFilters);
-  const [loadingFilters, setLoadingFilters] = React.useState(true);
-  const { cardCompactness } = useViewDisplay();
-  const [isFiltersCollapsed, setIsFiltersCollapsed] = React.useState(false);
+   // Separate stored filters (user preferences) from display filters (view-specific)
+   // storedFilters: Original user preferences from localStorage (never modified by view)
+   // displayFilters: Derived for rendering (may include view-specific defaults)
+   const [storedFilters, setStoredFilters] = React.useState<Filters>(getDefaultFilters);
+   const [loadingFilters, setLoadingFilters] = React.useState(true);
+   const [initialLoadComplete, setInitialLoadComplete] = React.useState(false);
+   const { cardCompactness } = useViewDisplay();
+   const [isFiltersCollapsed, setIsFiltersCollapsed] = React.useState(false);
+   
+  const displayFilters = React.useMemo(() => {
+    // KanbanBoard shows all statuses by default when status array is empty
+    if (storedFilters.status.length === 0) {
+      return {
+        ...storedFilters,
+        status: ["Backlog", "Ready", "WIP", "Blocked", "Done", "Dropped"] as TriageStatus[]
+      };
+    }
+    return storedFilters;
+  }, [storedFilters]);
 
   // Auto-collapse filters when switching to Ultra Compact mode
   // Auto-expand filters when switching to Full mode
@@ -353,9 +358,10 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
   useEffect(() => {
     const loadFilters = async () => {
       try {
-        const storedFilters = await loadFiltersFromSessionStorage();
-        if (storedFilters) {
-          setFilters(storedFilters);
+        const loaded = await loadFiltersFromSessionStorage();
+        if (loaded) {
+          const validated = validateFilters(loaded);
+          setStoredFilters(validated);
         }
       } catch (error) {
         console.error("Error loading filters:", error);
@@ -367,36 +373,39 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
     loadFilters();
   }, []);
 
-  // Server-side filtering: reload tasks when userId filter changes
-  // This dramatically improves performance by fetching only relevant tasks from the database
-  const prevUserIdRef = React.useRef<string | null | undefined>(undefined);
-  useEffect(() => {
-    // Skip on initial render (wait for filters to load from session storage)
-    if (loadingFilters) return;
+   // Server-side filtering: reload tasks when userId filter changes
+   // This dramatically improves performance by fetching only relevant tasks from the database
+   const prevUserIdRef = React.useRef<string | null | undefined>(undefined);
+   useEffect(() => {
+     // Skip on initial render (wait for filters to load from session storage)
+     if (loadingFilters) return;
 
-    // Only reload if userId actually changed
-    if (prevUserIdRef.current === filters.selectedUserId) return;
-    prevUserIdRef.current = filters.selectedUserId;
+     // Only reload if userId actually changed (after initial load)
+     if (prevUserIdRef.current === storedFilters.selectedUserId && initialLoadComplete) {
+       return;
+     }
+     prevUserIdRef.current = storedFilters.selectedUserId;
 
-    const loadFilteredTasks = async () => {
-      setIsLoadingTasks(true);
-      try {
-        if (filters.selectedUserId) {
-          // Use server-side filtering for specific user
-          await loadTasksByUser(filters.selectedUserId);
-        } else {
-          // No user filter - reload all tasks
-          await reloadTasks();
-        }
-      } catch (error) {
-        console.error("Error loading filtered tasks:", error);
-      } finally {
-        setIsLoadingTasks(false);
-      }
-    };
+     const loadFilteredTasks = async () => {
+       setIsLoadingTasks(true);
+       try {
+         if (storedFilters.selectedUserId) {
+           // Use server-side filtering for specific user
+           await loadTasksByUser(storedFilters.selectedUserId);
+         } else {
+           // No user filter - reload all tasks
+           await reloadTasks();
+         }
+       } catch (error) {
+         console.error("Error loading filtered tasks:", error);
+       } finally {
+         setIsLoadingTasks(false);
+         setInitialLoadComplete(true);
+       }
+     };
 
-    loadFilteredTasks();
-  }, [filters.selectedUserId, loadingFilters, loadTasksByUser, reloadTasks]);
+     loadFilteredTasks();
+   }, [storedFilters.selectedUserId, loadingFilters, loadTasksByUser, reloadTasks, initialLoadComplete]);
 
   const map = React.useMemo(() => byId(tasks), [tasks]);
   const topTasks = React.useMemo(() => {
@@ -405,8 +414,8 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
     // Note: Server-side filtering is now applied via loadTasksByUser.
     // Client-side filtering below is kept as a fallback for edge cases
     // and for filtering UNASSIGNED tasks (which need special handling)
-    if (filters.selectedUserId) {
-      if (filters.selectedUserId === 'UNASSIGNED') {
+    if (storedFilters.selectedUserId) {
+      if (storedFilters.selectedUserId === 'UNASSIGNED') {
         // UNASSIGNED needs client-side filter since server returns tasks with no userId
         filtered = filtered.filter(t => !t.userId || t.userId === 'unassigned');
       }
@@ -414,27 +423,27 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
     }
 
     // Apply text search filter using A* algorithm
-    if (filters.searchText?.trim()) {
-      const searchResults = aStarTextSearch(filters.searchText, filtered.map(t => ({ id: t.id, title: t.title })));
+    if (displayFilters.searchText?.trim()) {
+      const searchResults = aStarTextSearch(displayFilters.searchText, filtered.map(t => ({ id: t.id, title: t.title })));
       const matchingTaskIds = new Set(searchResults.filter(r => r.score >= 0.001).map(r => r.taskId));
       filtered = filtered.filter(t => matchingTaskIds.has(t.id));
     }
 
-    if (filters.showUrgent) filtered = filtered.filter(t => t.urgent);
-    if (filters.showImpact) filtered = filtered.filter(t => t.impact);
-    if (filters.showMajorIncident) filtered = filtered.filter(t => t.majorIncident);
-    if (filters.showSprintTarget) filtered = filtered.filter(t => t.sprintTarget);
-    if (filters.difficulty && Array.isArray(filters.difficulty) && filters.difficulty.length > 0) {
-      filtered = filtered.filter(t => filters.difficulty.includes(t.difficulty));
+    if (displayFilters.showUrgent) filtered = filtered.filter(t => t.urgent);
+    if (displayFilters.showImpact) filtered = filtered.filter(t => t.impact);
+    if (displayFilters.showMajorIncident) filtered = filtered.filter(t => t.majorIncident);
+    if (displayFilters.showSprintTarget) filtered = filtered.filter(t => t.sprintTarget);
+    if (displayFilters.difficulty && Array.isArray(displayFilters.difficulty) && displayFilters.difficulty.length > 0) {
+      filtered = filtered.filter(t => displayFilters.difficulty.includes(t.difficulty));
     }
-    if (filters.category && Array.isArray(filters.category) && filters.category.length > 0) {
-      filtered = filtered.filter(t => !t.category || filters.category.includes(t.category));
+    if (displayFilters.category && Array.isArray(displayFilters.category) && displayFilters.category.length > 0) {
+      filtered = filtered.filter(t => !t.category || displayFilters.category.includes(t.category));
     }
-    if (filters.status && Array.isArray(filters.status) && filters.status.length > 0) {
-      filtered = filtered.filter(t => filters.status.includes(t.triageStatus));
+    if (displayFilters.status && Array.isArray(displayFilters.status) && displayFilters.status.length > 0) {
+      filtered = filtered.filter(t => displayFilters.status.includes(t.triageStatus));
     }
     return filtered;
-  }, [tasks, filters]);
+  }, [tasks, displayFilters, storedFilters.selectedUserId]);
 
   // Track which parents are expanded; default: collapsed (no children shown)
   const [openParents, setOpenParents] = React.useState<Record<string, boolean>>({});
@@ -590,7 +599,7 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
 
   return (
     <div className="w-full overflow-x-auto">
-      <QuickAddInput onAdd={handleQuickAdd} selectedUserId={filters.selectedUserId} />
+      <QuickAddInput onAdd={handleQuickAdd} selectedUserId={storedFilters.selectedUserId} />
 
       <div className="mb-4 flex flex-col gap-2">
         <div className="flex items-center gap-2">
@@ -610,9 +619,12 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
         {!isFiltersCollapsed && (
           <div className="flex flex-wrap items-center gap-4 border rounded-lg p-3">
             <FilterControls
-              filters={filters}
-              setFilters={setFilters}
-              defaultFilters={defaultKanbanFilters}
+              filters={storedFilters}
+              setFilters={setStoredFilters}
+              defaultFilters={{
+                ...getDefaultFilters(),
+                status: ["Backlog", "Ready", "WIP", "Blocked", "Done", "Dropped"]
+              }}
             />
             {/* Vertical separator */}
             <div className="h-6 border-l border-gray-300 mx-2"></div>
@@ -631,47 +643,60 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
         )}
       </div>
 
-      {isLoadingTasks && (
+      {loadingFilters ? (
         <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
           <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
-          Loading tasks...
+          Loading filters...
         </div>
+      ) : !initialLoadComplete ? (
+        <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
+          Applying filters...
+        </div>
+      ) : (
+        <>
+          {isLoadingTasks && (
+            <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
+              Loading tasks...
+            </div>
+          )}
+          <div className="flex gap-4 pb-4">
+            {STATUSES.map((s) => (
+              <Column
+                key={s}
+                title={s}
+                cards={grouped[s]}
+                tasks={tasks}
+                onDropTask={handleDropTask}
+                onChangeStatus={handleChangeStatus}
+                onUpdateCategory={handleUpdateCategory}
+                onUpdateUser={handleUpdateUser}
+                onToggleUrgent={toggleUrgent}
+                onToggleImpact={toggleImpact}
+                onToggleMajorIncident={toggleMajorIncident}
+                onToggleSprintTarget={toggleSprintTarget}
+                onToggleDone={handleToggleDone}
+                onUpdateDifficulty={updateDifficulty}
+                onUpdateTitle={updateTitle}
+                onDelete={deleteTask}
+                duplicateTaskStructure={duplicateTaskStructure}
+                openParents={openParents}
+                onToggleParent={toggleParent}
+                onReparent={reparent}
+                onFocusOnTask={onFocusOnTask}
+                onToggleTimer={toggleTimer}
+                updateTerminationDate={updateTerminationDate}
+                updateDurationInMinutes={updateDurationInMinutes}
+                updateComment={updateComment}
+                highlightedTaskId={localHighlightedTaskId}
+                highlightedCardRef={highlightedCardRef}
+                onArchive={handleArchiveClick}
+              />
+            ))}
+          </div>
+        </>
       )}
-
-      <div className="flex gap-4 pb-4">
-        {STATUSES.map((s) => (
-          <Column
-            key={s}
-            title={s}
-            cards={grouped[s]}
-            tasks={tasks}
-            onDropTask={handleDropTask}
-            onChangeStatus={handleChangeStatus}
-            onUpdateCategory={handleUpdateCategory}
-            onUpdateUser={handleUpdateUser}
-            onToggleUrgent={toggleUrgent}
-            onToggleImpact={toggleImpact}
-            onToggleMajorIncident={toggleMajorIncident}
-            onToggleSprintTarget={toggleSprintTarget}
-            onToggleDone={handleToggleDone}
-            onUpdateDifficulty={updateDifficulty}
-            onUpdateTitle={updateTitle}
-            onDelete={deleteTask}
-            duplicateTaskStructure={duplicateTaskStructure}
-            openParents={openParents}
-            onToggleParent={toggleParent}
-            onReparent={reparent}
-            onFocusOnTask={onFocusOnTask}
-            onToggleTimer={toggleTimer}
-            updateTerminationDate={updateTerminationDate}
-            updateDurationInMinutes={updateDurationInMinutes}
-            updateComment={updateComment}
-            highlightedTaskId={localHighlightedTaskId}
-            highlightedCardRef={highlightedCardRef}
-            onArchive={handleArchiveClick}
-          />
-        ))}
-      </div>
 
       {/* Archive Confirmation Dialog */}
       <Dialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>

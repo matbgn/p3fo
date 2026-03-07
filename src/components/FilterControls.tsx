@@ -7,6 +7,7 @@ import { MultiSelect } from "@/components/ui/multi-select";
 import { TriageStatus, Category } from "@/hooks/useTasks";
 import { CATEGORIES } from "@/data/categories";
 import { saveFiltersToSessionStorage, clearFiltersFromSessionStorage } from "@/lib/filter-storage";
+import { getDefaultFilters } from "@/lib/filter-merge";
 import { UserFilterSelector } from "@/components/UserFilterSelector";
 
 export type Filters = {
@@ -42,18 +43,8 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
   };
 
   const getResetFilters = (): Filters => {
-    // Default reset filters (previous behavior)
-    const baseResetFilters: Filters = {
-      showUrgent: false,
-      showImpact: false,
-      showMajorIncident: false,
-      showSprintTarget: false,
-      status: [],
-      showDone: false,
-      searchText: "",
-      difficulty: [],
-      category: []
-    };
+    // Start with base defaults (includes selectedUserId: null)
+    const baseResetFilters = getDefaultFilters();
 
     // If defaultFilters is provided, use it to override the base reset filters
     if (defaultFilters) {

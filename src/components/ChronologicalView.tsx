@@ -4,6 +4,7 @@ import { EditableTimeEntry } from './EditableTimeEntry';
 import { TaskHierarchy } from './TaskHierarchy';
 import { useTasks } from '@/hooks/useTasks';
 import { saveFiltersToSessionStorage, loadFiltersFromSessionStorage, clearFiltersFromSessionStorage } from "@/lib/filter-storage";
+import { getDefaultFilters, validateFilters } from "@/lib/filter-merge";
 import { Filters } from "./FilterControls";
 
 import { Task } from '@/hooks/useTasks';
@@ -42,18 +43,7 @@ export const ChronologicalView: React.FC<ChronologicalViewProps> = ({
 }) => {
   const { updateTimeEntry, updateCategory } = useTasks();
 
-  const defaultChronologicalFilters: Filters = {
-    showUrgent: false,
-    showImpact: false,
-    showMajorIncident: false,
-    showSprintTarget: false,
-    status: [],
-    searchText: "",
-    difficulty: [],
-    category: []
-  };
-
-  const [filters, setFilters] = React.useState<Filters>(defaultChronologicalFilters);
+  const [filters, setFilters] = React.useState<Filters>(getDefaultFilters());
 
   // Load filters on mount
   React.useEffect(() => {
@@ -61,7 +51,7 @@ export const ChronologicalView: React.FC<ChronologicalViewProps> = ({
       try {
         const storedFilters = await loadFiltersFromSessionStorage();
         if (storedFilters) {
-          setFilters(storedFilters);
+          setFilters(validateFilters(storedFilters));
         }
       } catch (error) {
         console.error("Error loading filters:", error);
@@ -70,12 +60,6 @@ export const ChronologicalView: React.FC<ChronologicalViewProps> = ({
 
     loadFilters();
   }, []);
-
-  // Effect to update session storage when filters change
-  useEffect(() => {
-    // The FilterControls component now handles saving filters to session storage
-    // No need to save here directly, as setFilters is passed to FilterControls
-  }, [filters]);
 
   // Sort entries in reverse chronologically by start time
   const sortedEntries = [...timerEntries].sort((a, b) => b.startTime - a.startTime);

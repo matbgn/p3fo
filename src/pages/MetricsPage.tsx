@@ -13,6 +13,7 @@ import { useUsers } from "@/hooks/useUsers";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { loadFiltersFromSessionStorage, saveFiltersToSessionStorage } from "@/lib/filter-storage";
+import { getDefaultFilters } from "@/lib/filter-merge";
 import { Filters } from "@/components/FilterControls";
 
 const MetricsPage: React.FC = () => {
@@ -46,16 +47,7 @@ const MetricsPage: React.FC = () => {
 
   const handleUserChange = async (newUserId: string) => {
     setSelectedUserId(newUserId);
-    const currentFilters = await loadFiltersFromSessionStorage() || {
-      showUrgent: false,
-      showImpact: false,
-      showMajorIncident: false,
-      status: [],
-      showDone: false,
-      searchText: "",
-      difficulty: [],
-      category: []
-    } as Filters;
+    const currentFilters = await loadFiltersFromSessionStorage() || getDefaultFilters();
 
     await saveFiltersToSessionStorage({
       ...currentFilters,

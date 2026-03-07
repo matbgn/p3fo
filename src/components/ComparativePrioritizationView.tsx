@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, CircleDot, Flame } from 'lucide-react';
-import { saveFiltersToSessionStorage, loadFiltersFromSessionStorage, clearFiltersFromSessionStorage } from "@/lib/filter-storage";
+import { saveFiltersToSessionStorage, loadFiltersFromSessionStorage } from "@/lib/filter-storage";
+import { getDefaultFilters, validateFilters } from "@/lib/filter-merge";
 import { Filters } from "./FilterControls";
 
 interface ComparativePrioritizationViewProps {
@@ -22,19 +23,9 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
   tasks,
   onClose,
 }) => {
-  const { updatePrioritiesBulk } = useTasks(); // Use the new bulk update function
-  const defaultComparativeFilters: Filters = {
-    showUrgent: false,
-    showImpact: false,
-    showMajorIncident: false,
-    showSprintTarget: false,
-    status: [],
-    searchText: "",
-    difficulty: [],
-    category: []
-  };
+  const { updatePrioritiesBulk } = useTasks();
 
-  const [filters, setFilters] = useState<Filters>(defaultComparativeFilters);
+  const [filters, setFilters] = useState<Filters>(getDefaultFilters());
 
   // Load filters on mount
   useEffect(() => {
@@ -42,7 +33,9 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
       try {
         const storedFilters = await loadFiltersFromSessionStorage();
         if (storedFilters) {
-          setFilters(storedFilters);
+          setFilters(validateFilters(storedFilters));
+        } else {
+          setFilters(getDefaultFilters());
         }
       } catch (error) {
         console.error("Error loading filters:", error);
@@ -75,16 +68,20 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
 
   // Effect to update session storage when filters change
   useEffect(() => {
+    // Skip if filters haven't loaded yet
+    if (filterUrgent === null && filterImpact === null && filterIncident === null) return;
+    
     const newFilters: Filters = {
+      ...getDefaultFilters(),
       ...filters,
       showUrgent: filterUrgent === null ? false : filterUrgent,
       showImpact: filterImpact === null ? false : filterImpact,
       showMajorIncident: filterIncident === null ? false : filterIncident,
     };
     setFilters(newFilters);
-    setFilters(newFilters);
     saveFiltersToSessionStorage(newFilters);
-  }, [filterUrgent, filterImpact, filterIncident, filters]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterUrgent, filterImpact, filterIncident]);
 
   // Initialize selected tasks with all non-done, non-dropped top-level tasks
   useEffect(() => {

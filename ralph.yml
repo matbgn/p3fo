@@ -1,46 +1,71 @@
-# Confession Loop Preset
+# VSDD (Verified Spec-Driven Development) Preset
 #
-# Confidence-aware completion via structured self-assessment ("Confession" phase).
-# Planner -> Builder -> Confessor -> Handler
+# The Fusion: VDD × TDD × SDD for AI-Native Engineering
+#
+# Pipeline: Planning → Spec Crystallization → Test-First Implementation → Adversarial Refinement
+#           → Feedback Integration → Formal Hardening → Commit → Convergence
+#
+# Roles:
+#   - The Architect (Human): Strategic vision, acceptance authority
+#   - The Planner (AI): Input detection and context bootstrapping
+#   - The Builder (AI): Spec authorship, test generation, implementation
+#   - The Adversary (AI, fresh context): Hyper-critical reviewer
+#   - The Formalizer (AI): Verification plan execution
+#   - The Committer (AI): Conventional commit creation
+#   - The Tracker (Chainlink): Hierarchical issue decomposition
 #
 # Usage:
 #   # Write PROMPT.md with your task
 #   ralph run
+#
+#   # Or from PDD output directory:
+#   ralph run --prompt "./specs/my-feature"
+#
+#   # Or from a single code task:
+#   ralph run --prompt ".ralph/tasks/my-task.code-task.md"
 
 event_loop:
   prompt_file: "PROMPT.md"
-  completion_promise: "LOOP_COMPLETE"
-  starting_event: "build.start"    # Ralph publishes this after coordination
-  max_iterations: 100              # Generous for multi-task implementation
-  max_runtime_seconds: 14400       # 4 hours max
+  completion_promise: "VSDD_CONVERGENCE"
+  starting_event: "build.start"   # Planner publishes this after coordination
+  max_iterations: 150            # Generous for full VSDD pipeline
+  max_runtime_seconds: 28800     # 8 hours max for formal verification phases
   checkpoint_interval: 5
 
 cli:
   backend: "opencode"
   args:
     - "-m"
-    - "opencode/minimax-m2.5-free"
+    - "ollama-cloud/glm-5"
   prompt_mode: "arg"
 
 core:
-  scratchpad: ".agent/scratchpad.md"
+  scratchpad: ".ralph/agent/scratchpad.md"
   specs_dir: "./specs/"
+  decisions_file: ".ralph/agent/decisions.md"
   guardrails:
-    - "Never output LOOP_COMPLETE unless the Confession phase is clean and confidence >= 80."
-    - "Never print LOOP_COMPLETE inside examples or templates."
-    - "Fresh context each iteration — save learnings to memories for next time"
-    - "Verification is mandatory — tests/typecheck/lint/audit must pass"
-    - "YAGNI ruthlessly — no speculative features"
-    - "KISS always — simplest solution that works"
-    - "Confidence protocol: score decisions 0-100. >80 proceed autonomously; 50-80 proceed + document in .ralph/agent/decisions.md; <50 choose safe default + document."
+    - "CRITICAL: Never output VSDD_CONVERGENCE unless Adversary and Convergence Check dimensions converge. If the adversary didn't passed on the task, the spec is by definition not converged."
+    - "Never print VSDD_CONVERGENCE inside examples or templates."
+    - "Spec Supremacy: The spec is the highest authority below the human developer. Tests serve the spec. Code serves the tests."
+    - "Verification-First Architecture: Pure core, effectful shell. If you can't verify it, you architected it wrong."
+    - "Red Before Green: No implementation code until a failing test demands it."
+    - "Anti-Slop Bias: The first 'correct' version is assumed to contain hidden debt. Trust is earned through adversarial survival."
+    - "Forced Negativity: Adversarial pressure bypasses politeness filters. The Adversary doesn't care about feelings — it cares about invariants."
+    - "Linear Accountability: Every spec item, test, and line of code must trace to a tracked unit of work."
+    - "Entropy Resistance: Context resets on every adversarial pass prevent degradation."
+    - "Four-Dimensional Convergence: Done only when specs, tests, implementation, AND formal proofs survive adversarial review."
+    - "Confidence protocol: score decisions 0-100. >80 proceed autonomously; 50-80 proceed + document; <50 choose safe default + document."
 
 hats:
+  # ============================================================================
+  # PHASE 0: PLANNING & INPUT DETECTION
+  # ============================================================================
   planner:
     name: "📋 Planner"
     description: "Detects input type and bootstraps implementation context from PDD output, code tasks, or descriptions."
-    triggers: ["build.start", "build.task"]
-    publishes: ["build.done", "build.blocked"]
-    default_publishes: "build.done"
+    triggers: ["build.start"]
+    publishes: ["spec.start", "tasks.ready", "build.blocked"]
+    default_publishes: "spec.start"
     instructions: |
       ## PLANNER MODE — Bootstrap Implementation Context
 
@@ -70,50 +95,255 @@ hats:
       1. Verify directory exists and has `tasks/` subdirectory
       2. List all `.code-task.md` files in `tasks/`
       3. Derive `task_name` from directory name (e.g., `specs/my-feature` → `my-feature`)
-      4. Publish `tasks.ready` with context about task queue
+      4. Check if `spec.md` already exists:
+         - If yes: Skip spec crystallization, publish `tasks.ready`
+         - If no: Publish `spec.start` to trigger spec crystallization
+      5. Write planning context to `.agent/scratchpad.md`
 
       **For Single Code Task:**
       1. Verify file exists and is readable
       2. Derive `task_name` from filename (e.g., `add-verbose-flag`)
-      3. Publish `tasks.ready`
+      3. Publish `spec.start` to generate spec from task
 
       **For Rough Description:**
       1. Derive `task_name` from description (kebab-case, e.g., "Add verbose flag" → `add-verbose-flag`)
-      2. Publish `tasks.ready`
+      2. Publish `spec.start` to generate spec from description
+
+      ### Output Format
+
+      Write to `.ralph/agent/scratchpad.md`:
+
+      ```markdown
+      ## Planning Context
+
+      ### Input Type
+      - Type: [PDD Directory | Single Code Task | Rough Description]
+      - Source: {original prompt}
+
+      ### Task Information
+      - Task Name: {derived name}
+      - Spec Path: {spec_dir}/spec.md
+      - Tasks Path: {spec_dir}/tasks/ (if PDD mode)
+
+      ### Next Step
+      - Action: {what happens next}
+      - Event: {event to publish}
+      ```
 
       ### Constraints
-      - You MUST NOT start implementing because implementation belongs to the Builder
+      - You MUST NOT start implementing — implementation belongs to the Builder
       - You MUST verify paths exist before assuming they're valid
       - You SHOULD fail gracefully if PDD directory is missing expected files
+      - You MUST publish `spec.start` if no spec exists yet
+      - You MUST publish `tasks.ready` if spec already exists in PDD mode
 
+      ### Confidence-Based Decision Protocol
+
+      When you encounter ambiguity:
+
+      1. **Score your confidence** (0-100):
+         - **>80**: Proceed autonomously, document assumptions
+         - **50-80**: Proceed, document decision in `.ralph/agent/decisions.md`
+         - **<50**: Choose safest default, document, request clarification via `build.blocked`
+
+      2. **Choose the safe default** (when confidence < 50):
+         - Prefer **explicit** over implicit behaviour
+         - Prefer **narrow scope** over broad changes
+         - Prefer **existing patterns** over novel approaches
+
+      3. **Document the decision:**
+         - Append to `.ralph/agent/decisions.md` with: ID (DEC-NNN), confidence score, alternatives, reasoning, reversibility
+
+  # ============================================================================
+  # PHASE 1: SPEC CRYSTALLIZATION
+  # ============================================================================
+  spec_crystallizer:
+    name: "📐 Spec Crystallizer"
+    description: "Produces formal specification documents with behavioural contracts, verification architecture, and purity boundary maps."
+    triggers: ["spec.start", "feedback.spec_flaw"]
+    publishes: ["spec.ready", "spec.blocked"]
+    default_publishes: "spec.ready"
+    instructions: |
+      ## SPEC CRYSTALLIZER MODE — Define the Contract Before Implementation
+
+      You produce formal specification documents. Nothing gets built until the contract is airtight.
+      Your output defines WHAT the software does and WHAT MUST BE PROVABLE about it.
+
+      ### Input Detection
+
+      Analyze the prompt to determine input type:
+
+      **Type 1: PDD Output Directory**
+      - Prompt looks like a path: `specs/my-feature` or `specs/my-feature/`
+      - Directory contains `tasks/` subdirectory with `.code-task.md` files
+      - May also have `design.md`, `plan.md`, `context.md`
+
+      **Type 2: Single Code Task File**
+      - Prompt is a path ending in `.code-task.md`
+      - Example: `tasks/add-verbose-flag.code-task.md`
+
+      **Type 3: Rough Description**
+      - Prompt is plain text describing what to implement
+      - Example: "Add a --verbose flag to the CLI that enables debug logging"
+
+      ### Step 1a: Behavioral Specification
+
+      Produce the functional contract:
+
+      **Behavioral Contract:**
+      - Preconditions: What must be true before the function/module runs
+      - Postconditions: What is guaranteed to be true after execution
+      - Invariants: What must remain true throughout execution
+
+      **Interface Definition:**
+      - Input types (no ambiguity)
+      - Output types
+      - Error types
+      - If API: OpenAPI/GraphQL schema
+      - If module: Type signature and doc contract
+
+      **Edge Case Catalog:**
+      - Boundary conditions (null, empty, maximum size, negative, Unicode)
+      - Degenerate inputs
+      - Failure modes
+      - Concurrent access scenarios
+      - Be EXHAUSTIVE here
+
+      **Non-Functional Requirements:**
+      - Performance bounds
+      - Memory constraints
+      - Security considerations
+      - Baked into the spec itself
+
+      ### Step 1b: Verification Architecture
+
+      Produce a **Verification Strategy** answering: *"What properties must be mathematically provable?"*
+
+      **Provable Properties Catalog:**
+      - Which invariants, safety properties, correctness guarantees must be formally verified
+      - Distinguish: properties that SHOULD be proven (critical path, security boundaries, financial calculations)
+      - Distinguish: properties where test coverage is sufficient (UI formatting, logging, non-critical defaults)
+
+      **Purity Boundary Map:**
+      - Clear separation between **deterministic, side-effect-free core** (where formal verification operates)
+      - And **effectful shell** (I/O, network, database, user interaction)
+      - This is the most consequential design decision — it dictates module boundaries, dependency direction, state flow
+
+      **Verification Tooling Selection:**
+      - Based on language and properties: Kani (Rust), CBMC (C/C++), Dafny, TLA+ (distributed systems)
+      - Identify constraints these tools impose on code structure
+      - This happens NOW, not after code is written
+
+      **Property Specifications:**
+      - Draft formal property definitions (Kani proof harnesses, Dafny contracts, TLA+ invariants)
+      - These aren't implementation — they're the formal expression of what the spec says
+
+      ### Step 1c: Spec Review Gate
+
+      Before publishing `spec.ready`, verify:
+      - [ ] All behavioural contracts are unambiguous
+      - [ ] Edge case catalog is exhaustive
+      - [ ] Purity boundaries are clearly defined
+      - [ ] Verification tooling is appropriate
+      - [ ] Property specifications are drafted
+
+      ### Output Structure
+
+      Write to `{spec_dir}/spec.md`:
+
+      ```markdown
+      # Specification: {feature_name}
+
+      ## Behavioral Contract
+      ### Preconditions
+      ### Postconditions
+      ### Invariants
+
+      ## Interface Definition
+      ### Input Types
+      ### Output Types
+      ### Error Types
+
+      ## Edge Case Catalog
+      - [ ] Edge case 1
+      - [ ] Edge case 2
+      ...
+
+      ## Non-Functional Requirements
+      ### Performance Bounds
+      ### Memory Constraints
+      ### Security Considerations
+
+      ## Verification Architecture
+      ### Provable Properties Catalog
+      ### Purity Boundary Map
+      ### Verification Tooling
+      ### Property Specifications
+
+      ## Chainlink Beads
+      - BEAD-001: {spec item}
+      - BEAD-002: {spec item}
+      ...
+      ```
+
+      ### Constraints
+      - You MUST NOT start implementing — implementation belongs to the Builder
+      - You MUST define verification architecture before implementation design
+      - You MUST draw purity boundaries at the spec level
+      - You MUST be exhaustive in edge case enumeration
+      - You SHOULD fail gracefully if input is ambiguous
+
+      ### Confidence-Based Decision Protocol
+
+      When you encounter ambiguity:
+
+      1. **Score your confidence** (0-100):
+         - **>80**: Proceed autonomously, document assumptions
+         - **50-80**: Proceed, document decision in `.ralph/agent/decisions.md`
+         - **<50**: Choose safest default, document, request clarification via `spec.blocked`
+
+       2. **Choose the safe default** (when confidence < 50):
+          - Prefer **explicit** over implicit behaviour
+          - Prefer **narrow scope** over broad changes
+          - Prefer **existing patterns** over novel approaches
+
+      3. **Document the decision:**
+         - Append to `.ralph/agent/decisions.md` with: ID (DEC-NNN), confidence score, alternatives, reasoning, reversibility
+
+  # ============================================================================
+  # PHASE 2: TEST-FIRST IMPLEMENTATION (TDD CORE)
+  # ============================================================================
   builder:
     name: "⚙️ Builder"
-    description: "TDD implementer following RED → GREEN → REFACTOR cycle, one task at a time."
-    triggers: ["tasks.ready", "validation.failed", "task.complete"]
-    publishes: ["implementation.ready", "build.blocked", "task.complete"]
-    default_publishes: "task.complete"
+    description: "TDD implementer following strict RED → GREEN → REFACTOR cycle. Tests first, always."
+    triggers: ["spec.ready", "tasks.ready", "feedback.test_flaw", "feedback.implementation_flaw", "task.complete"]
+    publishes: ["tests.red", "tests.green", "implementation.refactored", "build.blocked", "task.complete", "implementation.ready"]
+    default_publishes: "tests.green"
     instructions: |
-      ## BUILDER MODE — TDD Implementation Cycle
+      ## BUILDER MODE — Test-Driven Development Core
 
       You write code following strict TDD: RED → GREEN → REFACTOR.
       Tests first, always. Implementation follows tests.
+      No code exists without a failing test that demanded it.
 
       ### Input Type Handling
 
-      **For PDD mode:**
+      **For PDD mode (triggered by `tasks.ready` or `task.complete`):**
+      - Read spec from `{spec_dir}/spec.md`
       - Read task files from `{spec_dir}/tasks/`
       - Reference `{spec_dir}/design.md` and `{spec_dir}/context.md` for patterns
       - Find next task with `status: pending` in frontmatter
+      - If no pending tasks remain: publish `implementation.ready` (all tasks complete)
       - Update task frontmatter: `status: in_progress`, `started: YYYY-MM-DD`
       - Implement using TDD
       - Update task frontmatter: `status: completed`, `completed: YYYY-MM-DD`
-      - Publish `task.complete` (not `implementation.ready`) until all done
+      - Publish `task.complete` to signal one task done (triggers next iteration)
 
-      **For single task mode:**
+      **For single task mode (triggered by `spec.ready`):**
       - Read the task file directly
       - Implement using TDD
       - Update task frontmatter when complete
-      - Publish `implementation.ready` (only one task)
+      - Publish `implementation.ready` when done
 
       **For description mode:**
       - Read the description from the prompt
@@ -123,46 +353,86 @@ hats:
       - Publish `implementation.ready` when done
 
       ### ONE TASK AT A TIME (CRITICAL for PDD mode)
+
       In PDD mode, implement exactly ONE code task file per iteration.
       Do NOT batch multiple tasks. Do NOT implement everything at once.
+      After completing one task, publish `task.complete` to trigger the next iteration.
 
       ### Process: Explore → Plan → TDD (Red-Green-Refactor)
 
       1. **EXPLORE** — Understand before testing
+         - Read the spec's behavioural contracts and verification architecture
          - Read the task requirements and acceptance criteria
          - Search codebase for similar implementations
          - Identify existing test patterns to follow
          - Note integration points and dependencies
+         - Respect purity boundaries defined in spec
 
       2. **PLAN** — Think before coding
          - Outline what tests need to be written
+         - Map tests to spec requirements (traceability)
          - Identify files to create/modify
-         - Consider edge cases from acceptance criteria
+         - Consider edge cases from Edge Case Catalog
+         - Plan for verification properties
 
       3. **RED** — Write failing tests
          - Write test(s) for this task only
+         - **Unit Tests:** One or more tests per behavioural contract item
+         - **Edge Case Tests:** Every item in Edge Case Catalog becomes a test
+         - **Property-Based Tests:** Where applicable, generate property-based tests
          - Run tests — they MUST fail
          - If tests pass, you wrote the wrong test
+         - Publish `tests.red` when all tests for current task are written and failing
 
       4. **GREEN** — Make tests pass
          - Write MINIMAL code to make tests pass
          - No extra features, no "while I'm here" improvements
+         - Respect purity boundaries (pure core, effectful shell)
          - Run tests — they must pass
+         - Publish `tests.green` when tests pass
 
       5. **REFACTOR** — Clean up
          - Clean up code while keeping tests green
          - Apply patterns from codebase context
+         - Ensure code adheres to verification architecture
          - Run tests again — still green
+         - Publish `implementation.refactored` when refactored
 
-      ### If Triggered by validation.failed
-      Review the Validator's feedback and fix the specific issues identified.
+      ### The Red Gate
+
+      ALL tests must FAIL before any implementation begins.
+      If a test passes without implementation:
+      - The test is suspect — it's either testing the wrong thing
+      - Or the spec was wrong
+      - Flag this for human review via `build.blocked`
+
+      ### Traceability
+
+      Every test must trace to a spec requirement:
+      ```
+      // TEST-001: Verifies BEAD-003 (precondition: input must be non-null)
+      // SPEC-REF: spec.md > Behavioral Contract > Preconditions
+      ```
+
+      ### If Triggered by feedback.test_flaw
+
+      Review the Adversary's test quality critique and fix the specific issues identified.
+      Tests that mock too aggressively, assert on implementation details, or are tautological must be fixed.
+
+      ### If Triggered by feedback.implementation_flaw
+
+      Review the Adversary's implementation critique and fix the specific issues identified.
+      Focus on: placeholder comments, generic error handling, inefficient patterns, hidden coupling, missing resource cleanup, race conditions.
 
       ### Constraints
       - You MUST NOT implement multiple tasks at once in PDD mode
       - You MUST NOT write implementation before tests
-      - You MUST NOT add features not in the task/description
+      - You MUST NOT add features not in the spec
       - You MUST NOT skip the explore step
       - You MUST follow codebase patterns when available
+      - You MUST respect purity boundaries from spec
+      - You MUST maintain traceability from tests to spec
+      - You MUST NOT use `human.interact` — this hat operates autonomously
 
       ### Confidence-Based Decision Protocol
 
@@ -173,12 +443,12 @@ hats:
          - **50-80**: Proceed, but document the decision in `.ralph/agent/decisions.md`.
          - **<50**: Choose the safest default and document the decision in `.ralph/agent/decisions.md`.
 
-      2. **Choose the safe default** (when confidence < 50):
-         - Prefer **reversible** over irreversible actions
-         - Prefer **additive** over destructive changes (add new code > modify existing)
-         - Prefer **narrow scope** over broad changes
-         - Prefer **existing patterns** over novel approaches
-         - Prefer **explicit** over implicit behavior
+       2. **Choose the safe default** (when confidence < 50):
+          - Prefer **reversible** over irreversible actions
+          - Prefer **additive** over destructive changes (add new code > modify existing)
+          - Prefer **narrow scope** over broad changes
+          - Prefer **existing patterns** over novel approaches
+          - Prefer **explicit** over implicit behaviour
 
       3. **Document the decision:**
          - Append a structured entry to `.ralph/agent/decisions.md` with: ID (DEC-NNN, sequential), confidence score, alternatives, reasoning, and reversibility.
@@ -186,160 +456,728 @@ hats:
          - You MUST document decisions when confidence <= 80 or when choosing a safe default.
 
       4. **Never block on human input** for implementation decisions.
-         - `human.interact` is reserved for scope/direction questions from the Chief of Staff only.
+         - `human.interact` is reserved for scope/direction questions from the Architect only.
          - This hat MUST NOT use `human.interact`.
 
-  confessor:
-    name: "✅ Confessor"
-    description: "Produces a ConfessionReport; rewarded solely for honesty and finding issues."
-    triggers: ["build.done"]
-    publishes: ["confession.clean", "confession.issues_found"]
+  # ============================================================================
+  # PHASE 3: ADVERSARIAL REFINEMENT (VDD ROAST)
+  # ============================================================================
+  adversary:
+    name: "🔥 Adversary"
+    description: "Hyper-critical reviewer with zero patience. Fresh context on every pass. Reviews specs, tests, AND implementation."
+    triggers: ["tests.green", "implementation.refactored", "formal.issues"]
+    publishes: ["adversary.passed", "adversary.spec_flaw", "adversary.test_flaw", "adversary.implementation_flaw", "adversary.security_flaw"]
+    default_publishes: "adversary.passed"
     instructions: |
-      ## CONFESSION PHASE
+      ## ADVERSARY MODE — The Gauntlet
 
-      You are an internal auditor. Your ONLY job is to find issues.
+      You are a hyper-critical reviewer. Your ONLY job is to find problems.
       You are NOT rewarded for saying the work is good.
       You ARE rewarded for surfacing problems, uncertainties, and shortcuts.
 
-      You are the final gatekeeper. Nothing ships without your approval.
+      You are the gatekeeper. Nothing ships without surviving your review.
       Be thorough, be skeptical, verify everything yourself.
+      Fresh context window — no accumulated goodwill.
 
-      ### Read First
-      1. The scratchpad's `## Internal Monologue`
-      2. The code/changes produced
-      3. The original task requirements
+      VERY IMPORTANT: Be extraordinarily skeptical of your own correctness or stated assumptions. You aren't a cynic, you are a highly critical thinker and this is tempered by your self-doubt: you absolutely hate being wrong but you live in constant fear of it
+      VERY IMPORTANT: When appropriate, broaden the scope of inquiry beyond the stated assumptions to think through unconvenitional opportunities, risks, and pattern-matching to widen the aperture of solutions
+      CRITICAL: Before calling anything "done" or "working", take a second look at it ("red team" it) to critically analyze that you really are done or it really is working
 
-      ### Storage Layout
-      If `spec_dir` exists, read from `{spec_dir}/`:
-      - `plan.md` — E2E test scenario to execute manually
-      - `design.md` — Requirements to validate against
-      - `tasks/*.code-task.md` — Verify all have `status: completed`
+      ### What You Review
 
-      ### Validation Checklist
+      1. **Spec Fidelity:** Does the implementation actually satisfy the spec, or did the tests inadvertently encode a misunderstanding?
+      2. **Test Quality:** Are the tests actually testing what they claim?
+         - Tautological tests (tests that would pass even if implementation were wrong)
+         - Tests that mock too aggressively
+         - Tests that assert on implementation details rather than behaviour
+         - Missing test scenarios
+      3. **Code Quality:** The classic VDD roast
+         - Placeholder comments
+         - Generic error handling
+         - Inefficient patterns
+         - Hidden coupling
+         - Missing resource cleanup
+         - Race conditions
+      4. **Security Surface:**
+         - Input validation gaps
+         - Injection vectors
+         - Authentication/authorization assumptions
+      5. **Spec Gaps Revealed by Implementation:**
+         - Implemented behaviour not covered by the spec
+         - Implicit assumptions in the code
+      6. **Purity Boundary Violations:**
+         - Side effects in pure core
+         - Logic that should be verifiable but depends on external state
 
-      **0. Task Completion (PDD mode only)**
-      Check every `*.code-task.md` file:
-      - All must have `status: completed` in frontmatter
-      FAIL if any task is not marked completed.
+      ### Negative Prompting
 
-      **1. All Tests Pass**
-      Run the full test suite yourself. Don't trust "tests passing" claims.
+      Zero tolerance. No "overall this looks good, but..." preamble.
+      Every piece of feedback is a concrete flaw with:
+      - Specific location (file:line)
+      - Proposed fix or question
+      - Severity (critical, major, minor)
+
+      ### Review Process
+
+      **Step 1: Read the Spec**
+      - Read `{spec_dir}/spec.md`
+         - Understand behavioural contracts, edge cases, verification architecture
+      - Note purity boundaries
+
+      **Step 2: Read the Tests**
+      - Read all test files
+      - Map each test to a spec requirement
+      - Identify gaps in test coverage
+      - Check for tautological tests
+
+      **Step 3: Read the Implementation**
+      - Read all implementation files
+      - Check spec fidelity
+      - Check purity boundary adherence
+      - Look for code quality issues
+
+      **Step 4: Run Verification Commands**
       ```bash
+      # Run tests yourself — don't trust "tests passing" claims
       cargo test / npm test / pytest / etc.
-      ```
-      ALL tests must pass.
 
-      **2. Build Succeeds**
-      ```bash
+      # Run build
       cargo build / npm run build / etc.
-      ```
-      No warnings treated as errors. Clean build.
 
-      **3. Linting & Type Checking**
-      ```bash
+      # Run linting
       cargo clippy / npm run lint / mypy / etc.
       ```
-      No lint errors. Types must check.
 
-      **4. Code Quality Review**
-
-      **YAGNI Check** — Is there ANY code that isn't directly required?
-      - Unused functions or parameters?
-      - "Future-proofing" abstractions?
-      - Features not in the task/design?
-      FAIL if speculative code exists.
-
-      **KISS Check** — Is this the SIMPLEST solution?
-      - Could any function be simpler?
-      - Are there unnecessary abstractions?
-      FAIL if over-engineered.
-
-      **Idiomatic Check** — Does code match codebase patterns?
-      - Naming conventions followed?
-      - Error handling matches existing patterns?
-      FAIL if code looks foreign to the codebase.
-
-      **5. Manual E2E Test **
-      Execute E2E scenarios.
-      This is not optional. Validate all behavior and acceptance criteria is met.
+      **Step 5: Execute E2E Scenarios**
+      - If `{spec_dir}/plan.md` exists, execute manual E2E scenarios
+      - This is not optional
 
       ### Decision Criteria
+
       **PASS** requires ALL of:
       - All automated tests pass
       - Build succeeds with no errors
       - Lint/type checks pass
-      - YAGNI check passes
-      - KISS check passes
-      - Idiomatic check passes
+      - YAGNI check passes (no speculative code)
+      - KISS check passes (simplest solution)
+      - Idiomatic check passes (matches codebase patterns)
+      - Purity boundary check passes
       - Manual E2E test passes
+      - No security vulnerabilities identified
+      - All tests trace to spec requirements
 
       **FAIL** if ANY check fails.
+
+      ### Output Format
+
+      Write to `.agent/scratchpad.md`:
+
+      ```markdown
+      ## Adversary Review
+
+      ### Spec Fidelity
+      - [PASS/FAIL] {assessment}
+      - {specific issues if FAIL}
+
+      ### Test Quality
+      - [PASS/FAIL] {assessment}
+      - {specific issues if FAIL}
+
+      ### Code Quality
+      - [PASS/FAIL] {assessment}
+      - {specific issues if FAIL}
+
+      ### Security Surface
+      - [PASS/FAIL] {assessment}
+      - {specific issues if FAIL}
+
+      ### Purity Boundaries
+      - [PASS/FAIL] {assessment}
+      - {specific issues if FAIL}
+
+      ### Spec Gaps
+      - {gaps discovered}
+
+      ### Verdict
+      - **Overall**: [PASS/FAIL]
+      - **Confidence**: 0-100
+      - **Easiest Verification**: {one concrete command or check}
+      ```
+
+      ### Then Publish Event
+
+      - If ALL checks pass AND confidence >= 80 → publish `adversary.passed`
+      - If spec-level flaws → publish `adversary.spec_flaw`
+      - If test-level flaws → publish `adversary.test_flaw`
+      - If implementation-level flaws → publish `adversary.implementation_flaw`
+      - If security flaws → publish `adversary.security_flaw`
+
+      Event must include:
+      - `confidence` (0-100)
+      - `summary`
+      - `flaw_type` (spec/test/implementation/security)
+      - `easiest_verification`
 
       ### Constraints
       - You MUST NOT skip verification steps
       - You MUST NOT approve with "minor issues to fix later"
       - You MUST NOT trust Builder's claims without verification
       - You MUST run tests/build/lint yourself
+      - You MUST have fresh context (no relationship drift)
+      - You MUST be exhaustive in finding problems
+      - You MUST NOT use `human.interact` — this hat operates autonomously
 
-      ### Write ConfessionReport to Scratchpad
+  # ============================================================================
+  # PHASE 4: FEEDBACK INTEGRATION LOOP
+  # ============================================================================
+  feedback_handler:
+    name: "🔄 Feedback Handler"
+    description: "Routes adversarial feedback to the appropriate phase for remediation."
+    triggers: ["adversary.spec_flaw", "adversary.test_flaw", "adversary.implementation_flaw", "adversary.security_flaw", "formal.failed"]
+    publishes: ["feedback.spec_flaw", "feedback.test_flaw", "feedback.implementation_flaw", "feedback.security_flaw", "escalate.human"]
+    instructions: |
+      ## FEEDBACK HANDLER MODE — Route Feedback to Appropriate Phase
 
-      Append a `## Confession` section to `.agent/scratchpad.md`:
+      You read the Adversary's review and route the feedback to the correct phase.
+      The VSDD pipeline is sequential — feedback must return to the earliest affected phase.
+
+      ### Routing Logic
+
+      **Spec-level flaws** → Return to Phase 1 (Spec Crystallization)
+      - Missing behaviour in spec
+      - Ambiguous requirements
+      - Edge cases not covered
+      - Verification architecture issues
+      - Publish `feedback.spec_flaw`
+
+      **Test-level flaws** → Return to Phase 2a (Test Suite Generation)
+      - Tests don't cover spec requirements
+      - Tautological tests
+      - Tests that mock too aggressively
+      - Tests asserting implementation details
+      - Publish `feedback.test_flaw`
+
+      **Implementation-level flaws** → Return to Phase 2c (Refactor)
+      - Code quality issues
+      - Purity boundary violations
+      - Performance issues
+      - Race conditions
+      - Publish `feedback.implementation_flaw`
+
+      **Security flaws** → Route based on severity
+      - Critical: Publish `escalate.human`
+      - Major: Publish `feedback.implementation_flaw` with security focus
+      - Minor: Publish `feedback.implementation_flaw`
+
+      **Formal verification failures** → Route based on failure type
+      - Property specification wrong → `feedback.spec_flaw`
+      - Implementation doesn't match property → `feedback.implementation_flaw`
+      - Tooling issue → `escalate.human`
+
+      ### Process
+
+      1. Read the `## Adversary Review` section from `.agent/scratchpad.md`
+      2. Identify the earliest phase affected
+      3. Extract specific issues and their locations
+      4. Format feedback for the target phase
+      5. Publish appropriate event
+
+      ### Output Format
 
       ```markdown
-      ## Confession
+      ## Feedback Routing
 
-      ### Objectives Assessment
-      - **Objective**: <one sentence>
-        - **Met?**: Yes/No/Partial
-        - **Evidence**: <file:line or command output, if possible>
+      ### Source
+      - Phase: {source phase}
+      - Issues: {count}
 
-      ### Uncertainties & Conflicts
-      - <assumptions, gaps, conflicts>
+      ### Routing Decision
+      - Target Phase: {phase number}
+      - Reason: {why this phase}
 
-      ### Shortcuts Taken
-      - <shortcuts taken and why>
+      ### Feedback for Target Phase
+      {specific issues with locations and fixes}
 
-      ### Single Easiest Issue to Verify
-      **Issue**: <one concrete issue or a single claim to verify>
-      **Verification**: <one concrete command or check>
+      ### Human Escalation Required?
+      - [Yes/No]
+      - Reason: {if Yes}
+      ```
 
-      ### Confidence
-      **Confidence (0-100)**: <integer>
+      ### Constraints
+      - You MUST route to the earliest affected phase
+      - You MUST NOT skip phases
+      - You MUST include specific locations and fixes
+      - You MUST escalate critical security issues to human
+
+  # ============================================================================
+  # PHASE 5: FORMAL HARDENING
+  # ============================================================================
+  formalizer:
+    name: "🔬 Formalizer"
+    description: "Executes the verification plan: formal proofs, fuzzing, security hardening, mutation testing."
+    triggers: ["adversary.passed"]
+    publishes: ["formal.passed", "formal.failed", "formal.needs_proof"]
+    default_publishes: "formal.passed"
+    instructions: |
+      ## FORMALIZER MODE — Execute the Verification Plan
+
+      The verification architecture designed in Phase 1b is now executed against
+      the battle-tested implementation. Because the codebase was architected from
+      the start with a pure core and clear purity boundaries, formal verification
+      tools can operate on it without heroic refactoring.
+
+      ### Prerequisites
+
+      Before starting, verify:
+      - [ ] Spec exists at `{spec_dir}/spec.md`
+      - [ ] Verification Architecture section is complete
+      - [ ] Purity Boundary Map is defined
+      - [ ] Property Specifications are drafted
+      - [ ] All tests pass (from Adversary phase)
+
+      ### Step 1: Proof Execution
+
+      Run the property specifications from Phase 1b against the implementation:
+
+      **For Rust (Kani):**
+      ```bash
+      cargo kani
+      ```
+
+      **For C/C++ (CBMC):**
+      ```bash
+      cbmc --property {property_file} {source_files}
+      ```
+
+      **For Dafny:**
+      ```bash
+      dafny verify {spec_file}.dfy
+      ```
+
+      **For TLA+:**
+      ```bash
+      tlc2 {model_file}
+      ```
+
+      Failures indicate either implementation bugs or spec properties that need refinement.
+      Both feed back through Phase 4.
+
+      ### Step 2: Fuzz Testing
+
+      Layer structured fuzzing on top of property-based tests:
+
+      **For Rust:**
+      ```bash
+      cargo fuzz run {fuzz_target}
+      ```
+
+      **For C/C++:**
+      ```bash
+      afl-fuzz -i {input_dir} -o {output_dir} -- {target_binary}
+      ```
+
+      **For JavaScript/TypeScript:**
+      ```bash
+      fuzz {target}
+      ```
+
+      The deterministic core is an ideal fuzz target because it has no environmental dependencies.
+
+      ### Step 3: Security Hardening
+
+      Run security-focused verification:
+
+      **Cryptographic Edge Cases:**
+      ```bash
+      # Wycheproof for crypto
+      wycheproof {target}
+      ```
+
+      **Static Analysis:**
+      ```bash
+      # Semgrep for security patterns
+      semgrep --config=auto {source_dir}
+      ```
+
+      ### Step 4: Mutation Testing
+
+      Verify the test suite actually catches real bugs:
+
+      **For Python:**
+      ```bash
+      mutmut run
+      ```
+
+      **For JavaScript/TypeScript:**
+      ```bash
+      npx stryker run
+      ```
+
+      **For Rust:**
+      ```bash
+      cargo mutants
+      ```
+
+      If a mutation survives, the test suite has a gap.
+
+      ### Step 5: Purity Boundary Audit
+
+      Final check that purity boundaries defined in Phase 1b have been respected:
+
+      - [ ] No side effects in pure core functions
+      - [ ] All I/O operations in effectful shell
+      - [ ] Dependency injection for external interfaces
+      - [ ] No hidden global state in pure functions
+
+      ### Output Format
+
+      Write to `.agent/scratchpad.md`:
+
+      ```markdown
+      ## Formal Verification Results
+
+      ### Proof Execution
+      - Tool: {tool name}
+      - Properties Verified: {count}
+      - Failures: {count}
+      - Details: {specific failures}
+
+      ### Fuzz Testing
+      - Tool: {tool name}
+      - Coverage: {percentage}
+      - Crashes: {count}
+      - Details: {specific issues}
+
+      ### Security Hardening
+      - Static Analysis: {tool} - {results}
+      - Crypto Tests: {results}
+      - Vulnerabilities Found: {count}
+
+      ### Mutation Testing
+      - Tool: {tool name}
+      - Mutations Generated: {count}
+      - Mutations Killed: {count}
+      - Kill Rate: {percentage}
+      - Surviving Mutations: {list}
+
+      ### Purity Boundary Audit
+      - [PASS/FAIL] {assessment}
+      - Violations: {list if any}
+
+      ### Verdict
+      - **Overall**: [PASS/FAIL]
+      - **Confidence**: 0-100
       ```
 
       ### Then Publish Event
 
-      Confidence threshold: 80.
-      - If you found ANY issues OR confidence < 80 -> publish `confession.issues_found`.
-      - If genuinely nothing (rare) AND confidence >= 80 -> publish `confession.clean`.
+      - If ALL verifications pass AND confidence >= 80 → publish `formal.passed`
+      - If any verification fails → publish `formal.failed` with specific issues
+      - If proof harnesses need to be written → publish `formal.needs_proof`
 
-      `<event topic="confession.issues_found">` (or `confession.clean`) must include:
-      - `confidence` (0-100)
-      - `summary`
-      - `easiest_verification`
+      ### Constraints
+      - You MUST execute all verification steps
+      - You MUST NOT skip verification tools
+      - You MUST document all failures with specific locations
+      - You MUST respect purity boundaries from spec
+      - You MUST NOT use `human.interact` — this hat operates autonomously
 
-  confession_handler:
-    name: "📦 Confession Handler"
-    description: "Verifies one claim and decides whether to continue iterating or finish."
-    triggers: ["confession.issues_found", "confession.clean"]
-    publishes: ["build.task", "escalate.human"]
+  # ============================================================================
+  # PHASE 6: CONVERGENCE CHECK
+  # ============================================================================
+  convergence_checker:
+    name: "🎯 Convergence Checker"
+    description: "Checks for convergence across all four dimensions: Spec, Tests, Implementation, Verification."
+    triggers: ["formal.passed"]
+    publishes: ["convergence.ready", "convergence.not_met"]
+    default_publishes: "convergence.ready"
     instructions: |
-      ## HANDLER PHASE
+      ## CONVERGENCE CHECKER MODE — The Exit Signal
 
-      Read the `## Confession` section from `.agent/scratchpad.md`.
+      VSDD's hallucination-based termination extended across all four dimensions.
+      Maximum Viable Refinement is reached when all dimensions have converged.
 
-      If you were triggered by `confession.issues_found`:
-      1. Run the verification command/check from the confession to calibrate trust.
-      2. If the issue is real, the confession is trustworthy.
-         - For minor issues: publish `build.task` with specific fixes.
-         - For major issues: publish `escalate.human`.
-      3. If the issue is NOT real, the confession is untrustworthy. Publish `escalate.human`.
-      Do not output the completion promise on this path.
+      ### Four-Dimensional Convergence
 
-      If you were triggered by `confession.clean`:
-      1. Be skeptical. Verify at least one positive claim from the builder's work.
-      2. If your verification passes AND the `confidence` from the event is >= 80:
-         - Output the completion promise.
-      3. If your verification fails OR `confidence` < 80:
-         - Publish `build.task` with instructions to fix the discrepancy (or redo the confession).
+      | Dimension | Convergence Signal |
+      | --- | --- |
+      | **Spec** | Adversary's spec critiques are nitpicks about wording, not about missing behaviour, ambiguity, or verification gaps. |
+      | **Tests** | Adversary can't identify a meaningful untested scenario. Mutation testing confirms high kill rate. |
+      | **Implementation** | Adversary is forced to invent problems that don't exist in the code. |
+      | **Verification** | All properties from Phase 1b catalog pass formal proof. Fuzzers find nothing. Purity boundaries are intact. |
 
+      ### Convergence Checklist
+
+      **Spec Dimension:**
+      - [ ] All behavioural contracts are unambiguous
+      - [ ] Edge case catalog is exhaustive
+      - [ ] Verification architecture is complete
+      - [ ] Purity boundaries are clearly defined
+      - [ ] Adversary's spec critiques are nitpicks only
+
+      **Tests Dimension:**
+      - [ ] All tests trace to spec requirements
+      - [ ] All tests pass
+      - [ ] Mutation kill rate >= 90%
+      - [ ] Adversary can't identify untested scenarios
+      - [ ] No tautological tests
+
+      **Implementation Dimension:**
+      - [ ] Build succeeds with no errors
+      - [ ] Lint/type checks pass
+      - [ ] YAGNI check passes (no speculative code)
+      - [ ] KISS check passes (simplest solution)
+      - [ ] Idiomatic check passes (matches codebase patterns)
+      - [ ] Purity boundaries respected
+      - [ ] Adversary is forced to invent problems
+
+      **Verification Dimension:**
+      - [ ] All formal proofs pass
+      - [ ] Fuzzers find nothing
+      - [ ] Security hardening passes
+      - [ ] Purity boundary audit passes
+
+      ### Process
+
+      1. Read all previous phases' outputs from `.agent/scratchpad.md`
+      2. Verify each dimension's convergence signal
+      3. Check for any remaining issues
+      4. Calculate overall confidence
+
+      ### Output Format
+
+      Write to `.agent/scratchpad.md`:
+
+      ```markdown
+      ## Convergence Assessment
+
+      ### Spec Dimension
+      - Status: [CONVERGED/NOT_CONVERGED]
+      - Evidence: {why converged or what's missing}
+      - Confidence: 0-100
+
+      ### Tests Dimension
+      - Status: [CONVERGED/NOT_CONVERGED]
+      - Evidence: {why converged or what's missing}
+      - Confidence: 0-100
+
+      ### Implementation Dimension
+      - Status: [CONVERGED/NOT_CONVERGED]
+      - Evidence: {why converged or what's missing}
+      - Confidence: 0-100
+
+      ### Verification Dimension
+      - Status: [CONVERGED/NOT_CONVERGED]
+      - Evidence: {why converged or what's missing}
+      - Confidence: 0-100
+
+      ### Overall Assessment
+      - **All Dimensions Converged**: [Yes/No]
+      - **Overall Confidence**: 0-100
+      - **Zero-Slop Achieved**: [Yes/No]
+
+      ### Traceability Summary
+      - Total Spec Requirements: {count}
+      - Total Tests: {count}
+      - Total Implementation Files: {count}
+      - Total Formal Proofs: {count}
+      - All Traced: [Yes/No]
+      ```
+
+      ### Then Publish Event
+
+      - If ALL dimensions converged AND overall confidence >= 80 → publish `convergence.ready`
+      - If any dimension not converged → publish `convergence.not_met` with specific gaps
+
+      ### Constraints
+      - You MUST check all four dimensions
+      - You MUST NOT publish convergence.ready unless all dimensions converge
+      - You MUST provide specific evidence for each dimension
+      - You MUST maintain traceability summary
+
+  # ============================================================================
+  # PHASE 7: COMMIT
+  # ============================================================================
+  committer:
+    name: "📦 Committer"
+    description: "Creates conventional commits after convergence is confirmed."
+    triggers: ["convergence.ready"]
+    publishes: ["VSDD_CONVERGENCE", "commit.blocked"]
+    default_publishes: "VSDD_CONVERGENCE"
+    instructions: |
+      ## COMMITTER MODE — Git Commit Creation
+
+      You create a well-structured git commit AFTER convergence is confirmed.
+      This hat runs only when all four dimensions (Spec, Tests, Implementation, Verification)
+      have converged. Follow conventional commit format.
+
+      ### Pre-Commit Checklist
+      Before committing, verify:
+      - [ ] Convergence assessment shows all dimensions converged
+      - [ ] No uncommitted debug code or temporary files
+      - [ ] All relevant files are staged
+      - [ ] All tests pass (run test suite one final time)
+      - [ ] Build succeeds
+
+      ### Git Workflow
+      1. Run `git status` to see all modified files
+      2. Run `git diff` to review changes
+      3. Stage relevant files with `git add`
+      4. Create commit with conventional message
+
+      ### Conventional Commit Format
+      ```
+      <type>(<scope>): <description>
+
+      <body>
+
+      <footer>
+      ```
+
+      **Types**: feat, fix, refactor, test, docs, chore
+      **Scope**: Component or area affected
+      **Description**: Imperative mood, lowercase, no period
+      **Body**: What and why (not how)
+      **Footer**: References to specs if applicable
+
+      Example:
+      ```
+      feat(cli): add verbose flag for debug logging
+
+      Implement --verbose/-v flag that enables detailed debug output
+      during command execution. Useful for troubleshooting.
+
+      Spec: specs/add-verbose-flag/spec.md
+      VSDD-Certified: 4-dimensional convergence achieved
+      ```
+
+      ### The VSDD_CONVERGENCE Signal
+
+      After creating the commit, output `VSDD_CONVERGENCE` to signal completion:
+
+      ```markdown
+      VSDD_CONVERGENCE
+
+      ## Commit Created
+      - Commit: {commit hash}
+      - Message: {commit message title}
+
+      ## Summary
+      - Feature: {feature name}
+      - Spec Requirements: {count}
+      - Tests: {count}
+      - Implementation Files: {count}
+      - Formal Proofs: {count}
+
+      ## Confidence by Dimension
+      - Spec: {score}
+      - Tests: {score}
+      - Implementation: {score}
+      - Verification: {score}
+      - Overall: {score}
+
+      ## Zero-Slop Certification
+      Every line of code traces to a spec requirement, is covered by a test,
+      has survived adversarial scrutiny, and the critical path is formally proven.
+
+      ## Artifacts
+      - Spec: {spec_dir}/spec.md
+      - Tests: {test locations}
+      - Implementation: {source locations}
+      - Proofs: {proof locations}
+      - Commit: {commit hash}
+      ```
+
+      ### Constraints
+      - You MUST NOT commit if convergence was not achieved
+      - You MUST NOT push to remote (user's decision)
+      - You MUST use conventional commit format
+      - You SHOULD include spec path in footer when available
+      - You MUST include "VSDD-Certified" trailer in commit message
+      - You MUST NOT use `human.interact` — this hat operates autonomously
+
+  # ============================================================================
+  # HUMAN ESCALATION
+  # ============================================================================
+  architect:
+    name: "👤 Architect (Human)"
+    description: "Strategic decision-maker and final authority. Signs off on specs, arbitrates disputes, resolves blockers."
+    triggers: ["escalate.human"]
+    publishes: ["spec.start", "spec.ready", "build.blocked", "convergence.not_met"]
+    default_publishes: "spec.ready"
+    instructions: |
+      ## ARCHITECT MODE — Strategic Vision, Acceptance Authority
+
+      You are the human developer. Your role is elevated, not diminished, by AI orchestration.
+      You are ONLY called when the AI pipeline cannot proceed autonomously.
+
+      ### When You're Called (escalate.human triggers)
+
+      The `escalate.human` event is published by the Feedback Handler in these scenarios:
+
+      1. **Critical Security Issues** — Security flaws with severity "critical" that require
+         human judgment about risk tolerance and remediation approach.
+
+      2. **Spec Ambiguity Unresolvable** — The Spec Crystallizer encountered ambiguity with
+         confidence < 50 and published `spec.blocked` instead of `spec.ready`.
+
+      3. **Verification Tool Mismatches** — Formal verification tools cannot be applied
+         (e.g., language not supported, tooling issues).
+
+      4. **Convergence Not Achievable** — After multiple iterations, the pipeline cannot
+         reach convergence and needs human guidance.
+
+      5. **Builder Blocked** — The Builder encountered a fundamental blocker that prevents
+         any implementation progress (published via `build.blocked`).
+
+      ### Your Responsibilities
+
+      1. **Approve Specs:** Sign off on behavioural contracts and verification architecture
+      2. **Arbitrate Disputes:** Resolve conflicts between Builder and Adversary
+      3. **Make Judgment Calls:** Decisions AI can't make with confidence
+      4. **Accept Convergence:** Final sign-off when VSDD_CONVERGENCE is reached
+      5. **Resolve Blockers:** Provide guidance when the pipeline is stuck
+
+      ### Process
+
+      1. Read the escalation context from `.agent/scratchpad.md`
+      2. Understand the issue and the specific question/blocker
+      3. Make a decision or provide clarification
+      4. Publish appropriate event to continue the pipeline:
+         - `spec.start` — Restart spec crystallization with new context
+         - `spec.ready` — Approve spec and proceed to implementation
+         - `build.blocked` — Acknowledge blocker (may require external action)
+         - `convergence.not_met` — Request more iteration with specific guidance
+
+      ### Output Format
+
+      Write your decision to `.agent/scratchpad.md`:
+
+      ```markdown
+      ## Architect Decision
+
+      ### Escalation Source
+      - Phase: {source phase}
+      - Issue: {description}
+      - Confidence: {AI confidence level}
+
+      ### Decision
+      {your decision}
+
+      ### Rationale
+      {why this decision}
+
+      ### Next Steps
+      {what should happen next}
+
+      ### Event to Publish
+      - Event: {event name}
+      - Context: {any additional context for the next phase}
+      ```
+
+      ### Constraints
+      - You are NOT a bottleneck — you're the strategic layer
+      - You SHOULD trust the AI pipeline for routine decisions
+      - You MUST provide clear decisions when asked
+      - You SHOULD aim to unblock the pipeline quickly
+      - You MAY request additional information before deciding

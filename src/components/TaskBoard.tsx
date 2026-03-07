@@ -10,6 +10,7 @@ import { useUserSettings } from "@/hooks/useUserSettings";
 import { QuickTimer } from "@/components/QuickTimer";
 import { aStarTextSearch } from "@/lib/a-star-search";
 import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
+import { mergeViewFilters } from "@/lib/filter-merge";
 import { sortTasks } from "@/utils/taskSorting";
 
 import { TaskCard } from "./TaskCard";
@@ -80,10 +81,20 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
     category: []
   };
 
-  const [filters, setFilters] = React.useState<Filters>(defaultTaskBoardFilters);
+  // Separate stored filters (user preferences) from display filters (view-specific)
+  // storedFilters: Original user preferences from localStorage (never modified by view)
+  // displayFilters: Derived with view-specific exclusions for rendering
+  const [storedFilters, setStoredFilters] = React.useState<Filters>(defaultTaskBoardFilters);
   const [loadingFilters, setLoadingFilters] = React.useState(true);
   const { cardCompactness } = useViewDisplay();
   const [isFiltersCollapsed, setIsFiltersCollapsed] = React.useState(false);
+
+  const displayFilters = React.useMemo(() => {
+    // TaskBoard excludes Done/Dropped from the stored status filter
+    return mergeViewFilters(storedFilters, {
+      excludeStatuses: ["Done", "Dropped"]
+    });
+  }, [storedFilters]);
 
   // Auto-collapse filters when switching to Ultra Compact mode
   // Auto-expand filters when switching to Full mode
@@ -99,18 +110,9 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
   useEffect(() => {
     const loadFilters = async () => {
       try {
-        const storedFilters = await loadFiltersFromSessionStorage();
-        if (storedFilters) {
-          // Reset Done/Dropped visibility on mount to prevent unwanted persistence
-          // User requested that these tasks be hidden by default when entering the view
-          const cleanStatus = (storedFilters.status || []).filter(
-            (s) => s !== "Done" && s !== "Dropped"
-          );
-
-          setFilters({
-            ...storedFilters,
-            status: cleanStatus
-          });
+        const loaded = await loadFiltersFromSessionStorage();
+        if (loaded) {
+          setStoredFilters(loaded);
         }
       } catch (error) {
         console.error("Error loading filters:", error);
@@ -125,8 +127,8 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
   // Effect to update session storage when filters change
   useEffect(() => {
     // The FilterControls component now handles saving filters to session storage
-    // No need to save here directly, as setFilters is passed to FilterControls
-  }, [filters]);
+    // No need to save here directly, as setStoredFilters is passed to FilterControls
+  }, [storedFilters]);
 
   const cardRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -191,13 +193,10 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
     const cols: Column[] = [];
 
     // Global search for subtasks
-    if (filters.searchText?.trim()) {
-      const allSearchableTasks = tasks.flatMap(task => {
-        // Include parent tasks and their children for search
-        return [{ id: task.id, title: task.title }];
-      });
-
-      const searchResults = aStarTextSearch(filters.searchText, allSearchableTasks);
+    if (displayFilters.searchText?.trim()) {
+      const searchLower = displayFilters.searchText.toLowerCase();
+      const allSearchableTasks = tasks.filter(t => !t.parentId).map(t => ({ id: t.id, title: t.title }));
+      const searchResults = aStarTextSearch(displayFilters.searchText, allSearchableTasks);
       const matchingTaskIds = new Set(searchResults.filter(r => r.score >= 0.001).map(r => r.taskId));
 
       const searchResultTasks = tasks.filter(task => matchingTaskIds.has(task.id));
@@ -236,7 +235,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
       });
     });
     return cols;
-  }, [tasks, map, path, filters]);
+  }, [tasks, map, path, displayFilters]);
 
   const handleActivate = (colIndex: number, id: string) => {
     // Implement Toggle Off:
@@ -256,7 +255,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
 
   const handleAdd = async (colIndex: number, title: string) => {
     const parentId = colIndex === 0 ? null : columns[colIndex].parentId!;
-    const assignedUserId = filters.selectedUserId && filters.selectedUserId !== 'UNASSIGNED' ? filters.selectedUserId : undefined;
+    const assignedUserId = storedFilters.selectedUserId && storedFilters.selectedUserId !== 'UNASSIGNED' ? storedFilters.selectedUserId : undefined;
     const newId = await createTask(title, parentId, assignedUserId);
     handleActivate(colIndex, newId);
   };
@@ -356,8 +355,8 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
         {!isFiltersCollapsed && (
           <div className="flex flex-wrap items-center gap-4 border rounded-lg p-3">
             <FilterControls
-              filters={filters}
-              setFilters={setFilters}
+              filters={storedFilters}
+              setFilters={setStoredFilters}
               defaultFilters={defaultTaskBoardFilters}
             />
             {/* Vertical separator */}
@@ -464,10 +463,10 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                   ) : (() => {
                     // Apply text search filter only if this is the search results column
                     let filteredItems = col.items;
-                    if (col.parentId === "search-results" && filters.searchText?.trim()) {
+                    if (col.parentId === "search-results" && displayFilters.searchText?.trim()) {
                       // The items in this column are already pre-filtered by the global search
                       // No need to re-apply aStarTextSearch here, just use the items as is.
-                    } else if (col.parentId !== "search-results" && filters.searchText?.trim()) {
+                    } else if (col.parentId !== "search-results" && displayFilters.searchText?.trim()) {
                       // If it's not the search results column, and there's a search text,
                       // we should not show any items in the regular columns.
                       filteredItems = [];
@@ -476,16 +475,15 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                     // Apply all other filters
                     const fullyFilteredItems = filteredItems.filter(task => {
                       // Apply user filter first
-                      // Apply user filter first
-                      if (filters.selectedUserId) {
-                        if (filters.selectedUserId === 'UNASSIGNED') {
+                      if (storedFilters.selectedUserId) {
+                        if (storedFilters.selectedUserId === 'UNASSIGNED') {
                           // Show tasks with no userId or empty userId or 'unassigned' string
                           if (task.userId && task.userId !== 'unassigned') {
                             return false;
                           }
                         } else {
                           // When a user is selected, only show tasks assigned to that user
-                          if (task.userId !== filters.selectedUserId) {
+                          if (task.userId !== storedFilters.selectedUserId) {
                             return false;
                           }
                         }
@@ -495,47 +493,45 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                       // Subtasks themselves don't have tags, so we only apply status filtering to them
                       if (task.parentId) {
                         // For subtasks, we only apply the status filter.
-                        if (filters.status && Array.isArray(filters.status) && filters.status.length > 0 && !filters.status.includes(task.triageStatus)) {
+                        if (displayFilters.status && Array.isArray(displayFilters.status) && displayFilters.status.length > 0 && !displayFilters.status.includes(task.triageStatus)) {
                           return false;
                         }
                         // Subtasks pass all other filters (urgent, impact, etc.)
                         return true;
                       }
 
-                      // 2. Apply urgent filter (applies to all tasks that passed the done filter)
-                      if (filters.showUrgent && !task.urgent) {
+                      // Apply urgent filter
+                      if (displayFilters.showUrgent && !task.urgent) {
                         return false;
                       }
 
-                      // 3. Apply impact filter (applies to all tasks that passed the done and urgent filters)
-                      if (filters.showImpact && !task.impact) {
+                      // Apply impact filter
+                      if (displayFilters.showImpact && !task.impact) {
                         return false;
                       }
 
-                      // 4. Apply major incident filter (applies to all tasks that passed the previous filters)
-                      if (filters.showMajorIncident && !task.majorIncident) {
+                      // Apply major incident filter
+                      if (displayFilters.showMajorIncident && !task.majorIncident) {
                         return false;
                       }
 
-                      // 4b. Apply sprint target filter
-                      if (filters.showSprintTarget && !task.sprintTarget) {
+                      // Apply sprint target filter
+                      if (displayFilters.showSprintTarget && !task.sprintTarget) {
                         return false;
                       }
 
                       // Apply difficulty filter
-                      if (filters.difficulty && Array.isArray(filters.difficulty) && filters.difficulty.length > 0 && !filters.difficulty.includes(task.difficulty)) {
+                      if (displayFilters.difficulty && Array.isArray(displayFilters.difficulty) && displayFilters.difficulty.length > 0 && !displayFilters.difficulty.includes(task.difficulty)) {
                         return false;
                       }
 
                       // Apply category filter
-                      if (filters.category && Array.isArray(filters.category) && filters.category.length > 0 && task.category && !filters.category.includes(task.category)) {
+                      if (displayFilters.category && Array.isArray(displayFilters.category) && displayFilters.category.length > 0 && task.category && !displayFilters.category.includes(task.category)) {
                         return false;
                       }
 
-                      // 5. Apply status filter (multiselect) for all tasks
-                      // If filters.status is empty, show all tasks (no filtering).
-                      // If filters.status has values, only show tasks with matching statuses.
-                      if (filters.status && Array.isArray(filters.status) && filters.status.length > 0 && !filters.status.includes(task.triageStatus)) {
+                      // Apply status filter for top-level tasks
+                      if (displayFilters.status && Array.isArray(displayFilters.status) && displayFilters.status.length > 0 && !displayFilters.status.includes(task.triageStatus)) {
                         return false;
                       }
 
@@ -555,7 +551,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                             onActivate={() => {
                               if (col.parentId === "search-results") {
                                 // Clear search, set path to reveal ancestry, and highlight
-                                setFilters(prev => ({ ...prev, searchText: "" }));
+                                setStoredFilters(prev => ({ ...prev, searchText: "" }));
                                 const newPath: string[] = [];
                                 let current: Task | undefined = t;
                                 while (current) {

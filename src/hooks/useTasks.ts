@@ -96,6 +96,28 @@ if (!PERSISTENCE_CONFIG.FORCE_BROWSER) {
 // Observer for Yjs updates - only set up if collaboration is enabled
 if (isCollaborationEnabled()) {
   yTasks.observe(() => {
+    // Skip Y.js sync when viewing filtered tasks to prevent showing all tasks.
+    // 
+    // When isFiltered is true, the 'tasks' array contains only a filtered subset
+    // (e.g., tasks for a specific user). If we let the Y.js observer replace it
+    // with all tasks from the collaborative document, the UI would show all tasks
+    // instead of the filtered subset.
+    //
+    // When a user creates a task while filtered:
+    // 1. createTask adds the new task to the local 'tasks' array (line 263)
+    // 2. syncTaskToYjs is called (line 264) to sync to the collaborative document
+    // 3. This observer would fire and replace 'tasks' with ALL tasks from Y.js
+    // 4. This would show all tasks in the UI - hence we skip when isFiltered
+    //
+    // Limitation: While filtered, this client won't see updates from other clients
+    // for the filtered user, only the local changes. The user would need to reload
+    // to see external changes. This is acceptable because:
+    // - The filter is typically used for personal task management
+    // - Reloading (unfilter + filter again) gets the latest data
+    // - Real-time sync is less critical when viewing a personal subset
+    if (isFiltered) {
+      return;
+    }
     const newTasks = (Array.from(yTasks.values()) as Task[]).map(t => ({
       ...t,
       triageStatus: t.triageStatus || "Backlog",
@@ -113,7 +135,6 @@ if (isCollaborationEnabled()) {
 
 // Load tasks filtered by userId (for server-side filtering optimization)
 const loadTasksByUser = async (userId?: string | null): Promise<Task[]> => {
-
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
@@ -122,8 +143,14 @@ const loadTasksByUser = async (userId?: string | null): Promise<Task[]> => {
     const filterUserId = userId === 'UNASSIGNED' ? undefined : (userId || undefined);
 
     const entities = await adapter.listTasks(filterUserId);
+    const filteredTasks = convertEntitiesToTasks(entities);
+    
+    tasks = filteredTasks;
+    isFiltered = true;
+    
+    eventBus.publish("tasksChanged");
 
-    return convertEntitiesToTasks(entities);
+    return filteredTasks;
   } catch (error) {
     console.error("Error loading tasks by user:", error);
     return [];
@@ -131,7 +158,6 @@ const loadTasksByUser = async (userId?: string | null): Promise<Task[]> => {
 };
 
 async function loadTasks() {
-
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
@@ -139,6 +165,13 @@ async function loadTasks() {
 
     // Use shared conversion helper
     const loadedTasks = convertEntitiesToTasks(entities);
+    
+    // CRITICAL: Do NOT overwrite if a filtered view has already loaded tasks
+    // This prevents the module-level loadTasks() from clobbering loadTasksByUser()
+    if (isFiltered) {
+      return;
+    }
+    
     tasks = loadedTasks;
     isFiltered = false;
 
@@ -179,6 +212,9 @@ async function loadTasks() {
         }
       }
     }
+    
+    // Publish event to notify subscribers (only after initial module load completes)
+    eventBus.publish("tasksChanged");
   } catch (error) {
     console.error("Error loading tasks from persistence:", error);
     // Fallback to localStorage for backward compatibility
@@ -261,6 +297,7 @@ async function createTask(title: string, parentId: string | null, userId?: strin
 
     // Update local state
     tasks = [...tasks, t];
+    
     syncTaskToYjs(t.id, t);
 
     if (parentId) {
@@ -1348,17 +1385,13 @@ export function useTasks() {
     }, []),
     // Load tasks filtered by userId for server-side filtering optimization
     loadTasksByUser: React.useCallback(async (userId?: string | null) => {
-      const filteredTasks = await loadTasksByUser(userId);
-      // Update global tasks array with filtered results
-      tasks = filteredTasks;
-      isFiltered = true;
-      eventBus.publish("tasksChanged");
-      return filteredTasks;
+      // Delegate to module-level function which handles state updates and event publishing
+      return await loadTasksByUser(userId);
     }, []),
     // Reload all tasks (no filter)
     reloadTasks: React.useCallback(async () => {
+      // Delegate to module-level function which handles state updates and event publishing
       await loadTasks();
-      eventBus.publish("tasksChanged");
     }, []),
   };
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DreamView } from './DreamView';
 import { useViewNavigation, useViewDisplay } from '@/hooks/useView';
-import { useTasks, Task } from '@/hooks/useTasks';
+import { useTasks, Task, TriageStatus } from '@/hooks/useTasks';
 import { useAllTasks } from '@/hooks/useAllTasks';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { sortTasks } from '@/utils/taskSorting';
 import { FilterControls, Filters } from "./FilterControls";
 import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
+import { getDefaultFilters, validateFilters, mergeViewFilters } from "@/lib/filter-merge";
 import { QuickTimer } from "@/components/QuickTimer";
 import { COMPACTNESS_ULTRA, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
 import { ChevronDown, ChevronRight } from "lucide-react";
@@ -36,18 +37,11 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
   const [loadingFilters, setLoadingFilters] = useState(true);
   const [input, setInput] = useState("");
 
-  const defaultPlanViewFilters: Filters = {
-    showUrgent: false,
-    showImpact: false,
-    showMajorIncident: false,
-    showSprintTarget: false,
-    status: ["Backlog", "Ready", "WIP", "Blocked"],
-    searchText: "",
-    difficulty: [],
-    category: []
-  };
-
-  const [filters, setFilters] = useState<Filters>(defaultPlanViewFilters);
+  const [storedFilters, setStoredFilters] = useState<Filters>(() => getDefaultFilters());
+  
+  const displayFilters = React.useMemo(() => {
+    return mergeViewFilters(storedFilters, { defaultActiveStatuses: true });
+  }, [storedFilters]);
 
   const handlePromoteToKanban = (taskId: string) => {
     setFocusedTaskId(taskId);
@@ -76,9 +70,10 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
   useEffect(() => {
     const loadFilters = async () => {
       try {
-        const storedFilters = await loadFiltersFromSessionStorage();
-        if (storedFilters) {
-          setFilters(storedFilters);
+        const loaded = await loadFiltersFromSessionStorage();
+        if (loaded) {
+          const validated = validateFilters(loaded);
+          setStoredFilters(validated);
         }
       } catch (error) {
         console.error("Error loading filters:", error);
@@ -94,7 +89,7 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
   const addTopTask = () => {
     const v = input.trim();
     if (!v) return;
-    const assignedUserId = filters.selectedUserId && filters.selectedUserId !== 'UNASSIGNED' ? filters.selectedUserId : undefined;
+    const assignedUserId = storedFilters.selectedUserId && storedFilters.selectedUserId !== 'UNASSIGNED' ? storedFilters.selectedUserId : undefined;
     createTask(v, null, assignedUserId);
     setInput("");
   };
@@ -103,48 +98,48 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
     return tasks
       .filter(task => !task.parentId && task.triageStatus !== 'Done' && task.triageStatus !== 'Dropped' && task.triageStatus !== 'Archived')
       .filter(task => {
-        if (filters.searchText?.trim()) {
-          const searchText = filters.searchText.toLowerCase();
+        if (displayFilters.searchText?.trim()) {
+          const searchText = displayFilters.searchText.toLowerCase();
           if (!task.title.toLowerCase().includes(searchText)) {
             return false;
           }
         }
 
-        if (filters.showUrgent && !task.urgent) {
+        if (displayFilters.showUrgent && !task.urgent) {
           return false;
         }
 
-        if (filters.showImpact && !task.impact) {
+        if (displayFilters.showImpact && !task.impact) {
           return false;
         }
 
-        if (filters.showMajorIncident && !task.majorIncident) {
+        if (displayFilters.showMajorIncident && !task.majorIncident) {
           return false;
         }
 
-        if (filters.showSprintTarget && !task.sprintTarget) {
+        if (displayFilters.showSprintTarget && !task.sprintTarget) {
           return false;
         }
 
-        if (filters.difficulty && Array.isArray(filters.difficulty) && filters.difficulty.length > 0 && !filters.difficulty.includes(task.difficulty)) {
+        if (displayFilters.difficulty && Array.isArray(displayFilters.difficulty) && displayFilters.difficulty.length > 0 && !displayFilters.difficulty.includes(task.difficulty)) {
           return false;
         }
 
-        if (filters.category && Array.isArray(filters.category) && filters.category.length > 0 && task.category && !filters.category.includes(task.category)) {
+        if (displayFilters.category && Array.isArray(displayFilters.category) && displayFilters.category.length > 0 && task.category && !displayFilters.category.includes(task.category)) {
           return false;
         }
 
-        if (filters.status && Array.isArray(filters.status) && filters.status.length > 0 && !filters.status.includes(task.triageStatus)) {
+        if (displayFilters.status && Array.isArray(displayFilters.status) && displayFilters.status.length > 0 && !displayFilters.status.includes(task.triageStatus)) {
           return false;
         }
 
-        if (filters.selectedUserId) {
-          if (filters.selectedUserId === 'UNASSIGNED') {
+        if (displayFilters.selectedUserId) {
+          if (displayFilters.selectedUserId === 'UNASSIGNED') {
             if (task.userId && task.userId !== 'unassigned') {
               return false;
             }
           } else {
-            if (task.userId !== filters.selectedUserId) {
+            if (task.userId !== displayFilters.selectedUserId) {
               return false;
             }
           }
@@ -153,7 +148,7 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
         return true;
       })
       .sort(sortTasks.plan);
-  }, [tasks, filters]);
+  }, [tasks, displayFilters]);
 
   // Get all children for a parent task (recursively)
   const getAllChildren = (task: Task): Task[] => {
@@ -314,9 +309,9 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
           {!isFiltersCollapsed && (
             <div className="flex flex-wrap items-center gap-4 border rounded-lg p-3">
               <FilterControls
-                filters={filters}
-                setFilters={setFilters}
-                defaultFilters={defaultPlanViewFilters}
+                filters={storedFilters}
+                setFilters={setStoredFilters}
+                defaultFilters={getDefaultFilters()}
               />
               <div className="h-6 border-l border-gray-300 mx-2"></div>
 

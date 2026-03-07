@@ -1,20 +1,7 @@
 import { Filters } from "@/components/FilterControls";
+import { validateFilters } from "./filter-merge";
 
 const FILTER_STORAGE_KEY = "taskFilters";
-
-// Get default filters for new users
-export const getDefaultFilters = (): Filters => ({
-  showUrgent: false,
-  showImpact: false,
-  showMajorIncident: false,
-  showSprintTarget: false,
-  status: [],
-  showDone: false,
-  searchText: "",
-  difficulty: [],
-  category: [],
-  selectedUserId: null
-});
 
 // Save filters to localStorage (per-user, persisted across views)
 export const saveFiltersToSessionStorage = async (filters: Filters): Promise<void> => {
@@ -26,10 +13,14 @@ export const saveFiltersToSessionStorage = async (filters: Filters): Promise<voi
 };
 
 // Load filters from localStorage (per-user, persisted across views)
+// Validates and migrates legacy schemas
 export const loadFiltersFromSessionStorage = async (): Promise<Filters | null> => {
   try {
     const storedFilters = localStorage.getItem(FILTER_STORAGE_KEY);
-    return storedFilters ? JSON.parse(storedFilters) : null;
+    if (!storedFilters) return null;
+    
+    const parsed = JSON.parse(storedFilters);
+    return validateFilters(parsed);
   } catch (error) {
     console.error("Error loading filters from localStorage:", error);
     return null;
