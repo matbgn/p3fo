@@ -24,8 +24,13 @@ const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
     const monthlyBalances = selectedUser?.monthlyBalances || {};
 
     const userWorkload = selectedUser?.workload ?? settings.userWorkloadPercentage;
+    const effectiveSettings = {
+        ...settings,
+        userWorkloadPercentage: userWorkload,
+        preferredWorkingDays: (selectedUser?.preferredWorkingDays as Record<string, number>) ?? settings.preferredWorkingDays
+    };
 
-    const data = getVacationsBalances(settings, 18, 6, monthlyBalances, userWorkload);
+    const data = getVacationsBalances(effectiveSettings, 18, 6, monthlyBalances, userWorkload);
 
     // Filter data for chart: only show last 6 months of history + projection
     const historyData = data.filter(d => !d.projected);

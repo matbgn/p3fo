@@ -1,6 +1,6 @@
 import { CombinedSettings } from "@/hooks/useCombinedSettings";
 import { MonthlyBalanceData } from "@/lib/persistence-types";
-import { getWorkingDays } from "./workingdays";
+import { getWorkingDays, getPreferredWorkingDays, getPreferredWorkingDaysInRange } from "./workingdays";
 import { Task } from "@/hooks/useTasks";
 import Holidays from 'date-holidays';
 
@@ -102,28 +102,88 @@ function calculateHoursDoneInDateRange(tasks: Task[], startDate: Date, endDate: 
     return totalMilliseconds / (1000 * 60 * 60);
 }
 
-function calculateHistoryPace(tasks: Task[], daysBack: number = 50, country: string = 'CH', region: string = 'BE'): number {
+/**
+ * Calculate the historical pace (hours per working day) over a given number of days.
+ * This function now considers preferred working days to calculate a more accurate pace
+ * for users who don't work all weekdays.
+ * 
+ * @param tasks - Array of tasks with timer entries
+ * @param daysBack - Number of days to look back (default 50)
+ * @param preferredDays - Map of preferred working days with capacity (0-1)
+ * @param country - Country code for holidays
+ * @param region - Region code for holidays
+ * @returns Average hours per preferred working day
+ */
+function calculateHistoryPace(
+    tasks: Task[],
+    daysBack: number = 50,
+    preferredDays: Record<number, number> | undefined,
+    country: string = 'CH',
+    region: string = 'BE'
+): number {
     const now = new Date();
     const startDate = new Date(now);
     startDate.setDate(now.getDate() - daysBack);
 
-    // 1. Calculate working days in the range
-    // We need to iterate day by day or use a more sophisticated method.
-    // Given 50 days is small, iteration is fine.
-    const hd = new Holidays(country, region, { types: ['public'] });
-    let workingDays = 0;
-    for (let d = new Date(startDate); d <= now; d.setDate(d.getDate() + 1)) {
-        if (d.getDay() !== 0 && d.getDay() !== 6 && !hd.isHoliday(d)) {
-            workingDays++;
+    // Use preferred working days for pace calculation
+    const { effectiveDays } = getPreferredWorkingDaysInRange(
+        startDate,
+        now,
+        preferredDays,
+        country,
+        region
+    );
+
+    // Avoid division by zero - if no preferred days in range, fall back to standard working days
+    if (effectiveDays === 0) {
+        const hd = new Holidays(country, region, { types: ['public'] });
+        let fallbackWorkingDays = 0;
+        for (let d = new Date(startDate); d <= now; d.setDate(d.getDate() + 1)) {
+            if (d.getDay() !== 0 && d.getDay() !== 6 && !hd.isHoliday(d)) {
+                fallbackWorkingDays++;
+            }
         }
+        if (fallbackWorkingDays === 0) return 0;
+        
+        const hoursDone = calculateHoursDoneInDateRange(tasks, startDate, now);
+        return hoursDone / fallbackWorkingDays;
     }
 
-    if (workingDays === 0) return 0;
-
-    // 2. Calculate hours done in the range
+    // Calculate hours done in the range
     const hoursDone = calculateHoursDoneInDateRange(tasks, startDate, now);
 
-    return hoursDone / workingDays;
+    return hoursDone / effectiveDays;
+}
+
+export function calculateProjection(params: {
+    hoursDone: number;
+    preferredDaysPassed: number;
+    totalPreferredDaysInMonth: number;
+    historyPace: number;
+}): number {
+    const remainingDays = Math.max(0, params.totalPreferredDaysInMonth - params.preferredDaysPassed);
+    
+    let currentPace = 0;
+    if (params.preferredDaysPassed > 0) {
+        currentPace = params.hoursDone / params.preferredDaysPassed;
+    }
+    
+    const effectivePace = Math.max(currentPace, params.historyPace);
+
+    return params.hoursDone + (effectivePace * remainingDays);
+}
+
+/**
+ * Extended result type for projected hours with preferred days information
+ */
+export interface ProjectedHoursResult {
+    totalTimeElapsedForAllMonth: number;
+    hoursDue: number;
+    totalTimeExpandedInHours: number;
+    actualHourlyBalance: number;
+    hourlyBalanceProjection: number;
+    workload: number;
+    preferredWorkingDays?: { totalDays: number; effectiveDays: number };
 }
 
 export function getProjectedHoursForActualMonth(
@@ -132,12 +192,20 @@ export function getProjectedHoursForActualMonth(
     tasks: Task[],
     settings: CombinedSettings,
     vacationsTaken: number = 0
-) {
-    const workingDays = getWorkingDays(year, month, 1, undefined, settings.country, settings.region);
+): ProjectedHoursResult {
     const hoursToBeDoneByDayByContract = settings.hoursToBeDoneByDay ?? 8;
     const workloadInDecimal = settings.userWorkloadPercentage / 100;
-
+    
+    // Hours due is based on ALL working days (Mon-Fri) and workload percentage
+    // Preferred days affect pace only, not hours due
+    const workingDays = getWorkingDays(year, month, 1, undefined, settings.country, settings.region);
     const hoursDue = workingDays * hoursToBeDoneByDayByContract * workloadInDecimal;
+    
+    // Get preferred working days from settings (for pace calculation)
+    const preferredDays = settings.preferredWorkingDays;
+    
+    // Hours done is calculated from all tasks regardless of preferred days
+    // Working outside preferred days is a "bonus"
     const hoursDone = calculateHoursDoneFromTasks(tasks, year, month);
 
     // Linear Projection Logic with Gliding Average
@@ -155,25 +223,46 @@ export function getProjectedHoursForActualMonth(
         projectedTotal = hoursDue;
     } else if (year === currentYear && month === currentMonth) {
         // Current month
-        // Calculate working days passed so far (from day 1 to today)
-        const workingDaysSoFar = getWorkingDays(year, month, 1, currentDay, settings.country, settings.region);
-        const totalWorkingDaysInMonth = workingDays; // Already calculated above
+        // Calculate preferred working days passed so far (from day 1 to today)
+        const preferredDaysSoFar = getPreferredWorkingDays(
+            year,
+            month,
+            1,
+            currentDay,
+            preferredDays,
+            settings.country,
+            settings.region
+        );
+        
+        // Calculate total preferred working days for the month (for pace calculation)
+        const preferredDaysInMonth = getPreferredWorkingDays(
+            year,
+            month,
+            1,
+            undefined,
+            preferredDays,
+            settings.country,
+            settings.region
+        );
+        
+        const totalPreferredDaysInMonth = preferredDaysInMonth.effectiveDays;
 
-        // Calculate History Pace (last 50 days)
-        const historyPace = calculateHistoryPace(tasks, 50, settings.country, settings.region);
+        // Calculate History Pace using preferred days (last 50 days)
+        const historyPace = calculateHistoryPace(
+            tasks,
+            50,
+            preferredDays,
+            settings.country,
+            settings.region
+        );
 
-        // Calculate Current Pace
-        // We use Math.max(1, workingDaysSoFar) to avoid division by zero
-        const currentPace = hoursDone / Math.max(1, workingDaysSoFar);
-
-        // Calculate Weight Z
-        // Z goes from 0 (start of month) to 1 (end of month)
-        // We clamp it between 0 and 1 just in case
-        const z = Math.max(0, Math.min(1, workingDaysSoFar / totalWorkingDaysInMonth));
-
-        const weightedPace = (z * currentPace) + ((1 - z) * historyPace);
-
-        projectedTotal = weightedPace * totalWorkingDaysInMonth;
+        // Project the rest of the month using strict TDD logic
+        projectedTotal = calculateProjection({
+            hoursDone,
+            preferredDaysPassed: preferredDaysSoFar.effectiveDays,
+            totalPreferredDaysInMonth,
+            historyPace
+        });
 
     } else {
         // Past month
@@ -189,6 +278,17 @@ export function getProjectedHoursForActualMonth(
     // Balance is always done - due
     // For the "Delta hours projected with due" we want the projected balance
     const balance = totalTimeExpandedInHours - hoursDue;
+    
+    // Get preferred working days for the month for result
+    const preferredDaysInMonth = getPreferredWorkingDays(
+        year,
+        month,
+        1,
+        undefined,
+        preferredDays,
+        settings.country,
+        settings.region
+    );
 
     return {
         totalTimeElapsedForAllMonth: Math.round(hoursDone * 10) / 10,
@@ -196,7 +296,8 @@ export function getProjectedHoursForActualMonth(
         totalTimeExpandedInHours: Math.round(totalTimeExpandedInHours * 10) / 10,
         actualHourlyBalance: Math.round(balance * 10) / 10,
         hourlyBalanceProjection: Math.round(balance * 10) / 10,
-        workload: settings.userWorkloadPercentage
+        workload: settings.userWorkloadPercentage,
+        preferredWorkingDays: preferredDaysInMonth
     };
 }
 
@@ -287,8 +388,9 @@ export function getHistoricalHourlyBalances(
             }
 
             // Always calculate balance to ensure consistency, ignoring potentially stale stored balance
-            const workingDays = getWorkingDays(year, month, 1, undefined, settings.country, settings.region);
-            const hoursDue = workingDays * (settings.hoursToBeDoneByDay ?? 8) * (workload / 100);
+            // Hours due is based on ALL working days (Mon-Fri), not preferred days
+            const workingDaysForMonth = getWorkingDays(year, month, 1, undefined, settings.country, settings.region);
+            const hoursDue = workingDaysForMonth * (settings.hoursToBeDoneByDay ?? 8) * (workload / 100);
             currentBalance = hoursDone - hoursDue;
         } else {
             // No record in DB
@@ -302,15 +404,17 @@ export function getHistoricalHourlyBalances(
                 hoursDone = calculateHoursDoneFromTasks(tasks, year, month);
             }
 
-            const workingDays = getWorkingDays(year, month, 1, undefined, settings.country, settings.region);
-            const hoursDue = workingDays * (settings.hoursToBeDoneByDay ?? 8) * (workload / 100);
+            // Hours due is based on ALL working days (Mon-Fri), not preferred days
+            const workingDaysForMonth = getWorkingDays(year, month, 1, undefined, settings.country, settings.region);
+            const hoursDue = workingDaysForMonth * (settings.hoursToBeDoneByDay ?? 8) * (workload / 100);
             currentBalance = hoursDone - hoursDue;
         }
 
         cumulativeBalance += currentBalance;
 
-        const workingDays = getWorkingDays(year, month, 1, undefined, settings.country, settings.region);
-        const hoursDue = workingDays * (settings.hoursToBeDoneByDay ?? 8) * (workload / 100);
+        // Hours due for display is also based on ALL working days (Mon-Fri)
+        const displayWorkingDays = getWorkingDays(year, month, 1, undefined, settings.country, settings.region);
+        const displayHoursDue = displayWorkingDays * (settings.hoursToBeDoneByDay ?? 8) * (workload / 100);
 
         data.push({
             date: `${date.toLocaleDateString("default", { month: "short" })} ${year % 100}`,
@@ -318,7 +422,7 @@ export function getHistoricalHourlyBalances(
             workload: workload,
             hourlyBalance: Number(currentBalance.toFixed(1)),
             hoursDone: Number(hoursDone.toFixed(1)),
-            hoursDue: Number(hoursDue.toFixed(1)),
+            hoursDue: Number(displayHoursDue.toFixed(1)),
             projected: false,
             cumulativeBalance: Number(cumulativeBalance.toFixed(1)),
             isManual: monthlyBalances[descId]?.isManual,
@@ -337,8 +441,9 @@ export function getHistoricalHourlyBalances(
         const month = date.getMonth() + 1;
         const descId = `${year}-${String(month).padStart(2, '0')}`;
 
-        const workingDays = getWorkingDays(year, month, 1, undefined, settings.country, settings.region);
-        const hoursDue = workingDays * (settings.hoursToBeDoneByDay ?? 8) * (lastWorkload / 100);
+        // Hours due for projection is based on ALL working days (Mon-Fri), not preferred days
+        const projectedWorkingDays = getWorkingDays(year, month, 1, undefined, settings.country, settings.region);
+        const hoursDue = projectedWorkingDays * (settings.hoursToBeDoneByDay ?? 8) * (lastWorkload / 100);
 
         projectedBalance += 0; // Assume neutral balance for projection
 
