@@ -136,14 +136,9 @@ class SqliteClient implements DbClient {
   constructor(private db: DatabaseSync) { }
 
   async initialize(): Promise<void> {
-    // Migration: Check for legacy schema and migrate if needed
-    try {
-      this.migrateSchema();
-    } catch (error) {
-      console.error('Migration failed:', error);
-      // Continue initialization, as migration might be partial or already done
-    }
-
+    // Create tables FIRST before attempting migrations
+    // This ensures tables exist when migrateSchema tries to add columns
+    
     // Create tasks table
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS "tasks" (
@@ -309,6 +304,14 @@ class SqliteClient implements DbClient {
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_reminders_taskId" ON "reminders"("taskId")`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_reminders_state" ON "reminders"("state")`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_reminders_triggerDate" ON "reminders"("triggerDate")`);
+
+    // Now run migrations AFTER tables exist
+    try {
+      this.migrateSchema();
+    } catch (error) {
+      console.error('Migration failed:', error);
+      // Continue initialization, as migration might be partial or already done
+    }
   }
 
   private migrateSchema(): void {

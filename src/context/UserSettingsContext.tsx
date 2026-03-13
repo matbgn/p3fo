@@ -12,9 +12,9 @@ export interface UserSettings {
     hasCompletedOnboarding: boolean;
     monthlyBalances: Record<string, MonthlyBalanceData>;
     cardCompactness: number;
-    // Legacy field for import compatibility
-    workload_percentage?: number;
-    // New fields
+    // Per-user workload
+    workload?: number;
+    // User preference fields
     splitTime?: string;
     timezone?: string;
     weekStartDay?: 0 | 1;
@@ -57,6 +57,7 @@ const loadUserSettings = async (userId: string): Promise<UserSettings> => {
             hasCompletedOnboarding: settings.hasCompletedOnboarding,
             monthlyBalances: settings.monthlyBalances || {},
             cardCompactness: settings.cardCompactness ?? 0,
+            workload: settings.workload,
             splitTime: settings.splitTime,
             timezone: settings.timezone,
             weekStartDay: settings.weekStartDay,
@@ -137,6 +138,7 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                     hasCompletedOnboarding: userSettings.hasCompletedOnboarding,
                     monthlyBalances: userSettings.monthlyBalances,
                     cardCompactness: userSettings.cardCompactness,
+                    workload: userSettings.workload,
                     splitTime: userSettings.splitTime,
                     timezone: userSettings.timezone,
                     weekStartDay: userSettings.weekStartDay,
@@ -155,6 +157,7 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                         username: userSettings.username,
                         logo: userSettings.logo,
                         hasCompletedOnboarding: userSettings.hasCompletedOnboarding,
+                        workload: userSettings.workload,
                         monthlyBalances: userSettings.monthlyBalances,
                         cardCompactness: userSettings.cardCompactness,
                         splitTime: userSettings.splitTime,
@@ -202,13 +205,20 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 const currentSettings = userSettingsRef.current;
                 const monthlyBalancesChanged = JSON.stringify(yjsSettings.monthlyBalances || {}) !== JSON.stringify(currentSettings.monthlyBalances);
 
+                const preferredWorkingDaysChanged = JSON.stringify(yjsSettings.preferredWorkingDays || {}) !== JSON.stringify(currentSettings.preferredWorkingDays || {});
+
                 if (yjsSettings.username !== currentSettings.username ||
                     yjsSettings.logo !== currentSettings.logo ||
                     yjsSettings.hasCompletedOnboarding !== currentSettings.hasCompletedOnboarding ||
                     yjsSettings.cardCompactness !== currentSettings.cardCompactness ||
                     yjsSettings.timezone !== currentSettings.timezone ||
                     yjsSettings.trigram !== currentSettings.trigram ||
-                    monthlyBalancesChanged) {
+                    yjsSettings.weekStartDay !== currentSettings.weekStartDay ||
+                    yjsSettings.defaultPlanView !== currentSettings.defaultPlanView ||
+                    yjsSettings.splitTime !== currentSettings.splitTime ||
+                    yjsSettings.workload !== currentSettings.workload ||
+                    monthlyBalancesChanged ||
+                    preferredWorkingDaysChanged) {
 
                     console.log('Received user settings update from Yjs:', yjsSettings);
 
@@ -218,6 +228,7 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                         hasCompletedOnboarding: yjsSettings.hasCompletedOnboarding,
                         monthlyBalances: yjsSettings.monthlyBalances || {},
                         cardCompactness: yjsSettings.cardCompactness ?? 0,
+                        workload: yjsSettings.workload,
                         splitTime: yjsSettings.splitTime,
                         timezone: yjsSettings.timezone,
                         weekStartDay: yjsSettings.weekStartDay,

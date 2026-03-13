@@ -20,6 +20,8 @@ export const UserManagement: React.FC = () => {
     const { tasks } = useAllTasks();
     const [editingTrigram, setEditingTrigram] = useState<string | null>(null);
     const [editValue, setEditValue] = useState("");
+    const [editingWorkload, setEditingWorkload] = useState<string | null>(null);
+    const [workloadValue, setWorkloadValue] = useState("");
 
     // Calculate task counts per user
     const userTaskCounts = useMemo(() => {
@@ -71,6 +73,31 @@ export const UserManagement: React.FC = () => {
         }
     };
 
+    const startEditingWorkload = (userId: string, currentWorkload: number | undefined) => {
+        setEditingWorkload(userId);
+        setWorkloadValue(String(currentWorkload ?? 60));
+    };
+
+    const cancelEditingWorkload = () => {
+        setEditingWorkload(null);
+        setWorkloadValue("");
+    };
+
+    const saveWorkload = async (userId: string) => {
+        try {
+            const workload = parseInt(workloadValue, 10);
+            if (isNaN(workload) || workload < 0 || workload > 100) {
+                alert('Workload must be a number between 0 and 100');
+                return;
+            }
+            await updateUser(userId, { workload });
+            setEditingWorkload(null);
+        } catch (error) {
+            console.error('Failed to update workload:', error);
+            alert('Failed to update workload. Please try again.');
+        }
+    };
+
     if (usersLoading) {
         return <div className="text-center py-4">Loading users...</div>;
     }
@@ -88,6 +115,7 @@ export const UserManagement: React.FC = () => {
                         <TableRow>
                             <TableHead>User</TableHead>
                             <TableHead>Trigram</TableHead>
+                            <TableHead>Workload</TableHead>
                             <TableHead>User ID</TableHead>
                             <TableHead className="text-center">Assigned Tasks</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
@@ -146,6 +174,40 @@ export const UserManagement: React.FC = () => {
                                                     title="Double-click to edit"
                                                 >
                                                     {(user as any).trigram || '???'}
+                                                </div>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            {editingWorkload === user.userId ? (
+                                                <div className="flex items-center gap-1">
+                                                    <Input
+                                                        type="number"
+                                                        min="0"
+                                                        max="100"
+                                                        value={workloadValue}
+                                                        onChange={(e) => setWorkloadValue(e.target.value)}
+                                                        className="w-16 h-8"
+                                                        autoFocus
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') saveWorkload(user.userId);
+                                                            if (e.key === 'Escape') cancelEditingWorkload();
+                                                        }}
+                                                    />
+                                                    <span className="text-xs">%</span>
+                                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => saveWorkload(user.userId)}>
+                                                        <Check className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={cancelEditingWorkload}>
+                                                        <X className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            ) : (
+                                                <div
+                                                    className="bg-muted/50 px-2 py-1 rounded w-fit cursor-pointer hover:bg-muted"
+                                                    onDoubleClick={() => startEditingWorkload(user.userId, (user as any).workload)}
+                                                    title="Double-click to edit"
+                                                >
+                                                    {(user as any).workload ?? 60}%
                                                 </div>
                                             )}
                                         </TableCell>
