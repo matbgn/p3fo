@@ -3,7 +3,7 @@ import moment from 'moment';
 import { useAllTasks } from '@/hooks/useAllTasks';
 import { useUsers } from '@/hooks/useUsers';
 import { Task } from '@/hooks/useTasks';
-import { calculateTotalDifficulty, normalizePreferredDays } from '@/utils/scheduler-utils';
+import { calculateAllTotalDifficulties, normalizePreferredDays } from '@/utils/scheduler-utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
@@ -67,6 +67,11 @@ const ResourcesScheduler: React.FC<ResourcesSchedulerProps> = ({ onFocusOnTask, 
         return list;
     }, [users]);
 
+    // 2.5 Pre-calculate all total difficulties
+    const totalDifficulties = useMemo(() => {
+        return calculateAllTotalDifficulties(tasks);
+    }, [tasks]);
+
     // 3. Schedule Logic
     const scheduledData = useMemo(() => {
         const data: Record<string, ScheduledBlock[]> = {};
@@ -110,7 +115,7 @@ const ResourcesScheduler: React.FC<ResourcesSchedulerProps> = ({ onFocusOnTask, 
             const blocks: ScheduledBlock[] = [];
 
             sorted.forEach(task => {
-                const totalDifficulty = calculateTotalDifficulty(task, tasks);
+                const totalDifficulty = totalDifficulties[task.id] || 0;
                 if (totalDifficulty === 0) return;
 
                 // "Standard Hours" required to complete the task (assuming 1.0 capacity)
@@ -120,7 +125,9 @@ const ResourcesScheduler: React.FC<ResourcesSchedulerProps> = ({ onFocusOnTask, 
                 const currentPointer = start.clone();
 
                 while (remainingStandardHours > 0) {
-                    const capacity = getDayCapacity(currentPointer);
+                    const absPointer = currentPointer.toDate();
+                    const day = absPointer.getDay();
+                    const capacity = preferredDaysMap[day] || 0;
 
                     if (capacity === 0) {
                         // Skip non-working day
@@ -129,25 +136,19 @@ const ResourcesScheduler: React.FC<ResourcesSchedulerProps> = ({ onFocusOnTask, 
                     }
 
                     // Calculate remaining time in this 24h window (linear time)
-                    // We assume work happens 24h/day in this visualization context (8pts = 24h)
-                    // The "End of Day" is actually the start of next day for calculation purposes
-                    const startOfNextDay = currentPointer.clone().add(1, 'days').startOf('day');
-                    const timeUntilNextDayHours = moment.duration(startOfNextDay.diff(currentPointer)).asHours();
+                    const endOfCurrentDay = currentPointer.clone().endOf('day').add(1, 'ms');
+                    const timeUntilNextDayHours = moment.duration(endOfCurrentDay.diff(currentPointer)).asHours();
 
                     // How much *Standard Work* can we do in this remaining time?
-                    // StandardWork = TimePassed * Capacity
                     const potentialStandardWork = timeUntilNextDayHours * capacity;
 
                     if (potentialStandardWork >= remainingStandardHours) {
-                        // We can finish the task today (or in this segment)
-                        // TimePassed = StandardWork / Capacity
                         const timeNeeded = remainingStandardHours / capacity;
                         currentPointer.add(timeNeeded, 'hours');
                         remainingStandardHours = 0;
                     } else {
-                        // CONSUME ALL of this day's capacity and move to next
                         remainingStandardHours -= potentialStandardWork;
-                        currentPointer.add(1, 'days').startOf('day'); // Jump to next day start
+                        currentPointer.add(1, 'days').startOf('day');
                     }
                 }
 
@@ -168,16 +169,15 @@ const ResourcesScheduler: React.FC<ResourcesSchedulerProps> = ({ onFocusOnTask, 
 
         // Handle Unassigned?
         if (tasksByUser['unassigned']) {
-            // ... unassigned logic (default M-F)
             const sorted = tasksByUser['unassigned'].sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999));
             let stack = moment().startOf('day');
             const blocks: ScheduledBlock[] = [];
             sorted.forEach(task => {
-                const td = calculateTotalDifficulty(task, tasks);
+                const td = totalDifficulties[task.id] || 0;
                 if (td === 0) return;
                 const hours = td * SCALE_HOURS_PER_POINT;
                 const start = stack.clone();
-                const end = start.clone().add(hours, 'hours'); // simplified
+                const end = start.clone().add(hours, 'hours');
                 blocks.push({ task, start: start.toDate(), end: end.toDate(), totalDifficulty: td });
                 stack = end;
             });
@@ -185,7 +185,7 @@ const ResourcesScheduler: React.FC<ResourcesSchedulerProps> = ({ onFocusOnTask, 
         }
 
         return data;
-    }, [activeTasks, tasks, resources]);
+    }, [activeTasks, totalDifficulties, resources]);
 
     // 4. Render Helpers
     // 4. Render Helpers

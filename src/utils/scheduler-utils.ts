@@ -43,6 +43,35 @@ export const calculateTotalDifficulty = (task: Task, allTasks: Task[]): number =
     return totalDifficulty;
 };
 
+/**
+ * Calculates total difficulty for all tasks efficiently.
+ * Uses a map for O(1) lookups and memoization to avoid O(N^2) recursion.
+ */
+export const calculateAllTotalDifficulties = (tasks: Task[]): Record<string, number> => {
+    const memo: Record<string, number> = {};
+    const taskMap = new Map<string, Task>(tasks.map(t => [t.id, t]));
+
+    const getDifficulty = (taskId: string): number => {
+        if (taskId in memo) return memo[taskId];
+
+        const task = taskMap.get(taskId);
+        if (!task) return 0;
+
+        let total = task.difficulty || 0;
+        if (task.children && task.children.length > 0) {
+            task.children.forEach(childId => {
+                total += getDifficulty(childId);
+            });
+        }
+
+        memo[taskId] = total;
+        return total;
+    };
+
+    tasks.forEach(task => getDifficulty(task.id));
+    return memo;
+};
+
 // Function to calculate end date based on start date and duration (in days), skipping weekends
 export const calculateEndDate = (startDate: Date, durationInDays: number): Date => {
     const endDate = moment(startDate);
