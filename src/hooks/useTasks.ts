@@ -1132,25 +1132,68 @@ export function useTasks() {
     return task.difficulty || 0;
   };
 
-  const toggleTimer = React.useCallback(async (taskId: string) => {
+  const toggleTimer = React.useCallback(async (taskId: string, currentUserId?: string) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
-    // First, stop any other running timers
-    tasks = tasks.map(t => {
-      if (t.id !== taskId && t.timer && t.timer.length > 0) {
-        const lastEntry = t.timer[t.timer.length - 1];
-        if (lastEntry && lastEntry.endTime === 0) {
-          return {
-            ...t,
-            timer: t.timer.map((entry, index) =>
-              index === t.timer!.length - 1 ? { ...entry, endTime: Date.now() } : entry
-            )
-          };
+    // Collect tasks that need to be persisted (other running timers that need to be stopped)
+    const tasksToPersist: Task[] = [];
+
+    // CRITICAL: Only stop other running timers if the current user is starting/stopping their OWN task.
+    // - If I'm starting a timer on MY task → stop MY other running timer
+    // - If I'm starting a timer on someone else's task → do NOT stop MY running timer
+    // - If I'm stopping someone else's task → do NOT stop MY running timer
+    // 
+    // The task belongs to the current user if:
+    // - task.userId matches currentUserId, OR
+    // - task has no userId AND currentUserId is 'UNASSIGNED' (special case for unassigned tasks filter)
+    const isTaskBelongingToCurrentUser = currentUserId
+      ? (task.userId === currentUserId || (!task.userId && currentUserId === 'UNASSIGNED'))
+      : true; // Backward compatibility: if no currentUserId, assume user's own task
+
+    // First, stop any other running timers ONLY for the current user
+    // This prevents stopping timers for other users' tasks
+    if (isTaskBelongingToCurrentUser) {
+      tasks = tasks.map(t => {
+        // Only consider tasks with running timers (excluding the task being toggled)
+        if (t.id !== taskId && t.timer && t.timer.length > 0) {
+          const lastEntry = t.timer[t.timer.length - 1];
+          if (lastEntry && lastEntry.endTime === 0) {
+            // Only stop timers on tasks that ALSO belong to the current user
+            const isOtherTaskBelongingToCurrentUser = currentUserId
+              ? (t.userId === currentUserId || (!t.userId && currentUserId === 'UNASSIGNED'))
+              : true;
+
+            if (isOtherTaskBelongingToCurrentUser) {
+              const updatedTask = {
+                ...t,
+                timer: t.timer.map((entry, index) =>
+                  index === t.timer!.length - 1 ? { ...entry, endTime: Date.now() } : entry
+                )
+              };
+              tasksToPersist.push(updatedTask);
+              syncTaskToYjs(t.id, updatedTask);
+              return updatedTask;
+            }
+          }
         }
+        return t;
+      });
+    }
+
+    // Persist stopped timers to backend
+    if (tasksToPersist.length > 0) {
+      try {
+        const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+        const adapter = await persistence;
+        for (const stoppedTask of tasksToPersist) {
+          const entity = taskToEntity(stoppedTask);
+          await adapter.updateTask(stoppedTask.id, entity);
+        }
+      } catch (error) {
+        console.error("Error stopping other timers:", error);
       }
-      return t;
-    });
+    }
 
     // Now toggle the requested timer
     updateTaskInTasks(taskId, (task) => {

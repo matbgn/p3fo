@@ -7,7 +7,6 @@ import { FilterControls, Filters } from "./FilterControls";
 import { useTasks, Task, TriageStatus } from "@/hooks/useTasks";
 import { useAllTasks } from "@/hooks/useAllTasks";
 import { useUserSettings } from "@/hooks/useUserSettings";
-import { QuickTimer } from "@/components/QuickTimer";
 import { aStarTextSearch } from "@/lib/a-star-search";
 import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
 import { mergeViewFilters } from "@/lib/filter-merge";
@@ -36,7 +35,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
   const [focusTargetId, setFocusTargetId] = React.useState<string | null>(null);
 
   const handleToggleTimer = (id: string) => {
-    toggleTimer(id);
+    toggleTimer(id, currentUserId);
     setFocusTargetId(id);
 
     // If starting the timer (currently not running), highlight and activate the task
@@ -359,25 +358,6 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
               setFilters={setStoredFilters}
               defaultFilters={defaultTaskBoardFilters}
             />
-            {/* Vertical separator */}
-            <div className="h-6 border-l border-gray-300 mx-2"></div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">Quick time edition:</span>
-              <QuickTimer onJumpToTask={(taskId) => {
-                // Find the task and activate its path
-                const task = map[taskId];
-                if (task) {
-                  const newPath: string[] = [];
-                  let current: Task | undefined = task;
-                  while (current) {
-                    newPath.unshift(current.id);
-                    current = current.parentId ? map[current.parentId] : undefined;
-                  }
-                  setPath(newPath);
-                }
-              }} />
-            </div>
           </div>
         )}
       </div>

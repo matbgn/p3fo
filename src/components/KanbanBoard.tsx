@@ -11,7 +11,6 @@ import { aStarTextSearch } from "@/lib/a-star-search";
 import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
 import { getDefaultFilters, validateFilters } from "@/lib/filter-merge";
 import { sortTasks } from "@/utils/taskSorting";
-import { QuickTimer } from "@/components/QuickTimer";
 
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { useViewNavigation, useViewDisplay } from "@/hooks/useView";
@@ -626,19 +625,6 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
                 status: ["Backlog", "Ready", "WIP", "Blocked", "Done", "Dropped"]
               }}
             />
-            {/* Vertical separator */}
-            <div className="h-6 border-l border-gray-300 mx-2"></div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">Quick time edition:</span>
-              <QuickTimer onJumpToTask={(taskId) => {
-                // Find the task and focus on it
-                const task = tasks.find(t => t.id === taskId);
-                if (task) {
-                  onFocusOnTask?.(taskId);
-                }
-              }} />
-            </div>
           </div>
         )}
       </div>

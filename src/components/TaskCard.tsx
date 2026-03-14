@@ -213,7 +213,7 @@ interface TaskCardProps {
   toggleMajorIncident: (id: string) => void;
   toggleSprintTarget: (id: string) => void;
   toggleDone: (task: Task) => void;
-  toggleTimer: (id: string) => void;
+  toggleTimer: (id: string, currentUserId?: string) => void;
   reparent: (id: string, parentId: string | null) => void;
   onActivate?: (id: string) => void;
   isActive?: boolean;
@@ -465,7 +465,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
               className="h-6 w-6 p-0"
               onClick={(e) => {
                 e.stopPropagation();
-                toggleTimer(task.id);
+                toggleTimer(task.id, currentUserId);
               }}
             >
               {task.timer?.some(e => !e.endTime) ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}

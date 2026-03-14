@@ -13,7 +13,6 @@ import { sortTasks } from '@/utils/taskSorting';
 import { FilterControls, Filters } from "./FilterControls";
 import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
 import { getDefaultFilters, validateFilters, mergeViewFilters } from "@/lib/filter-merge";
-import { QuickTimer } from "@/components/QuickTimer";
 import { COMPACTNESS_ULTRA, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
@@ -313,17 +312,6 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
                 setFilters={setStoredFilters}
                 defaultFilters={getDefaultFilters()}
               />
-              <div className="h-6 border-l border-gray-300 mx-2"></div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Quick time edition:</span>
-                <QuickTimer onJumpToTask={(taskId) => {
-                  const task = tasks.find(t => t.id === taskId);
-                  if (task) {
-                    onFocusOnTask(taskId);
-                  }
-                }} />
-              </div>
             </div>
           )}
         </div>

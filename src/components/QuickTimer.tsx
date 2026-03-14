@@ -1,28 +1,48 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Play, Pause, RotateCcw, ArrowRight } from "lucide-react";
+import { Pause, ArrowRight, Play } from "lucide-react";
 import { useTasks } from "@/hooks/useTasks";
+import { useAllTasks } from "@/hooks/useAllTasks";
+import { useUserSettings } from "@/hooks/useUserSettings";
 import { eventBus } from "@/lib/events";
 
 export const QuickTimer: React.FC<{
   onJumpToTask?: (taskId: string) => void;
 }> = ({ onJumpToTask }) => {
-  const { tasks } = useTasks();
+  // Use useAllTasks to get ALL tasks regardless of any view's filter
+  // This ensures the timer always shows the current user's running task
+  // even when a different user is selected in a filter dropdown
+  const { tasks } = useAllTasks();
+  const { userId: currentUserId } = useUserSettings();
+  const { toggleTimer } = useTasks();
   
-  // Find the currently running task
-  const runningTask = React.useMemo(() => {
+  // Find the currently running task AND the most recently stopped task for the current user
+  const { runningTask, lastStoppedTask } = React.useMemo(() => {
+    let running = null;
+    let lastStopped = null;
+    let lastStoppedTime = 0;
+    
     for (const task of tasks) {
+      // Only consider tasks assigned to the current user
+      if (task.userId && task.userId !== currentUserId) {
+        continue;
+      }
       if (task.timer && task.timer.length > 0) {
         const lastEntry = task.timer[task.timer.length - 1];
-        if (lastEntry && lastEntry.endTime === 0) {
-          return { task, entry: lastEntry };
+        if (lastEntry) {
+          if (lastEntry.endTime === 0) {
+            // Running task
+            running = { task, entry: lastEntry };
+          } else if (lastEntry.endTime > lastStoppedTime) {
+            // Most recently stopped task
+            lastStopped = { task, entry: lastEntry };
+            lastStoppedTime = lastEntry.endTime;
+          }
         }
       }
     }
-    return null;
-  }, [tasks]);
-  
-  const { toggleTimer } = useTasks();
+    return { runningTask: running, lastStoppedTask: lastStopped };
+  }, [tasks, currentUserId]);
   
   // State for elapsed time to update in real-time
   const [elapsedTime, setElapsedTime] = React.useState(0);
@@ -64,12 +84,24 @@ export const QuickTimer: React.FC<{
   // This is intentional - we want to show "No active timer" when no task is running
   
   const handleToggleTimer = () => {
-    toggleTimer(runningTask.task.id);
+    toggleTimer(runningTask.task.id, currentUserId);
   };
   
   const handleJumpToTask = () => {
     if (onJumpToTask) {
       onJumpToTask(runningTask.task.id);
+    }
+  };
+  
+  const handleResumeLastTask = () => {
+    if (lastStoppedTask) {
+      toggleTimer(lastStoppedTask.task.id, currentUserId);
+    }
+  };
+  
+  const handleJumpToLastTask = () => {
+    if (lastStoppedTask && onJumpToTask) {
+      onJumpToTask(lastStoppedTask.task.id);
     }
   };
   
@@ -82,26 +114,45 @@ export const QuickTimer: React.FC<{
   };
   
   return (
-    <div className="flex items-center gap-2 p-2 bg-secondary rounded-md min-h-[40px]">
+    <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-secondary rounded-md min-h-[32px] sm:min-h-[36px]">
       {runningTask ? (
         <>
-          <div className="text-sm font-medium truncate max-w-[150px]">
+          <div className="text-xs sm:text-sm font-medium truncate max-w-[80px] sm:max-w-[120px] md:max-w-[150px]">
             {runningTask.task.title}
           </div>
-          <div className="text-sm font-mono">
+          <div className="text-xs sm:text-sm font-mono shrink-0">
             {formatTime(elapsedTime)}
           </div>
-          <Button size="sm" variant="outline" onClick={handleToggleTimer}>
-            <Pause className="h-4 w-4" />
+          <Button size="sm" variant="outline" onClick={handleToggleTimer} className="h-7 w-7 sm:h-8 sm:w-8 p-0">
+            <Pause className="h-3 w-3 sm:h-4 sm:w-4" />
           </Button>
           {onJumpToTask && (
-            <Button size="sm" variant="outline" onClick={handleJumpToTask}>
-              <ArrowRight className="h-4 w-4" />
+            <Button size="sm" variant="outline" onClick={handleJumpToTask} className="h-7 w-7 sm:h-8 sm:w-8 p-0">
+              <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4" />
             </Button>
           )}
         </>
+      ) : lastStoppedTask ? (
+        <>
+          <button
+            onClick={handleJumpToLastTask}
+            className="text-xs sm:text-sm text-muted-foreground/60 hover:text-muted-foreground truncate max-w-[80px] sm:max-w-[120px] md:max-w-[150px] cursor-pointer hover:underline transition-colors"
+            title={lastStoppedTask.task.title}
+          >
+            {lastStoppedTask.task.title}
+          </button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={handleResumeLastTask}
+            className="h-7 w-7 sm:h-8 sm:w-8 p-0 text-muted-foreground/60 hover:text-foreground"
+            title="Resume timer"
+          >
+            <Play className="h-3 w-3 sm:h-4 sm:w-4" />
+          </Button>
+        </>
       ) : (
-        <div className="text-sm text-muted-foreground italic flex items-center h-full">
+        <div className="text-xs sm:text-sm text-muted-foreground italic flex items-center h-full">
           No active timer
         </div>
       )}

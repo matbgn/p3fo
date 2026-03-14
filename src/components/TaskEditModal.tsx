@@ -51,7 +51,7 @@ interface TaskEditModalProps {
     toggleMajorIncident: (id: string) => void;
     toggleSprintTarget: (id: string) => void;
     currentUserId: string | undefined;
-    onToggleTimer?: (id: string) => void;
+    onToggleTimer?: (id: string, currentUserId?: string) => void;
 }
 
 const DIFFICULTY_OPTIONS: Array<0.5 | 1 | 2 | 3 | 5 | 8> = [0.5, 1, 2, 3, 5, 8];
@@ -130,7 +130,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
                                     className="h-8 w-8 p-0"
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        onToggleTimer(activeTask.id);
+                                        onToggleTimer(activeTask.id, currentUserId);
                                     }}
                                 >
                                     {activeTask.timer?.some(t => t.endTime === 0) ? (
