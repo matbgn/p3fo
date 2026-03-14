@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
 import Cookies from 'js-cookie';
 import { getRandomUsername } from '@/lib/username-generator';
 import { getPersistenceAdapter } from '@/lib/persistence-factory';
@@ -14,6 +14,8 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [userId, setUserId] = useState<string | null>(null);
     const [userSettings, setUserSettings] = useState<UserSettingsEntity | null>(null);
     const [loading, setLoading] = useState(true);
+    const pendingUpdatesRef = useRef<Set<string>>(new Set());
+    const lastUpdateTimestampRef = useRef<Record<string, number>>({});
 
     // Initialize user identity and settings
     useEffect(() => {
@@ -117,6 +119,17 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             throw new Error('Cannot update settings: no user ID');
         }
 
+        const now = Date.now();
+        // Optimistic update
+        Object.keys(patch).forEach(key => {
+            pendingUpdatesRef.current.add(key);
+            lastUpdateTimestampRef.current[key] = now;
+        });
+
+        if (userSettings) {
+            setUserSettings({ ...userSettings, ...patch });
+        }
+
         try {
             const adapter = await getPersistenceAdapter();
             const updated = await adapter.updateUserSettings(userId, patch);
@@ -136,7 +149,17 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         } catch (error) {
             console.error('Error updating user settings:', error);
+            // Revert state if needed
             throw error;
+        } finally {
+            // Keep keys pending for a bit to avoid stale reloads
+            setTimeout(() => {
+                Object.keys(patch).forEach(key => {
+                    if (lastUpdateTimestampRef.current[key] === now) {
+                        pendingUpdatesRef.current.delete(key);
+                    }
+                });
+            }, 1000);
         }
     };
 
@@ -151,7 +174,17 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const adapter = await getPersistenceAdapter();
             const settings = await adapter.getUserSettings(userId);
             if (settings) {
-                setUserSettings(settings);
+                setUserSettings(prev => {
+                    if (!prev) return settings;
+                    const pending = pendingUpdatesRef.current;
+                    const merged = { ...settings };
+                    Object.keys(prev).forEach(key => {
+                        if (pending.has(key)) {
+                            (merged as any)[key] = (prev as any)[key];
+                        }
+                    });
+                    return merged;
+                });
             }
         } catch (error) {
             console.error('Error refreshing user settings:', error);

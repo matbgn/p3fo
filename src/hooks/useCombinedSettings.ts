@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { usePersistence } from "@/hooks/usePersistence";
 import { AppSettingsEntity } from '@/lib/persistence-types';
@@ -82,6 +82,8 @@ export const useCombinedSettings = () => {
     const persistence = usePersistence();
     const [settings, setSettings] = useState<CombinedSettings>(defaultCombinedSettings);
     const [loading, setLoading] = useState(true);
+    const pendingUpdatesRef = useRef<Set<string>>(new Set());
+    const lastUpdateTimestampRef = useRef<Record<string, number>>({});
 
     // Load and merge settings
     useEffect(() => {
@@ -161,7 +163,17 @@ export const useCombinedSettings = () => {
                     }
                 }
 
-                setSettings(merged);
+                // Only update fields that are NOT currently being updated locally
+                setSettings(prev => {
+                    const next = { ...prev };
+                    Object.keys(merged).forEach((key) => {
+                        const k = key as keyof CombinedSettings;
+                        if (!pendingUpdatesRef.current.has(k)) {
+                            (next as any)[k] = merged[k];
+                        }
+                    });
+                    return next;
+                });
             } catch (error) {
                 console.error('Error loading combined settings:', error);
                 setSettings(defaultCombinedSettings);
@@ -238,7 +250,13 @@ export const useCombinedSettings = () => {
      * to user settings. Global fields are saved to app settings.
      */
     const updateSettings = async (updates: Partial<CombinedSettings>, scope?: 'user' | 'global') => {
-        // Optimistically update local state
+        const now = Date.now();
+        // Optimistically update local state and track pending keys
+        Object.keys(updates).forEach(key => {
+            pendingUpdatesRef.current.add(key);
+            lastUpdateTimestampRef.current[key] = now;
+        });
+
         setSettings(prev => ({ ...prev, ...updates }));
 
         try {
@@ -345,8 +363,28 @@ export const useCombinedSettings = () => {
             }
         } catch (error) {
             console.error('Error saving combined settings:', error);
-            // Revert optimistic update on error
-            setSettings(settings); // Reset to previous state
+            // Revert optimistic update on error if no newer update has happened
+            setSettings(prev => {
+                const reverted = { ...prev };
+                Object.keys(updates).forEach(key => {
+                    const k = key as keyof CombinedSettings;
+                    if (lastUpdateTimestampRef.current[k] === now) {
+                        (reverted as any)[k] = settings[k];
+                    }
+                });
+                return reverted;
+            });
+        } finally {
+            // Remove keys from pending set after a short delay to allow for propagation
+            // This delay helps bridge the gap between the sync call finishing and 
+            // the next userSettings update arriving via UserContext.
+            setTimeout(() => {
+                Object.keys(updates).forEach(key => {
+                    if (lastUpdateTimestampRef.current[key] === now) {
+                        pendingUpdatesRef.current.delete(key);
+                    }
+                });
+            }, 1000);
         }
     };
 

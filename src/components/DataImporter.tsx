@@ -9,21 +9,18 @@ import { yUserSettings, isCollaborationEnabled } from '@/lib/collaboration';
 
 interface ImportedUserSettings {
   userId?: string;
-  user_id?: string;
   username?: string;
   logo?: string;
   hasCompletedOnboarding?: boolean;
-  has_completed_onboarding?: boolean;
   workload?: number;
   splitTime?: string;
-  split_time?: string;
   monthlyBalances?: Record<string, MonthlyBalanceData>;
-  monthly_balances?: Record<string, MonthlyBalanceData>;
   cardCompactness?: number;
-  card_compactness?: number;
   timezone?: string;
   weekStartDay?: 0 | 1;
   defaultPlanView?: 'week' | 'month';
+  preferredWorkingDays?: number[];
+  trigram?: string;
 }
 
 const DataImporter: React.FC = () => {
@@ -62,24 +59,28 @@ const DataImporter: React.FC = () => {
 
               if (userSettingsData) {
                 const processUserSetting = async (settings: ImportedUserSettings) => {
-                  if (!settings.userId && !settings.user_id) return;
+                  if (!settings.userId) return;
 
-                  const userId = settings.userId || settings.user_id;
+                  const userId = settings.userId;
 
-                  // Normalize legacy snake_case to camelCase
+                  // Import ALL fields from exported data - imported data takes precedence
                   const normalizedSettings = {
                     userId,
                     username: settings.username,
                     logo: settings.logo,
-                    hasCompletedOnboarding: settings.hasCompletedOnboarding ?? settings.has_completed_onboarding,
+                    hasCompletedOnboarding: settings.hasCompletedOnboarding,
                     workload: settings.workload,
-                    splitTime: settings.splitTime ?? settings.split_time,
-                    monthlyBalances: settings.monthlyBalances ?? settings.monthly_balances,
-                    cardCompactness: settings.cardCompactness ?? settings.card_compactness,
+                    splitTime: settings.splitTime,
+                    monthlyBalances: settings.monthlyBalances,
+                    cardCompactness: settings.cardCompactness,
                     timezone: settings.timezone,
                     weekStartDay: settings.weekStartDay,
                     defaultPlanView: settings.defaultPlanView,
+                    preferredWorkingDays: settings.preferredWorkingDays,
+                    trigram: settings.trigram,
                   };
+
+                  console.log('Importing user settings for:', userId, normalizedSettings);
 
                   await adapter.updateUserSettings(userId, normalizedSettings);
 
@@ -88,17 +89,21 @@ const DataImporter: React.FC = () => {
                   // overwrite it with their stale cached settings
                   if (isCollaborationEnabled()) {
                     console.log('Syncing imported user settings to Yjs:', { userId, username: normalizedSettings.username });
+                    // Set all fields explicitly - imported data takes precedence
                     yUserSettings.set(userId, {
                       userId,
                       username: normalizedSettings.username,
                       logo: normalizedSettings.logo,
                       hasCompletedOnboarding: normalizedSettings.hasCompletedOnboarding,
+                      workload: normalizedSettings.workload,
                       monthlyBalances: normalizedSettings.monthlyBalances || {},
                       cardCompactness: normalizedSettings.cardCompactness ?? 0,
                       splitTime: normalizedSettings.splitTime,
                       timezone: normalizedSettings.timezone,
                       weekStartDay: normalizedSettings.weekStartDay,
                       defaultPlanView: normalizedSettings.defaultPlanView,
+                      preferredWorkingDays: normalizedSettings.preferredWorkingDays,
+                      trigram: normalizedSettings.trigram,
                     });
                   }
                 };
@@ -151,14 +156,22 @@ const DataImporter: React.FC = () => {
               }
 
               // Import QoL Survey Responses
-              // Check for the correct key from DataExporter (qolSurveyResponses)
-              // Also support legacy/alternative keys (qolSurvey, qol_survey)
               const qolData = importedData.qolSurveyResponses || importedData.qolSurvey || importedData.qol_survey;
-
               if (qolData) {
                 for (const [userId, responses] of Object.entries(qolData)) {
                   await adapter.saveQolSurveyResponse(userId, responses as QolSurveyResponseEntity);
                 }
+              }
+
+              // Import Reminders (bulk)
+              const remindersData = importedData.scheduledReminders || importedData.reminders;
+              if (remindersData && Array.isArray(remindersData)) {
+                await adapter.importReminders(remindersData);
+              }
+
+              // Import Circles (bulk)
+              if (importedData.circles && Array.isArray(importedData.circles)) {
+                await adapter.importCircles(importedData.circles);
               }
 
               // RESTORE ACTIVE USER IDENTITY

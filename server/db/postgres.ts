@@ -56,9 +56,9 @@ class PostgresClient implements DbClient {
   constructor(private pool: Pool) { }
 
   async initialize(): Promise<void> {
-    // Migration: Check for legacy schema and migrate if needed
-    await this.migrateSchema();
-
+    // 1. Create tables FIRST before migration
+    // This ensures tables exist when migrateSchema tries to add columns
+    
     // Create tasks table
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS "tasks" (
@@ -79,7 +79,7 @@ class PostgresClient implements DbClient {
         "durationInMinutes" INTEGER,
         "priority" INTEGER,
         "userId" TEXT,
-        FOREIGN KEY ("parentId") REFERENCES "tasks" ("id") ON DELETE SET NULL
+        CONSTRAINT "fk_tasks_parent" FOREIGN KEY ("parentId") REFERENCES "tasks" ("id") ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE
       )
     `);
 
@@ -188,7 +188,7 @@ class PostgresClient implements DbClient {
         "order" INTEGER, -- Display order among siblings
         "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL,
         "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL,
-        FOREIGN KEY ("parentId") REFERENCES "circles" ("id") ON DELETE SET NULL
+        CONSTRAINT "fk_circles_parent" FOREIGN KEY ("parentId") REFERENCES "circles" ("id") ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE
       )
     `);
 
@@ -209,7 +209,7 @@ class PostgresClient implements DbClient {
         "state" TEXT DEFAULT 'scheduled' CHECK ("state" IN ('scheduled', 'triggered', 'read', 'dismissed')),
         "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL,
         "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL,
-        FOREIGN KEY ("taskId") REFERENCES "tasks" ("id") ON DELETE CASCADE
+        CONSTRAINT "fk_reminders_task" FOREIGN KEY ("taskId") REFERENCES "tasks" ("id") ON DELETE CASCADE DEFERRABLE INITIALLY IMMEDIATE
       )
     `);
 
@@ -232,6 +232,13 @@ class PostgresClient implements DbClient {
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_reminders_taskId" ON "reminders"("taskId")`);
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_reminders_state" ON "reminders"("state")`);
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_reminders_triggerDate" ON "reminders"("triggerDate")`);
+
+    // 2. Run migrations AFTER tables exist
+    try {
+      await this.migrateSchema();
+    } catch (error) {
+      console.error('PostgreSQL migration failed:', error);
+    }
   }
 
   private async migrateSchema(): Promise<void> {
@@ -401,11 +408,7 @@ class PostgresClient implements DbClient {
     }
 
     const result = await this.pool.query(sql, params);
-
-    const data = result.rows.map(row => ({
-      ...row,
-      timer: row.timer || { startTime: null, elapsedTime: 0, isRunning: false },
-    }));
+    const data = result.rows.map(row => this.mapTaskDbRowToEntity(row));
 
     return { data, total };
   }
@@ -414,11 +417,7 @@ class PostgresClient implements DbClient {
     const result = await this.pool.query('SELECT * FROM "tasks" WHERE "id" = $1', [id]);
     if (result.rows.length === 0) return null;
 
-    const row = result.rows[0];
-    return {
-      ...row,
-      timer: row.timer || { startTime: null, elapsedTime: 0, isRunning: false },
-    };
+    return this.mapTaskDbRowToEntity(result.rows[0]);
   }
 
   async createTask(input: Partial<TaskEntity>): Promise<TaskEntity> {
@@ -566,6 +565,7 @@ class PostgresClient implements DbClient {
     const client: PoolClient = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      await client.query('SET CONSTRAINTS ALL DEFERRED');
 
       for (const task of tasks) {
         await client.query(`
@@ -622,15 +622,7 @@ class PostgresClient implements DbClient {
   async getUserSettings(userId: string): Promise<UserSettingsEntity | null> {
     const result = await this.pool.query('SELECT * FROM "userSettings" WHERE "userId" = $1', [userId]);
     if (result.rows.length > 0) {
-      const row = result.rows[0];
-      return {
-        ...row,
-        monthlyBalances: row.monthlyBalances || {},
-        weekStartDay: row.weekStartDay,
-        defaultPlanView: row.defaultPlanView,
-        preferredWorkingDays: row.preferredWorkingDays || undefined,
-        trigram: row.trigram || undefined,
-      };
+      return this.mapUserSettingsDbRowToEntity(result.rows[0]);
     }
     return null;
   }
@@ -676,12 +668,7 @@ class PostgresClient implements DbClient {
 
   async listUsers(): Promise<UserSettingsEntity[]> {
     const result = await this.pool.query('SELECT * FROM "userSettings"');
-    return result.rows.map(row => ({
-      ...row,
-      monthlyBalances: row.monthlyBalances || {},
-      preferredWorkingDays: row.preferredWorkingDays || undefined,
-      trigram: row.trigram || undefined,
-    }));
+    return result.rows.map(row => this.mapUserSettingsDbRowToEntity(row));
   }
 
   async migrateUser(oldUserId: string, newUserId: string): Promise<void> {
@@ -854,23 +841,14 @@ class PostgresClient implements DbClient {
   // Circles (EasyCIRCLE)
   async getCircles(): Promise<CircleEntity[]> {
     const result = await this.pool.query('SELECT * FROM "circles" ORDER BY "order" ASC NULLS LAST, "createdAt" ASC');
-    return result.rows.map(row => ({
-      ...row,
-      nodeType: row.nodeType as CircleNodeType,
-      modifier: row.modifier as CircleNodeModifier | undefined,
-    }));
+    return result.rows.map(row => this.mapCircleDbRowToEntity(row));
   }
 
   async getCircleById(id: string): Promise<CircleEntity | null> {
     const result = await this.pool.query('SELECT * FROM "circles" WHERE "id" = $1', [id]);
     if (result.rows.length === 0) return null;
 
-    const row = result.rows[0];
-    return {
-      ...row,
-      nodeType: row.nodeType as CircleNodeType,
-      modifier: row.modifier as CircleNodeModifier | undefined,
-    };
+    return this.mapCircleDbRowToEntity(result.rows[0]);
   }
 
   async createCircle(input: Partial<CircleEntity>): Promise<CircleEntity> {
@@ -964,6 +942,51 @@ class PostgresClient implements DbClient {
 
   async clearAllCircles(): Promise<void> {
     await this.pool.query('DELETE FROM "circles"');
+  }
+
+  async importCircles(circles: CircleEntity[]): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('SET CONSTRAINTS ALL DEFERRED');
+
+      for (const circle of circles) {
+        await client.query(`
+          INSERT INTO "circles"("id", "name", "parentId", "nodeType", "modifier", "color", "size", "description", "order", "createdAt", "updatedAt")
+          VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          ON CONFLICT ("id") DO UPDATE SET
+            "name" = EXCLUDED."name",
+            "parentId" = EXCLUDED."parentId",
+            "nodeType" = EXCLUDED."nodeType",
+            "modifier" = EXCLUDED."modifier",
+            "color" = EXCLUDED."color",
+            "size" = EXCLUDED."size",
+            "description" = EXCLUDED."description",
+            "order" = EXCLUDED."order",
+            "createdAt" = EXCLUDED."createdAt",
+            "updatedAt" = EXCLUDED."updatedAt"
+        `, [
+          circle.id,
+          circle.name,
+          circle.parentId,
+          circle.nodeType,
+          circle.modifier ?? null,
+          circle.color ?? null,
+          circle.size ?? null,
+          circle.description ?? null,
+          circle.order ?? null,
+          circle.createdAt,
+          circle.updatedAt,
+        ]);
+      }
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   // Reminders
@@ -1079,6 +1102,83 @@ class PostgresClient implements DbClient {
 
   async clearAllReminders(): Promise<void> {
     await this.pool.query('DELETE FROM "reminders"');
+  }
+
+  async importReminders(reminders: ReminderEntity[]): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      for (const reminder of reminders) {
+        await client.query(`
+          INSERT INTO "reminders"("id", "userId", "taskId", "title", "description", "read", "persistent",
+            "triggerDate", "offsetMinutes", "snoozeDurationMinutes", "originalTriggerDate", "state", "createdAt", "updatedAt")
+          VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          ON CONFLICT ("id") DO UPDATE SET
+            "userId" = EXCLUDED."userId",
+            "taskId" = EXCLUDED."taskId",
+            "title" = EXCLUDED."title",
+            "description" = EXCLUDED."description",
+            "read" = EXCLUDED."read",
+            "persistent" = EXCLUDED."persistent",
+            "triggerDate" = EXCLUDED."triggerDate",
+            "offsetMinutes" = EXCLUDED."offsetMinutes",
+            "snoozeDurationMinutes" = EXCLUDED."snoozeDurationMinutes",
+            "originalTriggerDate" = EXCLUDED."originalTriggerDate",
+            "state" = EXCLUDED."state",
+            "updatedAt" = EXCLUDED."updatedAt"
+        `, [
+          reminder.id,
+          reminder.userId,
+          reminder.taskId ?? null,
+          reminder.title,
+          reminder.description ?? null,
+          reminder.read,
+          reminder.persistent,
+          reminder.triggerDate ?? null,
+          reminder.offsetMinutes ?? null,
+          reminder.snoozeDurationMinutes ?? null,
+          reminder.originalTriggerDate ?? null,
+          reminder.state,
+          reminder.createdAt,
+          reminder.updatedAt,
+        ]);
+      }
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private mapTaskDbRowToEntity(row: any): TaskEntity {
+    return {
+      ...row,
+      timer: row.timer || { startTime: null, elapsedTime: 0, isRunning: false },
+      children: [], // Children are populated by high-level service or on-demand
+    };
+  }
+
+  private mapUserSettingsDbRowToEntity(row: any): UserSettingsEntity {
+    return {
+      ...row,
+      monthlyBalances: row.monthlyBalances || {},
+      weekStartDay: row.weekStartDay,
+      defaultPlanView: row.defaultPlanView,
+      preferredWorkingDays: row.preferredWorkingDays || undefined,
+      trigram: row.trigram || undefined,
+    };
+  }
+
+  private mapCircleDbRowToEntity(row: any): CircleEntity {
+    return {
+      ...row,
+      nodeType: row.nodeType as CircleNodeType,
+      modifier: row.modifier as CircleNodeModifier | undefined,
+    };
   }
 
   private mapReminderRowToEntity(row: any): ReminderEntity {

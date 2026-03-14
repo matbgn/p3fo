@@ -51,11 +51,18 @@ const DataExporter: React.FC = () => {
       // Fetch Fertilization Board state
       const fertilizationBoardState = await adapter.getFertilizationBoardState();
 
+      // Fetch ALL reminders
+      const allReminders = await adapter.listReminders();
+
+      // Fetch ALL circles
+      const allCircles = await adapter.listCircles();
+
       const exportData = {
         tasks: allTasks,
-        scheduledReminders: useReminderStore.getState().scheduledReminders,
+        scheduledReminders: allReminders, // Unified export using persistence layer
         qolSurveyResponses: allQolSurveyResponses, // Export all users' QoL data
         fertilizationBoard: fertilizationBoardState, // Export Fertilization Board state
+        circles: allCircles, // Export Circles
         settings: settingsToExport,
         activeUserId: userId,
         allUserSettings, // Export all users for full restore

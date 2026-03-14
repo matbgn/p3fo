@@ -483,6 +483,118 @@ app.post('/api/circles/clear', async (req: Request, res: Response) => {
   }
 });
 
+app.post('/api/circles/import', express.json({ limit: '10mb' }), async (req: Request, res: Response) => {
+  try {
+    const circles = req.body;
+    if (!Array.isArray(circles)) {
+      return res.status(400).json({ error: 'Expected an array of circles' });
+    }
+    await db.importCircles(circles);
+    res.json({ ok: true });
+  } catch (error: unknown) {
+    console.error('Failed to import circles:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to import circles', details: message });
+  }
+});
+
+// Reminders routes
+app.get('/api/reminders', async (req: Request, res: Response) => {
+  try {
+    const userId = req.query.user_id as string | undefined;
+    const reminders = await db.listReminders(userId);
+    res.json(reminders);
+  } catch (error: unknown) {
+    console.error('Error fetching reminders:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to fetch reminders', details: message });
+  }
+});
+
+app.post('/api/reminders', async (req: Request, res: Response) => {
+  try {
+    const reminder = await db.createReminder(req.body);
+    res.status(201).json(reminder);
+  } catch (error: unknown) {
+    console.error('Error creating reminder:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to create reminder', details: message });
+  }
+});
+
+app.get('/api/reminders/:id', async (req: Request, res: Response) => {
+  try {
+    const reminder = await db.getReminderById(req.params.id);
+    if (!reminder) {
+      return res.status(404).json({ error: 'Reminder not found' });
+    }
+    res.json(reminder);
+  } catch (error: unknown) {
+    console.error('Error fetching reminder:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to fetch reminder', details: message });
+  }
+});
+
+app.patch('/api/reminders/:id', async (req: Request, res: Response) => {
+  try {
+    const reminder = await db.updateReminder(req.params.id, req.body);
+    res.json(reminder);
+  } catch (error: unknown) {
+    console.error('Error updating reminder:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to update reminder', details: message });
+  }
+});
+
+app.delete('/api/reminders/:id', async (req: Request, res: Response) => {
+  try {
+    await db.deleteReminder(req.params.id);
+    res.status(204).send();
+  } catch (error: unknown) {
+    console.error('Error deleting reminder:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to delete reminder', details: message });
+  }
+});
+
+app.delete('/api/reminders/task/:taskId', async (req: Request, res: Response) => {
+  try {
+    await db.deleteRemindersByTaskId(req.params.taskId);
+    res.status(204).send();
+  } catch (error: unknown) {
+    console.error('Error deleting reminders by task ID:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to delete reminders', details: message });
+  }
+});
+
+app.post('/api/reminders/clear', async (req: Request, res: Response) => {
+  try {
+    await db.clearAllReminders();
+    res.json({ success: true });
+  } catch (error: unknown) {
+    console.error('Error clearing reminders:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to clear reminders', details: message });
+  }
+});
+
+app.post('/api/reminders/import', express.json({ limit: '10mb' }), async (req: Request, res: Response) => {
+  try {
+    const reminders = req.body;
+    if (!Array.isArray(reminders)) {
+      return res.status(400).json({ error: 'Expected an array of reminders' });
+    }
+    await db.importReminders(reminders);
+    res.json({ ok: true });
+  } catch (error: unknown) {
+    console.error('Failed to import reminders:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to import reminders', details: message });
+  }
+});
+
 // Error handling middleware
 app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
   console.error('Unhandled error:', error);

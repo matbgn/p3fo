@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import { Calendar, momentLocalizer, View } from 'react-big-calendar';
 import moment from 'moment';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
@@ -85,46 +85,34 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) 
   const { tasks } = useAllTasks(); // Use useAllTasks to get unfiltered tasks
   const { userId: currentUserId } = useUserSettings();
 
-  const parentTasks = tasks.filter(
-    task =>
-      !task.parentId && // Only top-level tasks
-      task.triageStatus !== 'Done' &&
-      task.triageStatus !== 'Dropped'
-  );
-  const tasksWithoutTerminationDate = parentTasks.filter(task => !task.terminationDate);
-
-  const events = parentTasks
-    .filter(
+  const parentTasks = useMemo(() => {
+    return tasks.filter(
       task =>
-        task.terminationDate &&
+        !task.parentId && // Only top-level tasks
         task.triageStatus !== 'Done' &&
         task.triageStatus !== 'Dropped'
-    )
-    .map(task => {
-      const startDate = new Date(task.terminationDate!);
-      const duration = task.durationInMinutes;
-      const isAllDayEvent = startDate.getHours() === 0 && startDate.getMinutes() === 0 && startDate.getSeconds() === 0;
+    );
+  }, [tasks]);
 
-      if (duration) {
-        const endDate = new Date(startDate.getTime() + duration * 60000);
-        return {
-          title: task.title,
-          start: startDate,
-          end: endDate,
-          allDay: false,
-          resource: task,
-        };
-      } else {
-        if (isAllDayEvent) {
-          return {
-            title: task.title,
-            start: startDate,
-            end: startDate,
-            allDay: true,
-            resource: task,
-          };
-        } else {
-          const endDate = new Date(startDate.getTime() + 120 * 60000);
+  const tasksWithoutTerminationDate = useMemo(() => {
+    return parentTasks.filter(task => !task.terminationDate);
+  }, [parentTasks]);
+
+  const events = useMemo(() => {
+    return parentTasks
+      .filter(
+        task =>
+          task.terminationDate &&
+          task.triageStatus !== 'Done' &&
+          task.triageStatus !== 'Dropped'
+      )
+      .map(task => {
+        const startDate = new Date(task.terminationDate!);
+        const duration = task.durationInMinutes;
+        const isAllDayEvent = startDate.getHours() === 0 && startDate.getMinutes() === 0 && startDate.getSeconds() === 0;
+
+        if (duration) {
+          const endDate = new Date(startDate.getTime() + duration * 60000);
           return {
             title: task.title,
             start: startDate,
@@ -132,9 +120,28 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) 
             allDay: false,
             resource: task,
           };
+        } else {
+          if (isAllDayEvent) {
+            return {
+              title: task.title,
+              start: startDate,
+              end: startDate,
+              allDay: true,
+              resource: task,
+            };
+          } else {
+            const endDate = new Date(startDate.getTime() + 120 * 60000);
+            return {
+              title: task.title,
+              start: startDate,
+              end: endDate,
+              allDay: false,
+              resource: task,
+            };
+          }
         }
-      }
-    });
+      });
+  }, [parentTasks]);
 
   return (
     <ResizablePanelGroup direction="vertical" className="min-h-[850px]">

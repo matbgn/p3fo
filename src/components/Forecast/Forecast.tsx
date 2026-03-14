@@ -7,6 +7,7 @@ import { useUserSettings } from "@/hooks/useUserSettings";
 import { useUsers } from "@/hooks/useUsers";
 import { getWorkingDays } from "@/utils/workingdays";
 import { getHistoricalHourlyBalances } from "@/utils/projectedHours";
+import { normalizePreferredDays } from "@/utils/scheduler-utils";
 import TimetableRecordsCell from "./TimetableRecordsCell";
 
 interface ForecastProps {
@@ -23,7 +24,8 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
     const year = selectedDate.getFullYear();
     const month = selectedDate.getMonth() + 1; // 1-indexed for getWorkingDays and display
 
-    const workingDays = getWorkingDays(year, month);
+    // Working days is based on ALL weekdays (Mon-Fri), not preferred days
+    const workingDays = getWorkingDays(year, month, 1, undefined, settings.country, settings.region);
 
     // Format month name
     const monthName = selectedDate.toLocaleString('default', { month: 'long' });
@@ -51,10 +53,23 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
             ? selectedUser.username
             : (userSettings.username || "Select User");
 
-    // Use selected user's workload if available, otherwise fallback to current settings
+    // Normalize preferred days from the selected user
+    // User might have number[] or Record<string/number, number>
+    const normalized = selectedUser?.preferredWorkingDays 
+        ? normalizePreferredDays(selectedUser.preferredWorkingDays as any)
+        : settings.preferredWorkingDays;
+    
+    // Ensure we have a Record<string, number> to match CombinedSettings
+    const preferredWorkingDays: Record<string, number> = {};
+    Object.entries(normalized).forEach(([k, v]) => {
+        preferredWorkingDays[String(k)] = v;
+    });
+
+    // Use selected user's workload and preferred days if available, otherwise fallback to current settings
     const forecastSettings = {
         ...settings,
-        userWorkloadPercentage: selectedUser?.workload ?? settings.userWorkloadPercentage
+        userWorkloadPercentage: selectedUser?.workload ?? settings.userWorkloadPercentage,
+        preferredWorkingDays
     };
 
     const handleYearChange = (value: string) => {

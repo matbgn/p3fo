@@ -39,8 +39,13 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
     // Use selected user's workload if available, otherwise fallback to settings (which is current user's or default)
     // We need to pass this to getHistoricalHourlyBalances
     const userWorkload = selectedUser?.workload ?? settings.userWorkloadPercentage;
+    const effectiveSettings = {
+        ...settings,
+        userWorkloadPercentage: userWorkload,
+        preferredWorkingDays: (selectedUser?.preferredWorkingDays as Record<string, number>) ?? settings.preferredWorkingDays
+    };
 
-    const data = getHistoricalHourlyBalances(filteredTasks, settings, 6, monthlyBalances, userWorkload);
+    const data = getHistoricalHourlyBalances(filteredTasks, effectiveSettings, 6, monthlyBalances, userWorkload);
 
     // Filter data for chart: only show last 6 months of history + projection
     // data contains history (monthsBack) + projection (6 months)
@@ -132,10 +137,11 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
         // Recalculate hourlyBalance if workload or hours_done changed
         if (field === 'workload' || field === 'hoursDone') {
             const [year, month] = descId.split('-').map(Number);
-            const workingDays = getWorkingDays(year, month);
+            // Hours due is based on ALL working days (Mon-Fri), NOT preferred days
+            const workingDays = getWorkingDays(year, month, 1, undefined, settings.country, settings.region);
             const workload = field === 'workload' ? value : updatedBalance.workload;
             const hoursDone = field === 'hoursDone' ? value : updatedBalance.hoursDone;
-            const hoursDue = workingDays * 8 * (workload / 100);
+            const hoursDue = workingDays * (settings.hoursToBeDoneByDay ?? 8) * (workload / 100);
             updatedBalance.hourlyBalance = hoursDone - hoursDue;
         }
 

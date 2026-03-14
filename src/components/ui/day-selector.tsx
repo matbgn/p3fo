@@ -25,7 +25,7 @@ export const DaySelector: React.FC<DaySelectorProps> = ({
     className,
     disabled
 }) => {
-    const normalized = normalizePreferredDays(value);
+    const normalized = React.useMemo(() => normalizePreferredDays(value), [value]);
 
     // Toggle Logic: 0 (Off) -> 1 (Full) -> 0.5 (Half) -> 0 (Off)
     const handleClick = (dayValue: number) => {

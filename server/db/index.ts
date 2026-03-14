@@ -1,5 +1,5 @@
 // Database client interface and factory
-import { TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, FertilizationBoardEntity, DreamBoardEntity, CircleEntity } from '../../src/lib/persistence-types.js';
+import { TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, FertilizationBoardEntity, DreamBoardEntity, CircleEntity, ReminderEntity } from '../../src/lib/persistence-types.js';
 
 // Pagination options for queries
 export interface PaginationOptions {
@@ -59,6 +59,16 @@ export interface DbClient {
   getDreamBoardState(): Promise<DreamBoardEntity | null>;
   updateDreamBoardState(state: DreamBoardEntity): Promise<void>;
 
+  // Reminders
+  listReminders(userId?: string): Promise<ReminderEntity[]>;
+  getReminderById(id: string): Promise<ReminderEntity | null>;
+  createReminder(input: Partial<ReminderEntity>): Promise<ReminderEntity>;
+  updateReminder(id: string, patch: Partial<ReminderEntity>): Promise<ReminderEntity>;
+  deleteReminder(id: string): Promise<void>;
+  deleteRemindersByTaskId(taskId: string): Promise<void>;
+  clearAllReminders(): Promise<void>;
+  importReminders(reminders: ReminderEntity[]): Promise<void>;
+
   // Circles (EasyCIRCLE)
   getCircles(): Promise<CircleEntity[]>;
   getCircleById(id: string): Promise<CircleEntity | null>;
@@ -66,6 +76,7 @@ export interface DbClient {
   updateCircle(id: string, data: Partial<CircleEntity>): Promise<CircleEntity | null>;
   deleteCircle(id: string): Promise<void>;
   clearAllCircles(): Promise<void>;
+  importCircles(circles: CircleEntity[]): Promise<void>;
 
   // System
   clearAllData(): Promise<void>;
