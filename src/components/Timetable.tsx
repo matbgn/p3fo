@@ -505,39 +505,41 @@ export const Timetable: React.FC<{
     return map;
   }, [overlapInfo]);
 
-  // SVG line drawing for overlap connections - optimized for performance
+  // SVG line drawing for overlap connections
   const tableRef = React.useRef<HTMLDivElement | null>(null);
   const [overlapLines, setOverlapLines] = React.useState<Array<{ x1: number; y1: number; x2: number; y2: number; groupId: string }>>([]);
-  
-  // Store the previous overlap group count to avoid unnecessary recalculations
-  const prevOverlapGroupCountRef = React.useRef(0);
-  const overlapGroupCount = overlapInfo.overlappingGroups.length;
 
-  // Only recompute when overlap group count changes
-  React.useEffect(() => {
-    // Skip if no overlaps or count hasn't changed
-    if (overlapGroupCount === 0) {
-      if (overlapLines.length > 0) {
+  // Derive a stable key that changes when overlap groups actually change
+  // This ensures recalculation when filter changes result in different overlapping entries
+  const overlapGroupsKey = React.useMemo(() => {
+    return overlapInfo.overlappingGroups
+      .map(g => g.entries.map(e => `${e.taskId}-${e.index}`).sort().join('--'))
+      .sort()
+      .join('||');
+  }, [overlapInfo]);
+
+  // Create a key based on the actual visible entries (not just count)
+  // This ensures we recalculate when entries change due to filtering
+  const visibleEntriesKey = React.useMemo(() => {
+    return timerEntries.map(e => `${e.taskId}-${e.index}`).join(',');
+  }, [timerEntries]);
+
+  // Recompute lines when overlap groups or visible entries change
+  // Using useLayoutEffect to ensure we read DOM after React commits but before paint
+  React.useLayoutEffect(() => {
+    const container = tableRef.current;
+    if (!container) return;
+
+    const calculateLines = () => {
+      // If no overlaps, clear lines
+      if (overlapGroupsKey === '') {
         setOverlapLines([]);
+        return;
       }
-      prevOverlapGroupCountRef.current = 0;
-      return;
-    }
-
-    if (overlapGroupCount === prevOverlapGroupCountRef.current) {
-      return; // No change, skip recompute
-    }
-    
-    prevOverlapGroupCountRef.current = overlapGroupCount;
-
-    // Delay to let DOM settle
-    const timeoutId = setTimeout(() => {
-      const container = tableRef.current;
-      if (!container) return;
 
       // Get all overlap groups
       const groupElements = new Map<string, HTMLElement[]>();
-      
+
       container.querySelectorAll('[data-overlap-group]').forEach((el) => {
         const groupId = (el as HTMLElement).getAttribute('data-overlap-group');
         if (groupId) {
@@ -561,7 +563,7 @@ export const Timetable: React.FC<{
         for (let i = 0; i < sortedElements.length - 1; i++) {
           const el1 = sortedElements[i];
           const el2 = sortedElements[i + 1];
-          
+
           const rect1 = el1.getBoundingClientRect();
           const rect2 = el2.getBoundingClientRect();
 
@@ -579,10 +581,25 @@ export const Timetable: React.FC<{
       });
 
       setOverlapLines(lines);
-    }, 150); // Longer delay for initial render
-    
-    return () => clearTimeout(timeoutId);
-  }, [overlapGroupCount]); // Only depend on count, not the full overlapInfo
+    };
+
+    // Calculate immediately
+    calculateLines();
+
+    // Also watch for size changes
+    const resizeObserver = new ResizeObserver(() => {
+      calculateLines();
+    });
+    resizeObserver.observe(container);
+
+    // Occasional delay to catch late-renders (like fonts or dynamic layout shifts)
+    const timeoutId = setTimeout(calculateLines, 100);
+
+    return () => {
+      resizeObserver.disconnect();
+      clearTimeout(timeoutId);
+    };
+  }, [overlapGroupsKey, visibleEntriesKey, view, settings.timezone]);
 
 
   return (

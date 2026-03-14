@@ -99,35 +99,34 @@ export const ChronologicalView: React.FC<ChronologicalViewProps> = ({
     return map;
   }, [overlapInfo]);
 
+  // Derive a stable key that changes when overlap groups actually change
+  const overlapGroupsKey = React.useMemo(() => {
+    return overlapInfo.overlappingGroups
+      .map(g => g.entries.map(e => `${e.taskId}-${e.index}`).sort().join('--'))
+      .sort()
+      .join('||');
+  }, [overlapInfo]);
+
+  // Create a key based on the actual visible entries
+  const visibleEntriesKey = React.useMemo(() => {
+    return sortedEntries.map(e => `${e.taskId}-${e.index}`).join(',');
+  }, [sortedEntries]);
+
   // SVG line drawing for overlap connections - optimized for performance
   const tableRef = React.useRef<HTMLDivElement | null>(null);
   const [overlapLines, setOverlapLines] = React.useState<Array<{ x1: number; y1: number; x2: number; y2: number; groupId: string }>>([]);
   
-  // Store the previous overlap group count to avoid unnecessary recalculations
-  const prevOverlapGroupCountRef = React.useRef(0);
-  const overlapGroupCount = overlapInfo.overlappingGroups.length;
+  // Recompute lines when overlap groups or visible entries change
+  React.useLayoutEffect(() => {
+    const container = tableRef.current;
+    if (!container) return;
 
-  // Only recompute when overlap group count changes
-  React.useEffect(() => {
-    // Skip if no overlaps or count hasn't changed
-    if (overlapGroupCount === 0) {
-      if (overlapLines.length > 0) {
+    const calculateLines = () => {
+      // If no overlaps, clear lines
+      if (overlapGroupsKey === '') {
         setOverlapLines([]);
+        return;
       }
-      prevOverlapGroupCountRef.current = 0;
-      return;
-    }
-
-    if (overlapGroupCount === prevOverlapGroupCountRef.current) {
-      return; // No change, skip recompute
-    }
-    
-    prevOverlapGroupCountRef.current = overlapGroupCount;
-
-    // Delay to let DOM settle
-    const timeoutId = setTimeout(() => {
-      const container = tableRef.current;
-      if (!container) return;
 
       // Get all overlap groups
       const groupElements = new Map<string, HTMLElement[]>();
@@ -173,10 +172,25 @@ export const ChronologicalView: React.FC<ChronologicalViewProps> = ({
       });
 
       setOverlapLines(lines);
-    }, 150); // Longer delay for initial render
+    };
+
+    // Calculate immediately
+    calculateLines();
+
+    // Also watch for size changes
+    const resizeObserver = new ResizeObserver(() => {
+      calculateLines();
+    });
+    resizeObserver.observe(container);
+
+    // Occasional delay to catch late-renders
+    const timeoutId = setTimeout(calculateLines, 100);
     
-    return () => clearTimeout(timeoutId);
-  }, [overlapGroupCount]); // Only depend on count, not the full overlapInfo
+    return () => {
+      resizeObserver.disconnect();
+      clearTimeout(timeoutId);
+    };
+  }, [overlapGroupsKey, visibleEntriesKey]);
 
   return (
     <div ref={tableRef} className="relative">

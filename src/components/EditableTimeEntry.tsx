@@ -326,8 +326,12 @@ export const EditableTimeEntry: React.FC<{
   return (
     <TableRow
       ref={(el) => {
-        if (el && overlapInfo?.overlapGroupId) {
-          el.setAttribute('data-overlap-group', overlapInfo.overlapGroupId);
+        if (el) {
+          if (overlapInfo?.overlapGroupId) {
+            el.setAttribute('data-overlap-group', overlapInfo.overlapGroupId);
+          } else {
+            el.removeAttribute('data-overlap-group');
+          }
         }
       }}
       className={cn(
