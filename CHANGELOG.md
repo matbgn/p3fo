@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.17.0 (2026-03-14)
+
+### Features
+
+- **timetable:** add overlapping time entry detection (991dd8e)
+- **time-picker-dialog:** add keyboard input for direct time entry (cb2d48c)
+- **running timer:** centralize QuickTimer with user-specific filtering and resume (873304b)
+
+### Bug Fixes
+
+- **running timer:** stop and persist other running timers on toggle (79a7915)
+
+---
+
 ## v0.16.0 (2026-03-14)
 
 ### Features
@@ -119,23 +133,5 @@
 ### Bug Fixes
 
 - **layout:** persist card compactness user preference on server deployments (452699b)
-
----
-
-## v0.10.0 (2025-12-10)
-
-### Features
-
-- **fertilization:** permit column renaming (bcdf0bb)
-- **fertilization:** add filters (3ada959)
-- **fertilization:** permit anonymous contributions (c14e29e)
-- **fertilization:** add become moderator button (b125451)
-- **fertilization:** WIP start implementing new fertilization tool (704049a)
-
-### Bug Fixes
-
-- **fertilization:** restore import / export integrity (d3d797f)
-- **fertilization:** make it live collaborative (04467c1)
-- **tasks board:** do not show done/dropped by default (ac8272c)
 
 ---
