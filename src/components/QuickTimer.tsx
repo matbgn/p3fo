@@ -84,7 +84,7 @@ export const QuickTimer: React.FC<{
   // This is intentional - we want to show "No active timer" when no task is running
   
   const handleToggleTimer = () => {
-    toggleTimer(runningTask.task.id);
+    toggleTimer(runningTask.task.id, currentUserId);
   };
   
   const handleJumpToTask = () => {
@@ -95,7 +95,7 @@ export const QuickTimer: React.FC<{
   
   const handleResumeLastTask = () => {
     if (lastStoppedTask) {
-      toggleTimer(lastStoppedTask.task.id);
+      toggleTimer(lastStoppedTask.task.id, currentUserId);
     }
   };
   

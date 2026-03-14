@@ -35,7 +35,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
   const [focusTargetId, setFocusTargetId] = React.useState<string | null>(null);
 
   const handleToggleTimer = (id: string) => {
-    toggleTimer(id);
+    toggleTimer(id, currentUserId);
     setFocusTargetId(id);
 
     // If starting the timer (currently not running), highlight and activate the task

@@ -1132,27 +1132,37 @@ export function useTasks() {
     return task.difficulty || 0;
   };
 
-  const toggleTimer = React.useCallback(async (taskId: string) => {
+  const toggleTimer = React.useCallback(async (taskId: string, currentUserId?: string) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
     // Collect tasks that need to be persisted (other running timers that need to be stopped)
     const tasksToPersist: Task[] = [];
 
-    // First, stop any other running timers
+    // First, stop any other running timers ONLY for the current user
+    // This prevents stopping timers for other users' tasks
     tasks = tasks.map(t => {
+      // Only stop timers for tasks belonging to the current user
       if (t.id !== taskId && t.timer && t.timer.length > 0) {
-        const lastEntry = t.timer[t.timer.length - 1];
-        if (lastEntry && lastEntry.endTime === 0) {
-          const updatedTask = {
-            ...t,
-            timer: t.timer.map((entry, index) =>
-              index === t.timer!.length - 1 ? { ...entry, endTime: Date.now() } : entry
-            )
-          };
-          tasksToPersist.push(updatedTask);
-          syncTaskToYjs(t.id, updatedTask);
-          return updatedTask;
+        // Check if this task belongs to the current user
+        const taskUserId = t.userId;
+        const isCurrentUserTask = currentUserId 
+          ? (taskUserId === currentUserId || (!taskUserId && currentUserId === 'UNASSIGNED'))
+          : true; // If no userId provided, stop all (backward compatibility)
+        
+        if (isCurrentUserTask) {
+          const lastEntry = t.timer[t.timer.length - 1];
+          if (lastEntry && lastEntry.endTime === 0) {
+            const updatedTask = {
+              ...t,
+              timer: t.timer.map((entry, index) =>
+                index === t.timer!.length - 1 ? { ...entry, endTime: Date.now() } : entry
+              )
+            };
+            tasksToPersist.push(updatedTask);
+            syncTaskToYjs(t.id, updatedTask);
+            return updatedTask;
+          }
         }
       }
       return t;
