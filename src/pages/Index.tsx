@@ -19,6 +19,7 @@ import { useViewNavigation } from "@/hooks/useView";
 import { CompactnessSelector } from "@/components/CompactnessSelector";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { UserSection } from "@/components/UserSection";
+import { QuickTimer } from "@/components/QuickTimer";
 
 // Styles for the keep-alive view slots.
 // content-visibility:hidden tells the browser to skip layout+paint for hidden subtrees.
@@ -81,7 +82,12 @@ const Index: React.FC = () => {
                 <UserSection />
               </>
             }
-            rightItems={<CompactnessSelector />}
+            rightItems={
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap">
+                <QuickTimer onJumpToTask={handleFocusOnTask} />
+                <CompactnessSelector />
+              </div>
+            }
           />
         </div>
       </header>
