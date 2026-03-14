@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.16.0 (2026-03-14)
+
+### Features
+
+- **persistence:** add bulk import/export for circles and reminders (dc8ba00)
+- **metrics:** use preferred days for pace projection (f8fd4e4)
+- **users:** add inline trigram editing UI (37fd1a2)
+
+### Bug Fixes
+
+- **filters:** prevent race condition clobbering persisted filters on views reload (04d3e9a)
+- **reminders:** add HTTP persistence adapter CRUD operations (970b511)
+
+---
+
 ## v0.15.0 (2026-02-14)
 
 ### Features
@@ -122,22 +137,5 @@
 - **fertilization:** restore import / export integrity (d3d797f)
 - **fertilization:** make it live collaborative (04467c1)
 - **tasks board:** do not show done/dropped by default (ac8272c)
-
----
-
-## v0.9.0 (2025-12-09)
-
-### Features
-
-- **task modal:** add possibility to start / stop a card from the modal directly (b9c8435)
-- **timetable:** implement direct start/stop button on tasks in timetable (02e32c4)
-- **layout:** introduce persistance of compactness selector on user settings (fbf7d7d)
-
-### Bug Fixes
-
-- **tasks board:** sort also the dropped tasks to last position and strike them but not ticked (055f641)
-- **metrics:** correct last and projected hourly balance in forecast view (aeba583)
-- **focus board:** restore the sorting mechanic for tasks done which should be at the end (0fc597a)
-- **focus board:** restore highlight of the current task and ensure that a newly started task becomes the new focus (ac5956c)
 
 ---
