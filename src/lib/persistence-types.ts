@@ -166,9 +166,18 @@ export interface PersistenceAdapter {
   deleteReminder(id: string): Promise<void>;
   deleteRemindersByTaskId(taskId: string): Promise<void>;
   clearAllReminders(): Promise<void>;
+  importReminders(reminders: ReminderEntity[]): Promise<void>;
 
   // System
   clearAllData(): Promise<void>;
+
+  // Circles
+  listCircles(): Promise<CircleEntity[]>;
+  importCircles(circles: CircleEntity[]): Promise<void>;
+
+  // Reminders
+  listReminders(userId?: string): Promise<ReminderEntity[]>;
+  importReminders(reminders: ReminderEntity[]): Promise<void>;
 }
 
 export interface FertilizationCard {

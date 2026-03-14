@@ -1,4 +1,4 @@
-import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, ReminderEntity } from './persistence-types';
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, ReminderEntity, CircleEntity } from './persistence-types';
 
 // Storage keys
 const TASKS_STORAGE_KEY = 'dyad_task_board_v1';
@@ -8,6 +8,7 @@ const QOL_SURVEY_STORAGE_KEY = 'qolSurveyResponse';
 const FILTERS_STORAGE_KEY = 'taskFilters';
 const FERTILIZATION_BOARD_STORAGE_KEY = 'fertilizationBoard';
 const DREAM_BOARD_STORAGE_KEY = 'dreamBoard';
+const CIRCLES_STORAGE_KEY = 'p3fo_circles_v1';
 const REMINDERS_STORAGE_KEY = 'p3fo_reminders_v1';
 
 // Default values
@@ -644,6 +645,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       localStorage.removeItem(FERTILIZATION_BOARD_STORAGE_KEY);
       localStorage.removeItem(DREAM_BOARD_STORAGE_KEY);
       localStorage.removeItem(REMINDERS_STORAGE_KEY);
+      localStorage.removeItem(CIRCLES_STORAGE_KEY);
       sessionStorage.removeItem(FILTERS_STORAGE_KEY);
 
       // Clear dynamic keys (users and QoL surveys)
@@ -659,6 +661,47 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       console.log('All application data cleared from localStorage');
     } catch (error) {
       console.error('Error clearing all data from localStorage:', error);
+      throw error;
+    }
+  }
+
+  // Circles
+  async listCircles(): Promise<CircleEntity[]> {
+    if (typeof window === 'undefined') {
+      return [];
+    }
+
+    try {
+      const stored = localStorage.getItem(CIRCLES_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch (error) {
+      console.error('Error reading circles from localStorage:', error);
+      return [];
+    }
+  }
+
+  async importCircles(circles: CircleEntity[]): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      localStorage.setItem(CIRCLES_STORAGE_KEY, JSON.stringify(circles));
+    } catch (error) {
+      console.error('Error importing circles to localStorage:', error);
+      throw error;
+    }
+  }
+
+  async importReminders(reminders: ReminderEntity[]): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      localStorage.setItem(REMINDERS_STORAGE_KEY, JSON.stringify(reminders));
+    } catch (error) {
+      console.error('Error importing reminders to localStorage:', error);
       throw error;
     }
   }

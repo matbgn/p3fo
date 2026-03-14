@@ -156,14 +156,22 @@ const DataImporter: React.FC = () => {
               }
 
               // Import QoL Survey Responses
-              // Check for the correct key from DataExporter (qolSurveyResponses)
-              // Also support legacy/alternative keys (qolSurvey, qol_survey)
               const qolData = importedData.qolSurveyResponses || importedData.qolSurvey || importedData.qol_survey;
-
               if (qolData) {
                 for (const [userId, responses] of Object.entries(qolData)) {
                   await adapter.saveQolSurveyResponse(userId, responses as QolSurveyResponseEntity);
                 }
+              }
+
+              // Import Reminders (bulk)
+              const remindersData = importedData.scheduledReminders || importedData.reminders;
+              if (remindersData && Array.isArray(remindersData)) {
+                await adapter.importReminders(remindersData);
+              }
+
+              // Import Circles (bulk)
+              if (importedData.circles && Array.isArray(importedData.circles)) {
+                await adapter.importCircles(importedData.circles);
               }
 
               // RESTORE ACTIVE USER IDENTITY

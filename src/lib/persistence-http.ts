@@ -1,4 +1,4 @@
-import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, ReminderEntity } from './persistence-types';
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, ReminderEntity, CircleEntity } from './persistence-types';
 import { DEFAULT_TASKS_INITIALIZED_KEY } from '@/hooks/useTasks';
 
 export class HttpApiPersistence implements PersistenceAdapter {
@@ -210,8 +210,7 @@ export class HttpApiPersistence implements PersistenceAdapter {
   // Reminders
   async listReminders(userId?: string): Promise<ReminderEntity[]> {
     const endpoint = userId ? `/api/reminders?user_id=${encodeURIComponent(userId)}` : '/api/reminders';
-    const result = await this.makeRequest(endpoint);
-    return result.data || [];
+    return this.makeRequest(endpoint);
   }
 
   async getReminderById(id: string): Promise<ReminderEntity | null> {
@@ -293,5 +292,24 @@ export class HttpApiPersistence implements PersistenceAdapter {
     } catch (e) {
       console.error('Error broadcasting clear command:', e);
     }
+  }
+
+  // Circles
+  async listCircles(): Promise<CircleEntity[]> {
+    return this.makeRequest('/api/circles');
+  }
+
+  async importCircles(circles: CircleEntity[]): Promise<void> {
+    await this.makeRequest('/api/circles/import', {
+      method: 'POST',
+      body: JSON.stringify(circles),
+    });
+  }
+
+  async importReminders(reminders: ReminderEntity[]): Promise<void> {
+    await this.makeRequest('/api/reminders/import', {
+      method: 'POST',
+      body: JSON.stringify(reminders),
+    });
   }
 }

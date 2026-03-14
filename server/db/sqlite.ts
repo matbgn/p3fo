@@ -1099,6 +1099,86 @@ class SqliteClient implements DbClient {
     this.db.prepare('DELETE FROM "circles"').run();
   }
 
+  async importCircles(circles: CircleEntity[]): Promise<void> {
+    // 1. Get current FK state
+    const fkState = this.db.prepare('PRAGMA foreign_keys').get() as { foreign_keys: number };
+    const wasFkEnabled = fkState.foreign_keys === 1;
+
+    // 2. Disable FKs (must be done outside transaction)
+    if (wasFkEnabled) {
+      this.db.exec('PRAGMA foreign_keys = OFF');
+    }
+
+    const insertStmt = this.db.prepare(`
+      INSERT INTO "circles"("id", "name", "parentId", "nodeType", "modifier", "color", "size", "description", "order", "createdAt", "updatedAt")
+      VALUES(@id, @name, @parentId, @nodeType, @modifier, @color, @size, @description, @order, @createdAt, @updatedAt)
+      ON CONFLICT("id") DO UPDATE SET
+        "name" = excluded."name",
+        "parentId" = excluded."parentId",
+        "nodeType" = excluded."nodeType",
+        "modifier" = excluded."modifier",
+        "color" = excluded."color",
+        "size" = excluded."size",
+        "description" = excluded."description",
+        "order" = excluded."order",
+        "createdAt" = excluded."createdAt",
+        "updatedAt" = excluded."updatedAt"
+    `);
+
+    const checkFk = this.db.prepare('PRAGMA foreign_key_check');
+    const repairStmt = this.db.prepare('UPDATE "circles" SET "parentId" = NULL WHERE rowid = ?');
+
+    this.db.exec('BEGIN');
+    try {
+      for (const circle of circles) {
+        insertStmt.run({
+          id: circle.id,
+          name: circle.name,
+          parentId: circle.parentId,
+          nodeType: circle.nodeType,
+          modifier: circle.modifier ?? null,
+          color: circle.color ?? null,
+          size: circle.size ?? null,
+          description: circle.description ?? null,
+          order: circle.order ?? null,
+          createdAt: circle.createdAt,
+          updatedAt: circle.updatedAt,
+        });
+      }
+
+      // 3. Check for violations
+      let violations = checkFk.all() as { table: string, rowid: number, parent: string, fkid: number }[];
+
+      if (violations.length > 0) {
+        console.log(`SQLite: Found ${violations.length} foreign key violations in circles. Attempting to auto-repair...`);
+
+        for (const violation of violations) {
+          if (violation.table === 'circles' && violation.parent === 'circles') {
+            repairStmt.run(violation.rowid);
+          }
+        }
+
+        // Re-check violations
+        violations = checkFk.all() as { table: string, rowid: number, parent: string, fkid: number }[];
+
+        if (violations.length > 0) {
+          console.error('SQLite: Foreign key violations in circles persisted after repair attempt:', violations);
+          throw new Error(`Foreign key constraint failed in circles import: ${violations.length} violations found.`);
+        }
+      }
+
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    } finally {
+      // 4. Restore FK state
+      if (wasFkEnabled) {
+        this.db.exec('PRAGMA foreign_keys = ON');
+      }
+    }
+  }
+
   // Reminders
   async listReminders(userId?: string): Promise<ReminderEntity[]> {
     let sql = 'SELECT * FROM "reminders"';
@@ -1213,6 +1293,54 @@ class SqliteClient implements DbClient {
 
   async clearAllReminders(): Promise<void> {
     this.db.prepare('DELETE FROM "reminders"').run();
+  }
+
+  async importReminders(reminders: ReminderEntity[]): Promise<void> {
+    const insertStmt = this.db.prepare(`
+      INSERT INTO "reminders"("id", "userId", "taskId", "title", "description", "read", "persistent",
+        "triggerDate", "offsetMinutes", "snoozeDurationMinutes", "originalTriggerDate", "state", "createdAt", "updatedAt")
+      VALUES(@id, @userId, @taskId, @title, @description, @read, @persistent,
+        @triggerDate, @offsetMinutes, @snoozeDurationMinutes, @originalTriggerDate, @state, @createdAt, @updatedAt)
+      ON CONFLICT("id") DO UPDATE SET
+        "userId" = excluded."userId",
+        "taskId" = excluded."taskId",
+        "title" = excluded."title",
+        "description" = excluded."description",
+        "read" = excluded."read",
+        "persistent" = excluded."persistent",
+        "triggerDate" = excluded."triggerDate",
+        "offsetMinutes" = excluded."offsetMinutes",
+        "snoozeDurationMinutes" = excluded."snoozeDurationMinutes",
+        "originalTriggerDate" = excluded."originalTriggerDate",
+        "state" = excluded."state",
+        "updatedAt" = excluded."updatedAt"
+    `);
+
+    this.db.exec('BEGIN');
+    try {
+      for (const reminder of reminders) {
+        insertStmt.run({
+          id: reminder.id,
+          userId: reminder.userId,
+          taskId: reminder.taskId ?? null,
+          title: reminder.title,
+          description: reminder.description ?? null,
+          read: reminder.read ? 1 : 0,
+          persistent: reminder.persistent ? 1 : 0,
+          triggerDate: reminder.triggerDate ?? null,
+          offsetMinutes: reminder.offsetMinutes ?? null,
+          snoozeDurationMinutes: reminder.snoozeDurationMinutes ?? null,
+          originalTriggerDate: reminder.originalTriggerDate ?? null,
+          state: reminder.state,
+          createdAt: reminder.createdAt,
+          updatedAt: reminder.updatedAt,
+        });
+      }
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   private mapReminderDbRowToEntity(row: ReminderDbRow): ReminderEntity {
