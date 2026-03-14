@@ -1136,21 +1136,41 @@ export function useTasks() {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
+    // Collect tasks that need to be persisted (other running timers that need to be stopped)
+    const tasksToPersist: Task[] = [];
+
     // First, stop any other running timers
     tasks = tasks.map(t => {
       if (t.id !== taskId && t.timer && t.timer.length > 0) {
         const lastEntry = t.timer[t.timer.length - 1];
         if (lastEntry && lastEntry.endTime === 0) {
-          return {
+          const updatedTask = {
             ...t,
             timer: t.timer.map((entry, index) =>
               index === t.timer!.length - 1 ? { ...entry, endTime: Date.now() } : entry
             )
           };
+          tasksToPersist.push(updatedTask);
+          syncTaskToYjs(t.id, updatedTask);
+          return updatedTask;
         }
       }
       return t;
     });
+
+    // Persist stopped timers to backend
+    if (tasksToPersist.length > 0) {
+      try {
+        const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+        const adapter = await persistence;
+        for (const stoppedTask of tasksToPersist) {
+          const entity = taskToEntity(stoppedTask);
+          await adapter.updateTask(stoppedTask.id, entity);
+        }
+      } catch (error) {
+        console.error("Error stopping other timers:", error);
+      }
+    }
 
     // Now toggle the requested timer
     updateTaskInTasks(taskId, (task) => {
