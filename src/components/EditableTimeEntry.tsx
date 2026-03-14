@@ -3,7 +3,7 @@ import { Temporal } from '@js-temporal/polyfill';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TableRow, TableCell } from "@/components/ui/table";
-import { Trash2, Pencil, ArrowRight, Play, Pause } from "lucide-react";
+import { Trash2, Pencil, ArrowRight, Play, Pause, AlertTriangle } from "lucide-react";
 import { TaskTag } from "./TaskTag";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { CATEGORIES } from "../data/categories";
@@ -17,6 +17,7 @@ import { format } from "date-fns";
 import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 import { CalendarIcon, Clock } from "lucide-react";
 import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 
 import { Task } from '@/hooks/useTasks';
@@ -45,7 +46,12 @@ export const EditableTimeEntry: React.FC<{
   onJumpToTask?: (taskId: string) => void;
   onToggleTimer?: (taskId: string) => void;
   children?: React.ReactNode;
-}> = ({ entry, taskMap, onUpdateTimeEntry, onUpdateTaskCategory, onUpdateUser, onDelete, onJumpToTask, onToggleTimer, children }) => {
+  overlapInfo?: {
+    hasOverlap: boolean;
+    overlappingEntries: Array<{ taskId: string; taskTitle: string }>;
+    overlapGroupId?: string;
+  };
+}> = ({ entry, taskMap, onUpdateTimeEntry, onUpdateTaskCategory, onUpdateUser, onDelete, onJumpToTask, onToggleTimer, children, overlapInfo }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editStartTime, setEditStartTime] = useState('');
   const [editEndTime, setEditEndTime] = useState('');
@@ -314,13 +320,44 @@ export const EditableTimeEntry: React.FC<{
 
 
 
+  // Generate unique entry ID for overlap line drawing
+  const entryId = `entry-${entry.taskId}-${entry.index}`;
+
   return (
     <TableRow
-      className="hover:bg-muted/50"
+      ref={(el) => {
+        if (el && overlapInfo?.overlapGroupId) {
+          el.setAttribute('data-overlap-group', overlapInfo.overlapGroupId);
+        }
+      }}
+      className={cn(
+        "hover:bg-muted/50",
+        overlapInfo?.hasOverlap && "bg-red-50 dark:bg-red-950/20 border-l-2 border-l-red-500"
+      )}
       onDoubleClick={handleDoubleClick}
+      data-entry-id={entryId}
     >
       <TableCell style={{ paddingLeft: indentLevel > 0 ? `${Math.min(8 + indentLevel * 4, 20)}px` : undefined }}>
         <div className="flex items-center gap-2">
+          {overlapInfo?.hasOverlap && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center">
+                  <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <div className="text-sm">
+                  <p className="font-semibold mb-1">Overlapping time entries:</p>
+                  <ul className="list-disc list-inside">
+                    {overlapInfo.overlappingEntries.map((e, i) => (
+                      <li key={i}>{e.taskTitle}</li>
+                    ))}
+                  </ul>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          )}
           {indentLevel > 0 && <span className="text-muted-foreground">↳ </span>}
           {entry.taskTitle}
           <TaskTag
