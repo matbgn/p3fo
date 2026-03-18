@@ -14,7 +14,7 @@ import { FilterControls, Filters } from "./FilterControls";
 import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
 import { getDefaultFilters, validateFilters, mergeViewFilters } from "@/lib/filter-merge";
 import { COMPACTNESS_ULTRA, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 
 interface DreamTopViewProps {
   onFocusOnTask: (taskId: string) => void;
@@ -25,12 +25,13 @@ type ActiveView = 'dream' | 'storyboard' | 'prioritization';
 const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
   const { setView, setFocusedTaskId, focusedTaskId } = useViewNavigation();
   const { cardCompactness } = useViewDisplay();
-  const { updateStatus, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleUrgent, toggleImpact, toggleMajorIncident, toggleSprintTarget, toggleDone, toggleTimer, reparent, updateTerminationDate, updateComment, updateDurationInMinutes, updatePriority, createTask } = useTasks();
+  const { updateStatus, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleUrgent, toggleImpact, toggleMajorIncident, toggleSprintTarget, toggleDone, toggleTimer, reparent, updateTerminationDate, updateComment, updateDurationInMinutes, updatePrioritiesBulk, createTask } = useTasks();
   const { tasks } = useAllTasks();
   const { userId: currentUserId } = useUserSettings();
 
   const [activeView, setActiveView] = useState<ActiveView>('dream');
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [reorderingTaskId, setReorderingTaskId] = useState<string | null>(null);
   const [openParents, setOpenParents] = useState<Record<string, boolean>>({});
   const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(false);
   const [loadingFilters, setLoadingFilters] = useState(true);
@@ -183,19 +184,20 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>, targetTaskId: string) => {
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>, targetTaskId: string) => {
     e.preventDefault();
+    e.stopPropagation();
     if (!draggedTaskId || draggedTaskId === targetTaskId) {
       return;
     }
 
-    const draggedTask = tasks.find(task => task.id === draggedTaskId);
-    const targetTask = tasks.find(task => task.id === targetTaskId);
+    const draggedTask = prioritizedTasks.find(task => task.id === draggedTaskId);
+    const targetTask = prioritizedTasks.find(task => task.id === targetTaskId);
 
-    if (!draggedTask || !targetTask) return;
+    if (!draggedTask) return;
+    if (!targetTask && targetTaskId !== '') return;
 
-    const visibleTopLevelTasks = tasks.filter(task => !task.parentId && task.triageStatus !== 'Done' && task.triageStatus !== 'Dropped');
-    const currentDisplayOrder = [...visibleTopLevelTasks].sort(sortTasks.plan);
+    const currentDisplayOrder = prioritizedTasks;
 
     const draggedIndex = currentDisplayOrder.findIndex(task => task.id === draggedTaskId);
     const targetIndex = currentDisplayOrder.findIndex(task => task.id === targetTaskId);
@@ -217,12 +219,20 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
       newDisplayOrder.push(draggedTask);
     }
 
-    newDisplayOrder.forEach((task, index) => {
-      const newPriority = index + 1;
-      updatePriority(task.id, newPriority);
-    });
-
+    const updatedPriorities = newDisplayOrder.map((task, index) => ({
+      id: task.id,
+      priority: index + 1,
+    }));
+    
+    // Set reordering state to show spinner
+    setReorderingTaskId(draggedTaskId);
     setDraggedTaskId(null);
+    
+    try {
+      await updatePrioritiesBulk(updatedPriorities);
+    } finally {
+      setReorderingTaskId(null);
+    }
   };
 
   // View toggle buttons component
@@ -328,11 +338,12 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
             ) : (
               prioritizedTasks.map(task => {
                 const children = getAllChildren(task);
+                const isReordering = reorderingTaskId === task.id;
                 return (
                   <div
                     key={task.id}
-                    className="min-w-[300px] max-w-[300px] p-2 border rounded-lg shadow-sm bg-white dark:bg-gray-800"
-                    draggable
+                    className="min-w-[300px] max-w-[300px] p-2 border rounded-lg shadow-sm bg-white dark:bg-gray-800 relative"
+                    draggable={!isReordering}
                     onDragStart={(e) => handleDragStart(e, task.id)}
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, task.id)}
@@ -341,6 +352,11 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
                       border: draggedTaskId && draggedTaskId !== task.id ? '2px dashed #ccc' : '2px solid transparent',
                     }}
                   >
+                    {isReordering && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-background/80 rounded-lg z-10">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      </div>
+                    )}
                     <TaskCard
                       task={task}
                       tasks={tasks}
