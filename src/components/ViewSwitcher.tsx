@@ -85,8 +85,8 @@ const allViews: ViewOption[] = [
   { id: 'program', label: 'Program', icon: <Calendar className="w-4 h-4" /> },
   { id: 'kanban', label: 'Project', icon: <LayoutDashboard className="w-4 h-4" /> },
   { id: 'focus', label: 'Focus', icon: <ListChecks className="w-4 h-4" /> },
-  { id: 'metrics', label: 'Metrics', icon: <BarChart3 className="w-4 h-4" />, isUtility: true},
   { id: 'timetable', label: 'Timetable', icon: <Clock className="w-4 h-4" />, isUtility: true },
+  { id: 'metrics', label: 'Metrics', icon: <BarChart3 className="w-4 h-4" />, isUtility: true},
   { id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" />, isUtility: true },
 ];
 
