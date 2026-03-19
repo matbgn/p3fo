@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.17.1 (2026-03-18)
+
+### Bug Fixes
+
+- **ressources plan:** handle empty inputs on preferred days (0ed0cd2)
+- **timetable:** make overlap arcs reactive to filter and view changes (0a34c54)
+- **running timer:** only stop timers belonging to current user (535889c)
+- **running timer:** filter timer stops by current user only (3cb47ef)
+
+---
+
 ## v0.17.0 (2026-03-14)
 
 ### Features
@@ -125,13 +136,5 @@
 ### Bug Fixes
 
 - **metrics:** adapt badge color in Forecast accordingly to totalProjectedBalance (8227943)
-
----
-
-## v0.10.1 (2025-12-10)
-
-### Bug Fixes
-
-- **layout:** persist card compactness user preference on server deployments (452699b)
 
 ---

@@ -10,15 +10,25 @@ export const normalizePreferredDays = (input?: number[] | Record<string, number>
 
     if (!input) {
         // Default Mon-Fri full capacity
-        [1, 2, 3, 4, 5].forEach(d => result[d] = 1);
+        [1, 2, 3, 4, 5].forEach(d => { result[d] = 1; });
         return result;
     }
 
     if (Array.isArray(input)) {
         // Legacy: array of day indices
-        input.forEach(d => result[d] = 1);
+        if (input.length === 0) {
+            // Empty array = same as undefined, default to Mon-Fri
+            [1, 2, 3, 4, 5].forEach(d => { result[d] = 1; });
+            return result;
+        }
+        input.forEach(d => { result[d] = 1; });
     } else {
         // New: map of day -> capacity
+        if (Object.keys(input).length === 0) {
+            // Empty object = same as undefined, default to Mon-Fri
+            [1, 2, 3, 4, 5].forEach(d => { result[d] = 1; });
+            return result;
+        }
         Object.entries(input).forEach(([day, capacity]) => {
             result[parseInt(day, 10)] = capacity;
         });

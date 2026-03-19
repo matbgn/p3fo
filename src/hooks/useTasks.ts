@@ -1389,40 +1389,25 @@ export function useTasks() {
       eventBus.publish("tasksChanged");
     }, []),
     updatePrioritiesBulk: React.useCallback(async (updatedTasks: { id: string; priority: number | undefined }[]) => {
-      // Update local state
+      // Update local state and sync to Yjs for collaboration
       tasks = tasks.map(task => {
         const updatedTask = updatedTasks.find(t => t.id === task.id);
         if (updatedTask) {
-          return { ...task, priority: updatedTask.priority };
+          const updated = { ...task, priority: updatedTask.priority };
+          syncTaskToYjs(task.id, updated);
+          return updated;
         }
         return task;
       });
 
-      tasks = tasks.map(task => {
-        const updatedTask = updatedTasks.find(t => t.id === task.id);
-        if (updatedTask) {
-          return { ...task, priority: updatedTask.priority };
-        }
-        return task;
-      });
-
-      // Persist to backend
+      // Persist to backend in single transaction
       try {
         const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
         const adapter = await persistence;
-
-        // Update all affected tasks in the backend
-        for (const { id, priority } of updatedTasks) {
-          const task = tasks.find(t => t.id === id);
-          if (task) {
-            const entity = { ...taskToEntity(task), priority };
-            await adapter.updateTask(id, entity);
-          }
-        }
+        await adapter.bulkUpdateTaskPriorities(updatedTasks);
       } catch (error) {
         console.error("Error bulk updating priorities:", error);
       }
-
 
       eventBus.publish("tasksChanged");
     }, []),
