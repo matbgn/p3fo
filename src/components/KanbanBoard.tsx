@@ -62,7 +62,17 @@ const Column: React.FC<{
   onArchive?: (title: TriageStatus) => void;
 }> = React.memo(({ title, cards, tasks, onDropTask, onChangeStatus, onUpdateCategory, onUpdateUser, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onToggleSprintTarget, onToggleDone, onUpdateDifficulty, onUpdateTitle, onDelete, duplicateTaskStructure, openParents, onToggleParent, onReparent, onFocusOnTask, updateTerminationDate, updateDurationInMinutes, updateComment, onToggleTimer, highlightedTaskId, highlightedCardRef, onArchive }) => {
   // Calculate total difficulty points for this column
-  const totalDifficulty = cards.reduce((sum, card) => sum + (card.task.difficulty || 0), 0);
+  // Only count leaf tasks (tasks with no children) to avoid double-counting
+  // Parent tasks and intermediate parents should not be counted
+  const totalDifficulty = cards.reduce((sum, card) => {
+    const task = card.task;
+    const hasChildren = task.children && task.children.length > 0;
+    
+    if (!hasChildren) {
+      return sum + (task.difficulty || 0);
+    }
+    return sum;
+  }, 0);
 
   // Build render blocks: either a single ParentCard/ChildCard or a group block for open parent children
   type Block =

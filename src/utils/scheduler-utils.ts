@@ -39,16 +39,17 @@ export const normalizePreferredDays = (input?: number[] | Record<string, number>
 
 // Function to calculate total difficulty of a task and its descendants
 export const calculateTotalDifficulty = (task: Task, allTasks: Task[]): number => {
-    let totalDifficulty = task.difficulty || 0;
-
-    if (task.children && task.children.length > 0) {
-        task.children.forEach(childId => {
-            const childTask = allTasks.find(t => t.id === childId);
-            if (childTask) {
-                totalDifficulty += calculateTotalDifficulty(childTask, allTasks);
-            }
-        });
+    if (!task.children || task.children.length === 0) {
+        return task.difficulty || 0;
     }
+
+    let totalDifficulty = 0;
+    task.children.forEach(childId => {
+        const childTask = allTasks.find(t => t.id === childId);
+        if (childTask) {
+            totalDifficulty += calculateTotalDifficulty(childTask, allTasks);
+        }
+    });
 
     return totalDifficulty;
 };
@@ -67,12 +68,16 @@ export const calculateAllTotalDifficulties = (tasks: Task[]): Record<string, num
         const task = taskMap.get(taskId);
         if (!task) return 0;
 
-        let total = task.difficulty || 0;
-        if (task.children && task.children.length > 0) {
-            task.children.forEach(childId => {
-                total += getDifficulty(childId);
-            });
+        if (!task.children || task.children.length === 0) {
+            const diff = task.difficulty || 0;
+            memo[taskId] = diff;
+            return diff;
         }
+
+        let total = 0;
+        task.children.forEach(childId => {
+            total += getDifficulty(childId);
+        });
 
         memo[taskId] = total;
         return total;
