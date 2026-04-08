@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import { calculateProjection, getProjectedHoursForActualMonth, getHistoricalHourlyBalances, getVacationsBalances } from './projectedHours';
 import type { CombinedSettings } from '@/hooks/useCombinedSettings';
 import type { Task } from '@/hooks/useTasks';
@@ -12,6 +12,15 @@ const mockSettings: CombinedSettings = {
     hourlyBalanceLimitUpper: 30,
     hourlyBalanceLimitLower: -30,
     vacationLimitMultiplier: 1.5,
+    splitTime: '17:00',
+    weeksComputation: 4,
+    highImpactTaskGoal: 10,
+    failureRateGoal: 5,
+    qliGoal: 80,
+    newCapabilitiesGoal: 20,
+    weekStartDay: 1,
+    defaultPlanView: 'week',
+    timezone: 'Europe/Zurich',
 };
 
 const makeTaskWithTimer = (startTime: number, endTime: number, userId?: string): Task => ({
@@ -27,7 +36,7 @@ const makeTaskWithTimer = (startTime: number, endTime: number, userId?: string):
     sprintTarget: false,
     difficulty: 1,
     timer: [{ startTime, endTime }],
-    category: 'General',
+    category: 'Support',
     priority: 50,
     userId: userId ?? 'test-user',
 });
