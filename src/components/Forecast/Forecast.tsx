@@ -24,9 +24,6 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
     const year = selectedDate.getFullYear();
     const month = selectedDate.getMonth() + 1; // 1-indexed for getWorkingDays and display
 
-    // Working days is based on ALL weekdays (Mon-Fri), not preferred days
-    const workingDays = getWorkingDays(year, month, 1, undefined, settings.country, settings.region);
-
     // Format month name
     const monthName = selectedDate.toLocaleString('default', { month: 'long' });
 
@@ -72,6 +69,9 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
         preferredWorkingDays
     };
 
+    // Working days is based on ALL weekdays (Mon-Fri), not preferred days
+    const workingDays = getWorkingDays(year, month, 1, undefined, forecastSettings.country, forecastSettings.region);
+
     const handleYearChange = (value: string) => {
         const newDate = new Date(selectedDate);
         newDate.setFullYear(parseInt(value));
@@ -93,7 +93,7 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
 
     // Get Previous Month Balance
     const monthlyBalances = selectedUser?.monthlyBalances || {};
-    const historicalData = getHistoricalHourlyBalances(filteredTasks, settings, 0, monthlyBalances, forecastSettings.userWorkloadPercentage);
+    const historicalData = getHistoricalHourlyBalances(filteredTasks, forecastSettings, 0, monthlyBalances, forecastSettings.userWorkloadPercentage);
 
     // Find the cumulative balance of the PREVIOUS month
     // We want the balance up to [year, month-1]

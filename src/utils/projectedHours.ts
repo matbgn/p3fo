@@ -216,6 +216,11 @@ export function getProjectedHoursForActualMonth(
 
     let projectedTotal = hoursDone;
 
+    // Vacation hours count as hours worked (paid time off fulfilling obligation)
+    const vacationHours = Math.abs(vacationsTaken);
+    const hoursPerDay = hoursToBeDoneByDayByContract;
+    const vacationDaysEquivalent = vacationHours / hoursPerDay;
+
     // Only project if we are in the current month or a future month
     // For past months, projected is just what was done (handled by initial assignment)
     if (year > currentYear || (year === currentYear && month > currentMonth)) {
@@ -256,11 +261,18 @@ export function getProjectedHoursForActualMonth(
             settings.region
         );
 
-        // Project the rest of the month using strict TDD logic
+        // Reduce total preferred days by vacation day equivalents.
+        // Vacation days are not available for future work, so they reduce the projection window.
+        const effectiveTotalPreferredDays = Math.max(0, totalPreferredDaysInMonth - vacationDaysEquivalent);
+
+        // Project the rest of the month using strict TDD logic.
+        // Note: preferredDaysPassed is NOT adjusted for vacation because the current pace
+        // (hoursDone / daysPassed) naturally reflects lower productivity during vacation periods.
+        // The historyPace (last 50 days) provides a fallback when current pace is low.
         projectedTotal = calculateProjection({
             hoursDone,
             preferredDaysPassed: preferredDaysSoFar.effectiveDays,
-            totalPreferredDaysInMonth,
+            totalPreferredDaysInMonth: effectiveTotalPreferredDays,
             historyPace
         });
 
@@ -269,9 +281,8 @@ export function getProjectedHoursForActualMonth(
         projectedTotal = hoursDone;
     }
 
-    // Add vacations taken to the projected total (as they count towards the balance)
-    // vacationsTaken is negative, so we subtract it to add the absolute value
-    projectedTotal -= vacationsTaken;
+    // Add vacation hours as hours worked
+    projectedTotal += vacationHours;
 
     const totalTimeExpandedInHours = projectedTotal;
 
@@ -350,71 +361,79 @@ export function getHistoricalHourlyBalances(
         }
     });
 
-    // We want to generate data from minDate to now
+    // Also determine the max future month in monthlyBalances for future records
+    let maxFutureYear = currentYear;
+    let maxFutureMonth = currentMonth;
+
+    Object.keys(monthlyBalances).forEach(key => {
+        const [y, m] = key.split('-').map(Number);
+        if (y > maxFutureYear || (y === maxFutureYear && m > maxFutureMonth)) {
+            maxFutureYear = y;
+            maxFutureMonth = m;
+        }
+    });
+
     const data: DataPoint[] = [];
     let cumulativeBalance = 0;
 
-    // Iterate month by month from minDate to current date
-    // Calculate number of months between minDate and now
-    const monthsDiff = (currentYear - minYear) * 12 + (currentMonth - minMonth);
+    const endYear = Math.max(currentYear, maxFutureYear);
+    const endMonth = (currentYear > maxFutureYear) ? currentMonth : 
+                     (maxFutureYear > currentYear) ? maxFutureMonth : Math.max(currentMonth, maxFutureMonth);
+    const totalMonths = (endYear - minYear) * 12 + (endMonth - minMonth);
 
-    for (let i = 0; i <= monthsDiff; i++) {
-        // Calculate date for current iteration
-        // Start from minDate and add i months
+    for (let i = 0; i <= totalMonths; i++) {
         const date = new Date(minYear, minMonth - 1 + i, 1);
         const year = date.getFullYear();
         const month = date.getMonth() + 1;
         const descId = `${year}-${String(month).padStart(2, '0')}`;
         const isCurrentMonth = year === currentYear && month === currentMonth;
+        const isFuture = year > currentYear || (year === currentYear && month > currentMonth);
 
         let workload = 0;
         let hoursDone = 0;
         let currentBalance = 0;
 
         if (monthlyBalances[descId]) {
-            workload = monthlyBalances[descId].workload;
+            workload = isCurrentMonth ? defaultWorkload : monthlyBalances[descId].workload;
 
             if (isCurrentMonth) {
-                // For current month, ALWAYS use the projected logic which accounts for remaining working days
-                // This ensures consistency with the Forecast view and ignores potentially stale stored values
                 const vacationsTaken = monthlyBalances[descId]?.vacationsHourlyTaken || 0;
                 const projected = getProjectedHoursForActualMonth(year, month, tasks, effectiveSettings, vacationsTaken);
                 hoursDone = projected.totalTimeExpandedInHours;
+            } else if (isFuture) {
+                hoursDone = monthlyBalances[descId].hoursDone || 0;
             } else if (monthlyBalances[descId].hoursDone !== undefined && monthlyBalances[descId].hoursDone !== 0) {
-                // Use manual hours done if present for past months
                 hoursDone = monthlyBalances[descId].hoursDone;
             } else {
                 hoursDone = calculateHoursDoneFromTasks(tasks, year, month);
             }
 
-            // Always calculate balance to ensure consistency, ignoring potentially stale stored balance
-            // Hours due is based on ALL working days (Mon-Fri), not preferred days
-            const workingDaysForMonth = getWorkingDays(year, month, 1, undefined, settings.country, settings.region);
-            const hoursDue = workingDaysForMonth * (settings.hoursToBeDoneByDay ?? 8) * (workload / 100);
+            const workingDaysForMonth = getWorkingDays(year, month, 1, undefined, effectiveSettings.country, effectiveSettings.region);
+            const hoursDue = workingDaysForMonth * (effectiveSettings.hoursToBeDoneByDay ?? 8) * (workload / 100);
             currentBalance = hoursDone - hoursDue;
         } else {
             // No record in DB
             if (isCurrentMonth) {
                 workload = defaultWorkload;
-                // For current month, use the projected logic which accounts for remaining working days
-                const projected = getProjectedHoursForActualMonth(year, month, tasks, settings);
+                const projected = getProjectedHoursForActualMonth(year, month, tasks, effectiveSettings);
                 hoursDone = projected.totalTimeExpandedInHours;
+            } else if (isFuture) {
+                workload = defaultWorkload;
+                hoursDone = 0;
             } else {
-                workload = 0; // Default to 0 for past months without records
+                workload = 0;
                 hoursDone = calculateHoursDoneFromTasks(tasks, year, month);
             }
 
-            // Hours due is based on ALL working days (Mon-Fri), not preferred days
-            const workingDaysForMonth = getWorkingDays(year, month, 1, undefined, settings.country, settings.region);
-            const hoursDue = workingDaysForMonth * (settings.hoursToBeDoneByDay ?? 8) * (workload / 100);
+            const workingDaysForMonth = getWorkingDays(year, month, 1, undefined, effectiveSettings.country, effectiveSettings.region);
+            const hoursDue = workingDaysForMonth * (effectiveSettings.hoursToBeDoneByDay ?? 8) * (workload / 100);
             currentBalance = hoursDone - hoursDue;
         }
 
         cumulativeBalance += currentBalance;
 
-        // Hours due for display is also based on ALL working days (Mon-Fri)
-        const displayWorkingDays = getWorkingDays(year, month, 1, undefined, settings.country, settings.region);
-        const displayHoursDue = displayWorkingDays * (settings.hoursToBeDoneByDay ?? 8) * (workload / 100);
+        const displayWorkingDays = getWorkingDays(year, month, 1, undefined, effectiveSettings.country, effectiveSettings.region);
+        const displayHoursDue = displayWorkingDays * (effectiveSettings.hoursToBeDoneByDay ?? 8) * (workload / 100);
 
         data.push({
             date: `${date.toLocaleDateString("default", { month: "short" })} ${year % 100}`,
@@ -430,20 +449,21 @@ export function getHistoricalHourlyBalances(
         });
     }
 
-    // 2. Calculate Projection
+    // 2. Calculate Projection from after the last stored month
     const lastBalance = cumulativeBalance;
     let projectedBalance = lastBalance;
     const lastWorkload = data.length > 0 ? data[data.length - 1].workload : defaultWorkload;
 
+    const projStartYear = endYear;
+    const projStartMonth = endMonth;
     for (let i = 1; i <= monthsForward; i++) {
-        const date = new Date(now.getFullYear(), now.getMonth() + i, 1);
+        const date = new Date(projStartYear, projStartMonth - 1 + i, 1);
         const year = date.getFullYear();
         const month = date.getMonth() + 1;
         const descId = `${year}-${String(month).padStart(2, '0')}`;
 
-        // Hours due for projection is based on ALL working days (Mon-Fri), not preferred days
-        const projectedWorkingDays = getWorkingDays(year, month, 1, undefined, settings.country, settings.region);
-        const hoursDue = projectedWorkingDays * (settings.hoursToBeDoneByDay ?? 8) * (lastWorkload / 100);
+        const projectedWorkingDays = getWorkingDays(year, month, 1, undefined, effectiveSettings.country, effectiveSettings.region);
+        const hoursDue = projectedWorkingDays * (effectiveSettings.hoursToBeDoneByDay ?? 8) * (lastWorkload / 100);
 
         projectedBalance += 0; // Assume neutral balance for projection
 
@@ -508,6 +528,11 @@ export function getVacationsBalances(
     const currentMonth = now.getMonth() + 1;
     const defaultWorkload = userWorkload ?? settings.userWorkloadPercentage;
 
+    const effectiveSettings = {
+        ...settings,
+        userWorkloadPercentage: defaultWorkload
+    };
+
     // 1. Determine the start date for history
     let minYear = currentYear;
     let minMonth = currentMonth;
@@ -520,38 +545,63 @@ export function getVacationsBalances(
         }
     });
 
+    // Also determine the max future month in monthlyBalances for future records
+    let maxFutureYear = currentYear;
+    let maxFutureMonth = currentMonth;
+
+    Object.keys(monthlyBalances).forEach(key => {
+        const [y, m] = key.split('-').map(Number);
+        if (y > maxFutureYear || (y === maxFutureYear && m > maxFutureMonth)) {
+            maxFutureYear = y;
+            maxFutureMonth = m;
+        }
+    });
+
     const data: VacationsDataPoint[] = [];
     let cumulativeBalance = 0;
 
-    const monthsDiff = (currentYear - minYear) * 12 + (currentMonth - minMonth);
+    const endYear = Math.max(currentYear, maxFutureYear);
+    const endMonth = (currentYear > maxFutureYear) ? currentMonth : 
+                     (maxFutureYear > currentYear) ? maxFutureMonth : Math.max(currentMonth, maxFutureMonth);
+    const totalMonths = (endYear - minYear) * 12 + (endMonth - minMonth);
 
-    for (let i = 0; i <= monthsDiff; i++) {
+    for (let i = 0; i <= totalMonths; i++) {
         const date = new Date(minYear, minMonth - 1 + i, 1);
         const year = date.getFullYear();
         const month = date.getMonth() + 1;
         const descId = `${year}-${String(month).padStart(2, '0')}`;
         const isCurrentMonth = year === currentYear && month === currentMonth;
+        const isFuture = year > currentYear || (year === currentYear && month > currentMonth);
 
         let workload = 0;
         let vacationsTaken = 0;
 
         if (monthlyBalances[descId]) {
-            workload = monthlyBalances[descId].workload;
+            workload = isCurrentMonth ? defaultWorkload : monthlyBalances[descId].workload;
             vacationsTaken = monthlyBalances[descId].vacationsHourlyTaken || 0;
         } else {
-            if (isCurrentMonth) {
+            if (isCurrentMonth || isFuture) {
                 workload = defaultWorkload;
             } else {
                 workload = 0;
             }
         }
 
-        const vacationsDue = getMonthProjectionVacations(year, month, workload / 100, settings.hoursToBeDoneByDay ?? 8, settings.country, settings.region);
+        const vacationsDue = getMonthProjectionVacations(year, month, workload / 100, effectiveSettings.hoursToBeDoneByDay ?? 8, effectiveSettings.country, effectiveSettings.region);
 
         let currentBalance = 0;
-        if (monthlyBalances[descId] && monthlyBalances[descId].vacationsHourlyBalance !== undefined) {
-            currentBalance = monthlyBalances[descId].vacationsHourlyBalance!;
-            cumulativeBalance = currentBalance;
+        if (monthlyBalances[descId] && monthlyBalances[descId].vacationsHourlyBalance !== undefined && monthlyBalances[descId].vacationsHourlyBalance !== null) {
+            // Use stored balance only if it was manually set (non-zero or explicitly stored)
+            // A stored value of 0 for a future month that was auto-created breaks the cumulative chain
+            const storedBalance = monthlyBalances[descId].vacationsHourlyBalance!;
+            if (storedBalance !== 0 || !isFuture) {
+                currentBalance = storedBalance;
+                cumulativeBalance = currentBalance;
+            } else {
+                // Future month with 0 balance was auto-created, use cumulative calculation
+                cumulativeBalance += vacationsDue + vacationsTaken;
+                currentBalance = cumulativeBalance;
+            }
         } else {
             cumulativeBalance += vacationsDue + vacationsTaken;
             currentBalance = cumulativeBalance;
@@ -569,18 +619,21 @@ export function getVacationsBalances(
         });
     }
 
-    // 2. Calculate Projection
+    // 2. Calculate Projection from after the last stored month
     const lastBalance = cumulativeBalance;
     let projectedBalance = lastBalance;
-    const lastWorkload = data.length > 0 ? data[data.length - 1].workload : settings.userWorkloadPercentage;
+    const lastWorkload = data.length > 0 ? data[data.length - 1].workload : effectiveSettings.userWorkloadPercentage;
 
+    // Start projection from the month after the last stored data point (or after current month)
+    const projStartYear = endYear;
+    const projStartMonth = endMonth;
     for (let i = 1; i <= monthsForward; i++) {
-        const date = new Date(now.getFullYear(), now.getMonth() + i, 1);
+        const date = new Date(projStartYear, projStartMonth - 1 + i, 1);
         const year = date.getFullYear();
         const month = date.getMonth() + 1;
         const descId = `${year}-${String(month).padStart(2, '0')}`;
 
-        const vacationsDue = getMonthProjectionVacations(year, month, lastWorkload / 100, settings.hoursToBeDoneByDay ?? 8, settings.country, settings.region);
+        const vacationsDue = getMonthProjectionVacations(year, month, lastWorkload / 100, effectiveSettings.hoursToBeDoneByDay ?? 8, effectiveSettings.country, effectiveSettings.region);
         projectedBalance += vacationsDue;
 
         data.push({
