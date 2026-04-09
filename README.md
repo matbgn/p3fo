@@ -8,6 +8,14 @@ A comprehensive productivity and team-management tool built with React, TypeScri
 
 ---
 
+## 🎁 Donation
+
+Your donations are welcomed following this link / button: 
+
+[![LiberaPay](https://liberapay.com/assets/widgets/donate.svg)](https://liberapay.com/matbgn/donate)
+
+---
+
 ## 🚀 Features
 
 ### Core Functionality
