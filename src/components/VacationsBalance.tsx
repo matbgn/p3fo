@@ -32,13 +32,11 @@ const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
 
     const data = getVacationsBalances(effectiveSettings, 18, 6, monthlyBalances, userWorkload);
 
-    // Filter data for chart: only show last 6 months of history + projection
     const historyData = data.filter(d => !d.projected);
     const projectedData = data.filter(d => d.projected);
-    const chartHistoryData = historyData.slice(-monthsBack); // Last 6 months
+    const chartHistoryData = historyData.slice(-monthsBack);
     const chartData = [...chartHistoryData, ...projectedData];
 
-    // Filter data for table: show based on monthsBack
     const tableData = historyData.slice(-monthsBack);
     const hasMoreHistory = historyData.length > monthsBack;
 
@@ -53,7 +51,7 @@ const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
         if (!userId || userId === "unassigned") return;
 
         const currentBalance = monthlyBalances[descId] || {
-            workload: settings.userWorkloadPercentage,
+            workload: userWorkload,
             hourlyBalance: 0,
             hoursDone: 0,
             vacationsHourlyBalance: 0,
@@ -65,65 +63,6 @@ const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
             [field]: value,
         };
 
-        // Recalculate vacationsHourlyBalance if workload or vacationsHourlyTaken changed
-        // Logic: Balance = Previous Balance + Due - Taken?
-        // No, Vacations Balance is usually cumulative.
-        // But here we are updating a specific month.
-        // If we update a month, we just store the value.
-        // The cumulative calculation happens in `getVacationsBalances`.
-        // BUT `getVacationsBalances` uses `vacationsHourlyBalance` from DB if present!
-        // So if we store it, we override the calculation.
-        // If we want the calculation to be dynamic based on Due/Taken, we should perhaps NOT store `vacationsHourlyBalance`?
-        // Or we must recalculate it correctly here.
-        // But `vacationsHourlyBalance` is cumulative. It depends on previous months.
-        // If I edit month X, I can't easily calculate its cumulative balance without knowing month X-1.
-        // `getVacationsBalances` does the chain calculation.
-        // If I store a hardcoded balance for month X, `getVacationsBalances` uses it and continues from there.
-        // This seems to be the design: allow manual override of balance.
-        // BUT, if I change "Taken", I expect "Balance" to update?
-        // If I change "Taken", and I have a stored "Balance", the stored Balance is now stale?
-        // If the user wants to see the effect of "Taken", they probably shouldn't have a manual "Balance" override?
-        // Or the "Balance" field in DB is meant to be the *result*?
-        // If it's the result, I need to calculate it.
-        // But I don't have the previous balance here easily.
-
-        // However, looking at `HourlyBalance` logic I just wrote:
-        // `updatedBalance.hourlyBalance = hoursDone - hoursDue;`
-        // This is NOT cumulative. This is monthly delta.
-        // `getHistoricalHourlyBalances` sums them up.
-
-        // In `VacationsBalance`:
-        // `getVacationsBalances`:
-        // `cumulativeBalance += vacationsDue + vacationsTaken;`
-        // `currentBalance = cumulativeBalance;`
-        // IF `monthlyBalances[descId].vacationsHourlyBalance` exists, it uses it as `currentBalance` (cumulative).
-
-        // So `vacationsHourlyBalance` in DB is CUMULATIVE?
-        // If so, editing "Taken" for one month should update the cumulative balance for that month AND all future months?
-        // That's complex.
-
-        // Maybe `vacationsHourlyBalance` in DB is NOT cumulative?
-        // Let's check `getVacationsBalances` again.
-        // `if (monthlyBalances[descId].vacationsHourlyBalance !== undefined) { currentBalance = ...; cumulativeBalance = currentBalance; }`
-        // Yes, it treats it as the absolute cumulative balance at that point.
-
-        // If the user edits "Taken", they are changing the delta.
-        // If they also have a stored "Balance", that stored balance is now wrong if it was derived.
-        // If they want to rely on auto-calculation, they should maybe DELETE the stored balance?
-        // But `VacationsTable` doesn't allow deleting the balance field specifically.
-
-        // If I look at `VacationsTable`, the "Balance" column is NOT editable.
-        // So the user cannot manually set the balance.
-        // So `vacationsHourlyBalance` in DB should probably NOT be set by this `handleUpdate`?
-        // If `VacationsTable` calls `onUpdate` only for "Taken" and "Workload".
-        // Then `field` is never `vacationsHourlyBalance`.
-        // So `updatedBalance` will have the old `vacationsHourlyBalance`.
-        // If we want to revert to auto-calculation, we should REMOVE `vacationsHourlyBalance` from the DB entry?
-        // Yes! If I change "Taken", I want the system to recalculate Balance.
-        // Since Balance is derived cumulatively, I should probably `delete updatedBalance.vacationsHourlyBalance`.
-
-        // If the user manually updates the balance, we keep it.
-        // If they update workload or taken, we remove the manual balance to allow auto-recalculation.
         if (field === 'workload' || field === 'vacationsHourlyTaken') {
             delete updatedBalance.vacationsHourlyBalance;
         }
@@ -139,9 +78,8 @@ const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
     const handleAddPastRecord = async () => {
         if (!userId || userId === "unassigned") return;
 
-        // Find the oldest month in historyData
         const oldestEntry = historyData[0];
-        let targetYear, targetMonth;
+        let targetYear: number, targetMonth: number;
 
         if (oldestEntry) {
             const [y, m] = oldestEntry.descId.split('-').map(Number);
@@ -157,9 +95,8 @@ const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
 
         const descId = `${targetYear}-${String(targetMonth).padStart(2, '0')}`;
 
-        // Create entry with 0 workload
         const newBalance: MonthlyBalanceData = {
-            workload: 0,
+            workload: userWorkload,
             hourlyBalance: 0,
             hoursDone: 0,
             vacationsHourlyBalance: 0,
@@ -174,15 +111,68 @@ const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
         await updateUser(userId, { monthlyBalances: updatedMonthlyBalances });
     };
 
+    const handleAddFutureRecord = async () => {
+        if (!userId || userId === "unassigned") return;
+
+        const now = new Date();
+        const currentDescId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+        // Find the latest future month in monthlyBalances (after current month)
+        let maxFutureDescId = currentDescId;
+        Object.keys(monthlyBalances).forEach(key => {
+            if (key > maxFutureDescId) {
+                maxFutureDescId = key;
+            }
+        });
+
+        // Add one month after the latest
+        const [y, m] = maxFutureDescId.split('-').map(Number);
+        const date = new Date(y, m, 1); // m is 1-indexed, so m (not m-1) gives next month
+        const targetYear = date.getFullYear();
+        const targetMonth = date.getMonth() + 1;
+
+        const descId = `${targetYear}-${String(targetMonth).padStart(2, '0')}`;
+
+        const newBalance: MonthlyBalanceData = {
+            workload: userWorkload,
+            hourlyBalance: 0,
+            hoursDone: 0,
+            vacationsHourlyBalance: 0,
+            vacationsHourlyTaken: 0
+        };
+
+        const updatedMonthlyBalances = {
+            ...monthlyBalances,
+            [descId]: newBalance,
+        };
+
+        await updateUser(userId, { monthlyBalances: updatedMonthlyBalances });
+    };
+
+    const handleDelete = async (descId: string) => {
+        if (!userId || userId === "unassigned") return;
+
+        const updatedMonthlyBalances = { ...monthlyBalances };
+        delete updatedMonthlyBalances[descId];
+
+        await updateUser(userId, { monthlyBalances: updatedMonthlyBalances });
+    };
+
     return (
         <div className="flex flex-col gap-6 h-full">
             <div className="flex flex-col lg:flex-row gap-6 h-full min-h-[500px] items-start">
                 <div className="w-full lg:w-1/3 lg:min-w-[300px] flex flex-col order-2 lg:order-1">
                     {/* Table: newest month at top, oldest at bottom */}
+                    <div className="mb-4 flex flex-col gap-2 justify-center items-center">
+                        <Button variant="outline" size="sm" onClick={handleAddFutureRecord}>
+                            + Add a future record
+                        </Button>
+                    </div>
                     <div className="flex-1 overflow-auto">
                         <VacationsTable
                             data={[...tableData].reverse()}
                             onUpdate={handleUpdate}
+                            onDelete={handleDelete}
                         />
                     </div>
                     <div className="mt-4 flex flex-col gap-2 justify-center items-center">

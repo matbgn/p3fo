@@ -9,10 +9,14 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { VacationsDataPoint } from "@/utils/projectedHours";
+import { Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface VacationsTableProps {
     data: VacationsDataPoint[];
     onUpdate: (descId: string, field: 'workload' | 'vacationsHourlyTaken' | 'vacationsHourlyBalance', value: number) => void;
+    onDelete?: (descId: string) => void;
+    isRowDeletable?: (index: number) => boolean;
 }
 
 const EditableCell: React.FC<{
@@ -73,9 +77,9 @@ const EditableCell: React.FC<{
     );
 };
 
-const VacationsTable: React.FC<VacationsTableProps> = ({ data, onUpdate }) => {
-    // Filter out projected data for the table, usually we only edit history/current
-    const historyData = data.filter(d => !d.projected);
+const VacationsTable: React.FC<VacationsTableProps> = ({ data, onUpdate, onDelete, isRowDeletable }) => {
+    const now = new Date();
+    const currentDescId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
     return (
         <div className="rounded-md border">
@@ -87,35 +91,53 @@ const VacationsTable: React.FC<VacationsTableProps> = ({ data, onUpdate }) => {
                         <TableHead>Due [h]</TableHead>
                         <TableHead>Taken [h]</TableHead>
                         <TableHead>Balance [h]</TableHead>
+                        <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {historyData.map((row) => (
-                        <TableRow key={row.descId}>
-                            <TableCell className="font-medium">{row.descId}</TableCell>
-                            <TableCell>
-                                {/* Workload is read-only in Vacations table */}
-                                <span>{row.workload}</span>
-                            </TableCell>
-                            <TableCell>
-                                {row.vacationsDue.toFixed(1)}
-                            </TableCell>
-                            <TableCell>
-                                <EditableCell
-                                    value={row.vacationsHourlyTaken}
-                                    onSave={(val) => onUpdate(row.descId, 'vacationsHourlyTaken', val)}
-                                    isEditable={true}
-                                />
-                            </TableCell>
-                            <TableCell>
-                                <EditableCell
-                                    value={row.vacationsHourlyBalance}
-                                    onSave={(val) => onUpdate(row.descId, 'vacationsHourlyBalance', val)}
-                                    isEditable={true}
-                                />
-                            </TableCell>
-                        </TableRow>
-                    ))}
+                    {data.map((row, index) => {
+                        const isFuture = row.descId > currentDescId;
+                        // Only the furthest future record (first in reversed data) is deletable
+                        const showDelete = onDelete && index === 0 && isFuture && (isRowDeletable ? isRowDeletable(index) : true);
+
+                        return (
+                            <TableRow key={row.descId}>
+                                <TableCell className="font-medium">{row.descId}</TableCell>
+                                <TableCell>
+                                    <span>{row.workload}</span>
+                                </TableCell>
+                                <TableCell>
+                                    {row.vacationsDue.toFixed(1)}
+                                </TableCell>
+                                <TableCell>
+                                    <EditableCell
+                                        value={row.vacationsHourlyTaken}
+                                        onSave={(val) => onUpdate(row.descId, 'vacationsHourlyTaken', val)}
+                                        isEditable={true}
+                                    />
+                                </TableCell>
+                                <TableCell>
+                                    <EditableCell
+                                        value={row.vacationsHourlyBalance}
+                                        onSave={(val) => onUpdate(row.descId, 'vacationsHourlyBalance', val)}
+                                        isEditable={true}
+                                    />
+                                </TableCell>
+                                <TableCell>
+                                    {showDelete && (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                            onClick={() => onDelete!(row.descId)}
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    )}
+                                </TableCell>
+                            </TableRow>
+                        );
+                    })}
                 </TableBody>
             </Table>
         </div>

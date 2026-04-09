@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.17.2 (2026-04-08)
+
+### Bug Fixes
+
+- **metrics:** compute metrics per EFT instead of per user pool (739435f)
+- **tests:** syntax (a9da54a)
+- **common:** use selected user settings in projections (2ffa708)
+- **kanban:** only count leaf tasks in total difficulty calculations (a78544e)
+
+---
+
 ## v0.17.1 (2026-03-18)
 
 ### Bug Fixes
@@ -128,13 +139,5 @@
 ### Features
 
 - **fertilization:** add 3 additional ways to vote (Up/Down/Neutral, with points, Majority Judgment) (e5aa268)
-
----
-
-## v0.10.2 (2025-12-11)
-
-### Bug Fixes
-
-- **metrics:** adapt badge color in Forecast accordingly to totalProjectedBalance (8227943)
 
 ---

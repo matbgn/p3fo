@@ -62,7 +62,36 @@ export const getMajorIncidents = (tasks: Task[], weeks: number = 4): Task[] => {
   );
 };
 
-// Calculate high impact task achievement frequency
+export interface UserWorkload {
+  userId: string;
+  workload: number;
+}
+
+export const calculateHighImpactTaskFrequencyPerEFT = (
+  tasks: Task[],
+  weeks: number = 4,
+  userWorkloads: UserWorkload[],
+  taskMap?: Record<string, Task>,
+  highImpactMap?: Record<string, boolean>
+): number => {
+  if (weeks === 0) return 0;
+
+  const totalEFT = userWorkloads.reduce((sum, uw) => sum + (uw.workload || 0), 0) / 100;
+  if (totalEFT === 0) return 0;
+
+  const activeUserIds = new Set(
+    userWorkloads.filter(uw => (uw.workload || 0) > 0).map(uw => uw.userId)
+  );
+
+  const filteredTasks = activeUserIds.size > 0
+    ? tasks.filter(t => activeUserIds.has(t.userId || ''))
+    : tasks;
+
+  const completedHighImpactTasks = getCompletedHighImpactTasks(filteredTasks, weeks, taskMap, highImpactMap);
+
+  return completedHighImpactTasks.length / totalEFT / weeks;
+};
+
 export const calculateHighImpactTaskFrequency = (
   tasks: Task[],
   weeks: number = 4,
@@ -76,8 +105,25 @@ export const calculateHighImpactTaskFrequency = (
     return 0;
   }
 
-  // Returns the frequency of completed high-impact tasks per week.
   return completedHighImpactTasks.length / weeks;
+};
+
+export const calculateFailureRatePerEFT = (
+  tasks: Task[],
+  weeks: number = 4,
+  userWorkloads: UserWorkload[]
+): number => {
+  if (userWorkloads.length === 0) return 0;
+
+  const activeUserIds = new Set(
+    userWorkloads.filter(uw => (uw.workload || 0) > 0).map(uw => uw.userId)
+  );
+
+  if (activeUserIds.size === 0) return 0;
+
+  const filteredTasks = tasks.filter(t => activeUserIds.has(t.userId || ''));
+
+  return calculateFailureRate(filteredTasks, weeks);
 };
 
 // Calculate failure rate (major incidents / all tasks in the period)
@@ -188,4 +234,53 @@ export const calculateTimeSpentOnNewCapabilities = (
   const percentage = totalTime > 0 ? (newCapabilitiesTime / totalTime) * 100 : 0;
 
   return { totalTime, newCapabilitiesTime, percentage };
+};
+
+export const calculateTimeSpentOnNewCapabilitiesPerEFT = (
+  tasks: Task[],
+  weeks: number = 4,
+  taskMap: Record<string, Task>,
+  highImpactMap: Record<string, boolean>,
+  userWorkloads: UserWorkload[]
+): { totalTime: number; newCapabilitiesTime: number; percentage: number } => {
+  const activeUserIds = new Set(
+    userWorkloads.filter(uw => (uw.workload || 0) > 0).map(uw => uw.userId)
+  );
+
+  let weightedPercentageSum = 0;
+  let totalWorkload = 0;
+  let grandTotalTime = 0;
+  let grandHighImpactTime = 0;
+
+  for (const uw of userWorkloads) {
+    if ((uw.workload || 0) <= 0) continue;
+
+    const userTasks = tasks.filter(t => t.userId === uw.userId);
+    const result = calculateTimeSpentOnNewCapabilities(userTasks, weeks, taskMap, highImpactMap);
+
+    weightedPercentageSum += result.percentage * uw.workload;
+    totalWorkload += uw.workload;
+    grandTotalTime += result.totalTime;
+    grandHighImpactTime += result.newCapabilitiesTime;
+  }
+
+  // Include tasks with no userId or unknown userId, weighted by average workload of active users
+  const knownUserIds = new Set(userWorkloads.map(uw => uw.userId));
+  const unassignedTasks = tasks.filter(t => !t.userId || !knownUserIds.has(t.userId));
+  if (unassignedTasks.length > 0 && totalWorkload > 0) {
+    const activeUserCount = userWorkloads.filter(uw => (uw.workload || 0) > 0).length;
+    const avgWorkload = totalWorkload / activeUserCount;
+    const result = calculateTimeSpentOnNewCapabilities(unassignedTasks, weeks, taskMap, highImpactMap);
+
+    if (result.totalTime > 0) {
+      weightedPercentageSum += result.percentage * avgWorkload;
+      totalWorkload += avgWorkload;
+      grandTotalTime += result.totalTime;
+      grandHighImpactTime += result.newCapabilitiesTime;
+    }
+  }
+
+  const percentage = totalWorkload > 0 ? weightedPercentageSum / totalWorkload : 0;
+
+  return { totalTime: grandTotalTime, newCapabilitiesTime: grandHighImpactTime, percentage };
 };

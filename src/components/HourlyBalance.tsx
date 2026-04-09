@@ -47,19 +47,16 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
 
     const data = getHistoricalHourlyBalances(filteredTasks, effectiveSettings, 6, monthlyBalances, userWorkload);
 
-    // Filter data for chart: only show last 6 months of history + projection
-    // data contains history (monthsBack) + projection (6 months)
-    // We want the last 6 months of history + all projection
-    const historyData = data.filter(d => !d.projected);
+    // Filter data: separate projected from actual, and exclude future months (they belong in Vacations view only)
+    const now = new Date();
+    const currentDescId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const historyDataUpToCurrentMonth = data.filter(d => !d.projected && d.descId <= currentDescId);
     const projectedData = data.filter(d => d.projected);
-    const chartHistoryData = historyData.slice(-monthsBack); // Dynamic history based on user selection
-    // User requested to restore previous rendering, which likely means NO projections in the chart
-    // as the "Previously" image showed the graph ending at the current month.
+    const chartHistoryData = historyDataUpToCurrentMonth.slice(-monthsBack);
     const chartData = chartHistoryData;
 
-    // Filter data for table: show based on monthsBack
-    const tableData = historyData.slice(-monthsBack);
-    const hasMoreHistory = historyData.length > monthsBack;
+    const tableData = historyDataUpToCurrentMonth.slice(-monthsBack);
+    const hasMoreHistory = historyDataUpToCurrentMonth.length > monthsBack;
 
     const displayUserName =
         userId === "unassigned"
@@ -91,7 +88,7 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
             // We need to get vacations taken for that month if any (from where? if record missing, it's 0)
             const vacationsTaken = 0;
 
-            const projected = getHistoricalHourlyBalances(filteredTasks, settings, 0, monthlyBalances, userWorkload)
+            const projected = getHistoricalHourlyBalances(filteredTasks, effectiveSettings, 0, monthlyBalances, userWorkload)
                 .find(d => d.descId === prevDescId);
 
             // If we found the data point (which we should as getHistoricalHourlyBalances generates it)
@@ -138,10 +135,10 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
         if (field === 'workload' || field === 'hoursDone') {
             const [year, month] = descId.split('-').map(Number);
             // Hours due is based on ALL working days (Mon-Fri), NOT preferred days
-            const workingDays = getWorkingDays(year, month, 1, undefined, settings.country, settings.region);
+            const workingDays = getWorkingDays(year, month, 1, undefined, effectiveSettings.country, effectiveSettings.region);
             const workload = field === 'workload' ? value : updatedBalance.workload;
             const hoursDone = field === 'hoursDone' ? value : updatedBalance.hoursDone;
-            const hoursDue = workingDays * (settings.hoursToBeDoneByDay ?? 8) * (workload / 100);
+            const hoursDue = workingDays * (effectiveSettings.hoursToBeDoneByDay ?? 8) * (workload / 100);
             updatedBalance.hourlyBalance = hoursDone - hoursDue;
         }
 
@@ -174,7 +171,7 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
         if (!userId || userId === "unassigned") return;
 
         // Find the oldest month in historyData
-        const oldestEntry = historyData[0];
+        const oldestEntry = historyDataUpToCurrentMonth[0];
         let targetYear, targetMonth;
 
         if (oldestEntry) {

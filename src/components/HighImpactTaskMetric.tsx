@@ -2,21 +2,25 @@ import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTaskMetrics } from "@/hooks/useTaskMetrics";
 import { useCombinedSettings } from "@/hooks/useCombinedSettings";
-import { calculateHighImpactTaskFrequency } from "@/lib/metrics";
+import { useUsers } from "@/hooks/useUsers";
+import { calculateHighImpactTaskFrequencyPerEFT, UserWorkload } from "@/lib/metrics";
 
 const HighImpactTaskMetric: React.FC = () => {
   const { tasks, taskMap, highImpactMap } = useTaskMetrics();
   const { settings } = useCombinedSettings();
+  const { users } = useUsers();
 
-  // Get settings from the combined hook
-  const workloadPercentage = settings.userWorkloadPercentage / 100;
   const weeksComputation = settings.weeksComputation;
   const highImpactTaskGoal = settings.highImpactTaskGoal;
 
-  const frequency = calculateHighImpactTaskFrequency(tasks, weeksComputation, workloadPercentage, taskMap, highImpactMap);
+  const userWorkloads: UserWorkload[] = users.map(u => ({
+    userId: u.userId,
+    workload: u.workload ?? 0,
+  }));
 
-  // Format frequency
-  const formattedFrequency = (frequency).toFixed(1);
+  const frequency = calculateHighImpactTaskFrequencyPerEFT(tasks, weeksComputation, userWorkloads, taskMap, highImpactMap);
+
+  const formattedFrequency = frequency.toFixed(1);
 
   const getCardClass = () => {
     if (frequency >= highImpactTaskGoal) {
@@ -32,7 +36,7 @@ const HighImpactTaskMetric: React.FC = () => {
   return (
     <Card className={`h-32 ${getCardClass()}`}>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">High Impact Task Achievement / EFT / week </CardTitle>
+        <CardTitle className="text-sm font-medium">High Impact Task Achievement / EFT / week</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">

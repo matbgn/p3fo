@@ -2,19 +2,24 @@ import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTaskMetrics } from "@/hooks/useTaskMetrics";
 import { useCombinedSettings } from "@/hooks/useCombinedSettings";
-import { calculateTimeSpentOnNewCapabilities } from "@/lib/metrics";
+import { useUsers } from "@/hooks/useUsers";
+import { calculateTimeSpentOnNewCapabilitiesPerEFT, UserWorkload } from "@/lib/metrics";
 
 const NewCapabilitiesMetric: React.FC = () => {
   const { tasks, taskMap, highImpactMap } = useTaskMetrics();
   const { settings } = useCombinedSettings();
+  const { users } = useUsers();
 
-  // Get settings from combined settings
   const weeksComputation = settings.weeksComputation;
   const goal = settings.newCapabilitiesGoal;
 
-  const { percentage } = calculateTimeSpentOnNewCapabilities(tasks, weeksComputation, taskMap, highImpactMap);
+  const userWorkloads: UserWorkload[] = users.map(u => ({
+    userId: u.userId,
+    workload: u.workload ?? 0,
+  }));
 
-  // Format percentage
+  const { percentage } = calculateTimeSpentOnNewCapabilitiesPerEFT(tasks, weeksComputation, taskMap, highImpactMap, userWorkloads);
+
   const formattedPercentage = percentage.toFixed(1);
 
   const getCardClass = () => {
@@ -31,7 +36,7 @@ const NewCapabilitiesMetric: React.FC = () => {
   return (
     <Card className={`h-32 ${getCardClass()}`}>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">Time spent overall on High Impact work</CardTitle>
+        <CardTitle className="text-sm font-medium">Time spent on High Impact work / EFT</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">
