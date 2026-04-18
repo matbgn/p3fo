@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.18.0 (2026-04-18)
+
+### Features
+
+- **common:** implement card aging with visual feedback (877483e)
+
+---
+
 ## v0.17.2 (2026-04-08)
 
 ### Bug Fixes
@@ -131,13 +139,5 @@
 ### Bug Fixes
 
 - **import:** merge user settings and optimize export (aac0032)
-
----
-
-## v0.11.0 (2026-01-06)
-
-### Features
-
-- **fertilization:** add 3 additional ways to vote (Up/Down/Neutral, with points, Majority Judgment) (e5aa268)
 
 ---
