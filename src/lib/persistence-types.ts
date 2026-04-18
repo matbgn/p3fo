@@ -46,6 +46,7 @@ export interface TaskEntity {
   userId: string | null;
   parentId: string | null; // For hierarchical tasks
   children?: string[]; // Add children array for hierarchical structure
+  updatedAt?: string | null; // Last modification timestamp for card aging
 }
 
 export interface MonthlyBalanceData {
@@ -73,6 +74,7 @@ export interface AppSettingsEntity {
   timezone?: string;
   country?: string;
   region?: string;
+  cardAgingBaseDays?: number;
 }
 
 export interface UserSettingsEntity {

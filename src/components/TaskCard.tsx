@@ -40,6 +40,8 @@ import { useCombinedSettings } from "@/hooks/useCombinedSettings";
 import { useViewDisplay } from "@/hooks/useView";
 import { COMPACTNESS_ULTRA, COMPACTNESS_COMPACT, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
 import { TaskEditModal } from "./TaskEditModal";
+import { useCardAging } from "@/hooks/useCardAging";
+import { AgingDecorations } from "@/components/AgingOverlays";
 
 const LiveTimeBadge: React.FC<{ task: Task; totalTime?: number; onClick?: () => void }> = React.memo(({ task, totalTime, onClick }) => {
   const [runningTime, setRunningTime] = React.useState(0);
@@ -273,6 +275,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
   const { settings } = useCombinedSettings();
   const weekStartsOn = settings.weekStartDay as 0 | 1;
   const { cardCompactness } = useViewDisplay();
+  const aging = useCardAging(task);
 
   const isUltraCompact = cardCompactness === COMPACTNESS_ULTRA;
   const isCompact = cardCompactness === COMPACTNESS_COMPACT;
@@ -376,7 +379,8 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
       ref={ref}
       className={cn(
         `mb-2 transition-all duration-200 hover:shadow-md ${isActive ? "ring-2 ring-primary" : ""} ${isHighlighted ? "ring-2 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20" : ""}`,
-        isUltraCompact ? "p-2" : "p-3"
+        isUltraCompact ? "p-2" : "p-3",
+        aging.className
       )}
       onClick={() => onActivate && onActivate(task.id)}
       onDoubleClick={handleCardDoubleClick}
@@ -399,6 +403,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
       }}
       data-active-card={isActive ? "true" : undefined}
     >
+      <AgingDecorations level={aging.level} />
       <div
         className="flex justify-between items-center mb-2"
       >

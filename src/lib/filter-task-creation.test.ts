@@ -249,13 +249,13 @@ describe('Implementation Verification via Code Locations', () => {
     const source = fs.readFileSync(USE_TASKS_PATH, 'utf-8')
     const lines = source.split('\n')
     
-    // The guard is at line 171-172 (index 170-171)
+    // The guard is at line 172-173 (index 171-172)
     // Verify the line contains the if statement
-    const guardLine = lines[170]
+    const guardLine = lines[171]
     expect(guardLine).toMatch(/if\s*\(\s*isFiltered\s*\)/)
     
     // And next line is return
-    const returnLine = lines[171]
+    const returnLine = lines[172]
     expect(returnLine).toMatch(/return/)
   })
   

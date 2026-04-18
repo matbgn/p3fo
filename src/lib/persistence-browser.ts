@@ -31,6 +31,7 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
   qliGoal: 7,
   newCapabilitiesGoal: 3,
   hoursToBeDoneByDay: 8,
+  cardAgingBaseDays: 30,
 };
 
 export class BrowserJsonPersistence implements PersistenceAdapter {
@@ -80,6 +81,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
         id: input.id || crypto.randomUUID(),
         title: input.title || 'New Task',
         createdAt: input.createdAt || new Date().toISOString(),
+        updatedAt: input.updatedAt ?? null,
         triageStatus: input.triageStatus || 'Backlog',
         urgent: input.urgent || false,
         impact: input.impact || false,

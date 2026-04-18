@@ -466,6 +466,23 @@ const SettingsPage: React.FC = () => {
                     Region code for holidays (default: BE)
                   </p>
                 </div>
+
+                <div>
+                  <Label className="block text-sm font-medium mb-1">
+                    Card Aging Base Days
+                  </Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    value={settings.cardAgingBaseDays}
+                    onChange={(e) => handleSettingChange('cardAgingBaseDays', parseFloat(e.target.value) || 0, 'global')}
+                    className="w-24 mt-2"
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Days before cards show aging effects. Set to 0 to disable. (default: 30). Use decimals like 0.005 for testing (~7 min).
+                  </p>
+                </div>
               </div>
             </div>
 

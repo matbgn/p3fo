@@ -33,6 +33,7 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
   qliGoal: 7,
   newCapabilitiesGoal: 3,
   hoursToBeDoneByDay: 8,
+  cardAgingBaseDays: 30,
 };
 
 export async function createPostgresClient(connectionString?: string): Promise<DbClient> {
@@ -117,6 +118,7 @@ class PostgresClient implements DbClient {
         "vacationLimitMultiplier" REAL DEFAULT 1.5,
         "hourlyBalanceLimitUpper" REAL DEFAULT 0.5,
         "hourlyBalanceLimitLower" REAL DEFAULT -0.5,
+        "cardAgingBaseDays" REAL DEFAULT 30,
         "timezone" TEXT DEFAULT 'Europe/Zurich',
         "country" TEXT DEFAULT 'CH',
         "region" TEXT DEFAULT 'BE'
@@ -339,6 +341,9 @@ class PostgresClient implements DbClient {
     // Add sprintTarget column to tasks
     await addColumn('tasks', 'sprintTarget', 'BOOLEAN DEFAULT false');
 
+    // Add updatedAt column to tasks
+    await addColumn('tasks', 'updatedAt', 'TIMESTAMP WITH TIME ZONE');
+
     // Add new columns for UserSettings
     await addColumn('userSettings', 'weekStartDay', 'INTEGER');
     await addColumn('userSettings', 'defaultPlanView', 'TEXT');
@@ -357,6 +362,8 @@ class PostgresClient implements DbClient {
     await runMigration('appSettings', 'vacation_limit_multiplier', 'vacationLimitMultiplier');
     await runMigration('appSettings', 'hourly_balance_limit_upper', 'hourlyBalanceLimitUpper');
     await runMigration('appSettings', 'hourly_balance_limit_lower', 'hourlyBalanceLimitLower');
+
+    await addColumn('appSettings', 'cardAgingBaseDays', 'REAL DEFAULT 30');
 
     // QolSurvey columns
     await runMigration('qolSurvey', 'user_id', 'userId');
@@ -425,6 +432,7 @@ class PostgresClient implements DbClient {
       id: input.id || crypto.randomUUID(),
       title: input.title || 'New Task',
       createdAt: input.createdAt || new Date().toISOString(),
+      updatedAt: input.updatedAt ?? undefined,
       triageStatus: input.triageStatus || 'Backlog',
       urgent: input.urgent || false,
       impact: input.impact || false,
@@ -443,21 +451,22 @@ class PostgresClient implements DbClient {
     };
 
     await this.pool.query(`
-      INSERT INTO "tasks" ("id", "parentId", "title", "createdAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget",
+      INSERT INTO "tasks" ("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget",
                          "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
     `, [
       newTask.id,
       newTask.parentId,
       newTask.title,
       newTask.createdAt,
+      newTask.updatedAt ?? null,
       newTask.triageStatus,
       newTask.urgent,
       newTask.impact,
       newTask.majorIncident,
       newTask.sprintTarget,
       newTask.difficulty,
-      JSON.stringify(newTask.timer), // Use JSON string/object for JSONB
+      JSON.stringify(newTask.timer),
       newTask.category,
       newTask.terminationDate,
       newTask.comment,
@@ -470,18 +479,17 @@ class PostgresClient implements DbClient {
   }
 
   async updateTask(id: string, patch: Partial<TaskEntity>): Promise<TaskEntity | null> {
-    // First get the current task
     const currentTask = await this.getTaskById(id);
     if (!currentTask) {
       return null;
     }
 
-    // Merge with existing task
     const updatedTask = { ...currentTask, ...patch };
 
     const params = [
       updatedTask.parentId,
       updatedTask.title,
+      updatedTask.updatedAt ?? null,
       updatedTask.triageStatus,
       updatedTask.urgent,
       updatedTask.impact,
@@ -500,11 +508,11 @@ class PostgresClient implements DbClient {
 
     await this.pool.query(`
       UPDATE "tasks"
-      SET "parentId" = $1, "title" = $2, "triageStatus" = $3, "urgent" = $4,
-          "impact" = $5, "majorIncident" = $6, "sprintTarget" = $7, "difficulty" = $8, "timer" = $9,
-          "category" = $10, "terminationDate" = $11, "comment" = $12,
-          "durationInMinutes" = $13, "priority" = $14, "userId" = $15
-      WHERE "id" = $16
+      SET "parentId" = $1, "title" = $2, "updatedAt" = $3, "triageStatus" = $4, "urgent" = $5,
+          "impact" = $6, "majorIncident" = $7, "sprintTarget" = $8, "difficulty" = $9, "timer" = $10,
+          "category" = $11, "terminationDate" = $12, "comment" = $13,
+          "durationInMinutes" = $14, "priority" = $15, "userId" = $16
+      WHERE "id" = $17
     `, params);
 
     return updatedTask;
@@ -569,12 +577,13 @@ class PostgresClient implements DbClient {
 
       for (const task of tasks) {
         await client.query(`
-          INSERT INTO "tasks" ("id", "parentId", "title", "createdAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget",
+          INSERT INTO "tasks" ("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget",
                              "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId")
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
           ON CONFLICT ("id") DO UPDATE SET
             "parentId" = EXCLUDED."parentId",
             "title" = EXCLUDED."title",
+            "updatedAt" = EXCLUDED."updatedAt",
             "triageStatus" = EXCLUDED."triageStatus",
             "urgent" = EXCLUDED."urgent",
             "impact" = EXCLUDED."impact",
@@ -593,6 +602,7 @@ class PostgresClient implements DbClient {
           task.parentId,
           task.title,
           task.createdAt,
+          task.updatedAt ?? null,
           task.triageStatus,
           task.urgent,
           task.impact,
@@ -702,6 +712,7 @@ class PostgresClient implements DbClient {
         vacationLimitMultiplier: row.vacationLimitMultiplier ?? 1.5,
         hourlyBalanceLimitUpper: row.hourlyBalanceLimitUpper ?? 0.5,
         hourlyBalanceLimitLower: row.hourlyBalanceLimitLower ?? -0.5,
+        cardAgingBaseDays: row.cardAgingBaseDays ?? 30,
         timezone: row.timezone ?? 'Europe/Zurich',
         country: row.country ?? 'CH',
         region: row.region ?? 'BE',
@@ -718,8 +729,8 @@ class PostgresClient implements DbClient {
       INSERT INTO "appSettings" ("id", "splitTime", "userWorkloadPercentage", "weeksComputation", 
                                 "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal",
                                 "hoursToBeDoneByDay", "vacationLimitMultiplier", "hourlyBalanceLimitUpper",
-                                "hourlyBalanceLimitLower", "timezone", "country", "region")
-      VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                                "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region")
+      VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       ON CONFLICT ("id") DO UPDATE SET
         "splitTime" = EXCLUDED."splitTime",
         "userWorkloadPercentage" = EXCLUDED."userWorkloadPercentage",
@@ -732,6 +743,7 @@ class PostgresClient implements DbClient {
         "vacationLimitMultiplier" = EXCLUDED."vacationLimitMultiplier",
         "hourlyBalanceLimitUpper" = EXCLUDED."hourlyBalanceLimitUpper",
         "hourlyBalanceLimitLower" = EXCLUDED."hourlyBalanceLimitLower",
+        "cardAgingBaseDays" = EXCLUDED."cardAgingBaseDays",
         "timezone" = EXCLUDED."timezone",
         "country" = EXCLUDED."country",
         "region" = EXCLUDED."region"
@@ -747,6 +759,7 @@ class PostgresClient implements DbClient {
       updated.vacationLimitMultiplier,
       updated.hourlyBalanceLimitUpper,
       updated.hourlyBalanceLimitLower,
+      updated.cardAgingBaseDays,
       updated.timezone,
       updated.country,
       updated.region
@@ -1158,7 +1171,8 @@ class PostgresClient implements DbClient {
     return {
       ...row,
       timer: row.timer || { startTime: null, elapsedTime: 0, isRunning: false },
-      children: [], // Children are populated by high-level service or on-demand
+      children: [],
+      updatedAt: row.updatedAt ?? undefined,
     };
   }
 

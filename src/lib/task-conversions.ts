@@ -41,6 +41,7 @@ export const convertEntitiesToTasks = (entities: TaskEntity[]): Task[] => {
             durationInMinutes: entity.durationInMinutes || undefined,
             priority: entity.priority || 0,
             userId: entity.userId || undefined,
+            updatedAt: entity.updatedAt ? new Date(entity.updatedAt).getTime() : undefined,
         };
         taskMap[task.id] = task;
     });
@@ -81,6 +82,7 @@ export const taskToEntity = (task: Task): TaskEntity => ({
     userId: task.userId || null,
     parentId: task.parentId || null,
     children: task.children || [],
+    updatedAt: task.updatedAt ? new Date(task.updatedAt).toISOString() : null,
 });
 
 /**
@@ -136,6 +138,11 @@ export const taskPatchToEntity = (
     if (patch.userId !== undefined) entity.userId = patch.userId || null;
     if (patch.parentId !== undefined) entity.parentId = patch.parentId;
     if (patch.children !== undefined) entity.children = patch.children;
+    if (patch.updatedAt !== undefined) {
+        entity.updatedAt = patch.updatedAt
+            ? new Date(patch.updatedAt).toISOString()
+            : null;
+    }
 
     return entity;
 };
