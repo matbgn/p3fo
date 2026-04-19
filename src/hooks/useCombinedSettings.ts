@@ -1,8 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import * as Y from 'yjs';
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { usePersistence } from "@/hooks/usePersistence";
 import { AppSettingsEntity } from '@/lib/persistence-types';
 import { normalizePreferredDays } from '@/utils/scheduler-utils';
+import { yAppSettings, isCollaborationEnabled, doc } from '@/lib/collaboration';
+import { eventBus } from '@/lib/events';
 
 /**
  * Combined settings interface that merges global and user-specific settings
@@ -22,6 +25,7 @@ export interface CombinedSettings {
     hourlyBalanceLimitUpper: number;
     hourlyBalanceLimitLower: number;
     hoursToBeDoneByDay: number;
+    cardAgingBaseDays: number;
 
     // User preference
     weekStartDay: 0 | 1; // 0 for Sunday, 1 for Monday
@@ -64,6 +68,7 @@ const defaultCombinedSettings: CombinedSettings = {
     hourlyBalanceLimitUpper: 0.5,
     hourlyBalanceLimitLower: -0.5,
     hoursToBeDoneByDay: 8,
+    cardAgingBaseDays: 30,
     weekStartDay: 1, // Default to Monday
     defaultPlanView: 'week',
     preferredWorkingDays: { '1': 1, '2': 1, '3': 1, '4': 1, '5': 1 }, // Default Mon-Fri
@@ -84,6 +89,7 @@ export const useCombinedSettings = () => {
     const [loading, setLoading] = useState(true);
     const pendingUpdatesRef = useRef<Set<string>>(new Set());
     const lastUpdateTimestampRef = useRef<Record<string, number>>({});
+    const pendingValuesRef = useRef<Record<string, unknown>>({});
 
     // Load and merge settings
     useEffect(() => {
@@ -106,6 +112,7 @@ export const useCombinedSettings = () => {
                     hourlyBalanceLimitUpper: appSettings.hourlyBalanceLimitUpper || 0.5,
                     hourlyBalanceLimitLower: appSettings.hourlyBalanceLimitLower || -0.5,
                     hoursToBeDoneByDay: appSettings.hoursToBeDoneByDay || 8,
+                    cardAgingBaseDays: appSettings.cardAgingBaseDays ?? 30,
                     weekStartDay: 1,
                     defaultPlanView: 'week',
                     timezone: appSettings.timezone || 'Europe/Zurich',
@@ -164,12 +171,23 @@ export const useCombinedSettings = () => {
                 }
 
                 // Only update fields that are NOT currently being updated locally
+                // Also preserve values that we recently set and haven't been confirmed by server yet
                 setSettings(prev => {
                     const next = { ...prev };
                     Object.keys(merged).forEach((key) => {
                         const k = key as keyof CombinedSettings;
                         if (!pendingUpdatesRef.current.has(k)) {
-                            (next as any)[k] = merged[k];
+                            // Even if pending window expired, keep our value if server hasn't caught up yet
+                            const pendingValue = (pendingValuesRef.current as any)[k];
+                            if (pendingValue !== undefined && (merged as any)[k] !== pendingValue && prev[k] === pendingValue) {
+                                // Server still has old value, keep our local optimistic value
+                            } else {
+                                (next as any)[k] = merged[k];
+                                // Server now has our value, clear the pending record
+                                if (pendingValue !== undefined) {
+                                    delete (pendingValuesRef.current as any)[k];
+                                }
+                            }
                         }
                     });
                     return next;
@@ -245,16 +263,80 @@ export const useCombinedSettings = () => {
         }
     }, [loading, userSettings, settings, updateUserSettings]);
 
+    const reloadAppSettings = useCallback(async () => {
+        try {
+            const appSettings = await persistence.getAppSettings();
+            const freshAppValues: Partial<CombinedSettings> = {
+                splitTime: appSplitTimeToString(appSettings.splitTime || 40),
+                userWorkloadPercentage: appSettings.userWorkloadPercentage || 60,
+                weeksComputation: appSettings.weeksComputation || 4,
+                highImpactTaskGoal: appSettings.highImpactTaskGoal || 3.63,
+                failureRateGoal: appSettings.failureRateGoal || 5,
+                qliGoal: appSettings.qliGoal || 60,
+                newCapabilitiesGoal: appSettings.newCapabilitiesGoal || 57.98,
+                vacationLimitMultiplier: appSettings.vacationLimitMultiplier || 1.5,
+                hourlyBalanceLimitUpper: appSettings.hourlyBalanceLimitUpper || 0.5,
+                hourlyBalanceLimitLower: appSettings.hourlyBalanceLimitLower || -0.5,
+                hoursToBeDoneByDay: appSettings.hoursToBeDoneByDay || 8,
+                cardAgingBaseDays: appSettings.cardAgingBaseDays ?? 30,
+                timezone: appSettings.timezone || 'Europe/Zurich',
+                country: appSettings.country || 'CH',
+                region: appSettings.region || 'BE',
+            };
+
+            setSettings(prev => {
+                const next = { ...prev };
+                Object.keys(freshAppValues).forEach((key) => {
+                    const k = key as keyof CombinedSettings;
+                    if (!pendingUpdatesRef.current.has(k)) {
+                        (next as any)[k] = freshAppValues[k];
+                    }
+                });
+                return next;
+            });
+        } catch (error) {
+            console.error('Error reloading app settings:', error);
+        }
+    }, [persistence]);
+
+    useEffect(() => {
+        if (!isCollaborationEnabled()) return;
+
+        const handleYjsAppSettingsChange = (event: Y.YMapEvent<unknown>) => {
+            if (event.transaction.local) return;
+            reloadAppSettings();
+        };
+
+        yAppSettings.observe(handleYjsAppSettingsChange);
+
+        return () => {
+            yAppSettings.unobserve(handleYjsAppSettingsChange);
+        };
+    }, [reloadAppSettings]);
+
+    useEffect(() => {
+        const handleAppSettingsChanged = () => {
+            reloadAppSettings();
+        };
+
+        eventBus.subscribe('appSettingsChanged', handleAppSettingsChanged);
+
+        return () => {
+            eventBus.unsubscribe('appSettingsChanged', handleAppSettingsChanged);
+        };
+    }, [reloadAppSettings]);
+
     /**
      * Update settings. User-specific fields (splitTime, userWorkloadPercentage) are saved
      * to user settings. Global fields are saved to app settings.
      */
     const updateSettings = async (updates: Partial<CombinedSettings>, scope?: 'user' | 'global') => {
         const now = Date.now();
-        // Optimistically update local state and track pending keys
+        // Optimistically update local state and track pending keys + values
         Object.keys(updates).forEach(key => {
             pendingUpdatesRef.current.add(key);
             lastUpdateTimestampRef.current[key] = now;
+            (pendingValuesRef.current as any)[key] = (updates as any)[key];
         });
 
         setSettings(prev => ({ ...prev, ...updates }));
@@ -326,6 +408,7 @@ export const useCombinedSettings = () => {
             if (updates.hourlyBalanceLimitUpper !== undefined) addToApp('hourlyBalanceLimitUpper', updates.hourlyBalanceLimitUpper);
             if (updates.hourlyBalanceLimitLower !== undefined) addToApp('hourlyBalanceLimitLower', updates.hourlyBalanceLimitLower);
             if (updates.hoursToBeDoneByDay !== undefined) addToApp('hoursToBeDoneByDay', updates.hoursToBeDoneByDay);
+            if (updates.cardAgingBaseDays !== undefined) addToApp('cardAgingBaseDays', updates.cardAgingBaseDays);
 
             // Scoped settings (Timezone, Country, Region)
             if (updates.timezone !== undefined) {
@@ -355,11 +438,17 @@ export const useCombinedSettings = () => {
 
             // Save app settings updates if any
             if (Object.keys(appUpdates).length > 0) {
-                const currentAppSettings = await persistence.getAppSettings();
-                await persistence.updateAppSettings({
-                    ...currentAppSettings,
-                    ...appUpdates,
-                });
+                await persistence.updateAppSettings(appUpdates);
+
+                eventBus.publish('appSettingsChanged');
+
+                if (isCollaborationEnabled()) {
+                    doc.transact(() => {
+                        for (const [key, value] of Object.entries(appUpdates)) {
+                            yAppSettings.set(key, JSON.stringify(value));
+                        }
+                    });
+                }
             }
         } catch (error) {
             console.error('Error saving combined settings:', error);
@@ -375,9 +464,7 @@ export const useCombinedSettings = () => {
                 return reverted;
             });
         } finally {
-            // Remove keys from pending set after a short delay to allow for propagation
-            // This delay helps bridge the gap between the sync call finishing and 
-            // the next userSettings update arriving via UserContext.
+            // Remove keys from pending set after a delay to allow for propagation
             setTimeout(() => {
                 Object.keys(updates).forEach(key => {
                     if (lastUpdateTimestampRef.current[key] === now) {
@@ -385,6 +472,15 @@ export const useCombinedSettings = () => {
                     }
                 });
             }, 1000);
+
+            // Safety cleanup: clear pending values after 30s even if server never confirmed
+            setTimeout(() => {
+                Object.keys(updates).forEach(key => {
+                    if (lastUpdateTimestampRef.current[key] === now) {
+                        delete (pendingValuesRef.current as any)[key];
+                    }
+                });
+            }, 30000);
         }
     };
 

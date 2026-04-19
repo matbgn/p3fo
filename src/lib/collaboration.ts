@@ -24,6 +24,9 @@ export const yDreamColumns = doc.getMap('dreamColumns');
 // Export shared circles map for real-time sync
 export const yCircles = doc.getMap('circles');
 
+// Export shared app settings map for cross-client synchronization
+export const yAppSettings = doc.getMap('appSettings');
+
 // Export shared system state (for global commands like Clear All)
 export const ySystemState = doc.getMap('systemState');
 

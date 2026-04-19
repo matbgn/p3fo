@@ -20,6 +20,7 @@ interface TaskDbRow {
   parentId: string | null;
   title: string;
   createdAt: string;
+  updatedAt: string | null;
   triageStatus: string;
   urgent: number;
   impact: number;
@@ -64,6 +65,7 @@ interface AppSettingsDbRow {
   vacationLimitMultiplier: number | null;
   hourlyBalanceLimitUpper: number | null;
   hourlyBalanceLimitLower: number | null;
+  cardAgingBaseDays: number | null;
   timezone: string | null;
   country: string | null;
   region: string | null;
@@ -119,6 +121,7 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
   qliGoal: 7,
   newCapabilitiesGoal: 3,
   hoursToBeDoneByDay: 8,
+  cardAgingBaseDays: 30,
 };
 
 
@@ -197,6 +200,7 @@ class SqliteClient implements DbClient {
         "vacationLimitMultiplier" REAL DEFAULT 1.5,
         "hourlyBalanceLimitUpper" REAL DEFAULT 0.5,
         "hourlyBalanceLimitLower" REAL DEFAULT -0.5,
+        "cardAgingBaseDays" REAL DEFAULT 30,
         "timezone" TEXT DEFAULT 'Europe/Zurich',
         "country" TEXT DEFAULT 'CH',
         "region" TEXT DEFAULT 'BE'
@@ -381,6 +385,9 @@ class SqliteClient implements DbClient {
     // Add sprintTarget column to tasks
     addColumn('tasks', 'sprintTarget', 'BOOLEAN DEFAULT 0');
 
+    // Add updatedAt column to tasks
+    addColumn('tasks', 'updatedAt', 'TEXT');
+
     // Add new columns for UserSettings
     addColumn('userSettings', 'weekStartDay', 'INTEGER');
     addColumn('userSettings', 'defaultPlanView', 'TEXT');
@@ -399,6 +406,8 @@ class SqliteClient implements DbClient {
     runMigration('appSettings', 'vacation_limit_multiplier', 'vacationLimitMultiplier');
     runMigration('appSettings', 'hourly_balance_limit_upper', 'hourlyBalanceLimitUpper');
     runMigration('appSettings', 'hourly_balance_limit_lower', 'hourlyBalanceLimitLower');
+
+    addColumn('appSettings', 'cardAgingBaseDays', 'REAL DEFAULT 30');
 
     // QolSurvey columns
     runMigration('qolSurvey', 'user_id', 'userId');
@@ -451,6 +460,7 @@ class SqliteClient implements DbClient {
       majorIncident: Boolean(row.majorIncident),
       sprintTarget: Boolean(row.sprintTarget),
       timer: row.timer ? JSON.parse(row.timer) : { startTime: null, elapsedTime: 0, isRunning: false },
+      updatedAt: row.updatedAt ?? undefined,
     }));
 
     return { data, total };
@@ -468,6 +478,7 @@ class SqliteClient implements DbClient {
       majorIncident: Boolean(row.majorIncident),
       sprintTarget: Boolean(row.sprintTarget),
       timer: row.timer ? JSON.parse(row.timer) : { startTime: null, elapsedTime: 0, isRunning: false },
+      updatedAt: row.updatedAt ?? undefined,
     };
   }
 
@@ -476,6 +487,7 @@ class SqliteClient implements DbClient {
       id: input.id || crypto.randomUUID(),
       title: input.title || 'New Task',
       createdAt: input.createdAt || new Date().toISOString(),
+      updatedAt: input.updatedAt ?? null,
       triageStatus: input.triageStatus || 'Backlog',
       urgent: input.urgent || false,
       impact: input.impact || false,
@@ -498,6 +510,7 @@ class SqliteClient implements DbClient {
       parentId: newTask.parentId,
       title: newTask.title,
       createdAt: newTask.createdAt,
+      updatedAt: newTask.updatedAt,
       triageStatus: newTask.triageStatus,
       urgent: newTask.urgent ? 1 : 0,
       impact: newTask.impact ? 1 : 0,
@@ -514,8 +527,8 @@ class SqliteClient implements DbClient {
     };
 
     this.db.prepare(`
-      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget", "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId")
-      VALUES(@id, @parentId, @title, @createdAt, @triageStatus, @urgent, @impact, @majorIncident, @sprintTarget, @difficulty, @timer, @category, @terminationDate, @comment, @durationInMinutes, @priority, @userId)
+      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget", "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId")
+      VALUES(@id, @parentId, @title, @createdAt, @updatedAt, @triageStatus, @urgent, @impact, @majorIncident, @sprintTarget, @difficulty, @timer, @category, @terminationDate, @comment, @durationInMinutes, @priority, @userId)
     `).run(params);
 
     return newTask;
@@ -533,6 +546,7 @@ class SqliteClient implements DbClient {
       id: updated.id,
       parentId: updated.parentId,
       title: updated.title,
+      updatedAt: updated.updatedAt ?? null,
       triageStatus: updated.triageStatus,
       urgent: updated.urgent ? 1 : 0,
       impact: updated.impact ? 1 : 0,
@@ -552,6 +566,7 @@ class SqliteClient implements DbClient {
       UPDATE "tasks" SET
       "parentId" = @parentId,
         "title" = @title,
+        "updatedAt" = @updatedAt,
         "triageStatus" = @triageStatus,
         "urgent" = @urgent,
         "impact" = @impact,
@@ -631,11 +646,12 @@ class SqliteClient implements DbClient {
     }
 
     const insertStmt = this.db.prepare(`
-      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget", "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId")
-      VALUES(@id, @parentId, @title, @createdAt, @triageStatus, @urgent, @impact, @majorIncident, @sprintTarget, @difficulty, @timer, @category, @terminationDate, @comment, @durationInMinutes, @priority, @userId)
+      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget", "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId")
+      VALUES(@id, @parentId, @title, @createdAt, @updatedAt, @triageStatus, @urgent, @impact, @majorIncident, @sprintTarget, @difficulty, @timer, @category, @terminationDate, @comment, @durationInMinutes, @priority, @userId)
       ON CONFLICT("id") DO UPDATE SET
       "parentId" = excluded."parentId",
         "title" = excluded."title",
+        "updatedAt" = excluded."updatedAt",
         "triageStatus" = excluded."triageStatus",
         "urgent" = excluded."urgent",
         "impact" = excluded."impact",
@@ -662,6 +678,7 @@ class SqliteClient implements DbClient {
           parentId: task.parentId,
           title: task.title,
           createdAt: task.createdAt,
+          updatedAt: task.updatedAt ?? null,
           triageStatus: task.triageStatus,
           urgent: task.urgent ? 1 : 0,
           impact: task.impact ? 1 : 0,
@@ -838,6 +855,7 @@ class SqliteClient implements DbClient {
       vacationLimitMultiplier: row.vacationLimitMultiplier ?? 1.5,
       hourlyBalanceLimitUpper: row.hourlyBalanceLimitUpper ?? 0.5,
       hourlyBalanceLimitLower: row.hourlyBalanceLimitLower ?? -0.5,
+      cardAgingBaseDays: row.cardAgingBaseDays ?? 30,
       timezone: row.timezone ?? 'Europe/Zurich',
       country: row.country ?? 'CH',
       region: row.region ?? 'BE',
@@ -866,8 +884,8 @@ class SqliteClient implements DbClient {
     const params = { ...updated, id: 1 };
 
     this.db.prepare(`
-      INSERT INTO "appSettings"("id", "splitTime", "userWorkloadPercentage", "weeksComputation", "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal", "hoursToBeDoneByDay", "vacationLimitMultiplier", "hourlyBalanceLimitUpper", "hourlyBalanceLimitLower", "timezone", "country", "region")
-      VALUES(@id, @splitTime, @userWorkloadPercentage, @weeksComputation, @highImpactTaskGoal, @failureRateGoal, @qliGoal, @newCapabilitiesGoal, @hoursToBeDoneByDay, @vacationLimitMultiplier, @hourlyBalanceLimitUpper, @hourlyBalanceLimitLower, @timezone, @country, @region)
+      INSERT INTO "appSettings"("id", "splitTime", "userWorkloadPercentage", "weeksComputation", "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal", "hoursToBeDoneByDay", "vacationLimitMultiplier", "hourlyBalanceLimitUpper", "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region")
+      VALUES(@id, @splitTime, @userWorkloadPercentage, @weeksComputation, @highImpactTaskGoal, @failureRateGoal, @qliGoal, @newCapabilitiesGoal, @hoursToBeDoneByDay, @vacationLimitMultiplier, @hourlyBalanceLimitUpper, @hourlyBalanceLimitLower, @cardAgingBaseDays, @timezone, @country, @region)
       ON CONFLICT("id") DO UPDATE SET
         "splitTime" = excluded."splitTime",
         "userWorkloadPercentage" = excluded."userWorkloadPercentage",
@@ -880,6 +898,7 @@ class SqliteClient implements DbClient {
         "vacationLimitMultiplier" = excluded."vacationLimitMultiplier",
         "hourlyBalanceLimitUpper" = excluded."hourlyBalanceLimitUpper",
         "hourlyBalanceLimitLower" = excluded."hourlyBalanceLimitLower",
+        "cardAgingBaseDays" = excluded."cardAgingBaseDays",
         "timezone" = excluded."timezone",
         "country" = excluded."country",
         "region" = excluded."region"

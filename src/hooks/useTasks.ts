@@ -58,6 +58,7 @@ export type Task = {
   durationInMinutes?: number;
   priority?: number; // New field for explicit prioritization
   userId?: string; // User assigned to this task
+  updatedAt?: number; // Last modification timestamp for card aging
 };
 
 
@@ -80,7 +81,7 @@ const syncTaskToYjs = (taskId: string, task: Task) => {
 const updateTaskInTasks = (taskId: string, updater: (task: Task) => Task) => {
   tasks = tasks.map(t => {
     if (t.id === taskId) {
-      const updated = updater(t);
+      const updated = { ...updater(t), updatedAt: Date.now() };
       syncTaskToYjs(taskId, updated);
       return updated;
     }
@@ -370,7 +371,7 @@ const reparent = async (taskId: string, newParentId: string | null) => {
   // Update local tasks state
   tasks = tasks.map(t => {
     if (t.id === taskId) {
-      const updated = { ...t, parentId: newParentId };
+      const updated = { ...t, parentId: newParentId, updatedAt: Date.now() };
       syncTaskToYjs(taskId, updated);
       return updated;
     } else if (t.id === oldParentId) {
@@ -480,7 +481,8 @@ async function updateStatus(taskId: string, status: TriageStatus) {
       const updatedTask = {
         ...t,
         triageStatus: status,
-        terminationDate: status === 'Done' ? Date.now() : undefined
+        terminationDate: status === 'Done' ? Date.now() : undefined,
+        updatedAt: Date.now()
       };
 
       // Automatically degrade priority when task is moved to Blocked status
@@ -728,7 +730,7 @@ async function updateUser(taskId: string, userId: string | undefined) {
   const normalizedUserId = userId === '' ? undefined : userId;
 
   // Update local state and sync to Yjs atomically
-  const updatedTask = { ...task, userId: normalizedUserId };
+  const updatedTask = { ...task, userId: normalizedUserId, updatedAt: Date.now() };
 
   tasks = tasks.map(t => t.id === taskId ? updatedTask : t);
 
@@ -807,7 +809,7 @@ export function useTasks() {
     tasks = tasks.map((currentTask) => {
       if (currentTask.id === id) {
         parentIdToReturn = currentTask.parentId || null; // Capture parentId before update
-        const updated = { ...currentTask, title };
+        const updated = { ...currentTask, title, updatedAt: Date.now() };
         syncTaskToYjs(id, updated);
         return updated;
       }
