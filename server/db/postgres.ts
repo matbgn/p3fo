@@ -33,7 +33,13 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
   qliGoal: 7,
   newCapabilitiesGoal: 3,
   hoursToBeDoneByDay: 8,
+  vacationLimitMultiplier: 1.5,
+  hourlyBalanceLimitUpper: 0.5,
+  hourlyBalanceLimitLower: -0.5,
   cardAgingBaseDays: 30,
+  timezone: 'Europe/Zurich',
+  country: 'CH',
+  region: 'BE',
 };
 
 export async function createPostgresClient(connectionString?: string): Promise<DbClient> {
@@ -130,8 +136,9 @@ class PostgresClient implements DbClient {
     if (parseInt(appSettingsResult.rows[0].count) === 0) {
       await this.pool.query(`
         INSERT INTO "appSettings" ("id", "splitTime", "userWorkloadPercentage", "weeksComputation", 
-                                  "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal", "hoursToBeDoneByDay") 
-        VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8)
+                                  "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal", "hoursToBeDoneByDay",
+                                  "vacationLimitMultiplier", "hourlyBalanceLimitUpper", "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region") 
+        VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       `, [
         DEFAULT_APP_SETTINGS.splitTime,
         DEFAULT_APP_SETTINGS.userWorkloadPercentage,
@@ -140,7 +147,14 @@ class PostgresClient implements DbClient {
         DEFAULT_APP_SETTINGS.failureRateGoal,
         DEFAULT_APP_SETTINGS.qliGoal,
         DEFAULT_APP_SETTINGS.newCapabilitiesGoal,
-        DEFAULT_APP_SETTINGS.hoursToBeDoneByDay
+        DEFAULT_APP_SETTINGS.hoursToBeDoneByDay,
+        DEFAULT_APP_SETTINGS.vacationLimitMultiplier ?? 1.5,
+        DEFAULT_APP_SETTINGS.hourlyBalanceLimitUpper ?? 0.5,
+        DEFAULT_APP_SETTINGS.hourlyBalanceLimitLower ?? -0.5,
+        DEFAULT_APP_SETTINGS.cardAgingBaseDays ?? 30,
+        DEFAULT_APP_SETTINGS.timezone ?? 'Europe/Zurich',
+        DEFAULT_APP_SETTINGS.country ?? 'CH',
+        DEFAULT_APP_SETTINGS.region ?? 'BE'
       ]);
     }
 
@@ -187,7 +201,11 @@ class PostgresClient implements DbClient {
         "color" TEXT, -- Custom color for roles, e.g., "#FF6600"
         "size" REAL, -- Size weight for layout calculation
         "description" TEXT, -- Optional description/purpose
+        "purpose" TEXT, -- Raison d'être
+        "domains" TEXT, -- Domains of authority
+        "accountabilities" TEXT, -- Attendus and expectations
         "order" INTEGER, -- Display order among siblings
+        "assignments" JSONB, -- Users assigned to this role with involvement types
         "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL,
         "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL,
         CONSTRAINT "fk_circles_parent" FOREIGN KEY ("parentId") REFERENCES "circles" ("id") ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE
@@ -343,6 +361,12 @@ class PostgresClient implements DbClient {
 
     // Add updatedAt column to tasks
     await addColumn('tasks', 'updatedAt', 'TIMESTAMP WITH TIME ZONE');
+
+    // Circle columns (fields added after initial table creation)
+    await addColumn('circles', 'purpose', 'TEXT');
+    await addColumn('circles', 'domains', 'TEXT');
+    await addColumn('circles', 'accountabilities', 'TEXT');
+    await addColumn('circles', 'assignments', 'JSONB');
 
     // Add new columns for UserSettings
     await addColumn('userSettings', 'weekStartDay', 'INTEGER');
@@ -875,14 +899,18 @@ class PostgresClient implements DbClient {
       color: input.color,
       size: input.size,
       description: input.description,
+      purpose: input.purpose,
+      domains: input.domains,
+      accountabilities: input.accountabilities,
       order: input.order,
+      assignments: input.assignments,
       createdAt: input.createdAt || now,
       updatedAt: input.updatedAt || now,
     };
 
     await this.pool.query(`
-      INSERT INTO "circles" ("id", "name", "parentId", "nodeType", "modifier", "color", "size", "description", "order", "createdAt", "updatedAt")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      INSERT INTO "circles" ("id", "name", "parentId", "nodeType", "modifier", "color", "size", "description", "purpose", "domains", "accountabilities", "order", "assignments", "createdAt", "updatedAt")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
     `, [
       newCircle.id,
       newCircle.name,
@@ -892,7 +920,11 @@ class PostgresClient implements DbClient {
       newCircle.color ?? null,
       newCircle.size ?? null,
       newCircle.description ?? null,
+      newCircle.purpose ?? null,
+      newCircle.domains ?? null,
+      newCircle.accountabilities ?? null,
       newCircle.order ?? null,
+      newCircle.assignments ? JSON.stringify(newCircle.assignments) : null,
       newCircle.createdAt,
       newCircle.updatedAt,
     ]);
@@ -911,8 +943,10 @@ class PostgresClient implements DbClient {
     await this.pool.query(`
       UPDATE "circles"
       SET "name" = $1, "parentId" = $2, "nodeType" = $3, "modifier" = $4,
-          "color" = $5, "size" = $6, "description" = $7, "order" = $8, "updatedAt" = $9
-      WHERE "id" = $10
+          "color" = $5, "size" = $6, "description" = $7, "purpose" = $8,
+          "domains" = $9, "accountabilities" = $10, "order" = $11,
+          "assignments" = $12, "updatedAt" = $13
+      WHERE "id" = $14
     `, [
       updated.name,
       updated.parentId,
@@ -921,7 +955,11 @@ class PostgresClient implements DbClient {
       updated.color ?? null,
       updated.size ?? null,
       updated.description ?? null,
+      updated.purpose ?? null,
+      updated.domains ?? null,
+      updated.accountabilities ?? null,
       updated.order ?? null,
+      updated.assignments ? JSON.stringify(updated.assignments) : null,
       updated.updatedAt,
       id
     ]);
@@ -965,8 +1003,8 @@ class PostgresClient implements DbClient {
 
       for (const circle of circles) {
         await client.query(`
-          INSERT INTO "circles"("id", "name", "parentId", "nodeType", "modifier", "color", "size", "description", "order", "createdAt", "updatedAt")
-          VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          INSERT INTO "circles"("id", "name", "parentId", "nodeType", "modifier", "color", "size", "description", "purpose", "domains", "accountabilities", "order", "assignments", "createdAt", "updatedAt")
+          VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
           ON CONFLICT ("id") DO UPDATE SET
             "name" = EXCLUDED."name",
             "parentId" = EXCLUDED."parentId",
@@ -975,7 +1013,11 @@ class PostgresClient implements DbClient {
             "color" = EXCLUDED."color",
             "size" = EXCLUDED."size",
             "description" = EXCLUDED."description",
+            "purpose" = EXCLUDED."purpose",
+            "domains" = EXCLUDED."domains",
+            "accountabilities" = EXCLUDED."accountabilities",
             "order" = EXCLUDED."order",
+            "assignments" = EXCLUDED."assignments",
             "createdAt" = EXCLUDED."createdAt",
             "updatedAt" = EXCLUDED."updatedAt"
         `, [
@@ -987,7 +1029,11 @@ class PostgresClient implements DbClient {
           circle.color ?? null,
           circle.size ?? null,
           circle.description ?? null,
+          circle.purpose ?? null,
+          circle.domains ?? null,
+          circle.accountabilities ?? null,
           circle.order ?? null,
+          circle.assignments ? JSON.stringify(circle.assignments) : null,
           circle.createdAt,
           circle.updatedAt,
         ]);
@@ -1189,9 +1235,21 @@ class PostgresClient implements DbClient {
 
   private mapCircleDbRowToEntity(row: any): CircleEntity {
     return {
-      ...row,
+      id: row.id,
+      name: row.name,
+      parentId: row.parentId,
       nodeType: row.nodeType as CircleNodeType,
       modifier: row.modifier as CircleNodeModifier | undefined,
+      color: row.color ?? undefined,
+      size: row.size ?? undefined,
+      description: row.description ?? undefined,
+      purpose: row.purpose ?? undefined,
+      domains: row.domains ?? undefined,
+      accountabilities: row.accountabilities ?? undefined,
+      order: row.order ?? undefined,
+      assignments: row.assignments ? (typeof row.assignments === 'string' ? JSON.parse(row.assignments) : row.assignments) : undefined,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
     };
   }
 
@@ -1241,15 +1299,15 @@ class PostgresClient implements DbClient {
       await client.query('DROP TABLE IF EXISTS celebration_board CASCADE');
 
       await client.query('COMMIT');
-
-      // Re-initialize (this will recreate tables with new schema)
-      await this.initialize();
-
-    } catch (err) {
+    } catch (error) {
       await client.query('ROLLBACK');
-      throw err;
+      throw error;
     } finally {
       client.release();
     }
+
+    // Re-initialize OUTSIDE the transaction to avoid auto-commit conflicts
+    // (this will recreate tables with the new schema and run migrations)
+    await this.initialize();
   }
 }
