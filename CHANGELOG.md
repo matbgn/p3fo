@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.19.0 (2026-04-22)
+
+### Features
+
+- **circles:** add user assignments to roles (824fa4e)
+
+### Bug Fixes
+
+- **common:** browser-only mode and canvas events in plan view (983b556)
+- **projectedHours:** adapt expectation-normalized projection for vacation deductions and work day capping (c420393)
+
+---
+
 ## v0.18.0 (2026-04-18)
 
 ### Features
@@ -125,19 +138,5 @@
 ---
 
 ## v0.12.1 (2026-01-30)
-
----
-
-## v0.12.0 (2026-01-25)
-
-### Features
-
-- **board:** add Dream Board with time frames and voting system (a308862)
-- **fertilization:** add confirmation dialog and visual linking with auto-navigation (7201b6b)
-- **fertilization:** add card linking, promote-to-backlog, and sort-by-votes (57bad5f)
-
-### Bug Fixes
-
-- **import:** merge user settings and optimize export (aac0032)
 
 ---
