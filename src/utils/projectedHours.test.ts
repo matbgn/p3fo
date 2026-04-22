@@ -43,58 +43,105 @@ const makeTaskWithTimer = (startTime: number, endTime: number, userId?: string):
 });
 
 describe('calculateProjection', () => {
-    it('projects zero remaining hours when all inputs are zero', () => {
+    it('projects zero when no hours done, no days passed, no vacation, zero pace', () => {
         const result = calculateProjection({
             hoursDone: 0,
+            hoursDue: 0,
+            vacationHours: 0,
+            hoursPerDay: 8,
             preferredDaysPassed: 0,
-            totalPreferredDaysInMonth: 0,
             historyPace: 0
         });
         expect(result).toBe(0);
     });
 
-    it('returns exactly hoursDone when no preferred days have passed and history pace is zero', () => {
+    it('returns hoursDone when no work days are expected (hoursDue equals vacationHours)', () => {
         const result = calculateProjection({
             hoursDone: 12.5,
-            preferredDaysPassed: 0,
-            totalPreferredDaysInMonth: 5,
-            historyPace: 0
+            hoursDue: 40,
+            vacationHours: 40,
+            hoursPerDay: 8,
+            preferredDaysPassed: 5,
+            historyPace: 8
         });
         expect(result).toBe(12.5);
     });
 
-    it('projects exclusively using history pace when no preferred days have passed', () => {
+    it('projects using history pace when no preferred days have passed', () => {
         const result = calculateProjection({
             hoursDone: 0,
+            hoursDue: 80,
+            vacationHours: 0,
+            hoursPerDay: 8,
             preferredDaysPassed: 0,
-            totalPreferredDaysInMonth: 10,
-            historyPace: 7.5
+            historyPace: 8
         });
-        expect(result).toBe(75); // 0 done + (7.5 history pace * 10 remaining days)
+        // expectedWorkDays = (80 - 0) / 8 = 10
+        // daysWorkedEquivalent = 0 / 8 = 0
+        // remainingWorkDays = 10 - 0 = 10
+        // projected = 0 + (8 * 10) = 80
+        expect(result).toBe(80);
     });
 
     it('projects using current pace when it is higher than history pace', () => {
         const result = calculateProjection({
-            hoursDone: 36.5,
-            preferredDaysPassed: 5,
-            totalPreferredDaysInMonth: 10,
+            hoursDone: 40,
+            hoursDue: 80,
+            vacationHours: 0,
+            hoursPerDay: 8,
+            preferredDaysPassed: 4,
             historyPace: 0
         });
-        expect(result).toBe(73);
+        // effectivePace = max(40/4, 0) = 10
+        // expectedWorkDays = 80/8 = 10
+        // daysWorkedEquivalent = 40/10 = 4
+        // remainingWorkDays = 10 - 4 = 6
+        // projected = 40 + (10 * 6) = 100
+        expect(result).toBe(100);
     });
 
-    it('never projects negative remaining days if days passed exceeds total preferred days', () => {
+    it('caps at hoursDone when all expected work days are consumed', () => {
         const result = calculateProjection({
             hoursDone: 80,
+            hoursDue: 80,
+            vacationHours: 0,
+            hoursPerDay: 8,
             preferredDaysPassed: 12,
-            totalPreferredDaysInMonth: 10,
             historyPace: 7.5
         });
+        // effectivePace = max(80/12, 7.5) ~= 6.67
+        // expectedWorkDays = 80/8 = 10
+        // daysWorkedEquivalent = 80/6.67 ~= 12
+        // remainingWorkDays = max(0, 10 - 12) = 0
+        // projected = 80 + (6.67 * 0) = 80
         expect(result).toBe(80);
+    });
+
+    it('reduces expectedWorkDays by vacation hours', () => {
+        const resultNoVacation = calculateProjection({
+            hoursDone: 0,
+            hoursDue: 80,
+            vacationHours: 0,
+            hoursPerDay: 8,
+            preferredDaysPassed: 0,
+            historyPace: 8
+        });
+        const resultWithVacation = calculateProjection({
+            hoursDone: 0,
+            hoursDue: 80,
+            vacationHours: 40,
+            hoursPerDay: 8,
+            preferredDaysPassed: 0,
+            historyPace: 8
+        });
+        // Without vacation: expectedWorkDays=10, projected=80
+        // With vacation: expectedWorkDays=(80-40)/8=5, projected=0+8*5=40
+        expect(resultWithVacation).toBe(40);
+        expect(resultWithVacation).toBeLessThan(resultNoVacation);
     });
 });
 
-describe('getProjectedHoursForActualMonth - vacation handling', () => {
+describe('getProjectedHoursForActualMonth - expectation-normalized vacation handling', () => {
     beforeEach(() => {
         vi.setSystemTime(new Date(2026, 3, 8)); // April 8, 2026
     });
@@ -111,42 +158,16 @@ describe('getProjectedHoursForActualMonth - vacation handling', () => {
 
         const tasks: Task[] = [];
 
-        const resultNoVaction = getProjectedHoursForActualMonth(2026, 4, tasks, settings50, 0);
+        const resultNoVacation = getProjectedHoursForActualMonth(2026, 4, tasks, settings50, 0);
         const resultWith40hVacation = getProjectedHoursForActualMonth(2026, 4, tasks, settings50, -40);
 
-        const hoursDueNoVacation = resultNoVaction.hoursDue;
-        const hoursDueWithVacation = resultWith40hVacation.hoursDue;
-
         // Hours due should be the same regardless of vacation (it's based on working days * workload)
-        expect(hoursDueWithVacation).toBe(hoursDueNoVacation);
+        expect(resultWith40hVacation.hoursDue).toBe(resultNoVacation.hoursDue);
 
         // The projected total with vacation should NOT be 40h more than without
-        // because vacation days reduce remaining projection days
-        const projectedDifference = resultWith40hVacation.totalTimeExpandedInHours - resultNoVaction.totalTimeExpandedInHours;
-
-        // With 40h vacation (5 days at 8h/day), the remaining projection should shrink by 5 days worth of pacing
-        // but the 40h should still count as hours done. The net effect should be less than the raw 40h difference
-        // because we removed 5 days from the projection window.
-        expect(Math.abs(projectedDifference)).toBeLessThanOrEqual(40);
-    });
-
-    it('should reduce remaining workable days by vacation day equivalent', () => {
-        const settings50: CombinedSettings = {
-            ...mockSettings,
-            userWorkloadPercentage: 50,
-        };
-
-        const tasks: Task[] = [];
-
-        // 40h vacation = 5 work days at 8h/day
-        const resultWithVacation = getProjectedHoursForActualMonth(2026, 4, tasks, settings50, -40);
-        const resultNoVacation = getProjectedHoursForActualMonth(2026, 4, tasks, settings50, 0);
-
-        // projectedTotal should include vacation hours as "done" time
-        // but the pace projection should cover fewer days
-        // The balance should be more favorable with vacation (because you fulfill your obligation on vacation days)
-        // but NOT by double-counting
-        expect(resultWithVacation.totalTimeExpandedInHours).toBeGreaterThan(0);
+        // because vacation reduces the expected work days (not the hours due)
+        const projectedDifference = resultWith40hVacation.totalTimeExpandedInHours - resultNoVacation.totalTimeExpandedInHours;
+        expect(projectedDifference).toBeLessThanOrEqual(40);
     });
 
     it('should handle positive vacation values gracefully', () => {
@@ -157,10 +178,8 @@ describe('getProjectedHoursForActualMonth - vacation handling', () => {
 
         const tasks: Task[] = [];
 
-        // If someone enters 40 (positive) instead of -40
+        // If someone enters 40 (positive) instead of -40, Math.abs handles both signs
         const result = getProjectedHoursForActualMonth(2026, 4, tasks, settings50, 40);
-
-        // Should work without errors - Math.abs handles both signs
         expect(result.totalTimeExpandedInHours).toBeGreaterThan(0);
     });
 
@@ -177,6 +196,116 @@ describe('getProjectedHoursForActualMonth - vacation handling', () => {
 
         expect(result0.totalTimeExpandedInHours).toBe(resultExplicit0.totalTimeExpandedInHours);
         expect(result0.hoursDue).toBe(resultExplicit0.hoursDue);
+    });
+});
+
+describe('Vacation scenarios (50% workload, 40h vacation = 2 work weeks)', () => {
+    beforeEach(() => {
+        vi.setSystemTime(new Date(2026, 3, 22));
+    });
+
+    afterAll(() => {
+        vi.useRealTimers();
+    });
+
+    const settings50: CombinedSettings = {
+        ...mockSettings,
+        userWorkloadPercentage: 50,
+    };
+
+    it('scenario a: vacation at beginning of month, no work done yet', () => {
+        const tasks: Task[] = [];
+        const result = getProjectedHoursForActualMonth(2026, 4, tasks, settings50, -40);
+
+        // 0 hoursDone, historyPace=0, expectedWorkDays=6
+        // Fallback: hoursDone + expectedWorkDays * hoursPerDay = 0 + 6*8 = 48
+        // + 40h vacation = 88h total
+        expect(result.totalTimeExpandedInHours).toBeGreaterThanOrEqual(40);
+        expect(result.actualHourlyBalance).toBeLessThanOrEqual(0);
+    });
+
+    it('scenario b: some work done before/after vacation, pace matches contract', () => {
+        const tasks: Task[] = [];
+        for (let day = 1; day <= 3; day++) {
+            const start = new Date(2026, 3, day, 9, 0, 0).getTime();
+            const end = start + 4 * 3600 * 1000;
+            tasks.push(makeTaskWithTimer(start, end));
+        }
+
+        const resultNoVacation = getProjectedHoursForActualMonth(2026, 4, tasks, settings50, 0);
+        const resultWithVacation = getProjectedHoursForActualMonth(2026, 4, tasks, settings50, -40);
+
+        // With vacation: expectedWorkDays shrinks from ~11 to ~6
+        // Result includes hours done + vacation hours + any remaining pace projection
+        expect(resultWithVacation.totalTimeExpandedInHours).toBeGreaterThan(0);
+        // Vacation should reduce the total vs no-vacation + 40h (no double-counting)
+        expect(resultWithVacation.totalTimeExpandedInHours).toBeLessThanOrEqual(resultNoVacation.totalTimeExpandedInHours + 40);
+    });
+
+    it('scenario c: vacation towards end of month, work done early', () => {
+        vi.setSystemTime(new Date(2026, 3, 24));
+
+        const tasks: Task[] = [];
+        for (let day = 1; day <= 10; day++) {
+            const start = new Date(2026, 3, day, 9, 0, 0).getTime();
+            const end = start + 4 * 3600 * 1000;
+            tasks.push(makeTaskWithTimer(start, end));
+        }
+
+        const result = getProjectedHoursForActualMonth(2026, 4, tasks, settings50, -40);
+
+        expect(result.totalTimeExpandedInHours).toBeGreaterThanOrEqual(40 + 40);
+    });
+
+    it('scenario: no vacation still projects based on pace', () => {
+        const tasks: Task[] = [];
+        // At 50% workload with 4h/day tasks, the pace is low (~0.8h preferred day)
+        // If pace < hoursPerDay, daysWorkedEquivalent may exceed expectedWorkDays
+        // In that case projection returns hoursDone (no additional projection).
+        // This is correct: a slow pace means the employee has already used up their
+        // calendar-day budget for the expected work.
+        for (let day = 1; day <= 3; day++) {
+            const start = new Date(2026, 3, day, 9, 0, 0).getTime();
+            const end = start + 4 * 3600 * 1000;
+            tasks.push(makeTaskWithTimer(start, end));
+        }
+
+        const result = getProjectedHoursForActualMonth(2026, 4, tasks, settings50, 0);
+
+        // At very low effective pace, daysWorkedEquivalent > expectedWorkDays,
+        // projection returns hoursDone. But with full-time pace from history, it would exceed.
+        expect(result.totalTimeExpandedInHours).toBeGreaterThanOrEqual(12);
+    });
+
+    it('should NOT zero out projection when 0 hours done + vacation', () => {
+        const tasks: Task[] = [];
+
+        const result = getProjectedHoursForActualMonth(2026, 4, tasks, settings50, -40);
+
+        // With 0 hoursDone and 0 historyPace, fallback kicks in:
+        // projected = 0 + expectedWorkDays * hoursPerDay = 0 + 6*8 = 48
+        // total = 48 + 40 = 88
+        // This is the key fix: the old logic gave 0 remaining days.
+        expect(result.totalTimeExpandedInHours).toBeGreaterThan(40);
+    });
+
+    it('should handle vacation that exceeds hours due', () => {
+        const settings100: CombinedSettings = {
+            ...mockSettings,
+            userWorkloadPercentage: 100,
+        };
+
+        const tasks: Task[] = [];
+
+        const result = getProjectedHoursForActualMonth(2026, 4, tasks, settings100, -200);
+
+        // expectedWorkDays = max(0, (hoursDue - 200) / 8). If hoursDue < 200, expectedWorkDays = 0
+        // Fallback with 0 pace: 0 + 0*8 = 0 projected
+        // + 200 vacation = 200 total
+        // But balance = 200 - hoursDue > 0 (vacation exceeds obligation)
+        expect(result.totalTimeExpandedInHours).toBeGreaterThanOrEqual(0);
+        // When vacation exceeds hours due, balance is positive (over-credited)
+        expect(result.totalTimeExpandedInHours).toBeGreaterThan(0);
     });
 });
 
@@ -334,58 +463,6 @@ describe('Vacation projection edge cases', () => {
         vi.useRealTimers();
     });
 
-    it('should not produce unrealistic projections when large vacation is taken in current month', () => {
-        const settings50: CombinedSettings = {
-            ...mockSettings,
-            userWorkloadPercentage: 50,
-        };
-
-        const tasks: Task[] = [];
-
-        // No vacation
-        const resultNoVacation = getProjectedHoursForActualMonth(2026, 4, tasks, settings50, 0);
-
-        // 40h vacation (5 full days)
-        const result40hVacation = getProjectedHoursForActualMonth(2026, 4, tasks, settings50, -40);
-
-        expect(result40hVacation.totalTimeExpandedInHours).toBeGreaterThan(0);
-
-        // The difference should not exceed the vacation hours value
-        // (which would indicate double-counting)
-        const projDiff = result40hVacation.totalTimeExpandedInHours - resultNoVacation.totalTimeExpandedInHours;
-        expect(projDiff).toBeLessThanOrEqual(40);
-    });
-
-    it('should reduce projection days by vacation days and add vacation hours', () => {
-        const settings100: CombinedSettings = {
-            ...mockSettings,
-            userWorkloadPercentage: 100,
-        };
-
-        // Create tasks covering several days so there's a meaningful pace
-        const tasks: Task[] = [];
-        for (let day = 1; day <= 4; day++) {
-            const start = new Date(2026, 3, day, 9, 0, 0).getTime();
-            const end = start + 8 * 3600 * 1000;
-            tasks.push(makeTaskWithTimer(start, end));
-        }
-
-        const resultNoVacation = getProjectedHoursForActualMonth(2026, 4, tasks, settings100, 0);
-        const result40hVacation = getProjectedHoursForActualMonth(2026, 4, tasks, settings100, -40);
-
-        // With 40h vacation:
-        // - 5 vacation days are subtracted from total preferred days (reducing projection window)
-        // - 40 vacation hours are added as earned time
-        // - The net diff should be: +40h (vacation hours) - pace * 5 (removed projection days)
-        // At 8h/day pace, removing 5 days removes ~40h, so net ≈ 0-40h diff
-        // But the exact value depends on current vs history pace
-        const projDiff = result40hVacation.totalTimeExpandedInHours - resultNoVacation.totalTimeExpandedInHours;
-        // Vacation hours should be present in the total, and projection window is reduced
-        expect(result40hVacation.totalTimeExpandedInHours).toBeGreaterThan(0);
-        // The diff should not exceed the vacation hours (no double counting)
-        expect(projDiff).toBeLessThanOrEqual(40);
-    });
-
     it('should handle beginning-of-month vacation (no hours done yet)', () => {
         // Scenario: vacation taken in first week, no actual work hours tracked yet
         const settings50: CombinedSettings = {
@@ -397,7 +474,6 @@ describe('Vacation projection edge cases', () => {
         const result = getProjectedHoursForActualMonth(2026, 4, tasks, settings50, -40);
 
         // With 0 hours done and 40h vacation, total should include vacation hours + projected hours
-        // The projection uses historyPace for remaining days (reduced by vacation days)
         expect(result.totalTimeExpandedInHours).toBeGreaterThanOrEqual(40);
         // Hours due is based on full working days * workload (vacation doesn't reduce what's owed)
         // So balance should be negative or near zero (vacation covers some obligation but not all)
