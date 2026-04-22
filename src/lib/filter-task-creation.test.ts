@@ -248,14 +248,17 @@ describe('Implementation Verification via Code Locations', () => {
   it('loadTasks guard exists at documented location', async () => {
     const source = fs.readFileSync(USE_TASKS_PATH, 'utf-8')
     const lines = source.split('\n')
-    
-    // The guard is at line 172-173 (index 171-172)
+
+    // Find the guard dynamically rather than hardcoding a line number
+    const guardIndex = lines.findIndex(l => l.includes('if (isFiltered)'))
+    expect(guardIndex).toBeGreaterThanOrEqual(0)
+
     // Verify the line contains the if statement
-    const guardLine = lines[171]
+    const guardLine = lines[guardIndex]
     expect(guardLine).toMatch(/if\s*\(\s*isFiltered\s*\)/)
-    
+
     // And next line is return
-    const returnLine = lines[172]
+    const returnLine = lines[guardIndex + 1]
     expect(returnLine).toMatch(/return/)
   })
   

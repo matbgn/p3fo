@@ -1,7 +1,7 @@
 type EventHandler = (data?: unknown) => void;
 
 // Events that should be micro-batched to avoid redundant re-renders
-const BATCHED_EVENTS = new Set(["tasksChanged"]);
+const BATCHED_EVENTS = new Set(["tasksChanged", "userSettingsChanged"]);
 
 class EventBus {
   private subscribers: { [event: string]: EventHandler[] } = {};
@@ -35,14 +35,18 @@ class EventBus {
         queueMicrotask(() => {
           this.pendingBatched.delete(event);
           if (this.subscribers[event]) {
-            this.subscribers[event].forEach((subscriber) => subscriber(data));
+            this.subscribers[event].forEach((subscriber) => {
+              subscriber(data);
+            });
           }
         });
       }
       return;
     }
 
-    this.subscribers[event].forEach((subscriber) => subscriber(data));
+    this.subscribers[event].forEach((subscriber) => {
+      subscriber(data);
+    });
   }
 }
 

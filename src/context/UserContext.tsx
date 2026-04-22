@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useRef, useCallback } from 'react';
 import Cookies from 'js-cookie';
 import { getRandomUsername } from '@/lib/username-generator';
 import { getPersistenceAdapter } from '@/lib/persistence-factory';
@@ -16,6 +16,35 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [loading, setLoading] = useState(true);
     const pendingUpdatesRef = useRef<Set<string>>(new Set());
     const lastUpdateTimestampRef = useRef<Record<string, number>>({});
+    const lastOwnUpdateRef = useRef<number>(0);
+
+    // Refresh user settings from persistence
+    const refreshUserSettings = useCallback(async () => {
+        if (!userId) {
+            console.warn('Cannot refresh settings: no user ID');
+            return;
+        }
+
+        try {
+            const adapter = await getPersistenceAdapter();
+            const settings = await adapter.getUserSettings(userId);
+            if (settings) {
+                setUserSettings(prev => {
+                    if (!prev) return settings;
+                    const pending = pendingUpdatesRef.current;
+                    const merged = { ...settings };
+                    Object.keys(prev).forEach(key => {
+                        if (pending.has(key)) {
+                            (merged as any)[key] = (prev as any)[key];
+                        }
+                    });
+                    return merged;
+                });
+            }
+        } catch (error) {
+            console.error('Error refreshing user settings:', error);
+        }
+    }, [userId]);
 
     // Initialize user identity and settings
     useEffect(() => {
@@ -79,6 +108,10 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     useEffect(() => {
         const handleSettingsChanged = async () => {
             if (!userId) return;
+            // Skip refresh if this event was likely triggered by our own update within the last 500ms
+            if (Date.now() - lastOwnUpdateRef.current < 500) {
+                return;
+            }
             await refreshUserSettings();
         };
 
@@ -87,7 +120,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return () => {
             eventBus.unsubscribe('userSettingsChanged', handleSettingsChanged);
         };
-    }, [userId]);
+    }, [userId, refreshUserSettings]);
 
     // Listen for Yjs user settings changes
     useEffect(() => {
@@ -111,29 +144,30 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // Cleanup fn
             return () => yUserSettings.unobserve(handleYjsChange);
         });
-    }, [userId]);
+    }, [userId, refreshUserSettings]);
 
     // Update user settings
-    const updateUserSettings = async (patch: Partial<UserSettingsEntity>) => {
+    const updateUserSettings = useCallback(async (patch: Partial<UserSettingsEntity>) => {
         if (!userId) {
             throw new Error('Cannot update settings: no user ID');
         }
 
         const now = Date.now();
-        // Optimistic update
+        // Optimistic update using functional form to avoid stale closure
         Object.keys(patch).forEach(key => {
             pendingUpdatesRef.current.add(key);
             lastUpdateTimestampRef.current[key] = now;
         });
 
-        if (userSettings) {
-            setUserSettings({ ...userSettings, ...patch });
-        }
+        setUserSettings(prev => (prev ? { ...prev, ...patch } : null));
 
         try {
             const adapter = await getPersistenceAdapter();
             const updated = await adapter.updateUserSettings(userId, patch);
             setUserSettings(updated);
+
+            // Record own update timestamp so listeners can skip self-triggered events
+            lastOwnUpdateRef.current = Date.now();
 
             // Emit event so other components can refresh
             eventBus.publish('userSettingsChanged');
@@ -161,35 +195,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 });
             }, 1000);
         }
-    };
-
-    // Refresh user settings from persistence
-    const refreshUserSettings = async () => {
-        if (!userId) {
-            console.warn('Cannot refresh settings: no user ID');
-            return;
-        }
-
-        try {
-            const adapter = await getPersistenceAdapter();
-            const settings = await adapter.getUserSettings(userId);
-            if (settings) {
-                setUserSettings(prev => {
-                    if (!prev) return settings;
-                    const pending = pendingUpdatesRef.current;
-                    const merged = { ...settings };
-                    Object.keys(prev).forEach(key => {
-                        if (pending.has(key)) {
-                            (merged as any)[key] = (prev as any)[key];
-                        }
-                    });
-                    return merged;
-                });
-            }
-        } catch (error) {
-            console.error('Error refreshing user settings:', error);
-        }
-    };
+    }, [userId]);
 
     // Change user ID — discard current data and adopt target UUID's workspace
     const changeUserId = async (newUserId: string) => {

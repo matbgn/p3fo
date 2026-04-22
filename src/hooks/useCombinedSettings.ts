@@ -90,6 +90,7 @@ export const useCombinedSettings = () => {
     const pendingUpdatesRef = useRef<Set<string>>(new Set());
     const lastUpdateTimestampRef = useRef<Record<string, number>>({});
     const pendingValuesRef = useRef<Record<string, unknown>>({});
+    const hasMigratedRef = useRef(false);
 
     // Load and merge settings
     useEffect(() => {
@@ -208,7 +209,7 @@ export const useCombinedSettings = () => {
     // 1. Legacy localStorage settings are migrated
     // 2. Default settings are "pinned" to the user profile so they appear in exports
     useEffect(() => {
-        if (!loading && userSettings) {
+        if (!loading && userSettings && !hasMigratedRef.current) {
             const updates: Parameters<typeof updateUserSettings>[0] = {}; // Use UserSettings type
             let hasUpdates = false;
 
@@ -260,6 +261,7 @@ export const useCombinedSettings = () => {
                     updateUserSettings({ ...userSettings, ...updates });
                 }, 0);
             }
+            hasMigratedRef.current = true;
         }
     }, [loading, userSettings, settings, updateUserSettings]);
 

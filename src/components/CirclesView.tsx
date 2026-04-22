@@ -165,6 +165,16 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
   const [nodes, setNodes] = useState<CircleTreeNode[]>([]);
   const [colorToNode, setColorToNode] = useState<Map<string, CircleTreeNode>>(new Map());
 
+  // Refs for native event listeners (avoid stale closures)
+  const zoomInfoRef = useRef(zoomInfo);
+  zoomInfoRef.current = zoomInfo;
+  const dimensionsRef = useRef(dimensions);
+  dimensionsRef.current = dimensions;
+  const colorToNodeRef = useRef<Map<string, CircleTreeNode>>(new Map());
+  colorToNodeRef.current = colorToNode;
+  const nodesRef = useRef<CircleTreeNode[]>([]);
+  nodesRef.current = nodes;
+
   // Animation state for smooth zoom transitions
   const [isAnimating, setIsAnimating] = useState(false);
   const animationRef = useRef<number | null>(null);
@@ -397,67 +407,90 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
       setColorToNode(newColorMap);
     }
 
-    // Draw text labels (only on visible canvas)
+    // Draw text labels (visible canvas only) with float/center based on actual child text visibility
     if (!hidden) {
+      /* Pass 1: which node names actually render at current zoom? */
+      const textNodeIds = new Set<string>();
       for (const node of nodes) {
         if (node.x === undefined || node.y === undefined || node.r === undefined) continue;
-
-        const nodeX = ((node.x - zoomInfo.centerX) * zoomInfo.scale) + centerX;
-        const nodeY = ((node.y - zoomInfo.centerY) * zoomInfo.scale) + centerY;
         const nodeR = node.r * zoomInfo.scale * (node.nodeType === 'role' ? 0.9 : 1);
-
-        // Only draw text for visible nodes near current context
-        const shouldShowText = currentNode && (
+        const showText = currentNode && (
           node.id === currentNode.id ||
           node.parent?.id === currentNode.id ||
           node.id === currentNode.parent?.id ||
           node.parent?.id === currentNode.parent?.id
         );
-
-        if (shouldShowText && nodeR > 20) {
+        if (showText && nodeR > 15) { // LOWERED from 20 → 15 for closer trigger
           const fontSize = Math.min(Math.round(nodeR / 4), 24);
-          if (fontSize >= 8) {
-            ctx.font = `bold ${fontSize}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
+          if (fontSize >= 8) textNodeIds.add(node.id);
+        }
+      }
 
-            if (node.nodeType === 'role') {
-              ctx.fillStyle = '#000000';
-              ctx.strokeStyle = '#FFFFFF';
-            } else {
-              ctx.fillStyle = '#FFFFFF';
-              ctx.strokeStyle = '#000000';
-            }
+      /* Pass 2: containers with a visible child → float title above */
+      const hasVisibleTextChild = new Set<string>();
+      for (const node of nodes) {
+        if (node.children && node.children.length > 0) {
+          for (const child of node.children) {
+            if (textNodeIds.has(child.id)) { hasVisibleTextChild.add(node.id); break; }
+          }
+        }
+      }
 
-            ctx.lineWidth = 3;
-            ctx.lineJoin = 'round';
+      /* Pass 3: draw text */
+      for (const node of nodes) {
+        if (node.x === undefined || node.y === undefined || node.r === undefined) continue;
+        if (!textNodeIds.has(node.id)) continue;
 
-            // Word wrap text
-            const words = node.name.split(' ');
-            const lines: string[] = [];
-            let currentLine = words[0] || '';
+        const nodeX = ((node.x - zoomInfo.centerX) * zoomInfo.scale) + centerX;
+        const nodeY = ((node.y - zoomInfo.centerY) * zoomInfo.scale) + centerY;
+        const nodeR = node.r * zoomInfo.scale * (node.nodeType === 'role' ? 0.9 : 1);
+        const fontSize = Math.min(Math.round(nodeR / 4), 24);
 
-            for (let i = 1; i < words.length; i++) {
-              const testLine = currentLine + ' ' + words[i];
-              const metrics = ctx.measureText(testLine);
-              if (metrics.width < nodeR * 1.4) {
-                currentLine = testLine;
-              } else {
-                lines.push(currentLine);
-                currentLine = words[i];
-              }
-            }
-            lines.push(currentLine);
+        if (fontSize < 8) continue;
 
-            // Draw lines
-            const lineHeight = fontSize * 1.2;
-            const startY = nodeY - ((lines.length - 1) * lineHeight) / 2;
+        ctx.font = `bold ${fontSize}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 3;
+        ctx.lineJoin = 'round';
 
-            for (let i = 0; i < Math.min(lines.length, 3); i++) {
-              const text = i === 2 && lines.length > 3 ? '...' : lines[i];
-              ctx.strokeText(text, nodeX, startY + i * lineHeight);
-              ctx.fillText(text, nodeX, startY + i * lineHeight);
-            }
+        if (node.nodeType === 'role') {
+          ctx.fillStyle = '#000000';
+          ctx.strokeStyle = '#FFFFFF';
+        } else {
+          ctx.fillStyle = '#FFFFFF';
+          ctx.strokeStyle = '#000000';
+        }
+
+        const words = node.name.split(' ');
+        const lines: string[] = [];
+        let cur = words[0] || '';
+        for (let i = 1; i < words.length; i++) {
+          const test = cur + ' ' + words[i];
+          if (ctx.measureText(test).width < nodeR * 1.4) { cur = test; } else { lines.push(cur); cur = words[i]; }
+        }
+        lines.push(cur);
+
+        const lh = fontSize * 1.2;
+        const maxLines = Math.min(lines.length, 3);
+
+        if (hasVisibleTextChild.has(node.id)) {
+          // Float above so children are unobstructed
+          ctx.textBaseline = 'top';
+          const block = maxLines * lh;
+          const startY = nodeY - nodeR - block - 4;
+          for (let i = 0; i < maxLines; i++) {
+            const txt = i === 2 && lines.length > 3 ? '...' : lines[i];
+            ctx.strokeText(txt, nodeX, startY + i * lh);
+            ctx.fillText(txt, nodeX, startY + i * lh);
+          }
+        } else {
+          // Center inside (leaf or zoomed-out parent)
+          ctx.textBaseline = 'middle';
+          const startY = nodeY - ((maxLines - 1) * lh) / 2;
+          for (let i = 0; i < maxLines; i++) {
+            const txt = i === 2 && lines.length > 3 ? '...' : lines[i];
+            ctx.strokeText(txt, nodeX, startY + i * lh);
+            ctx.fillText(txt, nodeX, startY + i * lh);
           }
         }
       }
@@ -471,68 +504,46 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
       : 1 - Math.pow(-2 * t + 2, 3) / 2;
   };
 
-  // Zoom to a node with smooth animation using d3.interpolateZoom
+  // Direct cubic-ease interpolation (no d3.interpolateZoom orbit artifact)
   const zoomToNode = useCallback((node: CircleTreeNode) => {
     if (node.x === undefined || node.y === undefined || node.r === undefined) return;
 
-    // Cancel any ongoing animation
     if (animationRef.current !== null) {
       cancelAnimationFrame(animationRef.current);
       animationRef.current = null;
     }
 
-    // Calculate target scale to make the target node fill ~45% of the view (or more for leaves)
     const viewDiameter = Math.min(dimensions.width, dimensions.height) * 0.9;
     const zoomFactor = node.nodeType === 'role' || (node.children && node.children.length < 2) ? 2 : 1;
-    const targetScale = (viewDiameter / (node.r * 2)) * 0.45 * zoomFactor;
+    const s = (viewDiameter / (node.r * 2)) * 0.45 * zoomFactor;
 
-    // Calculate viewport as [centerX, centerY, viewSize] for interpolateZoom
-    // viewSize = diameter / scale (how much of the layout is visible)
-    const vOld: [number, number, number] = [
-      zoomInfo.centerX,
-      zoomInfo.centerY,
-      viewDiameter / zoomInfo.scale,
-    ];
-    const vNew: [number, number, number] = [
-      node.x,
-      node.y,
-      viewDiameter / targetScale,
-    ];
-
-    // Use d3.interpolateZoom for smooth transitions
-    const interpolator = d3.interpolateZoom(vOld, vNew);
-
-    // Animation duration based on interpolator suggestion (clamped)
-    const duration = Math.max(300, Math.min(interpolator.duration, 750));
+    const from = zoomInfoRef.current; // read latest at call time
+    const DURATION = 500;
 
     setIsAnimating(true);
     setCurrentNode(node);
 
-    const startTime = performance.now();
+    const t0 = performance.now();
+    const ease = (t: number) =>
+      t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
-    const animate = (currentTime: number) => {
-      const elapsed = currentTime - startTime;
-      const t = Math.min(elapsed / duration, 1);
-      const easedT = easeInOutCubic(t);
-
-      const v = interpolator(easedT);
-
+    const tick = (now: number) => {
+      const raw = Math.min((now - t0) / DURATION, 1);
+      const e = ease(raw);
       setZoomInfo({
-        centerX: v[0],
-        centerY: v[1],
-        scale: viewDiameter / v[2],
+        centerX: from.centerX + (node.x! - from.centerX) * e,
+        centerY: from.centerY + (node.y! - from.centerY) * e,
+        scale: from.scale + (s - from.scale) * e,
       });
-
-      if (t < 1) {
-        animationRef.current = requestAnimationFrame(animate);
+      if (raw < 1) {
+        animationRef.current = requestAnimationFrame(tick);
       } else {
         setIsAnimating(false);
         animationRef.current = null;
       }
     };
-
-    animationRef.current = requestAnimationFrame(animate);
-  }, [dimensions, zoomInfo]);
+    animationRef.current = requestAnimationFrame(tick);
+  }, [dimensions.width, dimensions.height]);
 
   // Handle canvas click
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -571,30 +582,147 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     }
   }, [colorToNode, currentNode, nodes, zoomToNode]);
 
-  // Handle canvas mouse move (hover)
-  const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+  /* -- Unified native canvas listeners (wheel + drag-pan + click/hover) -- */
+  useEffect(() => {
+    const canvas = canvasRef.current;
     const hiddenCanvas = hiddenCanvasRef.current;
-    const visibleCanvas = canvasRef.current;
-    if (!hiddenCanvas || !visibleCanvas) return;
+    if (!canvas || !hiddenCanvas) return;
 
-    // Use visible canvas rect for mouse coordinates (hidden canvas has display:none so its rect is zero)
-    const rect = visibleCanvas.getBoundingClientRect();
-    const scaleX = hiddenCanvas.width / rect.width;
-    const scaleY = hiddenCanvas.height / rect.height;
-    const mouseX = (e.clientX - rect.left) * scaleX;
-    const mouseY = (e.clientY - rect.top) * scaleY;
+    let isDragging = false;
+    let pointerDown: { x: number; y: number } | null = null;
+    const DRAG_THRESHOLD = 4;
 
-    const hiddenCtx = hiddenCanvas.getContext('2d', { willReadFrequently: true });
-    if (!hiddenCtx) return;
+    /* Wheel zoom */
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const { width, height } = dimensionsRef.current;
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const cx = width / 2;
+      const cy = height / 2;
 
-    const pixel = hiddenCtx.getImageData(mouseX, mouseY, 1, 1).data;
-    const colorString = `rgb(${pixel[0]},${pixel[1]},${pixel[2]})`;
-    const hovered = colorToNode.get(colorString);
+      const cur = zoomInfoRef.current;
+      const factor = 1 - e.deltaY * 0.001;
+      const s = Math.min(Math.max(cur.scale * factor, 0.05), 20);
+      if (s === cur.scale) return;
 
-    setHoveredNode(hovered || null);
-  }, [colorToNode]);
+      const worldX = cur.centerX + (mx - cx) / cur.scale;
+      const worldY = cur.centerY + (my - cy) / cur.scale;
+      setZoomInfo({
+        centerX: worldX - (mx - cx) / s,
+        centerY: worldY - (my - cy) / s,
+        scale: s,
+      });
 
-  // Add new node
+      // Auto-focus on whatever container/role is now under the cursor after zoom
+      let deepest: CircleTreeNode | null = null;
+      let bestDepth = -1;
+      for (const n of nodesRef.current) {
+        if (n.x === undefined || n.y === undefined || n.r === undefined) continue;
+        const dx = n.x - worldX;
+        const dy = n.y - worldY;
+        if (dx * dx + dy * dy <= n.r * n.r) {
+          if ((n.depth ?? 0) > bestDepth) {
+            bestDepth = n.depth ?? 0;
+            deepest = n;
+          }
+        }
+      }
+      if (deepest) {
+        setCurrentNode(deepest);
+      }
+    };
+
+    /* Drag pan */
+    const onMouseDown = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      pointerDown = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      isDragging = false;
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = hiddenCanvas.width / rect.width;
+      const scaleY = hiddenCanvas.height / rect.height;
+      const mX = (e.clientX - rect.left) * scaleX;
+      const mY = (e.clientY - rect.top) * scaleY;
+
+      if (pointerDown && e.buttons === 1) {
+        const dx = (e.clientX - rect.left) - pointerDown.x;
+        const dy = (e.clientY - rect.top) - pointerDown.y;
+        if (!isDragging && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+          isDragging = true;
+        }
+        if (isDragging) {
+          const cur = zoomInfoRef.current;
+          setZoomInfo(prev => ({
+            ...prev,
+            centerX: prev.centerX - e.movementX / cur.scale,
+            centerY: prev.centerY - e.movementY / cur.scale,
+          }));
+        }
+      }
+
+      // Hover detection when not dragging
+      if (!isDragging) {
+        const hc = hiddenCanvas.getContext('2d', { willReadFrequently: true });
+        if (!hc) return;
+        const px = hc.getImageData(mX, mY, 1, 1).data;
+        const color = `rgb(${px[0]},${px[1]},${px[2]})`;
+        const hovered = colorToNodeRef.current.get(color);
+        setHoveredNode(hovered || null);
+      }
+    };
+
+    /* Click-to-focus (only when not dragging) */
+    const onMouseUp = (e: MouseEvent) => {
+      const wasDragging = isDragging;
+      pointerDown = null;
+      isDragging = false;
+      if (wasDragging) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const sX = hiddenCanvas.width / rect.width;
+      const sY = hiddenCanvas.height / rect.height;
+      const mx = (e.clientX - rect.left) * sX;
+      const my = (e.clientY - rect.top) * sY;
+      const hc = hiddenCanvas.getContext('2d', { willReadFrequently: true });
+      if (!hc) return;
+      const px = hc.getImageData(mx, my, 1, 1).data;
+      const color = `rgb(${px[0]},${px[1]},${px[2]})`;
+      const clicked = colorToNodeRef.current.get(color);
+
+      if (clicked) {
+        const cn = currentNodeRef.current;
+        if (cn && clicked.id === cn.id && cn.parent) {
+          zoomToNode(cn.parent);
+        } else {
+          zoomToNode(clicked);
+        }
+      } else if (nodesRef.current.length > 0) {
+        zoomToNode(nodesRef.current[0]);
+      }
+    };
+
+    const onLeave = () => { pointerDown = null; isDragging = false; };
+
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    canvas.addEventListener('mousedown', onMouseDown);
+    canvas.addEventListener('mousemove', onMouseMove);
+    canvas.addEventListener('mouseup', onMouseUp);
+    canvas.addEventListener('mouseleave', onLeave);
+
+    return () => {
+      canvas.removeEventListener('wheel', onWheel);
+      canvas.removeEventListener('mousedown', onMouseDown);
+      canvas.removeEventListener('mousemove', onMouseMove);
+      canvas.removeEventListener('mouseup', onMouseUp);
+      canvas.removeEventListener('mouseleave', onLeave);
+    };
+  }, []); // refs + zoomToNode bridge mutable state
+
+
   const handleAddNode = useCallback(async () => {
     if (!editName.trim()) return;
 
@@ -1040,9 +1168,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                     ref={canvasRef}
                     width={dimensions.width}
                     height={dimensions.height}
-                    className="cursor-pointer"
-                    onClick={handleCanvasClick}
-                    onMouseMove={handleCanvasMouseMove}
+                    className="cursor-grab active:cursor-grabbing"
                     style={{
                       width: '100%',
                       height: '100%',
