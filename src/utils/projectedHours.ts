@@ -155,22 +155,48 @@ function calculateHistoryPace(
     return hoursDone / effectiveDays;
 }
 
+/**
+ * Expectation-normalized projection algorithm.
+ *
+ * Instead of subtracting vacation days from the calendar remaining window
+ * (which zeroes out past mid-month for low-workload + vacation cases),
+ * this computes how many actual work days the contract still requires:
+ *
+ *   expectedWorkDays = (hoursDue - vacationHours) / hoursPerDay
+ *   daysWorkedEquivalent = hoursDone / effectivePace
+ *   remainingWorkDays = max(0, expectedWorkDays - daysWorkedEquivalent)
+ *   projected = hoursDone + effectivePace * remainingWorkDays
+ *
+ * Vacation hours are then added on top by the caller (they count as earned time).
+ */
 export function calculateProjection(params: {
     hoursDone: number;
+    hoursDue: number;
+    vacationHours: number;
+    hoursPerDay: number;
     preferredDaysPassed: number;
-    totalPreferredDaysInMonth: number;
     historyPace: number;
 }): number {
-    const remainingDays = Math.max(0, params.totalPreferredDaysInMonth - params.preferredDaysPassed);
-    
-    let currentPace = 0;
-    if (params.preferredDaysPassed > 0) {
-        currentPace = params.hoursDone / params.preferredDaysPassed;
-    }
-    
-    const effectivePace = Math.max(currentPace, params.historyPace);
+    // Use the better of current-month pace and historical 50-day pace
+    const effectivePace = params.preferredDaysPassed > 0
+        ? Math.max(params.hoursDone / params.preferredDaysPassed, params.historyPace)
+        : params.historyPace;
 
-    return params.hoursDone + (effectivePace * remainingDays);
+    // How many actual work days the employee is expected to put in
+    // (total obligation minus vacation credit)
+    const expectedWorkDays = Math.max(0, (params.hoursDue - params.vacationHours) / params.hoursPerDay);
+
+    // Fallback: when no pace data exists, project at contractual rate
+    if (effectivePace <= 0) {
+        return params.hoursDone + expectedWorkDays * params.hoursPerDay;
+    }
+
+    // How many work-day-equivalents the employee has already delivered
+    const daysWorkedEquivalent = params.hoursDone / effectivePace;
+    // How many expected work days are still outstanding
+    const remainingWorkDays = Math.max(0, expectedWorkDays - daysWorkedEquivalent);
+
+    return params.hoursDone + (effectivePace * remainingWorkDays);
 }
 
 /**
@@ -216,10 +242,7 @@ export function getProjectedHoursForActualMonth(
 
     let projectedTotal = hoursDone;
 
-    // Vacation hours count as hours worked (paid time off fulfilling obligation)
     const vacationHours = Math.abs(vacationsTaken);
-    const hoursPerDay = hoursToBeDoneByDayByContract;
-    const vacationDaysEquivalent = vacationHours / hoursPerDay;
 
     // Only project if we are in the current month or a future month
     // For past months, projected is just what was done (handled by initial assignment)
@@ -249,8 +272,6 @@ export function getProjectedHoursForActualMonth(
             settings.country,
             settings.region
         );
-        
-        const totalPreferredDaysInMonth = preferredDaysInMonth.effectiveDays;
 
         // Calculate History Pace using preferred days (last 50 days)
         const historyPace = calculateHistoryPace(
@@ -261,18 +282,12 @@ export function getProjectedHoursForActualMonth(
             settings.region
         );
 
-        // Reduce total preferred days by vacation day equivalents.
-        // Vacation days are not available for future work, so they reduce the projection window.
-        const effectiveTotalPreferredDays = Math.max(0, totalPreferredDaysInMonth - vacationDaysEquivalent);
-
-        // Project the rest of the month using strict TDD logic.
-        // Note: preferredDaysPassed is NOT adjusted for vacation because the current pace
-        // (hoursDone / daysPassed) naturally reflects lower productivity during vacation periods.
-        // The historyPace (last 50 days) provides a fallback when current pace is low.
         projectedTotal = calculateProjection({
             hoursDone,
+            hoursDue,
+            vacationHours,
+            hoursPerDay: hoursToBeDoneByDayByContract,
             preferredDaysPassed: preferredDaysSoFar.effectiveDays,
-            totalPreferredDaysInMonth: effectiveTotalPreferredDays,
             historyPace
         });
 

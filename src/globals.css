@@ -102,38 +102,56 @@
 
 @layer components {
   .card-aged-1 {
-    filter: sepia(10%);
+    filter: grayscale(20%);
   }
 
   .card-aged-2 {
-    filter: sepia(20%) grayscale(15%);
+    filter: grayscale(45%);
   }
 
   .card-aged-3 {
-    filter: sepia(35%) grayscale(30%) opacity(0.85);
+    filter: grayscale(70%);
   }
 
   .border-aged-1 {
-    border-color: oklch(0.95 0.02 90 / 0.2);
+    border-color: theme('colors.gray.200');
   }
 
   .border-aged-2 {
-    border-color: oklch(0.85 0.05 75 / 0.3);
+    border-color: theme('colors.gray.200');
   }
 
   .border-aged-3 {
-    border-color: oklch(0.70 0.08 60 / 0.4);
+    border-color: theme('colors.gray.100');
   }
 
   .dark .card-aged-1 {
-    filter: grayscale(10%);
+    filter: grayscale(15%);
   }
 
   .dark .card-aged-2 {
-    filter: grayscale(25%);
+    filter: grayscale(35%);
   }
 
   .dark .card-aged-3 {
-    filter: grayscale(40%) opacity(0.9);
+    filter: grayscale(55%);
+  }
+}
+
+@media print {
+  .card-aged-1,
+  .card-aged-2,
+  .card-aged-3 {
+    filter: none !important;
+  }
+
+  .border-aged-1,
+  .border-aged-2,
+  .border-aged-3 {
+    border-color: inherit !important;
+  }
+
+  .aging-overlays {
+    display: none !important;
   }
 }
