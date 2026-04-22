@@ -1,7 +1,9 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import { useCircles, CircleTreeNode } from '@/hooks/useCircles';
-import { CircleNodeType } from '@/lib/persistence-types';
+import { CircleNodeType, RoleAssignment, RoleInvolvementType } from '@/lib/persistence-types';
+import { UserAvatar } from '@/components/UserAvatar';
+import { useUsers, UserWithTrigram } from '@/hooks/useUsers';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +24,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Plus, Edit, Trash2, Move, Home, ChevronRight, ChevronDown, Circle, Users, User, Building2, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
@@ -72,6 +75,7 @@ interface TreeNodeItemProps {
   onToggle: (nodeId: string) => void;
   onSelect: (node: CircleTreeNode) => void;
   depth: number;
+  users: UserWithTrigram[];
 }
 
 const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
@@ -81,6 +85,7 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
   onToggle,
   onSelect,
   depth,
+  users,
 }) => {
   const hasChildren = node.children && node.children.length > 0;
   const isExpanded = expandedNodes.has(node.id);
@@ -136,6 +141,7 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
               onToggle={onToggle}
               onSelect={onSelect}
               depth={depth + 1}
+              users={users}
             />
           ))}
         </div>
@@ -165,6 +171,53 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
   const [nodes, setNodes] = useState<CircleTreeNode[]>([]);
   const [colorToNode, setColorToNode] = useState<Map<string, CircleTreeNode>>(new Map());
 
+  // Determine which nodes have visible text labels (same rule as canvas Pass 1).
+  // We reuse this to gate overlay badges so they appear only when the role title is visible.
+  const visibleTextNodeIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    if (!currentNode) return ids;
+    for (const node of nodes) {
+      if (node.x === undefined || node.y === undefined || node.r === undefined) continue;
+      const nodeR =
+        node.r * zoomInfo.scale * (node.nodeType === 'role' ? 0.9 : 1);
+      const showText =
+        node.id === currentNode.id ||
+        node.parent?.id === currentNode.id ||
+        node.id === currentNode.parent?.id ||
+        node.parent?.id === currentNode.parent?.id;
+      if (showText && nodeR > 15) {
+        const fontSize = Math.min(Math.round(nodeR / 4), 24);
+        if (fontSize >= 8) ids.add(node.id);
+      }
+    }
+    return ids;
+  }, [nodes, zoomInfo, currentNode]);
+
+  // Compute visible role assignment overlays for the canvas
+  const visibleAssignmentNodes = React.useMemo(() => {
+    const result: { node: CircleTreeNode; screenX: number; screenY: number; nodeR: number }[] = [];
+    const { width, height } = dimensions;
+    const centerX = width / 2;
+    const centerY = height / 2;
+    for (const node of nodes) {
+      if (
+        node.nodeType !== 'role' ||
+        !node.assignments ||
+        node.assignments.length === 0 ||
+        node.x === undefined ||
+        node.y === undefined ||
+        node.r === undefined ||
+        !visibleTextNodeIds.has(node.id)
+      )
+        continue;
+      const nodeR = node.r * zoomInfo.scale * 0.9;
+      const screenX = (node.x - zoomInfo.centerX) * zoomInfo.scale + centerX;
+      const screenY = (node.y - zoomInfo.centerY) * zoomInfo.scale + centerY;
+      result.push({ node, screenX, screenY, nodeR });
+    }
+    return result;
+  }, [nodes, zoomInfo, dimensions, visibleTextNodeIds]);
+
   // Refs for native event listeners (avoid stale closures)
   const zoomInfoRef = useRef(zoomInfo);
   zoomInfoRef.current = zoomInfo;
@@ -181,6 +234,18 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
   // Ref to track currentNode for use in callbacks without stale closure
   const currentNodeRef = useRef<CircleTreeNode | null>(null);
 
+  const { users } = useUsers();
+
+  // Involvement labels
+  const INVOLVEMENT_OPTIONS: { value: RoleInvolvementType; label: string }[] = [
+    { value: 'P', label: 'PILOT / DRI (P)' },
+    { value: 'CP', label: 'COPILOT (CP)' },
+    { value: 'PA', label: 'PARTICIPANT (PA)' },
+    { value: 'F', label: 'FOCUS (F)' },
+    { value: 'A', label: 'APPRENTICE (A)' },
+    { value: 'R', label: 'RESOURCE (R)' },
+  ];
+
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editMode, setEditMode] = useState<'add' | 'edit'>('add');
@@ -191,6 +256,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
   const [editPurpose, setEditPurpose] = useState('');
   const [editDomains, setEditDomains] = useState('');
   const [editAccountabilities, setEditAccountabilities] = useState('');
+  const [editAssignments, setEditAssignments] = useState<RoleAssignment[]>([]);
 
   // Move dialog state
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
@@ -740,6 +806,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
       purpose: editPurpose || undefined,
       domains: editDomains || undefined,
       accountabilities: editAccountabilities || undefined,
+      assignments: editNodeType === 'role' ? editAssignments : undefined,
     });
 
     setEditDialogOpen(false);
@@ -748,10 +815,11 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     setEditPurpose('');
     setEditDomains('');
     setEditAccountabilities('');
+    setEditAssignments([]);
     // Note: refreshVisualization is called automatically by useEffect watching circles, 
     // but calling it manually ensures immediate update on the current client
     refreshVisualization();
-  }, [editName, editNodeType, editColor, editDescription, editPurpose, editDomains, editAccountabilities, currentNode, circles, createCircle, refreshVisualization]);
+  }, [editName, editNodeType, editColor, editDescription, editPurpose, editDomains, editAccountabilities, editAssignments, currentNode, circles, createCircle, refreshVisualization]);
 
   // Edit current node
   const handleEditNode = useCallback(async () => {
@@ -765,13 +833,14 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
       purpose: editPurpose || undefined,
       domains: editDomains || undefined,
       accountabilities: editAccountabilities || undefined,
+      assignments: editNodeType === 'role' ? editAssignments : undefined,
     });
 
     setEditDialogOpen(false);
     // Note: refreshVisualization is called automatically by useEffect watching circles,
     // but calling it manually ensures immediate update on the current client
     refreshVisualization();
-  }, [editName, editNodeType, editColor, editDescription, editPurpose, editDomains, editAccountabilities, currentNode, updateCircle, refreshVisualization]);
+  }, [editName, editNodeType, editColor, editDescription, editPurpose, editDomains, editAccountabilities, editAssignments, currentNode, updateCircle, refreshVisualization]);
 
   // Open delete dialog
   const handleDeleteNode = useCallback(() => {
@@ -828,6 +897,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     setEditPurpose('');
     setEditDomains('');
     setEditAccountabilities('');
+    setEditAssignments([]);
     setEditDialogOpen(true);
   }, [circles.length]);
 
@@ -843,6 +913,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     setEditPurpose(currentNode.purpose || '');
     setEditDomains(currentNode.domains || '');
     setEditAccountabilities(currentNode.accountabilities || '');
+    setEditAssignments(currentNode.assignments ? [...currentNode.assignments] : []);
     setEditDialogOpen(true);
   }, [currentNode]);
 
@@ -1111,6 +1182,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                               onToggle={toggleTreeNode}
                               onSelect={handleTreeNodeSelect}
                               depth={0}
+                              users={users}
                             />
                           )}
                         </div>
@@ -1140,6 +1212,29 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                                   <p className="text-sm whitespace-pre-wrap">{currentNode.accountabilities}</p>
                                 </div>
                               )}
+                              {currentNode.assignments && currentNode.assignments.length > 0 && (
+                                <div className="mb-2">
+                                  <span className="text-xs font-medium text-muted-foreground">Assigned Users:</span>
+                                  <div className="flex flex-wrap gap-2 mt-1">
+                                    {currentNode.assignments.map((assignment, index) => {
+                                      const assignedUser = users.find(u => u.userId === assignment.userId);
+                                      if (!assignedUser) return null;
+                                      return (
+                                        <div key={`${assignment.userId}-${index}`} className="flex items-center gap-1 bg-muted/50 rounded-full pl-1 pr-2 py-0.5">
+                                          <UserAvatar
+                                            username={assignedUser.username}
+                                            logo={assignedUser.logo}
+                                            size="sm"
+                                            showTooltip={true}
+                                            trigram={assignedUser.trigram}
+                                          />
+                                          <span className="text-xs font-medium">{assignment.involvementType}</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
                             </>
                           )}
                           {currentNode.description && (
@@ -1148,7 +1243,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                               <p className="text-sm whitespace-pre-wrap">{currentNode.description}</p>
                             </div>
                           )}
-                          {currentNode.nodeType === 'role' && !currentNode.purpose && !currentNode.domains && !currentNode.accountabilities && !currentNode.description && (
+                          {currentNode.nodeType === 'role' && !currentNode.purpose && !currentNode.domains && !currentNode.accountabilities && !currentNode.description && (!currentNode.assignments || currentNode.assignments.length === 0) && (
                             <p className="text-sm text-muted-foreground italic">No details defined. Click Edit to add.</p>
                           )}
                           {currentNode.nodeType !== 'role' && !currentNode.description && (
@@ -1196,6 +1291,47 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                       )}
                     </div>
                   )}
+                  {/* Role assignment badges overlay */}
+                  {visibleAssignmentNodes.map((item) => {
+                    const { node, screenX, screenY, nodeR } = item;
+                    const top = screenY - nodeR - 2;
+                    return (
+                      <div
+                        key={`badge-${node.id}`}
+                        className="absolute pointer-events-none"
+                        style={{
+                          left: screenX,
+                          top,
+                          transform: 'translate(-50%, -100%)',
+                        }}
+                      >
+                        <div className="flex -space-x-1">
+                          {node.assignments!.map((assignment, idx) => {
+                            const u = users.find((usr) => usr.userId === assignment.userId);
+                            if (!u) return null;
+                            return (
+                              <div
+                                key={`${node.id}-${assignment.userId}-${idx}`}
+                                className="relative inline-block"
+                              >
+                                <UserAvatar
+                                  username={u.username}
+                                  logo={u.logo}
+                                  size="lg"
+                                  showTooltip={false}
+                                  trigram={u.trigram}
+                                  className="ring-2 ring-white"
+                                />
+                                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-black/70 text-white text-[14px] font-bold px-1 rounded leading-none">
+                                  {assignment.involvementType}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </ResizablePanel>
             </ResizablePanelGroup>
@@ -1255,7 +1391,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                   placeholder="Optional description..."
                 />
               </div>
-              {/* Purpose, domains, and accountabilities are only for roles */}
+              {/* Purpose, domains, accountabilities, and assignments are only for roles */}
               {editNodeType === 'role' && (
                 <>
                   <div className="grid gap-2">
@@ -1287,6 +1423,100 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                       placeholder="What is expected from this role?"
                       rows={3}
                     />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Role Assignments</Label>
+                    <div className="space-y-2">
+                      {editAssignments.map((assignment, index) => {
+                        const assignedUser = users.find(u => u.userId === assignment.userId);
+                        return (
+                          <div key={`${assignment.userId}-${index}`} className="flex items-center gap-2">
+                            <Select
+                              value={assignment.userId}
+                              onValueChange={(val) => {
+                                const next = [...editAssignments];
+                                next[index] = { ...next[index], userId: val };
+                                setEditAssignments(next);
+                              }}
+                            >
+                              <SelectTrigger className="flex-1">
+                                <SelectValue placeholder="Select user...">
+                                  {assignedUser ? (
+                                    <div className="flex items-center gap-2">
+                                      <UserAvatar
+                                        username={assignedUser.username}
+                                        logo={assignedUser.logo}
+                                        size="sm"
+                                        showTooltip={false}
+                                        trigram={assignedUser.trigram}
+                                      />
+                                      <span className="text-sm">{assignedUser.username}</span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-sm text-muted-foreground">Select user...</span>
+                                  )}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {users.map((u) => (
+                                  <SelectItem key={u.userId} value={u.userId}>
+                                    <div className="flex items-center gap-2">
+                                      <UserAvatar
+                                        username={u.username}
+                                        logo={u.logo}
+                                        size="sm"
+                                        showTooltip={false}
+                                        trigram={u.trigram}
+                                      />
+                                      <span className="text-sm">{u.username}</span>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Select
+                              value={assignment.involvementType}
+                              onValueChange={(val) => {
+                                const next = [...editAssignments];
+                                next[index] = { ...next[index], involvementType: val as RoleInvolvementType };
+                                setEditAssignments(next);
+                              }}
+                            >
+                              <SelectTrigger className="w-40">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {INVOLVEMENT_OPTIONS.map(opt => (
+                                  <SelectItem key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive"
+                              onClick={() => {
+                                const next = [...editAssignments];
+                                next.splice(index, 1);
+                                setEditAssignments(next);
+                              }}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditAssignments([...editAssignments, { userId: '', involvementType: 'P' }])}
+                        className="w-full"
+                      >
+                        <Plus className="w-4 h-4 mr-1" /> Add User Assignment
+                      </Button>
+                    </div>
                   </div>
                 </>
               )}

@@ -51,6 +51,7 @@ const parseCircleEntity = (data: unknown): CircleEntity => {
     domains: raw.domains as string | undefined,
     accountabilities: raw.accountabilities as string | undefined,
     order: raw.order as number | undefined,
+    assignments: raw.assignments as import("@/lib/persistence-types").RoleAssignment[] | undefined,
     createdAt: raw.createdAt as string,
     updatedAt: raw.updatedAt as string,
   };
@@ -117,6 +118,7 @@ const createCircle = async (input: Partial<CircleEntity>): Promise<CircleEntity 
       domains: input.domains,
       accountabilities: input.accountabilities,
       order: input.order,
+      assignments: input.assignments,
       createdAt: input.createdAt || now,
       updatedAt: input.updatedAt || now,
     };
@@ -270,6 +272,7 @@ export interface CircleTreeNode {
   purpose?: string;
   domains?: string;
   accountabilities?: string;
+  assignments?: import("@/lib/persistence-types").RoleAssignment[];
   children?: CircleTreeNode[];
   // D3 computed properties (added by pack layout)
   x?: number;
@@ -294,6 +297,7 @@ const buildCircleTree = (parentId: string | null = null): CircleTreeNode[] => {
       purpose: circle.purpose,
       domains: circle.domains,
       accountabilities: circle.accountabilities,
+      assignments: circle.assignments,
       children: buildCircleTree(circle.id),
     }));
 };
