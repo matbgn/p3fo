@@ -253,6 +253,13 @@ export interface DreamBoardEntity {
 export type CircleNodeType = 'organization' | 'circle' | 'group' | 'role';
 export type CircleNodeModifier = 'template' | 'hierarchy';
 
+export type RoleInvolvementType = 'P' | 'CP' | 'PA' | 'F' | 'A' | 'R';
+
+export interface RoleAssignment {
+  userId: string;
+  involvementType: RoleInvolvementType;
+}
+
 export interface CircleEntity {
   id: string;
   name: string;
@@ -266,6 +273,7 @@ export interface CircleEntity {
   domains?: string; // Domains of authority - what this role has control over
   accountabilities?: string; // Attendus - expectations and accountabilities
   order?: number; // Display order among siblings
+  assignments?: RoleAssignment[]; // Users assigned to this role with involvement types
   createdAt: string;
   updatedAt: string;
 }

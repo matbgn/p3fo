@@ -23,6 +23,16 @@ dev:
   @echo "[1/2] Starting development server..."
   pnpm run dev:all
 
+# --- Browser-Only Development Task ---
+# Reproduce the deployed browser-only mode locally for debugging
+dev-browser:
+  @echo "--- Starting P3FO Browser-Only Development Environment ---"
+  @echo "[1/1] Starting frontend in browser-only mode..."
+  VITE_P3FO_FORCE_BROWSER="true" VITE_BASE_URL="/p3fo" pnpm run dev
+
+tests:
+  pnpm test --run
+
 # --- Version Management Tasks ---
 sync-versions version:
   #!/usr/bin/env bash

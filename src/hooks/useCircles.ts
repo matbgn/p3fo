@@ -2,6 +2,8 @@ import * as React from "react";
 import { eventBus } from "@/lib/events";
 import { CircleEntity, CircleNodeType, CircleNodeModifier } from "@/lib/persistence-types";
 import { doc, isCollaborationEnabled, initializeCollaboration, yCircles } from "@/lib/collaboration";
+import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
+import { getPersistenceAdapter } from "@/lib/persistence-factory";
 
 // Module-level state for circles
 let circles: CircleEntity[] = [];
@@ -49,14 +51,33 @@ const parseCircleEntity = (data: unknown): CircleEntity => {
     domains: raw.domains as string | undefined,
     accountabilities: raw.accountabilities as string | undefined,
     order: raw.order as number | undefined,
+    assignments: raw.assignments as import("@/lib/persistence-types").RoleAssignment[] | undefined,
     createdAt: raw.createdAt as string,
     updatedAt: raw.updatedAt as string,
   };
 };
 
-// Load circles from the API
+// Browser-only persistence helpers
+const saveCirclesToBrowser = async () => {
+  try {
+    const adapter = await getPersistenceAdapter();
+    await adapter.importCircles(circles);
+  } catch (error) {
+    console.error("Error saving circles to browser persistence:", error);
+  }
+};
+
+// Load circles
 const loadCircles = async (): Promise<CircleEntity[]> => {
   try {
+    // In browser-only mode, load from localStorage persistence
+    if (PERSISTENCE_CONFIG.FORCE_BROWSER) {
+      const adapter = await getPersistenceAdapter();
+      circles = await adapter.listCircles();
+      eventBus.publish("circlesChanged");
+      return circles;
+    }
+
     // Check if Yjs has data first (collaborative mode takes precedence)
     if (isCollaborationEnabled() && yCircles.size > 0) {
       circles = Array.from(yCircles.values()) as CircleEntity[];
@@ -83,6 +104,32 @@ const loadCircles = async (): Promise<CircleEntity[]> => {
 // Create a new circle
 const createCircle = async (input: Partial<CircleEntity>): Promise<CircleEntity | null> => {
   try {
+    const now = new Date().toISOString();
+    const newCircle: CircleEntity = {
+      id: input.id || crypto.randomUUID(),
+      name: input.name || "New Circle",
+      parentId: input.parentId ?? null,
+      nodeType: input.nodeType || "circle",
+      modifier: input.modifier,
+      color: input.color,
+      size: input.size ?? 1,
+      description: input.description,
+      purpose: input.purpose,
+      domains: input.domains,
+      accountabilities: input.accountabilities,
+      order: input.order,
+      assignments: input.assignments,
+      createdAt: input.createdAt || now,
+      updatedAt: input.updatedAt || now,
+    };
+
+    if (PERSISTENCE_CONFIG.FORCE_BROWSER) {
+      circles = [...circles, newCircle];
+      eventBus.publish("circlesChanged");
+      await saveCirclesToBrowser();
+      return newCircle;
+    }
+
     const response = await fetch("/api/circles", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -91,11 +138,11 @@ const createCircle = async (input: Partial<CircleEntity>): Promise<CircleEntity 
     if (!response.ok) {
       throw new Error(`Failed to create circle: ${response.statusText}`);
     }
-    const newCircle = parseCircleEntity(await response.json());
-    circles = [...circles, newCircle];
+    const created = parseCircleEntity(await response.json());
+    circles = [...circles, created];
     eventBus.publish("circlesChanged");
     syncCirclesToYjs();
-    return newCircle;
+    return created;
   } catch (error) {
     console.error("Error creating circle:", error);
     return null;
@@ -108,6 +155,19 @@ const updateCircle = async (
   data: Partial<CircleEntity>
 ): Promise<CircleEntity | null> => {
   try {
+    if (PERSISTENCE_CONFIG.FORCE_BROWSER) {
+      const index = circles.findIndex(c => c.id === id);
+      if (index === -1) {
+        console.warn("Update circle: not found", id);
+        return null;
+      }
+      const updated = { ...circles[index], ...data, updatedAt: new Date().toISOString() };
+      circles = circles.map(c => (c.id === id ? updated : c));
+      eventBus.publish("circlesChanged");
+      await saveCirclesToBrowser();
+      return updated;
+    }
+
     const response = await fetch(`/api/circles/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -131,26 +191,32 @@ const updateCircle = async (
   }
 };
 
-// Delete a circle (and its descendants via backend recursive delete)
+// Delete a circle (and its descendants)
 const deleteCircle = async (id: string): Promise<boolean> => {
   try {
+    // Remove the circle and all descendants from local state regardless of mode
+    const idsToRemove = new Set<string>();
+    const collectDescendants = (parentId: string) => {
+      idsToRemove.add(parentId);
+      circles
+        .filter((c) => c.parentId === parentId)
+        .forEach((c) => { collectDescendants(c.id); });
+    };
+    collectDescendants(id);
+    circles = circles.filter((c) => !idsToRemove.has(c.id));
+    eventBus.publish("circlesChanged");
+
+    if (PERSISTENCE_CONFIG.FORCE_BROWSER) {
+      await saveCirclesToBrowser();
+      return true;
+    }
+
     const response = await fetch(`/api/circles/${id}`, {
       method: "DELETE",
     });
     if (!response.ok) {
       throw new Error(`Failed to delete circle: ${response.statusText}`);
     }
-    // Remove the circle and all descendants from local state
-    const idsToRemove = new Set<string>();
-    const collectDescendants = (parentId: string) => {
-      idsToRemove.add(parentId);
-      circles
-        .filter((c) => c.parentId === parentId)
-        .forEach((c) => collectDescendants(c.id));
-    };
-    collectDescendants(id);
-    circles = circles.filter((c) => !idsToRemove.has(c.id));
-    eventBus.publish("circlesChanged");
     syncCirclesToYjs();
     return true;
   } catch (error) {
@@ -162,14 +228,20 @@ const deleteCircle = async (id: string): Promise<boolean> => {
 // Clear all circles
 const clearAllCircles = async (): Promise<boolean> => {
   try {
+    circles = [];
+    eventBus.publish("circlesChanged");
+
+    if (PERSISTENCE_CONFIG.FORCE_BROWSER) {
+      await saveCirclesToBrowser();
+      return true;
+    }
+
     const response = await fetch("/api/circles/clear", {
       method: "POST",
     });
     if (!response.ok) {
       throw new Error(`Failed to clear circles: ${response.statusText}`);
     }
-    circles = [];
-    eventBus.publish("circlesChanged");
     syncCirclesToYjs();
     return true;
   } catch (error) {
@@ -200,6 +272,7 @@ export interface CircleTreeNode {
   purpose?: string;
   domains?: string;
   accountabilities?: string;
+  assignments?: import("@/lib/persistence-types").RoleAssignment[];
   children?: CircleTreeNode[];
   // D3 computed properties (added by pack layout)
   x?: number;
@@ -224,6 +297,7 @@ const buildCircleTree = (parentId: string | null = null): CircleTreeNode[] => {
       purpose: circle.purpose,
       domains: circle.domains,
       accountabilities: circle.accountabilities,
+      assignments: circle.assignments,
       children: buildCircleTree(circle.id),
     }));
 };

@@ -35,7 +35,10 @@ dist/
 .vscode/
 
 *.db*
-.kilocode
+
+.kilocode/**
+!.kilocode/workflows/
+!.kilocode/workflows/pr-review.md
 
 .env*
 

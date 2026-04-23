@@ -42,11 +42,14 @@ export function UserSection() {
   // Automatically persist calculated trigram if missing in settings
   const currentUserWithTrigram = users.find(u => u.userId === userContext?.userId);
   React.useEffect(() => {
-    if (!userSettings.trigram && currentUserWithTrigram && (currentUserWithTrigram as any).trigram && (currentUserWithTrigram as any).trigram !== '???') {
-      console.log('Persisting calculated trigram for current user:', (currentUserWithTrigram as any).trigram);
-      updateTrigram((currentUserWithTrigram as any).trigram);
+    if (!userSettings) return;
+    // Only persist if there's a valid calculated trigram AND the settings genuinely lack one
+    const calculatedTrigram = (currentUserWithTrigram as any)?.trigram;
+    if (userSettings && !userSettings.trigram && calculatedTrigram && calculatedTrigram !== '???') {
+      console.log('Persisting calculated trigram for current user:', calculatedTrigram);
+      updateTrigram(calculatedTrigram);
     }
-  }, [userSettings.trigram, currentUserWithTrigram, updateTrigram]);
+  }, [userSettings, currentUserWithTrigram, updateTrigram]);
 
   if (!userSettings) return null;
 

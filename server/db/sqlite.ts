@@ -80,7 +80,11 @@ interface CircleDbRow {
   color: string | null;
   size: number | null;
   description: string | null;
+  purpose: string | null;
+  domains: string | null;
+  accountabilities: string | null;
   order: number | null;
+  assignments: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -121,7 +125,13 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
   qliGoal: 7,
   newCapabilitiesGoal: 3,
   hoursToBeDoneByDay: 8,
+  vacationLimitMultiplier: 1.5,
+  hourlyBalanceLimitUpper: 0.5,
+  hourlyBalanceLimitLower: -0.5,
   cardAgingBaseDays: 30,
+  timezone: 'Europe/Zurich',
+  country: 'CH',
+  region: 'BE',
 };
 
 
@@ -161,6 +171,7 @@ class SqliteClient implements DbClient {
         "comment" TEXT,
         "durationInMinutes" INTEGER,
         "priority" INTEGER,
+        "updatedAt" TEXT,
         "userId" TEXT,
         FOREIGN KEY("parentId") REFERENCES "tasks"("id")
       )
@@ -212,10 +223,26 @@ class SqliteClient implements DbClient {
     if (appSettingsCount.count === 0) {
       this.db.prepare(`
         INSERT INTO "appSettings"("id", "splitTime", "userWorkloadPercentage", "weeksComputation",
-          "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal", "hoursToBeDoneByDay")
-        VALUES(1, @splitTime, @userWorkloadPercentage, @weeksComputation,
-          @highImpactTaskGoal, @failureRateGoal, @qliGoal, @newCapabilitiesGoal, @hoursToBeDoneByDay)
-      `).run(DEFAULT_APP_SETTINGS as unknown as Record<string, string | number | null>);
+          "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal", "hoursToBeDoneByDay",
+          "vacationLimitMultiplier", "hourlyBalanceLimitUpper", "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region")
+        VALUES(1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        DEFAULT_APP_SETTINGS.splitTime,
+        DEFAULT_APP_SETTINGS.userWorkloadPercentage,
+        DEFAULT_APP_SETTINGS.weeksComputation,
+        DEFAULT_APP_SETTINGS.highImpactTaskGoal,
+        DEFAULT_APP_SETTINGS.failureRateGoal,
+        DEFAULT_APP_SETTINGS.qliGoal,
+        DEFAULT_APP_SETTINGS.newCapabilitiesGoal,
+        DEFAULT_APP_SETTINGS.hoursToBeDoneByDay,
+        DEFAULT_APP_SETTINGS.vacationLimitMultiplier ?? 1.5,
+        DEFAULT_APP_SETTINGS.hourlyBalanceLimitUpper ?? 0.5,
+        DEFAULT_APP_SETTINGS.hourlyBalanceLimitLower ?? -0.5,
+        DEFAULT_APP_SETTINGS.cardAgingBaseDays ?? 30,
+        DEFAULT_APP_SETTINGS.timezone ?? 'Europe/Zurich',
+        DEFAULT_APP_SETTINGS.country ?? 'CH',
+        DEFAULT_APP_SETTINGS.region ?? 'BE'
+      );
     }
 
     // Create qolSurvey table
@@ -261,7 +288,11 @@ class SqliteClient implements DbClient {
         "color" TEXT, -- Custom color for roles, e.g., "#FF6600"
         "size" REAL, -- Size weight for layout calculation
         "description" TEXT, -- Optional description/purpose
+        "purpose" TEXT, -- Raison d'être
+        "domains" TEXT, -- Domains of authority
+        "accountabilities" TEXT, -- Attendus and expectations
         "order" INTEGER, -- Display order among siblings
+        "assignments" TEXT, -- JSON string for role assignments
         "createdAt" TEXT NOT NULL,
         "updatedAt" TEXT NOT NULL,
         FOREIGN KEY("parentId") REFERENCES "circles"("id")
@@ -387,6 +418,12 @@ class SqliteClient implements DbClient {
 
     // Add updatedAt column to tasks
     addColumn('tasks', 'updatedAt', 'TEXT');
+
+    // Circle columns (fields added after initial table creation)
+    addColumn('circles', 'purpose', 'TEXT');
+    addColumn('circles', 'domains', 'TEXT');
+    addColumn('circles', 'accountabilities', 'TEXT');
+    addColumn('circles', 'assignments', 'TEXT');
 
     // Add new columns for UserSettings
     addColumn('userSettings', 'weekStartDay', 'INTEGER');
@@ -988,11 +1025,7 @@ class SqliteClient implements DbClient {
   // Circles (EasyCIRCLE)
   async getCircles(): Promise<CircleEntity[]> {
     const rows = this.db.prepare('SELECT * FROM "circles" ORDER BY "order" ASC NULLS LAST, "createdAt" ASC').all() as unknown as CircleDbRow[];
-    return rows.map(row => ({
-      ...row,
-      nodeType: row.nodeType as CircleNodeType,
-      modifier: row.modifier as CircleNodeModifier | undefined,
-    }));
+    return rows.map(row => this.mapCircleDbRowToEntity(row));
   }
 
   async getCircleById(id: string): Promise<CircleEntity | null> {
@@ -1000,11 +1033,7 @@ class SqliteClient implements DbClient {
     if (!row) {
       return null;
     }
-    return {
-      ...row,
-      nodeType: row.nodeType as CircleNodeType,
-      modifier: row.modifier as CircleNodeModifier | undefined,
-    };
+    return this.mapCircleDbRowToEntity(row);
   }
 
   async createCircle(input: Partial<CircleEntity>): Promise<CircleEntity> {
@@ -1018,7 +1047,11 @@ class SqliteClient implements DbClient {
       color: input.color,
       size: input.size,
       description: input.description,
+      purpose: input.purpose,
+      domains: input.domains,
+      accountabilities: input.accountabilities,
       order: input.order,
+      assignments: input.assignments,
       createdAt: input.createdAt || now,
       updatedAt: input.updatedAt || now,
     };
@@ -1032,14 +1065,18 @@ class SqliteClient implements DbClient {
       color: newCircle.color ?? null,
       size: newCircle.size ?? null,
       description: newCircle.description ?? null,
+      purpose: newCircle.purpose ?? null,
+      domains: newCircle.domains ?? null,
+      accountabilities: newCircle.accountabilities ?? null,
       order: newCircle.order ?? null,
+      assignments: newCircle.assignments ? JSON.stringify(newCircle.assignments) : null,
       createdAt: newCircle.createdAt,
       updatedAt: newCircle.updatedAt,
     };
 
     this.db.prepare(`
-      INSERT INTO "circles"("id", "name", "parentId", "nodeType", "modifier", "color", "size", "description", "order", "createdAt", "updatedAt")
-      VALUES(@id, @name, @parentId, @nodeType, @modifier, @color, @size, @description, @order, @createdAt, @updatedAt)
+      INSERT INTO "circles"("id", "name", "parentId", "nodeType", "modifier", "color", "size", "description", "purpose", "domains", "accountabilities", "order", "assignments", "createdAt", "updatedAt")
+      VALUES(@id, @name, @parentId, @nodeType, @modifier, @color, @size, @description, @purpose, @domains, @accountabilities, @order, @assignments, @createdAt, @updatedAt)
     `).run(params);
 
     return newCircle;
@@ -1062,7 +1099,11 @@ class SqliteClient implements DbClient {
       color: updated.color ?? null,
       size: updated.size ?? null,
       description: updated.description ?? null,
+      purpose: updated.purpose ?? null,
+      domains: updated.domains ?? null,
+      accountabilities: updated.accountabilities ?? null,
       order: updated.order ?? null,
+      assignments: updated.assignments ? JSON.stringify(updated.assignments) : null,
       updatedAt: updated.updatedAt,
     };
 
@@ -1075,7 +1116,11 @@ class SqliteClient implements DbClient {
         "color" = @color,
         "size" = @size,
         "description" = @description,
+        "purpose" = @purpose,
+        "domains" = @domains,
+        "accountabilities" = @accountabilities,
         "order" = @order,
+        "assignments" = @assignments,
         "updatedAt" = @updatedAt
       WHERE "id" = @id
     `).run(params);
@@ -1129,8 +1174,8 @@ class SqliteClient implements DbClient {
     }
 
     const insertStmt = this.db.prepare(`
-      INSERT INTO "circles"("id", "name", "parentId", "nodeType", "modifier", "color", "size", "description", "order", "createdAt", "updatedAt")
-      VALUES(@id, @name, @parentId, @nodeType, @modifier, @color, @size, @description, @order, @createdAt, @updatedAt)
+      INSERT INTO "circles"("id", "name", "parentId", "nodeType", "modifier", "color", "size", "description", "purpose", "domains", "accountabilities", "order", "assignments", "createdAt", "updatedAt")
+      VALUES(@id, @name, @parentId, @nodeType, @modifier, @color, @size, @description, @purpose, @domains, @accountabilities, @order, @assignments, @createdAt, @updatedAt)
       ON CONFLICT("id") DO UPDATE SET
         "name" = excluded."name",
         "parentId" = excluded."parentId",
@@ -1139,7 +1184,11 @@ class SqliteClient implements DbClient {
         "color" = excluded."color",
         "size" = excluded."size",
         "description" = excluded."description",
+        "purpose" = excluded."purpose",
+        "domains" = excluded."domains",
+        "accountabilities" = excluded."accountabilities",
         "order" = excluded."order",
+        "assignments" = excluded."assignments",
         "createdAt" = excluded."createdAt",
         "updatedAt" = excluded."updatedAt"
     `);
@@ -1159,7 +1208,11 @@ class SqliteClient implements DbClient {
           color: circle.color ?? null,
           size: circle.size ?? null,
           description: circle.description ?? null,
+          purpose: circle.purpose ?? null,
+          domains: circle.domains ?? null,
+          accountabilities: circle.accountabilities ?? null,
           order: circle.order ?? null,
+          assignments: circle.assignments ? JSON.stringify(circle.assignments) : null,
           createdAt: circle.createdAt,
           updatedAt: circle.updatedAt,
         });
@@ -1362,6 +1415,26 @@ class SqliteClient implements DbClient {
     }
   }
 
+  private mapCircleDbRowToEntity(row: CircleDbRow): CircleEntity {
+    return {
+      id: row.id,
+      name: row.name,
+      parentId: row.parentId,
+      nodeType: row.nodeType as CircleNodeType,
+      modifier: row.modifier as CircleNodeModifier | undefined,
+      color: row.color ?? undefined,
+      size: row.size ?? undefined,
+      description: row.description ?? undefined,
+      purpose: row.purpose ?? undefined,
+      domains: row.domains ?? undefined,
+      accountabilities: row.accountabilities ?? undefined,
+      order: row.order ?? undefined,
+      assignments: row.assignments ? JSON.parse(row.assignments) : undefined,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
   private mapReminderDbRowToEntity(row: ReminderDbRow): ReminderEntity {
     return {
       id: row.id,
@@ -1406,13 +1479,12 @@ class SqliteClient implements DbClient {
       this.db.exec('DROP TABLE IF EXISTS celebration_board');
 
       this.db.exec('COMMIT');
-
-      // Re-initialize to create empty tables with new schema
-      await this.initialize();
-
     } catch (error) {
       this.db.exec('ROLLBACK');
       throw error;
     }
+
+    // Re-initialize OUTSIDE the transaction to avoid auto-commit conflicts
+    await this.initialize();
   }
 }

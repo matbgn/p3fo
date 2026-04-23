@@ -1,7 +1,9 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import { useCircles, CircleTreeNode } from '@/hooks/useCircles';
-import { CircleNodeType } from '@/lib/persistence-types';
+import { CircleNodeType, RoleAssignment, RoleInvolvementType } from '@/lib/persistence-types';
+import { UserAvatar } from '@/components/UserAvatar';
+import { useUsers, UserWithTrigram } from '@/hooks/useUsers';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +24,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Plus, Edit, Trash2, Move, Home, ChevronRight, ChevronDown, Circle, Users, User, Building2, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
@@ -72,6 +75,7 @@ interface TreeNodeItemProps {
   onToggle: (nodeId: string) => void;
   onSelect: (node: CircleTreeNode) => void;
   depth: number;
+  users: UserWithTrigram[];
 }
 
 const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
@@ -81,6 +85,7 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
   onToggle,
   onSelect,
   depth,
+  users,
 }) => {
   const hasChildren = node.children && node.children.length > 0;
   const isExpanded = expandedNodes.has(node.id);
@@ -136,6 +141,7 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
               onToggle={onToggle}
               onSelect={onSelect}
               depth={depth + 1}
+              users={users}
             />
           ))}
         </div>
@@ -165,11 +171,80 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
   const [nodes, setNodes] = useState<CircleTreeNode[]>([]);
   const [colorToNode, setColorToNode] = useState<Map<string, CircleTreeNode>>(new Map());
 
+  // Determine which nodes have visible text labels (same rule as canvas Pass 1).
+  // We reuse this to gate overlay badges so they appear only when the role title is visible.
+  const visibleTextNodeIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    if (!currentNode) return ids;
+    for (const node of nodes) {
+      if (node.x === undefined || node.y === undefined || node.r === undefined) continue;
+      const nodeR =
+        node.r * zoomInfo.scale * (node.nodeType === 'role' ? 0.9 : 1);
+      const showText =
+        node.id === currentNode.id ||
+        node.parent?.id === currentNode.id ||
+        node.id === currentNode.parent?.id ||
+        node.parent?.id === currentNode.parent?.id;
+      if (showText && nodeR > 15) {
+        const fontSize = Math.min(Math.round(nodeR / 4), 24);
+        if (fontSize >= 8) ids.add(node.id);
+      }
+    }
+    return ids;
+  }, [nodes, zoomInfo, currentNode]);
+
+  // Compute visible role assignment overlays for the canvas
+  const visibleAssignmentNodes = React.useMemo(() => {
+    const result: { node: CircleTreeNode; screenX: number; screenY: number; nodeR: number }[] = [];
+    const { width, height } = dimensions;
+    const centerX = width / 2;
+    const centerY = height / 2;
+    for (const node of nodes) {
+      if (
+        node.nodeType !== 'role' ||
+        !node.assignments ||
+        node.assignments.length === 0 ||
+        node.x === undefined ||
+        node.y === undefined ||
+        node.r === undefined ||
+        !visibleTextNodeIds.has(node.id)
+      )
+        continue;
+      const nodeR = node.r * zoomInfo.scale * 0.9;
+      const screenX = (node.x - zoomInfo.centerX) * zoomInfo.scale + centerX;
+      const screenY = (node.y - zoomInfo.centerY) * zoomInfo.scale + centerY;
+      result.push({ node, screenX, screenY, nodeR });
+    }
+    return result;
+  }, [nodes, zoomInfo, dimensions, visibleTextNodeIds]);
+
+  // Refs for native event listeners (avoid stale closures)
+  const zoomInfoRef = useRef(zoomInfo);
+  zoomInfoRef.current = zoomInfo;
+  const dimensionsRef = useRef(dimensions);
+  dimensionsRef.current = dimensions;
+  const colorToNodeRef = useRef<Map<string, CircleTreeNode>>(new Map());
+  colorToNodeRef.current = colorToNode;
+  const nodesRef = useRef<CircleTreeNode[]>([]);
+  nodesRef.current = nodes;
+
   // Animation state for smooth zoom transitions
   const [isAnimating, setIsAnimating] = useState(false);
   const animationRef = useRef<number | null>(null);
   // Ref to track currentNode for use in callbacks without stale closure
   const currentNodeRef = useRef<CircleTreeNode | null>(null);
+
+  const { users } = useUsers();
+
+  // Involvement labels
+  const INVOLVEMENT_OPTIONS: { value: RoleInvolvementType; label: string }[] = [
+    { value: 'P', label: 'PILOT / DRI (P)' },
+    { value: 'CP', label: 'COPILOT (CP)' },
+    { value: 'PA', label: 'PARTICIPANT (PA)' },
+    { value: 'F', label: 'FOCUS (F)' },
+    { value: 'A', label: 'APPRENTICE (A)' },
+    { value: 'R', label: 'RESOURCE (R)' },
+  ];
 
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -181,6 +256,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
   const [editPurpose, setEditPurpose] = useState('');
   const [editDomains, setEditDomains] = useState('');
   const [editAccountabilities, setEditAccountabilities] = useState('');
+  const [editAssignments, setEditAssignments] = useState<RoleAssignment[]>([]);
 
   // Move dialog state
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
@@ -397,67 +473,90 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
       setColorToNode(newColorMap);
     }
 
-    // Draw text labels (only on visible canvas)
+    // Draw text labels (visible canvas only) with float/center based on actual child text visibility
     if (!hidden) {
+      /* Pass 1: which node names actually render at current zoom? */
+      const textNodeIds = new Set<string>();
       for (const node of nodes) {
         if (node.x === undefined || node.y === undefined || node.r === undefined) continue;
-
-        const nodeX = ((node.x - zoomInfo.centerX) * zoomInfo.scale) + centerX;
-        const nodeY = ((node.y - zoomInfo.centerY) * zoomInfo.scale) + centerY;
         const nodeR = node.r * zoomInfo.scale * (node.nodeType === 'role' ? 0.9 : 1);
-
-        // Only draw text for visible nodes near current context
-        const shouldShowText = currentNode && (
+        const showText = currentNode && (
           node.id === currentNode.id ||
           node.parent?.id === currentNode.id ||
           node.id === currentNode.parent?.id ||
           node.parent?.id === currentNode.parent?.id
         );
-
-        if (shouldShowText && nodeR > 20) {
+        if (showText && nodeR > 15) { // LOWERED from 20 → 15 for closer trigger
           const fontSize = Math.min(Math.round(nodeR / 4), 24);
-          if (fontSize >= 8) {
-            ctx.font = `bold ${fontSize}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
+          if (fontSize >= 8) textNodeIds.add(node.id);
+        }
+      }
 
-            if (node.nodeType === 'role') {
-              ctx.fillStyle = '#000000';
-              ctx.strokeStyle = '#FFFFFF';
-            } else {
-              ctx.fillStyle = '#FFFFFF';
-              ctx.strokeStyle = '#000000';
-            }
+      /* Pass 2: containers with a visible child → float title above */
+      const hasVisibleTextChild = new Set<string>();
+      for (const node of nodes) {
+        if (node.children && node.children.length > 0) {
+          for (const child of node.children) {
+            if (textNodeIds.has(child.id)) { hasVisibleTextChild.add(node.id); break; }
+          }
+        }
+      }
 
-            ctx.lineWidth = 3;
-            ctx.lineJoin = 'round';
+      /* Pass 3: draw text */
+      for (const node of nodes) {
+        if (node.x === undefined || node.y === undefined || node.r === undefined) continue;
+        if (!textNodeIds.has(node.id)) continue;
 
-            // Word wrap text
-            const words = node.name.split(' ');
-            const lines: string[] = [];
-            let currentLine = words[0] || '';
+        const nodeX = ((node.x - zoomInfo.centerX) * zoomInfo.scale) + centerX;
+        const nodeY = ((node.y - zoomInfo.centerY) * zoomInfo.scale) + centerY;
+        const nodeR = node.r * zoomInfo.scale * (node.nodeType === 'role' ? 0.9 : 1);
+        const fontSize = Math.min(Math.round(nodeR / 4), 24);
 
-            for (let i = 1; i < words.length; i++) {
-              const testLine = currentLine + ' ' + words[i];
-              const metrics = ctx.measureText(testLine);
-              if (metrics.width < nodeR * 1.4) {
-                currentLine = testLine;
-              } else {
-                lines.push(currentLine);
-                currentLine = words[i];
-              }
-            }
-            lines.push(currentLine);
+        if (fontSize < 8) continue;
 
-            // Draw lines
-            const lineHeight = fontSize * 1.2;
-            const startY = nodeY - ((lines.length - 1) * lineHeight) / 2;
+        ctx.font = `bold ${fontSize}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 3;
+        ctx.lineJoin = 'round';
 
-            for (let i = 0; i < Math.min(lines.length, 3); i++) {
-              const text = i === 2 && lines.length > 3 ? '...' : lines[i];
-              ctx.strokeText(text, nodeX, startY + i * lineHeight);
-              ctx.fillText(text, nodeX, startY + i * lineHeight);
-            }
+        if (node.nodeType === 'role') {
+          ctx.fillStyle = '#000000';
+          ctx.strokeStyle = '#FFFFFF';
+        } else {
+          ctx.fillStyle = '#FFFFFF';
+          ctx.strokeStyle = '#000000';
+        }
+
+        const words = node.name.split(' ');
+        const lines: string[] = [];
+        let cur = words[0] || '';
+        for (let i = 1; i < words.length; i++) {
+          const test = cur + ' ' + words[i];
+          if (ctx.measureText(test).width < nodeR * 1.4) { cur = test; } else { lines.push(cur); cur = words[i]; }
+        }
+        lines.push(cur);
+
+        const lh = fontSize * 1.2;
+        const maxLines = Math.min(lines.length, 3);
+
+        if (hasVisibleTextChild.has(node.id)) {
+          // Float above so children are unobstructed
+          ctx.textBaseline = 'top';
+          const block = maxLines * lh;
+          const startY = nodeY - nodeR - block - 4;
+          for (let i = 0; i < maxLines; i++) {
+            const txt = i === 2 && lines.length > 3 ? '...' : lines[i];
+            ctx.strokeText(txt, nodeX, startY + i * lh);
+            ctx.fillText(txt, nodeX, startY + i * lh);
+          }
+        } else {
+          // Center inside (leaf or zoomed-out parent)
+          ctx.textBaseline = 'middle';
+          const startY = nodeY - ((maxLines - 1) * lh) / 2;
+          for (let i = 0; i < maxLines; i++) {
+            const txt = i === 2 && lines.length > 3 ? '...' : lines[i];
+            ctx.strokeText(txt, nodeX, startY + i * lh);
+            ctx.fillText(txt, nodeX, startY + i * lh);
           }
         }
       }
@@ -471,68 +570,46 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
       : 1 - Math.pow(-2 * t + 2, 3) / 2;
   };
 
-  // Zoom to a node with smooth animation using d3.interpolateZoom
+  // Direct cubic-ease interpolation (no d3.interpolateZoom orbit artifact)
   const zoomToNode = useCallback((node: CircleTreeNode) => {
     if (node.x === undefined || node.y === undefined || node.r === undefined) return;
 
-    // Cancel any ongoing animation
     if (animationRef.current !== null) {
       cancelAnimationFrame(animationRef.current);
       animationRef.current = null;
     }
 
-    // Calculate target scale to make the target node fill ~45% of the view (or more for leaves)
     const viewDiameter = Math.min(dimensions.width, dimensions.height) * 0.9;
     const zoomFactor = node.nodeType === 'role' || (node.children && node.children.length < 2) ? 2 : 1;
-    const targetScale = (viewDiameter / (node.r * 2)) * 0.45 * zoomFactor;
+    const s = (viewDiameter / (node.r * 2)) * 0.45 * zoomFactor;
 
-    // Calculate viewport as [centerX, centerY, viewSize] for interpolateZoom
-    // viewSize = diameter / scale (how much of the layout is visible)
-    const vOld: [number, number, number] = [
-      zoomInfo.centerX,
-      zoomInfo.centerY,
-      viewDiameter / zoomInfo.scale,
-    ];
-    const vNew: [number, number, number] = [
-      node.x,
-      node.y,
-      viewDiameter / targetScale,
-    ];
-
-    // Use d3.interpolateZoom for smooth transitions
-    const interpolator = d3.interpolateZoom(vOld, vNew);
-
-    // Animation duration based on interpolator suggestion (clamped)
-    const duration = Math.max(300, Math.min(interpolator.duration, 750));
+    const from = zoomInfoRef.current; // read latest at call time
+    const DURATION = 500;
 
     setIsAnimating(true);
     setCurrentNode(node);
 
-    const startTime = performance.now();
+    const t0 = performance.now();
+    const ease = (t: number) =>
+      t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
-    const animate = (currentTime: number) => {
-      const elapsed = currentTime - startTime;
-      const t = Math.min(elapsed / duration, 1);
-      const easedT = easeInOutCubic(t);
-
-      const v = interpolator(easedT);
-
+    const tick = (now: number) => {
+      const raw = Math.min((now - t0) / DURATION, 1);
+      const e = ease(raw);
       setZoomInfo({
-        centerX: v[0],
-        centerY: v[1],
-        scale: viewDiameter / v[2],
+        centerX: from.centerX + (node.x! - from.centerX) * e,
+        centerY: from.centerY + (node.y! - from.centerY) * e,
+        scale: from.scale + (s - from.scale) * e,
       });
-
-      if (t < 1) {
-        animationRef.current = requestAnimationFrame(animate);
+      if (raw < 1) {
+        animationRef.current = requestAnimationFrame(tick);
       } else {
         setIsAnimating(false);
         animationRef.current = null;
       }
     };
-
-    animationRef.current = requestAnimationFrame(animate);
-  }, [dimensions, zoomInfo]);
+    animationRef.current = requestAnimationFrame(tick);
+  }, [dimensions.width, dimensions.height]);
 
   // Handle canvas click
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -571,30 +648,147 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     }
   }, [colorToNode, currentNode, nodes, zoomToNode]);
 
-  // Handle canvas mouse move (hover)
-  const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+  /* -- Unified native canvas listeners (wheel + drag-pan + click/hover) -- */
+  useEffect(() => {
+    const canvas = canvasRef.current;
     const hiddenCanvas = hiddenCanvasRef.current;
-    const visibleCanvas = canvasRef.current;
-    if (!hiddenCanvas || !visibleCanvas) return;
+    if (!canvas || !hiddenCanvas) return;
 
-    // Use visible canvas rect for mouse coordinates (hidden canvas has display:none so its rect is zero)
-    const rect = visibleCanvas.getBoundingClientRect();
-    const scaleX = hiddenCanvas.width / rect.width;
-    const scaleY = hiddenCanvas.height / rect.height;
-    const mouseX = (e.clientX - rect.left) * scaleX;
-    const mouseY = (e.clientY - rect.top) * scaleY;
+    let isDragging = false;
+    let pointerDown: { x: number; y: number } | null = null;
+    const DRAG_THRESHOLD = 4;
 
-    const hiddenCtx = hiddenCanvas.getContext('2d', { willReadFrequently: true });
-    if (!hiddenCtx) return;
+    /* Wheel zoom */
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const { width, height } = dimensionsRef.current;
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const cx = width / 2;
+      const cy = height / 2;
 
-    const pixel = hiddenCtx.getImageData(mouseX, mouseY, 1, 1).data;
-    const colorString = `rgb(${pixel[0]},${pixel[1]},${pixel[2]})`;
-    const hovered = colorToNode.get(colorString);
+      const cur = zoomInfoRef.current;
+      const factor = 1 - e.deltaY * 0.001;
+      const s = Math.min(Math.max(cur.scale * factor, 0.05), 20);
+      if (s === cur.scale) return;
 
-    setHoveredNode(hovered || null);
-  }, [colorToNode]);
+      const worldX = cur.centerX + (mx - cx) / cur.scale;
+      const worldY = cur.centerY + (my - cy) / cur.scale;
+      setZoomInfo({
+        centerX: worldX - (mx - cx) / s,
+        centerY: worldY - (my - cy) / s,
+        scale: s,
+      });
 
-  // Add new node
+      // Auto-focus on whatever container/role is now under the cursor after zoom
+      let deepest: CircleTreeNode | null = null;
+      let bestDepth = -1;
+      for (const n of nodesRef.current) {
+        if (n.x === undefined || n.y === undefined || n.r === undefined) continue;
+        const dx = n.x - worldX;
+        const dy = n.y - worldY;
+        if (dx * dx + dy * dy <= n.r * n.r) {
+          if ((n.depth ?? 0) > bestDepth) {
+            bestDepth = n.depth ?? 0;
+            deepest = n;
+          }
+        }
+      }
+      if (deepest) {
+        setCurrentNode(deepest);
+      }
+    };
+
+    /* Drag pan */
+    const onMouseDown = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      pointerDown = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      isDragging = false;
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = hiddenCanvas.width / rect.width;
+      const scaleY = hiddenCanvas.height / rect.height;
+      const mX = (e.clientX - rect.left) * scaleX;
+      const mY = (e.clientY - rect.top) * scaleY;
+
+      if (pointerDown && e.buttons === 1) {
+        const dx = (e.clientX - rect.left) - pointerDown.x;
+        const dy = (e.clientY - rect.top) - pointerDown.y;
+        if (!isDragging && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+          isDragging = true;
+        }
+        if (isDragging) {
+          const cur = zoomInfoRef.current;
+          setZoomInfo(prev => ({
+            ...prev,
+            centerX: prev.centerX - e.movementX / cur.scale,
+            centerY: prev.centerY - e.movementY / cur.scale,
+          }));
+        }
+      }
+
+      // Hover detection when not dragging
+      if (!isDragging) {
+        const hc = hiddenCanvas.getContext('2d', { willReadFrequently: true });
+        if (!hc) return;
+        const px = hc.getImageData(mX, mY, 1, 1).data;
+        const color = `rgb(${px[0]},${px[1]},${px[2]})`;
+        const hovered = colorToNodeRef.current.get(color);
+        setHoveredNode(hovered || null);
+      }
+    };
+
+    /* Click-to-focus (only when not dragging) */
+    const onMouseUp = (e: MouseEvent) => {
+      const wasDragging = isDragging;
+      pointerDown = null;
+      isDragging = false;
+      if (wasDragging) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const sX = hiddenCanvas.width / rect.width;
+      const sY = hiddenCanvas.height / rect.height;
+      const mx = (e.clientX - rect.left) * sX;
+      const my = (e.clientY - rect.top) * sY;
+      const hc = hiddenCanvas.getContext('2d', { willReadFrequently: true });
+      if (!hc) return;
+      const px = hc.getImageData(mx, my, 1, 1).data;
+      const color = `rgb(${px[0]},${px[1]},${px[2]})`;
+      const clicked = colorToNodeRef.current.get(color);
+
+      if (clicked) {
+        const cn = currentNodeRef.current;
+        if (cn && clicked.id === cn.id && cn.parent) {
+          zoomToNode(cn.parent);
+        } else {
+          zoomToNode(clicked);
+        }
+      } else if (nodesRef.current.length > 0) {
+        zoomToNode(nodesRef.current[0]);
+      }
+    };
+
+    const onLeave = () => { pointerDown = null; isDragging = false; };
+
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    canvas.addEventListener('mousedown', onMouseDown);
+    canvas.addEventListener('mousemove', onMouseMove);
+    canvas.addEventListener('mouseup', onMouseUp);
+    canvas.addEventListener('mouseleave', onLeave);
+
+    return () => {
+      canvas.removeEventListener('wheel', onWheel);
+      canvas.removeEventListener('mousedown', onMouseDown);
+      canvas.removeEventListener('mousemove', onMouseMove);
+      canvas.removeEventListener('mouseup', onMouseUp);
+      canvas.removeEventListener('mouseleave', onLeave);
+    };
+  }, []); // refs + zoomToNode bridge mutable state
+
+
   const handleAddNode = useCallback(async () => {
     if (!editName.trim()) return;
 
@@ -612,6 +806,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
       purpose: editPurpose || undefined,
       domains: editDomains || undefined,
       accountabilities: editAccountabilities || undefined,
+      assignments: editNodeType === 'role' ? editAssignments : undefined,
     });
 
     setEditDialogOpen(false);
@@ -620,10 +815,11 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     setEditPurpose('');
     setEditDomains('');
     setEditAccountabilities('');
+    setEditAssignments([]);
     // Note: refreshVisualization is called automatically by useEffect watching circles, 
     // but calling it manually ensures immediate update on the current client
     refreshVisualization();
-  }, [editName, editNodeType, editColor, editDescription, editPurpose, editDomains, editAccountabilities, currentNode, circles, createCircle, refreshVisualization]);
+  }, [editName, editNodeType, editColor, editDescription, editPurpose, editDomains, editAccountabilities, editAssignments, currentNode, circles, createCircle, refreshVisualization]);
 
   // Edit current node
   const handleEditNode = useCallback(async () => {
@@ -637,13 +833,14 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
       purpose: editPurpose || undefined,
       domains: editDomains || undefined,
       accountabilities: editAccountabilities || undefined,
+      assignments: editNodeType === 'role' ? editAssignments : undefined,
     });
 
     setEditDialogOpen(false);
     // Note: refreshVisualization is called automatically by useEffect watching circles,
     // but calling it manually ensures immediate update on the current client
     refreshVisualization();
-  }, [editName, editNodeType, editColor, editDescription, editPurpose, editDomains, editAccountabilities, currentNode, updateCircle, refreshVisualization]);
+  }, [editName, editNodeType, editColor, editDescription, editPurpose, editDomains, editAccountabilities, editAssignments, currentNode, updateCircle, refreshVisualization]);
 
   // Open delete dialog
   const handleDeleteNode = useCallback(() => {
@@ -700,6 +897,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     setEditPurpose('');
     setEditDomains('');
     setEditAccountabilities('');
+    setEditAssignments([]);
     setEditDialogOpen(true);
   }, [circles.length]);
 
@@ -715,6 +913,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     setEditPurpose(currentNode.purpose || '');
     setEditDomains(currentNode.domains || '');
     setEditAccountabilities(currentNode.accountabilities || '');
+    setEditAssignments(currentNode.assignments ? [...currentNode.assignments] : []);
     setEditDialogOpen(true);
   }, [currentNode]);
 
@@ -983,6 +1182,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                               onToggle={toggleTreeNode}
                               onSelect={handleTreeNodeSelect}
                               depth={0}
+                              users={users}
                             />
                           )}
                         </div>
@@ -1012,6 +1212,29 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                                   <p className="text-sm whitespace-pre-wrap">{currentNode.accountabilities}</p>
                                 </div>
                               )}
+                              {currentNode.assignments && currentNode.assignments.length > 0 && (
+                                <div className="mb-2">
+                                  <span className="text-xs font-medium text-muted-foreground">Assigned Users:</span>
+                                  <div className="flex flex-wrap gap-2 mt-1">
+                                    {currentNode.assignments.map((assignment, index) => {
+                                      const assignedUser = users.find(u => u.userId === assignment.userId);
+                                      if (!assignedUser) return null;
+                                      return (
+                                        <div key={`${assignment.userId}-${index}`} className="flex items-center gap-1 bg-muted/50 rounded-full pl-1 pr-2 py-0.5">
+                                          <UserAvatar
+                                            username={assignedUser.username}
+                                            logo={assignedUser.logo}
+                                            size="sm"
+                                            showTooltip={true}
+                                            trigram={assignedUser.trigram}
+                                          />
+                                          <span className="text-xs font-medium">{assignment.involvementType}</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
                             </>
                           )}
                           {currentNode.description && (
@@ -1020,7 +1243,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                               <p className="text-sm whitespace-pre-wrap">{currentNode.description}</p>
                             </div>
                           )}
-                          {currentNode.nodeType === 'role' && !currentNode.purpose && !currentNode.domains && !currentNode.accountabilities && !currentNode.description && (
+                          {currentNode.nodeType === 'role' && !currentNode.purpose && !currentNode.domains && !currentNode.accountabilities && !currentNode.description && (!currentNode.assignments || currentNode.assignments.length === 0) && (
                             <p className="text-sm text-muted-foreground italic">No details defined. Click Edit to add.</p>
                           )}
                           {currentNode.nodeType !== 'role' && !currentNode.description && (
@@ -1040,9 +1263,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                     ref={canvasRef}
                     width={dimensions.width}
                     height={dimensions.height}
-                    className="cursor-pointer"
-                    onClick={handleCanvasClick}
-                    onMouseMove={handleCanvasMouseMove}
+                    className="cursor-grab active:cursor-grabbing"
                     style={{
                       width: '100%',
                       height: '100%',
@@ -1070,6 +1291,47 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                       )}
                     </div>
                   )}
+                  {/* Role assignment badges overlay */}
+                  {visibleAssignmentNodes.map((item) => {
+                    const { node, screenX, screenY, nodeR } = item;
+                    const top = screenY - nodeR - 2;
+                    return (
+                      <div
+                        key={`badge-${node.id}`}
+                        className="absolute pointer-events-none"
+                        style={{
+                          left: screenX,
+                          top,
+                          transform: 'translate(-50%, -100%)',
+                        }}
+                      >
+                        <div className="flex -space-x-1">
+                          {node.assignments!.map((assignment, idx) => {
+                            const u = users.find((usr) => usr.userId === assignment.userId);
+                            if (!u) return null;
+                            return (
+                              <div
+                                key={`${node.id}-${assignment.userId}-${idx}`}
+                                className="relative inline-block"
+                              >
+                                <UserAvatar
+                                  username={u.username}
+                                  logo={u.logo}
+                                  size="lg"
+                                  showTooltip={false}
+                                  trigram={u.trigram}
+                                  className="ring-2 ring-white"
+                                />
+                                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-black/70 text-white text-[14px] font-bold px-1 rounded leading-none">
+                                  {assignment.involvementType}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </ResizablePanel>
             </ResizablePanelGroup>
@@ -1129,7 +1391,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                   placeholder="Optional description..."
                 />
               </div>
-              {/* Purpose, domains, and accountabilities are only for roles */}
+              {/* Purpose, domains, accountabilities, and assignments are only for roles */}
               {editNodeType === 'role' && (
                 <>
                   <div className="grid gap-2">
@@ -1161,6 +1423,100 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                       placeholder="What is expected from this role?"
                       rows={3}
                     />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Role Assignments</Label>
+                    <div className="space-y-2">
+                      {editAssignments.map((assignment, index) => {
+                        const assignedUser = users.find(u => u.userId === assignment.userId);
+                        return (
+                          <div key={`${assignment.userId}-${index}`} className="flex items-center gap-2">
+                            <Select
+                              value={assignment.userId}
+                              onValueChange={(val) => {
+                                const next = [...editAssignments];
+                                next[index] = { ...next[index], userId: val };
+                                setEditAssignments(next);
+                              }}
+                            >
+                              <SelectTrigger className="flex-1">
+                                <SelectValue placeholder="Select user...">
+                                  {assignedUser ? (
+                                    <div className="flex items-center gap-2">
+                                      <UserAvatar
+                                        username={assignedUser.username}
+                                        logo={assignedUser.logo}
+                                        size="sm"
+                                        showTooltip={false}
+                                        trigram={assignedUser.trigram}
+                                      />
+                                      <span className="text-sm">{assignedUser.username}</span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-sm text-muted-foreground">Select user...</span>
+                                  )}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {users.map((u) => (
+                                  <SelectItem key={u.userId} value={u.userId}>
+                                    <div className="flex items-center gap-2">
+                                      <UserAvatar
+                                        username={u.username}
+                                        logo={u.logo}
+                                        size="sm"
+                                        showTooltip={false}
+                                        trigram={u.trigram}
+                                      />
+                                      <span className="text-sm">{u.username}</span>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Select
+                              value={assignment.involvementType}
+                              onValueChange={(val) => {
+                                const next = [...editAssignments];
+                                next[index] = { ...next[index], involvementType: val as RoleInvolvementType };
+                                setEditAssignments(next);
+                              }}
+                            >
+                              <SelectTrigger className="w-40">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {INVOLVEMENT_OPTIONS.map(opt => (
+                                  <SelectItem key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive"
+                              onClick={() => {
+                                const next = [...editAssignments];
+                                next.splice(index, 1);
+                                setEditAssignments(next);
+                              }}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditAssignments([...editAssignments, { userId: '', involvementType: 'P' }])}
+                        className="w-full"
+                      >
+                        <Plus className="w-4 h-4 mr-1" /> Add User Assignment
+                      </Button>
+                    </div>
                   </div>
                 </>
               )}

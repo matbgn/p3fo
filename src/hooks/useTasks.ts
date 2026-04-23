@@ -6,9 +6,8 @@ import { yTasks, yUserSettings, doc, initializeCollaboration, isCollaborationEna
 import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
 import { taskToEntity, tasksToEntities, convertEntitiesToTasks } from "@/lib/task-conversions";
 import { useReminderStore } from "./useReminders";
-
-
-// Polyfill for crypto.randomUUID if not available
+import { BrowserJsonPersistence } from "@/lib/persistence-browser";
+import { getSelectedMode } from "@/lib/persistence-factory";
 if (typeof crypto.randomUUID !== 'function') {
   crypto.randomUUID = function () {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
@@ -201,15 +200,22 @@ async function loadTasks() {
       const alreadyInitialized = localStorage.getItem(DEFAULT_TASKS_INITIALIZED_KEY);
 
       if (!alreadyInitialized) {
-        try {
-          const response = await fetch('/api/tasks/init-defaults', { method: 'POST' });
-          const result = await response.json();
-          if (result.success) {
-            await initializeDefaultTasks();
-            localStorage.setItem(DEFAULT_TASKS_INITIALIZED_KEY, 'true');
+        // In browser-only mode, call the backend endpoint only if the backend is reachable.
+        if (!PERSISTENCE_CONFIG.FORCE_BROWSER) {
+          try {
+            const response = await fetch('/api/tasks/init-defaults', { method: 'POST' });
+            const result = await response.json();
+            if (result.success) {
+              await initializeDefaultTasks();
+              localStorage.setItem(DEFAULT_TASKS_INITIALIZED_KEY, 'true');
+            }
+          } catch (error) {
+            console.error('Error calling init-defaults endpoint:', error);
           }
-        } catch (error) {
-          console.error('Error calling init-defaults endpoint:', error);
+        } else {
+          // In browser-only mode with no backend, initialize defaults locally
+          await initializeDefaultTasks();
+          localStorage.setItem(DEFAULT_TASKS_INITIALIZED_KEY, 'true');
         }
       }
     }
