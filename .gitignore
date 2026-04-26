@@ -36,6 +36,7 @@ dist/
 
 *.db*
 
+.kilo/**
 .kilocode/**
 !.kilocode/workflows/
 !.kilocode/workflows/pr-review.md
