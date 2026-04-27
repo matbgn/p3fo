@@ -51,7 +51,7 @@ export const useCursors = () => {
 
         // Handle mouse movement
         const handleMouseMove = (e: MouseEvent) => {
-            awareness.setLocalStateField('cursor', {
+            awareness.setLocalStateField('mouseCursor', {
                 x: e.clientX,
                 y: e.clientY,
             });
@@ -64,10 +64,10 @@ export const useCursors = () => {
             awareness.getStates().forEach((state, clientId) => {
                 if (clientId === awareness.clientID) return; // Ignore self
 
-                if (state.cursor && state.user) {
+                if (state.mouseCursor && state.user) {
                     newCursors.set(clientId, {
-                        x: state.cursor.x,
-                        y: state.cursor.y,
+                        x: state.mouseCursor.x,
+                        y: state.mouseCursor.y,
                         user: state.user,
                         view: state.view,
                     });

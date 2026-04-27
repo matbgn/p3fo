@@ -79,10 +79,9 @@ interface CircleDbRow {
   modifier: string | null;
   color: string | null;
   size: number | null;
-  description: string | null;
   purpose: string | null;
-  domains: string | null;
-  accountabilities: string | null;
+  missions: string | null;
+  authorityScope: string | null;
   order: number | null;
   assignments: string | null;
   createdAt: string;
@@ -287,10 +286,9 @@ class SqliteClient implements DbClient {
         "modifier" TEXT, -- 'template', 'hierarchy'
         "color" TEXT, -- Custom color for roles, e.g., "#FF6600"
         "size" REAL, -- Size weight for layout calculation
-        "description" TEXT, -- Optional description/purpose
-        "purpose" TEXT, -- Raison d'être
-        "domains" TEXT, -- Domains of authority
-        "accountabilities" TEXT, -- Attendus and expectations
+        "purpose" TEXT, -- What service or general functionality does the role-circle provide
+        "missions" TEXT, -- What specific services or tasks does the role-circle provide
+        "authorityScope" TEXT, -- What are the elements over which the role-circle has exclusive authority
         "order" INTEGER, -- Display order among siblings
         "assignments" TEXT, -- JSON string for role assignments
         "createdAt" TEXT NOT NULL,
@@ -421,8 +419,8 @@ class SqliteClient implements DbClient {
 
     // Circle columns (fields added after initial table creation)
     addColumn('circles', 'purpose', 'TEXT');
-    addColumn('circles', 'domains', 'TEXT');
-    addColumn('circles', 'accountabilities', 'TEXT');
+    addColumn('circles', 'authorityScope', 'TEXT');
+    addColumn('circles', 'missions', 'TEXT');
     addColumn('circles', 'assignments', 'TEXT');
 
     // Add new columns for UserSettings
@@ -1046,10 +1044,9 @@ class SqliteClient implements DbClient {
       modifier: input.modifier,
       color: input.color,
       size: input.size,
-      description: input.description,
       purpose: input.purpose,
-      domains: input.domains,
-      accountabilities: input.accountabilities,
+      missions: input.missions,
+      authorityScope: input.authorityScope,
       order: input.order,
       assignments: input.assignments,
       createdAt: input.createdAt || now,
@@ -1064,10 +1061,9 @@ class SqliteClient implements DbClient {
       modifier: newCircle.modifier ?? null,
       color: newCircle.color ?? null,
       size: newCircle.size ?? null,
-      description: newCircle.description ?? null,
       purpose: newCircle.purpose ?? null,
-      domains: newCircle.domains ?? null,
-      accountabilities: newCircle.accountabilities ?? null,
+      missions: newCircle.missions ?? null,
+      authorityScope: newCircle.authorityScope ?? null,
       order: newCircle.order ?? null,
       assignments: newCircle.assignments ? JSON.stringify(newCircle.assignments) : null,
       createdAt: newCircle.createdAt,
@@ -1075,8 +1071,8 @@ class SqliteClient implements DbClient {
     };
 
     this.db.prepare(`
-      INSERT INTO "circles"("id", "name", "parentId", "nodeType", "modifier", "color", "size", "description", "purpose", "domains", "accountabilities", "order", "assignments", "createdAt", "updatedAt")
-      VALUES(@id, @name, @parentId, @nodeType, @modifier, @color, @size, @description, @purpose, @domains, @accountabilities, @order, @assignments, @createdAt, @updatedAt)
+      INSERT INTO "circles"("id", "name", "parentId", "nodeType", "modifier", "color", "size", "purpose", "missions", "authorityScope", "order", "assignments", "createdAt", "updatedAt")
+      VALUES(@id, @name, @parentId, @nodeType, @modifier, @color, @size, @purpose, @missions, @authorityScope, @order, @assignments, @createdAt, @updatedAt)
     `).run(params);
 
     return newCircle;
@@ -1098,10 +1094,9 @@ class SqliteClient implements DbClient {
       modifier: updated.modifier ?? null,
       color: updated.color ?? null,
       size: updated.size ?? null,
-      description: updated.description ?? null,
       purpose: updated.purpose ?? null,
-      domains: updated.domains ?? null,
-      accountabilities: updated.accountabilities ?? null,
+      missions: updated.missions ?? null,
+      authorityScope: updated.authorityScope ?? null,
       order: updated.order ?? null,
       assignments: updated.assignments ? JSON.stringify(updated.assignments) : null,
       updatedAt: updated.updatedAt,
@@ -1115,10 +1110,9 @@ class SqliteClient implements DbClient {
         "modifier" = @modifier,
         "color" = @color,
         "size" = @size,
-        "description" = @description,
         "purpose" = @purpose,
-        "domains" = @domains,
-        "accountabilities" = @accountabilities,
+        "missions" = @missions,
+        "authorityScope" = @authorityScope,
         "order" = @order,
         "assignments" = @assignments,
         "updatedAt" = @updatedAt
@@ -1174,8 +1168,8 @@ class SqliteClient implements DbClient {
     }
 
     const insertStmt = this.db.prepare(`
-      INSERT INTO "circles"("id", "name", "parentId", "nodeType", "modifier", "color", "size", "description", "purpose", "domains", "accountabilities", "order", "assignments", "createdAt", "updatedAt")
-      VALUES(@id, @name, @parentId, @nodeType, @modifier, @color, @size, @description, @purpose, @domains, @accountabilities, @order, @assignments, @createdAt, @updatedAt)
+      INSERT INTO "circles"("id", "name", "parentId", "nodeType", "modifier", "color", "size", "purpose", "missions", "authorityScope", "order", "assignments", "createdAt", "updatedAt")
+      VALUES(@id, @name, @parentId, @nodeType, @modifier, @color, @size, @purpose, @missions, @authorityScope, @order, @assignments, @createdAt, @updatedAt)
       ON CONFLICT("id") DO UPDATE SET
         "name" = excluded."name",
         "parentId" = excluded."parentId",
@@ -1183,10 +1177,9 @@ class SqliteClient implements DbClient {
         "modifier" = excluded."modifier",
         "color" = excluded."color",
         "size" = excluded."size",
-        "description" = excluded."description",
         "purpose" = excluded."purpose",
-        "domains" = excluded."domains",
-        "accountabilities" = excluded."accountabilities",
+        "missions" = excluded."missions",
+        "authorityScope" = excluded."authorityScope",
         "order" = excluded."order",
         "assignments" = excluded."assignments",
         "createdAt" = excluded."createdAt",
@@ -1207,10 +1200,9 @@ class SqliteClient implements DbClient {
           modifier: circle.modifier ?? null,
           color: circle.color ?? null,
           size: circle.size ?? null,
-          description: circle.description ?? null,
           purpose: circle.purpose ?? null,
-          domains: circle.domains ?? null,
-          accountabilities: circle.accountabilities ?? null,
+          missions: circle.missions ?? null,
+          authorityScope: circle.authorityScope ?? null,
           order: circle.order ?? null,
           assignments: circle.assignments ? JSON.stringify(circle.assignments) : null,
           createdAt: circle.createdAt,
@@ -1424,10 +1416,9 @@ class SqliteClient implements DbClient {
       modifier: row.modifier as CircleNodeModifier | undefined,
       color: row.color ?? undefined,
       size: row.size ?? undefined,
-      description: row.description ?? undefined,
       purpose: row.purpose ?? undefined,
-      domains: row.domains ?? undefined,
-      accountabilities: row.accountabilities ?? undefined,
+      missions: row.missions ?? undefined,
+      authorityScope: row.authorityScope ?? undefined,
       order: row.order ?? undefined,
       assignments: row.assignments ? JSON.parse(row.assignments) : undefined,
       createdAt: row.createdAt,

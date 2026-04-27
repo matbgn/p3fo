@@ -200,10 +200,9 @@ class PostgresClient implements DbClient {
         "modifier" TEXT, -- 'template', 'hierarchy'
         "color" TEXT, -- Custom color for roles, e.g., "#FF6600"
         "size" REAL, -- Size weight for layout calculation
-        "description" TEXT, -- Optional description/purpose
-        "purpose" TEXT, -- Raison d'être
-        "domains" TEXT, -- Domains of authority
-        "accountabilities" TEXT, -- Attendus and expectations
+        "purpose" TEXT, -- What service or general functionality does the role-circle provide
+        "missions" TEXT, -- What specific services or tasks does the role-circle provide
+        "authorityScope" TEXT, -- What are the elements over which the role-circle has exclusive authority
         "order" INTEGER, -- Display order among siblings
         "assignments" JSONB, -- Users assigned to this role with involvement types
         "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -364,8 +363,8 @@ class PostgresClient implements DbClient {
 
     // Circle columns (fields added after initial table creation)
     await addColumn('circles', 'purpose', 'TEXT');
-    await addColumn('circles', 'domains', 'TEXT');
-    await addColumn('circles', 'accountabilities', 'TEXT');
+    await addColumn('circles', 'authorityScope', 'TEXT');
+    await addColumn('circles', 'missions', 'TEXT');
     await addColumn('circles', 'assignments', 'JSONB');
 
     // Add new columns for UserSettings
@@ -898,10 +897,9 @@ class PostgresClient implements DbClient {
       modifier: input.modifier,
       color: input.color,
       size: input.size,
-      description: input.description,
       purpose: input.purpose,
-      domains: input.domains,
-      accountabilities: input.accountabilities,
+      missions: input.missions,
+      authorityScope: input.authorityScope,
       order: input.order,
       assignments: input.assignments,
       createdAt: input.createdAt || now,
@@ -909,8 +907,8 @@ class PostgresClient implements DbClient {
     };
 
     await this.pool.query(`
-      INSERT INTO "circles" ("id", "name", "parentId", "nodeType", "modifier", "color", "size", "description", "purpose", "domains", "accountabilities", "order", "assignments", "createdAt", "updatedAt")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      INSERT INTO "circles" ("id", "name", "parentId", "nodeType", "modifier", "color", "size", "purpose", "missions", "authorityScope", "order", "assignments", "createdAt", "updatedAt")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
     `, [
       newCircle.id,
       newCircle.name,
@@ -919,10 +917,9 @@ class PostgresClient implements DbClient {
       newCircle.modifier ?? null,
       newCircle.color ?? null,
       newCircle.size ?? null,
-      newCircle.description ?? null,
       newCircle.purpose ?? null,
-      newCircle.domains ?? null,
-      newCircle.accountabilities ?? null,
+      newCircle.missions ?? null,
+      newCircle.authorityScope ?? null,
       newCircle.order ?? null,
       newCircle.assignments ? JSON.stringify(newCircle.assignments) : null,
       newCircle.createdAt,
@@ -943,10 +940,9 @@ class PostgresClient implements DbClient {
     await this.pool.query(`
       UPDATE "circles"
       SET "name" = $1, "parentId" = $2, "nodeType" = $3, "modifier" = $4,
-          "color" = $5, "size" = $6, "description" = $7, "purpose" = $8,
-          "domains" = $9, "accountabilities" = $10, "order" = $11,
-          "assignments" = $12, "updatedAt" = $13
-      WHERE "id" = $14
+          "color" = $5, "size" = $6, "purpose" = $7, "missions" = $8,
+          "authorityScope" = $9, "order" = $10, "assignments" = $11, "updatedAt" = $12
+      WHERE "id" = $13
     `, [
       updated.name,
       updated.parentId,
@@ -954,10 +950,9 @@ class PostgresClient implements DbClient {
       updated.modifier ?? null,
       updated.color ?? null,
       updated.size ?? null,
-      updated.description ?? null,
       updated.purpose ?? null,
-      updated.domains ?? null,
-      updated.accountabilities ?? null,
+      updated.missions ?? null,
+      updated.authorityScope ?? null,
       updated.order ?? null,
       updated.assignments ? JSON.stringify(updated.assignments) : null,
       updated.updatedAt,
@@ -1003,8 +998,8 @@ class PostgresClient implements DbClient {
 
       for (const circle of circles) {
         await client.query(`
-          INSERT INTO "circles"("id", "name", "parentId", "nodeType", "modifier", "color", "size", "description", "purpose", "domains", "accountabilities", "order", "assignments", "createdAt", "updatedAt")
-          VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+          INSERT INTO "circles"("id", "name", "parentId", "nodeType", "modifier", "color", "size", "purpose", "missions", "authorityScope", "order", "assignments", "createdAt", "updatedAt")
+          VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
           ON CONFLICT ("id") DO UPDATE SET
             "name" = EXCLUDED."name",
             "parentId" = EXCLUDED."parentId",
@@ -1012,10 +1007,9 @@ class PostgresClient implements DbClient {
             "modifier" = EXCLUDED."modifier",
             "color" = EXCLUDED."color",
             "size" = EXCLUDED."size",
-            "description" = EXCLUDED."description",
             "purpose" = EXCLUDED."purpose",
-            "domains" = EXCLUDED."domains",
-            "accountabilities" = EXCLUDED."accountabilities",
+            "missions" = EXCLUDED."missions",
+            "authorityScope" = EXCLUDED."authorityScope",
             "order" = EXCLUDED."order",
             "assignments" = EXCLUDED."assignments",
             "createdAt" = EXCLUDED."createdAt",
@@ -1028,10 +1022,9 @@ class PostgresClient implements DbClient {
           circle.modifier ?? null,
           circle.color ?? null,
           circle.size ?? null,
-          circle.description ?? null,
           circle.purpose ?? null,
-          circle.domains ?? null,
-          circle.accountabilities ?? null,
+          circle.missions ?? null,
+          circle.authorityScope ?? null,
           circle.order ?? null,
           circle.assignments ? JSON.stringify(circle.assignments) : null,
           circle.createdAt,
@@ -1242,10 +1235,9 @@ class PostgresClient implements DbClient {
       modifier: row.modifier as CircleNodeModifier | undefined,
       color: row.color ?? undefined,
       size: row.size ?? undefined,
-      description: row.description ?? undefined,
       purpose: row.purpose ?? undefined,
-      domains: row.domains ?? undefined,
-      accountabilities: row.accountabilities ?? undefined,
+      missions: row.missions ?? undefined,
+      authorityScope: row.authorityScope ?? undefined,
       order: row.order ?? undefined,
       assignments: row.assignments ? (typeof row.assignments === 'string' ? JSON.parse(row.assignments) : row.assignments) : undefined,
       createdAt: row.createdAt,
