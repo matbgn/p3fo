@@ -51,7 +51,7 @@ const AssignmentBadges: React.FC<{ assignments: RoleAssignment[]; users: UserWit
   );
 };
 
-const getCircleParent = (role: CircleEntity, map: Map<string, CircleEntity>): { id: string; name: string } => {
+export const getCircleParent = (role: CircleEntity, map: Map<string, CircleEntity>): { id: string; name: string } => {
   if (!role.parentId) return { id: 'none', name: 'No Circle' };
   let current = map.get(role.parentId);
   while (current) {

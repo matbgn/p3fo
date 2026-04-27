@@ -155,6 +155,11 @@ const DataImporter: React.FC = () => {
                 await adapter.updateFertilizationBoardState(importedData.celebrationBoard);
               }
 
+              // Import Dream Board
+              if (importedData.dreamBoard) {
+                await adapter.updateDreamBoardState(importedData.dreamBoard);
+              }
+
               // Import QoL Survey Responses
               const qolData = importedData.qolSurveyResponses || importedData.qolSurvey || importedData.qol_survey;
               if (qolData) {

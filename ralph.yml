@@ -35,7 +35,7 @@ cli:
   backend: "opencode"
   args:
     - "--model"
-    - "ollama-cloud/glm-5"  # Change to your preferred model
+    - "ollama-cloud/kimi-k2.6:cloud"  # Change to your preferred model
   prompt_mode: "arg"
 
 core:

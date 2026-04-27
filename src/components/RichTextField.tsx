@@ -120,16 +120,16 @@ const EditorModal: React.FC<EditorModalProps> = ({
     const isEmpty = fragment.length === 0;
     
     if (isEmpty && initialBlocks.length > 0) {
-      // Use setTimeout to ensure editor is ready
-      const timeout = setTimeout(() => {
+      // Use requestAnimationFrame for more robust React lifecycle timing
+      const rafId = requestAnimationFrame(() => {
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           editor.replaceBlocks(editor.document.map((b: any) => b.id), initialBlocks);
         } catch {
           // Editor might not be ready yet, ignore
         }
-      }, 0);
-      return () => clearTimeout(timeout);
+      });
+      return () => cancelAnimationFrame(rafId);
     }
   }, [collaborativeKey, editor, initialBlocks]);
 

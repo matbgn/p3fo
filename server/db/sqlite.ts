@@ -423,6 +423,11 @@ class SqliteClient implements DbClient {
     addColumn('circles', 'missions', 'TEXT');
     addColumn('circles', 'assignments', 'TEXT');
 
+    // Migrate legacy circle columns: rename description→purpose, domains→missions, accountabilities→authorityScope
+    runMigration('circles', 'description', 'purpose');
+    runMigration('circles', 'domains', 'missions');
+    runMigration('circles', 'accountabilities', 'authorityScope');
+
     // Add new columns for UserSettings
     addColumn('userSettings', 'weekStartDay', 'INTEGER');
     addColumn('userSettings', 'defaultPlanView', 'TEXT');

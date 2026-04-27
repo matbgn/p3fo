@@ -367,6 +367,11 @@ class PostgresClient implements DbClient {
     await addColumn('circles', 'missions', 'TEXT');
     await addColumn('circles', 'assignments', 'JSONB');
 
+    // Migrate legacy circle columns: rename description→purpose, domains→missions, accountabilities→authorityScope
+    await runMigration('circles', 'description', 'purpose');
+    await runMigration('circles', 'domains', 'missions');
+    await runMigration('circles', 'accountabilities', 'authorityScope');
+
     // Add new columns for UserSettings
     await addColumn('userSettings', 'weekStartDay', 'INTEGER');
     await addColumn('userSettings', 'defaultPlanView', 'TEXT');

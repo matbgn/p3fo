@@ -176,10 +176,6 @@ export interface PersistenceAdapter {
   // Circles
   listCircles(): Promise<CircleEntity[]>;
   importCircles(circles: CircleEntity[]): Promise<void>;
-
-  // Reminders
-  listReminders(userId?: string): Promise<ReminderEntity[]>;
-  importReminders(reminders: ReminderEntity[]): Promise<void>;
 }
 
 export interface FertilizationCard {
