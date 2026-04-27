@@ -278,19 +278,30 @@ export class HttpApiPersistence implements PersistenceAdapter {
       }
     }
 
-    // 4. Broadcast Clear Command to other clients
+    // 4. Broadcast Clear Command to other Yjs clients' shared documents (boards and circles)
     // We import these dynamically to avoid circular dependencies if any, 
     // or just assume standard import at top if possible.
     // For now, let's assume we can import at module level.
     // But since this is a class method, let's use the valid imports.
     try {
-      const { doc, ySystemState } = await import('./collaboration');
+      const { doc, yFertilizationState, yFertilizationCards, yFertilizationColumns, yDreamState, yDreamCards, yDreamColumns, yCircles, ySystemState } = await import('./collaboration');
       doc.transact(() => {
+        // Clear fertilization board
+        yFertilizationState.clear();
+        yFertilizationCards.clear();
+        yFertilizationColumns.clear();
+        // Clear dream board
+        yDreamState.clear();
+        yDreamCards.clear();
+        yDreamColumns.clear();
+        // Clear circles
+        yCircles.clear();
+        // Broadcast clear command to other clients
         ySystemState.set('command', { type: 'CLEAR_ALL', timestamp: Date.now() });
       });
-      console.log('Broadcasted CLEAR_ALL command');
+      console.log('Cleared Yjs shared documents and broadcasted CLEAR_ALL command');
     } catch (e) {
-      console.error('Error broadcasting clear command:', e);
+      console.error('Error clearing Yjs documents:', e);
     }
   }
 
