@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import CirclesView from '@/components/CirclesView';
+import { RolesTable } from '@/components/RolesTable';
 
 interface PlanViewProps {
   onFocusOnTask: (taskId: string) => void;
 }
 
-type ActiveView = 'plan' | 'circles';
+type ActiveView = 'roles' | 'circles';
 
 const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
   const [activeView, setActiveView] = useState<ActiveView>('circles');
@@ -16,16 +17,16 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
   const ViewToggleButtons = () => (
     <div className="flex space-x-2">
       <Button
-        variant={activeView === 'plan' ? 'default' : 'outline'}
-        onClick={() => setActiveView('plan')}
-      >
-        Plan
-      </Button>
-      <Button
         variant={activeView === 'circles' ? 'default' : 'outline'}
         onClick={() => setActiveView('circles')}
       >
         Circles
+      </Button>
+      <Button
+        variant={activeView === 'roles' ? 'default' : 'outline'}
+        onClick={() => setActiveView('roles')}
+      >
+        Roles
       </Button>
     </div>
   );
@@ -44,19 +45,18 @@ const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
     );
   }
 
-  // Render Plan view (placeholder for now)
+  // Render Roles view
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="flex flex-col space-y-4 pb-2">
         <div className="flex flex-row items-center justify-between">
-          <CardTitle>Plan View</CardTitle>
+          <CardTitle>Roles</CardTitle>
           <ViewToggleButtons />
         </div>
       </CardHeader>
-      <CardContent className="flex-grow flex items-center justify-center">
-        <div className="text-center text-muted-foreground">
-          <p className="text-lg font-medium">Plan View - Coming Soon</p>
-          <p className="text-sm mt-2">Storyboard and Prioritization features are available in Dream View.</p>
+      <CardContent className="flex-grow overflow-hidden p-0">
+        <div className="h-full px-6 py-1">
+          <RolesTable />
         </div>
       </CardContent>
     </Card>

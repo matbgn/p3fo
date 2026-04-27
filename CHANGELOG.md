@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.21.0 (2026-04-27)
+
+### Features
+
+- **circles:** add BlockNote rich text editing with collaborative capa for roles edition (2ffd91b)
+
+---
+
+## v0.20.0 (2026-04-26)
+
+### Features
+
+- **plan:** add roles table with user assignments view (c6bbb49)
+
+### Bug Fixes
+
+- **DBs:** fix databases connectors for sqllite & postgres (dbc6051)
+
+---
+
 ## v0.19.0 (2026-04-22)
 
 ### Features
@@ -123,20 +143,5 @@
 - **import/export:** add allTasks state and improve SQLite import/export reliability (688c530)
 - **kanban:** handle invalid triageStatus values gracefully (180fd3d)
 - prevent default tasks recreation after clearing all data (882f054)
-
----
-
-## v0.12.2 (2026-02-01)
-
-### Bug Fixes
-
-- **lint:** replace any types with proper interfaces in App.tsx and DataImporter.tsx (b4b995b)
-- **lint:** replace any types with specific interfaces in sqlite.ts (67125d9)
-- **lint:** replace any types with specific union types in postgres.ts (e55e3dd)
-- sync imported user settings to Yjs to prevent cache overwrite (7ae7cb2)
-
----
-
-## v0.12.1 (2026-01-30)
 
 ---

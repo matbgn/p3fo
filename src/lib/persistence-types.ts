@@ -176,10 +176,6 @@ export interface PersistenceAdapter {
   // Circles
   listCircles(): Promise<CircleEntity[]>;
   importCircles(circles: CircleEntity[]): Promise<void>;
-
-  // Reminders
-  listReminders(userId?: string): Promise<ReminderEntity[]>;
-  importReminders(reminders: ReminderEntity[]): Promise<void>;
 }
 
 export interface FertilizationCard {
@@ -268,10 +264,9 @@ export interface CircleEntity {
   modifier?: CircleNodeModifier; // 'template' for predefined roles, 'hierarchy' for octagon display
   color?: string; // Custom color (mainly for roles), e.g., "#FF6600"
   size?: number; // Size weight for layout calculation
-  description?: string; // Optional description/purpose
-  purpose?: string; // Raison d'être - the purpose/reason for being of this role
-  domains?: string; // Domains of authority - what this role has control over
-  accountabilities?: string; // Attendus - expectations and accountabilities
+  purpose?: string; // What service or general functionality does the role-circle provide
+  missions?: string; // What specific services or tasks does the role-circle provide
+  authorityScope?: string; // What are the elements over which the role-circle has exclusive authority
   order?: number; // Display order among siblings
   assignments?: RoleAssignment[]; // Users assigned to this role with involvement types
   createdAt: string;

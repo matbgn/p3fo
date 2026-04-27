@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { RichTextField } from "@/components/RichTextField";
 import { Label } from "@/components/ui/label";
 import {
     Select,
@@ -190,12 +190,12 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
                     <div className="md:col-span-2 flex flex-col gap-4">
                         <div className="flex flex-col gap-2 flex-1">
                             <Label htmlFor="description" className="text-base font-semibold">Description</Label>
-                            <Textarea
-                                id="description"
+                            <RichTextField
                                 value={comment}
-                                onChange={(e) => setComment(e.target.value)}
-                                className="flex-1 min-h-[300px] resize-none"
+                                onChange={(text) => setComment(text)}
+                                label="Description"
                                 placeholder="Add a detailed description..."
+                                className="flex-1 min-h-[300px]"
                             />
                         </div>
 

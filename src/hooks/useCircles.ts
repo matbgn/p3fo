@@ -46,10 +46,9 @@ const parseCircleEntity = (data: unknown): CircleEntity => {
     modifier: raw.modifier as CircleNodeModifier | undefined,
     color: raw.color as string | undefined,
     size: raw.size as number | undefined,
-    description: raw.description as string | undefined,
-    purpose: raw.purpose as string | undefined,
-    domains: raw.domains as string | undefined,
-    accountabilities: raw.accountabilities as string | undefined,
+    purpose: (raw.purpose as string | undefined) || (raw.description as string | undefined),
+    missions: (raw.missions as string | undefined) || (raw.accountabilities as string | undefined),
+    authorityScope: (raw.authorityScope as string | undefined) || (raw.domains as string | undefined),
     order: raw.order as number | undefined,
     assignments: raw.assignments as import("@/lib/persistence-types").RoleAssignment[] | undefined,
     createdAt: raw.createdAt as string,
@@ -80,7 +79,10 @@ const loadCircles = async (): Promise<CircleEntity[]> => {
 
     // Check if Yjs has data first (collaborative mode takes precedence)
     if (isCollaborationEnabled() && yCircles.size > 0) {
-      circles = Array.from(yCircles.values()) as CircleEntity[];
+      circles = (Array.from(yCircles.values()) as unknown[]).map((v: any) => {
+        if (v && typeof v.toJSON === "function") return v.toJSON();
+        return JSON.parse(JSON.stringify(v));
+      }) as CircleEntity[];
       eventBus.publish("circlesChanged");
       return circles;
     }
@@ -113,10 +115,9 @@ const createCircle = async (input: Partial<CircleEntity>): Promise<CircleEntity 
       modifier: input.modifier,
       color: input.color,
       size: input.size ?? 1,
-      description: input.description,
       purpose: input.purpose,
-      domains: input.domains,
-      accountabilities: input.accountabilities,
+      missions: input.missions,
+      authorityScope: input.authorityScope,
       order: input.order,
       assignments: input.assignments,
       createdAt: input.createdAt || now,
@@ -268,10 +269,9 @@ export interface CircleTreeNode {
   modifier?: CircleNodeModifier;
   color?: string;
   size: number;
-  description?: string;
   purpose?: string;
-  domains?: string;
-  accountabilities?: string;
+  missions?: string;
+  authorityScope?: string;
   assignments?: import("@/lib/persistence-types").RoleAssignment[];
   children?: CircleTreeNode[];
   // D3 computed properties (added by pack layout)
@@ -293,10 +293,9 @@ const buildCircleTree = (parentId: string | null = null): CircleTreeNode[] => {
       modifier: circle.modifier,
       color: circle.color,
       size: circle.size ?? 1,
-      description: circle.description,
       purpose: circle.purpose,
-      domains: circle.domains,
-      accountabilities: circle.accountabilities,
+      missions: circle.missions,
+      authorityScope: circle.authorityScope,
       assignments: circle.assignments,
       children: buildCircleTree(circle.id),
     }));
@@ -311,16 +310,18 @@ loadCircles();
  */
 export function useCircles() {
   const [, setForceRender] = React.useState({});
+  const [circlesVersion, setCirclesVersion] = React.useState(0);
 
   // Initialize collaboration on mount
   React.useEffect(() => {
     initializeCollaboration();
   }, []);
 
-  // Subscribe to circles changes (local eventBus)
+  // Subscribe to circles changes (local eventBus + remote Yjs)
   React.useEffect(() => {
     const onCirclesChanged = () => {
       setForceRender({});
+      setCirclesVersion((v) => v + 1);
     };
     eventBus.subscribe("circlesChanged", onCirclesChanged);
     return () => {
@@ -333,8 +334,15 @@ export function useCircles() {
     if (!isCollaborationEnabled()) return;
 
     const observer = () => {
-      // Reconstruct state from Yjs
-      circles = Array.from(yCircles.values()) as CircleEntity[];
+      // Deep-clone Yjs values to plain objects so downstream code
+      // (React, BlockNote, persistence) receives plain strings.
+      circles = (Array.from(yCircles.values()) as unknown[]).map((v: any) => {
+        if (v && typeof v.toJSON === "function") {
+          return v.toJSON();
+        }
+        // Fallback for plain objects stored without YMap wrapping
+        return JSON.parse(JSON.stringify(v));
+      }) as CircleEntity[];
       eventBus.publish("circlesChanged");
     };
 
@@ -347,6 +355,7 @@ export function useCircles() {
   return {
     // Raw circles array
     circles,
+    circlesVersion,
 
     // CRUD operations
     loadCircles,

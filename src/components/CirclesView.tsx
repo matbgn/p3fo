@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { RichTextField } from '@/components/RichTextField';
+import { BlockNotePreview } from '@/components/BlockNotePreview';
 import {
   Select,
   SelectContent,
@@ -21,6 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Plus, Edit, Trash2, Move, Home, ChevronRight, ChevronDown, Circle, Users, User, Building2, PanelLeftClose, PanelLeft } from 'lucide-react';
@@ -150,13 +153,48 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
   );
 };
 
+// Extract plain text from a BlockNote JSON string for tooltips/previews
+function extractTextFromBlockNote(json: string | undefined): string {
+  if (!json) return '';
+  try {
+    const blocks = JSON.parse(json);
+    if (!Array.isArray(blocks)) return json.trim();
+    const texts: string[] = [];
+    for (const block of blocks) {
+      texts.push(extractTextFromBlock(block));
+    }
+    return texts.join(' ').trim();
+  } catch {
+    return json.trim();
+  }
+}
+
+function extractTextFromBlock(block: any): string {
+  if (!block) return '';
+  if (typeof block === 'string') return block;
+  if (Array.isArray(block)) return block.map(extractTextFromBlock).join('');
+  let text = '';
+  if (block.content) {
+    text += extractTextFromBlock(block.content);
+  }
+  if (block.text) {
+    text += block.text;
+  }
+  if (block.children) {
+    text += ' ' + extractTextFromBlock(block.children);
+  }
+  return text;
+}
+
 const CirclesView: React.FC<CirclesViewProps> = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hiddenCanvasRef = useRef<HTMLCanvasElement>(null);
+  const editingNodeIdRef = useRef<string | null>(null);
 
   const {
     circles,
+    circlesVersion,
     buildCircleTree,
     createCircle,
     updateCircle,
@@ -252,16 +290,31 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
   const [editName, setEditName] = useState('');
   const [editNodeType, setEditNodeType] = useState<CircleNodeType>('role');
   const [editColor, setEditColor] = useState('#FFCC00');
-  const [editDescription, setEditDescription] = useState('');
   const [editPurpose, setEditPurpose] = useState('');
-  const [editDomains, setEditDomains] = useState('');
-  const [editAccountabilities, setEditAccountabilities] = useState('');
+  const [editMissions, setEditMissions] = useState('');
+  const [editAuthorityScope, setEditAuthorityScope] = useState('');
   const [editAssignments, setEditAssignments] = useState<RoleAssignment[]>([]);
 
   // Move dialog state
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [moveTargetId, setMoveTargetId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  // When another client updates the circle that is currently being
+  // edited, sync the rich-text fields into the local edit state so
+  // the parent "Edit Node" modal always shows the latest content.
+  useEffect(() => {
+    if (!editDialogOpen || editMode !== 'edit') return;
+    const id = editingNodeIdRef.current;
+    if (!id) return;
+    const live = circles.find(c => c.id === id);
+    if (!live) return;
+    // Only update fields that the nested rich-text modals can change;
+    // name/color/assignments are not edited in the nested modals.
+    setEditPurpose(prev => prev !== (live.purpose || '') ? (live.purpose || '') : prev);
+    setEditMissions(prev => prev !== (live.missions || '') ? (live.missions || '') : prev);
+    setEditAuthorityScope(prev => prev !== (live.authorityScope || '') ? (live.authorityScope || '') : prev);
+  }, [circlesVersion, editDialogOpen, editMode, circles]);
 
   // Tree panel state
   const [treePanelOpen, setTreePanelOpen] = useState(true);
@@ -802,24 +855,23 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
       parentId,
       nodeType: editNodeType,
       color: editNodeType === 'role' ? editColor : undefined,
-      description: editDescription || undefined,
       purpose: editPurpose || undefined,
-      domains: editDomains || undefined,
-      accountabilities: editAccountabilities || undefined,
+      missions: editMissions || undefined,
+      authorityScope: editAuthorityScope || undefined,
       assignments: editNodeType === 'role' ? editAssignments : undefined,
     });
 
     setEditDialogOpen(false);
+    editingNodeIdRef.current = null;
     setEditName('');
-    setEditDescription('');
     setEditPurpose('');
-    setEditDomains('');
-    setEditAccountabilities('');
+    setEditMissions('');
+    setEditAuthorityScope('');
     setEditAssignments([]);
     // Note: refreshVisualization is called automatically by useEffect watching circles, 
     // but calling it manually ensures immediate update on the current client
     refreshVisualization();
-  }, [editName, editNodeType, editColor, editDescription, editPurpose, editDomains, editAccountabilities, editAssignments, currentNode, circles, createCircle, refreshVisualization]);
+  }, [editName, editNodeType, editColor, editPurpose, editMissions, editAuthorityScope, editAssignments, currentNode, circles, createCircle, refreshVisualization]);
 
   // Edit current node
   const handleEditNode = useCallback(async () => {
@@ -829,18 +881,18 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
       name: editName.trim(),
       nodeType: editNodeType,
       color: editNodeType === 'role' ? editColor : undefined,
-      description: editDescription || undefined,
       purpose: editPurpose || undefined,
-      domains: editDomains || undefined,
-      accountabilities: editAccountabilities || undefined,
+      missions: editMissions || undefined,
+      authorityScope: editAuthorityScope || undefined,
       assignments: editNodeType === 'role' ? editAssignments : undefined,
     });
 
     setEditDialogOpen(false);
+    editingNodeIdRef.current = null;
     // Note: refreshVisualization is called automatically by useEffect watching circles,
     // but calling it manually ensures immediate update on the current client
     refreshVisualization();
-  }, [editName, editNodeType, editColor, editDescription, editPurpose, editDomains, editAccountabilities, editAssignments, currentNode, updateCircle, refreshVisualization]);
+  }, [editName, editNodeType, editColor, editPurpose, editMissions, editAuthorityScope, editAssignments, currentNode, updateCircle, refreshVisualization]);
 
   // Open delete dialog
   const handleDeleteNode = useCallback(() => {
@@ -893,10 +945,9 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     // Default to organization if no circles exist, otherwise role
     setEditNodeType(circles.length === 0 ? 'organization' : 'role');
     setEditColor('#FFCC00');
-    setEditDescription('');
     setEditPurpose('');
-    setEditDomains('');
-    setEditAccountabilities('');
+    setEditMissions('');
+    setEditAuthorityScope('');
     setEditAssignments([]);
     setEditDialogOpen(true);
   }, [circles.length]);
@@ -909,11 +960,11 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     setEditName(currentNode.name);
     setEditNodeType(currentNode.nodeType);
     setEditColor(currentNode.color || '#FFCC00');
-    setEditDescription(currentNode.description || '');
     setEditPurpose(currentNode.purpose || '');
-    setEditDomains(currentNode.domains || '');
-    setEditAccountabilities(currentNode.accountabilities || '');
+    setEditMissions(currentNode.missions || '');
+    setEditAuthorityScope(currentNode.authorityScope || '');
     setEditAssignments(currentNode.assignments ? [...currentNode.assignments] : []);
+    editingNodeIdRef.current = currentNode.id;
     setEditDialogOpen(true);
   }, [currentNode]);
 
@@ -1010,11 +1061,11 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     };
   }, []);
 
-  // Rebuild tree when circles or dimensions change
+  // Rebuild tree when circles, dimensions, or version change
   useEffect(() => {
     refreshVisualization();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshVisualization is memoized, we only want to run on circles/dimensions changes
-  }, [circles, dimensions.width, dimensions.height]);
+  }, [circles, circlesVersion, dimensions.width, dimensions.height]);
 
   // Update zoom when nodes change (including dimension changes that rebuild nodes)
   useEffect(() => {
@@ -1191,30 +1242,18 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                       {currentNode && currentNode.id !== 'virtual-root' && (
                         <div className="border-t bg-background p-3 max-h-[40%] overflow-auto">
                           <h4 className="font-semibold text-base mb-2">{currentNode.name}</h4>
-                          {/* Purpose, domains, and accountabilities are only for roles */}
+                          {/* Purpose is only for roles */}
                           {currentNode.nodeType === 'role' && (
                             <>
                               {currentNode.purpose && (
                                 <div className="mb-2">
-                                  <span className="text-xs font-medium text-muted-foreground">Purpose:</span>
-                                  <p className="text-sm whitespace-pre-wrap">{currentNode.purpose}</p>
-                                </div>
-                              )}
-                              {currentNode.domains && (
-                                <div className="mb-2">
-                                  <span className="text-xs font-medium text-muted-foreground">Domains:</span>
-                                  <p className="text-sm whitespace-pre-wrap">{currentNode.domains}</p>
-                                </div>
-                              )}
-                              {currentNode.accountabilities && (
-                                <div className="mb-2">
-                                  <span className="text-xs font-medium text-muted-foreground">Accountabilities:</span>
-                                  <p className="text-sm whitespace-pre-wrap">{currentNode.accountabilities}</p>
+                                  <span className="text-xs font-medium text-muted-foreground">Purpose</span>
+                                  <BlockNotePreview value={currentNode.purpose} />
                                 </div>
                               )}
                               {currentNode.assignments && currentNode.assignments.length > 0 && (
                                 <div className="mb-2">
-                                  <span className="text-xs font-medium text-muted-foreground">Assigned Users:</span>
+                                  <span className="text-xs font-medium text-muted-foreground">Assigned Users</span>
                                   <div className="flex flex-wrap gap-2 mt-1">
                                     {currentNode.assignments.map((assignment, index) => {
                                       const assignedUser = users.find(u => u.userId === assignment.userId);
@@ -1237,17 +1276,11 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                               )}
                             </>
                           )}
-                          {currentNode.description && (
-                            <div className="mb-2">
-                              <span className="text-xs font-medium text-muted-foreground">Description:</span>
-                              <p className="text-sm whitespace-pre-wrap">{currentNode.description}</p>
-                            </div>
-                          )}
-                          {currentNode.nodeType === 'role' && !currentNode.purpose && !currentNode.domains && !currentNode.accountabilities && !currentNode.description && (!currentNode.assignments || currentNode.assignments.length === 0) && (
+                          {currentNode.nodeType === 'role' && !currentNode.purpose && !currentNode.missions && !currentNode.authorityScope && (!currentNode.assignments || currentNode.assignments.length === 0) && (
                             <p className="text-sm text-muted-foreground italic">No details defined. Click Edit to add.</p>
                           )}
-                          {currentNode.nodeType !== 'role' && !currentNode.description && (
-                            <p className="text-sm text-muted-foreground italic">No description defined. Click Edit to add.</p>
+                          {currentNode.nodeType !== 'role' && (
+                            <p className="text-sm text-muted-foreground italic">{currentNode.name}</p>
                           )}
                         </div>
                       )}
@@ -1285,10 +1318,14 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                         transform: 'translateX(-50%)'
                       }}
                     >
-                      {hoveredNode.name}
-                      {hoveredNode.description && (
-                        <span className="text-gray-300 ml-2">- {hoveredNode.description}</span>
-                      )}
+                      {(() => {
+                        const purposeText = hoveredNode.purpose ? extractTextFromBlockNote(hoveredNode.purpose) : '';
+                        if (purposeText && hoveredNode.name !== purposeText.split(/\s/)[0]) {
+                          const short = purposeText.slice(0, 60);
+                          return `${hoveredNode.name} - ${short}${purposeText.length > 60 ? '...' : ''}`;
+                        }
+                        return hoveredNode.name;
+                      })()}
                     </div>
                   )}
                   {/* Role assignment badges overlay */}
@@ -1345,6 +1382,9 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
               <DialogTitle>
                 {editMode === 'add' ? 'Add Node' : 'Edit Node'}
               </DialogTitle>
+              <DialogDescription className="sr-only">
+                {editMode === 'add' ? 'Add a new circle or role.' : 'Edit the selected circle or role.'}
+              </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
@@ -1382,46 +1422,37 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                   />
                 </div>
               )}
-              <div className="grid gap-2">
-                <Label htmlFor="description">Description</Label>
-                <Input
-                  id="description"
-                  value={editDescription}
-                  onChange={(e) => setEditDescription(e.target.value)}
-                  placeholder="Optional description..."
-                />
-              </div>
-              {/* Purpose, domains, accountabilities, and assignments are only for roles */}
+              {/* Purpose, missions, authorityScope, and assignments are only for roles */}
               {editNodeType === 'role' && (
                 <>
                   <div className="grid gap-2">
                     <Label htmlFor="purpose">Purpose</Label>
-                    <Textarea
-                      id="purpose"
+                    <RichTextField
                       value={editPurpose}
-                      onChange={(e) => setEditPurpose(e.target.value)}
-                      placeholder="What is this role's reason for being?"
-                      rows={3}
+                      onChange={(text) => setEditPurpose(text)}
+                      label="Purpose"
+                      placeholder="What service or general functionality does the role-circle provide to the organization, other role-circles or external stakeholders?"
+                      collaborativeKey={editMode === 'edit' && currentNode ? `circle-${currentNode.id}-purpose` : undefined}
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="domains">Domains of Authority</Label>
-                    <Textarea
-                      id="domains"
-                      value={editDomains}
-                      onChange={(e) => setEditDomains(e.target.value)}
-                      placeholder="What does this role have control over?"
-                      rows={3}
+                    <Label htmlFor="missions">Missions</Label>
+                    <RichTextField
+                      value={editMissions}
+                      onChange={(text) => setEditMissions(text)}
+                      label="Missions"
+                      placeholder="What specific services or tasks does the role-circle provide to the organization, to other role-circles or to external stakeholders?"
+                      collaborativeKey={editMode === 'edit' && currentNode ? `circle-${currentNode.id}-missions` : undefined}
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="accountabilities">Accountabilities</Label>
-                    <Textarea
-                      id="accountabilities"
-                      value={editAccountabilities}
-                      onChange={(e) => setEditAccountabilities(e.target.value)}
-                      placeholder="What is expected from this role?"
-                      rows={3}
+                    <Label htmlFor="authorityScope">Authority Scope</Label>
+                    <RichTextField
+                      value={editAuthorityScope}
+                      onChange={(text) => setEditAuthorityScope(text)}
+                      label="Authority Scope"
+                      placeholder="What are the elements over which the role-circle has exclusive authority and for which it alone can decide?"
+                      collaborativeKey={editMode === 'edit' && currentNode ? `circle-${currentNode.id}-authorityScope` : undefined}
                     />
                   </div>
                   <div className="grid gap-2">
@@ -1556,6 +1587,9 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Move "{currentNode?.name}"</DialogTitle>
+              <DialogDescription className="sr-only">
+                Move the selected node to a new parent.
+              </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
