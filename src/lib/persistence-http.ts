@@ -284,8 +284,12 @@ export class HttpApiPersistence implements PersistenceAdapter {
     // For now, let's assume we can import at module level.
     // But since this is a class method, let's use the valid imports.
     try {
-      const { doc, yFertilizationState, yFertilizationCards, yFertilizationColumns, yDreamState, yDreamCards, yDreamColumns, yCircles, ySystemState } = await import('./collaboration');
+      const { doc, yTasks, yUserSettings, yFertilizationState, yFertilizationCards, yFertilizationColumns, yDreamState, yDreamCards, yDreamColumns, yCircles, ySystemState } = await import('./collaboration');
       doc.transact(() => {
+        // Clear tasks
+        yTasks.clear();
+        // Clear user settings
+        yUserSettings.clear();
         // Clear fertilization board
         yFertilizationState.clear();
         yFertilizationCards.clear();

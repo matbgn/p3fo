@@ -34,7 +34,7 @@ const App = () => {
 
   // Listen for global system commands (like Clear All Data)
   useEffect(() => {
-    import('@/lib/collaboration').then(({ ySystemState, yFertilizationState, yFertilizationCards, yFertilizationColumns, yDreamState, yDreamCards, yDreamColumns, yCircles, doc }) => {
+    import('@/lib/collaboration').then(({ yTasks, yUserSettings, yFertilizationState, yFertilizationCards, yFertilizationColumns, yDreamState, yDreamCards, yDreamColumns, yCircles, ySystemState, doc }) => {
       const observer = () => {
         const command = ySystemState.get('command') as { type: string, timestamp: number } | undefined;
         if (command && command.type === 'CLEAR_ALL') {
@@ -44,8 +44,10 @@ const App = () => {
           const startupTime = window._appStartupTime || 0;
           if (command.timestamp > startupTime) {
             console.log('Received global CLEAR_ALL command. Wiping data...');
-            // Clear Yjs shared documents first (boards and circles)
+            // Clear Yjs shared documents first (tasks, users, boards and circles)
             doc.transact(() => {
+              yTasks.clear();
+              yUserSettings.clear();
               yFertilizationState.clear();
               yFertilizationCards.clear();
               yFertilizationColumns.clear();
