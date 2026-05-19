@@ -65,7 +65,7 @@ skills:
     - ".agent/skills"
 
 RObot:
-  enabled: true                    # Enable human-in-the-loop (default: false)
+  enabled: false                    # Enable human-in-the-loop (default: false)
   timeout_seconds: 10800           # How long to block waiting for a response
   checkin_interval_seconds: 900    # Periodic status updates (optional)
 

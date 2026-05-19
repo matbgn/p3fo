@@ -1098,6 +1098,16 @@ export function useTasks() {
       const entities = tasksToEntities(importedTasks);
 
       await adapter.importTasks(entities);
+
+      // Sync to Yjs for cross-client synchronization
+      if (isCollaborationEnabled()) {
+        doc.transact(() => {
+          yTasks.clear();
+          importedTasks.forEach(task => {
+            yTasks.set(task.id, task);
+          });
+        });
+      }
     } catch (error) {
       console.error("Error importing tasks:", error);
       // Continue with local state update
