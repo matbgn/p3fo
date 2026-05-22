@@ -46,28 +46,9 @@ export default defineConfig(({ mode }) => {
     build: {
       rollupOptions: {
         output: {
-          manualChunks(id) {
-            if (id.includes('node_modules')) {
-              // Extract core React packages first to avoid circular chunk deps.
-              // Use strict path matching so @radix-ui/react-* or @tanstack/react-*
-              // don't accidentally get pulled into the react chunk.
-              const base = id.replace(/\\/g, '/');
-              if (base.includes('/node_modules/react/') ||
-                  base.includes('/node_modules/react-dom/') ||
-                  base.includes('/node_modules/react/jsx-runtime') ||
-                  base.includes('/node_modules/react/jsx-dev-runtime') ||
-                  base.includes('/node_modules/scheduler/')) {
-                return 'react';
-              }
-              if (id.includes('@blocknote') || id.includes('prosemirror') || id.includes('y-prosemirror')) return 'blocknote';
-              if (id.includes('d3')) return 'd3';
-              if (id.includes('recharts')) return 'recharts';
-              if (id.includes('react-big-calendar') || id.includes('moment')) return 'calendar';
-              if (id.includes('yjs') || id.includes('y-websocket')) return 'yjs';
-              if (id.includes('@radix-ui')) return 'radix';
-              if (id.includes('@tanstack')) return 'tanstack';
-            }
-          },
+          // Avoid manual chunk splitting for React-based packages to prevent circular
+          // module dependencies in the production build. Rollup/Vite will still
+          // automatically code-split lazy-loaded dynamic imports.
         },
       },
     },
