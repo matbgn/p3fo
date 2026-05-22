@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.21.1 (2026-05-22)
+
+### Bug Fixes
+
+- **import:** sync imported tasks, boards, and circles to Yjs for cross-client collaboration (6d406b3)
+- **common:** all boards clearance bis (535c108)
+- **common:** all boards clearance (d41656b)
+- **import/export:** add dream board and circle migration (d2e5c7a)
+
+---
+
 ## v0.21.0 (2026-04-27)
 
 ### Features
@@ -129,19 +140,5 @@
 ### Bug Fixes
 
 - **circles:** resolve canvas interaction and color mapping issues (aee838d)
-
----
-
-## v0.13.0 (2026-02-03)
-
-### Features
-
-- **kanban board:** add difficulty points badge and bulk archive functionality (622a0c1)
-
-### Bug Fixes
-
-- **import/export:** add allTasks state and improve SQLite import/export reliability (688c530)
-- **kanban:** handle invalid triageStatus values gracefully (180fd3d)
-- prevent default tasks recreation after clearing all data (882f054)
 
 ---
