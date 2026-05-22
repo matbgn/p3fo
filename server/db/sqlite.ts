@@ -479,7 +479,7 @@ class SqliteClient implements DbClient {
 
     const whereClause = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
 
-    let countSql = `SELECT COUNT(*) as count FROM "tasks"${whereClause}`;
+    const countSql = `SELECT COUNT(*) as count FROM "tasks"${whereClause}`;
     const countResult = this.db.prepare(countSql).get(...params) as { count: number };
     const total = countResult.count;
 

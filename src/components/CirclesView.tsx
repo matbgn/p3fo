@@ -169,6 +169,7 @@ function extractTextFromBlockNote(json: string | undefined): string {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function extractTextFromBlock(block: any): string {
   if (!block) return '';
   if (typeof block === 'string') return block;
@@ -839,7 +840,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
       canvas.removeEventListener('mouseup', onMouseUp);
       canvas.removeEventListener('mouseleave', onLeave);
     };
-  }, []); // refs + zoomToNode bridge mutable state
+  }, [zoomToNode]);
 
 
   const handleAddNode = useCallback(async () => {

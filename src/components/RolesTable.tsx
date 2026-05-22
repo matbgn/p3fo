@@ -51,6 +51,7 @@ const AssignmentBadges: React.FC<{ assignments: RoleAssignment[]; users: UserWit
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const getCircleParent = (role: CircleEntity, map: Map<string, CircleEntity>): { id: string; name: string } => {
   if (!role.parentId) return { id: 'none', name: 'No Circle' };
   let current = map.get(role.parentId);

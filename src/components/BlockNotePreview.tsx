@@ -9,6 +9,7 @@ interface BlockNotePreviewProps {
   className?: string;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function deserializeBlocks(raw: string | undefined): any[] {
   if (!raw || raw.trim() === "") {
     return [{ type: "paragraph", content: [{ type: "text", text: "" }] }];
@@ -19,6 +20,7 @@ function deserializeBlocks(raw: string | undefined): any[] {
   } catch {
     // Fall back to markdown
   }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const blocks: any[] = [];
   for (const line of (raw || "").split("\n")) {
     const trimmed = line.trimEnd();
@@ -44,18 +46,21 @@ export const BlockNotePreview: React.FC<BlockNotePreviewProps> = ({
   const editor = useCreateBlockNote({
     initialContent: [{ type: "paragraph", content: [{ type: "text", text: "" }] }],
     placeholders: {},
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any);
 
   // Imperatively replace blocks when value changes so preview stays in sync
   React.useLayoutEffect(() => {
     if (!editor) return;
     const newBlocks = deserializeBlocks(value);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     editor.replaceBlocks(editor.document.map((b: any) => b.id), newBlocks);
   }, [value, editor]);
 
   return (
     <div className={className}>
       <BlockNoteView
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         editor={editor as any}
         theme="light"
         editable={false}

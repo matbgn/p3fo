@@ -32,12 +32,14 @@ export interface CombinedSettings {
     trigram?: string;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function appSplitTimeToString(splitTime: number): string {
     const hours = Math.floor(splitTime / 10);
     const minutes = (splitTime % 10) * 6;
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function stringToAppSplitTime(timeStr: string): number {
     const [hours, minutes] = timeStr.split(':').map(Number);
     return hours * 10 + Math.floor(minutes / 6);
@@ -149,13 +151,13 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 Object.keys(merged).forEach((key) => {
                     const k = key as keyof CombinedSettings;
                     if (!pendingUpdatesRef.current.has(k)) {
-                        const pendingValue = (pendingValuesRef.current as any)[k];
-                        if (pendingValue !== undefined && (merged as any)[k] !== pendingValue && prev[k] === pendingValue) {
+                        const pendingValue = (pendingValuesRef.current as unknown as Record<string, unknown>)[k as string];
+                        if (pendingValue !== undefined && (merged as unknown as Record<string, unknown>)[k as string] !== pendingValue && prev[k] === pendingValue) {
                             // Server still has old value, keep local optimistic value
                         } else {
-                            (next as any)[k] = merged[k];
+                            (next as unknown as Record<string, unknown>)[k as string] = merged[k];
                             if (pendingValue !== undefined) {
-                                delete (pendingValuesRef.current as any)[k];
+                                delete (pendingValuesRef.current as Record<string, unknown>)[k];
                             }
                         }
                     }
@@ -240,7 +242,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 Object.keys(freshAppValues).forEach((key) => {
                     const k = key as keyof CombinedSettings;
                     if (!pendingUpdatesRef.current.has(k)) {
-                        (next as any)[k] = freshAppValues[k];
+                        (next as Record<string, unknown>)[k] = freshAppValues[k];
                     }
                 });
                 return next;
@@ -293,7 +295,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         Object.keys(updates).forEach(key => {
             pendingUpdatesRef.current.add(key);
             lastUpdateTimestampRef.current[key] = now;
-            (pendingValuesRef.current as any)[key] = (updates as any)[key];
+            (pendingValuesRef.current as Record<string, unknown>)[key] = (updates as Record<string, unknown>)[key];
         });
 
         setSettings(prev => ({ ...prev, ...updates }));
@@ -303,10 +305,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
             const appUpdates: Partial<AppSettingsEntity> = {};
 
             const addToUser = (key: string, value: unknown) => {
-                (userUpdates as any)[key] = value;
+                (userUpdates as Record<string, unknown>)[key] = value;
             };
             const addToApp = (key: keyof AppSettingsEntity, value: unknown) => {
-                (appUpdates as any)[key] = value;
+                (appUpdates as Record<string, unknown>)[key] = value;
             };
 
             if (updates.splitTime !== undefined) {
@@ -381,7 +383,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 Object.keys(updates).forEach(key => {
                     const k = key as keyof CombinedSettings;
                     if (lastUpdateTimestampRef.current[k] === now) {
-                        (reverted as any)[k] = settings[k];
+                        (reverted as Record<string, unknown>)[k] = settings[k];
                     }
                 });
                 return reverted;
@@ -398,7 +400,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
             setTimeout(() => {
                 Object.keys(updates).forEach(key => {
                     if (lastUpdateTimestampRef.current[key] === now) {
-                        delete (pendingValuesRef.current as any)[key];
+                        delete (pendingValuesRef.current as Record<string, unknown>)[key];
                     }
                 });
             }, 30000);
@@ -412,6 +414,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useSettingsContext = (): SettingsContextType => {
     const ctx = useContext(SettingsContext);
     if (!ctx) {

@@ -53,7 +53,7 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
     // Normalize preferred days from the selected user
     // User might have number[] or Record<string/number, number>
     const normalized = selectedUser?.preferredWorkingDays 
-        ? normalizePreferredDays(selectedUser.preferredWorkingDays as any)
+        ? normalizePreferredDays(selectedUser.preferredWorkingDays as number[] | Record<string, number>)
         : settings.preferredWorkingDays;
     
     // Ensure we have a Record<string, number> to match CombinedSettings

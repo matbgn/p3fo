@@ -54,7 +54,7 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
     if (focusedTaskId && activeView !== 'storyboard') {
       setActiveView('storyboard');
     }
-  }, [focusedTaskId]);
+  }, [focusedTaskId, activeView]);
 
   // Auto-collapse filters when switching to Ultra Compact mode
   // Auto-expand filters when switching to Full mode

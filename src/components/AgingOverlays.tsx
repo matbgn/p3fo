@@ -10,6 +10,7 @@ type DustParticle = {
   rot: number
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const DUST_PARTICLES_LIGHT: DustParticle[] = [
   { x: 22, y: 15, size: 3, opacity: 0.7, shape: '50% 50% 45% 55%', ratio: 0.9, rot: 45 },
   { x: 75, y: 8, size: 4, opacity: 0.8, shape: '55% 45% 50% 50%', ratio: 1.05, rot: 120 },
@@ -23,6 +24,7 @@ export const DUST_PARTICLES_LIGHT: DustParticle[] = [
   { x: 55, y: 5, size: 3, opacity: 0.85, shape: '50% 50% 52% 48%', ratio: 1.08, rot: 195 },
 ]
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const DUST_PARTICLES_HEAVY: DustParticle[] = [
   { x: 12, y: 5, size: 3, opacity: 0.4, shape: '60% 40% 55% 45%', ratio: 0.85, rot: 12 },
   { x: 87, y: 12, size: 4, opacity: 0.3, shape: '45% 55% 60% 40%', ratio: 1.1, rot: 74 },

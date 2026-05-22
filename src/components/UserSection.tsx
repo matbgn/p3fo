@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Shuffle, Edit2, User, Upload, Fingerprint, AlertTriangle } from "lucide-react";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { useTasks } from "@/hooks/useTasks";
-import { useUsersContext } from "@/context/UsersContext";
+import { useUsersContext, UserWithTrigram } from "@/context/UsersContext";
 import { UserContext } from "@/context/UserContextDefinition";
 import { cn } from "@/lib/utils";
 import { eventBus } from "@/lib/events";
@@ -44,7 +44,7 @@ export function UserSection() {
   React.useEffect(() => {
     if (!userSettings) return;
     // Only persist if there's a valid calculated trigram AND the settings genuinely lack one
-    const calculatedTrigram = (currentUserWithTrigram as any)?.trigram;
+    const calculatedTrigram = (currentUserWithTrigram as UserWithTrigram | undefined)?.trigram;
     if (userSettings && !userSettings.trigram && calculatedTrigram && calculatedTrigram !== '???') {
       console.log('Persisting calculated trigram for current user:', calculatedTrigram);
       updateTrigram(calculatedTrigram);
@@ -137,7 +137,7 @@ export function UserSection() {
 
   const currentUser = users.find(u => u.userId === userContext?.userId);
   // Use persisted or calculated trigram
-  const displayInitial = userSettings.trigram || (currentUser as any)?.trigram || generateTrigram(userSettings.username.split(' ')[0], userSettings.username.split(' ').slice(1).join(' ') || '');
+    const displayInitial = userSettings.trigram || (currentUser as UserWithTrigram | undefined)?.trigram || generateTrigram(userSettings.username.split(' ')[0], userSettings.username.split(' ').slice(1).join(' ') || '');
 
   return (
     <Popover>

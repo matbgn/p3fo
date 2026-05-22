@@ -78,9 +78,9 @@ app.get('/api/tasks', async (req: Request, res: Response) => {
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
     const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : undefined;
     const rawExcludeStatuses = req.query.exclude_statuses;
-    const excludeStatuses = rawExcludeStatuses
+    const excludeStatuses: string[] | undefined = rawExcludeStatuses
       ? (Array.isArray(rawExcludeStatuses)
-          ? rawExcludeStatuses
+          ? (rawExcludeStatuses as string[])
           : (rawExcludeStatuses as string).split(','))
       : undefined;
 
