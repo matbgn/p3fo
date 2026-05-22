@@ -6,10 +6,24 @@ import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
-import { readFileSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, existsSync } from 'fs';
+import { join, dirname } from 'path';
 
-const pkg = JSON.parse(readFileSync(join(import.meta.dirname, '../package.json'), 'utf-8'));
+function findPackageJson(): { version: string } {
+  let dir = import.meta.dirname;
+  for (let i = 0; i < 5; i++) {
+    const candidate = join(dir, 'package.json');
+    if (existsSync(candidate)) {
+      return JSON.parse(readFileSync(candidate, 'utf-8'));
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return { version: '0.0.0' };
+}
+
+const pkg = findPackageJson();
 
 const traceExporter = new OTLPTraceExporter({
   url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://localhost:4318/v1/traces',

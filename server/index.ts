@@ -624,6 +624,10 @@ app.use('*', async (req: Request, res: Response) => {
     // Only serve index.html for routes that match the base URL
     const baseUrl = process.env.VITE_BASE_URL || '/';
     if (req.originalUrl.startsWith(baseUrl)) {
+      // Prevent stale index.html (and thus stale hashed chunk references) being cached
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       res.sendFile(indexPath);
     } else {
       res.status(404).json({ error: 'Route not found' });

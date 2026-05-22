@@ -48,6 +48,17 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks(id) {
             if (id.includes('node_modules')) {
+              // Extract core React packages first to avoid circular chunk deps.
+              // Use strict path matching so @radix-ui/react-* or @tanstack/react-*
+              // don't accidentally get pulled into the react chunk.
+              const base = id.replace(/\\/g, '/');
+              if (base.includes('/node_modules/react/') ||
+                  base.includes('/node_modules/react-dom/') ||
+                  base.includes('/node_modules/react/jsx-runtime') ||
+                  base.includes('/node_modules/react/jsx-dev-runtime') ||
+                  base.includes('/node_modules/scheduler/')) {
+                return 'react';
+              }
               if (id.includes('@blocknote') || id.includes('prosemirror') || id.includes('y-prosemirror')) return 'blocknote';
               if (id.includes('d3')) return 'd3';
               if (id.includes('recharts')) return 'recharts';
