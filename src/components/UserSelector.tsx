@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/select';
 import { UserAvatar } from './UserAvatar';
 import { useUserSettings } from '@/hooks/useUserSettings';
-import { useUsers } from '@/hooks/useUsers';
+import { useUsersContext, UserWithTrigram } from '@/context/UsersContext';
 import { cn } from '@/lib/utils';
 
 interface UserSelectorProps {
@@ -23,7 +23,7 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
   className
 }) => {
   const { userSettings, userId: currentUserId } = useUserSettings();
-  const { users, loading } = useUsers();
+  const { users, loading } = useUsersContext();
 
   const isCurrentUser = value && value === currentUserId;
 
@@ -45,7 +45,7 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
               logo={userSettings.logo}
               size="sm"
               showTooltip={false}
-              trigram={(currentUserFromList as any)?.trigram}
+              trigram={(currentUserFromList as UserWithTrigram | undefined)?.trigram}
             />
           ) : otherUser ? (
             <UserAvatar
@@ -53,7 +53,7 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
               logo={otherUser.logo}
               size="sm"
               showTooltip={false}
-              trigram={(otherUser as any).trigram}
+              trigram={(otherUser as UserWithTrigram).trigram}
             />
           ) : value && value !== 'unassigned' ? (
             // Fallback if user not found in list (shouldn't happen normally)
@@ -84,7 +84,7 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
                 logo={userSettings.logo}
                 size="sm"
                 showTooltip={false}
-                trigram={(currentUserFromList as any)?.trigram}
+                trigram={(currentUserFromList as UserWithTrigram | undefined)?.trigram}
               />
               <span className="text-sm">Myself ({userSettings.username})</span>
             </div>
@@ -99,7 +99,7 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
                 logo={user.logo}
                 size="sm"
                 showTooltip={false}
-                trigram={(user as any).trigram}
+                trigram={(user as UserWithTrigram).trigram}
               />
               <span className="text-sm">{user.username}</span>
             </div>

@@ -118,7 +118,7 @@ export interface StorageMetadata {
 
 export interface PersistenceAdapter {
   // Tasks
-  listTasks(userId?: string): Promise<TaskEntity[]>;
+  listTasks(userId?: string, excludeStatuses?: string[]): Promise<TaskEntity[]>;
   getTaskById(id: string): Promise<TaskEntity | null>;
   createTask(input: Partial<TaskEntity>): Promise<TaskEntity>;
   updateTask(id: string, patch: Partial<TaskEntity>): Promise<TaskEntity>;

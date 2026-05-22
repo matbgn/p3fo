@@ -79,7 +79,8 @@ const loadCircles = async (): Promise<CircleEntity[]> => {
 
     // Check if Yjs has data first (collaborative mode takes precedence)
     if (isCollaborationEnabled() && yCircles.size > 0) {
-      circles = (Array.from(yCircles.values()) as unknown[]).map((v: any) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      circles = (Array.from(yCircles.values()) as any[]).map(v => {
         if (v && typeof v.toJSON === "function") return v.toJSON();
         return JSON.parse(JSON.stringify(v));
       }) as CircleEntity[];
@@ -301,8 +302,10 @@ const buildCircleTree = (parentId: string | null = null): CircleTreeNode[] => {
     }));
 };
 
-// Initialize circles on module load
-loadCircles();
+// Initialize circles on module load (browser only — skip in Node/test envs)
+if (typeof window !== 'undefined') {
+  loadCircles();
+}
 
 /**
  * React hook for managing circles state.
@@ -336,7 +339,8 @@ export function useCircles() {
     const observer = () => {
       // Deep-clone Yjs values to plain objects so downstream code
       // (React, BlockNote, persistence) receives plain strings.
-      circles = (Array.from(yCircles.values()) as unknown[]).map((v: any) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      circles = (Array.from(yCircles.values()) as any[]).map(v => {
         if (v && typeof v.toJSON === "function") {
           return v.toJSON();
         }

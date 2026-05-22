@@ -120,7 +120,7 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 // Keep local optimistic values for pending fields
                 Object.keys(prev).forEach(key => {
                     if (pending.has(key)) {
-                        (merged as any)[key] = (prev as any)[key];
+                        (merged as unknown as Record<string, unknown>)[key] = (prev as unknown as Record<string, unknown>)[key];
                     }
                 });
                 return merged;
@@ -152,8 +152,8 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
         const handleYjsUserSettingsChange = (event: Y.YMapEvent<unknown>) => {
             if (event.transaction.local) return;
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const yjsSettings = yUserSettings.get(userId) as any; // simplified type for brevity
+            // Yjs returns dynamically-typed values, so we intentionally use Record<string, unknown>
+            const yjsSettings = yUserSettings.get(userId) as Record<string, unknown> | undefined;
 
             if (yjsSettings) {
                 const currentSettings = userSettingsRef.current;
@@ -177,18 +177,18 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
                     console.log('Received user settings update from Yjs:', yjsSettings);
 
                     setUserSettings({
-                        username: yjsSettings.username,
-                        logo: yjsSettings.logo,
-                        hasCompletedOnboarding: yjsSettings.hasCompletedOnboarding,
-                        monthlyBalances: yjsSettings.monthlyBalances || {},
-                        cardCompactness: yjsSettings.cardCompactness ?? 0,
-                        workload: yjsSettings.workload,
-                        splitTime: yjsSettings.splitTime,
-                        timezone: yjsSettings.timezone,
-                        weekStartDay: yjsSettings.weekStartDay,
-                        defaultPlanView: yjsSettings.defaultPlanView,
-                        preferredWorkingDays: yjsSettings.preferredWorkingDays,
-                        trigram: yjsSettings.trigram,
+                        username: yjsSettings.username as string,
+                        logo: yjsSettings.logo as string,
+                        hasCompletedOnboarding: yjsSettings.hasCompletedOnboarding as boolean,
+                        monthlyBalances: (yjsSettings.monthlyBalances || {}) as Record<string, MonthlyBalanceData>,
+                        cardCompactness: (yjsSettings.cardCompactness ?? 0) as number,
+                        workload: yjsSettings.workload as number,
+                        splitTime: yjsSettings.splitTime as string,
+                        timezone: yjsSettings.timezone as string,
+                        weekStartDay: yjsSettings.weekStartDay as 0 | 1,
+                        defaultPlanView: yjsSettings.defaultPlanView as 'week' | 'month',
+                        preferredWorkingDays: yjsSettings.preferredWorkingDays as number[],
+                        trigram: yjsSettings.trigram as string,
                     });
                 }
             } else {
@@ -226,7 +226,7 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
             const adapter = await persistence;
 
             // Map to entity
-            const entityPatch: Partial<UserSettingsEntity> = { ...patch } as any;
+            const entityPatch: Partial<UserSettingsEntity> = { ...patch };
             const updated = await adapter.updateUserSettings(userId, entityPatch);
 
             // Notify others

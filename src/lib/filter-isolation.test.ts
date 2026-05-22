@@ -195,8 +195,8 @@ describe('View-Local Filter Isolation Integration Tests', () => {
       
       // User changes selectedUserId in TaskBoard
       // CORRECT PATTERN: uses storedFilters
-      let currentStoredFilters = mockReactState.filters
-      let newFilters: Filters = {
+      const currentStoredFilters = mockReactState.filters
+      const newFilters: Filters = {
         ...currentStoredFilters,  // ← CORRECT: storedFilters
         selectedUserId: 'user-2'
       }

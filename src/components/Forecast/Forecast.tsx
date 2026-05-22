@@ -2,9 +2,9 @@ import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAllTasks } from "@/hooks/useAllTasks";
-import { useCombinedSettings } from "@/hooks/useCombinedSettings";
+import { useSettingsContext } from "@/context/SettingsContext";
 import { useUserSettings } from "@/hooks/useUserSettings";
-import { useUsers } from "@/hooks/useUsers";
+import { useUsersContext } from "@/context/UsersContext";
 import { getWorkingDays } from "@/utils/workingdays";
 import { getHistoricalHourlyBalances } from "@/utils/projectedHours";
 import { normalizePreferredDays } from "@/utils/scheduler-utils";
@@ -16,9 +16,9 @@ interface ForecastProps {
 
 const Forecast: React.FC<ForecastProps> = ({ userId }) => {
     const { tasks } = useAllTasks();
-    const { settings } = useCombinedSettings();
+    const { settings } = useSettingsContext();
     const { userSettings } = useUserSettings();
-    const { users } = useUsers();
+    const { users } = useUsersContext();
 
     const [selectedDate, setSelectedDate] = useState(new Date());
     const year = selectedDate.getFullYear();
@@ -53,7 +53,7 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
     // Normalize preferred days from the selected user
     // User might have number[] or Record<string/number, number>
     const normalized = selectedUser?.preferredWorkingDays 
-        ? normalizePreferredDays(selectedUser.preferredWorkingDays as any)
+        ? normalizePreferredDays(selectedUser.preferredWorkingDays as number[] | Record<string, number>)
         : settings.preferredWorkingDays;
     
     // Ensure we have a Record<string, number> to match CombinedSettings

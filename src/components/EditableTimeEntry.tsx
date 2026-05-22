@@ -14,7 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { useCombinedSettings } from "@/hooks/useCombinedSettings";
+import { useSettingsContext } from "@/context/SettingsContext";
 import { CalendarIcon, Clock } from "lucide-react";
 import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -23,7 +23,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Task } from '@/hooks/useTasks';
 
 import { UserSelector } from "./UserSelector";
-import { useUsers } from '@/hooks/useUsers';
+import { useUsersContext, UserWithTrigram } from '@/context/UsersContext';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { UserAvatar } from "./UserAvatar";
 
@@ -56,11 +56,11 @@ export const EditableTimeEntry: React.FC<{
   const [editStartTime, setEditStartTime] = useState('');
   const [editEndTime, setEditEndTime] = useState('');
   const [editTaskCategory, setEditTaskCategory] = useState<string>("Uncategorized");
-  const { settings } = useCombinedSettings();
+  const { settings } = useSettingsContext();
   const weekStartsOn = settings.weekStartDay as 0 | 1;
 
   const task = taskMap[entry.taskId];
-  const { users } = useUsers();
+  const { users } = useUsersContext();
   const { userSettings, userId: currentUserId } = useUserSettings();
   const [editUserId, setEditUserId] = useState<string | undefined>(undefined);
 
@@ -381,8 +381,8 @@ export const EditableTimeEntry: React.FC<{
             const otherUser = !isCurrentUser ? users.find((u) => u.userId === task.userId) : null;
             const currentUserFromList = users.find(u => u.userId === currentUserId);
             const trigram = isCurrentUser
-              ? (currentUserFromList as any)?.trigram
-              : (otherUser as any)?.trigram;
+              ? (currentUserFromList as UserWithTrigram)?.trigram
+              : (otherUser as UserWithTrigram)?.trigram;
             return (
               <UserAvatar
                 username={isCurrentUser ? userSettings.username : otherUser?.username || 'Unknown'}

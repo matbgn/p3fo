@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useCombinedSettings } from "@/hooks/useCombinedSettings";
-import { useUsers } from "@/hooks/useUsers";
+import { useSettingsContext } from "@/context/SettingsContext";
+import { useUsersContext } from "@/context/UsersContext";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { getVacationsBalances, getMonthProjectionVacations } from "@/utils/projectedHours";
 import VacationsTable from "./VacationsTable";
@@ -15,8 +15,8 @@ interface VacationsBalanceProps {
 }
 
 const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
-    const { settings } = useCombinedSettings();
-    const { users, updateUser } = useUsers();
+    const { settings } = useSettingsContext();
+    const { users, updateUser } = useUsersContext();
     const { userSettings } = useUserSettings();
     const [monthsBack, setMonthsBack] = useState(6);
 

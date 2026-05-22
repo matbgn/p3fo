@@ -1,6 +1,6 @@
 import { Pool, PoolClient } from 'pg';
 import { DbClient } from './index.js';
-import {
+import type {
   TaskEntity,
   UserSettingsEntity,
   AppSettingsEntity,
@@ -11,10 +11,81 @@ import {
   CircleEntity,
   CircleNodeType,
   CircleNodeModifier,
-  ReminderEntity
+  ReminderEntity,
+  MonthlyBalanceData
 } from '../../src/lib/persistence-types.js';
 
-// Default values
+// Raw database row types for pg (JSONB is already parsed, booleans are booleans)
+interface TaskDbRow {
+  id: string;
+  parentId: string | null;
+  title: string;
+  createdAt: string;
+  updatedAt: string | null;
+  triageStatus: string;
+  urgent: boolean;
+  impact: boolean;
+  majorIncident: boolean;
+  sprintTarget: boolean;
+  difficulty: number;
+  timer: { startTime: number | null; elapsedTime: number; isRunning: boolean } | null;
+  category: string;
+  terminationDate: string | null;
+  comment: string | null;
+  durationInMinutes: number | null;
+  priority: number | null;
+  userId: string | null;
+}
+
+interface UserSettingsDbRow {
+  userId: string;
+  username: string;
+  logo: string;
+  hasCompletedOnboarding: boolean;
+  workload: number | null;
+  splitTime: string | null;
+  monthlyBalances: Record<string, unknown> | null;
+  cardCompactness: number | null;
+  timezone: string | null;
+  weekStartDay: number | null;
+  defaultPlanView: string | null;
+  preferredWorkingDays: number[] | Record<string, number> | null;
+  trigram: string | null;
+}
+
+interface CircleDbRow {
+  id: string;
+  name: string;
+  parentId: string | null;
+  nodeType: string;
+  modifier: string | null;
+  color: string | null;
+  size: number | null;
+  purpose: string | null;
+  missions: string | null;
+  authorityScope: string | null;
+  order: number | null;
+  assignments: unknown;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ReminderDbRow {
+  id: string;
+  userId: string;
+  taskId: string | null;
+  title: string;
+  description: string | null;
+  read: boolean;
+  persistent: boolean;
+  triggerDate: string | null;
+  offsetMinutes: number | null;
+  snoozeDurationMinutes: number | null;
+  originalTriggerDate: string | null;
+  state: string;
+  createdAt: string;
+  updatedAt: string;
+}
 const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
   userId: 'default-user',
   username: 'User',
@@ -411,26 +482,29 @@ class PostgresClient implements DbClient {
   }
 
   // Tasks
-  async getTasks(userId?: string, pagination?: { limit?: number; offset?: number }): Promise<{ data: TaskEntity[]; total: number }> {
-    // Build count query
-    let countSql = 'SELECT COUNT(*) as count FROM "tasks"';
-    const countParams: (string | number | boolean | null)[] = [];
-    if (userId) {
-      countSql += ' WHERE "userId" = $1';
-      countParams.push(userId);
-    }
-    const countResult = await this.pool.query(countSql, countParams);
-    const total = parseInt(countResult.rows[0].count);
-
-    // Build data query
-    let sql = 'SELECT * FROM "tasks"';
+  async getTasks(userId?: string, pagination?: { limit?: number; offset?: number }, excludeStatuses?: string[]): Promise<{ data: TaskEntity[]; total: number }> {
+    const conditions: string[] = [];
     const params: (string | number | boolean | null)[] = [];
     let paramIndex = 1;
 
     if (userId) {
-      sql += ` WHERE "userId" = $${paramIndex++}`;
+      conditions.push(`"userId" = $${paramIndex++}`);
       params.push(userId);
     }
+
+    if (excludeStatuses && excludeStatuses.length > 0) {
+      const placeholders = excludeStatuses.map(() => `$${paramIndex++}`).join(', ');
+      conditions.push(`"triageStatus" NOT IN (${placeholders})`);
+      params.push(...excludeStatuses);
+    }
+
+    const whereClause = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
+
+    const countSql = `SELECT COUNT(*) as count FROM "tasks"${whereClause}`;
+    const countResult = await this.pool.query(countSql, params);
+    const total = parseInt(countResult.rows[0].count);
+
+    let sql = `SELECT * FROM "tasks"${whereClause}`;
     sql += ' ORDER BY "priority" DESC NULLS LAST, "createdAt" ASC';
 
     if (pagination?.limit !== undefined) {
@@ -1211,27 +1285,27 @@ class PostgresClient implements DbClient {
     }
   }
 
-  private mapTaskDbRowToEntity(row: any): TaskEntity {
+  private mapTaskDbRowToEntity(row: TaskDbRow): TaskEntity {
     return {
       ...row,
-      timer: row.timer || { startTime: null, elapsedTime: 0, isRunning: false },
+      timer: row.timer ? [row.timer as unknown as { startTime: number; endTime: number }] : [],
       children: [],
       updatedAt: row.updatedAt ?? undefined,
     };
   }
 
-  private mapUserSettingsDbRowToEntity(row: any): UserSettingsEntity {
+  private mapUserSettingsDbRowToEntity(row: UserSettingsDbRow): UserSettingsEntity {
     return {
       ...row,
-      monthlyBalances: row.monthlyBalances || {},
-      weekStartDay: row.weekStartDay,
-      defaultPlanView: row.defaultPlanView,
+      monthlyBalances: row.monthlyBalances as unknown as Record<string, MonthlyBalanceData> | undefined,
+      weekStartDay: row.weekStartDay as 0 | 1 | undefined,
+      defaultPlanView: row.defaultPlanView as 'week' | 'month' | undefined,
       preferredWorkingDays: row.preferredWorkingDays || undefined,
       trigram: row.trigram || undefined,
     };
   }
 
-  private mapCircleDbRowToEntity(row: any): CircleEntity {
+  private mapCircleDbRowToEntity(row: CircleDbRow): CircleEntity {
     return {
       id: row.id,
       name: row.name,
@@ -1250,7 +1324,7 @@ class PostgresClient implements DbClient {
     };
   }
 
-  private mapReminderRowToEntity(row: any): ReminderEntity {
+  private mapReminderRowToEntity(row: ReminderDbRow): ReminderEntity {
     return {
       id: row.id,
       userId: row.userId,
@@ -1263,7 +1337,7 @@ class PostgresClient implements DbClient {
       offsetMinutes: row.offsetMinutes ?? undefined,
       snoozeDurationMinutes: row.snoozeDurationMinutes ?? undefined,
       originalTriggerDate: row.originalTriggerDate ?? undefined,
-      state: row.state,
+      state: row.state as 'scheduled' | 'triggered' | 'read' | 'dismissed',
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };

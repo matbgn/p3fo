@@ -33,6 +33,13 @@ dev-browser:
 tests:
   pnpm test --run
 
+# --- Code Quality Checks ---
+check:
+  @echo "Running TypeScript type check..."
+  npx tsc -b --noEmit
+  @echo "Running ESLint..."
+  npx eslint --max-warnings 0
+
 # --- Version Management Tasks ---
 sync-versions version:
   #!/usr/bin/env bash
@@ -77,11 +84,11 @@ docker-build version="$(git-sv cv)":
 
   LAST_P3FO_HASH="$(docker images --format '{{{{.ID}}' p3fo)"
   echo "Last p3fo hash: $LAST_P3FO_HASH"
-  LAST_P3FO_VERSION="$(docker images --format '{{{{.Tag}}' {{DOCKER_IMAGE_NAME}} | sort -V | tail -n 1)"
+  LAST_P3FO_VERSION="$(docker images --format '{{{{.Tag}}' '{{DOCKER_IMAGE_NAME}}' | sort -V | tail -n 1)"
   echo "Last p3fo version: $LAST_P3FO_VERSION"
 
   # Build with version tag
-  docker build -t {{DOCKER_IMAGE_NAME}}:"{{version}}" .
+  docker build -t "{{DOCKER_IMAGE_NAME}}":"{{version}}" .
 
   P3FO_CHANGED="$(docker images --format '{{{{.ID}}' p3fo)"
   echo "New p3fo hash: $P3FO_CHANGED"
@@ -91,7 +98,7 @@ docker-build version="$(git-sv cv)":
     # docker tag is already done above, but ensuring latest is updated
     docker tag p3fo:latest p3fo:latest
     echo "Saving p3fo docker image to tar file..."
-    docker save -o ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar {{DOCKER_IMAGE_NAME}}:"{{version}}"
+    docker save -o ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar "{{DOCKER_IMAGE_NAME}}":"{{version}}"
     echo "Tar file created successfully: ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar"
   else
     echo "p3fo docker image has not changed"
@@ -127,28 +134,28 @@ docker-clean:
 # --- Production Deployment Tasks ---
 prod-push host='adt-vmg-202': _check-BW_SESSION
   @echo "Pushing {{PROJECT_NAME}} to production host {{host}}..."
-  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -t push -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit {{host}}
+  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -t push -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit "{{host}}"
 
 prod-load host='adt-vmg-202': _check-BW_SESSION
   @echo "Loading {{PROJECT_NAME}} on production host {{host}}..."
-  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -t load -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit {{host}}
+  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -t load -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit "{{host}}"
 
 prod-restart host='adt-vmg-202': _check-BW_SESSION
   @echo "Restarting {{PROJECT_NAME}} on production host {{host}}..."
-  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -t restart -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit {{host}}
+  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -t restart -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit "{{host}}"
 
 prod-stop host='adt-vmg-202': _check-BW_SESSION
   @echo "Stopping {{PROJECT_NAME}} on production host {{host}}..."
-  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -t stop -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit {{host}}
+  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -t stop -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit "{{host}}"
 
 prod-status host='adt-vmg-202': _check-BW_SESSION
   @echo "Checking {{PROJECT_NAME}} status on production host {{host}}..."
-  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -t status -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit {{host}}
+  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -t status -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit "{{host}}"
 
 # --- Full Deploy Task ---
 deploy host='adt-vmg-202': _check-BW_SESSION docker-build
   @echo "Full deployment of {{PROJECT_NAME}} on {{host}}..."
-  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit {{host}}
+  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit "{{host}}"
   just finish
 
 # --- Deploy with version ---
@@ -157,7 +164,7 @@ deploy-version version host='adt-vmg-202': _check-BW_SESSION
   VERSION="{{version}}"
   just sync-versions "$VERSION"
   just docker-build "$VERSION"
-  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit {{host}}
+  ansible-playbook -i ~/Dev/itpark/infrastructure-as-code/ansible/inventory ~/Dev/itpark/infrastructure-as-code/ansible/playbook-deploy-docker.yml -e "docker_project_to_deploy={{PROJECT_NAME}}" --limit "{{host}}"
   just finish
 
 # --- Release Task (Complete Release Workflow) ---

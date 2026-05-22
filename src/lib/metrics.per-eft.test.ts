@@ -3,6 +3,9 @@ import {
   calculateTimeSpentOnNewCapabilitiesPerEFT,
   calculateHighImpactTaskFrequencyPerEFT,
   calculateFailureRatePerEFT,
+  getCompletedHighImpactTasks,
+  createTaskMap,
+  createHighImpactMap,
   UserWorkload,
 } from './metrics';
 import type { Task } from '@/hooks/useTasks';
@@ -410,6 +413,232 @@ describe('calculateFailureRatePerEFT', () => {
 
     const result = calculateFailureRatePerEFT(tasks, 4, userWorkloads);
 
+    expect(result).toBe(0);
+  });
+});
+
+describe('getCompletedHighImpactTasks - guard against Done/Dropped/Archived regression', () => {
+  beforeEach(() => {
+    vi.setSystemTime(new Date('2026-04-08T12:00:00Z'));
+  });
+  afterAll(() => {
+    vi.useRealTimers();
+  });
+
+  it('counts only Done tasks — Dropped high-impact tasks are excluded', () => {
+    const now = Date.now();
+    const cutoffDate = now - 4 * 7 * DAY;
+
+    const tasks: Task[] = [
+      makeTask({ id: 't-done', createdAt: cutoffDate + DAY, impact: true, triageStatus: 'Done' }),
+      makeTask({ id: 't-dropped', createdAt: cutoffDate + DAY, impact: true, triageStatus: 'Dropped' }),
+    ];
+
+    const result = getCompletedHighImpactTasks(tasks, 4);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('t-done');
+  });
+
+  it('counts only Done tasks — Archived high-impact tasks are excluded', () => {
+    const now = Date.now();
+    const cutoffDate = now - 4 * 7 * DAY;
+
+    const tasks: Task[] = [
+      makeTask({ id: 't-done', createdAt: cutoffDate + DAY, impact: true, triageStatus: 'Done' }),
+      makeTask({ id: 't-archived', createdAt: cutoffDate + DAY, impact: true, triageStatus: 'Archived' }),
+    ];
+
+    const result = getCompletedHighImpactTasks(tasks, 4);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('t-done');
+  });
+
+  it('excludes tasks outside the time window', () => {
+    const now = Date.now();
+    const cutoffDate = now - 4 * 7 * DAY;
+
+    const tasks: Task[] = [
+      makeTask({ id: 't-old', createdAt: cutoffDate - DAY, impact: true, triageStatus: 'Done' }),
+      makeTask({ id: 't-recent', createdAt: cutoffDate + DAY, impact: true, triageStatus: 'Done' }),
+    ];
+
+    const result = getCompletedHighImpactTasks(tasks, 4);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('t-recent');
+  });
+
+  it('excludes non-high-impact tasks even if Done', () => {
+    const now = Date.now();
+    const cutoffDate = now - 4 * 7 * DAY;
+
+    const tasks: Task[] = [
+      makeTask({ id: 't-normal', createdAt: cutoffDate + DAY, impact: false, triageStatus: 'Done' }),
+      makeTask({ id: 't-impact', createdAt: cutoffDate + DAY, impact: true, triageStatus: 'Done' }),
+    ];
+
+    const result = getCompletedHighImpactTasks(tasks, 4);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('t-impact');
+  });
+
+  it('recognizes high-impact from parent ancestor chain', () => {
+    const now = Date.now();
+    const cutoffDate = now - 4 * 7 * DAY;
+
+    const tasks: Task[] = [
+      makeTask({ id: 'parent', createdAt: cutoffDate + DAY, impact: true, triageStatus: 'WIP', children: ['child'] }),
+      makeTask({ id: 'child', createdAt: cutoffDate + DAY, impact: false, triageStatus: 'Done', parentId: 'parent' }),
+    ];
+
+    const taskMap = createTaskMap(tasks);
+    const highImpactMap = createHighImpactMap(tasks, taskMap);
+
+    expect(highImpactMap['child']).toBe(true);
+
+    const result = getCompletedHighImpactTasks(tasks, 4, taskMap, highImpactMap);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('child');
+  });
+
+  it('deep ancestor chain: grandchild inherits high-impact from grandparent', () => {
+    const now = Date.now();
+    const cutoffDate = now - 4 * 7 * DAY;
+
+    const tasks: Task[] = [
+      makeTask({ id: 'gp', createdAt: cutoffDate + DAY, impact: true, triageStatus: 'WIP', children: ['p'] }),
+      makeTask({ id: 'p', createdAt: cutoffDate + DAY, impact: false, triageStatus: 'WIP', parentId: 'gp', children: ['gc'] }),
+      makeTask({ id: 'gc', createdAt: cutoffDate + DAY, impact: false, triageStatus: 'Done', parentId: 'p' }),
+    ];
+
+    const taskMap = createTaskMap(tasks);
+    const highImpactMap = createHighImpactMap(tasks, taskMap);
+
+    expect(highImpactMap['gc']).toBe(true);
+    expect(highImpactMap['p']).toBe(true);
+
+    const result = getCompletedHighImpactTasks(tasks, 4, taskMap, highImpactMap);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('gc');
+  });
+
+  it('returns empty array when all tasks are Dropped/Archived/non-Done', () => {
+    const now = Date.now();
+    const cutoffDate = now - 4 * 7 * DAY;
+
+    const tasks: Task[] = [
+      makeTask({ id: 't1', createdAt: cutoffDate + DAY, impact: true, triageStatus: 'Dropped' }),
+      makeTask({ id: 't2', createdAt: cutoffDate + DAY, impact: true, triageStatus: 'Archived' }),
+      makeTask({ id: 't3', createdAt: cutoffDate + DAY, impact: true, triageStatus: 'Backlog' }),
+      makeTask({ id: 't4', createdAt: cutoffDate + DAY, impact: true, triageStatus: 'WIP' }),
+    ];
+
+    const result = getCompletedHighImpactTasks(tasks, 4);
+    expect(result).toHaveLength(0);
+  });
+
+  it('returns empty array when no tasks are in the time window', () => {
+    const now = Date.now();
+    const cutoffDate = now - 4 * 7 * DAY;
+
+    const tasks: Task[] = [
+      makeTask({ id: 't1', createdAt: cutoffDate - 2 * DAY, impact: true, triageStatus: 'Done' }),
+      makeTask({ id: 't2', createdAt: cutoffDate - 10 * DAY, impact: true, triageStatus: 'Done' }),
+    ];
+
+    const result = getCompletedHighImpactTasks(tasks, 4);
+    expect(result).toHaveLength(0);
+  });
+
+  it('tasks exactly at cutoff date boundary are included (>=)', () => {
+    const now = Date.now();
+    const cutoffDate = now - 4 * 7 * DAY;
+
+    const tasks: Task[] = [
+      makeTask({ id: 't-at', createdAt: cutoffDate, impact: true, triageStatus: 'Done' }),
+      makeTask({ id: 't-before', createdAt: cutoffDate - 1, impact: true, triageStatus: 'Done' }),
+    ];
+
+    const result = getCompletedHighImpactTasks(tasks, 4);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('t-at');
+  });
+});
+
+describe('calculateHighImpactTaskFrequencyPerEFT - auto-parent completion guard', () => {
+  beforeEach(() => {
+    vi.setSystemTime(new Date('2026-04-08T12:00:00Z'));
+  });
+  afterAll(() => {
+    vi.useRealTimers();
+  });
+
+  it('auto-Done parent (via child completion) counts towards metric', () => {
+    const now = Date.now();
+    const cutoffDate = now - 4 * 7 * DAY;
+
+    const tasks: Task[] = [
+      makeTask({
+        id: 'parent',
+        createdAt: cutoffDate + DAY,
+        impact: true,
+        triageStatus: 'Done',
+        userId: 'user-A',
+        terminationDate: now,
+        children: ['child1', 'child2'],
+      }),
+      makeTask({ id: 'child1', createdAt: cutoffDate + DAY, impact: false, triageStatus: 'Done', parentId: 'parent', userId: 'user-A' }),
+      makeTask({ id: 'child2', createdAt: cutoffDate + DAY, impact: false, triageStatus: 'Done', parentId: 'parent', userId: 'user-A' }),
+    ];
+
+    const taskMap = createTaskMap(tasks);
+    const highImpactMap = createHighImpactMap(tasks, taskMap);
+    const userWorkloads: UserWorkload[] = [
+      { userId: 'user-A', workload: 100 },
+    ];
+
+    const result = calculateHighImpactTaskFrequencyPerEFT(tasks, 4, userWorkloads, taskMap, highImpactMap);
+    expect(result).toBeGreaterThan(0);
+  });
+
+  it('parent counted even if some children are Dropped (not Done)', () => {
+    const now = Date.now();
+    const cutoffDate = now - 4 * 7 * DAY;
+
+    const tasks: Task[] = [
+      makeTask({
+        id: 'parent',
+        createdAt: cutoffDate + DAY,
+        impact: true,
+        triageStatus: 'Done',
+        userId: 'user-A',
+        children: ['child'],
+      }),
+      makeTask({ id: 'child', createdAt: cutoffDate + DAY, impact: false, triageStatus: 'Dropped', parentId: 'parent', userId: 'user-A' }),
+    ];
+
+    const taskMap = createTaskMap(tasks);
+    const highImpactMap = createHighImpactMap(tasks, taskMap);
+    const userWorkloads: UserWorkload[] = [{ userId: 'user-A', workload: 100 }];
+
+    const result = calculateHighImpactTaskFrequencyPerEFT(tasks, 4, userWorkloads, taskMap, highImpactMap);
+    const totalEFT = 100 / 100;
+    const expected = 1 / totalEFT / 4;
+    expect(result).toBeCloseTo(expected, 4);
+  });
+
+  it('Dropped parent is NOT counted in high-impact task frequency', () => {
+    const now = Date.now();
+    const cutoffDate = now - 4 * 7 * DAY;
+
+    const tasks: Task[] = [
+      makeTask({ id: 't1', createdAt: cutoffDate + DAY, impact: true, triageStatus: 'Dropped', userId: 'user-A' }),
+    ];
+
+    const taskMap = createTaskMap(tasks);
+    const highImpactMap = createHighImpactMap(tasks, taskMap);
+    const userWorkloads: UserWorkload[] = [{ userId: 'user-A', workload: 100 }];
+
+    const result = calculateHighImpactTaskFrequencyPerEFT(tasks, 4, userWorkloads, taskMap, highImpactMap);
     expect(result).toBe(0);
   });
 });

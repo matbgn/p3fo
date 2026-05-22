@@ -1,4 +1,4 @@
-import { CombinedSettings } from "@/hooks/useCombinedSettings";
+import { CombinedSettings } from "@/context/SettingsContext";
 import { MonthlyBalanceData } from "@/lib/persistence-types";
 import { getWorkingDays, getPreferredWorkingDays, getPreferredWorkingDaysInRange } from "./workingdays";
 import { Task } from "@/hooks/useTasks";

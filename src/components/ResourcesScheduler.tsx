@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import moment from 'moment';
 import { useAllTasks } from '@/hooks/useAllTasks';
-import { useUsers } from '@/hooks/useUsers';
+import { useUsersContext, UserWithTrigram } from '@/context/UsersContext';
 import { Task } from '@/hooks/useTasks';
 import { calculateAllTotalDifficulties, normalizePreferredDays } from '@/utils/scheduler-utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -39,7 +39,7 @@ const SIDEBAR_WIDTH = 250;
 
 const ResourcesScheduler: React.FC<ResourcesSchedulerProps> = ({ onFocusOnTask, onEditTask }) => {
     const { tasks } = useAllTasks();
-    const { users, updateUser } = useUsers();
+    const { users, updateUser } = useUsersContext();
     const [viewStartDate, setViewStartDate] = useState(moment().startOf('day'));
 
     // 1. Filter Tasks
@@ -61,7 +61,7 @@ const ResourcesScheduler: React.FC<ResourcesSchedulerProps> = ({ onFocusOnTask, 
             // Use the pre-calculated trigram from the user object (added in useUsers hook)
             // We use 'any' cast here as a safety net if types aren't picked up immediately, 
             // but effectively we are consuming the standardized trigram.
-            initials: (u as any).trigram || '???',
+            initials: (u as UserWithTrigram).trigram || '???',
             preferredWorkingDays: u.preferredWorkingDays || [1, 2, 3, 4, 5]
         }));
         return list;

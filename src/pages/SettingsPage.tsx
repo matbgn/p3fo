@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { getPersistenceAdapter } from '@/lib/persistence-factory';
 import DataExporter from '@/components/DataExporter';
 import DataImporter from '@/components/DataImporter';
-import { useCombinedSettings } from '@/hooks/useCombinedSettings';
+import { useSettingsContext } from '@/context/SettingsContext';
 import { Label } from '@/components/ui/label';
 import { UserManagement } from '@/components/UserManagement';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -19,7 +19,7 @@ import { useState } from 'react';
 
 const SettingsPage: React.FC = () => {
   const { clearAllTasks, clearAllUsers } = useTasks();
-  const { settings, updateSettings } = useCombinedSettings();
+  const { settings, updateSettings } = useSettingsContext();
   const [timePickerOpen, setTimePickerOpen] = useState(false);
 
   // Helper to convert "HH:mm" string to timestamp for time picker

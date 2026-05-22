@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { useCombinedSettings } from "@/hooks/useCombinedSettings";
+import { useSettingsContext } from "@/context/SettingsContext";
 import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
 import { timestampToInstant, formatDuration, instantToPlainDateTime } from '@/lib/format-utils';
 
@@ -21,7 +21,7 @@ interface TimeSheetProps {
 export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
   const { tasks } = useAllTasks();
   const { updateTimeEntry, deleteTimeEntry } = useTasks();
-  const { settings } = useCombinedSettings();
+  const { settings } = useSettingsContext();
   const weekStartsOn = settings.weekStartDay as 0 | 1;
   const task = tasks.find(t => t.id === taskId);
   const entryRefs = React.useRef<HTMLDivElement[]>([]);

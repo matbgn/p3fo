@@ -45,7 +45,7 @@ import { BoardColumn } from './planView/BoardColumn';
 import { CardView } from './planView/CardView';
 import { useBoardTimer } from '@/hooks/useBoardTimer';
 import { useTasks } from '@/hooks/useTasks';
-import { useUsers } from '@/hooks/useUsers';
+import { useUsersContext } from '@/context/UsersContext';
 
 // Imports for collaboration
 import { doc, isCollaborationEnabled, initializeCollaboration, yDreamState, yDreamCards, yDreamColumns } from '@/lib/collaboration';
@@ -178,7 +178,7 @@ interface DreamViewProps {
 export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban }) => {
   const persistence = usePersistence();
   const { userId: currentUserId, userSettings } = useUserSettings();
-  const { users } = useUsers();
+  const { users } = useUsersContext();
   const { createTask } = useTasks();
 
   const [boardState, setBoardState] = useState<DreamBoardEntity | null>(null);

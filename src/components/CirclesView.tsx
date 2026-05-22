@@ -3,7 +3,7 @@ import * as d3 from 'd3';
 import { useCircles, CircleTreeNode } from '@/hooks/useCircles';
 import { CircleNodeType, RoleAssignment, RoleInvolvementType } from '@/lib/persistence-types';
 import { UserAvatar } from '@/components/UserAvatar';
-import { useUsers, UserWithTrigram } from '@/hooks/useUsers';
+import { useUsersContext, UserWithTrigram } from '@/context/UsersContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -169,6 +169,7 @@ function extractTextFromBlockNote(json: string | undefined): string {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function extractTextFromBlock(block: any): string {
   if (!block) return '';
   if (typeof block === 'string') return block;
@@ -272,7 +273,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
   // Ref to track currentNode for use in callbacks without stale closure
   const currentNodeRef = useRef<CircleTreeNode | null>(null);
 
-  const { users } = useUsers();
+  const { users } = useUsersContext();
 
   // Involvement labels
   const INVOLVEMENT_OPTIONS: { value: RoleInvolvementType; label: string }[] = [
@@ -839,7 +840,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
       canvas.removeEventListener('mouseup', onMouseUp);
       canvas.removeEventListener('mouseleave', onLeave);
     };
-  }, []); // refs + zoomToNode bridge mutable state
+  }, [zoomToNode]);
 
 
   const handleAddNode = useCallback(async () => {

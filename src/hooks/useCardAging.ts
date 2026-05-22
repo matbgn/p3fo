@@ -1,4 +1,4 @@
-import { useCombinedSettings } from './useCombinedSettings'
+import { useSettingsContext } from '@/context/SettingsContext'
 import type { Task } from './useTasks'
 
 export interface UseCardAgingResult {
@@ -10,7 +10,7 @@ const TERMINAL_STATUSES = new Set(['Done', 'Dropped', 'Archived'])
 const MS_PER_DAY = 1000 * 60 * 60 * 24
 
 export function useCardAging(task: Task): UseCardAgingResult {
-  const { settings } = useCombinedSettings()
+  const { settings } = useSettingsContext()
   const baseDays = settings.cardAgingBaseDays
 
   if (!baseDays || baseDays <= 0) {

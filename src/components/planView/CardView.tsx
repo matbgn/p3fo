@@ -35,6 +35,7 @@ import {
     ChevronDown
 } from 'lucide-react';
 import { MJ_SCALE } from './constants';
+import { UserWithTrigram } from '@/context/UsersContext';
 
 export interface CardViewProps {
     card: DreamCard | FertilizationCard;
@@ -293,7 +294,7 @@ export const CardView: React.FC<CardViewProps> = ({
                                     logo={users.find(u => u.userId === card.authorId)?.logo}
                                     size="sm"
                                     className="h-5 w-5 mr-1 hover:ring-2 hover:ring-ring transition-all"
-                                    trigram={(users.find(u => u.userId === card.authorId) as any)?.trigram}
+                                    trigram={users.find(u => u.userId === card.authorId)?.trigram}
                                 />
                             ) : (
                                 <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-muted-foreground mr-1 hover:bg-muted/80 transition-colors" title="Anonymous">
@@ -316,7 +317,7 @@ export const CardView: React.FC<CardViewProps> = ({
                                     logo={userSettings.logo}
                                     size="sm"
                                     className="h-4 w-4 mr-2"
-                                    trigram={(users.find(u => u.userId === currentUserId) as any)?.trigram}
+                                    trigram={users.find(u => u.userId === currentUserId)?.trigram}
                                 />
                                 Myself ({userSettings.username})
                             </DropdownMenuItem>
@@ -328,7 +329,7 @@ export const CardView: React.FC<CardViewProps> = ({
                                         logo={user.logo}
                                         size="sm"
                                         className="h-4 w-4 mr-2"
-                                        trigram={(user as any).trigram}
+                                        trigram={(user as UserWithTrigram).trigram}
                                     />
                                     {user.username}
                                 </DropdownMenuItem>

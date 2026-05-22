@@ -1,14 +1,14 @@
 import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTaskMetrics } from "@/hooks/useTaskMetrics";
-import { useCombinedSettings } from "@/hooks/useCombinedSettings";
-import { useUsers } from "@/hooks/useUsers";
+import { useSettingsContext } from "@/context/SettingsContext";
+import { useUsersContext } from "@/context/UsersContext";
 import { calculateHighImpactTaskFrequencyPerEFT, UserWorkload } from "@/lib/metrics";
 
 const HighImpactTaskMetric: React.FC = () => {
   const { tasks, taskMap, highImpactMap } = useTaskMetrics();
-  const { settings } = useCombinedSettings();
-  const { users } = useUsers();
+  const { settings } = useSettingsContext();
+  const { users } = useUsersContext();
 
   const weeksComputation = settings.weeksComputation;
   const highImpactTaskGoal = settings.highImpactTaskGoal;

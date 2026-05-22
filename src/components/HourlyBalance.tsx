@@ -4,8 +4,8 @@ import TimetableRawTable from "./TimetableRawTable";
 import { getHistoricalHourlyBalances, DataPoint } from "@/utils/projectedHours";
 import { getWorkingDays } from "@/utils/workingdays";
 import { useAllTasks } from "@/hooks/useAllTasks";
-import { useCombinedSettings } from "@/hooks/useCombinedSettings";
-import { useUsers } from "@/hooks/useUsers";
+import { useSettingsContext } from "@/context/SettingsContext";
+import { useUsersContext } from "@/context/UsersContext";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { Button } from "@/components/ui/button";
 import { MonthlyBalanceData } from "@/lib/persistence-types";
@@ -16,8 +16,8 @@ interface HourlyBalanceProps {
 
 const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
     const { tasks } = useAllTasks();
-    const { settings } = useCombinedSettings();
-    const { users, updateUser } = useUsers();
+    const { settings } = useSettingsContext();
+    const { users, updateUser } = useUsersContext();
     const { userSettings, userId: currentUserId } = useUserSettings();
     const [monthsBack, setMonthsBack] = useState(6);
 

@@ -1,3 +1,4 @@
+import './telemetry';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { createDbClient } from './db/index.js';
@@ -15,7 +16,11 @@ const DB_URL = process.env.P3FO_DB_URL;
 const DB_SQLITE_FILE = process.env.P3FO_DB_SQLITE_FILE || './p3fo.db';
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: true,
+  allowedHeaders: ['Content-Type', 'traceparent', 'tracestate'],
+  exposedHeaders: ['traceparent', 'tracestate'],
+}));
 app.use(express.json({ limit: '10mb' }));
 
 // Serve static files in production
@@ -72,12 +77,18 @@ app.get('/api/tasks', async (req: Request, res: Response) => {
     const userId = req.query.user_id as string | undefined;
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
     const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : undefined;
+    const rawExcludeStatuses = req.query.exclude_statuses;
+    const excludeStatuses: string[] | undefined = rawExcludeStatuses
+      ? (Array.isArray(rawExcludeStatuses)
+          ? (rawExcludeStatuses as string[])
+          : (rawExcludeStatuses as string).split(','))
+      : undefined;
 
     const pagination = (limit !== undefined || offset !== undefined)
       ? { limit, offset }
       : undefined;
 
-    const result = await db.getTasks(userId, pagination);
+    const result = await db.getTasks(userId, pagination, excludeStatuses);
     res.json(result);
   } catch (error) {
     console.error('Error fetching tasks:', error);

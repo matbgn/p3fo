@@ -13,7 +13,7 @@ import { ChronologicalView } from "./ChronologicalView";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { EditableTimeEntry } from "./EditableTimeEntry";
 import { formatDuration } from "@/lib/format-utils";
-import { useCombinedSettings } from "@/hooks/useCombinedSettings";
+import { useSettingsContext } from "@/context/SettingsContext";
 import { UserFilterSelector } from "@/components/UserFilterSelector";
 import { detectTimeOverlaps, getEntryKey } from "@/utils/timeOverlap";
 
@@ -35,7 +35,7 @@ export const Timetable: React.FC<{
   const { updateTimeEntry, deleteTimeEntry, updateCategory, updateUser, toggleTimer } = useTasks();
   // We use allTasks for the list, but we need to ensure we don't conflict with useTasks
   const tasks = allTasks;
-  const { settings } = useCombinedSettings();
+  const { settings } = useSettingsContext();
   const weekStartsOn = settings.weekStartDay as 0 | 1;
   const weeksComputation = settings.weeksComputation || 4;
   const [view, setView] = useState<TimetableView>("chronological");

@@ -1,18 +1,18 @@
-import React, { useEffect } from "react";
+import React, { Suspense, useEffect } from "react";
 import TaskBoard from "@/components/TaskBoard";
 import KanbanBoard from "@/components/KanbanBoard";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { ViewSwitcher } from "@/components/ViewSwitcher";
 import { Timetable } from "@/components/Timetable";
-import ProgramTopView from "@/components/ProgramTopView";
+const ProgramTopView = React.lazy(() => import("@/components/ProgramTopView"));
 import SettingsPage from "./SettingsPage";
-import MetricsPage from "./MetricsPage";
+const MetricsPage = React.lazy(() => import("./MetricsPage"));
 
 
 import { useUserSettingsContext } from "@/context/UserSettingsContext";
-import PlanView from "@/components/PlanView";
-import CelebrationView from "@/components/CelebrationView";
-import DreamTopView from "@/components/DreamTopView";
+const PlanView = React.lazy(() => import("@/components/PlanView"));
+const CelebrationView = React.lazy(() => import("@/components/CelebrationView"));
+const DreamTopView = React.lazy(() => import("@/components/DreamTopView"));
 import { Button } from "@/components/ui/button";
 import { useViewNavigation } from "@/hooks/useView";
 
@@ -20,6 +20,12 @@ import { CompactnessSelector } from "@/components/CompactnessSelector";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { UserSection } from "@/components/UserSection";
 import { QuickTimer } from "@/components/QuickTimer";
+
+const LazyWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <Suspense fallback={<div className="flex items-center justify-center p-8 text-muted-foreground">Loading...</div>}>
+    {children}
+  </Suspense>
+);
 
 // Styles for the keep-alive view slots.
 // content-visibility:hidden tells the browser to skip layout+paint for hidden subtrees.
@@ -62,11 +68,11 @@ const Index: React.FC = () => {
   const focusView = React.useMemo(() => <TaskBoard focusedTaskId={focusedTaskId} />, [focusedTaskId]);
   const kanbanView = React.useMemo(() => <KanbanBoard onFocusOnTask={handleFocusOnTask} highlightedTaskId={focusedTaskId} />, [handleFocusOnTask, focusedTaskId]);
   const timetableView = React.useMemo(() => <Timetable onJumpToTask={handleFocusOnTask} />, [handleFocusOnTask]);
-  const programView = React.useMemo(() => <ProgramTopView onFocusOnTask={handleFocusOnTask} />, [handleFocusOnTask]);
-  const planView = React.useMemo(() => <PlanView onFocusOnTask={handleFocusOnTask} />, [handleFocusOnTask]);
-  const celebrationView = React.useMemo(() => <CelebrationView onFocusOnTask={handleFocusOnTask} />, [handleFocusOnTask]);
-  const dreamView = React.useMemo(() => <DreamTopView onFocusOnTask={handleFocusOnTask} />, [handleFocusOnTask]);
-  const metricsView = React.useMemo(() => <MetricsPage />, []);
+  const programView = React.useMemo(() => <LazyWrapper><ProgramTopView onFocusOnTask={handleFocusOnTask} /></LazyWrapper>, [handleFocusOnTask]);
+  const planView = React.useMemo(() => <LazyWrapper><PlanView onFocusOnTask={handleFocusOnTask} /></LazyWrapper>, [handleFocusOnTask]);
+  const celebrationView = React.useMemo(() => <LazyWrapper><CelebrationView onFocusOnTask={handleFocusOnTask} /></LazyWrapper>, [handleFocusOnTask]);
+  const dreamView = React.useMemo(() => <LazyWrapper><DreamTopView onFocusOnTask={handleFocusOnTask} /></LazyWrapper>, [handleFocusOnTask]);
+  const metricsView = React.useMemo(() => <LazyWrapper><MetricsPage /></LazyWrapper>, []);
   const settingsView = React.useMemo(() => <SettingsPage />, []);
 
   return (

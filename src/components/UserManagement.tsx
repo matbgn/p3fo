@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { useUsers } from '@/hooks/useUsers';
+import { useUsersContext, UserWithTrigram } from '@/context/UsersContext';
 import { useAllTasks } from '@/hooks/useAllTasks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +16,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
 export const UserManagement: React.FC = () => {
-    const { users, loading: usersLoading, deleteUser, updateUser } = useUsers();
+    const { users, loading: usersLoading, deleteUser, updateUser } = useUsersContext();
     const { tasks } = useAllTasks();
     const [editingTrigram, setEditingTrigram] = useState<string | null>(null);
     const [editValue, setEditValue] = useState("");
@@ -140,7 +140,7 @@ export const UserManagement: React.FC = () => {
                                                 <Avatar className="h-8 w-8">
                                                     <AvatarImage src={user.logo} alt={user.username} />
                                                     <AvatarFallback>
-                                                        {(user as any).trigram || user.username.slice(0, 2).toUpperCase()}
+                                                        {(user as UserWithTrigram).trigram || user.username.slice(0, 2).toUpperCase()}
                                                     </AvatarFallback>
                                                 </Avatar>
                                                 <span className="font-medium">{user.username}</span>
@@ -170,10 +170,10 @@ export const UserManagement: React.FC = () => {
                                             ) : (
                                                 <div
                                                     className="font-mono bg-muted/50 px-2 py-1 rounded w-fit cursor-pointer hover:bg-muted"
-                                                    onDoubleClick={() => startEditing(user.userId, (user as any).trigram || '???')}
+                                                    onDoubleClick={() => startEditing(user.userId, (user as UserWithTrigram).trigram || '???')}
                                                     title="Double-click to edit"
                                                 >
-                                                    {(user as any).trigram || '???'}
+                                                    {(user as UserWithTrigram).trigram || '???'}
                                                 </div>
                                             )}
                                         </TableCell>
@@ -204,10 +204,10 @@ export const UserManagement: React.FC = () => {
                                             ) : (
                                                 <div
                                                     className="bg-muted/50 px-2 py-1 rounded w-fit cursor-pointer hover:bg-muted"
-                                                    onDoubleClick={() => startEditingWorkload(user.userId, (user as any).workload)}
+                                                    onDoubleClick={() => startEditingWorkload(user.userId, user.workload)}
                                                     title="Double-click to edit"
                                                 >
-                                                    {(user as any).workload ?? 60}%
+                                                    {user.workload ?? 60}%
                                                 </div>
                                             )}
                                         </TableCell>

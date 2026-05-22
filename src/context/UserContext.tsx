@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode, useRef, useCallback } from 'react';
+import * as Y from 'yjs';
 import Cookies from 'js-cookie';
 import { getRandomUsername } from '@/lib/username-generator';
 import { getPersistenceAdapter } from '@/lib/persistence-factory';
@@ -32,13 +33,13 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 setUserSettings(prev => {
                     if (!prev) return settings;
                     const pending = pendingUpdatesRef.current;
-                    const merged = { ...settings };
+                    const merged = { ...settings } as Record<string, unknown>;
                     Object.keys(prev).forEach(key => {
                         if (pending.has(key)) {
-                            (merged as any)[key] = (prev as any)[key];
+                            merged[key] = prev[key as keyof UserSettingsEntity];
                         }
                     });
-                    return merged;
+                    return merged as unknown as UserSettingsEntity;
                 });
             }
         } catch (error) {
@@ -129,7 +130,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         import('@/lib/collaboration').then(({ yUserSettings, isCollaborationEnabled }) => {
             if (!isCollaborationEnabled()) return;
 
-            const handleYjsChange = (event: any) => {
+            const handleYjsChange = (event: Y.YMapEvent<unknown>) => {
                 if (event.transaction.local) return;
 
                 // Check if our user was updated
