@@ -1,4 +1,4 @@
-import './telemetry';
+import './telemetry.js';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { createDbClient } from './db/index.js';
