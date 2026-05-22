@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import moment from 'moment';
 import { useAllTasks } from '@/hooks/useAllTasks';
-import { useUsers } from '@/hooks/useUsers';
+import { useUsersContext } from '@/context/UsersContext';
 import { Task } from '@/hooks/useTasks';
 import { calculateAllTotalDifficulties, normalizePreferredDays } from '@/utils/scheduler-utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -39,7 +39,7 @@ const SIDEBAR_WIDTH = 250;
 
 const ResourcesScheduler: React.FC<ResourcesSchedulerProps> = ({ onFocusOnTask, onEditTask }) => {
     const { tasks } = useAllTasks();
-    const { users, updateUser } = useUsers();
+    const { users, updateUser } = useUsersContext();
     const [viewStartDate, setViewStartDate] = useState(moment().startOf('day'));
 
     // 1. Filter Tasks

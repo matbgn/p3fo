@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Task } from "@/hooks/useTasks";
 import { getProjectedHoursForActualMonth } from "@/utils/projectedHours";
-import { CombinedSettings } from "@/hooks/useCombinedSettings";
+import { CombinedSettings } from "@/context/SettingsContext";
 
 interface TimetableRecordsCellProps {
     tasks: Task[];

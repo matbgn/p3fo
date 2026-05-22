@@ -27,7 +27,7 @@ import { CalendarIcon, Play, Pause, Clock2, X } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-import { useCombinedSettings } from "@/hooks/useCombinedSettings";
+import { useSettingsContext } from "@/context/SettingsContext";
 import { CategorySelect } from "./CategorySelect";
 import { TaskStatusSelect } from "./TaskStatusSelect";
 import { TimeSheet } from "./TimeSheet";
@@ -76,7 +76,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
     currentUserId,
     onToggleTimer,
 }) => {
-    const { settings } = useCombinedSettings();
+    const { settings } = useSettingsContext();
     const weekStartsOn = settings.weekStartDay as 0 | 1;
 
     // Internal state to track which task is currently being edited

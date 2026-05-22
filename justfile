@@ -33,6 +33,13 @@ dev-browser:
 tests:
   pnpm test --run
 
+# --- Code Quality Checks ---
+check:
+  @echo "Running TypeScript type check..."
+  npx tsc --noEmit
+  @echo "Running ESLint..."
+  npx eslint --max-warnings 0
+
 # --- Version Management Tasks ---
 sync-versions version:
   #!/usr/bin/env bash

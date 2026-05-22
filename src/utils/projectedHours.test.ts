@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import { calculateProjection, getProjectedHoursForActualMonth, getHistoricalHourlyBalances, getVacationsBalances } from './projectedHours';
-import type { CombinedSettings } from '@/hooks/useCombinedSettings';
+import type { CombinedSettings } from '@/context/SettingsContext';
 import type { Task } from '@/hooks/useTasks';
 
 const mockSettings: CombinedSettings = {

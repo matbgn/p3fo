@@ -36,7 +36,7 @@ import { UserSelector } from "./UserSelector";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { Calendar } from "@/components/ui/calendar";
 import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
-import { useCombinedSettings } from "@/hooks/useCombinedSettings";
+import { useSettingsContext } from "@/context/SettingsContext";
 import { useViewDisplay } from "@/hooks/useView";
 import { COMPACTNESS_ULTRA, COMPACTNESS_COMPACT, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
 import { TaskEditModal } from "./TaskEditModal";
@@ -272,7 +272,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false); // New state for full edit modal
   const { scheduledReminders, reminders, updateScheduledReminderTriggerDate, dismissReminder } = useReminderStore();
   const { userSettings, userId: currentUserId } = useUserSettings();
-  const { settings } = useCombinedSettings();
+  const { settings } = useSettingsContext();
   const weekStartsOn = settings.weekStartDay as 0 | 1;
   const { cardCompactness } = useViewDisplay();
   const aging = useCardAging(task);

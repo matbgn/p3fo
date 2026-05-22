@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback, ReactNode } from 'react';
 import * as Y from 'yjs';
 import { UserSettingsEntity } from '@/lib/persistence-types';
 import { eventBus } from '@/lib/events';
@@ -9,18 +9,27 @@ export interface UserWithTrigram extends UserSettingsEntity {
     trigram: string;
 }
 
-export const useUsers = () => {
+interface UsersContextType {
+    users: UserWithTrigram[];
+    loading: boolean;
+    refreshUsers: () => Promise<void>;
+    deleteUser: (userId: string) => Promise<void>;
+    updateUser: (userId: string, patch: Partial<UserSettingsEntity>) => Promise<void>;
+}
+
+const UsersContext = createContext<UsersContextType | undefined>(undefined);
+
+export const UsersProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [users, setUsers] = useState<UserSettingsEntity[]>([]);
     const [loading, setLoading] = useState(true);
-    const pendingUpdatesRef = useRef<Set<string>>(new Set()); // Keys: "userId:field"
-    const lastUpdateTimestampRef = useRef<Record<string, number>>({}); // Keys: "userId:field"
+    const pendingUpdatesRef = useRef<Set<string>>(new Set());
+    const lastUpdateTimestampRef = useRef<Record<string, number>>({});
 
-    const fetchUsers = async () => {
+    const fetchUsers = useCallback(async () => {
         try {
             const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
             const adapter = await persistence;
             const userList = await adapter.listUsers();
-            
             setUsers(prev => {
                 const pending = pendingUpdatesRef.current;
                 return userList.map(u => {
@@ -31,6 +40,7 @@ export const useUsers = () => {
                     Object.keys(u).forEach(key => {
                         const compositeKey = `${u.userId}:${key}`;
                         if (pending.has(compositeKey)) {
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             (merged as any)[key] = (existing as any)[key];
                         }
                     });
@@ -42,12 +52,12 @@ export const useUsers = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
+    // Single fetch on mount + eventBus refresh
     useEffect(() => {
         fetchUsers();
 
-        // Listen for user settings changes to refresh the list
         const handleUserSettingsChanged = () => {
             console.log('User settings changed, refreshing users list');
             fetchUsers();
@@ -58,43 +68,39 @@ export const useUsers = () => {
         return () => {
             eventBus.unsubscribe('userSettingsChanged', handleUserSettingsChanged);
         };
-    }, []);
+    }, [fetchUsers]);
 
-    // Listen for Yjs user settings changes from other clients
+    // Yjs collaboration refresh — debounce to avoid HTTP storms while keeping source-of-truth sync
+    const yjsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     useEffect(() => {
-        if (!isCollaborationEnabled()) {
-            return;
-        }
+        if (!isCollaborationEnabled()) return;
 
         const handleYjsUserSettingsChange = (event: Y.YMapEvent<unknown>) => {
-            // Ignore local changes to prevent loops
-            if (event.transaction.local) {
-                return;
-            }
-            console.log('Yjs user settings changed, refreshing users list');
-            fetchUsers();
+            if (event.transaction.local) return;
+            if (yjsDebounceRef.current) clearTimeout(yjsDebounceRef.current);
+            yjsDebounceRef.current = setTimeout(() => {
+                fetchUsers();
+            }, 300);
         };
 
         yUserSettings.observe(handleYjsUserSettingsChange);
 
         return () => {
             yUserSettings.unobserve(handleYjsUserSettingsChange);
+            if (yjsDebounceRef.current) clearTimeout(yjsDebounceRef.current);
         };
-    }, []);
+    }, [fetchUsers]);
 
-    const deleteUser = async (userId: string) => {
+    const deleteUser = useCallback(async (userId: string) => {
         try {
             const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
             const adapter = await persistence;
             await adapter.deleteUser(userId);
 
-            // Refresh the list
             await fetchUsers();
 
-            // Notify others (local)
             eventBus.publish('userSettingsChanged');
 
-            // Sync to Yjs (remote)
             if (isCollaborationEnabled()) {
                 doc.transact(() => {
                     yUserSettings.delete(userId);
@@ -104,9 +110,9 @@ export const useUsers = () => {
             console.error('Error deleting user:', error);
             throw error;
         }
-    };
+    }, [fetchUsers]);
 
-    const updateUser = async (userId: string, patch: Partial<UserSettingsEntity>) => {
+    const updateUser = useCallback(async (userId: string, patch: Partial<UserSettingsEntity>) => {
         const now = Date.now();
         const pending = pendingUpdatesRef.current;
         const timestamps = lastUpdateTimestampRef.current;
@@ -125,10 +131,8 @@ export const useUsers = () => {
             const adapter = await persistence;
             const updatedUser = await adapter.updateUserSettings(userId, patch);
 
-            // Notify others (local)
             eventBus.publish('userSettingsChanged');
 
-            // Sync to Yjs (remote)
             if (isCollaborationEnabled()) {
                 doc.transact(() => {
                     yUserSettings.set(userId, updatedUser);
@@ -136,23 +140,19 @@ export const useUsers = () => {
             }
         } catch (error) {
             console.error('Error updating user:', error);
-            // Revert changes if no newer update has occurred
             setUsers(prev => prev.map(u => {
                 if (u.userId !== userId) return u;
                 const reverted = { ...u };
                 Object.keys(patch).forEach(key => {
                     const compositeKey = `${userId}:${key}`;
                     if (timestamps[compositeKey] === now) {
-                        // We don't have the original value easily here, 
-                        // but fetchUsers will eventually bring it back if we clear pending.
-                        // For a quick revert, we might just rely on the next fetch.
+                        // We don't have the original value easily here
                     }
                 });
                 return reverted;
             }));
             throw error;
         } finally {
-            // Clear pending status after a delay
             setTimeout(() => {
                 Object.keys(patch).forEach(key => {
                     const compositeKey = `${userId}:${key}`;
@@ -162,18 +162,33 @@ export const useUsers = () => {
                 });
             }, 1000);
         }
-    };
+    }, []);
 
-    // Calculate trigrams efficiently
     const usersWithTrigrams = useMemo(() => {
         const trigramMap = assignTrigrams(users);
         return users.map(u => ({
             ...u,
-            // Prefer the persisted trigram if it exists (which assignTrigrams also respects for collision)
-            // But we always take what assignTrigrams returned to ensure consistency/fallback
             trigram: u.trigram || trigramMap[u.userId] || '???'
         })) as UserWithTrigram[];
     }, [users]);
 
-    return { users: usersWithTrigrams, loading, refreshUsers: fetchUsers, deleteUser, updateUser };
+    return (
+        <UsersContext.Provider value={{
+            users: usersWithTrigrams,
+            loading,
+            refreshUsers: fetchUsers,
+            deleteUser,
+            updateUser,
+        }}>
+            {children}
+        </UsersContext.Provider>
+    );
+};
+
+export const useUsersContext = (): UsersContextType => {
+    const ctx = useContext(UsersContext);
+    if (!ctx) {
+        throw new Error('useUsersContext must be used within a UsersProvider');
+    }
+    return ctx;
 };

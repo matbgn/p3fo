@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Lock, Unlock, Eye, EyeOff, Play, RotateCcw, Link, Unlink, ArrowUpRight, Minus, Clock, Square, Info, Plus, X, Trash2, ThumbsUp, HatGlasses, MousePointer2, MousePointerClick } from 'lucide-react';
 import { useTasks } from '@/hooks/useTasks';
-import { useUsers } from '@/hooks/useUsers';
+import { useUsersContext } from '@/context/UsersContext';
 import { Label } from '@/components/ui/label';
 import {
     Dialog,
@@ -69,7 +69,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
     const persistence = usePersistence();
     const { userId: currentUserId, userSettings } = useUserSettings();
     const { createTask } = useTasks();
-    const { users } = useUsers();
+    const { users } = useUsersContext();
 
     const [boardState, setBoardState] = useState<FertilizationBoardEntity | null>(null);
     const [loading, setLoading] = useState(true);

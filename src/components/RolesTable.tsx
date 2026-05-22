@@ -11,7 +11,7 @@ import {
 } from '@tanstack/react-table';
 import { CircleEntity, RoleAssignment } from '@/lib/persistence-types';
 import { useCircles } from '@/hooks/useCircles';
-import { useUsers, UserWithTrigram } from '@/hooks/useUsers';
+import { useUsersContext, UserWithTrigram } from '@/context/UsersContext';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -65,7 +65,7 @@ export const getCircleParent = (role: CircleEntity, map: Map<string, CircleEntit
 
 export const RolesTable: React.FC = () => {
   const { circles } = useCircles();
-  const { users } = useUsers();
+  const { users } = useUsersContext();
 
   const roles = useMemo<RoleRow[]>(() => {
     const circleMap = new Map<string, CircleEntity>();

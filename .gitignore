@@ -54,3 +54,6 @@ PROMPT.md
 .ralph
 .sop/planning
 .worktrees/
+
+# Build artifacts
+bundle-stats.html

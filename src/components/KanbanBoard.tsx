@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { useCombinedSettings } from "@/hooks/useCombinedSettings";
+import { useSettingsContext } from "@/context/SettingsContext";
 
 type BoardCard =
   | { kind: "parent"; task: Task }
@@ -276,7 +276,7 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
   const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, toggleSprintTarget, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, reparent, toggleDone, toggleTimer, updateTerminationDate, updateDurationInMinutes, updateComment, loadTasksByUser, reloadTasks } = useTasks();
   const { userId: currentUserId } = useUserSettings();
   const { setFocusedTaskId } = useViewNavigation();
-  const { settings } = useCombinedSettings();
+  const { settings } = useSettingsContext();
   const [isLoadingTasks, setIsLoadingTasks] = React.useState(false);
 
   // Stable callback references for Column props (prevents Column/TaskCard re-renders)

@@ -1,11 +1,12 @@
 type EventHandler = (data?: unknown) => void;
 
-// Events that should be micro-batched to avoid redundant re-renders
-const BATCHED_EVENTS = new Set(["tasksChanged", "userSettingsChanged"]);
+const BATCHED_EVENTS = new Set(["tasksChanged", "userSettingsChanged", "appSettingsChanged"]);
+const DEBOUNCE_MS = 100;
 
 class EventBus {
   private subscribers: { [event: string]: EventHandler[] } = {};
   private pendingBatched: Set<string> = new Set();
+  private debounceTimers: { [event: string]: ReturnType<typeof setTimeout> } = {};
 
   subscribe(event: string, callback: EventHandler) {
     if (!this.subscribers[event]) {
@@ -28,19 +29,18 @@ class EventBus {
       return;
     }
 
-    // For batched events, coalesce multiple calls in the same microtask
     if (BATCHED_EVENTS.has(event)) {
-      if (!this.pendingBatched.has(event)) {
-        this.pendingBatched.add(event);
-        queueMicrotask(() => {
-          this.pendingBatched.delete(event);
-          if (this.subscribers[event]) {
-            this.subscribers[event].forEach((subscriber) => {
-              subscriber(data);
-            });
-          }
-        });
+      if (this.debounceTimers[event]) {
+        clearTimeout(this.debounceTimers[event]);
       }
+      this.debounceTimers[event] = setTimeout(() => {
+        delete this.debounceTimers[event];
+        if (this.subscribers[event]) {
+          this.subscribers[event].forEach((subscriber) => {
+            subscriber(data);
+          });
+        }
+      }, DEBOUNCE_MS);
       return;
     }
 

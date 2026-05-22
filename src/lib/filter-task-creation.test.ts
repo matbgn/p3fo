@@ -200,46 +200,38 @@ describe('BEAD-004: Filter State Preservation', () => {
     })
   })
 
-  describe('EventBus Microtask Batching', () => {
-    it('eventBus.publish("tasksChanged") uses queueMicrotask for batching', async () => {
+  describe('EventBus Debounce Batching', () => {
+    it('eventBus.publish("tasksChanged") uses setTimeout debounce for batching', async () => {
       const source = fs.readFileSync(EVENTS_PATH, 'utf-8')
       
-      // Verify EventBus uses queueMicrotask for batched events
       expect(source).toMatch(/BATCHED_EVENTS/)
       expect(source).toMatch(/tasksChanged/)
-      expect(source).toMatch(/queueMicrotask/)
-      
-      // Verify batching logic: check if pending, add to pending set, then process in microtask
-      expect(source).toMatch(/pendingBatched\.has/)
-      expect(source).toMatch(/pendingBatched\.add/)
+      expect(source).toMatch(/setTimeout/)
+      expect(source).toMatch(/DEBOUNCE_MS/)
     })
     
-    it('EventBus coalesces multiple tasksChanged calls in same microtask', async () => {
-      // Import actual EventBus
+    it('EventBus coalesces multiple tasksChanged calls within debounce window', async () => {
+      vi.useFakeTimers()
+
       const { eventBus } = await import('./events')
-      
-      const callCounts: number[] = []
-      const subscriber = vi.fn(() => {
-        callCounts.push(1)
-      })
-      
+
+      const subscriber = vi.fn(() => {})
+
       eventBus.subscribe('tasksChanged', subscriber)
-      
-      // Publish multiple times synchronously
+
       eventBus.publish('tasksChanged')
       eventBus.publish('tasksChanged')
       eventBus.publish('tasksChanged')
-      
-      // Subscriber should not be called yet (microtask queued)
+
       expect(subscriber).toHaveBeenCalledTimes(0)
-      
-      // Wait for microtask to execute
-      await new Promise<void>(resolve => { queueMicrotask(() => { resolve() }) })
-      
-      // Subscriber should be called only ONCE (coalesced)
+
+      await vi.advanceTimersByTimeAsync(600)
+
       expect(subscriber).toHaveBeenCalledTimes(1)
-      
+
       eventBus.unsubscribe('tasksChanged', subscriber)
+
+      vi.useRealTimers()
     })
   })
 })

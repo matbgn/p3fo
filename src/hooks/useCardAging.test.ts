@@ -8,8 +8,8 @@ const MS_PER_DAY = 1000 * 60 * 60 * 24
 
 const mockUseCombinedSettings = vi.fn()
 
-vi.mock('./useCombinedSettings', () => ({
-  useCombinedSettings: () => mockUseCombinedSettings(),
+vi.mock('@/context/SettingsContext', () => ({
+  useSettingsContext: () => mockUseCombinedSettings(),
 }))
 
 describe('useCardAging', () => {

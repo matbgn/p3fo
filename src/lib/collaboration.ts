@@ -1,34 +1,36 @@
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { PERSISTENCE_CONFIG } from './persistence-config';
+import { instrumentYjsProvider, instrumentYMap, instrumentDocTransactions } from './yjs-telemetry';
 
 // Create a shared Yjs document (always safe to create)
 export const doc = new Y.Doc();
+instrumentDocTransactions(doc);
 
 // Export shared tasks map (always safe to create)
-export const yTasks = doc.getMap('tasks');
+export const yTasks = instrumentYMap(doc.getMap('tasks'), 'tasks');
 
 // Export shared user settings map for cross-client synchronization
-export const yUserSettings = doc.getMap('userSettings');
+export const yUserSettings = instrumentYMap(doc.getMap('userSettings'), 'userSettings');
 
 // Export shared fertilization board maps
-export const yFertilizationState = doc.getMap('fertilizationState');
-export const yFertilizationCards = doc.getMap('fertilizationCards');
-export const yFertilizationColumns = doc.getMap('fertilizationColumns');
+export const yFertilizationState = instrumentYMap(doc.getMap('fertilizationState'), 'fertilizationState');
+export const yFertilizationCards = instrumentYMap(doc.getMap('fertilizationCards'), 'fertilizationCards');
+export const yFertilizationColumns = instrumentYMap(doc.getMap('fertilizationColumns'), 'fertilizationColumns');
 
 // Export shared dream board maps
-export const yDreamState = doc.getMap('dreamState');
-export const yDreamCards = doc.getMap('dreamCards');
-export const yDreamColumns = doc.getMap('dreamColumns');
+export const yDreamState = instrumentYMap(doc.getMap('dreamState'), 'dreamState');
+export const yDreamCards = instrumentYMap(doc.getMap('dreamCards'), 'dreamCards');
+export const yDreamColumns = instrumentYMap(doc.getMap('dreamColumns'), 'dreamColumns');
 
 // Export shared circles map for real-time sync
-export const yCircles = doc.getMap('circles');
+export const yCircles = instrumentYMap(doc.getMap('circles'), 'circles');
 
 // Export shared app settings map for cross-client synchronization
-export const yAppSettings = doc.getMap('appSettings');
+export const yAppSettings = instrumentYMap(doc.getMap('appSettings'), 'appSettings');
 
 // Export shared system state (for global commands like Clear All)
-export const ySystemState = doc.getMap('systemState');
+export const ySystemState = instrumentYMap(doc.getMap('systemState'), 'systemState');
 
 // Provider and awareness are nullable - only initialized when NOT in browser-only mode
 export let provider: WebsocketProvider | null = null;
@@ -62,6 +64,8 @@ export function initializeCollaboration(): void {
 
         provider = new WebsocketProvider(wsUrl, 'p3fo-room', doc);
         awareness = provider.awareness;
+
+        instrumentYjsProvider(provider, 'p3fo-room');
 
         isInitialized = true;
         console.log('Collaboration: Initialized with WebSocket provider');

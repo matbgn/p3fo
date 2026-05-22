@@ -5,7 +5,7 @@ import { Button } from './button';
 import { Input } from './input';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './dialog';
-import { useCombinedSettings } from '@/hooks/useCombinedSettings';
+import { useSettingsContext } from '@/context/SettingsContext';
 
 interface TimePickerProps {
     isOpen: boolean;
@@ -20,7 +20,7 @@ export const TimePickerDialog: React.FC<TimePickerProps> = ({
     initialTime,
     onTimeChange,
 }) => {
-    const { settings } = useCombinedSettings();
+    const { settings } = useSettingsContext();
     const [selectedDateTime, setSelectedDateTime] = useState<Temporal.PlainDateTime>(() => {
         if (initialTime) {
             const instant = Temporal.Instant.fromEpochMilliseconds(initialTime);

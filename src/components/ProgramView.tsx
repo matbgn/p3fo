@@ -12,7 +12,7 @@ import {
 import { useTasks, Task } from '@/hooks/useTasks';
 import { useAllTasks } from '@/hooks/useAllTasks';
 import { useUserSettings } from '@/hooks/useUserSettings';
-import { useCombinedSettings } from '@/hooks/useCombinedSettings';
+import { useSettingsContext } from '@/context/SettingsContext';
 import { TaskCard } from './TaskCard';
 import {
   Dialog,
@@ -33,7 +33,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) 
   // const [selectedTask, setSelectedTask] = React.useState<Task | null>(null); // Lifted to parent
   const calendarRef = useRef<Calendar>(null); // Ref for the Calendar component
 
-  const { settings } = useCombinedSettings();
+  const { settings } = useSettingsContext();
   const weekStartsOn = settings.weekStartDay;
   const defaultPlanView = settings.defaultPlanView || 'week';
 

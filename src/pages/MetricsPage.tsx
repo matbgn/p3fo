@@ -9,7 +9,7 @@ import VacationsBalance from "@/components/VacationsBalance";
 import QoLSurvey from "@/components/QoLSurvey";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
-import { useUsers } from "@/hooks/useUsers";
+import { useUsersContext } from "@/context/UsersContext";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { loadFiltersFromSessionStorage, saveFiltersToSessionStorage } from "@/lib/filter-storage";
@@ -19,7 +19,7 @@ import { Filters } from "@/components/FilterControls";
 const MetricsPage: React.FC = () => {
   const [activeTab, setActiveTab] = React.useState("forecast");
   const { userId: currentUserId } = useCurrentUser();
-  const { users } = useUsers();
+  const { users } = useUsersContext();
   const { userSettings } = useUserSettings();
 
   const [selectedUserId, setSelectedUserId] = React.useState<string>("");

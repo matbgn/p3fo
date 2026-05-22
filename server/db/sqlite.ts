@@ -462,24 +462,28 @@ class SqliteClient implements DbClient {
   }
 
   // Tasks
-  async getTasks(userId?: string, pagination?: { limit?: number; offset?: number }): Promise<{ data: TaskEntity[]; total: number }> {
-    // Build count query
-    let countSql = 'SELECT COUNT(*) as count FROM "tasks"';
-    const countParams: (string | number | null)[] = [];
-    if (userId) {
-      countSql += ' WHERE "userId" = ?';
-      countParams.push(userId);
-    }
-    const countResult = this.db.prepare(countSql).get(...countParams) as { count: number };
-    const total = countResult.count;
-
-    // Build data query
-    let sql = 'SELECT * FROM "tasks"';
+  async getTasks(userId?: string, pagination?: { limit?: number; offset?: number }, excludeStatuses?: string[]): Promise<{ data: TaskEntity[]; total: number }> {
+    const conditions: string[] = [];
     const params: (string | number | null)[] = [];
+
     if (userId) {
-      sql += ' WHERE "userId" = ?';
+      conditions.push('"userId" = ?');
       params.push(userId);
     }
+
+    if (excludeStatuses && excludeStatuses.length > 0) {
+      const placeholders = excludeStatuses.map(() => '?').join(', ');
+      conditions.push(`"triageStatus" NOT IN (${placeholders})`);
+      params.push(...excludeStatuses);
+    }
+
+    const whereClause = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
+
+    let countSql = `SELECT COUNT(*) as count FROM "tasks"${whereClause}`;
+    const countResult = this.db.prepare(countSql).get(...params) as { count: number };
+    const total = countResult.count;
+
+    let sql = `SELECT * FROM "tasks"${whereClause}`;
     sql += ' ORDER BY "priority" DESC NULLS LAST, "createdAt" ASC';
 
     if (pagination?.limit !== undefined) {

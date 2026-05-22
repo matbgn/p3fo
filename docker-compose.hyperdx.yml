@@ -1,0 +1,73 @@
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: hyperdx-clickhouse
+    environment:
+      - CLICKHOUSE_ALLOW_EMPTY_PASSWORD=true
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    networks:
+      - hyperdx-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  mongo:
+    image: mongo:6
+    container_name: hyperdx-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - hyperdx-network
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: hyperdx-otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8889:8889"   # Prometheus exporter metrics
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    networks:
+      - hyperdx-network
+    depends_on:
+      clickhouse:
+        condition: service_started
+    restart: unless-stopped
+
+  hyperdx:
+    image: docker.hyperdx.io/hyperdx/hyperdx:2-beta
+    container_name: hyperdx-ui
+    ports:
+      - "8088:8080"
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/hyperdx
+      - CLICKHOUSE_HOST=http://clickhouse:8123
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=
+      - FRONTEND_URL=http://localhost:8088
+      - EXPRESS_SESSION_SECRET=change-me-in-production
+    networks:
+      - hyperdx-network
+    depends_on:
+      - mongo
+      - clickhouse
+
+volumes:
+  clickhouse_data:
+  mongo_data:
+
+networks:
+  hyperdx-network:
+    driver: bridge

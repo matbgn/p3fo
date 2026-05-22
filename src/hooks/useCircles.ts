@@ -301,8 +301,10 @@ const buildCircleTree = (parentId: string | null = null): CircleTreeNode[] => {
     }));
 };
 
-// Initialize circles on module load
-loadCircles();
+// Initialize circles on module load (browser only — skip in Node/test envs)
+if (typeof window !== 'undefined') {
+  loadCircles();
+}
 
 /**
  * React hook for managing circles state.

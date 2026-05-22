@@ -1,7 +1,11 @@
 import { defineConfig, loadEnv } from "vite";
 import dyadComponentTagger from "@dyad-sh/react-vite-component-tagger";
 import react from "@vitejs/plugin-react-swc";
+import { visualizer } from "rollup-plugin-visualizer";
 import path from "path";
+import { readFileSync } from "fs";
+
+const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "package.json"), "utf-8"));
 
 const patchYProsemirrorCursors = () => ({
   name: "patch-y-prosemirror-cursors",
@@ -30,11 +34,32 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
   return {
     base: env.VITE_BASE_URL || '/',
+    define: {
+      __APP_VERSION__: JSON.stringify(pkg.version),
+    },
     plugins: [
       patchYProsemirrorCursors(),
       react(),
       dyadComponentTagger(),
-    ],
+      mode === 'analyze' && visualizer({ open: false, filename: 'bundle-stats.html', gzipSize: true }),
+    ].filter(Boolean),
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('@blocknote') || id.includes('prosemirror') || id.includes('y-prosemirror')) return 'blocknote';
+              if (id.includes('d3')) return 'd3';
+              if (id.includes('recharts')) return 'recharts';
+              if (id.includes('react-big-calendar') || id.includes('moment')) return 'calendar';
+              if (id.includes('yjs') || id.includes('y-websocket')) return 'yjs';
+              if (id.includes('@radix-ui')) return 'radix';
+              if (id.includes('@tanstack')) return 'tanstack';
+            }
+          },
+        },
+      },
+    },
     server: {
       host: true, // This makes the dev server listen on all network interfaces
       allowedHosts: env.VITE_ALLOWED_HOSTS ? env.VITE_ALLOWED_HOSTS.split(',') : [],
@@ -51,6 +76,11 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: process.env.API_TARGET || 'http://localhost:5172',
           changeOrigin: true,
+        },
+        '/v1/traces': {
+          target: process.env.OTEL_COLLECTOR_URL || 'http://localhost:4318',
+          changeOrigin: true,
+          rewrite: (path) => path,
         },
       },
     },

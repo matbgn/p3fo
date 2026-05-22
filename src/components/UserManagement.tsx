@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { useUsers } from '@/hooks/useUsers';
+import { useUsersContext } from '@/context/UsersContext';
 import { useAllTasks } from '@/hooks/useAllTasks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +16,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
 export const UserManagement: React.FC = () => {
-    const { users, loading: usersLoading, deleteUser, updateUser } = useUsers();
+    const { users, loading: usersLoading, deleteUser, updateUser } = useUsersContext();
     const { tasks } = useAllTasks();
     const [editingTrigram, setEditingTrigram] = useState<string | null>(null);
     const [editValue, setEditValue] = useState("");

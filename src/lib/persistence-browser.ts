@@ -35,18 +35,21 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
 };
 
 export class BrowserJsonPersistence implements PersistenceAdapter {
-  async listTasks(userId?: string): Promise<TaskEntity[]> {
+  async listTasks(userId?: string, excludeStatuses?: string[]): Promise<TaskEntity[]> {
     if (typeof window === 'undefined') {
       return [];
     }
 
     try {
       const stored = localStorage.getItem(TASKS_STORAGE_KEY);
-      const allTasks = stored ? JSON.parse(stored) : [];
+      let allTasks = stored ? JSON.parse(stored) : [];
 
-      // Filter by userId if provided
       if (userId) {
-        return allTasks.filter((task: TaskEntity) => task.userId === userId);
+        allTasks = allTasks.filter((task: TaskEntity) => task.userId === userId);
+      }
+
+      if (excludeStatuses && excludeStatuses.length > 0) {
+        allTasks = allTasks.filter((task: TaskEntity) => !excludeStatuses.includes(task.triageStatus || ''));
       }
 
       return allTasks;

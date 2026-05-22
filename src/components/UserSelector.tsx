@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/select';
 import { UserAvatar } from './UserAvatar';
 import { useUserSettings } from '@/hooks/useUserSettings';
-import { useUsers } from '@/hooks/useUsers';
+import { useUsersContext } from '@/context/UsersContext';
 import { cn } from '@/lib/utils';
 
 interface UserSelectorProps {
@@ -23,7 +23,7 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
   className
 }) => {
   const { userSettings, userId: currentUserId } = useUserSettings();
-  const { users, loading } = useUsers();
+  const { users, loading } = useUsersContext();
 
   const isCurrentUser = value && value === currentUserId;
 

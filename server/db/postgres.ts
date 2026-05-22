@@ -411,26 +411,29 @@ class PostgresClient implements DbClient {
   }
 
   // Tasks
-  async getTasks(userId?: string, pagination?: { limit?: number; offset?: number }): Promise<{ data: TaskEntity[]; total: number }> {
-    // Build count query
-    let countSql = 'SELECT COUNT(*) as count FROM "tasks"';
-    const countParams: (string | number | boolean | null)[] = [];
-    if (userId) {
-      countSql += ' WHERE "userId" = $1';
-      countParams.push(userId);
-    }
-    const countResult = await this.pool.query(countSql, countParams);
-    const total = parseInt(countResult.rows[0].count);
-
-    // Build data query
-    let sql = 'SELECT * FROM "tasks"';
+  async getTasks(userId?: string, pagination?: { limit?: number; offset?: number }, excludeStatuses?: string[]): Promise<{ data: TaskEntity[]; total: number }> {
+    const conditions: string[] = [];
     const params: (string | number | boolean | null)[] = [];
     let paramIndex = 1;
 
     if (userId) {
-      sql += ` WHERE "userId" = $${paramIndex++}`;
+      conditions.push(`"userId" = $${paramIndex++}`);
       params.push(userId);
     }
+
+    if (excludeStatuses && excludeStatuses.length > 0) {
+      const placeholders = excludeStatuses.map(() => `$${paramIndex++}`).join(', ');
+      conditions.push(`"triageStatus" NOT IN (${placeholders})`);
+      params.push(...excludeStatuses);
+    }
+
+    const whereClause = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
+
+    let countSql = `SELECT COUNT(*) as count FROM "tasks"${whereClause}`;
+    const countResult = await this.pool.query(countSql, params);
+    const total = parseInt(countResult.rows[0].count);
+
+    let sql = `SELECT * FROM "tasks"${whereClause}`;
     sql += ' ORDER BY "priority" DESC NULLS LAST, "createdAt" ASC';
 
     if (pagination?.limit !== undefined) {

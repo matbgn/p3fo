@@ -6,8 +6,8 @@ vi.mock('@/hooks/useCircles', () => ({
   useCircles: vi.fn(),
 }));
 
-vi.mock('@/hooks/useUsers', () => ({
-  useUsers: vi.fn(),
+vi.mock('@/context/UsersContext', () => ({
+  useUsersContext: vi.fn(),
 }));
 
 vi.mock('@/lib/collaboration', () => ({
@@ -22,11 +22,11 @@ vi.mock('@blocknote/mantine', () => ({
 }));
 
 import { useCircles } from '@/hooks/useCircles';
-import { useUsers } from '@/hooks/useUsers';
+import { useUsersContext } from '@/context/UsersContext';
 
-describe('RolesTable', () => {
+ describe('RolesTable', () => {
   const mockUseCircles = useCircles as unknown as ReturnType<typeof vi.fn>;
-  const mockUseUsers = useUsers as unknown as ReturnType<typeof vi.fn>;
+  const mockUseUsers = useUsersContext as unknown as ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();

@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, Profiler } from "react";
+import { otelProfilerCallback } from "./telemetry";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,6 +11,8 @@ import { UserSection } from "./components/UserSection";
 import { PersistenceProvider } from "@/lib/PersistenceProvider";
 import { UserProvider } from "@/context/UserContext";
 import { UserSettingsProvider } from "@/context/UserSettingsContext";
+import { UsersProvider } from "@/context/UsersContext";
+import { SettingsProvider } from "@/context/SettingsContext";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { useReminderStore } from "./hooks/useReminders";
@@ -83,31 +86,37 @@ const App = () => {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <PersistenceProvider>
-          <UserProvider>
-            <UserSettingsProvider>
-              <ViewProvider>
-                <Toaster />
-                <Sonner />
-                <CursorOverlay />
-                <NotificationManager />
-                <div className="relative">
-                  <BrowserRouter basename={import.meta.env.VITE_BASE_URL || "/p3fo"} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-                    <Routes>
-                      <Route path="/" element={<Index />} />
-                      {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                      <Route path="*" element={<NotFound />} />
-                    </Routes>
-                  </BrowserRouter>
-                </div>
-              </ViewProvider>
-            </UserSettingsProvider>
-          </UserProvider>
-        </PersistenceProvider>
-      </TooltipProvider>
-    </QueryClientProvider >
+    <Profiler id="Root-App" onRender={otelProfilerCallback}>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <PersistenceProvider>
+            <UserProvider>
+              <UserSettingsProvider>
+                <UsersProvider>
+                  <SettingsProvider>
+                    <ViewProvider>
+                      <Toaster />
+                      <Sonner />
+                      <CursorOverlay />
+                      <NotificationManager />
+                      <div className="relative">
+                        <BrowserRouter basename={import.meta.env.VITE_BASE_URL || "/p3fo"} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                          <Routes>
+                            <Route path="/" element={<Index />} />
+                            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                            <Route path="*" element={<NotFound />} />
+                          </Routes>
+                        </BrowserRouter>
+                      </div>
+                    </ViewProvider>
+                  </SettingsProvider>
+                </UsersProvider>
+              </UserSettingsProvider>
+            </UserProvider>
+          </PersistenceProvider>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </Profiler>
   );
 };
 
