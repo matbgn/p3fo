@@ -136,6 +136,17 @@
   .dark .card-aged-3 {
     filter: grayscale(55%);
   }
+
+  /* react-big-calendar drag-over slot highlight */
+  .rbc-slot-highlight {
+    background-color: hsl(var(--primary) / 0.25) !important;
+    transition: background-color 0.15s ease;
+  }
+
+  /* Hide the click-to-create "slot selection" overlay while a card is being dragged */
+  body.rbc-dnd-active .rbc-slot-selection {
+    display: none !important;
+  }
 }
 
 @media print {

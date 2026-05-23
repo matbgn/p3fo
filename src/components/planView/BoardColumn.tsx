@@ -278,7 +278,11 @@ export function BoardColumn<T extends { id: string }>({
                     </div>
                 )}
 
-                {cards.map(card => renderCard(card))}
+                {cards.map(card => (
+                    <React.Fragment key={card.id}>
+                        {renderCard(card)}
+                    </React.Fragment>
+                ))}
             </div>
         </div>
     );

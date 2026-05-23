@@ -164,10 +164,10 @@ const Column: React.FC<{
     });
   }
 
-  const onDragOver: React.DragEventHandler = (e) => {
-    if (e.dataTransfer.types.includes("text/task-id")) e.preventDefault();
+  const handleColumnDragOver: React.DragEventHandler = (e) => {
+    e.preventDefault(); // unconditional — required for HTML5 DnD to allow dropping
   };
-  const onDrop: React.DragEventHandler = (e) => {
+  const handleColumnDrop: React.DragEventHandler = (e) => {
     const id = e.dataTransfer.getData("text/task-id");
     if (id) onDropTask(id, title);
   };
@@ -196,13 +196,30 @@ const Column: React.FC<{
           )}
         </div>
       </div>
-      <div className="p-2 space-y-2 min-h-[320px]" onDragOver={onDragOver} onDrop={onDrop}>
+      <div className="p-2 space-y-2 min-h-[320px]" onDragOver={handleColumnDragOver} onDrop={handleColumnDrop}>
         {finalBlocks.length === 0 ? (
           <div className="text-xs text-muted-foreground px-2 py-6">No tasks</div>
         ) : (
           finalBlocks.map((blk) =>
             blk.type === "single" ? (
-              <LazyCard key={blk.key}>{blk.node}</LazyCard>
+              (() => {
+                const m = /^p-(.+)$/.exec(blk.key);
+                const taskId = m ? m[1] : undefined;
+                return (
+                  <LazyCard
+                    key={blk.key}
+                    draggable={!!taskId}
+                    onDragStart={(e) => {
+                      if (taskId) {
+                        e.dataTransfer.setData("text/task-id", taskId);
+                        e.dataTransfer.effectAllowed = "move";
+                      }
+                    }}
+                  >
+                    {blk.node}
+                  </LazyCard>
+                );
+              })()
             ) : (
               <LazyCard
                 key={blk.key}

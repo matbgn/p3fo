@@ -429,7 +429,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                 <div
                   className="p-2 space-y-2 min-h-[280px]"
                   onDragOver={(e) => {
-                    if (e.dataTransfer.types.includes("text/task-id")) e.preventDefault();
+                    e.preventDefault(); // unconditional — required for HTML5 DnD
                   }}
                   onDrop={(e) => {
                     const id = e.dataTransfer.getData("text/task-id");
@@ -523,7 +523,24 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                       <div className="text-xs text-muted-foreground px-2 py-6">No items yet.</div>
                     ) : (
                       fullyFilteredItems.map((t) => (
-                        <LazyCard key={t.id}>
+                        <LazyCard
+                          key={t.id}
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData("text/task-id", t.id);
+                            e.dataTransfer.effectAllowed = "move";
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault(); // unconditional — required for HTML5 DnD
+                            e.dataTransfer.dropEffect = "move";
+                          }}
+                          onDrop={(e) => {
+                            e.stopPropagation(); // prevent column drop from also firing
+                            const dragId = e.dataTransfer.getData("text/task-id");
+                            if (!dragId || dragId === t.id) return;
+                            reparent(dragId, t.id);
+                          }}
+                        >
                           <TaskCard
                             ref={(el) => (cardRefs.current[t.id] = el)}
                             task={t}

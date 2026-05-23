@@ -390,15 +390,18 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
         e.dataTransfer.effectAllowed = "move";
       }}
       onDragOver={(e) => {
+        // Only act as a drop target for Kanban/TaskBoard reparenting drags
         if (e.dataTransfer.types.includes("text/task-id")) {
           e.preventDefault();
           e.dataTransfer.dropEffect = "move";
         }
       }}
       onDrop={(e) => {
-        if (disableReparenting) return; // Prevent reparenting if disabled
         const dragId = e.dataTransfer.getData("text/task-id");
-        if (!dragId) return;
+        if (!dragId || dragId === task.id) return;
+        if (disableReparenting) return;
+        e.preventDefault();
+        e.stopPropagation();
         reparent(dragId, task.id);
       }}
       data-active-card={isActive ? "true" : undefined}
