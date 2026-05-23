@@ -12,11 +12,18 @@ export interface FilterState {
     userId: string | null;
     columns: string[];
     minLikes: number;
+    tags: string[];
 }
 
 export interface ColumnOption {
     value: string;
     label: string;
+}
+
+export interface TagOption {
+    value: string;
+    label: string;
+    className?: string;
 }
 
 interface BoardHeaderProps {
@@ -25,6 +32,7 @@ interface BoardHeaderProps {
     filterState: FilterState;
     onFilterChange: (newState: FilterState) => void;
     columnOptions: ColumnOption[];
+    tagOptions?: TagOption[];
     sessionControls?: React.ReactNode;
     customControls?: React.ReactNode; // e.g., Moderator controls
 }
@@ -35,6 +43,7 @@ export const BoardHeader: React.FC<BoardHeaderProps> = ({
     filterState,
     onFilterChange,
     columnOptions,
+    tagOptions,
     sessionControls,
     customControls,
 }) => {
@@ -43,7 +52,8 @@ export const BoardHeader: React.FC<BoardHeaderProps> = ({
     const hasActiveFilters = filterState.searchText.trim() !== '' ||
         filterState.userId !== null ||
         filterState.columns.length > 0 ||
-        filterState.minLikes > 0;
+        filterState.minLikes > 0 ||
+        filterState.tags.length > 0;
 
     const updateFilter = (key: keyof FilterState, value: FilterState[keyof FilterState]) => {
         onFilterChange({ ...filterState, [key]: value });
@@ -55,6 +65,7 @@ export const BoardHeader: React.FC<BoardHeaderProps> = ({
             userId: null,
             columns: [],
             minLikes: 0,
+            tags: [],
         });
     };
 
@@ -156,6 +167,24 @@ export const BoardHeader: React.FC<BoardHeaderProps> = ({
                                 className="w-16"
                             />
                         </div>
+
+                        {/* Tag Filter */}
+                        {tagOptions && tagOptions.length > 0 && (
+                            <>
+                                {/* Vertical separator */}
+                                <div className="h-6 border-l border-gray-300"></div>
+                                <div className="flex items-center gap-2">
+                                    <Label>Tags:</Label>
+                                    <MultiSelect
+                                        options={tagOptions}
+                                        selected={filterState.tags}
+                                        onChange={(tags) => updateFilter('tags', tags)}
+                                        placeholder="All tags..."
+                                        className="w-40"
+                                    />
+                                </div>
+                            </>
+                        )}
 
                         {hasActiveFilters && (
                             <>

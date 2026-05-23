@@ -2,6 +2,13 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Lock, Unlock, Plus, HatGlasses, ChevronDown, ChevronUp } from 'lucide-react';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 
 export interface ColumnDefinition {
     id: string;
@@ -15,8 +22,13 @@ interface BoardColumnProps<T> {
     cards: T[];
     activeColumnId: string | null;
     onSetActiveColumnId: (id: string | null) => void;
-    onAddCard: (content: string, anonymous: boolean) => void;
+    onAddCard: (content: string, anonymous: boolean, tag?: string) => void;
     renderCard: (card: T) => React.ReactNode;
+
+    // Optional tag selector for add input (e.g. fact tags)
+    tagOptions?: { value: string; label: string; letter: string; className?: string }[];
+    tagValue?: string;
+    onTagChange?: (value: string) => void;
 
     // Drag & Drop
     onDragOver: (e: React.DragEvent) => void;
@@ -67,6 +79,9 @@ export function BoardColumn<T extends { id: string }>({
     onTitleDoubleClick,
     className = "min-w-[300px] w-1/5",
     votingToolbar,
+    tagOptions,
+    tagValue,
+    onTagChange,
 }: BoardColumnProps<T>) {
     const [newCardContent, setNewCardContent] = useState('');
     const [isAnonymousMode, setIsAnonymousMode] = useState(false);
@@ -167,30 +182,53 @@ export function BoardColumn<T extends { id: string }>({
                     <div className="mb-2">
                         {activeColumnId === column.id ? (
                             <div className="space-y-2">
-                                <Input
-                                    autoFocus
-                                    value={newCardContent}
-                                    onChange={(e) => setNewCardContent(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            onAddCard(newCardContent, isAnonymousMode);
-                                            setNewCardContent(''); // Keep open or close? Typically keep open for rapid entry but maybe reset content
-                                            // Actually original behavior was to NOT close, but clear content.
-                                        }
-                                        if (e.key === 'Escape') {
-                                            onSetActiveColumnId(null);
-                                            setNewCardContent('');
-                                            setIsAnonymousMode(false);
-                                        }
-                                    }}
-                                    placeholder="Type..."
-                                />
+                                <div className="flex gap-1 items-center">
+                                    <Input
+                                        autoFocus
+                                        value={newCardContent}
+                                        onChange={(e) => setNewCardContent(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                onAddCard(newCardContent, isAnonymousMode, tagValue);
+                                                setNewCardContent('');
+                                            }
+                                            if (e.key === 'Escape') {
+                                                onSetActiveColumnId(null);
+                                                setNewCardContent('');
+                                                setIsAnonymousMode(false);
+                                            }
+                                        }}
+                                        placeholder="Type..."
+                                        className="flex-1"
+                                    />
+                                    {tagOptions && onTagChange && (
+                                        <Select value={tagValue || ''} onValueChange={onTagChange}>
+                                            <SelectTrigger className="w-12 h-10 px-1 text-xs justify-center">
+                                                {(() => {
+                                                    const selected = tagOptions.find(o => o.value === tagValue);
+                                                    return selected ? (
+                                                        <span className={selected.className}>{selected.letter}</span>
+                                                    ) : (
+                                                        <span className="text-muted-foreground">Tag</span>
+                                                    );
+                                                })()}
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {tagOptions.map(opt => (
+                                                    <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                                                        <span className={opt.className}>{opt.letter}</span> {opt.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                </div>
                                 <div className="flex space-x-1">
                                     <Button
                                         size="sm"
                                         className="flex-1"
                                         onClick={() => {
-                                            onAddCard(newCardContent, isAnonymousMode);
+                                            onAddCard(newCardContent, isAnonymousMode, tagValue);
                                             setNewCardContent('');
                                         }}
                                     >

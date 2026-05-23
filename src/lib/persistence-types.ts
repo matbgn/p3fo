@@ -178,6 +178,8 @@ export interface PersistenceAdapter {
   importCircles(circles: CircleEntity[]): Promise<void>;
 }
 
+export type FactTag = 'A' | 'N' | 'K' | 'P';
+
 export interface FertilizationCard {
   id: string;
   columnId: string;
@@ -187,6 +189,7 @@ export interface FertilizationCard {
   isRevealed: boolean; // For hidden edition
   linkedCardIds?: string[]; // IDs of linked cards
   promotedTaskId?: string | null; // ID of task created from this card (for legacy display)
+  factTag?: FactTag; // Achieved / Non-Achieved / Key numbers / Planned (facts column only)
 }
 
 export interface DreamCard extends FertilizationCard {

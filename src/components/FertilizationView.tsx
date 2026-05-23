@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from 'react';
 import { useUserSettings } from '@/hooks/useUserSettings';
-import { FertilizationBoardEntity, FertilizationCard, FertilizationColumn } from '@/lib/persistence-types';
+import { FertilizationBoardEntity, FertilizationCard, FertilizationColumn, FactTag } from '@/lib/persistence-types';
 import { usePersistence } from '@/hooks/usePersistence';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -81,6 +81,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
         userId: null,
         columns: [],
         minLikes: 0,
+        tags: [],
     });
 
     // Per-Column Points Voting State
@@ -91,6 +92,15 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
     // Per-Column MJ Labels State
     const [mjConfigColumnId, setMjConfigColumnId] = useState<string | null>(null);
     const [mjLabelInputs, setMjLabelInputs] = useState<Record<number, string>>({});
+
+    const [factTag, setFactTag] = useState<FactTag>('A');
+
+    const FACT_TAG_OPTIONS = [
+        { value: 'A', label: 'Achieved', letter: 'A', className: 'bg-green-400 text-black px-1 rounded font-bold' },
+        { value: 'N', label: 'Non-Achieved', letter: 'NA', className: 'bg-black text-white px-1 rounded font-bold' },
+        { value: 'K', label: 'Key numbers', letter: 'K', className: 'bg-white text-black border border-gray-200 px-1 rounded font-bold' },
+        { value: 'P', label: 'Planned', letter: 'P', className: 'bg-yellow-400 text-black px-1 rounded font-bold' },
+    ];
 
     // Helper: get effective voting mode for a column (falls back to board-level)
     const getColumnVotingMode = useCallback((columnId: string): VotingMode => {
@@ -250,6 +260,13 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                 const positiveVotes = Object.values(card.votes || {}).filter(v => v > 0).length;
                 return positiveVotes >= filterState.minLikes;
             });
+        }
+
+        // Apply tag filter (fact tags)
+        if (filterState.tags.length > 0) {
+            cards = cards.filter(card =>
+                card.factTag ? filterState.tags.includes(card.factTag) : false
+            );
         }
 
         // Apply search filter with A* algorithm
@@ -512,7 +529,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
         await saveBoard({ ...boardState, hiddenEdition: !boardState.hiddenEdition });
     };
 
-    const addCard = async (content: string, anonymous: boolean) => {
+    const addCard = async (content: string, anonymous: boolean, tag?: FactTag) => {
         if (!boardState || !content.trim() || !activeColumnId) return;
         const newCard: FertilizationCard = {
             id: crypto.randomUUID(),
@@ -521,6 +538,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
             authorId: anonymous ? null : currentUserId,
             votes: {},
             isRevealed: !boardState.hiddenEdition,
+            factTag: activeColumnId === 'facts' ? (tag || 'A') : undefined,
         };
         await saveBoard({
             ...boardState,
@@ -1021,6 +1039,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                 filterState={filterState}
                 onFilterChange={setFilterState}
                 columnOptions={boardState.columns.map(col => ({ value: col.id, label: col.title }))}
+                tagOptions={FACT_TAG_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
                 sessionControls={
                     <>
                         {/* Timer Display */}
@@ -1206,10 +1225,13 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                             })}
                             activeColumnId={activeColumnId}
                             onSetActiveColumnId={setActiveColumnId}
-                            onAddCard={(content, anonymous) => {
+                            onAddCard={(content, anonymous, tag) => {
                                 setActiveColumnId(column.id); // Context for add
-                                addCard(content, anonymous);
+                                addCard(content, anonymous, tag as FactTag);
                             }}
+                            tagOptions={column.id === 'facts' ? FACT_TAG_OPTIONS : undefined}
+                            tagValue={column.id === 'facts' ? factTag : undefined}
+                            onTagChange={(val) => setFactTag(val as FactTag)}
                             isModerator={isModerator}
                             onToggleLock={() => toggleLock(column.id)}
                             onDragOver={handleDragOver}
@@ -1272,10 +1294,15 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                             renderCard={(card) => {
                                 const colCards = filteredCards.filter(c => c.columnId === column.id);
                                 const colMaxScore = Math.max(1, ...colCards.map(c => calculateCardVoteScore(c, column.id)));
+                                const factTag = card.factTag;
                                 return (
                                 <CardView
                                     key={card.id}
                                     card={card}
+                                    tags={factTag ? [{
+                                        label: FACT_TAG_OPTIONS.find(o => o.value === factTag)?.label || factTag,
+                                        className: FACT_TAG_OPTIONS.find(o => o.value === factTag)?.className || 'bg-secondary text-secondary-foreground',
+                                    }] : []}
                                     isModerator={!!isModerator}
                                     currentUserId={currentUserId}
                                     users={users}

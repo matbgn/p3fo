@@ -120,6 +120,14 @@ const TIME_FRAME_LABELS: Record<TimeFrame, string> = {
   '4y': '4 years',
 };
 
+const TIME_FRAME_TAG_OPTIONS = [
+  { value: '3mo', label: TIME_FRAME_LABELS['3mo'], className: 'bg-blue-400 text-white px-1 rounded font-bold' },
+  { value: '6mo', label: TIME_FRAME_LABELS['6mo'], className: 'bg-green-400 text-black px-1 rounded font-bold' },
+  { value: '1y', label: TIME_FRAME_LABELS['1y'], className: 'bg-yellow-400 text-black px-1 rounded font-bold' },
+  { value: '2y', label: TIME_FRAME_LABELS['2y'], className: 'bg-orange-400 text-black px-1 rounded font-bold' },
+  { value: '4y', label: TIME_FRAME_LABELS['4y'], className: 'bg-red-400 text-white px-1 rounded font-bold' },
+];
+
 // TimeTagBadge component
 interface TimeTagBadgeProps {
   timeFrame: TimeFrame;
@@ -195,6 +203,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
     columns: [],
     userId: null,
     minLikes: 0,
+    tags: [],
   });
 
   // Column sort by vote score (none / desc / asc)
@@ -848,6 +857,11 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
     if (filterState.minLikes > 0) {
       cards = cards.filter(c => Object.values(c.votes || {}).filter(v => v > 0).length >= filterState.minLikes);
     }
+    if (filterState.tags.length > 0) {
+      cards = cards.filter(c =>
+        (c as DreamCard).timeFrame ? filterState.tags.includes((c as DreamCard).timeFrame) : false
+      );
+    }
     if (filterState.searchText.trim()) {
       const results = aStarTextSearch(filterState.searchText, cards.map(c => ({ id: c.id, title: c.content })));
       const ids = new Set(results.map(r => r.taskId));
@@ -1159,6 +1173,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
           filterState={filterState}
           onFilterChange={setFilterState}
           columnOptions={boardState.columns.map(c => ({ label: c.title, value: c.id }))}
+          tagOptions={TIME_FRAME_TAG_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
           sessionControls={
             <>
               {/* Timer Display */}
