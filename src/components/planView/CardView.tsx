@@ -508,7 +508,8 @@ export const CardView: React.FC<CardViewProps> = ({
                                             const voteCount = Object.values(card.votes).filter(v => v === 1).length;
                                             const hasVotes = voteCount > 0;
                                             return (
-                                                <div className={`w-full flex items-center justify-center gap-2 p-1.5 rounded-md text-sm font-medium cursor-help overflow-hidden ${hasVotes ? 'bg-green-600 border border-green-600 text-white' : 'bg-muted/50 border text-primary'}`}>
+                                                <div className={`w-full relative flex items-center justify-start gap-2 p-1.5 rounded-md text-sm font-medium cursor-help overflow-hidden ${hasVotes ? 'bg-gray-400 border border-gray-400 text-white' : 'bg-muted/50 border text-primary'}`}>
+                                                    {voteBadgeFill}
                                                     <ThumbsUp className="h-4 w-4 relative z-10" />
                                                     <span className="relative z-10">
                                                         {voteCount}
@@ -649,7 +650,8 @@ export const CardView: React.FC<CardViewProps> = ({
                                             const totalPoints = Object.values(card.votes).reduce((a, b) => a + b, 0);
                                             const hasPoints = totalPoints > 0;
                                             return (
-                                                <div className={`w-full flex items-center justify-center gap-2 p-1.5 rounded-md text-sm font-medium cursor-help overflow-hidden ${hasPoints ? 'bg-green-600 border border-green-600 text-white' : 'bg-muted/50 border text-primary'}`}>
+                                                <div className={`w-full relative flex items-center justify-start gap-2 p-1.5 rounded-md text-sm font-medium cursor-help overflow-hidden ${hasPoints ? 'bg-gray-400 border border-gray-400 text-white' : 'bg-muted/50 border text-primary'}`}>
+                                                    {voteBadgeFill}
                                                     <BarChart3 className="h-4 w-4 relative z-10" />
                                                     <span className="relative z-10">
                                                         {totalPoints}
