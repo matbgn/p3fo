@@ -360,6 +360,13 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
         await saveBoard(newState);
     };
 
+    const resetVotes = async () => {
+        if (!boardState || !isModerator) return;
+        if (!confirm('Are you sure you want to reset all votes? This will clear every vote but keep all cards.')) return;
+        const newCards = boardState.cards.map(c => ({ ...c, votes: {} }));
+        await saveBoard({ ...boardState, cards: newCards, votingPhase: 'IDLE' });
+    };
+
     const becomeModerator = async () => {
         if (!boardState) return;
         if (!confirm('⚠️ Warning: You are about to take over as moderator.\n\nThis should only be done if the current moderator has left the session or is unavailable.\n\nAre you sure you want to become the moderator?')) return;
@@ -974,6 +981,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                                     {boardState.votingPhase === 'VOTING' && (<Button size="sm" variant="secondary" onClick={() => saveBoard({ ...boardState!, votingPhase: 'IDLE' })}><Square className="h-3 w-3 mr-1" /> Stop Voting</Button>)}
                                     {boardState.votingPhase !== 'REVEALED' && (<Button size="sm" variant="outline" onClick={() => saveBoard({ ...boardState!, votingPhase: 'REVEALED' })}><Eye className="h-3 w-3 mr-1" /> Reveal Votes</Button>)}
                                     {boardState.votingPhase === 'REVEALED' && (<Button size="sm" variant="outline" onClick={() => saveBoard({ ...boardState!, votingPhase: 'IDLE' })}><RotateCcw className="h-3 w-3 mr-1" /> Continue Voting</Button>)}
+                                    <Button size="sm" variant="outline" className="text-destructive border-destructive/50 hover:bg-destructive/10" onClick={resetVotes}><Trash2 className="h-3 w-3 mr-1" /> Reset Votes</Button>
                                 </div>
                             )
                         }
@@ -1061,7 +1069,10 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                             setEditingColumnId(column.id);
                             setEditingColumnTitle(column.title);
                         }}
-                        renderCard={(card) => (
+                        renderCard={(card) => {
+                            const colCards = filteredCards.filter(c => c.columnId === column.id);
+                            const colMaxScore = Math.max(1, ...colCards.map(c => calculateCardVoteScore(c)));
+                            return (
                             <CardView
                                 key={card.id}
                                 card={card}
@@ -1103,8 +1114,10 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                                 }}
                                 onDragStart={(e) => handleDragStart(e, card.id)}
                                 isDraggable={!column.isLocked && !linkingCardId}
+                                columnMaxScore={colMaxScore}
                             />
-                        )}
+                            );
+                        }}
                     />
                 ))}
             </div>

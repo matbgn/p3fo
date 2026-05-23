@@ -492,6 +492,13 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
     await saveBoard(newState);
   };
 
+  const resetVotes = async () => {
+    if (!boardState || !isModerator) return;
+    if (!confirm('Are you sure you want to reset all votes? This will clear every vote but keep all cards.')) return;
+    const newCards = boardState.cards.map(c => ({ ...c, votes: {} }));
+    await saveBoard({ ...boardState, cards: newCards, votingPhase: 'IDLE' as VotingPhase });
+  };
+
   const calculateCardVoteScore = (card: DreamCard): number => {
     if (!boardState) return 0;
     const votes = card.votes || {};
@@ -1110,6 +1117,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
                   {boardState.votingPhase === 'VOTING' && (<Button size="sm" variant="secondary" onClick={() => saveBoard({ ...boardState!, votingPhase: 'IDLE' as VotingPhase })}><Square className="h-3 w-3 mr-1" /> Stop Voting</Button>)}
                   {boardState.votingPhase !== 'REVEALED' && (<Button size="sm" variant="outline" onClick={() => saveBoard({ ...boardState!, votingPhase: 'REVEALED' as VotingPhase })}><Eye className="h-3 w-3 mr-1" /> Reveal Votes</Button>)}
                   {boardState.votingPhase === 'REVEALED' && (<Button size="sm" variant="outline" onClick={() => saveBoard({ ...boardState!, votingPhase: 'IDLE' as VotingPhase })}><RotateCcw className="h-3 w-3 mr-1" /> Continue Voting</Button>)}
+                  <Button size="sm" variant="outline" className="text-destructive border-destructive/50 hover:bg-destructive/10" onClick={resetVotes}><Trash2 className="h-3 w-3 mr-1" /> Reset Votes</Button>
                 </div>
               )}
             </>
@@ -1211,7 +1219,10 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
                 }}
                 isEditingTitle={false} // Dream headers are static for now or add logic
                 // ... pass other necessary props
-                renderCard={(card) => (
+                renderCard={(card) => {
+                  const colCards = getSortedCardsForColumn(column.id);
+                  const colMaxScore = Math.max(1, ...colCards.map(c => calculateCardVoteScore(c)));
+                  return (
                   <CardView
                     card={card}
                     tags={(!boardState.isTimelineExpanded && card.columnId === 'dreams') ? [{
@@ -1267,8 +1278,10 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
                     }}
                     onDragStart={(e) => handleDragStart(e, card.id)}
                     isDraggable={!column.isLocked && !linkingCardId}
+                    columnMaxScore={colMaxScore}
                   />
-                )}
+                  );
+                }}
               />
             );
           })}
