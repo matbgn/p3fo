@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from 'react';
 import { useUserSettings } from '@/hooks/useUserSettings';
-import { FertilizationBoardEntity, FertilizationCard, FertilizationColumn } from '@/lib/persistence-types';
+import { FertilizationBoardEntity, FertilizationCard, FertilizationColumn, FactTag } from '@/lib/persistence-types';
 import { usePersistence } from '@/hooks/usePersistence';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,7 +49,7 @@ import { useBoardTimer } from '@/hooks/useBoardTimer';
 type VotingMode = 'THUMBS_UP' | 'THUMBS_UD_NEUTRAL' | 'POINTS' | 'MAJORITY_JUDGMENT';
 type VotingPhase = 'IDLE' | 'VOTING' | 'REVEALED';
 
-import { MJ_SCALE } from './planView/constants';
+import { MJ_SCALE, VOTING_MODES_LABELS } from './planView/constants';
 
 // Default columns
 const DEFAULT_COLUMNS: FertilizationColumn[] = [
@@ -81,11 +81,144 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
         userId: null,
         columns: [],
         minLikes: 0,
+        tags: [],
     });
 
-    // Points Voting State
+    // Per-Column Points Voting State
     const [pointsConfigOpen, setPointsConfigOpen] = useState(false);
+    const [pointsConfigColumnId, setPointsConfigColumnId] = useState<string | null>(null);
     const [pointsConfigValue, setPointsConfigValue] = useState(10);
+
+    // Per-Column MJ Labels State
+    const [mjConfigColumnId, setMjConfigColumnId] = useState<string | null>(null);
+    const [mjLabelInputs, setMjLabelInputs] = useState<Record<number, string>>({});
+
+    const [factTag, setFactTag] = useState<FactTag>('A');
+
+    const FACT_TAG_OPTIONS = [
+        { value: 'A', label: 'Achieved', letter: 'A', className: 'bg-green-400 text-black px-1 rounded font-bold' },
+        { value: 'N', label: 'Non-Achieved', letter: 'NA', className: 'bg-black text-white px-1 rounded font-bold' },
+        { value: 'K', label: 'Key numbers', letter: 'K', className: 'bg-white text-black border border-gray-200 px-1 rounded font-bold' },
+        { value: 'P', label: 'Planned', letter: 'P', className: 'bg-yellow-400 text-black px-1 rounded font-bold' },
+    ];
+
+    // Helper: get effective voting mode for a column (falls back to board-level)
+    const getColumnVotingMode = useCallback((columnId: string): VotingMode => {
+        if (!boardState) return 'THUMBS_UP';
+        const col = boardState.columns.find(c => c.id === columnId);
+        return col?.votingMode ?? boardState.votingMode;
+    }, [boardState]);
+
+    // Helper: get effective voting phase for a column (falls back to board-level)
+    const getColumnVotingPhase = useCallback((columnId: string): VotingPhase => {
+        if (!boardState) return 'IDLE';
+        const col = boardState.columns.find(c => c.id === columnId);
+        return col?.votingPhase ?? boardState.votingPhase;
+    }, [boardState]);
+
+    // Set per-column voting mode
+    const setColumnVotingMode = async (columnId: string, mode: VotingMode) => {
+        if (!boardState || !isModerator) return;
+        const newColumns = boardState.columns.map(col =>
+            col.id === columnId ? { ...col, votingMode: mode, votingPhase: 'IDLE' as VotingPhase, maxPointsPerUser: undefined } : col
+        );
+        await saveBoard({ ...boardState, columns: newColumns });
+    };
+
+    // Start voting for a specific column
+    const startColumnVoting = (columnId: string) => {
+        const mode = getColumnVotingMode(columnId);
+        if (mode === 'POINTS') {
+            setPointsConfigColumnId(columnId);
+        } else if (mode === 'MAJORITY_JUDGMENT') {
+            const col = boardState?.columns.find(c => c.id === columnId);
+            setMjLabelInputs(col?.mjLabels ? { ...col.mjLabels } : {});
+            setMjConfigColumnId(columnId);
+        } else {
+            setColumnVotingPhase(columnId, 'VOTING');
+        }
+    };
+
+    // Set per-column voting phase
+    const setColumnVotingPhase = async (columnId: string, phase: VotingPhase) => {
+        if (!boardState || !isModerator) return;
+        const newColumns = boardState.columns.map(col =>
+            col.id === columnId ? { ...col, votingPhase: phase } : col
+        );
+        await saveBoard({ ...boardState, columns: newColumns });
+    };
+
+    // Confirm points config for a specific column
+    const confirmColumnPointsConfig = async () => {
+        if (!boardState || !pointsConfigColumnId) return;
+        const newColumns = boardState.columns.map(col =>
+            col.id === pointsConfigColumnId ? { ...col, votingPhase: 'VOTING' as VotingPhase, maxPointsPerUser: pointsConfigValue } : col
+        );
+        await saveBoard({ ...boardState, columns: newColumns });
+        setPointsConfigColumnId(null);
+    };
+
+    // Reset votes for a specific column only
+    const resetColumnVotes = async (columnId: string) => {
+        if (!boardState || !isModerator) return;
+        if (!confirm(`Are you sure you want to reset all votes in the "${boardState.columns.find(c => c.id === columnId)?.title}" column? This will clear every vote in this column but keep all cards.`)) return;
+        const newCards = boardState.cards.map(c =>
+            c.columnId === columnId ? { ...c, votes: {} } : c
+        );
+        const newColumns = boardState.columns.map(col =>
+            col.id === columnId ? { ...col, votingPhase: 'IDLE' as VotingPhase } : col
+        );
+        await saveBoard({ ...boardState, cards: newCards, columns: newColumns });
+    };
+
+    // Calculate points used by a user in a specific column
+    const calculateColumnUserUsedPoints = (columnId: string, userId: string) => {
+        if (!boardState) return 0;
+        return boardState.cards
+            .filter(c => c.columnId === columnId)
+            .reduce((acc, card) => acc + (card.votes[userId] || 0), 0);
+    };
+
+    // Vote points scoped to a column's budget
+    const voteColumnPoints = async (cardId: string, delta: number, columnId: string) => {
+        if (!boardState) return;
+        const col = boardState.columns.find(c => c.id === columnId);
+        const maxPoints = col?.maxPointsPerUser ?? boardState.maxPointsPerUser ?? 10;
+        const usedPoints = calculateColumnUserUsedPoints(columnId, currentUserId);
+        const card = boardState.cards.find(c => c.id === cardId);
+        if (!card) return;
+        const currentCardPoints = card.votes[currentUserId] || 0;
+        const newCardPoints = currentCardPoints + delta;
+        if (newCardPoints < 0) return;
+        if (usedPoints - currentCardPoints + newCardPoints > maxPoints) return;
+        const newVotes = { ...card.votes };
+        if (newCardPoints === 0) delete newVotes[currentUserId];
+        else newVotes[currentUserId] = newCardPoints;
+        const newCards = boardState.cards.map(c => c.id === cardId ? { ...c, votes: newVotes } : c);
+        await saveBoard({ ...boardState, cards: newCards });
+    };
+
+    // Vote a card scoped to its column's mode
+    const voteColumnCard = async (cardId: string, value: number, columnId: string) => {
+        if (!boardState) return;
+        const phase = getColumnVotingPhase(columnId);
+        if (phase !== 'VOTING') return;
+        const mode = getColumnVotingMode(columnId);
+        const newCards = boardState.cards.map(c => {
+            if (c.id === cardId) {
+                const currentVote = c.votes[currentUserId];
+                const newVotes = { ...c.votes };
+                if (mode !== 'MAJORITY_JUDGMENT' && currentVote === value) {
+                    delete newVotes[currentUserId];
+                } else {
+                    newVotes[currentUserId] = value;
+                }
+                return { ...c, votes: newVotes };
+            }
+            return c;
+        });
+        await saveBoard({ ...boardState, cards: newCards });
+    };
 
     // Linking mode state
     const [linkingCardId, setLinkingCardId] = useState<string | null>(null);
@@ -129,6 +262,13 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
             });
         }
 
+        // Apply tag filter (fact tags) - only filter cards that actually have a tag
+        if (filterState.tags.length > 0) {
+            cards = cards.filter(card =>
+                !card.factTag || filterState.tags.includes(card.factTag)
+            );
+        }
+
         // Apply search filter with A* algorithm
         if (filterState.searchText.trim()) {
             const searchResults = aStarTextSearch(
@@ -163,6 +303,8 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
             yFertilizationState.set('votingPhase', state.votingPhase);
             yFertilizationState.set('areCursorsVisible', state.areCursorsVisible);
             yFertilizationState.set('showAllLinks', state.showAllLinks);
+            if (state.maxPointsPerUser !== undefined) yFertilizationState.set('maxPointsPerUser', state.maxPointsPerUser);
+            if (state.mjLabels !== undefined) yFertilizationState.set('mjLabels', state.mjLabels);
 
             // Sync Columns
             state.columns.forEach(col => {
@@ -205,6 +347,9 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
             const areCursorsVisible = yFertilizationState.get('areCursorsVisible') as boolean ?? true;
             const showAllLinks = yFertilizationState.get('showAllLinks') as boolean ?? false;
 
+            const maxPointsPerUser = yFertilizationState.get('maxPointsPerUser') as number | undefined;
+            const mjLabels = yFertilizationState.get('mjLabels') as Record<number, string> | undefined;
+
             const columns = Array.from(yFertilizationColumns.values()) as FertilizationColumn[];
             const sortedColumns = DEFAULT_COLUMNS.map(defCol =>
                 columns.find(c => c.id === defCol.id) || defCol
@@ -222,6 +367,8 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                     votingPhase,
                     areCursorsVisible,
                     showAllLinks,
+                    maxPointsPerUser,
+                    mjLabels,
                     columns: sortedColumns,
                     cards: cards
                 };
@@ -275,6 +422,8 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                         const votingPhase = (yFertilizationState.get('votingPhase') as VotingPhase) || 'IDLE';
                         const areCursorsVisible = yFertilizationState.get('areCursorsVisible') as boolean ?? true;
                         const showAllLinks = yFertilizationState.get('showAllLinks') as boolean ?? false;
+                        const maxPointsPerUser = yFertilizationState.get('maxPointsPerUser') as number | undefined;
+                        const mjLabels = yFertilizationState.get('mjLabels') as Record<number, string> | undefined;
                         const columns = Array.from(yFertilizationColumns.values()) as FertilizationColumn[];
                         const sortedColumns = DEFAULT_COLUMNS.map(defCol =>
                             columns.find(c => c.id === defCol.id) || defCol
@@ -290,6 +439,8 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                             votingPhase,
                             areCursorsVisible,
                             showAllLinks,
+                            maxPointsPerUser,
+                            mjLabels,
                             columns: sortedColumns,
                             cards: cards
                         };
@@ -360,6 +511,13 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
         await saveBoard(newState);
     };
 
+    const resetVotes = async () => {
+        if (!boardState || !isModerator) return;
+        if (!confirm('Are you sure you want to reset all votes? This will clear every vote but keep all cards.')) return;
+        const newCards = boardState.cards.map(c => ({ ...c, votes: {} }));
+        await saveBoard({ ...boardState, cards: newCards, votingPhase: 'IDLE' });
+    };
+
     const becomeModerator = async () => {
         if (!boardState) return;
         if (!confirm('⚠️ Warning: You are about to take over as moderator.\n\nThis should only be done if the current moderator has left the session or is unavailable.\n\nAre you sure you want to become the moderator?')) return;
@@ -382,7 +540,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
         await saveBoard({ ...boardState, hiddenEdition: !boardState.hiddenEdition });
     };
 
-    const addCard = async (content: string, anonymous: boolean) => {
+    const addCard = async (content: string, anonymous: boolean, tag?: FactTag) => {
         if (!boardState || !content.trim() || !activeColumnId) return;
         const newCard: FertilizationCard = {
             id: crypto.randomUUID(),
@@ -391,6 +549,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
             authorId: anonymous ? null : currentUserId,
             votes: {},
             isRevealed: !boardState.hiddenEdition,
+            factTag: activeColumnId === 'facts' ? (tag || 'A') : undefined,
         };
         await saveBoard({
             ...boardState,
@@ -439,6 +598,12 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
     const updateCardAuthor = async (cardId: string, authorId: string | null) => {
         if (!boardState) return;
         const newCards = boardState.cards.map(c => c.id === cardId ? { ...c, authorId } : c);
+        await saveBoard({ ...boardState, cards: newCards });
+    };
+
+    const updateCardFactTag = async (cardId: string, factTag: FactTag) => {
+        if (!boardState) return;
+        const newCards = boardState.cards.map(c => c.id === cardId ? { ...c, factTag } : c);
         await saveBoard({ ...boardState, cards: newCards });
     };
 
@@ -511,12 +676,13 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
         if (onPromoteToKanban) onPromoteToKanban(newTaskId);
     };
 
-    const calculateCardVoteScore = (card: FertilizationCard): number => {
+    const calculateCardVoteScore = (card: FertilizationCard, columnId?: string): number => {
         if (!boardState) return 0;
+        const mode = columnId ? getColumnVotingMode(columnId) : boardState.votingMode;
         const votes = card.votes || {};
         const values = Object.values(votes);
         if (values.length === 0) return 0;
-        switch (boardState.votingMode) {
+        switch (mode) {
             case 'THUMBS_UP': return values.filter(v => v > 0).length;
             case 'THUMBS_UD_NEUTRAL': return values.reduce((acc, v) => acc + v, 0);
             case 'POINTS': return values.reduce((acc, v) => acc + v, 0);
@@ -556,18 +722,14 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                 cardsToLink.add(id);
                 pairsToDraw.push([linkingCardId, id]);
             });
-            linkedIds.forEach(id => {
-                cardsToLink.add(id);
-                pairsToDraw.push([linkingCardId, id]);
-            });
         } else if (boardState.showAllLinks) {
-            // If showAllLinks is enabled (visible to everyone), show ALL links
+            const seen = new Set<string>();
             boardState.cards.forEach(card => {
                 if (card.linkedCardIds && card.linkedCardIds.length > 0) {
                     card.linkedCardIds.forEach(linkedId => {
-                        // Avoid duplicates by sorting ids or just adding (we filter dupes later implicitly by line logic? No, we might double draw)
-                        // Let's standardise order to avoid double lines
-                        if (card.id < linkedId) {
+                        const key = card.id < linkedId ? `${card.id}::${linkedId}` : `${linkedId}::${card.id}`;
+                        if (!seen.has(key)) {
+                            seen.add(key);
                             pairsToDraw.push([card.id, linkedId]);
                         }
                     });
@@ -841,6 +1003,47 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                 </DialogContent>
             </Dialog>
 
+            {/* Points Config Dialog */}
+            <Dialog open={pointsConfigColumnId !== null} onOpenChange={(open) => !open && setPointsConfigColumnId(null)}>
+                <DialogContent className="sm:max-w-sm">
+                    <DialogHeader><DialogTitle>Configure Points Budget</DialogTitle></DialogHeader>
+                    <div className="flex items-center gap-4 py-4">
+                        <Label className="text-right">Max Points:</Label>
+                        <Input type="number" value={pointsConfigValue} onChange={(e) => setPointsConfigValue(Math.max(1, parseInt(e.target.value) || 0))} className="col-span-3" />
+                    </div>
+                    <Button onClick={confirmColumnPointsConfig}>Start Points Voting</Button>
+                </DialogContent>
+            </Dialog>
+
+            {/* MJ Labels Config Dialog */}
+            <Dialog open={mjConfigColumnId !== null} onOpenChange={(open) => !open && setMjConfigColumnId(null)}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader><DialogTitle>Configure Majority Judgment Labels</DialogTitle></DialogHeader>
+                    <div className="space-y-3 py-2">
+                        {MJ_SCALE.map(grade => (
+                            <div key={grade.value} className="flex items-center gap-3">
+                                <span className={`flex items-center justify-center w-6 h-6 rounded ${grade.color} text-[10px]`}>{grade.icon}</span>
+                                <Input
+                                    value={mjLabelInputs[grade.value] ?? grade.label}
+                                    onChange={(e) => setMjLabelInputs(prev => ({ ...prev, [grade.value]: e.target.value }))}
+                                    className="flex-1"
+                                    placeholder={`Label for grade ${grade.value}`}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                    <Button onClick={async () => {
+                        if (!boardState || !mjConfigColumnId) return;
+                        const newColumns = boardState.columns.map(col =>
+                            col.id === mjConfigColumnId ? { ...col, mjLabels: { ...mjLabelInputs } } : col
+                        );
+                        await saveBoard({ ...boardState, columns: newColumns });
+                        setMjConfigColumnId(null);
+                        setMjLabelInputs({});
+                    }}>Save & Start MJ Voting</Button>
+                </DialogContent>
+            </Dialog>
+
             <BoardHeader
                 title="Fertilization Board"
                 titleContent={
@@ -853,6 +1056,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                 filterState={filterState}
                 onFilterChange={setFilterState}
                 columnOptions={boardState.columns.map(col => ({ value: col.id, label: col.title }))}
+                tagOptions={FACT_TAG_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
                 sessionControls={
                     <>
                         {/* Timer Display */}
@@ -946,7 +1150,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                         {
                             isModerator && (
                                 <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium mr-1">Voting:</span>
+                                    <span className="text-sm font-medium mr-1">Default Voting:</span>
                                     <Select value={boardState.votingMode} onValueChange={(val: VotingMode) => saveBoard({ ...boardState!, votingMode: val, votingPhase: 'IDLE' })} disabled={boardState.votingPhase !== 'IDLE'}>
                                         <SelectTrigger className="w-[180px] h-8"><SelectValue placeholder="Mode" /></SelectTrigger>
                                         <SelectContent>
@@ -956,24 +1160,8 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                                             <SelectItem value="MAJORITY_JUDGMENT">Majority Judgment</SelectItem>
                                         </SelectContent>
                                     </Select>
-                                    {boardState.votingPhase === 'IDLE' && (
-                                        <>
-                                            <Button size="sm" onClick={handleStartVoting}><Play className="h-3 w-3 mr-1" /> Start Voting</Button>
-                                            <Dialog open={pointsConfigOpen} onOpenChange={setPointsConfigOpen}>
-                                                <DialogContent className="sm:max-w-sm">
-                                                    <DialogHeader><DialogTitle>Configure Points Budget</DialogTitle></DialogHeader>
-                                                    <div className="flex items-center gap-4 py-4">
-                                                        <Label className="text-right">Max Points:</Label>
-                                                        <Input type="number" value={pointsConfigValue} onChange={(e) => setPointsConfigValue(Math.max(1, parseInt(e.target.value) || 0))} className="col-span-3" />
-                                                    </div>
-                                                    <Button onClick={confirmPointsConfig}>Start Points Voting</Button>
-                                                </DialogContent>
-                                            </Dialog>
-                                        </>
-                                    )}
-                                    {boardState.votingPhase === 'VOTING' && (<Button size="sm" variant="secondary" onClick={() => saveBoard({ ...boardState!, votingPhase: 'IDLE' })}><Square className="h-3 w-3 mr-1" /> Stop Voting</Button>)}
-                                    {boardState.votingPhase !== 'REVEALED' && (<Button size="sm" variant="outline" onClick={() => saveBoard({ ...boardState!, votingPhase: 'REVEALED' })}><Eye className="h-3 w-3 mr-1" /> Reveal Votes</Button>)}
-                                    {boardState.votingPhase === 'REVEALED' && (<Button size="sm" variant="outline" onClick={() => saveBoard({ ...boardState!, votingPhase: 'IDLE' })}><RotateCcw className="h-3 w-3 mr-1" /> Continue Voting</Button>)}
+                                    <Button size="sm" variant="outline" onClick={() => saveBoard({ ...boardState!, votingPhase: 'REVEALED' })}><Eye className="h-3 w-3 mr-1" /> Reveal All</Button>
+                                    <Button size="sm" variant="outline" className="text-destructive border-destructive/50 hover:bg-destructive/10" onClick={resetVotes}><Trash2 className="h-3 w-3 mr-1" /> Reset All Votes</Button>
                                 </div>
                             )
                         }
@@ -1012,101 +1200,174 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                         height={boardContainerRef.current?.clientHeight || 0}
                         style={{ overflow: 'visible', zIndex: 10 }}
                     >
+                        <defs>
+                            <filter id="link-glow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="2" result="blur" />
+                                <feMerge>
+                                    <feMergeNode in="blur" />
+                                    <feMergeNode in="SourceGraphic" />
+                                </feMerge>
+                            </filter>
+                        </defs>
                         {linkLines.map((l, i) => (
                             <path
                                 key={i}
                                 d={`M ${l.x1} ${l.y1} C ${l.x1 + 40} ${l.y1}, ${l.x2 - 40} ${l.y2}, ${l.x2} ${l.y2}`}
-                                stroke="#facc15"
-                                strokeWidth="3"
+                                stroke="rgba(250, 204, 21, 0.55)"
+                                strokeWidth="2"
+                                strokeDasharray="6 4"
+                                strokeLinecap="round"
                                 fill="none"
+                                filter="url(#link-glow)"
                             />
                         ))}
                     </svg>
                 )}
 
-                {boardState.columns.map(column => (
-                    <BoardColumn
-                        key={column.id}
-                        column={column}
-                        cards={filteredCards.filter(c => c.columnId === column.id).sort((a, b) => {
-                            const sortOrder = columnSortOrder[column.id];
-                            if (!sortOrder || sortOrder === 'none') return 0;
-                            const scoreA = calculateCardVoteScore(a);
-                            const scoreB = calculateCardVoteScore(b);
-                            return sortOrder === 'desc' ? scoreB - scoreA : scoreA - scoreB;
-                        })}
-                        activeColumnId={activeColumnId}
-                        onSetActiveColumnId={setActiveColumnId}
-                        onAddCard={(content, anonymous) => {
-                            setActiveColumnId(column.id); // Context for add
-                            addCard(content, anonymous);
-                        }}
-                        isModerator={isModerator}
-                        onToggleLock={() => toggleLock(column.id)}
-                        onDragOver={handleDragOver}
-                        onDrop={(e) => handleDrop(e, column.id)}
-                        sortOrder={columnSortOrder[column.id]}
-                        onToggleSort={() => toggleColumnSort(column.id)}
-                        isEditingTitle={editingColumnId === column.id}
-                        editingTitleValue={editingColumnTitle}
-                        onEditingTitleChange={setEditingColumnTitle}
-                        onEditingTitleCommit={() => {
-                            if (editingColumnTitle.trim() && editingColumnTitle.trim() !== column.title) {
-                                updateColumnTitle(column.id, editingColumnTitle.trim());
-                            }
-                            setEditingColumnId(null);
-                        }}
-                        onEditingTitleCancel={() => setEditingColumnId(null)}
-                        onTitleDoubleClick={() => {
-                            setEditingColumnId(column.id);
-                            setEditingColumnTitle(column.title);
-                        }}
-                        renderCard={(card) => (
-                            <CardView
-                                key={card.id}
-                                card={card}
-                                isModerator={!!isModerator}
-                                currentUserId={currentUserId}
-                                users={users}
-                                userSettings={userSettings}
-                                hiddenEdition={boardState.hiddenEdition}
-                                votingMode={boardState.votingMode}
-                                votingPhase={boardState.votingPhase}
-                                maxPoints={boardState.maxPointsPerUser}
-                                userPointsUsed={calculateUserUsedPoints(currentUserId)}
-                                isEditing={editingCardId === card.id}
-                                onEditStart={() => {
-                                    setEditingCardId(card.id);
-                                    setEditingCardContent(card.content);
-                                }}
-                                onEditEnd={() => setEditingCardId(null)}
-                                linkingCardId={linkingCardId}
-                                isLinkedToLinkingCard={!!linkingCardId && card.id !== linkingCardId && getLinkedCardIds(linkingCardId).has(card.id)}
-                                isDirectlyLinked={!!linkingCardId && card.id !== linkingCardId && (boardState.cards.find(c => c.id === linkingCardId)?.linkedCardIds?.includes(card.id) || false)}
-                                onUpdateContent={(content) => updateCardContent(card.id, content)}
-                                onUpdateAuthor={(authorId) => updateCardAuthor(card.id, authorId)}
-                                onDelete={() => deleteCard(card.id)}
-                                onPromote={() => openPromoteDialog(card)}
-                                onVote={(value) => {
-                                    if (boardState.votingMode === 'POINTS') {
-                                        votePoints(card.id, value);
-                                    } else {
-                                        voteCard(card.id, value);
-                                    }
-                                }}
-                                onToggleLink={() => {
-                                    if (linkingCardId && card.id !== linkingCardId) {
-                                        toggleLinkCards(linkingCardId, card.id);
-                                    } else {
-                                        setLinkingCardId(linkingCardId === card.id ? null : card.id);
-                                    }
-                                }}
-                                onDragStart={(e) => handleDragStart(e, card.id)}
-                                isDraggable={!column.isLocked && !linkingCardId}
-                            />
-                        )}
-                    />
-                ))}
+                {boardState.columns.map(column => {
+                    const colMode = getColumnVotingMode(column.id);
+                    const colPhase = getColumnVotingPhase(column.id);
+                    const colMaxPoints = column.maxPointsPerUser ?? boardState.maxPointsPerUser;
+                    const colPointsUsed = calculateColumnUserUsedPoints(column.id, currentUserId);
+                    return (
+                        <BoardColumn
+                            key={column.id}
+                            column={column}
+                            cards={filteredCards.filter(c => c.columnId === column.id).sort((a, b) => {
+                                const sortOrder = columnSortOrder[column.id];
+                                if (!sortOrder || sortOrder === 'none') return 0;
+                                const scoreA = calculateCardVoteScore(a, column.id);
+                                const scoreB = calculateCardVoteScore(b, column.id);
+                                return sortOrder === 'desc' ? scoreB - scoreA : scoreA - scoreB;
+                            })}
+                            activeColumnId={activeColumnId}
+                            onSetActiveColumnId={setActiveColumnId}
+                            onAddCard={(content, anonymous, tag) => {
+                                setActiveColumnId(column.id); // Context for add
+                                addCard(content, anonymous, tag as FactTag);
+                            }}
+                            tagOptions={column.id === 'facts' ? FACT_TAG_OPTIONS : undefined}
+                            tagValue={column.id === 'facts' ? factTag : undefined}
+                            onTagChange={(val) => setFactTag(val as FactTag)}
+                            isModerator={isModerator}
+                            onToggleLock={() => toggleLock(column.id)}
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, column.id)}
+                            sortOrder={columnSortOrder[column.id]}
+                            onToggleSort={() => toggleColumnSort(column.id)}
+                            isEditingTitle={editingColumnId === column.id}
+                            editingTitleValue={editingColumnTitle}
+                            onEditingTitleChange={setEditingColumnTitle}
+                            onEditingTitleCommit={() => {
+                                if (editingColumnTitle.trim() && editingColumnTitle.trim() !== column.title) {
+                                    updateColumnTitle(column.id, editingColumnTitle.trim());
+                                }
+                                setEditingColumnId(null);
+                            }}
+                            onEditingTitleCancel={() => setEditingColumnId(null)}
+                            onTitleDoubleClick={() => {
+                                setEditingColumnId(column.id);
+                                setEditingColumnTitle(column.title);
+                            }}
+                            votingToolbar={isModerator ? (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-xs font-medium whitespace-nowrap">{VOTING_MODES_LABELS[colMode]}</span>
+                                    {colMode === 'POINTS' && colPhase === 'VOTING' && (
+                                        <span className="text-xs text-primary whitespace-nowrap">
+                                            Budget: {colPointsUsed}/{colMaxPoints || 10} pts
+                                        </span>
+                                    )}
+                                    {colPhase === 'IDLE' && (
+                                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => startColumnVoting(column.id)}><Play className="h-3 w-3 mr-1" /> Vote</Button>
+                                    )}
+                                    {colPhase === 'VOTING' && (
+                                        <Button size="sm" variant="secondary" className="h-6 px-2 text-xs" onClick={() => setColumnVotingPhase(column.id, 'IDLE')}><Square className="h-3 w-3 mr-1" /> Stop</Button>
+                                    )}
+                                    {colPhase !== 'REVEALED' && (
+                                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => setColumnVotingPhase(column.id, 'REVEALED')}><Eye className="h-3 w-3 mr-1" /> Reveal</Button>
+                                    )}
+                                    {colPhase === 'REVEALED' && (
+                                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => setColumnVotingPhase(column.id, 'IDLE')}><RotateCcw className="h-3 w-3 mr-1" /> Revote</Button>
+                                    )}
+                                    <Button size="sm" variant="outline" className="h-6 px-2 text-xs text-destructive border-destructive/50 hover:bg-destructive/10" onClick={() => resetColumnVotes(column.id)}><Trash2 className="h-3 w-3 mr-1" /> Reset</Button>
+                                    <Select value={colMode} onValueChange={(val: VotingMode) => setColumnVotingMode(column.id, val)} disabled={colPhase !== 'IDLE'}>
+                                        <SelectTrigger className="w-[100px] h-6 text-xs px-1"><SelectValue placeholder="Mode" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="THUMBS_UP">Thumbs Up</SelectItem>
+                                            <SelectItem value="THUMBS_UD_NEUTRAL">Up/Down</SelectItem>
+                                            <SelectItem value="POINTS">Points</SelectItem>
+                                            <SelectItem value="MAJORITY_JUDGMENT">MJ</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-1">
+                                    <span className="text-xs text-muted-foreground">{VOTING_MODES_LABELS[colMode]}</span>
+                                    {colPhase === 'VOTING' && <span className="text-[10px] text-green-600 flex items-center gap-0.5"><Play className="h-2.5 w-2.5" />Open</span>}
+                                    {colPhase === 'REVEALED' && <span className="text-[10px] text-blue-600 flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" />Revealed</span>}
+                                    {colPhase === 'IDLE' && <span className="text-[10px] text-muted-foreground">Closed</span>}
+                                </div>
+                            )}
+                            renderCard={(card) => {
+                                const colCards = filteredCards.filter(c => c.columnId === column.id);
+                                const colMaxScore = Math.max(1, ...colCards.map(c => calculateCardVoteScore(c, column.id)));
+                                const factTag = card.factTag;
+                                return (
+                                <CardView
+                                    key={card.id}
+                                    card={card}
+                                    tags={column.id !== 'facts' && factTag ? [{
+                                        label: FACT_TAG_OPTIONS.find(o => o.value === factTag)?.label || factTag,
+                                        className: FACT_TAG_OPTIONS.find(o => o.value === factTag)?.className || 'bg-secondary text-secondary-foreground',
+                                    }] : []}
+                                    isModerator={!!isModerator}
+                                    currentUserId={currentUserId}
+                                    users={users}
+                                    userSettings={userSettings}
+                                    hiddenEdition={boardState.hiddenEdition}
+                                    votingMode={colMode}
+                                    votingPhase={colPhase}
+                                    maxPoints={colMaxPoints}
+                                    userPointsUsed={colPointsUsed}
+                                    isEditing={editingCardId === card.id}
+                                    onEditStart={() => {
+                                        setEditingCardId(card.id);
+                                        setEditingCardContent(card.content);
+                                    }}
+                                    onEditEnd={() => setEditingCardId(null)}
+                                    linkingCardId={linkingCardId}
+                                    isLinkedToLinkingCard={!!linkingCardId && card.id !== linkingCardId && getLinkedCardIds(linkingCardId).has(card.id)}
+                                    isDirectlyLinked={!!linkingCardId && card.id !== linkingCardId && (boardState.cards.find(c => c.id === linkingCardId)?.linkedCardIds?.includes(card.id) || false)}
+                                    onUpdateContent={(content) => updateCardContent(card.id, content)}
+                                    onUpdateAuthor={(authorId) => updateCardAuthor(card.id, authorId)}
+                                    onDelete={() => deleteCard(card.id)}
+                                    onPromote={() => openPromoteDialog(card)}
+                                    onVote={(value) => {
+                                        if (colMode === 'POINTS') {
+                                            voteColumnPoints(card.id, value, column.id);
+                                        } else {
+                                            voteColumnCard(card.id, value, column.id);
+                                        }
+                                    }}
+                                    onToggleLink={() => {
+                                        if (linkingCardId && card.id !== linkingCardId) {
+                                            toggleLinkCards(linkingCardId, card.id);
+                                        } else {
+                                            setLinkingCardId(linkingCardId === card.id ? null : card.id);
+                                        }
+                                    }}
+                                    onDragStart={(e) => handleDragStart(e, card.id)}
+                                    isDraggable={!column.isLocked && !linkingCardId}
+                                    columnMaxScore={colMaxScore}
+                                    mjLabels={column.mjLabels}
+                                    factTagOptions={column.id === 'facts' ? FACT_TAG_OPTIONS : undefined}
+                                    onUpdateFactTag={(tag) => updateCardFactTag(card.id, tag as FactTag)}
+                                />
+                                );
+                            }}
+                        />
+                    );
+                })}
             </div>
         </BoardLayout>
     );

@@ -27,7 +27,31 @@ import { useUsersContext, UserWithTrigram } from '@/context/UsersContext';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { UserAvatar } from "./UserAvatar";
 
-// Editable time entry component
+function plainDateTimeToDisplayString(pdt: Temporal.PlainDateTime): string {
+    return pdt.toString({ smallestUnit: 'second' }).slice(0, 19);
+}
+
+function plainDateTimeToTimestampS(pdt: Temporal.PlainDateTime, timezone: string): number {
+    return pdt.toZonedDateTime(timezone).epochMilliseconds;
+}
+
+function dateDayToPlainDateTime(date: Date, timePdt: Temporal.PlainDateTime | null, timezone: string): Temporal.PlainDateTime {
+    const datePdt = Temporal.PlainDate.from({
+        year: date.getFullYear(),
+        month: date.getMonth() + 1,
+        day: date.getDate(),
+    });
+    const timePart = timePdt
+        ? { hour: timePdt.hour, minute: timePdt.minute, second: timePdt.second }
+        : { hour: 0, minute: 0, second: 0 };
+    return Temporal.PlainDateTime.from({
+        year: datePdt.year,
+        month: datePdt.month,
+        day: datePdt.day,
+        ...timePart,
+    });
+}
+
 export const EditableTimeEntry: React.FC<{
   entry: {
     taskId: string;
@@ -53,18 +77,19 @@ export const EditableTimeEntry: React.FC<{
   };
 }> = ({ entry, taskMap, onUpdateTimeEntry, onUpdateTaskCategory, onUpdateUser, onDelete, onJumpToTask, onToggleTimer, children, overlapInfo }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [editStartTime, setEditStartTime] = useState('');
-  const [editEndTime, setEditEndTime] = useState('');
-  const [editTaskCategory, setEditTaskCategory] = useState<string>("Uncategorized");
   const { settings } = useSettingsContext();
   const weekStartsOn = settings.weekStartDay as 0 | 1;
+  const timezone = settings.timezone || 'Europe/Zurich';
+
+  const [startPdt, setStartPdt] = useState<Temporal.PlainDateTime | null>(null);
+  const [endPdt, setEndPdt] = useState<Temporal.PlainDateTime | null>(null);
+  const [editTaskCategory, setEditTaskCategory] = useState<string>("Uncategorized");
 
   const task = taskMap[entry.taskId];
   const { users } = useUsersContext();
   const { userSettings, userId: currentUserId } = useUserSettings();
   const [editUserId, setEditUserId] = useState<string | undefined>(undefined);
 
-  // State for time picker dialog
   const [timePickerOpen, setTimePickerOpen] = useState(false);
   const [timePickerConfig, setTimePickerConfig] = useState<{
     type: 'start' | 'end';
@@ -77,58 +102,39 @@ export const EditableTimeEntry: React.FC<{
   };
 
   const startInstant = timestampToInstant(entry.startTime);
-  const startPlainDateTime = instantToPlainDateTime(startInstant, settings.timezone);
+  const startPlainDateTime = instantToPlainDateTime(startInstant, timezone);
 
   const endInstant = entry.endTime > 0
     ? timestampToInstant(entry.endTime)
     : null;
   const endPlainDateTime = endInstant
-    ? instantToPlainDateTime(endInstant, settings.timezone)
+    ? instantToPlainDateTime(endInstant, timezone)
     : null;
 
-  // Calculate duration
   const duration = entry.endTime > 0
     ? entry.endTime - entry.startTime
     : Date.now() - entry.startTime;
 
   const handleEdit = () => {
-    setEditStartTime(startPlainDateTime.toString({ smallestUnit: 'second' }).slice(0, 19));
-    setEditEndTime(endPlainDateTime ? endPlainDateTime.toString({ smallestUnit: 'second' }).slice(0, 19) : '');
+    setStartPdt(startPlainDateTime);
+    setEndPdt(endPlainDateTime);
     setEditTaskCategory(entry.taskCategory || "Uncategorized");
     setEditUserId(task?.userId);
     setIsEditing(true);
   };
 
-  // Handle double-click to enter edit mode
   const handleDoubleClick = () => {
     handleEdit();
   };
 
   const handleSave = () => {
     try {
-      const [startDatePart, startTimePart] = editStartTime.split('T');
-      const [startYear, startMonth, startDay] = startDatePart.split('-').map(Number);
-      const [startHour, startMinute, startSecond] = startTimePart.split(':').map(Number);
-
-      const startPlainDateTime = Temporal.PlainDateTime.from({
-        year: startYear, month: startMonth, day: startDay,
-        hour: startHour, minute: startMinute, second: startSecond
-      });
-
-      const newStartTime = plainDateTimeToTimestamp(startPlainDateTime, settings.timezone);
+      if (!startPdt) return;
+      const newStartTime = plainDateTimeToTimestampS(startPdt, timezone);
 
       let newEndTime = 0;
-      if (editEndTime) {
-        const [endDatePart, endTimePart] = editEndTime.split('T');
-        const [endYear, endMonth, endDay] = endDatePart.split('-').map(Number);
-        const [endHour, endMinute, endSecond] = endTimePart.split(':').map(Number);
-
-        const endPlainDateTime = Temporal.PlainDateTime.from({
-          year: endYear, month: endMonth, day: endDay,
-          hour: endHour, minute: endMinute, second: endSecond
-        });
-
-        newEndTime = plainDateTimeToTimestamp(endPlainDateTime, settings.timezone);
+      if (endPdt) {
+        newEndTime = plainDateTimeToTimestampS(endPdt, timezone);
       }
 
       onUpdateTimeEntry(entry.taskId, entry.index, { startTime: newStartTime, endTime: newEndTime });
@@ -149,6 +155,11 @@ export const EditableTimeEntry: React.FC<{
   };
 
   if (isEditing) {
+    const startDisplayStr = startPdt ? plainDateTimeToDisplayString(startPdt) : '';
+    const endDisplayStr = endPdt ? plainDateTimeToDisplayString(endPdt) : '';
+    const startAsDate = startPdt ? new Date(startPdt.year, startPdt.month - 1, startPdt.day) : undefined;
+    const endAsDate = endPdt ? new Date(endPdt.year, endPdt.month - 1, endPdt.day) : undefined;
+
     return (
       <TableRow>
         <TableCell>{entry.taskTitle}</TableCell>
@@ -181,12 +192,12 @@ export const EditableTimeEntry: React.FC<{
                 variant={"outline"}
                 className={cn(
                   "w-[240px] justify-start text-left font-normal",
-                  !editStartTime && "text-muted-foreground"
+                  !startDisplayStr && "text-muted-foreground"
                 )}
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
-                {editStartTime ? (
-                  format(new Date(editStartTime), "PPP p")
+                {startPdt ? (
+                  format(startAsDate!, "PPP p")
                 ) : (
                   <span>Pick a date</span>
                 )}
@@ -195,12 +206,10 @@ export const EditableTimeEntry: React.FC<{
             <PopoverContent className="w-auto p-0" align="start">
               <Calendar
                 mode="single"
-                selected={editStartTime ? new Date(editStartTime) : undefined}
+                selected={startAsDate}
                 onSelect={(date) => {
-                  if (date) {
-                    const current = editStartTime ? new Date(editStartTime) : new Date();
-                    date.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
-                    setEditStartTime(format(date, "yyyy-MM-dd'T'HH:mm:ss"));
+                  if (date && startPdt) {
+                    setStartPdt(dateDayToPlainDateTime(date, startPdt, timezone));
                   }
                 }}
                 initialFocus
@@ -210,11 +219,11 @@ export const EditableTimeEntry: React.FC<{
                 <Button
                   variant="outline"
                   className="w-full justify-start"
-                  onClick={() => openTimePicker('start', editStartTime ? new Date(editStartTime).getTime() : Date.now())}
+                  onClick={() => openTimePicker('start', startPdt ? plainDateTimeToTimestampS(startPdt, timezone) : Date.now())}
                 >
                   <Clock className="mr-2 h-4 w-4" />
-                  {editStartTime ? (
-                    format(new Date(editStartTime), "HH:mm:ss")
+                  {startPdt ? (
+                    `${startPdt.hour.toString().padStart(2, '0')}:${startPdt.minute.toString().padStart(2, '0')}:${startPdt.second.toString().padStart(2, '0')}`
                   ) : (
                     <span className="text-muted-foreground">Set time...</span>
                   )}
@@ -230,12 +239,12 @@ export const EditableTimeEntry: React.FC<{
                 variant={"outline"}
                 className={cn(
                   "w-[240px] justify-start text-left font-normal",
-                  !editEndTime && "text-muted-foreground"
+                  !endPdt && "text-muted-foreground"
                 )}
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
-                {editEndTime ? (
-                  format(new Date(editEndTime), "PPP p")
+                {endPdt ? (
+                  format(endAsDate!, "PPP p")
                 ) : (
                   <span>Running...</span>
                 )}
@@ -244,12 +253,11 @@ export const EditableTimeEntry: React.FC<{
             <PopoverContent className="w-auto p-0" align="start">
               <Calendar
                 mode="single"
-                selected={editEndTime ? new Date(editEndTime) : undefined}
+                selected={endAsDate}
                 onSelect={(date) => {
                   if (date) {
-                    const current = editEndTime ? new Date(editEndTime) : new Date();
-                    date.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
-                    setEditEndTime(format(date, "yyyy-MM-dd'T'HH:mm:ss"));
+                    const timeRef = endPdt || startPdt;
+                    setEndPdt(dateDayToPlainDateTime(date, timeRef, timezone));
                   }
                 }}
                 initialFocus
@@ -259,11 +267,11 @@ export const EditableTimeEntry: React.FC<{
                 <Button
                   variant="outline"
                   className="w-full justify-start"
-                  onClick={() => openTimePicker('end', editEndTime ? new Date(editEndTime).getTime() : Date.now())}
+                  onClick={() => openTimePicker('end', endPdt ? plainDateTimeToTimestampS(endPdt, timezone) : (startPdt ? plainDateTimeToTimestampS(startPdt, timezone) : Date.now()))}
                 >
                   <Clock className="mr-2 h-4 w-4" />
-                  {editEndTime ? (
-                    format(new Date(editEndTime), "HH:mm:ss")
+                  {endPdt ? (
+                    `${endPdt.hour.toString().padStart(2, '0')}:${endPdt.minute.toString().padStart(2, '0')}:${endPdt.second.toString().padStart(2, '0')}`
                   ) : (
                     <span className="text-muted-foreground">Set time...</span>
                   )}
@@ -271,7 +279,7 @@ export const EditableTimeEntry: React.FC<{
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setEditEndTime('')}
+                  onClick={() => setEndPdt(null)}
                 >
                   Set to Running
                 </Button>
@@ -288,14 +296,13 @@ export const EditableTimeEntry: React.FC<{
               onClose={() => setTimePickerOpen(false)}
               initialTime={timePickerConfig.initialTime}
               onTimeChange={(timestamp) => {
-                const instant = timestampToInstant(timestamp);
-                const plainDateTime = instantToPlainDateTime(instant, settings.timezone);
-                const dateString = plainDateTime.toString({ smallestUnit: 'second' });
+                const instant = Temporal.Instant.fromEpochMilliseconds(timestamp);
+                const pdt = instant.toZonedDateTimeISO(timezone).toPlainDateTime();
 
                 if (timePickerConfig.type === 'start') {
-                  setEditStartTime(dateString);
+                  setStartPdt(pdt);
                 } else {
-                  setEditEndTime(dateString);
+                  setEndPdt(pdt);
                 }
               }}
             />
@@ -320,7 +327,6 @@ export const EditableTimeEntry: React.FC<{
 
 
 
-  // Generate unique entry ID for overlap line drawing
   const entryId = `entry-${entry.taskId}-${entry.index}`;
 
   return (
@@ -399,8 +405,8 @@ export const EditableTimeEntry: React.FC<{
           </div>
         )}
       </TableCell>
-      <TableCell>{formatTimeWithTemporal(entry.startTime, settings.timezone)}</TableCell>
-      <TableCell>{entry.endTime > 0 ? formatTimeWithTemporal(entry.endTime, settings.timezone) : 'Running'}</TableCell>
+      <TableCell>{formatTimeWithTemporal(entry.startTime, timezone)}</TableCell>
+      <TableCell>{entry.endTime > 0 ? formatTimeWithTemporal(entry.endTime, timezone) : 'Running'}</TableCell>
       <TableCell className="flex items-center justify-between">
         <span>{formatDuration(duration)}</span>
         <div className="flex gap-1">

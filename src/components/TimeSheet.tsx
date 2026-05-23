@@ -13,6 +13,23 @@ import { useSettingsContext } from "@/context/SettingsContext";
 import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
 import { timestampToInstant, formatDuration, instantToPlainDateTime } from '@/lib/format-utils';
 
+function dateDayToPlainDateTime(date: Date, timePdt: Temporal.PlainDateTime | null, timezone: string): Temporal.PlainDateTime {
+  const datePdt = Temporal.PlainDate.from({
+    year: date.getFullYear(),
+    month: date.getMonth() + 1,
+    day: date.getDate(),
+  });
+  const timePart = timePdt
+    ? { hour: timePdt.hour, minute: timePdt.minute, second: timePdt.second }
+    : { hour: 0, minute: 0, second: 0 };
+  return Temporal.PlainDateTime.from({
+    year: datePdt.year,
+    month: datePdt.month,
+    day: datePdt.day,
+    ...timePart,
+  });
+}
+
 interface TimeSheetProps {
   taskId: string;
 }
@@ -22,6 +39,7 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
   const { tasks } = useAllTasks();
   const { updateTimeEntry, deleteTimeEntry } = useTasks();
   const { settings } = useSettingsContext();
+  const timezone = settings.timezone || 'Europe/Zurich';
   const weekStartsOn = settings.weekStartDay as 0 | 1;
   const task = tasks.find(t => t.id === taskId);
   const entryRefs = React.useRef<HTMLDivElement[]>([]);
@@ -96,13 +114,13 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
     <div className="space-y-4">
       {task.timer?.map((entry, index) => {
         const startInstant = timestampToInstant(entry.startTime);
-        const startPlainDateTime = instantToPlainDateTime(startInstant, settings.timezone);
+        const startPlainDateTime = instantToPlainDateTime(startInstant, timezone);
 
         const endInstant = entry.endTime && entry.endTime > 0
           ? timestampToInstant(entry.endTime)
           : null;
         const endPlainDateTime = endInstant
-          ? instantToPlainDateTime(endInstant, settings.timezone)
+          ? instantToPlainDateTime(endInstant, timezone)
           : null;
 
         // Calculate duration
@@ -145,9 +163,8 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
                       selected={entry.startTime ? new Date(entry.startTime) : undefined}
                       onSelect={(date) => {
                         if (date) {
-                          const current = entry.startTime ? new Date(entry.startTime) : new Date();
-                          date.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
-                          handleUpdate(index, { ...entry, startTime: date.getTime() });
+                          const newPdt = dateDayToPlainDateTime(date, startPlainDateTime, timezone);
+                          handleUpdate(index, { ...entry, startTime: newPdt.toZonedDateTime(timezone).epochMilliseconds });
                         }
                       }}
                       initialFocus
@@ -195,15 +212,9 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
                       selected={entry.endTime && entry.endTime > 0 ? new Date(entry.endTime) : undefined}
                       onSelect={(date) => {
                         if (date) {
-                          const current = entry.endTime && entry.endTime > 0 ? new Date(entry.endTime) : new Date();
-                          date.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
-                          handleUpdate(index, { ...entry, endTime: date.getTime() });
-                        } else {
-                          // If cleared, maybe set to 0 (running)? Or just don't allow clearing here easily?
-                          // Let's assume selecting a date sets it.
-                          // Actually, if they deselect, maybe we should set it to 0?
-                          // But standard calendar behavior is toggle.
-                          // Let's just update if date is valid.
+                          const timeRef = endPlainDateTime || startPlainDateTime;
+                          const newPdt = dateDayToPlainDateTime(date, timeRef, timezone);
+                          handleUpdate(index, { ...entry, endTime: newPdt.toZonedDateTime(timezone).epochMilliseconds });
                         }
                       }}
                       initialFocus

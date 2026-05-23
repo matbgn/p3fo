@@ -162,6 +162,7 @@ const DataImporter: React.FC = () => {
                     yFertilizationState.set('votingPhase', board.votingPhase ?? 'IDLE');
                     yFertilizationState.set('areCursorsVisible', board.areCursorsVisible ?? true);
                     yFertilizationState.set('showAllLinks', board.showAllLinks ?? false);
+                    if (board.maxPointsPerUser !== undefined) yFertilizationState.set('maxPointsPerUser', board.maxPointsPerUser);
                     // Clear and repopulate columns
                     yFertilizationColumns.clear();
                     board.columns?.forEach(col => yFertilizationColumns.set(col.id, col));
@@ -185,6 +186,7 @@ const DataImporter: React.FC = () => {
                     yFertilizationState.set('votingPhase', board.votingPhase ?? 'IDLE');
                     yFertilizationState.set('areCursorsVisible', board.areCursorsVisible ?? true);
                     yFertilizationState.set('showAllLinks', board.showAllLinks ?? false);
+                    if (board.maxPointsPerUser !== undefined) yFertilizationState.set('maxPointsPerUser', board.maxPointsPerUser);
                     // Clear and repopulate columns
                     yFertilizationColumns.clear();
                     board.columns?.forEach(col => yFertilizationColumns.set(col.id, col));
@@ -211,6 +213,7 @@ const DataImporter: React.FC = () => {
                     yDreamState.set('areCursorsVisible', board.areCursorsVisible ?? true);
                     yDreamState.set('showAllLinks', board.showAllLinks ?? false);
                     if (board.maxPointsPerUser !== undefined) yDreamState.set('maxPointsPerUser', board.maxPointsPerUser);
+                    if (board.mjLabels !== undefined) yDreamState.set('mjLabels', board.mjLabels);
                     yDreamState.set('isTimelineExpanded', board.isTimelineExpanded ?? false);
                     yDreamState.set('timeSortDirection', board.timeSortDirection ?? 'nearest');
                     // Clear and repopulate columns

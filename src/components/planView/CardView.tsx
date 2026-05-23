@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     DreamCard,
     FertilizationCard,
@@ -24,6 +23,13 @@ import {
     HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import {
     HatGlasses,
     Minus,
     Link as LinkIcon,
@@ -32,7 +38,8 @@ import {
     Trash2,
     ThumbsUp,
     Plus,
-    ChevronDown
+    ChevronDown,
+    BarChart3
 } from 'lucide-react';
 import { MJ_SCALE } from './constants';
 import { UserWithTrigram } from '@/context/UsersContext';
@@ -50,8 +57,11 @@ export interface CardViewProps {
     votingPhase: VotingPhase;
     maxPoints?: number;
     userPointsUsed?: number;
+    mjLabels?: Record<number, string>; // Custom Majority Judgment grade labels
 
-    // Interaction State
+    // Optional tag editing (e.g. fact tags on fertilization cards)
+    onUpdateFactTag?: (tag: string) => void;
+    factTagOptions?: { value: string; label: string; letter: string; className?: string }[];
     isEditing: boolean;
     onEditStart: () => void;
     onEditEnd: () => void;
@@ -75,6 +85,9 @@ export interface CardViewProps {
 
     // Visuals
     tags?: { label: string; color?: string; icon?: React.ReactNode; className?: string }[];
+
+    // For vote-intensity background (budget / thumbs-up only)
+    columnMaxScore?: number;
 }
 
 export const CardView: React.FC<CardViewProps> = ({
@@ -102,7 +115,11 @@ export const CardView: React.FC<CardViewProps> = ({
     onToggleLink,
     onDragStart,
     isDraggable,
-    tags = []
+    tags = [],
+    columnMaxScore,
+    mjLabels,
+    onUpdateFactTag,
+    factTagOptions
 }) => {
     // Local state for editing content ensures smooth typing
     const [editContent, setEditContent] = useState(card.content);
@@ -115,6 +132,10 @@ export const CardView: React.FC<CardViewProps> = ({
     const isHiddenFromUser = hiddenEdition && !card.isRevealed && (card.authorId === null || card.authorId !== currentUserId);
     const isLinkingSource = linkingCardId === card.id;
     const hasLinkedCards = (card.linkedCardIds?.length || 0) > 0;
+
+    // Resolve custom Majority Judgment labels
+    const getMJLabel = (value: number) => mjLabels?.[value] ?? MJ_SCALE.find(g => g.value === value)?.label ?? '';
+    const getMJGrade = (value: number) => ({ ...MJ_SCALE.find(g => g.value === value)!, label: getMJLabel(value) });
 
     const handleVote = (delta: number) => {
         if (votingPhase !== 'VOTING') return;
@@ -141,7 +162,7 @@ export const CardView: React.FC<CardViewProps> = ({
                     {MJ_SCALE.map(grade => (
                         <div key={grade.value} className="flex items-center gap-1.5">
                             <div className={`w-3 h-3 rounded ${grade.color} ${grade.value === medianValue ? 'ring-4 ring-gray-900 ring-offset-1 ring-offset-transparent' : ''}`}></div>
-                            <span className={`text-[10px] whitespace-nowrap ${grade.value === medianValue ? 'font-bold text-foreground' : 'text-muted-foreground'}`}>{grade.label}</span>
+                            <span className={`text-[10px] whitespace-nowrap ${grade.value === medianValue ? 'font-bold text-foreground' : 'text-muted-foreground'}`}>{getMJLabel(grade.value)}</span>
                         </div>
                     ))}
                 </div>
@@ -154,12 +175,13 @@ export const CardView: React.FC<CardViewProps> = ({
                             if (count === 0) return null;
                             const percent = (count / total) * 100;
                             const isMedian = grade.value === medianValue;
+                            const g = getMJGrade(grade.value);
                             return (
                                 <div
                                     key={grade.value}
                                     className={`h-full flex items-center justify-center ${grade.color} transition-all hover:brightness-110 relative ${isMedian ? 'ring-inset ring-4 ring-gray-900 z-10' : ''}`}
                                     style={{ width: `${percent}%` }}
-                                    title={`${grade.label}: ${count} votes (${percent.toFixed(1)}%) ${isMedian ? '(Median)' : ''}`}
+                                    title={`${g.label}: ${count} votes (${percent.toFixed(1)}%) ${isMedian ? '(Median)' : ''}`}
                                 >
                                     {percent > 8 && (
                                         <span className={`text-[10px] font-bold px-1 truncate ${[1, 2].includes(grade.value) ? 'text-black/80' : 'text-white/90'}`}>
@@ -232,12 +254,83 @@ export const CardView: React.FC<CardViewProps> = ({
         );
     };
 
+    const renderPointsDistribution = (votes: Record<string, number>) => {
+        const entries = Object.entries(votes).sort((a, b) => b[1] - a[1]);
+        const total = entries.reduce((sum, [, v]) => sum + v, 0);
+        const maxVal = Math.max(1, ...entries.map(([, v]) => v));
+        const totalVoters = entries.length;
+
+        return (
+            <div className="space-y-3 pt-1">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-bold">{total} pts</span>
+                        <span className="text-xs text-muted-foreground">({totalVoters} voters)</span>
+                    </div>
+                </div>
+                {entries.length > 0 ? (
+                    <div className="flex flex-col gap-1.5">
+                        {entries.map(([userId, value]) => {
+                            const user = users.find(u => u.userId === userId);
+                            const percent = (value / maxVal) * 100;
+                            return (
+                                <div key={userId} className="flex items-center gap-2">
+                                    {user ? (
+                                        <UserAvatar
+                                            username={user.username}
+                                            logo={user.logo}
+                                            size="sm"
+                                            className="h-5 w-5"
+                                            trigram={user.trigram}
+                                        />
+                                    ) : (
+                                        <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-[8px] text-muted-foreground">
+                                            ?
+                                        </div>
+                                    )}
+                                    <div className="flex-1 h-4 bg-secondary/30 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-primary rounded-full transition-all"
+                                            style={{ width: `${percent}%` }}
+                                            title={`${user?.username || 'Unknown'}: ${value} pts`}
+                                        />
+                                    </div>
+                                    <span className="text-[10px] font-bold w-5 text-right">{value}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <div className="text-center text-xs text-muted-foreground py-2 italic">No votes cast yet</div>
+                )}
+            </div>
+        );
+    };
+
     const handleCommitEdit = () => {
         if (editContent.trim() !== card.content) {
             onUpdateContent(editContent.trim());
         }
         onEditEnd();
     };
+
+    // Vote-intensity background for budget / thumbs-up
+    const voteIntensity = useMemo(() => {
+        if (votingPhase === 'IDLE') return 0;
+        if (votingMode !== 'POINTS' && votingMode !== 'THUMBS_UP') return 0;
+        const score = Object.values(card.votes || {}).reduce((a, b) => a + b, 0);
+        if (score <= 0) return 0;
+        const max = Math.max(1, columnMaxScore ?? 1);
+        return Math.min(score / max, 1);
+    }, [card.votes, votingPhase, votingMode, columnMaxScore]);
+
+    const voteBadgeFill = voteIntensity > 0 ? (
+        <div
+            className="absolute inset-y-0 left-0 bg-green-600 rounded-md transition-all"
+            style={{ width: `${Math.round(voteIntensity * 100)}%` }}
+        />
+    ) : null;
 
     return (
         <div
@@ -364,14 +457,42 @@ export const CardView: React.FC<CardViewProps> = ({
             </div>
 
             {/* Tags */}
-            {tags && tags.length > 0 && !isHiddenFromUser && (
+            {!isHiddenFromUser && (
                 <div className="flex flex-wrap gap-1 mt-2 mb-1">
-                    {tags.map((tag, i) => (
+                    {tags && tags.length > 0 && !factTagOptions && tags.map((tag, i) => (
                         <span key={i} className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium flex items-center gap-1 ${tag.className || 'bg-secondary text-secondary-foreground'}`}>
                             {tag.icon}
                             {tag.label}
                         </span>
                     ))}
+                    {factTagOptions && onUpdateFactTag && (
+                        <Select
+                            value={(card as FertilizationCard).factTag || ''}
+                            onValueChange={(val) => onUpdateFactTag(val)}
+                        >
+                            <SelectTrigger className="h-5 px-1.5 text-[10px] w-auto border-0 bg-transparent hover:bg-muted rounded-md gap-1"
+                            >
+                                {(() => {
+                                    const opt = factTagOptions.find(o => o.value === (card as FertilizationCard).factTag);
+                                    return opt ? (
+                                        <>
+                                            <span className={opt.className}>{opt.letter}</span>
+                                            <span className="text-[10px] font-medium">{opt.label}</span>
+                                        </>
+                                    ) : (
+                                        <span className="text-muted-foreground">Tag</span>
+                                    );
+                                })()}
+                            </SelectTrigger>
+                            <SelectContent>
+                                {factTagOptions.map(opt => (
+                                    <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                                        <span className={opt.className}>{opt.letter}</span> {opt.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
                 </div>
             )}
 
@@ -379,90 +500,184 @@ export const CardView: React.FC<CardViewProps> = ({
             {!isHiddenFromUser && votingPhase !== 'IDLE' && (
                 <div className="mt-2 flex flex-col gap-2 border-t pt-2">
                     {votingMode === 'THUMBS_UP' && (
-                        <Button
-                            variant={card.votes[currentUserId] === 1 ? 'default' : 'outline'}
-                            size="sm"
-                            className="w-full h-8"
-                            onClick={(e) => { e.stopPropagation(); handleVote(1); }}
-                            disabled={votingPhase !== 'VOTING'}
-                        >
-                            <ThumbsUp className="h-3 w-3 mr-2" />
-                            {votingPhase === 'REVEALED'
-                                ? Object.values(card.votes).filter(v => v === 1).length
-                                : (card.votes[currentUserId] === 1 ? 1 : "")}
-                        </Button>
-                    )}
-                    {votingMode === 'THUMBS_UD_NEUTRAL' && (
                         <>
-                            <div className="flex justify-between gap-1">
+                            {votingPhase === 'REVEALED' ? (
+                                <HoverCard>
+                                    <HoverCardTrigger asChild>
+                                        {(() => {
+                                            const voteCount = Object.values(card.votes).filter(v => v === 1).length;
+                                            const hasVotes = voteCount > 0;
+                                            return (
+                                                <div className={`w-full relative flex items-center justify-start gap-2 p-1.5 rounded-md text-sm font-medium cursor-help overflow-hidden ${hasVotes ? 'bg-gray-400 border border-gray-400 text-white' : 'bg-muted/50 border text-primary'}`}>
+                                                    {voteBadgeFill}
+                                                    <ThumbsUp className="h-4 w-4 relative z-10" />
+                                                    <span className="relative z-10">
+                                                        {voteCount}
+                                                    </span>
+                                                    <span className={`text-xs relative z-10 ${hasVotes ? 'text-white/80' : 'text-muted-foreground'}`}>votes</span>
+                                                </div>
+                                            );
+                                        })()}
+                                    </HoverCardTrigger>
+                                    <HoverCardContent className="w-auto p-2">
+                                        <div className="flex flex-wrap gap-1">
+                                            {Object.entries(card.votes)
+                                                .filter(([, v]) => v === 1)
+                                                .map(([userId]) => {
+                                                    const user = users.find(u => u.userId === userId);
+                                                    return user ? (
+                                                        <UserAvatar
+                                                            key={userId}
+                                                            username={user.username}
+                                                            logo={user.logo}
+                                                            size="sm"
+                                                            className="h-6 w-6"
+                                                            trigram={user.trigram}
+                                                        />
+                                                    ) : null;
+                                                })}
+                                        </div>
+                                    </HoverCardContent>
+                                </HoverCard>
+                            ) : (
                                 <Button
                                     variant={card.votes[currentUserId] === 1 ? 'default' : 'outline'}
                                     size="sm"
-                                    className={`flex-1 h-8 ${card.votes[currentUserId] === 1
-                                        ? 'bg-green-600 hover:bg-green-700 text-white border-green-600'
-                                        : 'text-green-600 border-green-200 hover:bg-green-50 dark:hover:bg-green-950/30'
-                                        }`}
+                                    className="w-full h-8"
                                     onClick={(e) => { e.stopPropagation(); handleVote(1); }}
                                     disabled={votingPhase !== 'VOTING'}
                                 >
-                                    +1
+                                    <ThumbsUp className="h-3 w-3 mr-2" />
+                                    {card.votes[currentUserId] === 1 ? 1 : ""}
                                 </Button>
-                                <Button
-                                    variant={card.votes[currentUserId] === 0 ? 'default' : 'outline'}
-                                    size="sm"
-                                    className={`flex-1 h-8 ${card.votes[currentUserId] === 0
-                                        ? 'bg-gray-500 hover:bg-gray-600 text-white border-gray-500'
-                                        : 'text-gray-500 border-gray-200 hover:bg-gray-50 dark:hover:bg-gray-900/30'
-                                        }`}
-                                    onClick={(e) => { e.stopPropagation(); handleVote(0); }}
-                                    disabled={votingPhase !== 'VOTING'}
-                                >
-                                    0
-                                </Button>
-                                <Button
-                                    variant={card.votes[currentUserId] === -1 ? 'default' : 'outline'}
-                                    size="sm"
-                                    className={`flex-1 h-8 ${card.votes[currentUserId] === -1
-                                        ? 'bg-red-500 hover:bg-red-600 text-white border-red-500'
-                                        : 'text-red-500 border-red-200 hover:bg-red-50 dark:hover:bg-red-950/30'
-                                        }`}
-                                    onClick={(e) => { e.stopPropagation(); handleVote(-1); }}
-                                    disabled={votingPhase !== 'VOTING'}
-                                >
-                                    -1
-                                </Button>
-                            </div>
-                            {(votingPhase === 'REVEALED' || isModerator) && (
+                            )}
+                        </>
+                    )}
+                    {votingMode === 'THUMBS_UD_NEUTRAL' && (
+                        <>
+                            {votingPhase === 'REVEALED' ? (
                                 <HoverCard>
                                     <HoverCardTrigger asChild>
-                                        <div className="pt-2 cursor-help text-center">
-                                            {(() => {
-                                                const median = getMJMedian(card.votes);
-                                                if (median === null) return <span className="text-xs text-muted-foreground">No votes</span>;
-                                                const label = median > 0 ? '+1' : (median < 0 ? '-1' : '0');
-                                                const color = median > 0 ? 'text-green-600' : (median < 0 ? 'text-red-600' : 'text-gray-600');
-                                                return <span className={`text-xs font-bold ${color}`}>Median: {label} <span className="text-muted-foreground font-normal">({Object.keys(card.votes).length} votes)</span></span>
-                                            })()}
+                                        <div className="flex items-center justify-between gap-2 p-2 rounded-md bg-muted/50 border cursor-help">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-xs font-medium text-green-600 bg-green-100 dark:bg-green-900/30 px-1.5 py-0.5 rounded">
+                                                    +1: {Object.values(card.votes).filter(v => v === 1).length}
+                                                </span>
+                                                <span className="text-xs font-medium text-black bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                                                    0: {Object.values(card.votes).filter(v => v === 0).length}
+                                                </span>
+                                                <span className="text-xs font-medium text-red-600 bg-red-100 dark:bg-red-900/30 px-1.5 py-0.5 rounded">
+                                                    -1: {Object.values(card.votes).filter(v => v === -1).length}
+                                                </span>
+                                            </div>
+                                            <span className="text-sm font-bold">
+                                                {Object.values(card.votes).reduce((a, b) => a + b, 0)}
+                                            </span>
                                         </div>
                                     </HoverCardTrigger>
                                     <HoverCardContent className="w-80">
                                         {renderUDNeutralDistribution(card.votes)}
                                     </HoverCardContent>
                                 </HoverCard>
+                            ) : (
+                                <>
+                                    <div className="flex justify-between gap-1">
+                                        <Button
+                                            variant={card.votes[currentUserId] === 1 ? 'default' : 'outline'}
+                                            size="sm"
+                                            className={`flex-1 h-8 ${card.votes[currentUserId] === 1
+                                                ? 'bg-green-600 hover:bg-green-700 text-white border-green-600'
+                                                : 'text-green-600 border-green-200 hover:bg-green-50 dark:hover:bg-green-950/30'
+                                                }`}
+                                            onClick={(e) => { e.stopPropagation(); handleVote(1); }}
+                                            disabled={votingPhase !== 'VOTING'}
+                                        >
+                                            +1
+                                        </Button>
+                                        <Button
+                                            variant={card.votes[currentUserId] === 0 ? 'default' : 'outline'}
+                                            size="sm"
+                                            className={`flex-1 h-8 ${card.votes[currentUserId] === 0
+                                                ? 'bg-gray-500 hover:bg-gray-600 text-white border-gray-500'
+                                                : 'text-black border-gray-200 hover:bg-gray-50 dark:hover:bg-gray-900/30'
+                                                }`}
+                                            onClick={(e) => { e.stopPropagation(); handleVote(0); }}
+                                            disabled={votingPhase !== 'VOTING'}
+                                        >
+                                            0
+                                        </Button>
+                                        <Button
+                                            variant={card.votes[currentUserId] === -1 ? 'default' : 'outline'}
+                                            size="sm"
+                                            className={`flex-1 h-8 ${card.votes[currentUserId] === -1
+                                                ? 'bg-red-500 hover:bg-red-600 text-white border-red-500'
+                                                : 'text-red-500 border-red-200 hover:bg-red-50 dark:hover:bg-red-950/30'
+                                                }`}
+                                            onClick={(e) => { e.stopPropagation(); handleVote(-1); }}
+                                            disabled={votingPhase !== 'VOTING'}
+                                        >
+                                            -1
+                                        </Button>
+                                    </div>
+                                    {isModerator && (
+                                        <HoverCard>
+                                            <HoverCardTrigger asChild>
+                                                <div className="pt-2 cursor-help text-center">
+                                                    {(() => {
+                                                        const median = getMJMedian(card.votes);
+                                                        if (median === null) return <span className="text-xs text-muted-foreground">No votes</span>;
+                                                        const label = median > 0 ? '+1' : (median < 0 ? '-1' : '0');
+                                                        const color = median > 0 ? 'text-green-600' : (median < 0 ? 'text-red-600' : 'text-black');
+                                                        return <span className={`text-xs font-bold ${color}`}>Median: {label} <span className="text-muted-foreground font-normal">({Object.keys(card.votes).length} votes)</span></span>
+                                                    })()}
+                                                </div>
+                                            </HoverCardTrigger>
+                                            <HoverCardContent className="w-80">
+                                                {renderUDNeutralDistribution(card.votes)}
+                                            </HoverCardContent>
+                                        </HoverCard>
+                                    )}
+                                </>
                             )}
                         </>
                     )}
                     {votingMode === 'POINTS' && (
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1">
-                                <Button variant="outline" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleVote(-1); }} disabled={votingPhase !== 'VOTING'}><Minus className="h-3 w-3" /></Button>
-                                <span className="text-sm font-bold w-6 text-center">{card.votes[currentUserId] || 0}</span>
-                                <Button variant="outline" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleVote(1); }} disabled={votingPhase !== 'VOTING'}><Plus className="h-3 w-3" /></Button>
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                                Unspent: {(maxPoints || 10) - (userPointsUsed || 0)} pts
-                            </div>
-                        </div>
+                        <>
+                                {votingPhase === 'REVEALED' ? (
+                                <HoverCard>
+                                    <HoverCardTrigger asChild>
+                                        {(() => {
+                                            const totalPoints = Object.values(card.votes).reduce((a, b) => a + b, 0);
+                                            const hasPoints = totalPoints > 0;
+                                            return (
+                                                <div className={`w-full relative flex items-center justify-start gap-2 p-1.5 rounded-md text-sm font-medium cursor-help overflow-hidden ${hasPoints ? 'bg-gray-400 border border-gray-400 text-white' : 'bg-muted/50 border text-primary'}`}>
+                                                    {voteBadgeFill}
+                                                    <BarChart3 className="h-4 w-4 relative z-10" />
+                                                    <span className="relative z-10">
+                                                        {totalPoints}
+                                                    </span>
+                                                    <span className={`text-xs relative z-10 ${hasPoints ? 'text-white/80' : 'text-muted-foreground'}`}>pts</span>
+                                                </div>
+                                            );
+                                        })()}
+                                    </HoverCardTrigger>
+                                    <HoverCardContent className="w-80">
+                                        {renderPointsDistribution(card.votes)}
+                                    </HoverCardContent>
+                                </HoverCard>
+                            ) : (
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-1">
+                                        <Button variant="outline" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleVote(-1); }} disabled={votingPhase !== 'VOTING'}><Minus className="h-3 w-3" /></Button>
+                                        <span className="text-sm font-bold w-6 text-center">{card.votes[currentUserId] || 0}</span>
+                                        <Button variant="outline" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleVote(1); }} disabled={votingPhase !== 'VOTING'}><Plus className="h-3 w-3" /></Button>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                        Unspent: {(maxPoints || 10) - (userPointsUsed || 0)} pts
+                                    </div>
+                                </div>
+                            )}
+                        </>
                     )}
                     {votingMode === 'MAJORITY_JUDGMENT' && (
                         <HoverCard open={votingPhase === 'REVEALED' ? undefined : false}>
@@ -473,7 +688,7 @@ export const CardView: React.FC<CardViewProps> = ({
                                             flex items-center justify-center gap-2 p-1.5 rounded-md text-sm font-medium border
                                             ${(() => {
                                                 const median = getMJMedian(card.votes);
-                                                const grade = MJ_SCALE.find(g => g.value === median);
+                                                const grade = getMJGrade(median || 0);
                                                 return grade ? grade.color : 'bg-muted';
                                             })()}
                                             ${(() => {
@@ -483,7 +698,7 @@ export const CardView: React.FC<CardViewProps> = ({
                                         `}>
                                             {(() => {
                                                 const median = getMJMedian(card.votes);
-                                                const grade = MJ_SCALE.find(g => g.value === median);
+                                                const grade = getMJGrade(median || 0);
                                                 return grade ? (
                                                     <>
                                                         {grade.icon}
@@ -500,8 +715,8 @@ export const CardView: React.FC<CardViewProps> = ({
                                                     <div className="flex items-center gap-2">
                                                         {card.votes[currentUserId] !== undefined ? (
                                                             <>
-                                                                {MJ_SCALE.find(g => g.value === card.votes[currentUserId])?.icon}
-                                                                {MJ_SCALE.find(g => g.value === card.votes[currentUserId])?.label}
+                                                                {getMJGrade(card.votes[currentUserId]).icon}
+                                                                {getMJGrade(card.votes[currentUserId]).label}
                                                             </>
                                                         ) : (
                                                             <span className="text-muted-foreground">Evaluate...</span>
@@ -522,7 +737,7 @@ export const CardView: React.FC<CardViewProps> = ({
                                                         <span className={`flex items-center justify-center w-5 h-5 rounded ${grade.color} text-[10px]`}>
                                                             {grade.icon}
                                                         </span>
-                                                        <span>{grade.label}</span>
+                                                        <span>{getMJLabel(grade.value)}</span>
                                                         {card.votes[currentUserId] === grade.value && (
                                                             <ThumbsUp className="h-3 w-3 ml-auto" />
                                                         )}

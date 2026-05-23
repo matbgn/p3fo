@@ -178,6 +178,8 @@ export interface PersistenceAdapter {
   importCircles(circles: CircleEntity[]): Promise<void>;
 }
 
+export type FactTag = 'A' | 'N' | 'K' | 'P';
+
 export interface FertilizationCard {
   id: string;
   columnId: string;
@@ -187,6 +189,7 @@ export interface FertilizationCard {
   isRevealed: boolean; // For hidden edition
   linkedCardIds?: string[]; // IDs of linked cards
   promotedTaskId?: string | null; // ID of task created from this card (for legacy display)
+  factTag?: FactTag; // Achieved / Non-Achieved / Key numbers / Planned (facts column only)
 }
 
 export interface DreamCard extends FertilizationCard {
@@ -198,6 +201,10 @@ export interface FertilizationColumn {
   title: string;
   color: string; // For UI styling
   isLocked: boolean;
+  votingMode?: VotingMode; // Per-column override; falls back to board-level
+  votingPhase?: VotingPhase; // Per-column override; falls back to board-level
+  maxPointsPerUser?: number; // Per-column budget for POINTS mode
+  mjLabels?: Record<number, string>; // Per-column override for Majority Judgment grade labels
 }
 
 export type DreamColumn = FertilizationColumn;
@@ -220,6 +227,7 @@ export interface FertilizationBoardEntity {
   votingMode: VotingMode;
   votingPhase: VotingPhase;
   maxPointsPerUser?: number; // Configurable max points for POINTS voting mode
+  mjLabels?: Record<number, string>; // Global override for Majority Judgment grade labels
   areCursorsVisible?: boolean; // Control cursor visibility for all users
   showAllLinks?: boolean; // Control global link visibility
 }
@@ -242,6 +250,7 @@ export interface DreamBoardEntity {
   timeSortDirection: 'nearest' | 'farthest'; // Dream-specific sorting direction
   areCursorsVisible?: boolean; // Control cursor visibility for all users
   showAllLinks?: boolean; // Control global link visibility
+  mjLabels?: Record<number, string>; // Global override for Majority Judgment grade labels
 }
 
 // Circles (EasyCIRCLE) - Organizational structure visualization
