@@ -192,10 +192,21 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
   // Filter state
   const [filterState, setFilterState] = useState<FilterState>({
     searchText: '',
-    userId: null,
     columns: [],
+    userId: null,
     minLikes: 0,
   });
+
+  // Column sort by vote score (none / desc / asc)
+  const [columnSortOrder, setColumnSortOrder] = useState<Record<string, 'none' | 'desc' | 'asc'>>({});
+
+  const toggleColumnSort = (columnId: string) => {
+    setColumnSortOrder(prev => {
+      const currentOrder = prev[columnId] || 'none';
+      const nextOrder = currentOrder === 'none' ? 'desc' : currentOrder === 'desc' ? 'asc' : 'none';
+      return { ...prev, [columnId]: nextOrder };
+    });
+  };
 
   // Timer State
 
@@ -923,6 +934,17 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
         });
       }
     }
+
+    // Vote-score sort (overrides / re-sorts when active)
+    const sortOrder = columnSortOrder[columnId];
+    if (sortOrder && sortOrder !== 'none') {
+      cardsInColumn.sort((a, b) => {
+        const scoreA = calculateCardVoteScore(a);
+        const scoreB = calculateCardVoteScore(b);
+        return sortOrder === 'desc' ? scoreB - scoreA : scoreA - scoreB;
+      });
+    }
+
     return cardsInColumn;
   };
 
@@ -1211,6 +1233,8 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, column.id)}
                 headerActions={headerActions}
+                sortOrder={columnSortOrder[column.id]}
+                onToggleSort={() => toggleColumnSort(column.id)}
                 onChangeColor={async (color) => {
                   const newColumns = boardState.columns.map(c => c.id === column.id ? { ...c, color } : c);
                   const newState = { ...boardState, columns: newColumns };
