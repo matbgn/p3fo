@@ -23,6 +23,13 @@ import {
     HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import {
     HatGlasses,
     Minus,
     Link as LinkIcon,
@@ -52,7 +59,9 @@ export interface CardViewProps {
     userPointsUsed?: number;
     mjLabels?: Record<number, string>; // Custom Majority Judgment grade labels
 
-    // Interaction State
+    // Optional tag editing (e.g. fact tags on fertilization cards)
+    onUpdateFactTag?: (tag: string) => void;
+    factTagOptions?: { value: string; label: string; letter: string; className?: string }[];
     isEditing: boolean;
     onEditStart: () => void;
     onEditEnd: () => void;
@@ -108,7 +117,9 @@ export const CardView: React.FC<CardViewProps> = ({
     isDraggable,
     tags = [],
     columnMaxScore,
-    mjLabels
+    mjLabels,
+    onUpdateFactTag,
+    factTagOptions
 }) => {
     // Local state for editing content ensures smooth typing
     const [editContent, setEditContent] = useState(card.content);
@@ -446,14 +457,42 @@ export const CardView: React.FC<CardViewProps> = ({
             </div>
 
             {/* Tags */}
-            {tags && tags.length > 0 && !isHiddenFromUser && (
+            {!isHiddenFromUser && (
                 <div className="flex flex-wrap gap-1 mt-2 mb-1">
-                    {tags.map((tag, i) => (
+                    {tags && tags.length > 0 && !factTagOptions && tags.map((tag, i) => (
                         <span key={i} className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium flex items-center gap-1 ${tag.className || 'bg-secondary text-secondary-foreground'}`}>
                             {tag.icon}
                             {tag.label}
                         </span>
                     ))}
+                    {factTagOptions && onUpdateFactTag && (
+                        <Select
+                            value={(card as FertilizationCard).factTag || ''}
+                            onValueChange={(val) => onUpdateFactTag(val)}
+                        >
+                            <SelectTrigger className="h-5 px-1.5 text-[10px] w-auto border-0 bg-transparent hover:bg-muted rounded-md gap-1"
+                            >
+                                {(() => {
+                                    const opt = factTagOptions.find(o => o.value === (card as FertilizationCard).factTag);
+                                    return opt ? (
+                                        <>
+                                            <span className={opt.className}>{opt.letter}</span>
+                                            <span className="text-[10px] font-medium">{opt.label}</span>
+                                        </>
+                                    ) : (
+                                        <span className="text-muted-foreground">Tag</span>
+                                    );
+                                })()}
+                            </SelectTrigger>
+                            <SelectContent>
+                                {factTagOptions.map(opt => (
+                                    <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                                        <span className={opt.className}>{opt.letter}</span> {opt.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
                 </div>
             )}
 

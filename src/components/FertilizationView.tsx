@@ -601,6 +601,12 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
         await saveBoard({ ...boardState, cards: newCards });
     };
 
+    const updateCardFactTag = async (cardId: string, factTag: FactTag) => {
+        if (!boardState) return;
+        const newCards = boardState.cards.map(c => c.id === cardId ? { ...c, factTag } : c);
+        await saveBoard({ ...boardState, cards: newCards });
+    };
+
     const toggleLinkCards = async (cardId1: string, cardId2: string) => {
         if (!boardState || cardId1 === cardId2) return;
         const card1 = boardState.cards.find(c => c.id === cardId1);
@@ -1310,7 +1316,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                                 <CardView
                                     key={card.id}
                                     card={card}
-                                    tags={factTag ? [{
+                                    tags={column.id !== 'facts' && factTag ? [{
                                         label: FACT_TAG_OPTIONS.find(o => o.value === factTag)?.label || factTag,
                                         className: FACT_TAG_OPTIONS.find(o => o.value === factTag)?.className || 'bg-secondary text-secondary-foreground',
                                     }] : []}
@@ -1354,6 +1360,8 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                                     isDraggable={!column.isLocked && !linkingCardId}
                                     columnMaxScore={colMaxScore}
                                     mjLabels={column.mjLabels}
+                                    factTagOptions={column.id === 'facts' ? FACT_TAG_OPTIONS : undefined}
+                                    onUpdateFactTag={(tag) => updateCardFactTag(card.id, tag as FactTag)}
                                 />
                                 );
                             }}
