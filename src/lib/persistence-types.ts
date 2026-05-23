@@ -250,6 +250,7 @@ export interface DreamBoardEntity {
   timeSortDirection: 'nearest' | 'farthest'; // Dream-specific sorting direction
   areCursorsVisible?: boolean; // Control cursor visibility for all users
   showAllLinks?: boolean; // Control global link visibility
+  mjLabels?: Record<number, string>; // Global override for Majority Judgment grade labels
 }
 
 // Circles (EasyCIRCLE) - Organizational structure visualization

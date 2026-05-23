@@ -389,6 +389,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
     const timeSortDirection = (yDreamState.get('timeSortDirection') as 'nearest' | 'farthest') || 'nearest';
     const areCursorsVisible = yDreamState.get('areCursorsVisible') as boolean ?? true;
     const showAllLinks = yDreamState.get('showAllLinks') as boolean ?? false;
+    const mjLabels = yDreamState.get('mjLabels') as Record<number, string> | undefined;
 
     // Ensure columns are complete (merge with defaults)
     const sortedColumns = DEFAULT_DREAM_COLUMNS.map(defCol =>
@@ -414,7 +415,8 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
       isTimelineExpanded,
       timeSortDirection,
       areCursorsVisible,
-      showAllLinks
+      showAllLinks,
+      mjLabels
     };
   }, []);
 
@@ -435,6 +437,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
       yDreamState.set('timeSortDirection', state.timeSortDirection);
       yDreamState.set('showAllLinks', state.showAllLinks);
       if (state.maxPointsPerUser !== undefined) yDreamState.set('maxPointsPerUser', state.maxPointsPerUser);
+      if (state.mjLabels !== undefined) yDreamState.set('mjLabels', state.mjLabels);
 
       // Sync Columns
       state.columns.forEach(col => {
@@ -859,7 +862,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
     }
     if (filterState.tags.length > 0) {
       cards = cards.filter(c =>
-        (c as DreamCard).timeFrame ? filterState.tags.includes((c as DreamCard).timeFrame) : false
+        !(c as DreamCard).timeFrame || filterState.tags.includes((c as DreamCard).timeFrame)
       );
     }
     if (filterState.searchText.trim()) {

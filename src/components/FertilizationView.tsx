@@ -262,10 +262,10 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
             });
         }
 
-        // Apply tag filter (fact tags)
+        // Apply tag filter (fact tags) - only filter cards that actually have a tag
         if (filterState.tags.length > 0) {
             cards = cards.filter(card =>
-                card.factTag ? filterState.tags.includes(card.factTag) : false
+                !card.factTag || filterState.tags.includes(card.factTag)
             );
         }
 
@@ -303,6 +303,8 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
             yFertilizationState.set('votingPhase', state.votingPhase);
             yFertilizationState.set('areCursorsVisible', state.areCursorsVisible);
             yFertilizationState.set('showAllLinks', state.showAllLinks);
+            if (state.maxPointsPerUser !== undefined) yFertilizationState.set('maxPointsPerUser', state.maxPointsPerUser);
+            if (state.mjLabels !== undefined) yFertilizationState.set('mjLabels', state.mjLabels);
 
             // Sync Columns
             state.columns.forEach(col => {
@@ -345,6 +347,9 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
             const areCursorsVisible = yFertilizationState.get('areCursorsVisible') as boolean ?? true;
             const showAllLinks = yFertilizationState.get('showAllLinks') as boolean ?? false;
 
+            const maxPointsPerUser = yFertilizationState.get('maxPointsPerUser') as number | undefined;
+            const mjLabels = yFertilizationState.get('mjLabels') as Record<number, string> | undefined;
+
             const columns = Array.from(yFertilizationColumns.values()) as FertilizationColumn[];
             const sortedColumns = DEFAULT_COLUMNS.map(defCol =>
                 columns.find(c => c.id === defCol.id) || defCol
@@ -362,6 +367,8 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                     votingPhase,
                     areCursorsVisible,
                     showAllLinks,
+                    maxPointsPerUser,
+                    mjLabels,
                     columns: sortedColumns,
                     cards: cards
                 };
@@ -415,6 +422,8 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                         const votingPhase = (yFertilizationState.get('votingPhase') as VotingPhase) || 'IDLE';
                         const areCursorsVisible = yFertilizationState.get('areCursorsVisible') as boolean ?? true;
                         const showAllLinks = yFertilizationState.get('showAllLinks') as boolean ?? false;
+                        const maxPointsPerUser = yFertilizationState.get('maxPointsPerUser') as number | undefined;
+                        const mjLabels = yFertilizationState.get('mjLabels') as Record<number, string> | undefined;
                         const columns = Array.from(yFertilizationColumns.values()) as FertilizationColumn[];
                         const sortedColumns = DEFAULT_COLUMNS.map(defCol =>
                             columns.find(c => c.id === defCol.id) || defCol
@@ -430,6 +439,8 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                             votingPhase,
                             areCursorsVisible,
                             showAllLinks,
+                            maxPointsPerUser,
+                            mjLabels,
                             columns: sortedColumns,
                             cards: cards
                         };

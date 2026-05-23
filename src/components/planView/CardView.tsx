@@ -316,7 +316,7 @@ export const CardView: React.FC<CardViewProps> = ({
 
     const voteBadgeFill = voteIntensity > 0 ? (
         <div
-            className="absolute inset-y-0 left-0 bg-green-500/50 rounded-md transition-all"
+            className="absolute inset-y-0 left-0 bg-green-600 rounded-md transition-all"
             style={{ width: `${Math.round(voteIntensity * 100)}%` }}
         />
     ) : null;
@@ -465,14 +465,19 @@ export const CardView: React.FC<CardViewProps> = ({
                             {votingPhase === 'REVEALED' ? (
                                 <HoverCard>
                                     <HoverCardTrigger asChild>
-                                        <div className="relative flex items-center gap-2 p-2 rounded-md bg-primary/5 border border-primary/10 cursor-help overflow-hidden">
-                                            {voteBadgeFill}
-                                            <ThumbsUp className="h-4 w-4 text-primary relative z-10" />
-                                            <span className="text-lg font-bold text-primary relative z-10">
-                                                {Object.values(card.votes).filter(v => v === 1).length}
-                                            </span>
-                                            <span className="text-xs text-muted-foreground relative z-10">votes</span>
-                                        </div>
+                                        {(() => {
+                                            const voteCount = Object.values(card.votes).filter(v => v === 1).length;
+                                            const hasVotes = voteCount > 0;
+                                            return (
+                                                <div className={`w-full flex items-center justify-center gap-2 p-1.5 rounded-md text-sm font-medium cursor-help overflow-hidden ${hasVotes ? 'bg-green-600 border border-green-600 text-white' : 'bg-muted/50 border text-primary'}`}>
+                                                    <ThumbsUp className="h-4 w-4 relative z-10" />
+                                                    <span className="relative z-10">
+                                                        {voteCount}
+                                                    </span>
+                                                    <span className={`text-xs relative z-10 ${hasVotes ? 'text-white/80' : 'text-muted-foreground'}`}>votes</span>
+                                                </div>
+                                            );
+                                        })()}
                                     </HoverCardTrigger>
                                     <HoverCardContent className="w-auto p-2">
                                         <div className="flex flex-wrap gap-1">
@@ -518,7 +523,7 @@ export const CardView: React.FC<CardViewProps> = ({
                                                 <span className="text-xs font-medium text-green-600 bg-green-100 dark:bg-green-900/30 px-1.5 py-0.5 rounded">
                                                     +1: {Object.values(card.votes).filter(v => v === 1).length}
                                                 </span>
-                                                <span className="text-xs font-medium text-gray-600 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                                                <span className="text-xs font-medium text-black bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
                                                     0: {Object.values(card.votes).filter(v => v === 0).length}
                                                 </span>
                                                 <span className="text-xs font-medium text-red-600 bg-red-100 dark:bg-red-900/30 px-1.5 py-0.5 rounded">
@@ -554,7 +559,7 @@ export const CardView: React.FC<CardViewProps> = ({
                                             size="sm"
                                             className={`flex-1 h-8 ${card.votes[currentUserId] === 0
                                                 ? 'bg-gray-500 hover:bg-gray-600 text-white border-gray-500'
-                                                : 'text-gray-500 border-gray-200 hover:bg-gray-50 dark:hover:bg-gray-900/30'
+                                                : 'text-black border-gray-200 hover:bg-gray-50 dark:hover:bg-gray-900/30'
                                                 }`}
                                             onClick={(e) => { e.stopPropagation(); handleVote(0); }}
                                             disabled={votingPhase !== 'VOTING'}
@@ -582,7 +587,7 @@ export const CardView: React.FC<CardViewProps> = ({
                                                         const median = getMJMedian(card.votes);
                                                         if (median === null) return <span className="text-xs text-muted-foreground">No votes</span>;
                                                         const label = median > 0 ? '+1' : (median < 0 ? '-1' : '0');
-                                                        const color = median > 0 ? 'text-green-600' : (median < 0 ? 'text-red-600' : 'text-gray-600');
+                                                        const color = median > 0 ? 'text-green-600' : (median < 0 ? 'text-red-600' : 'text-black');
                                                         return <span className={`text-xs font-bold ${color}`}>Median: {label} <span className="text-muted-foreground font-normal">({Object.keys(card.votes).length} votes)</span></span>
                                                     })()}
                                                 </div>
@@ -598,17 +603,22 @@ export const CardView: React.FC<CardViewProps> = ({
                     )}
                     {votingMode === 'POINTS' && (
                         <>
-                            {votingPhase === 'REVEALED' ? (
+                                {votingPhase === 'REVEALED' ? (
                                 <HoverCard>
                                     <HoverCardTrigger asChild>
-                                        <div className="relative flex items-center gap-2 p-2 rounded-md bg-primary/5 border border-primary/10 cursor-help overflow-hidden">
-                                            {voteBadgeFill}
-                                            <BarChart3 className="h-4 w-4 text-primary relative z-10" />
-                                            <span className="text-lg font-bold text-primary relative z-10">
-                                                {Object.values(card.votes).reduce((a, b) => a + b, 0)}
-                                            </span>
-                                            <span className="text-xs text-muted-foreground relative z-10">pts</span>
-                                        </div>
+                                        {(() => {
+                                            const totalPoints = Object.values(card.votes).reduce((a, b) => a + b, 0);
+                                            const hasPoints = totalPoints > 0;
+                                            return (
+                                                <div className={`w-full flex items-center justify-center gap-2 p-1.5 rounded-md text-sm font-medium cursor-help overflow-hidden ${hasPoints ? 'bg-green-600 border border-green-600 text-white' : 'bg-muted/50 border text-primary'}`}>
+                                                    <BarChart3 className="h-4 w-4 relative z-10" />
+                                                    <span className="relative z-10">
+                                                        {totalPoints}
+                                                    </span>
+                                                    <span className={`text-xs relative z-10 ${hasPoints ? 'text-white/80' : 'text-muted-foreground'}`}>pts</span>
+                                                </div>
+                                            );
+                                        })()}
                                     </HoverCardTrigger>
                                     <HoverCardContent className="w-80">
                                         {renderPointsDistribution(card.votes)}
