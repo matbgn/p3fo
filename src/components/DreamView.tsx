@@ -229,6 +229,125 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
   // Track collaboration active state
   const [isCollabActive, setIsCollabActive] = useState(false);
 
+  // Per-Column Points Voting State
+  const [pointsConfigColumnId, setPointsConfigColumnId] = useState<string | null>(null);
+
+  // Helper: get effective voting mode for a column (falls back to board-level)
+  const getColumnVotingMode = useCallback((columnId: string): VotingMode => {
+    if (!boardState) return 'THUMBS_UP';
+    const col = boardState.columns.find(c => c.id === columnId);
+    return col?.votingMode ?? boardState.votingMode;
+  }, [boardState]);
+
+  // Helper: get effective voting phase for a column (falls back to board-level)
+  const getColumnVotingPhase = useCallback((columnId: string): VotingPhase => {
+    if (!boardState) return 'IDLE';
+    const col = boardState.columns.find(c => c.id === columnId);
+    return col?.votingPhase ?? boardState.votingPhase;
+  }, [boardState]);
+
+  // Set per-column voting mode
+  const setColumnVotingMode = async (columnId: string, mode: VotingMode) => {
+    if (!boardState || !isModerator) return;
+    const newColumns = boardState.columns.map(col =>
+      col.id === columnId ? { ...col, votingMode: mode, votingPhase: 'IDLE' as VotingPhase, maxPointsPerUser: undefined } : col
+    );
+    await saveBoard({ ...boardState, columns: newColumns });
+  };
+
+  // Start voting for a specific column
+  const startColumnVoting = (columnId: string) => {
+    const mode = getColumnVotingMode(columnId);
+    if (mode === 'POINTS') {
+      setPointsConfigColumnId(columnId);
+    } else {
+      setColumnVotingPhase(columnId, 'VOTING');
+    }
+  };
+
+  // Set per-column voting phase
+  const setColumnVotingPhase = async (columnId: string, phase: VotingPhase) => {
+    if (!boardState || !isModerator) return;
+    const newColumns = boardState.columns.map(col =>
+      col.id === columnId ? { ...col, votingPhase: phase } : col
+    );
+    await saveBoard({ ...boardState, columns: newColumns });
+  };
+
+  // Confirm points config for a specific column
+  const confirmColumnPointsConfig = async () => {
+    if (!boardState || !pointsConfigColumnId) return;
+    const newColumns = boardState.columns.map(col =>
+      col.id === pointsConfigColumnId ? { ...col, votingPhase: 'VOTING' as VotingPhase, maxPointsPerUser: pointsConfigValue } : col
+    );
+    await saveBoard({ ...boardState, columns: newColumns });
+    setPointsConfigColumnId(null);
+  };
+
+  // Reset votes for a specific column only
+  const resetColumnVotes = async (columnId: string) => {
+    if (!boardState || !isModerator) return;
+    if (!confirm(`Are you sure you want to reset all votes in the "${boardState.columns.find(c => c.id === columnId)?.title}" column? This will clear every vote in this column but keep all cards.`)) return;
+    const newCards = boardState.cards.map(c =>
+      c.columnId === columnId ? { ...c, votes: {} } : c
+    );
+    const newColumns = boardState.columns.map(col =>
+      col.id === columnId ? { ...col, votingPhase: 'IDLE' as VotingPhase } : col
+    );
+    await saveBoard({ ...boardState, cards: newCards, columns: newColumns });
+  };
+
+  // Calculate points used by a user in a specific column
+  const calculateColumnUserUsedPoints = (columnId: string, userId: string) => {
+    if (!boardState) return 0;
+    return boardState.cards
+      .filter(c => c.columnId === columnId)
+      .reduce((acc, card) => acc + (card.votes[userId] || 0), 0);
+  };
+
+  // Vote points scoped to a column's budget
+  const voteColumnPoints = async (cardId: string, delta: number, columnId: string) => {
+    if (!boardState) return;
+    const col = boardState.columns.find(c => c.id === columnId);
+    const maxPoints = col?.maxPointsPerUser ?? boardState.maxPointsPerUser ?? 10;
+    const usedPoints = calculateColumnUserUsedPoints(columnId, currentUserId);
+    const card = boardState.cards.find(c => c.id === cardId);
+    if (!card) return;
+    const currentCardPoints = card.votes[currentUserId] || 0;
+    const newCardPoints = currentCardPoints + delta;
+    if (newCardPoints < 0) return;
+    if (usedPoints - currentCardPoints + newCardPoints > maxPoints) return;
+    const newVotes = { ...card.votes };
+    if (newCardPoints === 0) delete newVotes[currentUserId];
+    else newVotes[currentUserId] = newCardPoints;
+    const newCards = boardState.cards.map(c => c.id === cardId ? { ...c, votes: newVotes } : c);
+    await saveBoard({ ...boardState, cards: newCards });
+  };
+
+  // Vote a card scoped to its column's mode
+  const voteColumnCard = async (cardId: string, value: number, columnId: string) => {
+    if (!boardState) return;
+    const phase = getColumnVotingPhase(columnId);
+    if (phase !== 'VOTING') return;
+    const mode = getColumnVotingMode(columnId);
+    const newCards = boardState.cards.map(c => {
+      if (c.id === cardId) {
+        const currentVote = c.votes[currentUserId];
+        const newVotes = { ...c.votes };
+        if (mode !== 'MAJORITY_JUDGMENT' && currentVote === value) {
+          delete newVotes[currentUserId];
+        } else {
+          newVotes[currentUserId] = value;
+        }
+        return { ...c, votes: newVotes };
+      }
+      return c;
+    });
+    await saveBoard({ ...boardState, cards: newCards });
+  };
+
+  // Voting Handlers
+
   // Initialize collaboration
   useEffect(() => {
     // FIX: Check config directly, do not rely on isCollaborationEnabled() which depends on this running first

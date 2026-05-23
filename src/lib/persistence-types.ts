@@ -198,6 +198,9 @@ export interface FertilizationColumn {
   title: string;
   color: string; // For UI styling
   isLocked: boolean;
+  votingMode?: VotingMode; // Per-column override; falls back to board-level
+  votingPhase?: VotingPhase; // Per-column override; falls back to board-level
+  maxPointsPerUser?: number; // Per-column budget for POINTS mode
 }
 
 export type DreamColumn = FertilizationColumn;

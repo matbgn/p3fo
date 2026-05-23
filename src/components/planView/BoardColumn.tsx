@@ -42,6 +42,7 @@ interface BoardColumnProps<T> {
     onTitleDoubleClick?: () => void;
     onChangeColor?: (color: string) => void;
     className?: string;
+    votingToolbar?: React.ReactNode;
 }
 
 export function BoardColumn<T extends { id: string }>({
@@ -65,6 +66,7 @@ export function BoardColumn<T extends { id: string }>({
     onEditingTitleCancel,
     onTitleDoubleClick,
     className = "min-w-[300px] w-1/5",
+    votingToolbar,
 }: BoardColumnProps<T>) {
     const [newCardContent, setNewCardContent] = useState('');
     const [isAnonymousMode, setIsAnonymousMode] = useState(false);
@@ -151,6 +153,13 @@ export function BoardColumn<T extends { id: string }>({
                     )}
                 </div>
             </div>
+
+            {/* Column Voting Toolbar */}
+            {votingToolbar && (
+                <div className="px-3 py-2 border-b bg-muted/30">
+                    {votingToolbar}
+                </div>
+            )}
 
             {/* Column Content */}
             <div className="flex-grow p-2 space-y-2 overflow-y-auto">
