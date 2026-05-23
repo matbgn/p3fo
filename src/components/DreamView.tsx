@@ -812,13 +812,13 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
         pairsToDraw.push([linkingCardId, id]);
       });
     } else if (boardState.showAllLinks) {
-      // If showAllLinks is enabled (visible to everyone), show ALL links
+      const seen = new Set<string>();
       boardState.cards.forEach(card => {
         if (card.linkedCardIds && card.linkedCardIds.length > 0) {
           card.linkedCardIds.forEach(linkedId => {
-            // Avoid duplicates by sorting ids or just adding (we filter dupes later implicitly by line logic? No, we might double draw)
-            // Let's standardise order to avoid double lines
-            if (card.id < linkedId) {
+            const key = card.id < linkedId ? `${card.id}::${linkedId}` : `${linkedId}::${card.id}`;
+            if (!seen.has(key)) {
+              seen.add(key);
               pairsToDraw.push([card.id, linkedId]);
             }
           });
@@ -1175,13 +1175,25 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
               height={boardContainerRef.current?.clientHeight || 0}
               style={{ overflow: 'visible', zIndex: 10 }}
             >
+              <defs>
+                <filter id="link-glow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur stdDeviation="2" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
               {linkLines.map((l, i) => (
                 <path
                   key={i}
                   d={`M ${l.x1} ${l.y1} C ${l.x1 + 40} ${l.y1}, ${l.x2 - 40} ${l.y2}, ${l.x2} ${l.y2}`}
-                  stroke="#facc15"
-                  strokeWidth="3"
+                  stroke="rgba(250, 204, 21, 0.55)"
+                  strokeWidth="2"
+                  strokeDasharray="6 4"
+                  strokeLinecap="round"
                   fill="none"
+                  filter="url(#link-glow)"
                 />
               ))}
             </svg>
