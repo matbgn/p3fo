@@ -201,6 +201,7 @@ export interface FertilizationColumn {
   votingMode?: VotingMode; // Per-column override; falls back to board-level
   votingPhase?: VotingPhase; // Per-column override; falls back to board-level
   maxPointsPerUser?: number; // Per-column budget for POINTS mode
+  mjLabels?: Record<number, string>; // Per-column override for Majority Judgment grade labels
 }
 
 export type DreamColumn = FertilizationColumn;
@@ -223,6 +224,7 @@ export interface FertilizationBoardEntity {
   votingMode: VotingMode;
   votingPhase: VotingPhase;
   maxPointsPerUser?: number; // Configurable max points for POINTS voting mode
+  mjLabels?: Record<number, string>; // Global override for Majority Judgment grade labels
   areCursorsVisible?: boolean; // Control cursor visibility for all users
   showAllLinks?: boolean; // Control global link visibility
 }

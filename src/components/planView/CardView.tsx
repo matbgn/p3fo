@@ -50,6 +50,7 @@ export interface CardViewProps {
     votingPhase: VotingPhase;
     maxPoints?: number;
     userPointsUsed?: number;
+    mjLabels?: Record<number, string>; // Custom Majority Judgment grade labels
 
     // Interaction State
     isEditing: boolean;
@@ -106,7 +107,8 @@ export const CardView: React.FC<CardViewProps> = ({
     onDragStart,
     isDraggable,
     tags = [],
-    columnMaxScore
+    columnMaxScore,
+    mjLabels
 }) => {
     // Local state for editing content ensures smooth typing
     const [editContent, setEditContent] = useState(card.content);
@@ -119,6 +121,10 @@ export const CardView: React.FC<CardViewProps> = ({
     const isHiddenFromUser = hiddenEdition && !card.isRevealed && (card.authorId === null || card.authorId !== currentUserId);
     const isLinkingSource = linkingCardId === card.id;
     const hasLinkedCards = (card.linkedCardIds?.length || 0) > 0;
+
+    // Resolve custom Majority Judgment labels
+    const getMJLabel = (value: number) => mjLabels?.[value] ?? MJ_SCALE.find(g => g.value === value)?.label ?? '';
+    const getMJGrade = (value: number) => ({ ...MJ_SCALE.find(g => g.value === value)!, label: getMJLabel(value) });
 
     const handleVote = (delta: number) => {
         if (votingPhase !== 'VOTING') return;
@@ -145,7 +151,7 @@ export const CardView: React.FC<CardViewProps> = ({
                     {MJ_SCALE.map(grade => (
                         <div key={grade.value} className="flex items-center gap-1.5">
                             <div className={`w-3 h-3 rounded ${grade.color} ${grade.value === medianValue ? 'ring-4 ring-gray-900 ring-offset-1 ring-offset-transparent' : ''}`}></div>
-                            <span className={`text-[10px] whitespace-nowrap ${grade.value === medianValue ? 'font-bold text-foreground' : 'text-muted-foreground'}`}>{grade.label}</span>
+                            <span className={`text-[10px] whitespace-nowrap ${grade.value === medianValue ? 'font-bold text-foreground' : 'text-muted-foreground'}`}>{getMJLabel(grade.value)}</span>
                         </div>
                     ))}
                 </div>
@@ -158,12 +164,13 @@ export const CardView: React.FC<CardViewProps> = ({
                             if (count === 0) return null;
                             const percent = (count / total) * 100;
                             const isMedian = grade.value === medianValue;
+                            const g = getMJGrade(grade.value);
                             return (
                                 <div
                                     key={grade.value}
                                     className={`h-full flex items-center justify-center ${grade.color} transition-all hover:brightness-110 relative ${isMedian ? 'ring-inset ring-4 ring-gray-900 z-10' : ''}`}
                                     style={{ width: `${percent}%` }}
-                                    title={`${grade.label}: ${count} votes (${percent.toFixed(1)}%) ${isMedian ? '(Median)' : ''}`}
+                                    title={`${g.label}: ${count} votes (${percent.toFixed(1)}%) ${isMedian ? '(Median)' : ''}`}
                                 >
                                     {percent > 8 && (
                                         <span className={`text-[10px] font-bold px-1 truncate ${[1, 2].includes(grade.value) ? 'text-black/80' : 'text-white/90'}`}>
@@ -630,7 +637,7 @@ export const CardView: React.FC<CardViewProps> = ({
                                             flex items-center justify-center gap-2 p-1.5 rounded-md text-sm font-medium border
                                             ${(() => {
                                                 const median = getMJMedian(card.votes);
-                                                const grade = MJ_SCALE.find(g => g.value === median);
+                                                const grade = getMJGrade(median || 0);
                                                 return grade ? grade.color : 'bg-muted';
                                             })()}
                                             ${(() => {
@@ -640,7 +647,7 @@ export const CardView: React.FC<CardViewProps> = ({
                                         `}>
                                             {(() => {
                                                 const median = getMJMedian(card.votes);
-                                                const grade = MJ_SCALE.find(g => g.value === median);
+                                                const grade = getMJGrade(median || 0);
                                                 return grade ? (
                                                     <>
                                                         {grade.icon}
@@ -657,8 +664,8 @@ export const CardView: React.FC<CardViewProps> = ({
                                                     <div className="flex items-center gap-2">
                                                         {card.votes[currentUserId] !== undefined ? (
                                                             <>
-                                                                {MJ_SCALE.find(g => g.value === card.votes[currentUserId])?.icon}
-                                                                {MJ_SCALE.find(g => g.value === card.votes[currentUserId])?.label}
+                                                                {getMJGrade(card.votes[currentUserId]).icon}
+                                                                {getMJGrade(card.votes[currentUserId]).label}
                                                             </>
                                                         ) : (
                                                             <span className="text-muted-foreground">Evaluate...</span>
@@ -679,7 +686,7 @@ export const CardView: React.FC<CardViewProps> = ({
                                                         <span className={`flex items-center justify-center w-5 h-5 rounded ${grade.color} text-[10px]`}>
                                                             {grade.icon}
                                                         </span>
-                                                        <span>{grade.label}</span>
+                                                        <span>{getMJLabel(grade.value)}</span>
                                                         {card.votes[currentUserId] === grade.value && (
                                                             <ThumbsUp className="h-3 w-3 ml-auto" />
                                                         )}

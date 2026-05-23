@@ -88,6 +88,10 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
     const [pointsConfigColumnId, setPointsConfigColumnId] = useState<string | null>(null);
     const [pointsConfigValue, setPointsConfigValue] = useState(10);
 
+    // Per-Column MJ Labels State
+    const [mjConfigColumnId, setMjConfigColumnId] = useState<string | null>(null);
+    const [mjLabelInputs, setMjLabelInputs] = useState<Record<number, string>>({});
+
     // Helper: get effective voting mode for a column (falls back to board-level)
     const getColumnVotingMode = useCallback((columnId: string): VotingMode => {
         if (!boardState) return 'THUMBS_UP';
@@ -116,6 +120,10 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
         const mode = getColumnVotingMode(columnId);
         if (mode === 'POINTS') {
             setPointsConfigColumnId(columnId);
+        } else if (mode === 'MAJORITY_JUDGMENT') {
+            const col = boardState?.columns.find(c => c.id === columnId);
+            setMjLabelInputs(col?.mjLabels ? { ...col.mjLabels } : {});
+            setMjConfigColumnId(columnId);
         } else {
             setColumnVotingPhase(columnId, 'VOTING');
         }
@@ -960,6 +968,47 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                 </DialogContent>
             </Dialog>
 
+            {/* Points Config Dialog */}
+            <Dialog open={pointsConfigColumnId !== null} onOpenChange={(open) => !open && setPointsConfigColumnId(null)}>
+                <DialogContent className="sm:max-w-sm">
+                    <DialogHeader><DialogTitle>Configure Points Budget</DialogTitle></DialogHeader>
+                    <div className="flex items-center gap-4 py-4">
+                        <Label className="text-right">Max Points:</Label>
+                        <Input type="number" value={pointsConfigValue} onChange={(e) => setPointsConfigValue(Math.max(1, parseInt(e.target.value) || 0))} className="col-span-3" />
+                    </div>
+                    <Button onClick={confirmColumnPointsConfig}>Start Points Voting</Button>
+                </DialogContent>
+            </Dialog>
+
+            {/* MJ Labels Config Dialog */}
+            <Dialog open={mjConfigColumnId !== null} onOpenChange={(open) => !open && setMjConfigColumnId(null)}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader><DialogTitle>Configure Majority Judgment Labels</DialogTitle></DialogHeader>
+                    <div className="space-y-3 py-2">
+                        {MJ_SCALE.map(grade => (
+                            <div key={grade.value} className="flex items-center gap-3">
+                                <span className={`flex items-center justify-center w-6 h-6 rounded ${grade.color} text-[10px]`}>{grade.icon}</span>
+                                <Input
+                                    value={mjLabelInputs[grade.value] ?? grade.label}
+                                    onChange={(e) => setMjLabelInputs(prev => ({ ...prev, [grade.value]: e.target.value }))}
+                                    className="flex-1"
+                                    placeholder={`Label for grade ${grade.value}`}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                    <Button onClick={async () => {
+                        if (!boardState || !mjConfigColumnId) return;
+                        const newColumns = boardState.columns.map(col =>
+                            col.id === mjConfigColumnId ? { ...col, mjLabels: { ...mjLabelInputs } } : col
+                        );
+                        await saveBoard({ ...boardState, columns: newColumns });
+                        setMjConfigColumnId(null);
+                        setMjLabelInputs({});
+                    }}>Save & Start MJ Voting</Button>
+                </DialogContent>
+            </Dialog>
+
             <BoardHeader
                 title="Fertilization Board"
                 titleContent={
@@ -1075,24 +1124,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                                             <SelectItem value="MAJORITY_JUDGMENT">Majority Judgment</SelectItem>
                                         </SelectContent>
                                     </Select>
-                                    {boardState.votingPhase === 'IDLE' && (
-                                        <>
-                                            <Button size="sm" onClick={handleStartVoting}><Play className="h-3 w-3 mr-1" /> Start Global Voting</Button>
-                                            <Dialog open={pointsConfigColumnId !== null} onOpenChange={(open) => !open && setPointsConfigColumnId(null)}>
-                                                <DialogContent className="sm:max-w-sm">
-                                                    <DialogHeader><DialogTitle>Configure Points Budget</DialogTitle></DialogHeader>
-                                                    <div className="flex items-center gap-4 py-4">
-                                                        <Label className="text-right">Max Points:</Label>
-                                                        <Input type="number" value={pointsConfigValue} onChange={(e) => setPointsConfigValue(Math.max(1, parseInt(e.target.value) || 0))} className="col-span-3" />
-                                                    </div>
-                                                    <Button onClick={confirmColumnPointsConfig}>Start Points Voting</Button>
-                                                </DialogContent>
-                                            </Dialog>
-                                        </>
-                                    )}
-                                    {boardState.votingPhase === 'VOTING' && (<Button size="sm" variant="secondary" onClick={() => saveBoard({ ...boardState!, votingPhase: 'IDLE' })}><Square className="h-3 w-3 mr-1" /> Stop Global Voting</Button>)}
-                                    {boardState.votingPhase !== 'REVEALED' && (<Button size="sm" variant="outline" onClick={() => saveBoard({ ...boardState!, votingPhase: 'REVEALED' })}><Eye className="h-3 w-3 mr-1" /> Reveal All</Button>)}
-                                    {boardState.votingPhase === 'REVEALED' && (<Button size="sm" variant="outline" onClick={() => saveBoard({ ...boardState!, votingPhase: 'IDLE' })}><RotateCcw className="h-3 w-3 mr-1" /> Continue Voting</Button>)}
+                                    <Button size="sm" variant="outline" onClick={() => saveBoard({ ...boardState!, votingPhase: 'REVEALED' })}><Eye className="h-3 w-3 mr-1" /> Reveal All</Button>
                                     <Button size="sm" variant="outline" className="text-destructive border-destructive/50 hover:bg-destructive/10" onClick={resetVotes}><Trash2 className="h-3 w-3 mr-1" /> Reset All Votes</Button>
                                 </div>
                             )
@@ -1283,6 +1315,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                                     onDragStart={(e) => handleDragStart(e, card.id)}
                                     isDraggable={!column.isLocked && !linkingCardId}
                                     columnMaxScore={colMaxScore}
+                                    mjLabels={column.mjLabels}
                                 />
                                 );
                             }}
