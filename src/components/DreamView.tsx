@@ -1155,7 +1155,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
             <Button onClick={async () => {
               if (!boardState || !mjConfigColumnId) return;
               const newColumns = boardState.columns.map(col =>
-                col.id === mjConfigColumnId ? { ...col, mjLabels: { ...mjLabelInputs } } : col
+                col.id === mjConfigColumnId ? { ...col, mjLabels: { ...mjLabelInputs }, votingPhase: 'VOTING' as VotingPhase } : col
               );
               await saveBoard({ ...boardState, columns: newColumns });
               setMjConfigColumnId(null);

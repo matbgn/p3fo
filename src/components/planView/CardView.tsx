@@ -170,7 +170,7 @@ export const CardView: React.FC<CardViewProps> = ({
                 {/* Stacked Bar */}
                 {total > 0 ? (
                     <div className="h-9 w-full flex rounded-md overflow-hidden ring-1 ring-border/50 shadow-sm relative bg-secondary/20">
-                        {MJ_SCALE.map(grade => {
+                        {MJ_SCALE.slice().reverse().map(grade => {
                             const count = counts[grade.value] || 0;
                             if (count === 0) return null;
                             const percent = (count / total) * 100;
