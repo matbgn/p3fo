@@ -1470,7 +1470,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
                 )}
                 renderCard={(card) => {
                   const colCards = getSortedCardsForColumn(column.id);
-                  const colMaxScore = Math.max(1, ...colCards.map(c => calculateCardVoteScore(c, column.id)));
+                  const colMaxScore = Math.max(1, ...colCards.map(c => Math.abs(calculateCardVoteScore(c, column.id))));
                   return (
                   <CardView
                     card={card}

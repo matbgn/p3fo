@@ -558,22 +558,32 @@ export const CardView: React.FC<CardViewProps> = ({
                             {votingPhase === 'REVEALED' ? (
                                 <HoverCard>
                                     <HoverCardTrigger asChild>
-                                        <div className="flex items-center justify-between gap-2 p-2 rounded-md bg-muted/50 border cursor-help">
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-xs font-medium text-green-600 bg-green-100 dark:bg-green-900/30 px-1.5 py-0.5 rounded">
-                                                    +1: {Object.values(card.votes).filter(v => v === 1).length}
-                                                </span>
-                                                <span className="text-xs font-medium text-black bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
-                                                    0: {Object.values(card.votes).filter(v => v === 0).length}
-                                                </span>
-                                                <span className="text-xs font-medium text-red-600 bg-red-100 dark:bg-red-900/30 px-1.5 py-0.5 rounded">
-                                                    -1: {Object.values(card.votes).filter(v => v === -1).length}
-                                                </span>
-                                            </div>
-                                            <span className="text-sm font-bold">
-                                                {Object.values(card.votes).reduce((a, b) => a + b, 0)}
-                                            </span>
-                                        </div>
+                                        {(() => {
+                                            const netScore = Object.values(card.votes).reduce((a, b) => a + b, 0);
+                                            const voteCount = Object.keys(card.votes).length;
+                                            const hasVotes = voteCount > 0;
+                                            const max = Math.max(1, columnMaxScore ?? 1);
+                                            const intensity = Math.min(Math.abs(netScore) / max, 1);
+                                            const isPositive = netScore >= 0;
+                                            const widthPct = Math.round(intensity * 100) / 2;
+                                            return (
+                                                <div className={`w-full relative flex items-center justify-start gap-2 p-1.5 rounded-md text-sm font-medium cursor-help overflow-hidden ${hasVotes ? 'bg-gray-400 border border-gray-400 text-white' : 'bg-muted/50 border text-primary'}`}>
+                                                    {intensity > 0 && (
+                                                        <div
+                                                            className={`absolute inset-y-0 ${isPositive ? 'left-1/2 bg-green-600 rounded-r-md' : 'right-1/2 bg-red-600 rounded-l-md'} transition-all`}
+                                                            style={{ width: `${widthPct}%` }}
+                                                        />
+                                                    )}
+                                                    <span className="relative z-10 inline-flex items-center justify-center rounded-bl-sm border-l-2 border-b-2 border-current h-4 min-w-[1.25rem] px-0.5 text-[10px] font-bold">+/-</span>
+                                                    <span className="relative z-10">
+                                                        {hasVotes ? `${netScore > 0 ? '+' : ''}${netScore}` : `${voteCount} votes`}
+                                                    </span>
+                                                    {hasVotes && (
+                                                        <span className={`text-xs relative z-10 ${hasVotes ? 'text-white/80' : 'text-muted-foreground'}`}>pts</span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
                                     </HoverCardTrigger>
                                     <HoverCardContent className="w-80">
                                         {renderUDNeutralDistribution(card.votes)}

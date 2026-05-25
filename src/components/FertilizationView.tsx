@@ -1310,7 +1310,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                             )}
                             renderCard={(card) => {
                                 const colCards = filteredCards.filter(c => c.columnId === column.id);
-                                const colMaxScore = Math.max(1, ...colCards.map(c => calculateCardVoteScore(c, column.id)));
+                                const colMaxScore = Math.max(1, ...colCards.map(c => Math.abs(calculateCardVoteScore(c, column.id))));
                                 const factTag = card.factTag;
                                 return (
                                 <CardView
