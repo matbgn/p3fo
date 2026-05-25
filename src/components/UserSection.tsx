@@ -22,6 +22,9 @@ export function UserSection() {
   const [isEditing, setIsEditing] = useState(false);
   const [isChangingUuid, setIsChangingUuid] = useState(false);
   const [tempUsername, setTempUsername] = useState(userSettings?.username || "");
+  const [tempTrigram, setTempTrigram] = useState(userSettings?.trigram || "");
+  const [editStartTrigram, setEditStartTrigram] = useState("");
+  const [trigramManuallyEdited, setTrigramManuallyEdited] = useState(false);
   const [tempUuid, setTempUuid] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -39,47 +42,64 @@ export function UserSection() {
     }
   }, [isChangingUuid, userContext?.userId]);
 
-  // Automatically persist calculated trigram if missing in settings
-  const currentUserWithTrigram = users.find(u => u.userId === userContext?.userId);
-  React.useEffect(() => {
-    if (!userSettings) return;
-    // Only persist if there's a valid calculated trigram AND the settings genuinely lack one
-    const calculatedTrigram = (currentUserWithTrigram as UserWithTrigram | undefined)?.trigram;
-    if (userSettings && !userSettings.trigram && calculatedTrigram && calculatedTrigram !== '???') {
-      console.log('Persisting calculated trigram for current user:', calculatedTrigram);
-      updateTrigram(calculatedTrigram);
-    }
-  }, [userSettings, currentUserWithTrigram, updateTrigram]);
+  // No auto-persist effect: trigrams are calculated on-the-fly in UsersContext.
+  // We only persist when the user explicitly sets a custom one.
 
   if (!userSettings) return null;
 
-  const handleEditToggle = async () => {
-    if (isEditing) {
-      // Save changes
-      const newUsername = tempUsername.trim() || userSettings.username;
-      console.log('UserSection: Saving username change', { old: userSettings.username, new: newUsername });
-      try {
-        updateUsername(newUsername);
-        console.log('UserSection: Username saved successfully');
+  const computeAutoTrigram = (username: string) =>
+    generateTrigram(username.split(' ')[0], username.split(' ').slice(1).join(' ') || '');
 
-        // Wait a bit for persistence to complete, then emit event
-        setTimeout(() => {
-          eventBus.publish('userSettingsChanged');
-          console.log('UserSection: Emitted userSettingsChanged event');
-        }, 100);
-      } catch (error) {
-        console.error('UserSection: Failed to save username', error);
-      }
-      setIsEditing(false);
-    } else {
+  const handleEditToggle = async () => {
+    if (!isEditing) {
       // Start editing
+      const foundUser = users.find(u => u.userId === userContext?.userId);
+      const currentTrigram = userSettings.trigram || (foundUser as UserWithTrigram | undefined)?.trigram || computeAutoTrigram(userSettings.username);
       setTempUsername(userSettings.username);
+      setTempTrigram(currentTrigram);
+      setEditStartTrigram(currentTrigram);
+      setTrigramManuallyEdited(false);
       setIsEditing(true);
+      setIsChangingUuid(false);
+      return;
     }
+
+    const autoTrigram = computeAutoTrigram(tempUsername.trim() || userSettings.username);
+    const needsRecompute = tempUsername.trim() !== userSettings.username && !trigramManuallyEdited;
+
+    if (needsRecompute) {
+      // Recompute the trigram for preview, stay in edit mode
+      setTempTrigram(autoTrigram);
+      setTrigramManuallyEdited(true);
+      return;
+    }
+
+    // Save changes
+    const newUsername = tempUsername.trim() || userSettings.username;
+    const newTrigram = tempTrigram.trim().toUpperCase();
+    const usernameChanged = newUsername !== userSettings.username;
+    const trigramChanged = newTrigram !== editStartTrigram;
+    console.log('UserSection: Saving profile change', { old: userSettings.username, new: newUsername, usernameChanged, trigramChanged });
+    try {
+      await updateUsername(newUsername);
+      if (trigramChanged) {
+        // User manually edited trigram, save it (even empty to revert to auto)
+        await updateTrigram(newTrigram);
+      } else if (usernameChanged) {
+        // Username changed but trigram not manually edited, clear persisted trigram to recompute
+        console.log('UserSection: Clearing persisted trigram to recompute');
+        await updateTrigram('');
+      }
+      console.log('UserSection: Profile saved successfully');
+    } catch (error) {
+      console.error('UserSection: Failed to save profile', error);
+    }
+    setIsEditing(false);
   };
 
   const handleCancelEdit = () => {
     setTempUsername(userSettings.username);
+    setTempTrigram(editStartTrigram);
     setIsEditing(false);
   };
 
@@ -135,9 +155,11 @@ export function UserSection() {
     regenerateUsername();
   };
 
+  // Use persisted or calculated trigram (or temp trigram while editing)
   const currentUser = users.find(u => u.userId === userContext?.userId);
-  // Use persisted or calculated trigram
-    const displayInitial = userSettings.trigram || (currentUser as UserWithTrigram | undefined)?.trigram || generateTrigram(userSettings.username.split(' ')[0], userSettings.username.split(' ').slice(1).join(' ') || '');
+  const displayInitial = isEditing
+    ? (tempTrigram || '???')
+    : (userSettings.trigram || (currentUser as UserWithTrigram | undefined)?.trigram || generateTrigram(userSettings.username.split(' ')[0], userSettings.username.split(' ').slice(1).join(' ') || ''));
 
   return (
     <Popover>
@@ -182,16 +204,12 @@ export function UserSection() {
                   </div>
                 </div>
               ) : isEditing ? (
-                <div className="space-y-2">
-                  <Input
-                    value={tempUsername}
-                    onChange={(e) => setTempUsername(e.target.value)}
-                    placeholder="Enter your name"
-                    className="text-sm"
-                    autoFocus
-                  />
+                <div className="space-y-1">
+                  <div className="text-sm font-medium">
+                    {userSettings.username}
+                  </div>
                   <div className="text-xs text-muted-foreground">
-                    Press Enter to save or Esc to cancel
+                    Trigram: <span className="font-mono font-semibold">{displayInitial}</span>
                   </div>
                 </div>
               ) : (
@@ -262,24 +280,47 @@ export function UserSection() {
                 </Button>
               </>
             ) : isEditing ? (
-              <div className="flex gap-2">
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="flex-1"
-                  onClick={handleEditToggle}
-                  disabled={!tempUsername.trim()}
-                >
-                  Save
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1"
-                  onClick={handleCancelEdit}
-                >
-                  Cancel
-                </Button>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={tempUsername}
+                    onChange={(e) => { setTempUsername(e.target.value); setTrigramManuallyEdited(false); }}
+                    placeholder="Enter your name"
+                    className="text-sm"
+                    autoFocus
+                  />
+                  <Input
+                    value={tempTrigram}
+                    onChange={(e) => { setTempTrigram(e.target.value.toUpperCase()); setTrigramManuallyEdited(true); }}
+                    placeholder="TRG"
+                    className="text-sm w-20 text-center font-mono"
+                    maxLength={3}
+                  />
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {tempUsername.trim() !== userSettings.username && !trigramManuallyEdited
+                    ? 'Recompute the trigram, or edit it directly, then save'
+                    : 'Press Enter to save or Esc to cancel'}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="flex-1"
+                    onClick={handleEditToggle}
+                    disabled={!tempUsername.trim()}
+                  >
+                    {tempUsername.trim() !== userSettings.username && !trigramManuallyEdited ? 'Recompute Trigram' : 'Save'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={handleCancelEdit}
+                  >
+                    Cancel
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="space-y-2">
