@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { useTasks, Category, TriageStatus } from "@/hooks/useTasks";
 import { useAllTasks } from "@/hooks/useAllTasks";
 import { CATEGORIES } from "@/data/categories";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Temporal } from '@js-temporal/polyfill';
@@ -13,6 +13,7 @@ import { ChronologicalView } from "./ChronologicalView";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { EditableTimeEntry } from "./EditableTimeEntry";
 import { formatDuration } from "@/lib/format-utils";
+import { formatTimeWithTemporal } from "@/lib/format-utils";
 import { useSettingsContext } from "@/context/SettingsContext";
 import { UserFilterSelector } from "@/components/UserFilterSelector";
 import { detectTimeOverlaps, getEntryKey } from "@/utils/timeOverlap";
@@ -427,13 +428,6 @@ export const Timetable: React.FC<{
       return true;
     });
 
-  const formatDuration = (ms: number) => {
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    return `${String(hours).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
-  };
-
   // Calculate total time spent
   const totalTime = timerEntries.reduce((acc, entry) => acc + (entry.endTime > 0 ? entry.endTime - entry.startTime : Date.now() - entry.startTime), 0);
 
@@ -505,8 +499,54 @@ export const Timetable: React.FC<{
     return map;
   }, [overlapInfo]);
 
+  // Flat rows for virtualized categorical view
+  type FlatRowKind =
+    | { type: 'group-header'; topParentId: string; topParentTask: typeof tasks[0] | undefined; groupTotal: number }
+    | { type: 'subtask-header'; parentId: string; parentTask: typeof tasks[0] | undefined; subtotal: number }
+    | { type: 'entry'; entry: (typeof timerEntries)[0]; entryKey: string };
+
+  const flatRows = React.useMemo(() => {
+    const rows: FlatRowKind[] = [];
+
+    for (const [topParentId, entries] of Object.entries(entriesByTopParentTask)) {
+      const groupTotal = entries.reduce(
+        (acc, entry) => acc + (entry.endTime > 0 ? entry.endTime - entry.startTime : Date.now() - entry.startTime),
+        0
+      );
+      const topParentTask = taskMap[topParentId];
+      rows.push({ type: 'group-header', topParentId, topParentTask, groupTotal });
+
+      const entriesByImmediateParent = entries.reduce((acc, entry) => {
+        const immediateParentId = entry.taskParentId || entry.taskId;
+        if (!acc[immediateParentId]) acc[immediateParentId] = [];
+        acc[immediateParentId].push(entry);
+        return acc;
+      }, {} as Record<string, typeof entries>);
+
+      for (const [parentId, parentEntries] of Object.entries(entriesByImmediateParent)) {
+        const parentTask = taskMap[parentId];
+        const isSubtaskGroup = parentId !== topParentId;
+
+        if (isSubtaskGroup && parentTask) {
+          const subtotal = parentEntries.reduce(
+            (acc, entry) => acc + (entry.endTime > 0 ? entry.endTime - entry.startTime : Date.now() - entry.startTime),
+            0
+          );
+          rows.push({ type: 'subtask-header', parentId, parentTask, subtotal });
+        }
+
+        for (const entry of parentEntries) {
+          rows.push({ type: 'entry', entry, entryKey: getEntryKey(entry.taskId, entry.index) });
+        }
+      }
+    }
+    return rows;
+  }, [entriesByTopParentTask, taskMap]);
+
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+
   // SVG line drawing for overlap connections
-  const tableRef = React.useRef<HTMLDivElement | null>(null);
+  const tableRef = useRef<HTMLDivElement | null>(null);
   const [overlapLines, setOverlapLines] = React.useState<Array<{ x1: number; y1: number; x2: number; y2: number; groupId: string }>>([]);
 
   // Derive a stable key that changes when overlap groups actually change
@@ -784,9 +824,8 @@ export const Timetable: React.FC<{
             {/* SVG overlay for overlap lines */}
             <svg className="pointer-events-none absolute top-0 left-0 w-full h-full" style={{ overflow: "visible" }}>
               {overlapLines.map((line, i) => {
-                // Draw a curved arc using quadratic bezier curve
                 const midY = (line.y1 + line.y2) / 2;
-                const curveOffset = -40; // How far the curve extends to the left
+                const curveOffset = -40;
                 const pathD = `M ${line.x1} ${line.y1} Q ${line.x1 + curveOffset} ${midY} ${line.x2} ${line.y2}`;
                 return (
                   <path
@@ -803,115 +842,84 @@ export const Timetable: React.FC<{
             {timerEntries.length === 0 ? (
               <p>No timer data matches the selected filters.</p>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Task</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>User</TableHead>
-                    <TableHead>Start Time</TableHead>
-                    <TableHead>End Time</TableHead>
-                    <TableHead>Duration</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {Object.entries(entriesByTopParentTask).map(([topParentId, entries]) => {
-                    // Calculate grand total for this top parent task group
-                    const groupTotal = entries.reduce((acc, entry) =>
-                      acc + (entry.endTime > 0 ? entry.endTime - entry.startTime : Date.now() - entry.startTime), 0);
-
-                    // Get top parent task info
-                    const topParentTask = taskMap[topParentId];
-
-                    // Group entries by their immediate parent for proper nesting
-                    const entriesByImmediateParent = entries.reduce((acc, entry) => {
-                      // The immediate parent for grouping is either the task's actual parent, or the task itself if it's a top-level task in this group
-                      const immediateParentId = entry.taskParentId || entry.taskId;
-
-                      if (!acc[immediateParentId]) {
-                        acc[immediateParentId] = [];
+              <div className="overflow-x-auto" ref={tableContainerRef} style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+                <Table style={{ tableLayout: 'fixed', minWidth: '980px' }}>
+                  <colgroup>
+                    <col style={{ width: '25%' }} />
+                    <col style={{ width: '150px' }} />
+                    <col style={{ width: '60px' }} />
+                    <col style={{ width: '210px' }} />
+                    <col style={{ width: '210px' }} />
+                    <col style={{ width: '200px' }} />
+                  </colgroup>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Task</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>User</TableHead>
+                      <TableHead>Start Time</TableHead>
+                      <TableHead>End Time</TableHead>
+                      <TableHead>Duration</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {flatRows.map((row, idx) => {
+                      if (row.type === 'group-header') {
+                        return (
+                          <TableRow key={`gh-${row.topParentId}`} className="bg-muted">
+                            <TableCell colSpan={5} className="overflow-hidden">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-bold truncate shrink-0" title={row.topParentTask?.title || "Unknown Task"}>{row.topParentTask?.title || "Unknown Task"} (Grand Total)</span>
+                                <TaskTag
+                                  impact={row.topParentTask?.impact}
+                                  urgent={row.topParentTask?.urgent}
+                                  majorIncident={row.topParentTask?.majorIncident}
+                                  sprintTarget={row.topParentTask?.sprintTarget}
+                                />
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-bold whitespace-nowrap" title={formatDuration(row.groupTotal)}>{formatDuration(row.groupTotal)}</TableCell>
+                          </TableRow>
+                        );
                       }
-                      acc[immediateParentId].push(entry);
-                      return acc;
-                    }, {} as Record<string, typeof entries>);
-
-                    return (
-                      <React.Fragment key={topParentId}>
-                        {/* Top parent task row with grand total */}
-                        <TableRow className="bg-muted">
-                          <TableCell className="font-bold">
-                            <div className="flex items-center gap-2">
-                              {topParentTask?.title || "Unknown Task"} (Grand Total)
-                              <TaskTag
-                                impact={topParentTask?.impact}
-                                urgent={topParentTask?.urgent}
-                                majorIncident={topParentTask?.majorIncident}
-                                sprintTarget={topParentTask?.sprintTarget}
-                              />
-                            </div>
-                          </TableCell>
-                          <TableCell colSpan={4}></TableCell>
-                          <TableCell className="font-bold">{formatDuration(groupTotal)}</TableCell>
-                        </TableRow>
-
-                        {/* Individual entries grouped by immediate parent */}
-                        {Object.entries(entriesByImmediateParent).map(([parentId, parentEntries]) => {
-                          // If this is not the top parent, show it as a subtask group
-                          const parentTask = taskMap[parentId];
-                          const isSubtaskGroup = parentId !== topParentId;
-
-                          return (
-                            <React.Fragment key={parentId}>
-                              {/* Subtask group header */}
-                              {isSubtaskGroup && parentTask && (
-                                <TableRow className="bg-secondary/50">
-                                  <TableCell className="pl-6 font-medium">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-muted-foreground">↳ </span>
-                                      {parentTask.title}
-                                      <TaskTag
-                                        impact={parentTask.impact}
-                                        urgent={parentTask.urgent}
-                                        majorIncident={parentTask.majorIncident}
-                                        sprintTarget={parentTask.sprintTarget}
-                                      />
-                                    </div>
-                                  </TableCell>
-                                  <TableCell colSpan={4}></TableCell>
-                                  <TableCell className="font-medium">
-                                    {formatDuration(parentEntries.reduce((acc, entry) =>
-                                      acc + (entry.endTime > 0 ? entry.endTime - entry.startTime : Date.now() - entry.startTime), 0))}
-                                  </TableCell>
-                                </TableRow>
-                              )}
-
-                              {/* Entries */}
-                              {parentEntries.map((entry) => {
-                                const entryKey = getEntryKey(entry.taskId, entry.index);
-                                const overlap = entryOverlapMap.get(entryKey);
-                                return (
-                                  <EditableTimeEntry
-                                    key={`${entry.taskId}-${entry.index}`}
-                                    entry={entry}
-                                    taskMap={taskMap}
-                                    onUpdateTimeEntry={updateTimeEntry}
-                                    onUpdateTaskCategory={updateCategory}
-                                    onUpdateUser={updateUser}
-                                    onDelete={deleteTimeEntry}
-                                    onJumpToTask={onJumpToTask}
-                                    onToggleTimer={toggleTimer}
-                                    overlapInfo={overlap}
-                                  />
-                                );
-                              })}
-                            </React.Fragment>
-                          );
-                        })}
-                      </React.Fragment>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                      if (row.type === 'subtask-header') {
+                        return (
+                          <TableRow key={`sh-${row.parentId}`} className="bg-secondary/50">
+                            <TableCell colSpan={5} className="overflow-hidden">
+                              <div className="flex items-center gap-2 min-w-0 pl-4">
+                                <span className="text-muted-foreground shrink-0">↳ </span>
+                                <span className="font-medium truncate" title={row.parentTask?.title || ''}>{row.parentTask?.title}</span>
+                                <TaskTag
+                                  impact={row.parentTask?.impact}
+                                  urgent={row.parentTask?.urgent}
+                                  majorIncident={row.parentTask?.majorIncident}
+                                  sprintTarget={row.parentTask?.sprintTarget}
+                                />
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-medium whitespace-nowrap" title={formatDuration(row.subtotal)}>{formatDuration(row.subtotal)}</TableCell>
+                          </TableRow>
+                        );
+                      }
+                      const overlap = entryOverlapMap.get(row.entryKey);
+                      return (
+                        <EditableTimeEntry
+                          key={`entry-${row.entry.taskId}-${row.entry.index}`}
+                          entry={row.entry}
+                          taskMap={taskMap}
+                          onUpdateTimeEntry={updateTimeEntry}
+                          onUpdateTaskCategory={updateCategory}
+                          onUpdateUser={updateUser}
+                          onDelete={deleteTimeEntry}
+                          onJumpToTask={onJumpToTask}
+                          onToggleTimer={toggleTimer}
+                          overlapInfo={overlap}
+                        />
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </div>
         )}

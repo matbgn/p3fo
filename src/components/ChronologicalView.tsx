@@ -216,7 +216,16 @@ export const ChronologicalView: React.FC<ChronologicalViewProps> = ({
       {sortedEntries.length === 0 ? (
         <p>No timer data matches the selected filters.</p>
       ) : (
-        <Table>
+        <div className="overflow-x-auto" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+          <Table style={{ tableLayout: 'fixed', minWidth: '980px' }}>
+          <colgroup>
+            <col style={{ width: '25%' }} />
+            <col style={{ width: '150px' }} />
+            <col style={{ width: '60px' }} />
+            <col style={{ width: '210px' }} />
+            <col style={{ width: '210px' }} />
+            <col style={{ width: '200px' }} />
+          </colgroup>
           <TableHeader>
             <TableRow>
               <TableHead>Task</TableHead>
@@ -250,6 +259,7 @@ export const ChronologicalView: React.FC<ChronologicalViewProps> = ({
             })}
           </TableBody>
         </Table>
+        </div>
       )}
     </div>
   );

@@ -9,7 +9,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { CATEGORIES } from "../data/categories";
 import { Category } from "@/hooks/useTasks";
 
-import { formatTimeWithTemporal, formatDuration, timestampToInstant, plainDateTimeToTimestamp, instantToPlainDateTime } from "@/lib/format-utils";
+import { formatTimeWithTemporal, formatTimeCompact, formatDuration, timestampToInstant, plainDateTimeToTimestamp, instantToPlainDateTime } from "@/lib/format-utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
@@ -162,151 +162,97 @@ export const EditableTimeEntry: React.FC<{
 
     return (
       <TableRow>
-        <TableCell>{entry.taskTitle}</TableCell>
-        <TableCell>
-          <Select onValueChange={(value) => setEditTaskCategory(value)} value={editTaskCategory}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Select a category" />
-            </SelectTrigger>
-            <SelectContent>
-              {CATEGORIES.map((category) => (
-                <SelectItem key={category} value={category}>
-                  {category}
-                </SelectItem>
-              ))}
-              <SelectItem value="Uncategorized">Uncategorized</SelectItem>
-            </SelectContent>
-          </Select>
-        </TableCell>
-        <TableCell>
-          <UserSelector
-            value={editUserId}
-            onChange={setEditUserId}
-            className="h-6 w-auto"
-          />
-        </TableCell>
-        <TableCell>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant={"outline"}
-                className={cn(
-                  "w-[240px] justify-start text-left font-normal",
-                  !startDisplayStr && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {startPdt ? (
-                  format(startAsDate!, "PPP p")
-                ) : (
-                  <span>Pick a date</span>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={startAsDate}
-                onSelect={(date) => {
-                  if (date && startPdt) {
-                    setStartPdt(dateDayToPlainDateTime(date, startPdt, timezone));
-                  }
-                }}
-                initialFocus
-                weekStartsOn={weekStartsOn}
-              />
-              <div className="p-3 border-t border-border">
+        <TableCell colSpan={6}>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium truncate max-w-[200px]" title={entry.taskTitle}>{entry.taskTitle}</span>
+            <Select onValueChange={(value) => setEditTaskCategory(value)} value={editTaskCategory}>
+              <SelectTrigger className="w-[140px] h-8">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                {CATEGORIES.map((category) => (
+                  <SelectItem key={category} value={category}>{category}</SelectItem>
+                ))}
+                <SelectItem value="Uncategorized">Uncategorized</SelectItem>
+              </SelectContent>
+            </Select>
+            <UserSelector value={editUserId} onChange={setEditUserId} className="h-8 w-auto" />
+            <Popover>
+              <PopoverTrigger asChild>
                 <Button
                   variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => openTimePicker('start', startPdt ? plainDateTimeToTimestampS(startPdt, timezone) : Date.now())}
-                >
-                  <Clock className="mr-2 h-4 w-4" />
-                  {startPdt ? (
-                    `${startPdt.hour.toString().padStart(2, '0')}:${startPdt.minute.toString().padStart(2, '0')}:${startPdt.second.toString().padStart(2, '0')}`
-                  ) : (
-                    <span className="text-muted-foreground">Set time...</span>
+                  className={cn(
+                    "h-8 justify-start text-left font-normal px-2",
+                    !startDisplayStr && "text-muted-foreground"
                   )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {startPdt ? format(startAsDate!, "PPP p") : <span>Pick a date</span>}
                 </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </TableCell>
-        <TableCell>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant={"outline"}
-                className={cn(
-                  "w-[240px] justify-start text-left font-normal",
-                  !endPdt && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {endPdt ? (
-                  format(endAsDate!, "PPP p")
-                ) : (
-                  <span>Running...</span>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={endAsDate}
-                onSelect={(date) => {
-                  if (date) {
-                    const timeRef = endPdt || startPdt;
-                    setEndPdt(dateDayToPlainDateTime(date, timeRef, timezone));
-                  }
-                }}
-                initialFocus
-                weekStartsOn={weekStartsOn}
-              />
-              <div className="p-3 border-t border-border flex flex-col gap-2">
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={startAsDate}
+                  onSelect={(date) => { if (date && startPdt) setStartPdt(dateDayToPlainDateTime(date, startPdt, timezone)); }}
+                  initialFocus
+                  weekStartsOn={weekStartsOn}
+                />
+                <div className="p-3 border-t border-border">
+                  <Button variant="outline" className="w-full justify-start" onClick={() => openTimePicker('start', startPdt ? plainDateTimeToTimestampS(startPdt, timezone) : Date.now())}>
+                    <Clock className="mr-2 h-4 w-4" />
+                    {startPdt ? `${String(startPdt.hour).padStart(2,'0')}:${String(startPdt.minute).padStart(2,'0')}:${String(startPdt.second).padStart(2,'0')}` : <span className="text-muted-foreground">Set time...</span>}
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+            <Popover>
+              <PopoverTrigger asChild>
                 <Button
                   variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => openTimePicker('end', endPdt ? plainDateTimeToTimestampS(endPdt, timezone) : (startPdt ? plainDateTimeToTimestampS(startPdt, timezone) : Date.now()))}
-                >
-                  <Clock className="mr-2 h-4 w-4" />
-                  {endPdt ? (
-                    `${endPdt.hour.toString().padStart(2, '0')}:${endPdt.minute.toString().padStart(2, '0')}:${endPdt.second.toString().padStart(2, '0')}`
-                  ) : (
-                    <span className="text-muted-foreground">Set time...</span>
+                  className={cn(
+                    "h-8 justify-start text-left font-normal px-2",
+                    !endPdt && "text-muted-foreground"
                   )}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setEndPdt(null)}
                 >
-                  Set to Running
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {endPdt ? format(endAsDate!, "PPP p") : <span>Running...</span>}
                 </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </TableCell>
-        <TableCell className="flex gap-2">
-          <Button size="sm" onClick={handleSave}>Save</Button>
-          <Button size="sm" variant="outline" onClick={handleCancel}>Cancel</Button>
-          {timePickerConfig && (
-            <TimePickerDialog
-              isOpen={timePickerOpen}
-              onClose={() => setTimePickerOpen(false)}
-              initialTime={timePickerConfig.initialTime}
-              onTimeChange={(timestamp) => {
-                const instant = Temporal.Instant.fromEpochMilliseconds(timestamp);
-                const pdt = instant.toZonedDateTimeISO(timezone).toPlainDateTime();
-
-                if (timePickerConfig.type === 'start') {
-                  setStartPdt(pdt);
-                } else {
-                  setEndPdt(pdt);
-                }
-              }}
-            />
-          )}
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={endAsDate}
+                  onSelect={(date) => { if (date) setEndPdt(dateDayToPlainDateTime(date, endPdt || startPdt, timezone)); }}
+                  initialFocus
+                  weekStartsOn={weekStartsOn}
+                />
+                <div className="p-3 border-t border-border flex flex-col gap-2">
+                  <Button variant="outline" className="w-full justify-start" onClick={() => openTimePicker('end', endPdt ? plainDateTimeToTimestampS(endPdt, timezone) : (startPdt ? plainDateTimeToTimestampS(startPdt, timezone) : Date.now()))}>
+                    <Clock className="mr-2 h-4 w-4" />
+                    {endPdt ? `${String(endPdt.hour).padStart(2,'0')}:${String(endPdt.minute).padStart(2,'0')}:${String(endPdt.second).padStart(2,'0')}` : <span className="text-muted-foreground">Set time...</span>}
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setEndPdt(null)}>Set to Running</Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={handleSave}>Save</Button>
+              <Button size="sm" variant="outline" onClick={handleCancel}>Cancel</Button>
+            </div>
+            {timePickerConfig && (
+              <TimePickerDialog
+                isOpen={timePickerOpen}
+                onClose={() => setTimePickerOpen(false)}
+                initialTime={timePickerConfig.initialTime}
+                onTimeChange={(timestamp) => {
+                  const instant = Temporal.Instant.fromEpochMilliseconds(timestamp);
+                  const pdt = instant.toZonedDateTimeISO(timezone).toPlainDateTime();
+                  if (timePickerConfig.type === 'start') setStartPdt(pdt); else setEndPdt(pdt);
+                }}
+              />
+            )}
+          </div>
         </TableCell>
       </TableRow>
     );
@@ -348,12 +294,12 @@ export const EditableTimeEntry: React.FC<{
       data-entry-id={entryId}
     >
       <TableCell style={{ paddingLeft: indentLevel > 0 ? `${Math.min(8 + indentLevel * 4, 20)}px` : undefined }}>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           {overlapInfo?.hasOverlap && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="flex items-center">
-                  <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
+                <div className="flex items-center shrink-0">
+                  <AlertTriangle className="h-4 w-4 text-red-500" />
                 </div>
               </TooltipTrigger>
               <TooltipContent className="max-w-xs">
@@ -368,8 +314,8 @@ export const EditableTimeEntry: React.FC<{
               </TooltipContent>
             </Tooltip>
           )}
-          {indentLevel > 0 && <span className="text-muted-foreground">↳ </span>}
-          {entry.taskTitle}
+          {indentLevel > 0 && <span className="text-muted-foreground shrink-0">↳ </span>}
+          <span className="truncate" title={entry.taskTitle}>{entry.taskTitle}</span>
           <TaskTag
             impact={task?.impact}
             urgent={task?.urgent}
@@ -379,7 +325,9 @@ export const EditableTimeEntry: React.FC<{
         </div>
         {children}
       </TableCell>
-      <TableCell>{entry.taskCategory || "Uncategorized"}</TableCell>
+      <TableCell className="whitespace-nowrap">
+        <span className="truncate block max-w-full" title={entry.taskCategory || "Uncategorized"}>{entry.taskCategory || "Uncategorized"}</span>
+      </TableCell>
       <TableCell>
         {task?.userId ? (
           (() => {
@@ -405,11 +353,12 @@ export const EditableTimeEntry: React.FC<{
           </div>
         )}
       </TableCell>
-      <TableCell>{formatTimeWithTemporal(entry.startTime, timezone)}</TableCell>
-      <TableCell>{entry.endTime > 0 ? formatTimeWithTemporal(entry.endTime, timezone) : 'Running'}</TableCell>
-      <TableCell className="flex items-center justify-between">
-        <span>{formatDuration(duration)}</span>
-        <div className="flex gap-1">
+      <TableCell className="whitespace-nowrap overflow-hidden text-ellipsis" title={formatTimeWithTemporal(entry.startTime, timezone)}>{formatTimeCompact(entry.startTime, timezone)}</TableCell>
+      <TableCell className="whitespace-nowrap overflow-hidden text-ellipsis" title={entry.endTime > 0 ? formatTimeWithTemporal(entry.endTime, timezone) : 'Running'}>{entry.endTime > 0 ? formatTimeCompact(entry.endTime, timezone) : 'Running'}</TableCell>
+      <TableCell>
+        <div className="flex items-center justify-between whitespace-nowrap">
+          <span title={formatDuration(duration)}>{formatDuration(duration)}</span>
+          <div className="flex gap-1">
           {onJumpToTask && (
             <Button
               size="sm"
@@ -449,6 +398,7 @@ export const EditableTimeEntry: React.FC<{
           >
             <Trash2 className="h-4 w-4" />
           </Button>
+          </div>
         </div>
       </TableCell>
     </TableRow>
