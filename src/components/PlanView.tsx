@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import CirclesView from '@/components/CirclesView';
 import { RolesTable } from '@/components/RolesTable';
+import { useViewNavigation } from '@/hooks/useView';
 
 interface PlanViewProps {
   onFocusOnTask: (taskId: string) => void;
@@ -12,6 +13,17 @@ type ActiveView = 'roles' | 'circles';
 
 const PlanView: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
   const [activeView, setActiveView] = useState<ActiveView>('circles');
+  const { pendingSubView, clearPendingSubView } = useViewNavigation();
+
+  // Consume pending sub-view from Umbrella navigation
+  useEffect(() => {
+    if (!pendingSubView) return;
+    const valid: ActiveView[] = ['circles', 'roles'];
+    if (valid.includes(pendingSubView as ActiveView)) {
+      setActiveView(pendingSubView as ActiveView);
+      clearPendingSubView();
+    }
+  }, [pendingSubView, clearPendingSubView]);
 
   // View toggle buttons component
   const ViewToggleButtons = () => (

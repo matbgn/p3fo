@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ProgramView from './ProgramView';
 import ResourcesScheduler from './ResourcesScheduler';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +8,7 @@ import { TaskEditModal } from './TaskEditModal';
 import { useTasks, Task } from '@/hooks/useTasks';
 import { useAllTasks } from '@/hooks/useAllTasks';
 import { useUserSettings } from '@/hooks/useUserSettings';
+import { useViewNavigation } from '@/hooks/useView';
 
 interface ProgramTopViewProps {
     onFocusOnTask: (taskId: string) => void;
@@ -18,6 +19,17 @@ type ActiveView = 'calendar' | 'resources';
 const ProgramTopView: React.FC<ProgramTopViewProps> = ({ onFocusOnTask }) => {
     const [activeView, setActiveView] = useState<ActiveView>('calendar');
     const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+    const { pendingSubView, clearPendingSubView } = useViewNavigation();
+
+    // Consume pending sub-view from Umbrella navigation
+    useEffect(() => {
+        if (!pendingSubView) return;
+        const valid: ActiveView[] = ['calendar', 'resources'];
+        if (valid.includes(pendingSubView as ActiveView)) {
+            setActiveView(pendingSubView as ActiveView);
+            clearPendingSubView();
+        }
+    }, [pendingSubView, clearPendingSubView]);
 
     const {
         updateStatus,

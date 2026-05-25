@@ -23,7 +23,7 @@ interface DreamTopViewProps {
 type ActiveView = 'dream' | 'storyboard' | 'prioritization';
 
 const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
-  const { setView, setFocusedTaskId, focusedTaskId } = useViewNavigation();
+  const { setView, setFocusedTaskId, focusedTaskId, pendingSubView, clearPendingSubView } = useViewNavigation();
   const { cardCompactness } = useViewDisplay();
   const { updateStatus, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleUrgent, toggleImpact, toggleMajorIncident, toggleSprintTarget, toggleDone, toggleTimer, reparent, updateTerminationDate, updateComment, updateDurationInMinutes, updatePrioritiesBulk, createTask } = useTasks();
   const { tasks } = useAllTasks();
@@ -84,6 +84,16 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
 
     loadFilters();
   }, []);
+
+  // Consume pending sub-view from Umbrella navigation
+  useEffect(() => {
+    if (!pendingSubView) return;
+    const valid: ActiveView[] = ['dream', 'storyboard', 'prioritization'];
+    if (valid.includes(pendingSubView as ActiveView)) {
+      setActiveView(pendingSubView as ActiveView);
+      clearPendingSubView();
+    }
+  }, [pendingSubView, clearPendingSubView]);
 
   // Quick add functionality
   const addTopTask = () => {

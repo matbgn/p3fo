@@ -1,7 +1,6 @@
-import React, { Suspense, useEffect } from "react";
+import React, { Suspense, useState, useCallback } from "react";
 import TaskBoard from "@/components/TaskBoard";
 import KanbanBoard from "@/components/KanbanBoard";
-import { MadeWithDyad } from "@/components/made-with-dyad";
 import { ViewSwitcher } from "@/components/ViewSwitcher";
 import { Timetable } from "@/components/Timetable";
 const ProgramTopView = React.lazy(() => import("@/components/ProgramTopView"));
@@ -13,13 +12,13 @@ import { useUserSettingsContext } from "@/context/UserSettingsContext";
 const PlanView = React.lazy(() => import("@/components/PlanView"));
 const CelebrationView = React.lazy(() => import("@/components/CelebrationView"));
 const DreamTopView = React.lazy(() => import("@/components/DreamTopView"));
-import { Button } from "@/components/ui/button";
 import { useViewNavigation } from "@/hooks/useView";
 
 import { CompactnessSelector } from "@/components/CompactnessSelector";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { UserSection } from "@/components/UserSection";
 import { QuickTimer } from "@/components/QuickTimer";
+import { UmbrellaNavigation } from "@/components/UmbrellaNavigation";
 
 const LazyWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <Suspense fallback={<div className="flex items-center justify-center p-8 text-muted-foreground">Loading...</div>}>
@@ -48,6 +47,13 @@ const Index: React.FC = () => {
   // Track which views have been mounted (lazy-mount on first visit, keep-alive after)
   const [mountedViews, setMountedViews] = React.useState<Set<string>>(() => new Set([view]));
 
+  // Umbrella overlay open state
+  const [umbrellaOpen, setUmbrellaOpen] = useState(false);
+
+  const toggleUmbrella = useCallback(() => {
+    setUmbrellaOpen(prev => !prev);
+  }, []);
+
   React.useEffect(() => {
     setMountedViews(prev => {
       if (prev.has(view)) return prev;
@@ -56,6 +62,18 @@ const Index: React.FC = () => {
       return next;
     });
   }, [view]);
+
+  // Global Ctrl+K / Cmd+K shortcut to toggle umbrella
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        toggleUmbrella();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [toggleUmbrella]);
 
   const handleViewChange = React.useCallback((newView: typeof view) => {
     setView(newView);
@@ -129,6 +147,8 @@ const Index: React.FC = () => {
           {mountedViews.has("settings") && settingsView}
         </div>
       </main>
+
+      <UmbrellaNavigation open={umbrellaOpen} onClose={() => setUmbrellaOpen(false)} />
     </div>
   );
 };

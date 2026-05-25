@@ -50,7 +50,7 @@ const COLOR_MAP: Record<ViewId, ColorCategory> = {
   celebration: 'green',
   dream: 'blue',
   plan: 'orange',
-  program: 'red',
+  program: 'orange',
   kanban: 'red',
   focus: 'red',
   metrics: 'red',

@@ -23,6 +23,9 @@ export interface ViewNavigationContextType {
     focusedTaskId: string | null;
     setFocusedTaskId: (taskId: string | null) => void;
     handleFocusOnTask: (taskId: string) => void;
+    pendingSubView: string | null;
+    navigateTo: (view: ViewType, subView?: string) => void;
+    clearPendingSubView: () => void;
 }
 
 // Display context: visual preferences that don't change on tab switch
