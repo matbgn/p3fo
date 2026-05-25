@@ -335,8 +335,8 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
 
   return (
 
-    <div className="w-full">
-      <div className="mb-4 flex flex-col gap-2">
+    <div className="w-full h-full flex flex-col">
+      <div className="mb-4 flex flex-col gap-2 shrink-0">
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -365,8 +365,8 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
 
 
 
-      <div className="relative">
-        <div ref={containerRef} className="flex pb-4 relative gap-6 flex-nowrap justify-start">
+      <div className="relative flex-1 min-h-0">
+        <div ref={containerRef} className="flex pb-4 relative gap-6 flex-nowrap justify-start h-full overflow-x-auto">
           <svg className="pointer-events-none absolute top-0 left-0 w-full h-full" width={containerRef.current?.clientWidth || 0} height={containerRef.current?.clientHeight || 0} style={{ overflow: "visible" }}>
             {lines.map((l, i) => (
               <path key={i} d={`M ${l.x1} ${l.y1} C ${l.x1 + 40} ${l.y1}, ${l.x2 - 40} ${l.y2}, ${l.x2} ${l.y2}`} stroke="#f97316" strokeWidth="3" fill="none" />
@@ -375,8 +375,8 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
 
           {columns.map((col, i) => (
             <div key={i} className="relative">
-              <Card className="w-72 shrink-0 overflow-hidden">
-                <div className="flex items-center justify-between px-3 py-2 border-b">
+              <Card className="w-72 shrink-0 overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between px-3 py-2 border-b shrink-0">
                   <div className="flex items-center gap-2 text-sm font-medium">
                     {col.parentId === "search-results" ? (
                       <Filter className="h-4 w-4 text-muted-foreground" />
@@ -399,7 +399,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                   </Button>
                 </div>
 
-                <div className="p-3 border-b">
+                <div className="p-3 border-b shrink-0">
                   <div className="flex gap-2">
                     <Input
                       placeholder={i === 0 ? "New top task..." : "New subtask..."}
@@ -427,7 +427,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
                 </div>
 
                 <div
-                  className="p-2 space-y-2 min-h-[280px]"
+                  className="flex-1 p-2 space-y-2 overflow-y-auto min-h-0"
                   onDragOver={(e) => {
                     e.preventDefault(); // unconditional — required for HTML5 DnD
                   }}

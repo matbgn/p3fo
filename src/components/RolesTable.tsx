@@ -4,7 +4,6 @@ import {
   getCoreRowModel,
   getFilteredRowModel,
   getSortedRowModel,
-  getPaginationRowModel,
   ColumnDef,
   flexRender,
   SortingState,
@@ -90,7 +89,6 @@ export const RolesTable: React.FC = () => {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'name', desc: false }]);
   const [view, setView] = useState<RoleTableView>('list');
 
-  // Collapsible section state for categorical views
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   const toggleGroup = (groupId: string) => {
@@ -148,14 +146,12 @@ export const RolesTable: React.FC = () => {
     state: {
       globalFilter,
       sorting,
-      pagination: { pageIndex: 0, pageSize: view === 'list' ? 25 : roles.length },
     },
     onGlobalFilterChange: setGlobalFilter,
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
     globalFilterFn: (row, _columnId, filterValue) => {
       const search = String(filterValue).toLowerCase();
       const role = row.original;
@@ -209,7 +205,6 @@ export const RolesTable: React.FC = () => {
     });
   }, [filteredRows, users]);
 
-  // Reset collapsed groups when view or filter changes
   React.useEffect(() => {
     setCollapsedGroups(new Set());
   }, [view, globalFilter]);
@@ -234,7 +229,6 @@ export const RolesTable: React.FC = () => {
                 </TableHead>
               ))}
             </TableRow>
-            {/* Column filter row */}
             <TableRow className="border-b-0">
               {hg.headers.map(header => (
                 <TableHead key={`${header.id}-filter`} className="pt-0 pb-2">
@@ -253,14 +247,14 @@ export const RolesTable: React.FC = () => {
         ))}
       </TableHeader>
       <TableBody>
-        {table.getRowModel().rows.length === 0 ? (
+        {filteredRows.length === 0 ? (
           <TableRow>
             <TableCell colSpan={columns.length} className="text-center text-muted-foreground py-8">
               No roles match the current filters.
             </TableCell>
           </TableRow>
         ) : (
-          table.getRowModel().rows.map(row => (
+          filteredRows.map(row => (
             <TableRow key={row.id}>
               {row.getVisibleCells().map(cell => (
                 <TableCell key={cell.id}>
@@ -371,7 +365,7 @@ export const RolesTable: React.FC = () => {
 
   return (
     <div className="space-y-4 h-full flex flex-col">
-      <div className="flex justify-between items-center flex-wrap gap-3">
+      <div className="flex justify-between items-center flex-wrap gap-3 shrink-0">
         <div className="flex items-center gap-2">
           <Input
             placeholder="Search roles..."
@@ -380,70 +374,30 @@ export const RolesTable: React.FC = () => {
             className="w-64"
           />
         </div>
-        <ToggleGroup
-          type="single"
-          value={view}
-          onValueChange={(value) => value && setView(value as RoleTableView)}
-          aria-label="Roles View"
-        >
-          <ToggleGroupItem value="list" aria-label="List View">
-            List
-          </ToggleGroupItem>
-          <ToggleGroupItem value="byUser" aria-label="By User">
-            By User
-          </ToggleGroupItem>
-        </ToggleGroup>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-muted-foreground">
+            {filteredRows.length} role(s)
+          </span>
+          <ToggleGroup
+            type="single"
+            value={view}
+            onValueChange={(value) => value && setView(value as RoleTableView)}
+            aria-label="Roles View"
+          >
+            <ToggleGroupItem value="list" aria-label="List View">
+              List
+            </ToggleGroupItem>
+            <ToggleGroupItem value="byUser" aria-label="By User">
+              By User
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
       </div>
 
-      <div className="flex-grow overflow-auto">
+      <div className="flex-1 min-h-0 overflow-auto">
         {view === 'list' && renderListTable()}
         {view === 'byUser' && renderByUserView()}
       </div>
-
-      {view === 'list' && (
-        <div className="flex items-center justify-between py-2">
-          <div className="text-sm text-muted-foreground">
-            {table.getFilteredRowModel().rows.length} role(s) found
-          </div>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.setPageIndex(0)}
-              disabled={!table.getCanPreviousPage()}
-            >
-              {'<<'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-            >
-              {'<'}
-            </Button>
-            <span className="text-sm px-2">
-              Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-            >
-              {'>'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-              disabled={!table.getCanNextPage()}
-            >
-              {'>>'}
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

@@ -240,7 +240,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
     : 0;
 
   return (
-    <Card className="h-full flex flex-col">
+    <Card className="h-full flex flex-col border-0">
       <CardHeader>
         <CardTitle>Comparative Prioritization</CardTitle>
       </CardHeader>
@@ -423,7 +423,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
             </div>
 
             {comparisonState.leftTask && comparisonState.rightTask && (
-              <div className="mt-6 p-4 border rounded-lg bg-gray-50 dark:bg-gray-700">
+              <div className="mt-6 p-4 rounded-lg bg-gray-50 dark:bg-gray-700">
                 <h3 className="text-lg font-semibold mb-4 text-center">Which is more important?</h3>
                 <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-600 mb-4">
                   <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div>

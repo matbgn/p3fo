@@ -8,6 +8,8 @@ import { Lock, Unlock, Eye, EyeOff, Play, RotateCcw, Link, Unlink, ArrowUpRight,
 import { useTasks } from '@/hooks/useTasks';
 import { useUsersContext } from '@/context/UsersContext';
 import { Label } from '@/components/ui/label';
+import { FocusModeProvider } from './FocusModeProvider';
+import { FocusModeOverlay } from './FocusModeOverlay';
 import {
     Dialog,
     DialogContent,
@@ -986,7 +988,9 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
     }
 
     return (
-        <BoardLayout>
+        <FocusModeProvider viewId="celebration">
+        <FocusModeOverlay>
+        <BoardLayout className="focus-mode-board">
             {/* Dialogs */}
             <Dialog open={promoteDialogOpen} onOpenChange={setPromoteDialogOpen}>
                 <DialogContent>
@@ -1370,5 +1374,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                 })}
             </div>
         </BoardLayout>
+        </FocusModeOverlay>
+        </FocusModeProvider>
     );
 };

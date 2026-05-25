@@ -22,6 +22,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { useSettingsContext } from "@/context/SettingsContext";
 
+import { FocusModeBar } from "./planView/FocusModeBar";
+import { FocusModeProvider } from "./FocusModeProvider";
+import { FocusModeOverlay } from "./FocusModeOverlay";
+import { useFocusMode } from "@/hooks/useFocusMode";
+
 type BoardCard =
   | { kind: "parent"; task: Task }
   | { kind: "child"; task: Task; parent: Task };
@@ -173,8 +178,8 @@ const Column: React.FC<{
   };
 
   return (
-    <Card className="w-80 shrink-0 overflow-hidden">
-      <div className="px-3 py-2 border-b text-sm font-medium flex items-center justify-between">
+    <Card className="w-80 shrink-0 overflow-hidden flex flex-col">
+      <div className="px-3 py-2 border-b text-sm font-medium flex items-center justify-between shrink-0">
         <span>{title === "WIP" ? "Work in Progress [MAX 5/p]" : title}</span>
         <div className="flex items-center gap-2">
           {totalDifficulty > 0 && (
@@ -196,7 +201,7 @@ const Column: React.FC<{
           )}
         </div>
       </div>
-      <div className="p-2 space-y-2 min-h-[320px]" onDragOver={handleColumnDragOver} onDrop={handleColumnDrop}>
+      <div className="flex-1 p-2 space-y-2 overflow-y-auto min-h-0" onDragOver={handleColumnDragOver} onDrop={handleColumnDrop}>
         {finalBlocks.length === 0 ? (
           <div className="text-xs text-muted-foreground px-2 py-6">No tasks</div>
         ) : (
@@ -290,6 +295,15 @@ const QuickAddInput: React.FC<{ onAdd: (title: string, userId?: string) => void;
 });
 
 const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highlightedTaskId?: string | null }> = ({ onFocusOnTask, highlightedTaskId }) => {
+  return (
+    <FocusModeProvider viewId="kanban">
+      <KanbanBoardInner onFocusOnTask={onFocusOnTask} highlightedTaskId={highlightedTaskId} />
+    </FocusModeProvider>
+  );
+};
+
+const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; highlightedTaskId?: string | null }> = ({ onFocusOnTask, highlightedTaskId }) => {
+  const { isFocusMode } = useFocusMode();
   const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, toggleSprintTarget, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, reparent, toggleDone, toggleTimer, updateTerminationDate, updateDurationInMinutes, updateComment, loadTasksByUser, reloadTasks } = useTasks();
   const { userId: currentUserId } = useUserSettings();
   const { setFocusedTaskId } = useViewNavigation();
@@ -357,7 +371,14 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
    const [loadingFilters, setLoadingFilters] = React.useState(true);
    const [initialLoadComplete, setInitialLoadComplete] = React.useState(false);
    const { cardCompactness } = useViewDisplay();
-   const [isFiltersCollapsed, setIsFiltersCollapsed] = React.useState(false);
+    const [isFiltersCollapsed, setIsFiltersCollapsed] = React.useState(false);
+
+    // Collapse filters by default when entering focus mode
+    React.useEffect(() => {
+        if (isFocusMode) {
+            setIsFiltersCollapsed(true);
+        }
+    }, [isFocusMode]);
    
   const displayFilters = React.useMemo(() => {
     // KanbanBoard shows all statuses by default when status array is empty
@@ -624,130 +645,165 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
   };
 
   return (
-    <div className="w-full overflow-x-auto">
-      <QuickAddInput onAdd={handleQuickAdd} selectedUserId={storedFilters.selectedUserId} />
-
-      <div className="mb-4 flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="p-0 h-6 w-6"
-            onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}
-          >
-            {isFiltersCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </Button>
-          <span className="text-sm font-medium text-muted-foreground cursor-pointer select-none" onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}>
-            Filters & Controls
-          </span>
-        </div>
-
-        {!isFiltersCollapsed && (
-          <div className="flex flex-wrap items-center gap-4 border rounded-lg p-3">
-            <FilterControls
-              filters={storedFilters}
-              setFilters={setStoredFilters}
-              defaultFilters={{
-                ...getDefaultFilters(),
-                status: ["Backlog", "Ready", "WIP", "Blocked", "Done", "Dropped"]
-              }}
-            />
-          </div>
-        )}
-      </div>
-
-      {loadingFilters ? (
-        <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
-          <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
-          Loading filters...
-        </div>
-      ) : !initialLoadComplete ? (
-        <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
-          <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
-          Applying filters...
-        </div>
-      ) : (
-        <>
-          {isLoadingTasks && (
-            <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
-              <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
-              Loading tasks...
+    <FocusModeOverlay>
+      <div className="flex flex-col h-full">
+        {!isFocusMode && (
+          <>
+            <div className="mb-4 flex items-center justify-between">
+              <QuickAddInput onAdd={handleQuickAdd} selectedUserId={storedFilters.selectedUserId} />
             </div>
-          )}
-          <div className="flex gap-4 pb-4">
-            {STATUSES.map((s) => (
-              <Column
-                key={s}
-                title={s}
-                cards={grouped[s]}
-                tasks={tasks}
-                onDropTask={handleDropTask}
-                onChangeStatus={handleChangeStatus}
-                onUpdateCategory={handleUpdateCategory}
-                onUpdateUser={handleUpdateUser}
-                onToggleUrgent={toggleUrgent}
-                onToggleImpact={toggleImpact}
-                onToggleMajorIncident={toggleMajorIncident}
-                onToggleSprintTarget={toggleSprintTarget}
-                onToggleDone={handleToggleDone}
-                onUpdateDifficulty={updateDifficulty}
-                onUpdateTitle={updateTitle}
-                onDelete={deleteTask}
-                duplicateTaskStructure={duplicateTaskStructure}
-                openParents={openParents}
-                onToggleParent={toggleParent}
-                onReparent={reparent}
-                onFocusOnTask={onFocusOnTask}
-                onToggleTimer={toggleTimer}
-                updateTerminationDate={updateTerminationDate}
-                updateDurationInMinutes={updateDurationInMinutes}
-                updateComment={updateComment}
-                highlightedTaskId={localHighlightedTaskId}
-                highlightedCardRef={highlightedCardRef}
-                onArchive={handleArchiveClick}
-              />
-            ))}
-          </div>
-        </>
-      )}
 
-      {/* Archive Confirmation Dialog */}
-      <Dialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Archive Tasks</DialogTitle>
-            <DialogDescription>
-              Archive all tasks from the {archiveColumnTitle} column.
-              {grouped[archiveColumnTitle || "Done"]?.length > 0 && (
-                <span className="block mt-2">
-                  This will archive {grouped[archiveColumnTitle || "Done"].length} tasks.
+            <div className="mb-4 flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="p-0 h-6 w-6"
+                  onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}
+                >
+                  {isFiltersCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </Button>
+                <span className="text-sm font-medium text-muted-foreground cursor-pointer select-none" onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}>
+                  Filters & Controls
                 </span>
+              </div>
+
+              {!isFiltersCollapsed && (
+                <div className="flex flex-wrap items-center gap-4 border rounded-lg p-3">
+                  <FilterControls
+                    filters={storedFilters}
+                    setFilters={setStoredFilters}
+                    defaultFilters={{
+                      ...getDefaultFilters(),
+                      status: ["Backlog", "Ready", "WIP", "Blocked", "Done", "Dropped"]
+                    }}
+                  />
+                </div>
               )}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="archive-old-only"
-                checked={archiveOnlyOldCards}
-                onCheckedChange={(checked) => setArchiveOnlyOldCards(!!checked)}
-              />
-              <Label htmlFor="archive-old-only">
-                Only archive cards older than {settings.weeksComputation || 4} weeks
-              </Label>
             </div>
+          </>
+        )}
+
+        {isFocusMode && (
+          <FocusModeBar
+            title="Kanban Board"
+            hasActiveFilters={
+              !!storedFilters.searchText?.trim() ||
+              !!storedFilters.selectedUserId ||
+              (storedFilters.difficulty?.length || 0) > 0 ||
+              (storedFilters.category?.length || 0) > 0 ||
+              (storedFilters.status?.length || 0) > 0 ||
+              storedFilters.showUrgent ||
+              storedFilters.showImpact ||
+              storedFilters.showMajorIncident ||
+              storedFilters.showSprintTarget
+            }
+            filterDropdownContent={
+              <FilterControls
+                filters={storedFilters}
+                setFilters={setStoredFilters}
+                defaultFilters={{
+                  ...getDefaultFilters(),
+                  status: ["Backlog", "Ready", "WIP", "Blocked", "Done", "Dropped"]
+                }}
+              />
+            }
+          />
+        )}
+
+        {loadingFilters ? (
+          <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
+            Loading filters...
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={handleCancelArchive}>
-              Cancel
-            </Button>
-            <Button onClick={handleConfirmArchive} variant="default">
-              Archive
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+        ) : !initialLoadComplete ? (
+          <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
+            Applying filters...
+          </div>
+        ) : (
+          <>
+            {isLoadingTasks && (
+              <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
+                Loading tasks...
+              </div>
+            )}
+            <div className="flex gap-4 pb-4 overflow-x-auto flex-1 min-h-0">
+              {STATUSES.map((s) => (
+                <Column
+                  key={s}
+                  title={s}
+                  cards={grouped[s]}
+                  tasks={tasks}
+                  onDropTask={handleDropTask}
+                  onChangeStatus={handleChangeStatus}
+                  onUpdateCategory={handleUpdateCategory}
+                  onUpdateUser={handleUpdateUser}
+                  onToggleUrgent={toggleUrgent}
+                  onToggleImpact={toggleImpact}
+                  onToggleMajorIncident={toggleMajorIncident}
+                  onToggleSprintTarget={toggleSprintTarget}
+                  onToggleDone={handleToggleDone}
+                  onUpdateDifficulty={updateDifficulty}
+                  onUpdateTitle={updateTitle}
+                  onDelete={deleteTask}
+                  duplicateTaskStructure={duplicateTaskStructure}
+                  openParents={openParents}
+                  onToggleParent={toggleParent}
+                  onReparent={reparent}
+                  onFocusOnTask={onFocusOnTask}
+                  onToggleTimer={toggleTimer}
+                  updateTerminationDate={updateTerminationDate}
+                  updateDurationInMinutes={updateDurationInMinutes}
+                  updateComment={updateComment}
+                  highlightedTaskId={localHighlightedTaskId}
+                  highlightedCardRef={highlightedCardRef}
+                  onArchive={handleArchiveClick}
+                />
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Archive Confirmation Dialog */}
+        <Dialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Archive Tasks</DialogTitle>
+              <DialogDescription>
+                Archive all tasks from the {archiveColumnTitle} column.
+                {grouped[archiveColumnTitle || "Done"]?.length > 0 && (
+                  <span className="block mt-2">
+                    This will archive {grouped[archiveColumnTitle || "Done"].length} tasks.
+                  </span>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="archive-old-only"
+                  checked={archiveOnlyOldCards}
+                  onCheckedChange={(checked) => setArchiveOnlyOldCards(!!checked)}
+                />
+                <Label htmlFor="archive-old-only">
+                  Only archive cards older than {settings.weeksComputation || 4} weeks
+                </Label>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={handleCancelArchive}>
+                Cancel
+              </Button>
+              <Button onClick={handleConfirmArchive} variant="default">
+                Archive
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </FocusModeOverlay>
   );
 };
 

@@ -1,4 +1,4 @@
-import React, { Suspense, useState, useCallback } from "react";
+import React, { Suspense, useEffect, useState, useCallback } from "react";
 import TaskBoard from "@/components/TaskBoard";
 import KanbanBoard from "@/components/KanbanBoard";
 import { ViewSwitcher } from "@/components/ViewSwitcher";
@@ -19,6 +19,7 @@ import { NotificationCenter } from "@/components/NotificationCenter";
 import { UserSection } from "@/components/UserSection";
 import { QuickTimer } from "@/components/QuickTimer";
 import { UmbrellaNavigation } from "@/components/UmbrellaNavigation";
+import { GlobalFocusModeToggle } from "@/components/GlobalFocusModeToggle";
 
 const LazyWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <Suspense fallback={<div className="flex items-center justify-center p-8 text-muted-foreground">Loading...</div>}>
@@ -38,7 +39,11 @@ const hiddenStyle: React.CSSProperties = {
   overflow: "hidden",
   pointerEvents: "none",
 };
-const activeStyle: React.CSSProperties = {};
+const activeStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  height: "100%",
+};
 
 const Index: React.FC = () => {
   const { view, setView, focusedTaskId, handleFocusOnTask } = useViewNavigation();
@@ -46,6 +51,9 @@ const Index: React.FC = () => {
 
   // Track which views have been mounted (lazy-mount on first visit, keep-alive after)
   const [mountedViews, setMountedViews] = React.useState<Set<string>>(() => new Set([view]));
+
+  // Global focus mode state driven by body data attribute
+  const [isGlobalFocusMode, setIsGlobalFocusMode] = useState(false);
 
   // Umbrella overlay open state
   const [umbrellaOpen, setUmbrellaOpen] = useState(false);
@@ -63,6 +71,12 @@ const Index: React.FC = () => {
     });
   }, [view]);
 
+  React.useEffect(() => {
+    const onChange = (e: CustomEvent) => setIsGlobalFocusMode(e.detail.active);
+    window.addEventListener('focusmodechange', onChange as EventListener);
+    return () => window.removeEventListener('focusmodechange', onChange as EventListener);
+  }, []);
+
   // Global Ctrl+K / Cmd+K shortcut to toggle umbrella
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -74,6 +88,23 @@ const Index: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toggleUmbrella]);
+
+  // Global F11 shortcut: toggles focus mode for the currently active view
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F11') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('togglefocusmode', { detail: { viewId: view } }));
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [view]);
+
+  // Track active view on body for per-view focus mode providers
+  React.useEffect(() => {
+    document.body.dataset.activeView = view;
+  }, [view]);
 
   const handleViewChange = React.useCallback((newView: typeof view) => {
     setView(newView);
@@ -94,8 +125,8 @@ const Index: React.FC = () => {
   const settingsView = React.useMemo(() => <SettingsPage />, []);
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b">
+      <div className={`flex flex-col h-screen bg-background ${isGlobalFocusMode ? 'focus-mode-active' : ''}`}>
+      <header className={`border-b transition-all duration-300 ${isGlobalFocusMode ? 'hidden' : 'block'}`}>
         <div className="container mx-auto px-4 py-4">
           <ViewSwitcher
             value={view}
@@ -110,13 +141,14 @@ const Index: React.FC = () => {
               <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap">
                 <QuickTimer onJumpToTask={handleFocusOnTask} />
                 <CompactnessSelector />
+                <GlobalFocusModeToggle activeViewId={view} />
               </div>
             }
           />
         </div>
       </header>
 
-      <main className="px-12 py-8">
+      <main className={`flex flex-col px-12 py-8 transition-all duration-300 ${isGlobalFocusMode ? 'px-0 py-0 h-screen' : 'h-[calc(100vh-4rem)] min-h-0'}`}>
         {/* Keep-alive: mount on first visit, hide with content-visibility:hidden, skip reconciliation via useMemo */}
         {/* content-visibility:hidden tells the browser to skip layout+paint entirely for hidden views */}
         <div style={view === "focus" ? activeStyle : hiddenStyle}>
