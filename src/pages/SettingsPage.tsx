@@ -15,7 +15,27 @@ import { CompactnessSelector } from '@/components/CompactnessSelector';
 import { DaySelector } from '@/components/ui/day-selector';
 import { Clock } from 'lucide-react';
 import { TimePickerDialog } from '@/components/ui/time-picker-dialog';
+import { Switch } from '@/components/ui/switch';
 import { useState } from 'react';
+import type { ModuleId } from '@/lib/persistence-types';
+
+const ALL_MODULES: { id: ModuleId; label: string; description: string; isTopLevel: boolean }[] = [
+  { id: 'celebration', label: 'Celebration', description: 'Fertilization Board for achievements and celebrations', isTopLevel: true },
+  { id: 'dream', label: 'Dream', description: 'Dream Board, Storyboard, and Prioritization views', isTopLevel: true },
+  { id: 'dream.dream', label: 'Dream Board', description: 'Dream Board sub-view within Dream', isTopLevel: false },
+  { id: 'dream.storyboard', label: 'Storyboard', description: 'Storyboard sub-view within Dream', isTopLevel: false },
+  { id: 'dream.prioritization', label: 'Prioritization', description: 'Prioritization sub-view within Dream', isTopLevel: false },
+  { id: 'plan', label: 'Plan', description: 'Circles and Roles organizational views', isTopLevel: true },
+  { id: 'plan.circles', label: 'Circles', description: 'Organizational circles sub-view within Plan', isTopLevel: false },
+  { id: 'plan.roles', label: 'Roles', description: 'Roles sub-view within Plan', isTopLevel: false },
+  { id: 'program', label: 'Program', description: 'Calendar and Resources scheduling views', isTopLevel: true },
+  { id: 'program.calendar', label: 'Calendar', description: 'Calendar sub-view within Program', isTopLevel: false },
+  { id: 'program.resources', label: 'Resources', description: 'Resources sub-view within Program', isTopLevel: false },
+  { id: 'kanban', label: 'Project', description: 'Kanban board for project management', isTopLevel: true },
+  { id: 'focus', label: 'Focus', description: 'Focus mode for concentrated task work', isTopLevel: true },
+  { id: 'timetable', label: 'Timetable', description: 'Time-based view for hourly planning', isTopLevel: true },
+  { id: 'metrics', label: 'Metrics', description: 'Performance metrics and dashboards', isTopLevel: true },
+];
 
 const SettingsPage: React.FC = () => {
   const { clearAllTasks, clearAllUsers } = useTasks();
@@ -44,9 +64,14 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleSettingChange = (key: keyof typeof settings, value: string | Record<string, number> | number, scope?: 'user' | 'global') => {
+  const handleSettingChange = (key: keyof typeof settings, value: string | Record<string, number> | number | ModuleId[], scope?: 'user' | 'global') => {
     if (key === 'preferredWorkingDays') {
       updateSettings({ [key]: value as Record<string, number> }, scope);
+      return;
+    }
+
+    if (key === 'disabledModules') {
+      updateSettings({ [key]: value as ModuleId[] }, scope);
       return;
     }
 
@@ -483,6 +508,57 @@ const SettingsPage: React.FC = () => {
                     Days before cards show aging effects. Set to 0 to disable. (default: 30). Use decimals like 0.005 for testing (~7 min).
                   </p>
                 </div>
+              </div>
+            </div>
+
+            <div className="pt-6 border-t">
+              <h2 className="text-xl font-semibold mb-4">Module Management</h2>
+              <p className="text-muted-foreground mb-4">
+                Enable or disable modules to customize your workspace. Disabled modules are hidden from navigation and the umbrella menu.
+              </p>
+              <div className="space-y-4 max-w-2xl">
+                {ALL_MODULES.filter(m => m.isTopLevel).map(module => (
+                  <div key={module.id}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label className="text-sm font-medium">{module.label}</Label>
+                        <p className="text-xs text-muted-foreground">{module.description}</p>
+                      </div>
+                      <Switch
+                        checked={!settings.disabledModules?.includes(module.id)}
+                        onCheckedChange={(checked) => {
+                          const current = settings.disabledModules ?? [];
+                          const updated = checked
+                            ? current.filter((id: ModuleId) => id !== module.id)
+                            : [...current, module.id];
+                          handleSettingChange('disabledModules', updated as ModuleId[], 'global');
+                        }}
+                      />
+                    </div>
+                    {ALL_MODULES.filter(m => !m.isTopLevel && m.id.startsWith(module.id + '.')).length > 0 && !settings.disabledModules?.includes(module.id) && (
+                      <div className="ml-6 mt-2 space-y-2">
+                        {ALL_MODULES.filter(m => !m.isTopLevel && m.id.startsWith(module.id + '.')).map(subModule => (
+                          <div key={subModule.id} className="flex items-center justify-between">
+                            <div>
+                              <Label className="text-sm font-medium">{subModule.label}</Label>
+                              <p className="text-xs text-muted-foreground">{subModule.description}</p>
+                            </div>
+                            <Switch
+                              checked={!settings.disabledModules?.includes(subModule.id)}
+                              onCheckedChange={(checked) => {
+                                const current = settings.disabledModules ?? [];
+                                const updated = checked
+                                  ? current.filter((id: ModuleId) => id !== subModule.id)
+                                  : [...current, subModule.id];
+                                handleSettingChange('disabledModules', updated as ModuleId[], 'global');
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
 

@@ -17,6 +17,7 @@ import { formatTimeWithTemporal } from "@/lib/format-utils";
 import { useSettingsContext } from "@/context/SettingsContext";
 import { UserFilterSelector } from "@/components/UserFilterSelector";
 import { detectTimeOverlaps, getEntryKey } from "@/utils/timeOverlap";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 import { loadFiltersFromSessionStorage, saveFiltersToSessionStorage } from "@/lib/filter-storage";
 import { getDefaultFilters } from "@/lib/filter-merge";
@@ -32,7 +33,7 @@ export const Timetable: React.FC<{
   onJumpToTask?: (taskId: string) => void;
 }> = ({ onJumpToTask }) => {
   const navigate = useNavigate();
-  const { tasks: allTasks } = useAllTasks();
+  const { tasks: allTasks, loading: tasksLoading } = useAllTasks();
   const { updateTimeEntry, deleteTimeEntry, updateCategory, updateUser, toggleTimer } = useTasks();
   // We use allTasks for the list, but we need to ensure we don't conflict with useTasks
   const tasks = allTasks;
@@ -70,6 +71,7 @@ export const Timetable: React.FC<{
   const [showSprintTarget, setShowSprintTarget] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedStatuses, setSelectedStatuses] = useState<TriageStatus[]>([]);
+  const [initializing, setInitializing] = useState(true);
 
   // Load filters from storage on mount
   useEffect(() => {
@@ -84,6 +86,7 @@ export const Timetable: React.FC<{
         if (filters.category) setSelectedCategories(filters.category);
         if (filters.status) setSelectedStatuses(filters.status);
       }
+      setInitializing(false);
     };
     load();
   }, []);
@@ -641,6 +644,10 @@ export const Timetable: React.FC<{
     };
   }, [overlapGroupsKey, visibleEntriesKey, view, settings.timezone]);
 
+
+  if (initializing || tasksLoading) {
+    return <LoadingSpinner label="Loading timetable..." className="h-full" />;
+  }
 
   return (
     <div className="space-y-4">

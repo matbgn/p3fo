@@ -32,6 +32,7 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
   newCapabilitiesGoal: 3,
   hoursToBeDoneByDay: 8,
   cardAgingBaseDays: 30,
+  disabledModules: [],
 };
 
 export class BrowserJsonPersistence implements PersistenceAdapter {

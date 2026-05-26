@@ -69,6 +69,7 @@ interface AppSettingsDbRow {
   timezone: string | null;
   country: string | null;
   region: string | null;
+  disabledModules: string | null;
 }
 
 interface CircleDbRow {
@@ -131,6 +132,7 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
   timezone: 'Europe/Zurich',
   country: 'CH',
   region: 'BE',
+  disabledModules: [],
 };
 
 
@@ -448,6 +450,7 @@ class SqliteClient implements DbClient {
     runMigration('appSettings', 'hourly_balance_limit_lower', 'hourlyBalanceLimitLower');
 
     addColumn('appSettings', 'cardAgingBaseDays', 'REAL DEFAULT 30');
+    addColumn('appSettings', 'disabledModules', 'TEXT');
 
     // QolSurvey columns
     runMigration('qolSurvey', 'user_id', 'userId');
@@ -903,6 +906,7 @@ class SqliteClient implements DbClient {
       timezone: row.timezone ?? 'Europe/Zurich',
       country: row.country ?? 'CH',
       region: row.region ?? 'BE',
+      disabledModules: row.disabledModules ? JSON.parse(row.disabledModules) : [],
     };
   }
 
@@ -910,26 +914,15 @@ class SqliteClient implements DbClient {
     const current = await this.getAppSettings();
     const updated = { ...current, ...patch };
 
-    // Ensure id is not in the object passed to run() if strict or to avoid confusion, 
-    // OR ensure query uses @id if we pass it. 
-    // But since id is always 1 for app settings, we can just hardcode 1 in SQL (as done) 
-    // and remove id from params if needed.
-    // However, better-sqlite3 usually ignores unused params.
-    // Let's debug by ensuring we only pass exact params.
-
-    // Actually, looking at the error "Unknown named parameter 'id'", it strongly suggests
-    // that the query EXPECTS @id but it was NOT provided? 
-    // OR provided but not used?
-
-    // Ah, I see "id" in "INSERT INTO appSettings(id, ...)".
-    // Maybe I should explicitly pass id=1 in params and use @id in SQL?
-    // Let's modify query to use @id and ensure params has id: 1.
-
-    const params = { ...updated, id: 1 };
+    const params = {
+      ...updated,
+      id: 1,
+      disabledModules: JSON.stringify(updated.disabledModules ?? []),
+    };
 
     this.db.prepare(`
-      INSERT INTO "appSettings"("id", "splitTime", "userWorkloadPercentage", "weeksComputation", "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal", "hoursToBeDoneByDay", "vacationLimitMultiplier", "hourlyBalanceLimitUpper", "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region")
-      VALUES(@id, @splitTime, @userWorkloadPercentage, @weeksComputation, @highImpactTaskGoal, @failureRateGoal, @qliGoal, @newCapabilitiesGoal, @hoursToBeDoneByDay, @vacationLimitMultiplier, @hourlyBalanceLimitUpper, @hourlyBalanceLimitLower, @cardAgingBaseDays, @timezone, @country, @region)
+      INSERT INTO "appSettings"("id", "splitTime", "userWorkloadPercentage", "weeksComputation", "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal", "hoursToBeDoneByDay", "vacationLimitMultiplier", "hourlyBalanceLimitUpper", "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region", "disabledModules")
+      VALUES(@id, @splitTime, @userWorkloadPercentage, @weeksComputation, @highImpactTaskGoal, @failureRateGoal, @qliGoal, @newCapabilitiesGoal, @hoursToBeDoneByDay, @vacationLimitMultiplier, @hourlyBalanceLimitUpper, @hourlyBalanceLimitLower, @cardAgingBaseDays, @timezone, @country, @region, @disabledModules)
       ON CONFLICT("id") DO UPDATE SET
         "splitTime" = excluded."splitTime",
         "userWorkloadPercentage" = excluded."userWorkloadPercentage",
@@ -945,7 +938,8 @@ class SqliteClient implements DbClient {
         "cardAgingBaseDays" = excluded."cardAgingBaseDays",
         "timezone" = excluded."timezone",
         "country" = excluded."country",
-        "region" = excluded."region"
+        "region" = excluded."region",
+        "disabledModules" = excluded."disabledModules"
     `).run(params);
 
     return updated;

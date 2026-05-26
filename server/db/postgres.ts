@@ -111,6 +111,7 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
   timezone: 'Europe/Zurich',
   country: 'CH',
   region: 'BE',
+  disabledModules: [],
 };
 
 export async function createPostgresClient(connectionString?: string): Promise<DbClient> {
@@ -463,6 +464,7 @@ class PostgresClient implements DbClient {
     await runMigration('appSettings', 'hourly_balance_limit_lower', 'hourlyBalanceLimitLower');
 
     await addColumn('appSettings', 'cardAgingBaseDays', 'REAL DEFAULT 30');
+    await addColumn('appSettings', 'disabledModules', 'JSONB');
 
     // QolSurvey columns
     await runMigration('qolSurvey', 'user_id', 'userId');
@@ -818,6 +820,7 @@ class PostgresClient implements DbClient {
         timezone: row.timezone ?? 'Europe/Zurich',
         country: row.country ?? 'CH',
         region: row.region ?? 'BE',
+        disabledModules: typeof row.disabledModules === 'string' ? JSON.parse(row.disabledModules) : (row.disabledModules ?? []),
       };
     }
     return DEFAULT_APP_SETTINGS;
@@ -831,8 +834,8 @@ class PostgresClient implements DbClient {
       INSERT INTO "appSettings" ("id", "splitTime", "userWorkloadPercentage", "weeksComputation", 
                                 "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal",
                                 "hoursToBeDoneByDay", "vacationLimitMultiplier", "hourlyBalanceLimitUpper",
-                                "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region")
-      VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                                "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region", "disabledModules")
+      VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       ON CONFLICT ("id") DO UPDATE SET
         "splitTime" = EXCLUDED."splitTime",
         "userWorkloadPercentage" = EXCLUDED."userWorkloadPercentage",
@@ -848,7 +851,8 @@ class PostgresClient implements DbClient {
         "cardAgingBaseDays" = EXCLUDED."cardAgingBaseDays",
         "timezone" = EXCLUDED."timezone",
         "country" = EXCLUDED."country",
-        "region" = EXCLUDED."region"
+        "region" = EXCLUDED."region",
+        "disabledModules" = EXCLUDED."disabledModules"
     `, [
       updated.splitTime,
       updated.userWorkloadPercentage,
@@ -864,7 +868,8 @@ class PostgresClient implements DbClient {
       updated.cardAgingBaseDays,
       updated.timezone,
       updated.country,
-      updated.region
+      updated.region,
+      JSON.stringify(updated.disabledModules ?? []),
     ]);
 
     return updated;

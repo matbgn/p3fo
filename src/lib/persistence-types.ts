@@ -59,6 +59,24 @@ export interface MonthlyBalanceData {
   modifiedBy?: string;
 }
 
+export type ModuleId =
+  | 'celebration'
+  | 'dream'
+  | 'plan'
+  | 'program'
+  | 'kanban'
+  | 'focus'
+  | 'timetable'
+  | 'metrics'
+  | 'settings'
+  | 'dream.dream'
+  | 'dream.storyboard'
+  | 'dream.prioritization'
+  | 'plan.circles'
+  | 'plan.roles'
+  | 'program.calendar'
+  | 'program.resources';
+
 export interface AppSettingsEntity {
   splitTime: number;
   userWorkloadPercentage: number;
@@ -75,6 +93,7 @@ export interface AppSettingsEntity {
   country?: string;
   region?: string;
   cardAgingBaseDays?: number;
+  disabledModules?: ModuleId[];
 }
 
 export interface UserSettingsEntity {

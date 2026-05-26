@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useViewNavigation } from '@/hooks/useView';
 import { cn } from '@/lib/utils';
 import type { ViewType } from '@/context/ViewContextDefinition';
+import type { ModuleId } from '@/lib/persistence-types';
 import {
   X,
   PartyPopper,
@@ -162,9 +163,28 @@ const QUARTER_CONFIG: Record<QuarterKey, QuarterConfig> = {
 };
 
 export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, onClose }) => {
-  const { navigateTo } = useViewNavigation();
+  const { navigateTo, disabledModules } = useViewNavigation();
   const [hovered, setHovered] = useState<string | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+
+  const isModuleDisabled = useCallback((view: string, subView?: string): boolean => {
+    if (subView) {
+      const moduleId = `${view}.${subView}` as ModuleId;
+      return disabledModules.includes(moduleId) || disabledModules.includes(view as ModuleId);
+    }
+    return disabledModules.includes(view as ModuleId);
+  }, [disabledModules]);
+
+  const filteredSections = useMemo(() =>
+    SECTIONS.map(section => ({
+      ...section,
+      views: section.views.filter(v => !isModuleDisabled(v.view, v.subView)),
+    })).filter(section => section.views.length > 0),
+  [isModuleDisabled]);
+
+  const filteredCenterViews = useMemo(() =>
+    CENTER_VIEWS.filter(v => !isModuleDisabled(v.view)),
+  [isModuleDisabled]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -235,7 +255,7 @@ export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, on
           <div className="absolute inset-0 rounded-full border-4 border-white/10 pointer-events-none z-50" />
 
           {/* Quarters */}
-          {SECTIONS.map((section) => {
+          {filteredSections.map((section) => {
             const q = QUARTER_CONFIG[section.position as QuarterKey];
             const isHovered = hovered === section.id;
             const isDimmed = hovered && hovered !== section.id;
@@ -327,6 +347,7 @@ export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, on
           })}
 
           {/* Inner circle (Tools) */}
+          {filteredCenterViews.length > 0 && (
           <div
             className={cn(
               'absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-28 h-28 rounded-full flex flex-col items-center justify-center cursor-pointer transition-all duration-300 z-30 border-4 border-white/20',
@@ -362,7 +383,7 @@ export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, on
                 <span className="text-xs font-bold">{CENTER_SECTION.label}</span>
               </div>
               <div className="flex flex-col gap-1.5 w-full">
-                {CENTER_SECTION.views.map((v) => (
+                {filteredCenterViews.map((v) => (
                   <button
                     key={v.id}
                     className="flex items-center justify-center gap-1 bg-white/90 text-gray-900 rounded-md px-2 py-1.5 text-[8px] font-medium shadow hover:bg-white transition-colors"
@@ -378,6 +399,7 @@ export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, on
               </div>
             </div>
           </div>
+          )}
         </div>
       </div>
     </div>

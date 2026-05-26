@@ -19,6 +19,7 @@ import { FocusModeProvider } from "./FocusModeProvider";
 import { FocusModeOverlay } from "./FocusModeOverlay";
 import { FocusModeBar } from './planView/FocusModeBar';
 import { useFocusMode } from "@/hooks/useFocusMode";
+import type { ModuleId } from '@/lib/persistence-types';
 
 interface DreamTopViewProps {
   onFocusOnTask: (taskId: string) => void;
@@ -26,36 +27,46 @@ interface DreamTopViewProps {
 
 type ActiveView = 'dream' | 'storyboard' | 'prioritization';
 
-const ViewToggleButtons: React.FC<{ activeView: ActiveView; setActiveView: (v: ActiveView) => void }> = React.memo(({ activeView, setActiveView }) => (
+const ViewToggleButtons: React.FC<{ activeView: ActiveView; setActiveView: (v: ActiveView) => void; enabledSubViews: ActiveView[] }> = React.memo(({ activeView, setActiveView, enabledSubViews }) => (
   <div className="flex space-x-2">
+    {enabledSubViews.includes('dream') && (
     <Button
       variant={activeView === 'dream' ? 'default' : 'outline'}
       onClick={() => setActiveView('dream')}
     >
       Dream
     </Button>
+    )}
+    {enabledSubViews.includes('prioritization') && (
     <Button
       variant={activeView === 'prioritization' ? 'default' : 'outline'}
       onClick={() => setActiveView('prioritization')}
     >
       Prioritization
     </Button>
+    )}
+    {enabledSubViews.includes('storyboard') && (
     <Button
       variant={activeView === 'storyboard' ? 'default' : 'outline'}
       onClick={() => setActiveView('storyboard')}
     >
       Storyboard
     </Button>
+    )}
   </div>
 ));
 
 const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
-  const { setFocusedTaskId, focusedTaskId, pendingSubView, clearPendingSubView } = useViewNavigation();
+  const { setFocusedTaskId, focusedTaskId, pendingSubView, clearPendingSubView, disabledModules } = useViewNavigation();
   const { cardCompactness } = useViewDisplay();
   const { updateStatus, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleUrgent, toggleImpact, toggleMajorIncident, toggleSprintTarget, toggleDone, toggleTimer, reparent, updateTerminationDate, updateComment, updateDurationInMinutes, updatePrioritiesBulk, createTask } = useTasks();
   const { tasks } = useAllTasks();
   const { userId: currentUserId } = useUserSettings();
   const { isFocusMode } = useFocusMode();
+
+  const enabledSubViews: ActiveView[] = (['dream', 'storyboard', 'prioritization'] as ActiveView[]).filter(
+    v => !disabledModules.includes(`dream.${v}` as ModuleId)
+  );
 
   const [activeView, setActiveView] = useState<ActiveView>('storyboard');
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
@@ -117,11 +128,18 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
   useEffect(() => {
     if (!pendingSubView) return;
     const valid: ActiveView[] = ['dream', 'storyboard', 'prioritization'];
-    if (valid.includes(pendingSubView as ActiveView)) {
+    if (valid.includes(pendingSubView as ActiveView) && enabledSubViews.includes(pendingSubView as ActiveView)) {
       setActiveView(pendingSubView as ActiveView);
       clearPendingSubView();
     }
-  }, [pendingSubView, clearPendingSubView]);
+  }, [pendingSubView, clearPendingSubView, enabledSubViews]);
+
+  // Auto-select enabled sub-view if current is disabled
+  useEffect(() => {
+    if (enabledSubViews.length > 0 && !enabledSubViews.includes(activeView)) {
+      setActiveView(enabledSubViews[0]);
+    }
+  }, [enabledSubViews, activeView]);
 
   // Quick add functionality
   const addTopTask = () => {
@@ -282,14 +300,14 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
             <CardHeader className="flex flex-col space-y-4 pb-2">
               <div className="flex flex-row items-center justify-between">
                 <CardTitle>Dream Board</CardTitle>
-                <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} />
+                <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} enabledSubViews={enabledSubViews} />
               </div>
             </CardHeader>
           )}
           <CardContent className="flex-grow overflow-hidden p-0">
             <DreamView
               onPromoteToKanban={handlePromoteToKanban}
-              focusModeHeaderContent={isFocusMode ? <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} /> : undefined}
+              focusModeHeaderContent={isFocusMode ? <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} enabledSubViews={enabledSubViews} /> : undefined}
             />
           </CardContent>
         </Card>
@@ -307,7 +325,7 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
           <FocusModeBar
             title={viewTitle}
             rightContent={
-              <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} />
+              <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} enabledSubViews={enabledSubViews} />
             }
             hasActiveFilters={
               !!storedFilters.searchText?.trim() ||
@@ -335,7 +353,7 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
           <CardHeader className="flex flex-col space-y-4 pb-2">
             <div className="flex flex-row items-center justify-between">
               <CardTitle>{viewTitle}</CardTitle>
-              <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} />
+              <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} enabledSubViews={enabledSubViews} />
             </div>
 
             <div className="mb-2 flex gap-2">

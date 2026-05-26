@@ -10,6 +10,7 @@ import { FocusModeProvider } from '@/components/FocusModeProvider';
 import { FocusModeOverlay } from '@/components/FocusModeOverlay';
 import { FocusModeBar } from '@/components/planView/FocusModeBar';
 import { Plus, Edit, Trash2, Move, PanelLeftClose, Home } from 'lucide-react';
+import type { ModuleId } from '@/lib/persistence-types';
 
 interface PlanViewProps {
   onFocusOnTask: (taskId: string) => void;
@@ -17,28 +18,43 @@ interface PlanViewProps {
 
 type ActiveView = 'circles' | 'roles';
 
-const ViewToggleButtons: React.FC<{ activeView: ActiveView; setActiveView: (v: ActiveView) => void }> = React.memo(({ activeView, setActiveView }) => (
+const ViewToggleButtons: React.FC<{ activeView: ActiveView; setActiveView: (v: ActiveView) => void; enabledSubViews: ActiveView[] }> = React.memo(({ activeView, setActiveView, enabledSubViews }) => (
   <div className="flex space-x-2">
+    {enabledSubViews.includes('circles') && (
     <Button
       variant={activeView === 'circles' ? 'default' : 'outline'}
       onClick={() => setActiveView('circles')}
     >
       Circles
     </Button>
+    )}
+    {enabledSubViews.includes('roles') && (
     <Button
       variant={activeView === 'roles' ? 'default' : 'outline'}
       onClick={() => setActiveView('roles')}
     >
       Roles
     </Button>
+    )}
   </div>
 ));
 
 const PlanViewInner: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
   const [activeView, setActiveView] = useState<ActiveView>('circles');
-  const { pendingSubView, clearPendingSubView } = useViewNavigation();
+  const { pendingSubView, clearPendingSubView, disabledModules } = useViewNavigation();
   const { isFocusMode } = useFocusMode();
   const circlesRef = useRef<CirclesViewHandle>(null);
+
+  const enabledSubViews: ActiveView[] = ['circles', 'roles'].filter(
+    v => !disabledModules.includes(`plan.${v}` as ModuleId)
+  ) as ActiveView[];
+
+  // Auto-select enabled sub-view if current is disabled
+  useEffect(() => {
+    if (enabledSubViews.length > 0 && !enabledSubViews.includes(activeView)) {
+      setActiveView(enabledSubViews[0]);
+    }
+  }, [enabledSubViews, activeView]);
 
   useEffect(() => {
     if (!pendingSubView) return;
@@ -90,7 +106,7 @@ const PlanViewInner: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
           <FocusModeBar
             title={viewTitle}
             rightContent={
-              <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} />
+              <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} enabledSubViews={enabledSubViews} />
             }
             moderatorDropdownContent={circleActions}
           />
@@ -100,7 +116,7 @@ const PlanViewInner: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
             <CardHeader className="flex flex-col space-y-4 pb-2 shrink-0">
               <div className="flex flex-row items-center justify-between">
                 <CardTitle>Circles</CardTitle>
-                <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} />
+                <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} enabledSubViews={enabledSubViews} />
               </div>
             </CardHeader>
           )}
@@ -119,7 +135,7 @@ const PlanViewInner: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
         <FocusModeBar
           title={viewTitle}
           rightContent={
-            <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} />
+             <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} enabledSubViews={enabledSubViews} />
           }
         />
       )}
@@ -128,7 +144,7 @@ const PlanViewInner: React.FC<PlanViewProps> = ({ onFocusOnTask }) => {
           <CardHeader className="flex flex-col space-y-4 pb-2 shrink-0">
             <div className="flex flex-row items-center justify-between">
               <CardTitle>Roles</CardTitle>
-              <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} />
+              <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} enabledSubViews={enabledSubViews} />
             </div>
           </CardHeader>
         )}

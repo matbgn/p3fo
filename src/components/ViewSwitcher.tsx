@@ -25,12 +25,14 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import type { ModuleId } from '@/lib/persistence-types';
 
 type ViewId = "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "plan" | "dream" | "celebration";
 
 interface ViewSwitcherProps {
   value: ViewId;
   onChange: (view: ViewId) => void;
+  disabledModules?: ModuleId[];
   /** Items that sit in the pill bar after utility views (e.g. NotificationCenter, UserSection) */
   utilityItems?: React.ReactNode;
   /** Items that always stay visible in the right section (e.g. CompactnessSelector) */
@@ -90,8 +92,6 @@ const allViews: ViewOption[] = [
   { id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" />, isUtility: true },
 ];
 
-const MAIN_COUNT = allViews.filter(v => !v.isUtility).length; // 7
-
 type DisplayMode = 'full' | 'compact' | 'overflow';
 
 // Approximate widths for calculating fit
@@ -101,7 +101,7 @@ const OVERFLOW_BTN_WIDTH = 40;    // three dots button
 const UTILITY_ITEMS_WIDTH = 100;  // approximate width for notification bell + user avatar
 const GAP = 16;                   // flex gap
 
-export function ViewSwitcher({ value, onChange, utilityItems, rightItems }: ViewSwitcherProps) {
+export function ViewSwitcher({ value, onChange, disabledModules = [], utilityItems, rightItems }: ViewSwitcherProps) {
   const cursors = useCursors();
   const containerRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
@@ -109,6 +109,11 @@ export function ViewSwitcher({ value, onChange, utilityItems, rightItems }: View
   const [displayMode, setDisplayMode] = useState<DisplayMode>('full');
   const [visibleCount, setVisibleCount] = useState(allViews.length);
   const [overflowOpen, setOverflowOpen] = useState(false);
+
+  const enabledViews = useMemo(
+    () => allViews.filter(v => !disabledModules.includes(v.id as ModuleId)),
+    [disabledModules]
+  );
 
   const userCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -120,32 +125,32 @@ export function ViewSwitcher({ value, onChange, utilityItems, rightItems }: View
     return counts;
   }, [cursors]);
 
+  const enabledMainCount = enabledViews.filter(v => !v.isUtility).length;
+  const enabledUtilCount = enabledViews.filter(v => v.isUtility).length;
+
   const calculateLayout = useCallback(() => {
     if (!containerRef.current) return;
 
     const containerWidth = containerRef.current.offsetWidth;
     const rightWidth = rightRef.current?.offsetWidth || 0;
     const logoWidth = logoRef.current?.offsetWidth || 0;
-    // Available space for the pill bar (including potential overflow button)
     const availableForPills = containerWidth - logoWidth - rightWidth - GAP * 2;
 
-    // Account for utilityItems (NotificationCenter, UserSection) in the pill bar
     const extraWidth = utilityItems ? UTILITY_ITEMS_WIDTH : 0;
 
     // Try full mode: main views get icon + text, utility views are always icon-only
-    const utilCount = allViews.length - MAIN_COUNT;
-    const fullWidth = MAIN_COUNT * ITEM_FULL_WIDTH + utilCount * ITEM_COMPACT_WIDTH + extraWidth;
+    const fullWidth = enabledMainCount * ITEM_FULL_WIDTH + enabledUtilCount * ITEM_COMPACT_WIDTH + extraWidth;
     if (fullWidth <= availableForPills) {
       setDisplayMode('full');
-      setVisibleCount(allViews.length);
+      setVisibleCount(enabledViews.length);
       return;
     }
 
     // Try compact mode: all views icon-only
-    const compactWidth = allViews.length * ITEM_COMPACT_WIDTH + extraWidth;
+    const compactWidth = enabledViews.length * ITEM_COMPACT_WIDTH + extraWidth;
     if (compactWidth <= availableForPills) {
       setDisplayMode('compact');
-      setVisibleCount(allViews.length);
+      setVisibleCount(enabledViews.length);
       return;
     }
 
@@ -153,8 +158,8 @@ export function ViewSwitcher({ value, onChange, utilityItems, rightItems }: View
     setDisplayMode('overflow');
     const availableForItems = availableForPills - OVERFLOW_BTN_WIDTH;
     const fitCount = Math.max(1, Math.floor(availableForItems / ITEM_COMPACT_WIDTH));
-    setVisibleCount(Math.min(fitCount, allViews.length));
-  }, [utilityItems]);
+    setVisibleCount(Math.min(fitCount, enabledViews.length));
+  }, [utilityItems, enabledViews.length, enabledMainCount, enabledUtilCount]);
 
   useEffect(() => {
     calculateLayout();
@@ -165,9 +170,9 @@ export function ViewSwitcher({ value, onChange, utilityItems, rightItems }: View
     return () => observer.disconnect();
   }, [calculateLayout]);
 
-  // Split all views into visible and overflow
-  let visibleViews = allViews.slice(0, visibleCount);
-  let overflowViews = displayMode === 'overflow' ? allViews.slice(visibleCount) : [];
+  // Split enabled views into visible and overflow
+  let visibleViews = enabledViews.slice(0, visibleCount);
+  let overflowViews = displayMode === 'overflow' ? enabledViews.slice(visibleCount) : [];
 
   // Ensure active view is always visible — swap it in if it overflowed
   const activeInOverflow = overflowViews.find(v => v.id === value);

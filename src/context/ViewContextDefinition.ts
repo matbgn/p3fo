@@ -1,4 +1,5 @@
 import { createContext } from 'react';
+import type { ModuleId } from '@/lib/persistence-types';
 
 export type ViewType =
     | "focus"
@@ -26,6 +27,8 @@ export interface ViewNavigationContextType {
     pendingSubView: string | null;
     navigateTo: (view: ViewType, subView?: string) => void;
     clearPendingSubView: () => void;
+    disabledModules: ModuleId[];
+    setDisabledModules: (modules: ModuleId[]) => void;
 }
 
 // Display context: visual preferences that don't change on tab switch
