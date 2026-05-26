@@ -1,5 +1,15 @@
 packages:
   - '.'
 
+allowBuilds:
+  '@swc/core': true
+  esbuild: true
+  leveldown: true
+  protobufjs: true
+
 onlyBuiltDependencies:
+  - '@swc/core'
   - better-sqlite3
+  - esbuild
+  - leveldown
+  - protobufjs
