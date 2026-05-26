@@ -408,118 +408,147 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
       <div
         className="flex justify-between items-center mb-2"
       >
-        <div className="flex justify-start gap-1">
-          <div className="flex gap-1 items-center">
-            {/* Always show LiveTimeBadge unless in Ultra Compact mode? Requirement says: 
-                Ultra Compact: "shows only the card name and the user assigned to it and the small icons of criticity"
-                Second view: "time related stuff in addition"
-            */}
-            {!isUltraCompact && (
-              <LiveTimeBadge
-                task={task}
-                totalTime={hasSubtasks ? totalTime : undefined}
-                onClick={() => {
-                  if (onFocusOnTask) {
-                    onFocusOnTask(task.id);
-                  }
+         <div className={`flex justify-start gap-1 transition-opacity duration-200 ${isUltraCompact ? (isHovered ? 'opacity-100' : 'opacity-0') : 'opacity-100'}`}>
+           {(isUltraCompact ? isHovered : true) && (
+             <>
+               <div className="flex gap-1 items-center">
+                 <LiveTimeBadge
+                   task={task}
+                   totalTime={hasSubtasks ? totalTime : undefined}
+                   onClick={() => {
+                     if (onFocusOnTask) {
+                       onFocusOnTask(task.id);
+                     }
+                   }}
+                 />
+               </div>
+               <div className="text-muted-foreground">/</div>
+               {hasSubtasks ? (
+                 <DifficultyBadge difficulty={totalDifficulty} />
+               ) : (
+                 <Select value={task.difficulty?.toString() || "1"} onValueChange={(v) => updateDifficulty(task.id, parseFloat(v) as 0.5 | 1 | 2 | 3 | 5 | 8)}>
+                   <SelectTrigger className="h-6 w-16 p-0">
+                     <SelectValue>
+                       {task.difficulty ? (
+                         <div className="flex items-center">
+                           <div className={`w-3 h-3 rounded-full ${getDifficultyColor(task.difficulty)} mr-2`} />
+                           <span>{task.difficulty}</span>
+                         </div>
+                       ) : (
+                         <div className="flex items-center">
+                           <div className={`w-3 h-3 rounded-full ${getDifficultyColor(1)} mr-2`} />
+                           <span>1</span>
+                         </div>
+                       )}
+                     </SelectValue>
+                   </SelectTrigger>
+                   <SelectContent>
+                     {DIFFICULTY_OPTIONS.map((difficulty) => (
+                       <SelectItem key={difficulty} value={difficulty.toString()}>
+                         <div className="flex items-center">
+                           <div className={`w-3 h-3 rounded-full ${getDifficultyColor(difficulty)} mr-2`} />
+                           <span>{difficulty}</span>
+                         </div>
+                       </SelectItem>
+                     ))}
+                   </SelectContent>
+                 </Select>
+               )}
+             </>
+           )}
+         </div>
+        {/* Timer controls - show in Compact/Full always, Ultra Compact on hover */}
+        {!hasSubtasks && (
+          isUltraCompact ? (
+            <div className={`flex items-center gap-2 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
+              {isHovered && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleTimer(task.id, currentUserId);
+                    }}
+                  >
+                    {task.timer?.some(e => !e.endTime) ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsTimeSheetOpen(true);
+                    }}
+                  >
+                    <Clock2 className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleTimer(task.id, currentUserId);
                 }}
-              />
-            )}
-          </div>
-          {!isUltraCompact && <div className="text-muted-foreground">/</div>}
-          {/* Difficulty in Compact and Full mode */}
-          {!isUltraCompact && (
-            hasSubtasks ? (
-              <DifficultyBadge difficulty={totalDifficulty} />
-            ) : (
-              <Select value={task.difficulty?.toString() || "1"} onValueChange={(v) => updateDifficulty(task.id, parseFloat(v) as 0.5 | 1 | 2 | 3 | 5 | 8)}>
-                <SelectTrigger className="h-6 w-16 p-0">
-                  <SelectValue>
-                    {task.difficulty ? (
-                      <div className="flex items-center">
-                        <div className={`w-3 h-3 rounded-full ${getDifficultyColor(task.difficulty)} mr-2`} />
-                        <span>{task.difficulty}</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center">
-                        <div className={`w-3 h-3 rounded-full ${getDifficultyColor(1)} mr-2`} />
-                        <span>1</span>
-                      </div>
-                    )}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {DIFFICULTY_OPTIONS.map((difficulty) => (
-                    <SelectItem key={difficulty} value={difficulty.toString()}>
-                      <div className="flex items-center">
-                        <div className={`w-3 h-3 rounded-full ${getDifficultyColor(difficulty)} mr-2`} />
-                        <span>{difficulty}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )
-          )}
-        </div>
-        {/* Timer controls - show in Compact and Full */}
-        {!hasSubtasks && !isUltraCompact && (
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 w-6 p-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleTimer(task.id, currentUserId);
-              }}
-            >
-              {task.timer?.some(e => !e.endTime) ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 w-6 p-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsTimeSheetOpen(true);
-              }}
-            >
-              <Clock2 className="h-4 w-4" />
-            </Button>
-            {isTimeSheetOpen && (
-              <Dialog open={isTimeSheetOpen} onOpenChange={setIsTimeSheetOpen}>
-                <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col p-0" aria-describedby={undefined}>
-                  <DialogHeader className="p-6 pb-4">
-                    <DialogTitle>Time Sheet - {task.title}</DialogTitle>
-                    <DialogDescription className="sr-only">
-                      View and edit time entries for task: {task.title}
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="flex-grow overflow-y-auto px-6 pb-6">
-                    <TimeSheet taskId={task.id} />
-                  </div>
-                </DialogContent>
-              </Dialog>
-            )}
-          </div>
+              >
+                {task.timer?.some(e => !e.endTime) ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsTimeSheetOpen(true);
+                }}
+              >
+                <Clock2 className="h-4 w-4" />
+              </Button>
+            </div>
+          )
         )}
-        {/* Date picker toggle - show in Compact and Full */}
-        {!task.parentId && !isUltraCompact && (
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 w-6 p-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsDateTimeBlockOpen(!isDateTimeBlockOpen);
-              }}
-            >
-              <CalendarIcon className={`h-4 w-4 ${((!hasSubtasks && (task.terminationDate || task.durationInMinutes)) || isDateTimeBlockOpen) ? "text-blue-500" : "text-gray-400"}`} />
-            </Button>
-          </div>
-        )}
+         {/* Date picker toggle - show in Compact/Full always, Ultra Compact on hover */}
+         {!task.parentId && (
+           isUltraCompact ? (
+             <div className={`flex items-center gap-2 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
+               {isHovered && (
+                 <Button
+                   size="sm"
+                   variant="ghost"
+                   className="h-6 w-6 p-0"
+                   onClick={(e) => {
+                     e.stopPropagation();
+                     setIsDateTimeBlockOpen(!isDateTimeBlockOpen);
+                   }}
+                 >
+                   <CalendarIcon className={`h-4 w-4 ${((!hasSubtasks && (task.terminationDate || task.durationInMinutes)) || isDateTimeBlockOpen) ? "text-blue-500" : "text-gray-400"}`} />
+                 </Button>
+               )}
+             </div>
+           ) : (
+             <div className="flex items-center gap-2">
+               <Button
+                 size="sm"
+                 variant="ghost"
+                 className="h-6 w-6 p-0"
+                 onClick={(e) => {
+                   e.stopPropagation();
+                   setIsDateTimeBlockOpen(!isDateTimeBlockOpen);
+                 }}
+               >
+                 <CalendarIcon className={`h-4 w-4 ${((!hasSubtasks && (task.terminationDate || task.durationInMinutes)) || isDateTimeBlockOpen) ? "text-blue-500" : "text-gray-400"}`} />
+               </Button>
+             </div>
+           )
+         )}
       </div>
       {isDateTimeBlockOpen && !task.parentId && (
         <div className="flex flex-col gap-2 mb-2">
@@ -680,56 +709,35 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
           done={task.triageStatus === "Done" || task.triageStatus === "Dropped"}
           onUpdateTitle={(title) => updateTitle(task.id, title)}
         />
-        {/* Comment icon - show in Compact and Full */}
-        {!isUltraCompact && (
-          <>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 w-6 p-0 shrink-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsCommentModalOpen(true);
-              }}
-            >
-              <FileText className={`h-4 w-4 ${task.comment ? "text-blue-500" : "text-gray-400"}`} />
-            </Button>
-            {isCommentModalOpen && (
-              <Dialog open={isCommentModalOpen} onOpenChange={setIsCommentModalOpen}>
-                <DialogContent className="max-w-md" aria-describedby={undefined}>
-                  <DialogHeader>
-                    <DialogTitle>Edit Comment - {task.title}</DialogTitle>
-                    <DialogDescription className="sr-only">
-                      Edit comment for task: {task.title}
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                    <div className="grid gap-2">
-                      <label htmlFor="comment" className="sr-only">Comment</label>
-                      <textarea
-                        id="comment"
-                        value={commentText}
-                        onChange={(e) => setCommentText(e.target.value)}
-                        className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                        placeholder="Add a comment..."
-                      />
-                    </div>
-                  </div>
-                  <div className="flex justify-end">
-                    <Button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        updateComment(task.id, commentText);
-                        setIsCommentModalOpen(false);
-                      }}
-                    >
-                      Save Comment
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
+        {/* Comment icon - show in Compact/Full always, Ultra Compact on hover */}
+        {isUltraCompact ? (
+          <div className={`transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
+            {isHovered && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0 shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsCommentModalOpen(true);
+                }}
+              >
+                <FileText className={`h-4 w-4 ${task.comment ? "text-blue-500" : "text-gray-400"}`} />
+              </Button>
             )}
-          </>
+          </div>
+        ) : (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 w-6 p-0 shrink-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsCommentModalOpen(true);
+            }}
+          >
+            <FileText className={`h-4 w-4 ${task.comment ? "text-blue-500" : "text-gray-400"}`} />
+          </Button>
         )}
       </div>
       {/* Subtasks toggle - show in ALL modes (Ultra, Compact, Full) */}
@@ -856,13 +864,15 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
           Compact: Hide Status ("takeaway the state column").
           Full: Show Status.
       */}
-      {isFull && (
+      {(isFull || (!task.parentId && !isFull)) && (
         <div className="mt-2 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <TaskStatusSelect value={task.triageStatus} onChange={(s) => updateStatus(task.id, s)} />
-          </div>
-          {!task.parentId && isFull && (
-            <div className={`flex gap-1 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
+          {isFull && (
+            <div className="flex items-center gap-2">
+              <TaskStatusSelect value={task.triageStatus} onChange={(s) => updateStatus(task.id, s)} />
+            </div>
+          )}
+          {!task.parentId && (
+            <div className={`flex gap-1 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'} ${isFull ? '' : 'ml-auto'}`}>
               {isHovered && (
                 <>
                   <Button
@@ -939,7 +949,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
             </div>
           )}
           {task.parentId && (
-            <div className={`flex gap-1 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
+            <div className={`flex gap-1 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'} ${isFull ? '' : 'ml-auto'}`}>
               {isHovered && (
                 <>
                   <Button
@@ -967,7 +977,6 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
-
                 </>
               )}
             </div>
@@ -996,6 +1005,58 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
           onToggleTimer={toggleTimer}
           currentUserId={currentUserId}
         />
+      )}
+      {/* Comment Modal */}
+      {isCommentModalOpen && (
+        <Dialog open={isCommentModalOpen} onOpenChange={setIsCommentModalOpen}>
+          <DialogContent className="max-w-md" aria-describedby={undefined}>
+            <DialogHeader>
+              <DialogTitle>Edit Comment - {task.title}</DialogTitle>
+              <DialogDescription className="sr-only">
+                Edit comment for task: {task.title}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <label htmlFor="comment" className="sr-only">Comment</label>
+                <textarea
+                  id="comment"
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  placeholder="Add a comment..."
+                />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updateComment(task.id, commentText);
+                  setIsCommentModalOpen(false);
+                }}
+              >
+                Save Comment
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+      {/* TimeSheet Dialog */}
+      {!hasSubtasks && isTimeSheetOpen && (
+        <Dialog open={isTimeSheetOpen} onOpenChange={setIsTimeSheetOpen}>
+          <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col p-0" aria-describedby={undefined}>
+            <DialogHeader className="p-6 pb-4">
+              <DialogTitle>Time Sheet - {task.title}</DialogTitle>
+              <DialogDescription className="sr-only">
+                View and edit time entries for task: {task.title}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex-grow overflow-y-auto px-6 pb-6">
+              <TimeSheet taskId={task.id} />
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
       {/* Time Picker Dialog for termination date time */}
       <TimePickerDialog

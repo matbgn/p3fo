@@ -13,7 +13,6 @@ import { useTasks, Task } from '@/hooks/useTasks';
 import { useAllTasks } from '@/hooks/useAllTasks';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { useSettingsContext } from '@/context/SettingsContext';
-import { TaskCard } from './TaskCard';
 import {
   Dialog,
   DialogContent,
@@ -23,8 +22,11 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { LazyCard } from './LazyCard';
-import { AlertTriangle, CircleDot, Flame, GripHorizontal } from 'lucide-react';
+import { StoryboardCard } from './StoryboardCard';
+import { AlertTriangle, CircleDot, Flame, GripHorizontal, ChevronDown, ChevronRight } from 'lucide-react';
+import { FilterControls, Filters } from './FilterControls';
+import { loadFiltersFromSessionStorage } from '@/lib/filter-storage';
+import { getDefaultFilters, validateFilters, mergeViewFilters } from '@/lib/filter-merge';
 
 
 interface ProgramViewProps {
@@ -40,6 +42,8 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) 
   const defaultPlanView = settings.defaultPlanView || 'week';
 
   const [view, setView] = React.useState<View>(defaultPlanView);
+
+  const [quickAddInput, setQuickAddInput] = React.useState('');
 
   // Click-to-create task state
   const [newTaskDialogOpen, setNewTaskDialogOpen] = React.useState(false);
@@ -109,14 +113,82 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) 
   const { tasks } = useAllTasks();
   const { userId: currentUserId } = useUserSettings();
 
+  const [storedFilters, setStoredFilters] = React.useState<Filters>(() => getDefaultFilters());
+  const [isFiltersCollapsed, setIsFiltersCollapsed] = React.useState(true);
+
+  const displayFilters = React.useMemo(() => {
+    return mergeViewFilters(storedFilters, { defaultActiveStatuses: true });
+  }, [storedFilters]);
+
+  React.useEffect(() => {
+    const load = async () => {
+      try {
+        const loaded = await loadFiltersFromSessionStorage();
+        if (loaded) {
+          const validated = validateFilters(loaded);
+          setStoredFilters(validated);
+        }
+      } catch (error) {
+        console.error("Error loading filters:", error);
+      }
+    };
+    load();
+  }, []);
+
   const parentTasks = useMemo(() => {
-    return tasks.filter(
-      task =>
-        !task.parentId &&
-        task.triageStatus !== 'Done' &&
-        task.triageStatus !== 'Dropped'
-    );
-  }, [tasks]);
+    return tasks
+      .filter(task => !task.parentId && task.triageStatus !== 'Done' && task.triageStatus !== 'Dropped' && task.triageStatus !== 'Archived')
+      .filter(task => {
+        if (displayFilters.searchText?.trim()) {
+          const searchText = displayFilters.searchText.toLowerCase();
+          if (!task.title.toLowerCase().includes(searchText)) {
+            return false;
+          }
+        }
+
+        if (displayFilters.showUrgent && !task.urgent) {
+          return false;
+        }
+
+        if (displayFilters.showImpact && !task.impact) {
+          return false;
+        }
+
+        if (displayFilters.showMajorIncident && !task.majorIncident) {
+          return false;
+        }
+
+        if (displayFilters.showSprintTarget && !task.sprintTarget) {
+          return false;
+        }
+
+        if (displayFilters.difficulty && Array.isArray(displayFilters.difficulty) && displayFilters.difficulty.length > 0 && !displayFilters.difficulty.includes(task.difficulty)) {
+          return false;
+        }
+
+        if (displayFilters.category && Array.isArray(displayFilters.category) && displayFilters.category.length > 0 && task.category && !displayFilters.category.includes(task.category)) {
+          return false;
+        }
+
+        if (displayFilters.status && Array.isArray(displayFilters.status) && displayFilters.status.length > 0 && !displayFilters.status.includes(task.triageStatus)) {
+          return false;
+        }
+
+        if (displayFilters.selectedUserId) {
+          if (displayFilters.selectedUserId === 'UNASSIGNED') {
+            if (task.userId && task.userId !== 'unassigned') {
+              return false;
+            }
+          } else {
+            if (task.userId !== displayFilters.selectedUserId) {
+              return false;
+            }
+          }
+        }
+
+        return true;
+      });
+  }, [tasks, displayFilters]);
 
   const tasksWithoutTerminationDate = useMemo(() => {
     return parentTasks.filter(task => !task.terminationDate);
@@ -132,11 +204,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) 
 
   const events = useMemo(() => {
     return parentTasks
-      .filter(task =>
-        task.terminationDate &&
-        task.triageStatus !== 'Done' &&
-        task.triageStatus !== 'Dropped'
-      )
+      .filter(task => task.terminationDate)
       .map(task => {
         const startDate = new Date(task.terminationDate!);
         const duration = task.durationInMinutes;
@@ -440,29 +508,22 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) 
               </Badge>
             </CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-row gap-2 overflow-x-auto pb-2">
-            {tasksWithoutTerminationDate
-              .sort((a, b) => {
-                if (a.priority !== undefined && b.priority !== undefined) {
-                  return a.priority - b.priority;
-                } else if (a.priority !== undefined) {
-                  return -1;
-                } else if (b.priority !== undefined) {
-                  return 1;
-                }
-                return a.createdAt - b.createdAt;
-              })
-              .map(task => (
-                <LazyCard
-                  key={task.id}
-                  className="w-64"
-                  draggable
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData('text/task-id', task.id);
-                    e.dataTransfer.effectAllowed = 'move';
-                  }}
-                >
-                  <TaskCard
+          <CardContent className="flex flex-col gap-2">
+            <div className="flex flex-row gap-2 overflow-x-auto">
+              {tasksWithoutTerminationDate
+                .sort((a, b) => {
+                  if (a.priority !== undefined && b.priority !== undefined) {
+                    return a.priority - b.priority;
+                  } else if (a.priority !== undefined) {
+                    return -1;
+                  } else if (b.priority !== undefined) {
+                    return 1;
+                  }
+                  return a.createdAt - b.createdAt;
+                })
+                .map(task => (
+                  <StoryboardCard
+                    key={task.id}
                     task={task}
                     tasks={tasks}
                     updateStatus={updateStatus}
@@ -483,9 +544,67 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) 
                     updateTerminationDate={updateTerminationDate}
                     updateComment={updateComment}
                     updateDurationInMinutes={updateDurationInMinutes}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('text/task-id', task.id);
+                      e.dataTransfer.effectAllowed = 'move';
+                    }}
                   />
-                </LazyCard>
-              ))}
+                ))}
+            </div>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Quick add task..."
+                value={quickAddInput}
+                onChange={(e) => setQuickAddInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const title = quickAddInput.trim();
+                    if (title) {
+                      createTask(title, null, currentUserId);
+                      setQuickAddInput('');
+                    }
+                  }
+                }}
+                className="max-w-md"
+              />
+              <Button
+                onClick={() => {
+                  const title = quickAddInput.trim();
+                  if (title) {
+                    createTask(title, null, currentUserId);
+                    setQuickAddInput('');
+                  }
+                }}
+                disabled={!quickAddInput.trim()}
+              >
+                Add
+              </Button>
+            </div>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="p-0 h-6 w-6"
+                  onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}
+                >
+                  {isFiltersCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </Button>
+                <span className="text-sm font-medium text-muted-foreground cursor-pointer select-none" onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}>
+                  Filters & Controls
+                </span>
+              </div>
+              {!isFiltersCollapsed && (
+                <div className="flex flex-wrap items-center gap-4 border rounded-lg p-3">
+                  <FilterControls
+                    filters={storedFilters}
+                    setFilters={setStoredFilters}
+                    defaultFilters={getDefaultFilters()}
+                  />
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       </ResizablePanel>

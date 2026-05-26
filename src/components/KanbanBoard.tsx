@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useTasks, Task, TriageStatus, Category } from "@/hooks/useTasks";
@@ -27,6 +27,8 @@ import { FocusModeProvider } from "./FocusModeProvider";
 import { FocusModeOverlay } from "./FocusModeOverlay";
 import { useFocusMode } from "@/hooks/useFocusMode";
 
+import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, useDraggable, useDroppable, type DragStartEvent, type DragEndEvent } from "@dnd-kit/core";
+
 type BoardCard =
   | { kind: "parent"; task: Task }
   | { kind: "child"; task: Task; parent: Task };
@@ -35,13 +37,30 @@ import { LazyCard } from "./LazyCard";
 
 const STATUSES: TriageStatus[] = ["Backlog", "Ready", "WIP", "Blocked", "Done", "Dropped", "Archived"];
 
+interface DraggableCardProps {
+  id: string;
+  children: React.ReactNode;
+}
+
+const DraggableCard: React.FC<DraggableCardProps> = ({ id, children }) => {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id });
+  const style: React.CSSProperties = transform
+    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, touchAction: 'none' }
+    : { touchAction: 'none' };
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className={isDragging ? 'opacity-50' : ''}>
+      {children}
+    </div>
+  );
+};
+
 // Column renders a mixture of single cards and grouped children for expanded parents
 // Wrapped in React.memo to only re-render when its specific cards/props change
 const Column: React.FC<{
   title: TriageStatus;
   cards: BoardCard[];
   tasks: Task[];
-  onDropTask: (taskId: string, status: TriageStatus) => void;
+  isOver?: boolean;
   onChangeStatus: (id: string, s: TriageStatus) => void;
   onUpdateCategory: (id: string, category: Category) => void;
   onUpdateUser: (id: string, userId: string | undefined) => void;
@@ -65,7 +84,7 @@ const Column: React.FC<{
   highlightedTaskId?: string | null;
   highlightedCardRef?: React.RefObject<HTMLDivElement | null>;
   onArchive?: (title: TriageStatus) => void;
-}> = React.memo(({ title, cards, tasks, onDropTask, onChangeStatus, onUpdateCategory, onUpdateUser, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onToggleSprintTarget, onToggleDone, onUpdateDifficulty, onUpdateTitle, onDelete, duplicateTaskStructure, openParents, onToggleParent, onReparent, onFocusOnTask, updateTerminationDate, updateDurationInMinutes, updateComment, onToggleTimer, highlightedTaskId, highlightedCardRef, onArchive }) => {
+}> = React.memo(({ title, cards, tasks, isOver, onChangeStatus, onUpdateCategory, onUpdateUser, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onToggleSprintTarget, onToggleDone, onUpdateDifficulty, onUpdateTitle, onDelete, duplicateTaskStructure, openParents, onToggleParent, onReparent, onFocusOnTask, updateTerminationDate, updateDurationInMinutes, updateComment, onToggleTimer, highlightedTaskId, highlightedCardRef, onArchive }) => {
   // Calculate total difficulty points for this column
   // Only count leaf tasks (tasks with no children) to avoid double-counting
   // Parent tasks and intermediate parents should not be counted
@@ -170,16 +189,10 @@ const Column: React.FC<{
     });
   }
 
-  const handleColumnDragOver: React.DragEventHandler = (e) => {
-    e.preventDefault(); // unconditional — required for HTML5 DnD to allow dropping
-  };
-  const handleColumnDrop: React.DragEventHandler = (e) => {
-    const id = e.dataTransfer.getData("text/task-id");
-    if (id) onDropTask(id, title);
-  };
+  const { setNodeRef, isOver: droppableIsOver } = useDroppable({ id: `column-${title}`, data: { type: 'column', status: title } });
 
   return (
-    <Card className="w-80 shrink-0 overflow-hidden flex flex-col">
+    <Card className={`w-80 shrink-0 overflow-hidden flex flex-col transition-colors ${droppableIsOver || isOver ? 'ring-2 ring-primary/50' : ''}`}>
       <div className="px-3 py-2 border-b text-sm font-medium flex items-center justify-between shrink-0">
         <span>{title === "WIP" ? "Work in Progress [MAX 5/p]" : title}</span>
         <div className="flex items-center gap-2">
@@ -202,30 +215,27 @@ const Column: React.FC<{
           )}
         </div>
       </div>
-      <div className="flex-1 p-2 space-y-2 overflow-y-auto min-h-0" onDragOver={handleColumnDragOver} onDrop={handleColumnDrop}>
+      <div ref={setNodeRef} className="flex-1 p-2 space-y-2 overflow-y-auto min-h-0" style={{ touchAction: 'none' }}>
         {finalBlocks.length === 0 ? (
           <div className="text-xs text-muted-foreground px-2 py-6">No tasks</div>
         ) : (
           finalBlocks.map((blk) =>
             blk.type === "single" ? (
-              (() => {
-                const m = /^p-(.+)$/.exec(blk.key);
-                const taskId = m ? m[1] : undefined;
-                return (
-                  <LazyCard
-                    key={blk.key}
-                    draggable={!!taskId}
-                    onDragStart={(e) => {
-                      if (taskId) {
-                        e.dataTransfer.setData("text/task-id", taskId);
-                        e.dataTransfer.effectAllowed = "move";
-                      }
-                    }}
-                  >
-                    {blk.node}
-                  </LazyCard>
-                );
-              })()
+               (() => {
+                 const m = /^p-(.+)$/.exec(blk.key);
+                 const taskId = m ? m[1] : undefined;
+                 return taskId ? (
+                   <DraggableCard key={blk.key} id={taskId}>
+                     <LazyCard>
+                       {blk.node}
+                     </LazyCard>
+                   </DraggableCard>
+                 ) : (
+                   <LazyCard key={blk.key}>
+                     {blk.node}
+                   </LazyCard>
+                 );
+               })()
             ) : (
               <LazyCard
                 key={blk.key}
@@ -312,11 +322,33 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
   const { settings } = useSettingsContext();
   const [isLoadingTasks, setIsLoadingTasks] = React.useState(false);
 
-  // Stable callback references for Column props (prevents Column/TaskCard re-renders)
-  const handleDropTask = React.useCallback((id: string, status: TriageStatus) => {
-    updateStatus(id, status);
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    })
+  );
+
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+
+  const handleDragStart = React.useCallback((event: DragStartEvent) => {
+    setActiveTaskId(String(event.active.id));
+  }, []);
+
+  const handleDragEnd = React.useCallback((event: DragEndEvent) => {
+    setActiveTaskId(null);
+    const { active, over } = event;
+    if (!over) return;
+
+    const taskId = String(active.id);
+    const overId = String(over.id);
+
+    const columnMatch = STATUSES.find(s => `column-${s}` === overId);
+    if (columnMatch) {
+      updateStatus(taskId, columnMatch);
+    }
   }, [updateStatus]);
 
+  // Stable callback references for Column props (prevents Column/TaskCard re-renders)
   const handleChangeStatus = React.useCallback((id: string, status: TriageStatus) => {
     updateStatus(id, status);
   }, [updateStatus]);
@@ -731,14 +763,14 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
                 Loading tasks...
               </div>
             )}
-            <div className="flex gap-4 pb-4 overflow-x-auto flex-1 min-h-0">
+            <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+            <div className="flex gap-4 pb-4 overflow-x-auto flex-1 min-h-0" style={{ touchAction: 'none' }}>
               {STATUSES.map((s) => (
                 <Column
                   key={s}
                   title={s}
                   cards={grouped[s]}
                   tasks={tasks}
-                  onDropTask={handleDropTask}
                   onChangeStatus={handleChangeStatus}
                   onUpdateCategory={handleUpdateCategory}
                   onUpdateUser={handleUpdateUser}
@@ -765,6 +797,19 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
                 />
               ))}
             </div>
+            <DragOverlay dropAnimation={null}>
+              {activeTaskId ? (
+                <div className="opacity-80 rotate-2 pointer-events-none">
+                  <div className="bg-card border rounded-lg shadow-lg p-2 max-w-xs">
+                    {(() => {
+                      const task = tasks.find(t => t.id === activeTaskId);
+                      return task ? <span className="text-sm font-medium truncate block">{task.title}</span> : null;
+                    })()}
+                  </div>
+                </div>
+              ) : null}
+            </DragOverlay>
+            </DndContext>
           </>
         )}
 

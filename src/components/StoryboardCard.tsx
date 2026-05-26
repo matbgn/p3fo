@@ -92,7 +92,7 @@ export const StoryboardCard: React.FC<StoryboardCardProps> = React.memo(({
       if (!isDraggingRef.current) {
         setIsHovered(true);
       }
-    }, 1250);
+    }, 1100);
   }, []);
 
   const handleMouseLeave = useCallback(() => {

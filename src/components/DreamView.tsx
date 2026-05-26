@@ -57,7 +57,7 @@ type VotingPhase = 'IDLE' | 'VOTING' | 'REVEALED';
 
 import { MJ_SCALE, VOTING_MODES_LABELS } from './planView/constants';
 
-// Default columns for Dream mode
+// Default columns for Dream Board
 const DEFAULT_DREAM_COLUMNS: DreamColumn[] = [
   { id: 'dreams', title: 'Dreams', color: '#FFFFFF', isLocked: false },
   { id: 'strengths', title: 'Strengths', color: '#FACC15', isLocked: true },
@@ -1098,7 +1098,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
   if (!boardState?.isSessionActive) {
     return (
       <div className="flex flex-col items-center justify-center h-full space-y-4">
-        <h2 className="text-2xl font-bold">Dream Mode</h2>
+        <h2 className="text-2xl font-bold">Dream Board</h2>
         <p className="text-muted-foreground">No moderator active. Start a session to become the moderator.</p>
         <Button onClick={startSession}>Start Session</Button>
       </div>
