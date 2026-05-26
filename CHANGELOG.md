@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.23.0 (2026-05-26)
+
+### Features
+
+- **common:** add focus mode to program view and align dual-view rendering (09ba014)
+
+### Bug Fixes
+
+- **kanban board:** correct dnd for touch devices (dda864f)
+
+---
+
 ## v0.22.0 (2026-05-26)
 
 ### Features
@@ -127,30 +139,5 @@
 
 - **filters:** prevent race condition clobbering persisted filters on views reload (04d3e9a)
 - **reminders:** add HTTP persistence adapter CRUD operations (970b511)
-
----
-
-## v0.15.0 (2026-02-14)
-
-### Features
-
-- **tasks:** add Sprint Target togglable label with filtering (f6b1a4d)
-- **users:** persist trigrams in user settings for stability (5ba57c7)
-- **users:** add standardized trigram identification system (c51cbcd)
-- **ressources:** add resource scheduler with preferred working days (40df2a3)
-- **board:** add focus mode and toggle off functionality in task board (da44e9b)
-
-### Bug Fixes
-
-- **reminders:** correct reminder system severall way (f37b657)
-- **dreamview:** create task and highlight it in storyboard upon dream card promotion (55eda27)
-- **storyboard:** filter archived tasks and add attribute badges (4058e71)
-- **settings:** support capacity-based preferred working days (84be9c9)
-- **users:** use generateTrigram for fallback display initial (afa09c5)
-- **user:** change UUID switch to discard current workspace (954ab82)
-- **forecast:** make hourly balance badge thresholds related (3896851)
-- **settings:** add weekStartDay and defaultPlanView user preferences (d81e18c)
-- **circles:** make deletion more reliable by using shadcn modal (7c659a0)
-- **circles:** enhance circles editor with node type handling and UI improvements (65ccea7)
 
 ---
