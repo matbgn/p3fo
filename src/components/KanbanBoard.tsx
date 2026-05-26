@@ -27,7 +27,7 @@ import { FocusModeProvider } from "./FocusModeProvider";
 import { FocusModeOverlay } from "./FocusModeOverlay";
 import { useFocusMode } from "@/hooks/useFocusMode";
 
-import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, useDraggable, useDroppable, type DragStartEvent, type DragEndEvent } from "@dnd-kit/core";
+import { DndContext, DragOverlay, MouseSensor, TouchSensor, useSensor, useSensors, useDraggable, useDroppable, type DragStartEvent, type DragEndEvent } from "@dnd-kit/core";
 
 type BoardCard =
   | { kind: "parent"; task: Task }
@@ -46,7 +46,7 @@ const DraggableCard: React.FC<DraggableCardProps> = ({ id, children }) => {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id });
   const style: React.CSSProperties = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, touchAction: 'none' }
-    : { touchAction: 'none' };
+    : { touchAction: 'pan-y' };
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} className={isDragging ? 'opacity-50' : ''}>
       {children}
@@ -215,7 +215,7 @@ const Column: React.FC<{
           )}
         </div>
       </div>
-      <div ref={setNodeRef} className="flex-1 p-2 space-y-2 overflow-y-auto min-h-0" style={{ touchAction: 'none' }}>
+      <div ref={setNodeRef} className="flex-1 p-2 space-y-2 overflow-y-auto min-h-0">
         {finalBlocks.length === 0 ? (
           <div className="text-xs text-muted-foreground px-2 py-6">No tasks</div>
         ) : (
@@ -323,8 +323,14 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
   const [isLoadingTasks, setIsLoadingTasks] = React.useState(false);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: { distance: 8 },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 250,
+        tolerance: { y: 5 },
+      },
     })
   );
 
@@ -764,7 +770,7 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
               </div>
             )}
             <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-            <div className="flex gap-4 pb-4 overflow-x-auto flex-1 min-h-0" style={{ touchAction: 'none' }}>
+            <div className="flex gap-4 pb-4 overflow-x-auto flex-1 min-h-0">
               {STATUSES.map((s) => (
                 <Column
                   key={s}
