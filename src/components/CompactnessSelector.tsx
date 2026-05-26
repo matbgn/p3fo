@@ -2,7 +2,6 @@ import React from 'react';
 import { Slider } from "@/components/ui/slider";
 import { useViewDisplay } from "@/hooks/useView";
 import { COMPACTNESS_ULTRA, COMPACTNESS_COMPACT, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
-import { Layers, Maximize2, Minimize2 } from "lucide-react";
 
 export const CompactnessSelector: React.FC = () => {
     const { cardCompactness, setCardCompactness } = useViewDisplay();
@@ -12,8 +11,8 @@ export const CompactnessSelector: React.FC = () => {
     };
 
     return (
-        <div className="flex items-center gap-2 w-32">
-            <Minimize2 className={`h-4 w-4 ${cardCompactness === COMPACTNESS_ULTRA ? "text-primary" : "text-muted-foreground"}`} />
+        <div className="flex items-center gap-2 w-28">
+            <span className={`text-xs font-semibold ${cardCompactness === COMPACTNESS_ULTRA ? "text-primary" : "text-muted-foreground"}`}>SM</span>
             <Slider
                 defaultValue={[COMPACTNESS_FULL]}
                 value={[cardCompactness]}
@@ -23,7 +22,7 @@ export const CompactnessSelector: React.FC = () => {
                 onValueChange={handleChange}
                 className="flex-1"
             />
-            <Maximize2 className={`h-4 w-4 ${cardCompactness === COMPACTNESS_FULL ? "text-primary" : "text-muted-foreground"}`} />
+            <span className={`text-xs font-semibold ${cardCompactness === COMPACTNESS_FULL ? "text-primary" : "text-muted-foreground"}`}>XL</span>
         </div>
     );
 };

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import * as d3 from 'd3';
 import { useCircles, CircleTreeNode } from '@/hooks/useCircles';
 import { CircleNodeType, RoleAssignment, RoleInvolvementType } from '@/lib/persistence-types';
@@ -44,6 +44,17 @@ import {
 
 interface CirclesViewProps {
   onFocusOnTask?: (taskId: string) => void;
+  embedded?: boolean;
+  hideHeaderActions?: boolean;
+}
+
+export interface CirclesViewHandle {
+  openAddDialog: () => void;
+  openEditDialog: () => void;
+  openMoveDialog: () => void;
+  handleDeleteNode: () => void;
+  toggleTreePanel: () => void;
+  zoomToRoot: () => void;
 }
 
 // Color palette based on OMO2 EasyCIRCLE
@@ -187,7 +198,7 @@ function extractTextFromBlock(block: any): string {
   return text;
 }
 
-const CirclesView: React.FC<CirclesViewProps> = () => {
+const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOnTask, embedded = false, hideHeaderActions = false }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hiddenCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -318,7 +329,14 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
   }, [circlesVersion, editDialogOpen, editMode, circles]);
 
   // Tree panel state
-  const [treePanelOpen, setTreePanelOpen] = useState(true);
+  const [treePanelOpen, setTreePanelOpen] = useState(!hideHeaderActions);
+
+  // Hide tree panel when entering focus mode
+  useEffect(() => {
+    if (hideHeaderActions) {
+      setTreePanelOpen(false);
+    }
+  }, [hideHeaderActions]);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
 
   // Generate unique color for hidden canvas hit detection
@@ -360,10 +378,23 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
       .padding(3);
 
     const hierarchy = d3.hierarchy(rootData)
-      .sum(d => d.children && d.children.length > 0 ? 0 : (d.size || 10))
+      .sum(d => {
+        const hasChildren = d.children && d.children.length > 0;
+        if (hasChildren) return 0;
+        const size = d.size || 10;
+        return isNaN(size) || size <= 0 ? 10 : size;
+      })
       .sort((a, b) => (b.value || 0) - (a.value || 0));
 
-    const packedRoot = pack(hierarchy);
+    let packedRoot: d3.HierarchyCircularNode<CircleTreeNode>;
+    try {
+      packedRoot = pack(hierarchy);
+    } catch {
+      if (treeData.length > 0 && treeData[0].x !== undefined) {
+        return treeData;
+      }
+      return [];
+    }
 
     const allNodes: CircleTreeNode[] = [];
     packedRoot.each(node => {
@@ -497,9 +528,28 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
         if (node.modifier === 'template') {
           ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
           ctx.lineWidth = 1;
-          // Draw diagonal lines
           const step = 6;
           ctx.save();
+          ctx.beginPath();
+          ctx.arc(nodeX, nodeY, nodeR, 0, 2 * Math.PI);
+          ctx.clip();
+          for (let i = -nodeR * 2; i < nodeR * 2; i += step) {
+            ctx.beginPath();
+            ctx.moveTo(nodeX + i, nodeY - nodeR);
+            ctx.lineTo(nodeX + i + nodeR * 2, nodeY + nodeR);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+
+        // Unassigned role pattern (diagonal lines)
+        if (node.nodeType === 'role' && (!node.assignments || node.assignments.length === 0)) {
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+          ctx.lineWidth = 5;
+          const step = 20;
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(nodeX, nodeY, nodeR, 0, 2 * Math.PI);
           ctx.clip();
           for (let i = -nodeR * 2; i < nodeR * 2; i += step) {
             ctx.beginPath();
@@ -512,10 +562,14 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
 
         // Highlight current node
         if (currentNode && node.id === currentNode.id) {
+          ctx.beginPath();
+          ctx.arc(nodeX, nodeY, nodeR, 0, 2 * Math.PI);
           ctx.strokeStyle = 'rgba(255, 255, 255, 1)';
           ctx.lineWidth = 6;
           ctx.stroke();
         } else if (hoveredNode && node.id === hoveredNode.id) {
+          ctx.beginPath();
+          ctx.arc(nodeX, nodeY, nodeR, 0, 2 * Math.PI);
           ctx.strokeStyle = 'rgba(255, 255, 255, 1)';
           ctx.lineWidth = 3;
           ctx.stroke();
@@ -710,6 +764,9 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
 
     let isDragging = false;
     let pointerDown: { x: number; y: number } | null = null;
+    let pinchStartDist: number | null = null;
+    let pinchStartScale: number | null = null;
+    let pinchStartCenter: { x: number; y: number } | null = null;
     const DRAG_THRESHOLD = 4;
 
     /* Wheel zoom */
@@ -795,7 +852,9 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
       }
     };
 
-    /* Click-to-focus (only when not dragging) */
+    /* Click-to-focus (only when not dragging), with double-click detection */
+    let mouseClickTimer: ReturnType<typeof setTimeout> | null = null;
+
     const onMouseUp = (e: MouseEvent) => {
       const wasDragging = isDragging;
       pointerDown = null;
@@ -813,25 +872,179 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
       const color = `rgb(${px[0]},${px[1]},${px[2]})`;
       const clicked = colorToNodeRef.current.get(color);
 
-      if (clicked) {
-        const cn = currentNodeRef.current;
-        if (cn && clicked.id === cn.id && cn.parent) {
-          zoomToNode(cn.parent);
-        } else {
-          zoomToNode(clicked);
+      if (mouseClickTimer) {
+        clearTimeout(mouseClickTimer);
+        mouseClickTimer = null;
+        // Second click within window — double click
+        if (clicked && clicked.nodeType === 'role') {
+          openEditForNodeRef.current(clicked);
         }
-      } else if (nodesRef.current.length > 0) {
-        zoomToNode(nodesRef.current[0]);
+        return;
+      }
+
+      const clickedNode = clicked;
+      const clickTime = performance.now();
+      mouseClickTimer = setTimeout(() => {
+        mouseClickTimer = null;
+        if (clickedNode) {
+          const cn = currentNodeRef.current;
+          if (cn && clickedNode.id === cn.id && cn.parent) {
+            zoomToNode(cn.parent);
+          } else {
+            zoomToNode(clickedNode);
+          }
+        } else if (nodesRef.current.length > 0) {
+          zoomToNode(nodesRef.current[0]);
+        }
+      }, 300);
+    };
+
+    const onDoubleClick = () => {
+      // Handled by mouseup double-click timer above; prevent native dblclick from also firing
+      if (mouseClickTimer) {
+        clearTimeout(mouseClickTimer);
+        mouseClickTimer = null;
       }
     };
 
     const onLeave = () => { pointerDown = null; isDragging = false; };
+
+    /* Touch support for mobile */
+    const onTouchStart = (e: TouchEvent) => {
+      e.preventDefault();
+      if (e.touches.length === 1) {
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        pointerDown = { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+        isDragging = false;
+      } else if (e.touches.length === 2) {
+        // Pinch zoom - store initial distance and center
+        pinchStartDist = Math.sqrt(
+          Math.pow(e.touches[0].clientX - e.touches[1].clientX, 2) +
+          Math.pow(e.touches[0].clientY - e.touches[1].clientY, 2)
+        );
+        pinchStartScale = zoomInfoRef.current.scale;
+        pinchStartCenter = {
+          x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+          y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+        };
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      if (e.touches.length === 1 && pointerDown) {
+        // Single finger pan
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        const curX = touch.clientX - rect.left;
+        const curY = touch.clientY - rect.top;
+        const dx = curX - pointerDown.x;
+        const dy = curY - pointerDown.y;
+        if (!isDragging && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+          isDragging = true;
+        }
+        if (isDragging) {
+          const cur = zoomInfoRef.current;
+          const prevTouch = { x: pointerDown.x, y: pointerDown.y };
+          setZoomInfo(prev => ({
+            ...prev,
+            centerX: prev.centerX - (curX - prevTouch.x) / cur.scale,
+            centerY: prev.centerY - (curY - prevTouch.y) / cur.scale,
+          }));
+          pointerDown = { x: curX, y: curY };
+        }
+      } else if (e.touches.length === 2 && pinchStartDist !== null) {
+        // Pinch zoom
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const { width, height } = dimensionsRef.current;
+        const cx = width / 2;
+        const cy = height / 2;
+        const cur = zoomInfoRef.current;
+
+        const newScale = Math.min(Math.max(pinchStartScale! * (dist / pinchStartDist), 0.05), 20);
+        const rect = canvas.getBoundingClientRect();
+        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+
+        const worldX = cur.centerX + (midX - cx) / cur.scale;
+        const worldY = cur.centerY + (midY - cy) / cur.scale;
+
+        setZoomInfo({
+          centerX: worldX - (midX - cx) / newScale,
+          centerY: worldY - (midY - cy) / newScale,
+          scale: newScale,
+        });
+      }
+    };
+
+    let lastTapTime = 0;
+    let lastTapNode: CircleTreeNode | null = null;
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length === 0 && !isDragging && pointerDown) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = hiddenCanvas.width / rect.width;
+        const scaleY = hiddenCanvas.height / rect.height;
+        const touch = e.changedTouches[0];
+        const mx = (touch.clientX - rect.left) * scaleX;
+        const my = (touch.clientY - rect.top) * scaleY;
+        const hc = hiddenCanvas.getContext('2d', { willReadFrequently: true });
+        if (hc) {
+          const px = hc.getImageData(mx, my, 1, 1).data;
+          const color = `rgb(${px[0]},${px[1]},${px[2]})`;
+          const clicked = colorToNodeRef.current.get(color);
+
+          const now = performance.now();
+          if (clicked && clicked.id === lastTapNode?.id && now - lastTapTime < 500) {
+            // Double tap - edit role
+            lastTapTime = 0;
+            lastTapNode = null;
+            if (clicked.nodeType === 'role') {
+              openEditForNodeRef.current(clicked);
+            }
+          } else {
+            // Single tap - deferred to allow double-tap detection
+            lastTapTime = now;
+            lastTapNode = clicked || null;
+            const tapNode = clicked;
+            const tapTime = now;
+            setTimeout(() => {
+              if (lastTapTime !== tapTime || lastTapNode !== tapNode) return;
+              if (tapNode) {
+                const cn = currentNodeRef.current;
+                if (cn && tapNode.id === cn.id && cn.parent) {
+                  zoomToNode(cn.parent);
+                } else {
+                  zoomToNode(tapNode);
+                }
+              } else if (nodesRef.current.length > 0) {
+                zoomToNode(nodesRef.current[0]);
+              }
+            }, 300);
+          }
+        }
+      }
+      pointerDown = null;
+      isDragging = false;
+      if (e.touches.length < 2) {
+        pinchStartDist = null;
+        pinchStartScale = null;
+        pinchStartCenter = null;
+      }
+    };
 
     canvas.addEventListener('wheel', onWheel, { passive: false });
     canvas.addEventListener('mousedown', onMouseDown);
     canvas.addEventListener('mousemove', onMouseMove);
     canvas.addEventListener('mouseup', onMouseUp);
     canvas.addEventListener('mouseleave', onLeave);
+    canvas.addEventListener('dblclick', onDoubleClick);
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd);
 
     return () => {
       canvas.removeEventListener('wheel', onWheel);
@@ -839,6 +1052,10 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
       canvas.removeEventListener('mousemove', onMouseMove);
       canvas.removeEventListener('mouseup', onMouseUp);
       canvas.removeEventListener('mouseleave', onLeave);
+      canvas.removeEventListener('dblclick', onDoubleClick);
+      canvas.removeEventListener('touchstart', onTouchStart);
+      canvas.removeEventListener('touchmove', onTouchMove);
+      canvas.removeEventListener('touchend', onTouchEnd);
     };
   }, [zoomToNode]);
 
@@ -969,6 +1186,23 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     setEditDialogOpen(true);
   }, [currentNode]);
 
+  // Open edit dialog for a specific node (used by double-click)
+  const openEditDialogForNode = useCallback((node: CircleTreeNode) => {
+    if (node.id === 'virtual-root') return;
+
+    setEditMode('edit');
+    setEditName(node.name);
+    setEditNodeType(node.nodeType);
+    setEditColor(node.color || '#FFCC00');
+    setEditPurpose(node.purpose || '');
+    setEditMissions(node.missions || '');
+    setEditAuthorityScope(node.authorityScope || '');
+    setEditAssignments(node.assignments ? [...node.assignments] : []);
+    editingNodeIdRef.current = node.id;
+    setCurrentNode(node);
+    setEditDialogOpen(true);
+  }, []);
+
   // Open move dialog
   const openMoveDialog = useCallback(() => {
     if (!currentNode || currentNode.id === 'virtual-root') return;
@@ -1008,6 +1242,10 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
   useEffect(() => {
     currentNodeRef.current = currentNode;
   }, [currentNode]);
+
+  // Ref for openEditDialogForNode to avoid stale closure in event listener
+  const openEditForNodeRef = useRef(openEditDialogForNode);
+  openEditForNodeRef.current = openEditDialogForNode;
 
   // Auto-expand parent nodes when current node changes
   useEffect(() => {
@@ -1143,12 +1381,22 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
     return circles.filter(c => !excludeIds.has(c.id) && c.nodeType !== 'role');
   }, [currentNode, circles]);
 
+  useImperativeHandle(ref, () => ({
+    openAddDialog,
+    openEditDialog,
+    openMoveDialog,
+    handleDeleteNode,
+    toggleTreePanel: () => setTreePanelOpen(prev => !prev),
+    zoomToRoot: () => nodes.length > 0 && zoomToNode(nodes[0]),
+  }));
+
   return (
-    <div style={{ height: 'calc(100vh - 240px)', width: '100%', overflow: 'hidden' }}>
-      <Card className="h-full flex flex-col">
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
+    <div className={embedded ? 'h-full w-full overflow-hidden' : ''} style={embedded ? undefined : { height: 'calc(100vh - 240px)', width: '100%', overflow: 'hidden' } as React.CSSProperties}>
+      <Card className={`h-full min-h-0 flex flex-col ${embedded ? 'border-0 shadow-none' : ''}`}>
+        {!hideHeaderActions && (
+        <CardHeader className="flex flex-row items-center justify-between pb-2 shrink-0">
           <div className="flex items-center gap-4">
-            <CardTitle>Circles View</CardTitle>
+            {!embedded && <CardTitle>Circles View</CardTitle>}
             {currentNode && currentNode.id !== 'virtual-root' && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Button
@@ -1206,7 +1454,8 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="flex-grow overflow-hidden p-0">
+        )}
+        <CardContent className="flex-1 min-h-0 overflow-hidden p-0">
           {circles.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-2">
               <p className="mb-4">No circles yet. Create your first organization!</p>
@@ -1219,9 +1468,9 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
               {/* Tree Panel */}
               {treePanelOpen && (
                 <>
-                  <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
-                    <div className="h-full border-r bg-muted/30 flex flex-col">
-                      <div className="p-2 border-b bg-muted/50">
+                  <ResizablePanel id="circles-tree" order={1} defaultSize={25} minSize={15} maxSize={40}>
+                    <div className="h-full overflow-hidden border-r bg-muted/30 flex flex-col">
+                      <div className="shrink-0 p-2 border-b bg-muted/50">
                         <h3 className="text-sm font-medium text-muted-foreground">Organization Tree</h3>
                       </div>
                       <ScrollArea className="flex-1 min-h-0">
@@ -1241,7 +1490,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                       </ScrollArea>
                       {/* Node Detail Section */}
                       {currentNode && currentNode.id !== 'virtual-root' && (
-                        <div className="border-t bg-background p-3 max-h-[40%] overflow-auto">
+                        <div className="shrink-0 border-t bg-background p-3 max-h-[40%] overflow-y-auto">
                           <h4 className="font-semibold text-base mb-2">{currentNode.name}</h4>
                           {/* Purpose is only for roles */}
                           {currentNode.nodeType === 'role' && (
@@ -1291,7 +1540,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                 </>
               )}
               {/* Circle Canvas Panel */}
-              <ResizablePanel defaultSize={treePanelOpen ? 75 : 100}>
+              <ResizablePanel id="circles-canvas" order={2} defaultSize={treePanelOpen ? 75 : 100}>
                 <div className="relative w-full h-full" ref={containerRef}>
                   <canvas
                     ref={canvasRef}
@@ -1302,6 +1551,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                       width: '100%',
                       height: '100%',
                       pointerEvents: isAnimating ? 'none' : 'auto',
+                      touchAction: 'none',
                     }}
                   />
                   <canvas
@@ -1378,7 +1628,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
 
         {/* Add/Edit Dialog */}
         <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-          <DialogContent>
+          <DialogContent className="max-h-[calc(100vh-6rem)] flex flex-col">
             <DialogHeader>
               <DialogTitle>
                 {editMode === 'add' ? 'Add Node' : 'Edit Node'}
@@ -1387,7 +1637,7 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
                 {editMode === 'add' ? 'Add a new circle or role.' : 'Edit the selected circle or role.'}
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
+            <div className="grid gap-4 py-4 overflow-y-auto flex-1 min-h-0 pr-6">
               <div className="grid gap-2">
                 <Label htmlFor="name">Name</Label>
                 <Input
@@ -1626,6 +1876,6 @@ const CirclesView: React.FC<CirclesViewProps> = () => {
       </Card>
     </div>
   );
-};
+});
 
 export default CirclesView;

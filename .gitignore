@@ -57,3 +57,4 @@ PROMPT.md
 
 # Build artifacts
 bundle-stats.html
+*.tsbuildinfo

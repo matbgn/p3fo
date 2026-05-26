@@ -26,7 +26,7 @@ const QualityOfLifeIndexMetric: React.FC = () => {
 
   if (loading) {
     return (
-      <Card className="h-32 bg-card">
+      <Card className="h-42 bg-card">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium">Team Quality of Life Index</CardTitle>
         </CardHeader>
@@ -42,7 +42,7 @@ const QualityOfLifeIndexMetric: React.FC = () => {
 
   if (error) {
     return (
-      <Card className="h-32 bg-card">
+      <Card className="h-42 bg-card">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium">Team Quality of Life Index</CardTitle>
         </CardHeader>
@@ -58,7 +58,7 @@ const QualityOfLifeIndexMetric: React.FC = () => {
 
   if (!data) {
     return (
-      <Card className="h-32 bg-card">
+      <Card className="h-42 bg-card">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium">Team Quality of Life Index</CardTitle>
         </CardHeader>
@@ -73,7 +73,7 @@ const QualityOfLifeIndexMetric: React.FC = () => {
   }
 
   return (
-    <Card className={`h-32 ${getCardClass()}`}>
+    <Card className={`h-42 ${getCardClass()}`}>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium">Team Quality of Life Index</CardTitle>
       </CardHeader>

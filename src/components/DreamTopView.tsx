@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { DreamView } from './DreamView';
 import { useViewNavigation, useViewDisplay } from '@/hooks/useView';
-import { useTasks, Task, TriageStatus } from '@/hooks/useTasks';
+import { useTasks, Task } from '@/hooks/useTasks';
 import { useAllTasks } from '@/hooks/useAllTasks';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { TaskCard } from './TaskCard';
+import { StoryboardCard } from './StoryboardCard';
 import ComparativePrioritizationView from './ComparativePrioritizationView';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +14,12 @@ import { FilterControls, Filters } from "./FilterControls";
 import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
 import { getDefaultFilters, validateFilters, mergeViewFilters } from "@/lib/filter-merge";
 import { COMPACTNESS_ULTRA, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
-import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { FocusModeProvider } from "./FocusModeProvider";
+import { FocusModeOverlay } from "./FocusModeOverlay";
+import { FocusModeBar } from './planView/FocusModeBar';
+import { useFocusMode } from "@/hooks/useFocusMode";
+import type { ModuleId } from '@/lib/persistence-types';
 
 interface DreamTopViewProps {
   onFocusOnTask: (taskId: string) => void;
@@ -22,14 +27,48 @@ interface DreamTopViewProps {
 
 type ActiveView = 'dream' | 'storyboard' | 'prioritization';
 
-const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
-  const { setView, setFocusedTaskId, focusedTaskId } = useViewNavigation();
+const ViewToggleButtons: React.FC<{ activeView: ActiveView; setActiveView: (v: ActiveView) => void; enabledSubViews: ActiveView[] }> = React.memo(({ activeView, setActiveView, enabledSubViews }) => (
+  <div className="flex space-x-2">
+    {enabledSubViews.includes('dream') && (
+    <Button
+      variant={activeView === 'dream' ? 'default' : 'outline'}
+      onClick={() => setActiveView('dream')}
+    >
+      Dream
+    </Button>
+    )}
+    {enabledSubViews.includes('prioritization') && (
+    <Button
+      variant={activeView === 'prioritization' ? 'default' : 'outline'}
+      onClick={() => setActiveView('prioritization')}
+    >
+      Prioritization
+    </Button>
+    )}
+    {enabledSubViews.includes('storyboard') && (
+    <Button
+      variant={activeView === 'storyboard' ? 'default' : 'outline'}
+      onClick={() => setActiveView('storyboard')}
+    >
+      Storyboard
+    </Button>
+    )}
+  </div>
+));
+
+const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
+  const { setFocusedTaskId, focusedTaskId, pendingSubView, clearPendingSubView, disabledModules } = useViewNavigation();
   const { cardCompactness } = useViewDisplay();
   const { updateStatus, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleUrgent, toggleImpact, toggleMajorIncident, toggleSprintTarget, toggleDone, toggleTimer, reparent, updateTerminationDate, updateComment, updateDurationInMinutes, updatePrioritiesBulk, createTask } = useTasks();
   const { tasks } = useAllTasks();
   const { userId: currentUserId } = useUserSettings();
+  const { isFocusMode } = useFocusMode();
 
-  const [activeView, setActiveView] = useState<ActiveView>('dream');
+  const enabledSubViews: ActiveView[] = (['dream', 'storyboard', 'prioritization'] as ActiveView[]).filter(
+    v => !disabledModules.includes(`dream.${v}` as ModuleId)
+  );
+
+  const [activeView, setActiveView] = useState<ActiveView>('storyboard');
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [reorderingTaskId, setReorderingTaskId] = useState<string | null>(null);
   const [openParents, setOpenParents] = useState<Record<string, boolean>>({});
@@ -38,16 +77,16 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
   const [input, setInput] = useState("");
 
   const [storedFilters, setStoredFilters] = useState<Filters>(() => getDefaultFilters());
-  
+
   const displayFilters = React.useMemo(() => {
     return mergeViewFilters(storedFilters, { defaultActiveStatuses: true });
   }, [storedFilters]);
 
-  const handlePromoteToKanban = (taskId: string) => {
+  const handlePromoteToKanban = React.useCallback((taskId: string) => {
     setFocusedTaskId(taskId);
-    // Navigate to storyboard view within Dream view instead of global Kanban
+    // Navigate to storyboard view within Dream Board instead of global Kanban
     setActiveView('storyboard');
-  };
+  }, [setFocusedTaskId]);
 
   // Auto-switch to storyboard when focusedTaskId is set (e.g., after promoting from fertilization/dream)
   useEffect(() => {
@@ -84,6 +123,23 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
 
     loadFilters();
   }, []);
+
+  // Consume pending sub-view from Umbrella navigation
+  useEffect(() => {
+    if (!pendingSubView) return;
+    const valid: ActiveView[] = ['dream', 'storyboard', 'prioritization'];
+    if (valid.includes(pendingSubView as ActiveView) && enabledSubViews.includes(pendingSubView as ActiveView)) {
+      setActiveView(pendingSubView as ActiveView);
+      clearPendingSubView();
+    }
+  }, [pendingSubView, clearPendingSubView, enabledSubViews]);
+
+  // Auto-select enabled sub-view if current is disabled
+  useEffect(() => {
+    if (enabledSubViews.length > 0 && !enabledSubViews.includes(activeView)) {
+      setActiveView(enabledSubViews[0]);
+    }
+  }, [enabledSubViews, activeView]);
 
   // Quick add functionality
   const addTopTask = () => {
@@ -223,11 +279,11 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
       id: task.id,
       priority: index + 1,
     }));
-    
+
     // Set reordering state to show spinner
     setReorderingTaskId(draggedTaskId);
     setDraggedTaskId(null);
-    
+
     try {
       await updatePrioritiesBulk(updatedPriorities);
     } finally {
@@ -235,44 +291,27 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
     }
   };
 
-  // View toggle buttons component
-  const ViewToggleButtons = () => (
-    <div className="flex space-x-2">
-      <Button
-        variant={activeView === 'dream' ? 'default' : 'outline'}
-        onClick={() => setActiveView('dream')}
-      >
-        Dream
-      </Button>
-      <Button
-        variant={activeView === 'prioritization' ? 'default' : 'outline'}
-        onClick={() => setActiveView('prioritization')}
-      >
-        Prioritization
-      </Button>
-      <Button
-        variant={activeView === 'storyboard' ? 'default' : 'outline'}
-        onClick={() => setActiveView('storyboard')}
-      >
-        Storyboard
-      </Button>
-    </div>
-  );
-
-  // Render Dream view
+  // Render Dream Board
   if (activeView === 'dream') {
     return (
-      <Card className="h-full flex flex-col">
-        <CardHeader className="flex flex-col space-y-4 pb-2">
-          <div className="flex flex-row items-center justify-between">
-            <CardTitle>Dream View</CardTitle>
-            <ViewToggleButtons />
-          </div>
-        </CardHeader>
-        <CardContent className="flex-grow overflow-hidden p-0">
-          <DreamView onPromoteToKanban={handlePromoteToKanban} />
-        </CardContent>
-      </Card>
+      <div className="h-full flex flex-col">
+        <Card className={`flex-1 flex flex-col border-0 shadow-none ${isFocusMode ? 'overflow-auto' : ''}`}>
+          {!isFocusMode && (
+            <CardHeader className="flex flex-col space-y-4 pb-2">
+              <div className="flex flex-row items-center justify-between">
+                <CardTitle>Dream Board</CardTitle>
+                <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} enabledSubViews={enabledSubViews} />
+              </div>
+            </CardHeader>
+          )}
+          <CardContent className="flex-grow overflow-hidden p-0">
+            <DreamView
+              onPromoteToKanban={handlePromoteToKanban}
+              focusModeHeaderContent={isFocusMode ? <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} enabledSubViews={enabledSubViews} /> : undefined}
+            />
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
@@ -280,121 +319,140 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
   const viewTitle = activeView === 'storyboard' ? 'Storyboard View' : 'Prioritization View';
 
   return (
-    <Card className="h-full flex flex-col">
-      <CardHeader className="flex flex-col space-y-4 pb-2">
-        <div className="flex flex-row items-center justify-between">
-          <CardTitle>{viewTitle}</CardTitle>
-          <ViewToggleButtons />
-        </div>
-
-        <div className="mb-2 flex gap-2">
-          <Input
-            placeholder="Quick add top task..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addTopTask()}
-            className="max-w-md"
-          />
-          <Button onClick={addTopTask} disabled={!input.trim()}>
-            Add
-          </Button>
-        </div>
-
-        <div className="mb-4 flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="p-0 h-6 w-6"
-              onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}
-            >
-              {isFiltersCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </Button>
-            <span className="text-sm font-medium text-muted-foreground cursor-pointer select-none" onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}>
-              Filters & Controls
-            </span>
-          </div>
-
-          {!isFiltersCollapsed && (
-            <div className="flex flex-wrap items-center gap-4 border rounded-lg p-3">
+    <div className={`h-full flex flex-col ${isFocusMode ? 'relative' : ''}`}>
+      {isFocusMode && (
+        <>
+          <FocusModeBar
+            title={viewTitle}
+            rightContent={
+              <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} enabledSubViews={enabledSubViews} />
+            }
+            hasActiveFilters={
+              !!storedFilters.searchText?.trim() ||
+              !!storedFilters.selectedUserId ||
+              (storedFilters.difficulty?.length || 0) > 0 ||
+              (storedFilters.category?.length || 0) > 0 ||
+              (storedFilters.status?.length || 0) > 0 ||
+              storedFilters.showUrgent ||
+              storedFilters.showImpact ||
+              storedFilters.showMajorIncident ||
+              storedFilters.showSprintTarget
+            }
+            filterDropdownContent={
               <FilterControls
                 filters={storedFilters}
                 setFilters={setStoredFilters}
                 defaultFilters={getDefaultFilters()}
               />
+            }
+          />
+        </>
+      )}
+      <Card className={`flex-1 flex flex-col border-0 shadow-none ${isFocusMode ? 'overflow-auto' : ''}`}>
+        {!isFocusMode && (
+          <CardHeader className="flex flex-col space-y-4 pb-2">
+            <div className="flex flex-row items-center justify-between">
+              <CardTitle>{viewTitle}</CardTitle>
+              <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} enabledSubViews={enabledSubViews} />
             </div>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="flex-grow overflow-hidden">
-        {activeView === 'storyboard' ? (
-          <div
-            className="flex flex-nowrap overflow-x-auto h-full p-2 space-x-4"
-            onDragOver={handleDragOver}
-            onDrop={(e) => handleDrop(e, '')}
-          >
-            {prioritizedTasks.length === 0 ? (
-              <div className="text-muted-foreground p-4">No tasks to plan.</div>
-            ) : (
-              prioritizedTasks.map(task => {
-                const children = getAllChildren(task);
-                const isReordering = reorderingTaskId === task.id;
-                return (
-                  <div
-                    key={task.id}
-                    className="min-w-[300px] max-w-[300px] p-2 border rounded-lg shadow-sm bg-white dark:bg-gray-800 relative"
-                    draggable={!isReordering}
-                    onDragStart={(e) => handleDragStart(e, task.id)}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, task.id)}
-                    style={{
-                      opacity: draggedTaskId === task.id ? 0.5 : 1,
-                      border: draggedTaskId && draggedTaskId !== task.id ? '2px dashed #ccc' : '2px solid transparent',
-                    }}
-                  >
-                    {isReordering && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-background/80 rounded-lg z-10">
-                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                      </div>
-                    )}
-                    <TaskCard
-                      task={task}
-                      tasks={tasks}
-                      isHighlighted={task.id === focusedTaskId}
-                      updateStatus={updateStatus}
-                      updateDifficulty={updateDifficulty}
-                      updateCategory={updateCategory}
-                      updateTitle={updateTitle}
-                      updateUser={(id, userId) => updateUser(id, userId === 'current-user' ? currentUserId : userId)}
-                      deleteTask={deleteTask}
-                      duplicateTaskStructure={duplicateTaskStructure}
-                      toggleUrgent={toggleUrgent}
-                      toggleImpact={toggleImpact}
-                      toggleMajorIncident={toggleMajorIncident}
-                      toggleSprintTarget={toggleSprintTarget}
-                      toggleDone={() => toggleDone(task.id)}
-                      toggleTimer={toggleTimer}
-                      reparent={reparent}
-                      onFocusOnTask={onFocusOnTask}
-                      updateTerminationDate={updateTerminationDate}
-                      updateComment={updateComment}
-                      updateDurationInMinutes={updateDurationInMinutes}
-                      disableReparenting={true}
-                      open={!!openParents[task.id]}
-                      onToggleOpen={toggleParent}
-                    />
 
-                    {openParents[task.id] && children.length > 0 && (
-                      <div className="mt-2 space-y-2">
-                        <div className="text-xs font-medium text-muted-foreground px-1">
-                          Subtasks of: {task.title}
-                        </div>
-                        {children.map(child => (
-                          <div
-                            key={child.id}
-                            className="p-2 border rounded-md bg-muted/20"
-                          >
-                            <TaskCard
+            <div className="mb-2 flex gap-2">
+              <Input
+                placeholder="Quick add top task..."
+                value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addTopTask()}
+                className="max-w-md"
+              />
+              <Button onClick={addTopTask} disabled={!input.trim()}>
+                Add
+              </Button>
+            </div>
+
+            <div className="mb-4 flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="p-0 h-6 w-6"
+                  onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}
+                >
+                  {isFiltersCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </Button>
+                <span className="text-sm font-medium text-muted-foreground cursor-pointer select-none" onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}>
+                  Filters & Controls
+                </span>
+              </div>
+
+              {!isFiltersCollapsed && (
+                <div className="flex flex-wrap items-center gap-4 border rounded-lg p-3">
+                  <FilterControls
+                    filters={storedFilters}
+                    setFilters={setStoredFilters}
+                    defaultFilters={getDefaultFilters()}
+                  />
+                </div>
+              )}
+            </div>
+          </CardHeader>
+        )}
+        <CardContent className="flex-grow overflow-hidden">
+          {activeView === 'storyboard' ? (
+            <div
+              className="flex flex-nowrap overflow-x-auto h-full p-2 gap-3"
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(e, '')}
+            >
+              {prioritizedTasks.length === 0 ? (
+                <div className="text-muted-foreground p-4">No tasks to plan.</div>
+              ) : (
+                prioritizedTasks.map(task => {
+                  const children = getAllChildren(task);
+                  const isReordering = reorderingTaskId === task.id;
+                  return (
+                    <div key={task.id} className="flex flex-col gap-2 min-w-fit">
+                      <StoryboardCard
+                        task={task}
+                        tasks={tasks}
+                        isHighlighted={task.id === focusedTaskId}
+                        updateStatus={updateStatus}
+                        updateDifficulty={updateDifficulty}
+                        updateCategory={updateCategory}
+                        updateTitle={updateTitle}
+                        updateUser={(id, userId) => updateUser(id, userId === 'current-user' ? currentUserId : userId)}
+                        deleteTask={deleteTask}
+                        duplicateTaskStructure={duplicateTaskStructure}
+                        toggleUrgent={toggleUrgent}
+                        toggleImpact={toggleImpact}
+                        toggleMajorIncident={toggleMajorIncident}
+                        toggleSprintTarget={toggleSprintTarget}
+                        toggleDone={() => toggleDone(task.id)}
+                        toggleTimer={toggleTimer}
+                        reparent={reparent}
+                        onFocusOnTask={onFocusOnTask}
+                        updateTerminationDate={updateTerminationDate}
+                        updateComment={updateComment}
+                        updateDurationInMinutes={updateDurationInMinutes}
+                        disableReparenting={true}
+                        open={!!openParents[task.id]}
+                        onToggleOpen={toggleParent}
+                        isReordering={isReordering}
+                        isDragged={draggedTaskId === task.id}
+                        isDragOver={!!draggedTaskId && draggedTaskId !== task.id}
+                        draggable={!isReordering}
+                        onDragStart={(e) => handleDragStart(e, task.id)}
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, task.id)}
+                      />
+
+                      {openParents[task.id] && children.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="text-xs font-medium text-muted-foreground px-1">
+                            Subtasks of: {task.title}
+                          </div>
+                          {children.map(child => (
+                            <StoryboardCard
+                              key={child.id}
                               task={child}
                               tasks={tasks}
                               isHighlighted={child.id === focusedTaskId}
@@ -417,24 +475,36 @@ const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
                               updateComment={updateComment}
                               updateDurationInMinutes={updateDurationInMinutes}
                               disableReparenting={true}
+                              isDragged={draggedTaskId === child.id}
+                              isDragOver={!!draggedTaskId && draggedTaskId !== child.id}
                             />
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        ) : (
-          <ComparativePrioritizationView
-            tasks={prioritizedTasks}
-            onClose={() => setActiveView('dream')}
-          />
-        )}
-      </CardContent>
-    </Card>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          ) : (
+            <ComparativePrioritizationView
+              tasks={prioritizedTasks}
+              onClose={() => setActiveView('dream')}
+            />
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+const DreamTopView: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
+  return (
+    <FocusModeProvider viewId="dream">
+      <FocusModeOverlay>
+        <DreamTopViewInner onFocusOnTask={onFocusOnTask} />
+      </FocusModeOverlay>
+    </FocusModeProvider>
   );
 };
 

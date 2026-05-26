@@ -75,13 +75,13 @@ interface UserSettingsContextType {
     userId: string;
     userSettings: UserSettings;
     loading: boolean;
-    updateUsername: (newUsername: string) => void;
+    updateUsername: (newUsername: string) => Promise<void>;
     updateLogo: (newLogo: string) => void;
     completeOnboarding: () => void;
     regenerateUsername: () => void;
     updateCardCompactness: (compactness: number) => void;
     updatePreferredWorkingDays: (days: number[]) => void;
-    updateTrigram: (trigram: string) => void;
+    updateTrigram: (trigram: string) => Promise<void>;
 }
 
 const UserSettingsContext = createContext<UserSettingsContextType | undefined>(undefined);
@@ -212,13 +212,13 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const performUpdate = async (patch: Partial<UserSettings>) => {
         if (!userId) return;
         const now = Date.now();
-        
+
         // Optimistic update
         Object.keys(patch).forEach(key => {
             pendingUpdatesRef.current.add(key);
             lastUpdateTimestampRef.current[key] = now;
         });
-        
+
         setUserSettings(prev => ({ ...prev, ...patch }));
 
         try {
@@ -236,9 +236,12 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
             if (isCollaborationEnabled()) {
                 yUserSettings.set(userId, updated);
             }
+
+            return updated;
         } catch (error) {
             console.error('UserSettingsContext: Error during update:', error);
             // Revert could be implemented here
+            throw error;
         } finally {
             setTimeout(() => {
                 Object.keys(patch).forEach(key => {
@@ -250,8 +253,8 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }
     };
 
-    const updateUsername = (newUsername: string) => {
-        performUpdate({ username: newUsername });
+    const updateUsername = async (newUsername: string) => {
+        await performUpdate({ username: newUsername });
     };
 
     const updateLogo = (newLogo: string) => {
@@ -274,8 +277,8 @@ export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
         performUpdate({ preferredWorkingDays: days });
     };
 
-    const updateTrigram = (trigram: string) => {
-        performUpdate({ trigram: trigram });
+    const updateTrigram = async (trigram: string) => {
+        await performUpdate({ trigram: trigram });
     };
 
     return (

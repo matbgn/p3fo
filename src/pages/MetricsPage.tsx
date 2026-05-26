@@ -15,14 +15,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { loadFiltersFromSessionStorage, saveFiltersToSessionStorage } from "@/lib/filter-storage";
 import { getDefaultFilters } from "@/lib/filter-merge";
 import { Filters } from "@/components/FilterControls";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 const MetricsPage: React.FC = () => {
   const [activeTab, setActiveTab] = React.useState("forecast");
   const { userId: currentUserId } = useCurrentUser();
-  const { users } = useUsersContext();
+  const { users, loading: usersLoading } = useUsersContext();
   const { userSettings } = useUserSettings();
 
   const [selectedUserId, setSelectedUserId] = React.useState<string>("");
+  const [initializing, setInitializing] = React.useState(true);
 
   // Load from storage on mount
   React.useEffect(() => {
@@ -31,7 +33,6 @@ const MetricsPage: React.FC = () => {
       if (filters?.selectedUserId) {
         setSelectedUserId(filters.selectedUserId);
       } else {
-        // Default to current user if no filter is saved
         if (userSettings.username) {
           const currentUser = users.find(u => u.username === userSettings.username);
           if (currentUser) {
@@ -41,6 +42,7 @@ const MetricsPage: React.FC = () => {
           }
         }
       }
+      setInitializing(false);
     };
     load();
   }, [userSettings, users, currentUserId]);
@@ -55,10 +57,14 @@ const MetricsPage: React.FC = () => {
     });
   };
 
+  if (initializing || usersLoading) {
+    return <LoadingSpinner label="Loading metrics..." className="h-full" />;
+  }
+
   return (
     <div className="flex flex-col gap-6 h-full">
       {/* Top pane for collaborative metrics cards */}
-      <section className="flex-1 border rounded-lg p-6">
+      <section className="rounded-lg p-2">
         <h2 className="text-xl font-semibold mb-4">Collaborative Metrics</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* High Impact Task Achievement Frequency Metric */}

@@ -22,6 +22,7 @@ const mockSettings: CombinedSettings = {
     defaultPlanView: 'week',
     timezone: 'Europe/Zurich',
     cardAgingBaseDays: 30,
+    disabledModules: [],
 };
 
 const makeTaskWithTimer = (startTime: number, endTime: number, userId?: string): Task => ({

@@ -23,6 +23,12 @@ dev:
   @echo "[1/2] Starting development server..."
   pnpm run dev:all
 
+dev-otel:
+  @echo "--- Starting P3FO Development Environment with local OpenTelemetry ---"
+  @echo "[1/2] Starting development server..."
+  docker compose -f docker-compose.hyperdx.yml up -d
+  OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318/v1/traces pnpm run dev:all
+
 # --- Browser-Only Development Task ---
 # Reproduce the deployed browser-only mode locally for debugging
 dev-browser:

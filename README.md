@@ -19,26 +19,35 @@ Your donations are welcomed following this link / button:
 ## 🚀 Features
 
 ### Core Functionality
-- **Multiple View Modes**: 9 views — Celebration, Dream, Plan, Program, Project (Kanban), Focus, Timetable, Metrics, and Settings
-- **Task Management**: Hierarchical task organization with parent-child relationships
+<div align="center">
+  <img src="public/P3Fo_umbrella.png" alt="P3Fo Quick Launch Umbrella" width="500" />
+</div>
+
+
+P3Fo is designed to be a comprehensive productivity tool that support a wide range of needs when applying the Ecocracy governance but not only. Here are some of its key features:
+
+- **Multiple View Modes**: 6 views — Celebration, Dream, Plan, Program, Project (Kanban) and Focus
+- **Celebration & Dream views**: Celebrate achievements and set new long term goals thanks to tools that supports process facilitating
+- **Plan the structure**: Design your structure & policies to promote transparency and accountability
+- **Interactive Calendar and Ressources planning**: Program tasks in a calendar view according to actual ressources of the organization
+- **Kanban & Focus Board**: Visual management of tasks and focus board to use the Mikado technique efficiently
 - **Time Tracking**: Built-in start/stop timer per task with multi-entry time logs
-- **Calendar Integration**: Program tasks in a calendar view
+- **Metrics & Tools**: Enhance team Quality of Life and decision making with metrics and tools
 - **Notification & Reminders**: Persistent reminders with real-time notification center
 
 ### Advanced Features
-- **Fertilization Board**: Collaborative brainstorming board with anonymous contributions, card linking, voting (Thumbs Up, Up/Down/Neutral, Points, Majority Judgment), moderator controls, hidden edition mode, and promote-to-backlog
+- **Fertilization Board**: Collaborative brainstorming board with anonymous (or not) contributions, card linking, voting (Thumbs Up, Up/Down/Neutral, Points, Majority Judgment), moderator controls, hidden edition mode, and promote-to-backlog
 - **Dream Board**: Long-term vision board with time-frame horizons (3mo → 4y), timeline view, and the same voting/collaboration system as Fertilization
-- **Circles**: Organizational structure visualization known as [Company as Code](https://blog.42futures.com/p/company-as-code) with D3.js — roles, circles, groups, and organizations with zoom/pan, descriptions, purpose, domains, and accountabilities
 - **Comparative Prioritization**: Pair-wise task comparison for intelligent priority ranking
+- **Circles**: Organizational structure visualization known as [Company as Code](https://blog.42futures.com/p/company-as-code) with D3.js — roles, circles, groups, and organizations with zoom/pan, descriptions, purpose, domains, and accountabilities
 - **Metrics Dashboard**: High-impact task frequency, failure rate, new-capabilities time ratio, hourly balance, vacations tracking, and forecast
 - **Quality of Life Index (QLI)**: Per-user QoL survey with cross-user analytics
 - **Data Management**: Full JSON export/import for backup and migration, with per-user granularity
-- **Multi-User Support**: User management with per-user settings, workload, monthly balances, and timezone
-- **Theme Support**: Dark/light mode with `next-themes`
+- **Realtime Collaboration (Multi-User) Support**: User management with per-user settings, workload, monthly balances, and timezone
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ Tech Architecture
 
 ### High-Level Overview
 
@@ -139,25 +148,7 @@ A **Node.js / Express** server providing:
 - `EventBus` — Lightweight pub/sub for cross-component communication (tasks reload, filter changes, etc.)
 - `metrics.ts` — Calculates high-impact task frequency, failure rate, time-on-new-capabilities, all scoped to configurable week windows
 
----
-
-## 📋 Views
-
-| View | Description |
-|------|-------------|
-| **Celebration** | Achievement showcase |
-| **Dream** | Long-term vision board with time-frame horizons and voting |
-| **Plan** | Strategic planning with comparative prioritization |
-| **Program** | Calendar-based task scheduling (`react-big-calendar`) |
-| **Project (Kanban)** | Visual kanban board with drag-and-drop |
-| **Focus** | Detailed task & subtask management with active timer highlight |
-| **Timetable** | Time-tracking analytics, hourly balance, and vacation charts |
-| **Metrics** | Productivity dashboard (high-impact, failure rate, new capabilities, QoL, forecast) |
-| **Settings** | App configuration, user management, data export/import |
-
----
-
-## 🛠️ Tech Stack
+### 🛠️ Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
@@ -177,44 +168,59 @@ A **Node.js / Express** server providing:
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Dev Quick Start
 
 ### Prerequisites
 - Node.js 24+
 - pnpm (recommended) or npm/yarn
+- just
 
 ### Installation
 
 1. **Clone and install dependencies:**
    ```bash
-   pnpm install
+   just install
    ```
 
-2. **Start development (frontend only — browser persistence):**
+2. Start dev
+
+   a. **Start fullstack development (frontend + backend with SQLite):**
+      ```bash
+      just dev
+      ```
+      This runs both the Vite dev server and the Express backend concurrently .
+
+   b. **Start front development (frontend only — browser persistence):**
+      ```bash
+      just dev-browser
+      ```
+
+   c. **Start full dev with telemetry:**
+      ```bash
+      just dev-otel
+      ```
+      This runs the Vite dev server, Express backend, and OpenTelemetry tracing and metrics server.
+
+3. **Check linting and type-checking:**
    ```bash
-   pnpm dev
+   just check
    ```
 
-3. **Start development (frontend + backend with SQLite):**
+4. **Run tests:**
    ```bash
-   pnpm dev:all
-   ```
-   This runs both the Vite dev server and the Express backend concurrently.
-
-4. **Build for production:**
-   ```bash
-   pnpm build
+   just tests
    ```
 
-5. **Preview production build:**
+5. **Build for production:**
    ```bash
-   pnpm preview
+   just build
    ```
 
-6. **Lint code:**
+4. **Create a release:**
    ```bash
-   pnpm lint
+   just release
    ```
+
 
 ### Environment Variables
 

@@ -8,6 +8,8 @@ import { Lock, Unlock, Eye, EyeOff, Play, RotateCcw, Link, Unlink, ArrowUpRight,
 import { useTasks } from '@/hooks/useTasks';
 import { useUsersContext } from '@/context/UsersContext';
 import { Label } from '@/components/ui/label';
+import { FocusModeProvider } from './FocusModeProvider';
+import { FocusModeOverlay } from './FocusModeOverlay';
 import {
     Dialog,
     DialogContent,
@@ -839,7 +841,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
         const medianValue = getMJMedian(votes);
 
         // Calculate distribution
-        const distribution = MJ_SCALE.map(grade => {
+        const distribution = MJ_SCALE.slice().reverse().map(grade => {
             const count = Object.values(votes).filter(v => v === grade.value).length;
             const percentage = (count / totalVotes) * 100;
             return {
@@ -986,7 +988,9 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
     }
 
     return (
-        <BoardLayout>
+        <FocusModeProvider viewId="celebration">
+        <FocusModeOverlay>
+        <BoardLayout className="focus-mode-board">
             {/* Dialogs */}
             <Dialog open={promoteDialogOpen} onOpenChange={setPromoteDialogOpen}>
                 <DialogContent>
@@ -1035,7 +1039,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                     <Button onClick={async () => {
                         if (!boardState || !mjConfigColumnId) return;
                         const newColumns = boardState.columns.map(col =>
-                            col.id === mjConfigColumnId ? { ...col, mjLabels: { ...mjLabelInputs } } : col
+                            col.id === mjConfigColumnId ? { ...col, mjLabels: { ...mjLabelInputs }, votingPhase: 'VOTING' as VotingPhase } : col
                         );
                         await saveBoard({ ...boardState, columns: newColumns });
                         setMjConfigColumnId(null);
@@ -1310,7 +1314,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                             )}
                             renderCard={(card) => {
                                 const colCards = filteredCards.filter(c => c.columnId === column.id);
-                                const colMaxScore = Math.max(1, ...colCards.map(c => calculateCardVoteScore(c, column.id)));
+                                const colMaxScore = Math.max(1, ...colCards.map(c => Math.abs(calculateCardVoteScore(c, column.id))));
                                 const factTag = card.factTag;
                                 return (
                                 <CardView
@@ -1370,5 +1374,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                 })}
             </div>
         </BoardLayout>
+        </FocusModeOverlay>
+        </FocusModeProvider>
     );
 };

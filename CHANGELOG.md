@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.22.0 (2026-05-26)
+
+### Features
+
+- **common:** add module mgmt to unmount unused modules (sub-views) from the UI (728e7e8)
+- **storyboard:** add compact post-it storyboard cards with hover expand (4e16313)
+- **common:** add focus mode across celebration, dream and plan views and boards (24e768c)
+- **common:** add umbrella navigation overlay (4906dbd)
+- **user profile:** add inline trigram editing to profile (b1196de)
+- **common:** add drag & drop to calendar and improve the one from boards (4f0d937)
+- **common:** add tag editing to fact fertilization cards (9714dd4)
+- **common:** add fact tags to fertilization cards (afb0f1a)
+- **common:** add custom mj labels and fix scoring (055fb28)
+- **common:** add per-column voting controls (1271c4f)
+- **common:** add reorder votes by column option (f0c902c)
+- **common:** add vote reset and improve revealed votes (d96cf2c)
+
+### Bug Fixes
+
+- **circles:** add touch support for mobile and fix double-click (02613b9)
+- **voting:** start MJ voting phase and reorder scale (c01cde4)
+- **common:** revise vote badge color and fill (2382334)
+- **common:** persist vote labels and points on boards (ebf08d0)
+- **common:** deduplicate links and soften line style (21700b2)
+
+---
+
 ## v0.21.1 (2026-05-22)
 
 ### Bug Fixes
@@ -125,20 +152,5 @@
 - **settings:** add weekStartDay and defaultPlanView user preferences (d81e18c)
 - **circles:** make deletion more reliable by using shadcn modal (7c659a0)
 - **circles:** enhance circles editor with node type handling and UI improvements (65ccea7)
-
----
-
-## v0.14.0 (2026-02-04)
-
-### Features
-
-- **circles:** add description fields and real-time collaboration (abf100e)
-- **circles:** add smooth zoom animation and fix resize skewing (9de10d5)
-- **circles:** add basic circles editor visualization with D3.js (9fc1d9d)
-- **views:** add Celebration and Dream as top-level views (0e6fa25)
-
-### Bug Fixes
-
-- **circles:** resolve canvas interaction and color mapping issues (aee838d)
 
 ---

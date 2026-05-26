@@ -181,9 +181,10 @@ const TimeTagBadge: React.FC<TimeTagBadgeProps> = ({ timeFrame, onChange, disabl
 interface DreamViewProps {
   onClose?: () => void;
   onPromoteToKanban?: (taskId: string) => void;
+  focusModeHeaderContent?: React.ReactNode;
 }
 
-export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban }) => {
+export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban, focusModeHeaderContent }) => {
   const persistence = usePersistence();
   const { userId: currentUserId, userSettings } = useUserSettings();
   const { users } = useUsersContext();
@@ -1106,67 +1107,11 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
 
   return (
     <div className="h-full w-full">
-      <BoardLayout>
-        {/* Dialogs */}
-        <Dialog open={promoteDialogOpen} onOpenChange={setPromoteDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Promote to Kanban</DialogTitle>
-              <DialogDescription>
-                This will create a new task in the Kanban board with the content of this card.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex justify-end space-x-2">
-              <Button variant="outline" onClick={() => setPromoteDialogOpen(false)}>Cancel</Button>
-              <Button onClick={promoteToBacklog}>Promote</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Points Config Dialog */}
-        <Dialog open={pointsConfigColumnId !== null} onOpenChange={(open) => !open && setPointsConfigColumnId(null)}>
-          <DialogContent className="sm:max-w-sm">
-            <DialogHeader><DialogTitle>Configure Points Budget</DialogTitle></DialogHeader>
-            <div className="flex items-center gap-4 py-4">
-              <Label className="text-right">Max Points:</Label>
-              <Input type="number" value={pointsConfigValue} onChange={(e) => setPointsConfigValue(Math.max(1, parseInt(e.target.value) || 0))} className="col-span-3" />
-            </div>
-            <Button onClick={confirmColumnPointsConfig}>Start Points Voting</Button>
-          </DialogContent>
-        </Dialog>
-
-        {/* MJ Labels Config Dialog */}
-        <Dialog open={mjConfigColumnId !== null} onOpenChange={(open) => !open && setMjConfigColumnId(null)}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader><DialogTitle>Configure Majority Judgment Labels</DialogTitle></DialogHeader>
-            <div className="space-y-3 py-2">
-              {MJ_SCALE.map(grade => (
-                <div key={grade.value} className="flex items-center gap-3">
-                  <span className={`flex items-center justify-center w-6 h-6 rounded ${grade.color} text-[10px]`}>{grade.icon}</span>
-                  <Input
-                    value={mjLabelInputs[grade.value] ?? grade.label}
-                    onChange={(e) => setMjLabelInputs(prev => ({ ...prev, [grade.value]: e.target.value }))}
-                    className="flex-1"
-                    placeholder={`Label for grade ${grade.value}`}
-                  />
-                </div>
-              ))}
-            </div>
-            <Button onClick={async () => {
-              if (!boardState || !mjConfigColumnId) return;
-              const newColumns = boardState.columns.map(col =>
-                col.id === mjConfigColumnId ? { ...col, mjLabels: { ...mjLabelInputs } } : col
-              );
-              await saveBoard({ ...boardState, columns: newColumns });
-              setMjConfigColumnId(null);
-              setMjLabelInputs({});
-            }}>Save & Start MJ Voting</Button>
-          </DialogContent>
-        </Dialog>
-
-        <BoardHeader
-          title="Dream Mode"
-          titleContent={
+        <BoardLayout>
+          <BoardHeader
+            title="Dream Board"
+            focusModeRightExtra={focusModeHeaderContent}
+            titleContent={
             boardState?.votingMode === 'POINTS' && boardState.votingPhase === 'VOTING' && (
               <div className="text-sm font-normal px-3 py-1 bg-primary/10 rounded-full border border-primary/20 text-primary">
                 Budget: <span className="font-bold">{calculateUserUsedPoints(currentUserId)}</span> / {boardState.maxPointsPerUser || 10} pts
@@ -1312,6 +1257,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
                   <Button size="sm" variant="outline" className="text-destructive border-destructive/50 hover:bg-destructive/10" onClick={resetVotes}><Trash2 className="h-3 w-3 mr-1" /> Reset Votes</Button>
                 </div>
               )}
+              
             </>
           }
         />
@@ -1470,7 +1416,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
                 )}
                 renderCard={(card) => {
                   const colCards = getSortedCardsForColumn(column.id);
-                  const colMaxScore = Math.max(1, ...colCards.map(c => calculateCardVoteScore(c, column.id)));
+                  const colMaxScore = Math.max(1, ...colCards.map(c => Math.abs(calculateCardVoteScore(c, column.id))));
                   return (
                   <CardView
                     card={card}

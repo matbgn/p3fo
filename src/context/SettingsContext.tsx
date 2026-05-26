@@ -30,6 +30,7 @@ export interface CombinedSettings {
     country: string;
     region: string;
     trigram?: string;
+    disabledModules: import('@/lib/persistence-types').ModuleId[];
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -65,6 +66,7 @@ const defaultCombinedSettings: CombinedSettings = {
     country: 'CH',
     region: 'BE',
     trigram: undefined,
+    disabledModules: [],
 };
 
 interface SettingsContextType {
@@ -110,6 +112,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 region: appSettings.region || 'BE',
                 preferredWorkingDays: { '1': 1, '2': 1, '3': 1, '4': 1, '5': 1 },
                 trigram: undefined,
+                disabledModules: (appSettings.disabledModules as import('@/lib/persistence-types').ModuleId[]) || [],
             };
 
             if (userSettings) {
@@ -235,6 +238,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 timezone: appSettings.timezone || 'Europe/Zurich',
                 country: appSettings.country || 'CH',
                 region: appSettings.region || 'BE',
+                disabledModules: (appSettings.disabledModules as import('@/lib/persistence-types').ModuleId[]) || [],
             };
 
             setSettings(prev => {
@@ -359,6 +363,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
             }
             if (updates.country !== undefined) addToApp('country', updates.country);
             if (updates.region !== undefined) addToApp('region', updates.region);
+            if (updates.disabledModules !== undefined) addToApp('disabledModules', updates.disabledModules);
 
             if (Object.keys(userUpdates).length > 0 && userSettings) {
                 await updateUserSettings({ ...userSettings, ...userUpdates });

@@ -1,5 +1,21 @@
 import { Temporal } from '@js-temporal/polyfill';
 
+// Helper function to convert Unix timestamp to time string with specified timezone (compact, no timezone abbreviation)
+export const formatTimeCompact = (ms: number, timezone: string = 'Europe/Zurich'): string => {
+    if (ms <= 0) return 'Invalid Date';
+
+    try {
+        const instant = Temporal.Instant.fromEpochMilliseconds(ms);
+        const zonedDateTime = instant.toZonedDateTimeISO(timezone);
+        const dateString = zonedDateTime.toPlainDate().toString();
+        const timeString = zonedDateTime.toPlainTime().toString({ smallestUnit: 'second' });
+        return `${dateString} ${timeString}`;
+    } catch (error) {
+        console.error('Error formatting time:', error);
+        return 'Invalid Date';
+    }
+};
+
 // Helper function to convert Unix timestamp to time string with specified timezone
 export const formatTimeWithTemporal = (ms: number, timezone: string = 'Europe/Zurich'): string => {
     if (ms <= 0) return 'Invalid Date';
