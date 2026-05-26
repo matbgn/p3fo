@@ -215,11 +215,11 @@ clean:
 build:
   @echo "Building {{PROJECT_NAME}} frontend and backend..."
   pnpm build
-  npx tsc --project tsconfig.server.json
+  pnpm exec tsc --project tsconfig.server.json
 
 install:
   @echo "Installing dependencies..."
-  pnpm install
+  pnpm install --config.minimumReleaseAge=168h
 
 # --- Completion Message ---
 finish:

@@ -9,33 +9,21 @@ WORKDIR /app
 # Install necessary build tools
 RUN apt-get update && apt-get install -y build-essential
 
-# Copy package files
-COPY package*.json ./
-COPY pnpm-lock.yaml* ./
+# Enable corepack to use pnpm from packageManager field
+RUN corepack enable
 
-# Install dependencies based on the lockfile
-RUN if [ -f pnpm-lock.yaml ]; then \
-      npm install -g pnpm && \
-      pnpm install --frozen-lockfile && \
-      echo "Dependencies installed with pnpm"; \
-    else \
-      npm install && \
-      echo "Dependencies installed with npm"; \
-    fi
+# Copy package files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
 
 # Copy the rest of the application
 COPY . .
 
 # Build the Vite app and compile the server
-RUN if [ -f pnpm-lock.yaml ]; then \
-      pnpm run build && \
-      pnpm exec tsc --project tsconfig.server.json && \
-      echo "Build completed with pnpm"; \
-    else \
-      npm run build && \
-      npx tsc --project tsconfig.server.json && \
-      echo "Build completed with npm"; \
-    fi
+RUN pnpm run build && \
+    pnpm exec tsc --project tsconfig.server.json
 
 # Stage 2: Create the runtime image
 FROM node:24-slim
@@ -45,11 +33,10 @@ WORKDIR /app
 # Install necessary runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     coreutils bash curl unzip \
-    coreutils bash curl unzip \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pnpm globally
-RUN npm install -g pnpm
+# Enable corepack for pnpm
+RUN corepack enable
 
 # Create a non-root user to run the container
 RUN groupadd -r appuser && useradd -r -g appuser -m -d /home/appuser appuser
