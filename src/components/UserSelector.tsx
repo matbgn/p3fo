@@ -37,7 +37,7 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
 
   return (
     <Select value={value || 'unassigned'} onValueChange={(val) => onChange(val === 'unassigned' ? undefined : val)}>
-      <SelectTrigger className={cn('w-auto justify-center px-0 mt-1 mb-2 h-6 rounded-full border-none bg-transparent hover:bg-accent [&_.lucide-chevron-down]:hidden [&>span:last-child]:hidden', className)}>
+      <SelectTrigger className={cn('w-auto justify-center px-0 h-6 rounded-full border-none bg-transparent hover:bg-accent [&_.lucide-chevron-down]:hidden [&>span:last-child]:hidden', className)}>
         <SelectValue placeholder="Unassigned">
           {isCurrentUser ? (
             <UserAvatar

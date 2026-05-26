@@ -1,8 +1,9 @@
 import React, { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { otelProfilerCallback } from "@/telemetry";
 import { Input } from "@/components/ui/input";
-import { Plus, CornerDownRight, FolderTree, Printer, Filter, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, CornerDownRight, FolderTree, Printer, Filter, ChevronDown, ChevronRight, PlusCircle, MinusCircle } from "lucide-react";
 import { FilterControls, Filters } from "./FilterControls";
 import { useTasks, Task, TriageStatus } from "@/hooks/useTasks";
 import { useAllTasks } from "@/hooks/useAllTasks";
@@ -11,13 +12,37 @@ import { aStarTextSearch } from "@/lib/a-star-search";
 import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
 import { mergeViewFilters } from "@/lib/filter-merge";
 import { sortTasks } from "@/utils/taskSorting";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 import { TaskCard } from "./TaskCard";
 import { LazyCard } from "./LazyCard";
+import { TodolistView } from "./TodolistView";
 
 import { byId } from "@/lib/utils";
 import { useViewDisplay } from "@/hooks/useView";
 import { COMPACTNESS_ULTRA, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
+
+type FocusBoardView = "flow" | "todolist";
+
+const FOCUS_BOARD_VIEW_KEY = "focus-board-view";
+
+const loadViewPreference = (): FocusBoardView => {
+  try {
+    const stored = sessionStorage.getItem(FOCUS_BOARD_VIEW_KEY);
+    if (stored === "todolist" || stored === "flow") return stored;
+  } catch {
+    // sessionStorage not available
+  }
+  return "todolist";
+};
+
+const saveViewPreference = (view: FocusBoardView) => {
+  try {
+    sessionStorage.setItem(FOCUS_BOARD_VIEW_KEY, view);
+  } catch {
+    // sessionStorage not available
+  }
+};
 
 type Column = {
   parentId: string | null;
@@ -25,11 +50,22 @@ type Column = {
   activeId?: string;
 };
 
-const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId }) => {
+const TaskBoard: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: (taskId: string) => void }> = ({ focusedTaskId, onFocusOnTask }) => {
+  const [focusView, setFocusView] = React.useState<FocusBoardView>(loadViewPreference);
+
+  const handleFocusViewChange = React.useCallback((view: string) => {
+    if (view === "flow" || view === "todolist") {
+      setFocusView(view);
+      saveViewPreference(view);
+    }
+  }, []);
+
   const { createTask, reparent, updateStatus, toggleUrgent, toggleImpact, toggleMajorIncident, toggleSprintTarget, updateDifficulty, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleDone, updateTaskTimer, toggleTimer, updateTimeEntry, updateCategory, updateComment, updateTerminationDate, updateDurationInMinutes } = useTasks();
   const { tasks } = useAllTasks();
   const { userId: currentUserId } = useUserSettings();
   const map = React.useMemo(() => byId(tasks), [tasks]);
+  const mapRef = React.useRef(map);
+  mapRef.current = map;
 
   // Focus restoration
   const [focusTargetId, setFocusTargetId] = React.useState<string | null>(null);
@@ -67,7 +103,47 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
   }, [tasks, focusTargetId]);
 
   const [path, setPath] = React.useState<string[]>([]);
+
   const [highlightedTaskId, setHighlightedTaskId] = React.useState<string | null>(null);
+
+  const scrollTodolistRowRef = React.useRef<Map<string, HTMLElement>>(new Map());
+  const lastHandledFocusIdRef = React.useRef<string | null>(null);
+
+  const handleFocusOnTaskInternal = React.useCallback((taskId: string) => {
+    setHighlightedTaskId(taskId);
+
+    const task = map[taskId];
+    if (task) {
+      const ancestorIds: string[] = [];
+      let current: Task | undefined = task;
+      while (current) {
+        ancestorIds.unshift(current.id);
+        current = current.parentId ? map[current.parentId] : undefined;
+      }
+      if (focusView === "todolist") {
+        setExpandedParents(prev => {
+          const next = new Set(prev);
+          for (let i = 0; i < ancestorIds.length - 1; i++) {
+            next.add(ancestorIds[i]);
+          }
+          return next;
+        });
+      } else {
+        setPath(ancestorIds);
+      }
+    }
+
+    setTimeout(() => {
+      const el = scrollTodolistRowRef.current.get(taskId);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 150);
+
+    setTimeout(() => setHighlightedTaskId(null), 3000);
+
+    if (onFocusOnTask) onFocusOnTask(taskId);
+  }, [map, focusView, onFocusOnTask]);
 
   const defaultTaskBoardFilters: Filters = {
     showUrgent: false,
@@ -88,10 +164,21 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
   const { cardCompactness } = useViewDisplay();
   const [isFiltersCollapsed, setIsFiltersCollapsed] = React.useState(false);
 
+  const [expandedParents, setExpandedParents] = React.useState<Set<string>>(new Set());
+
+  const allParentIds = React.useMemo(() => {
+    return tasks
+      .filter(t => !t.parentId && t.children && t.children.length > 0)
+      .map(t => t.id);
+  }, [tasks]);
+
+  const expandAllParents = () => setExpandedParents(new Set(allParentIds));
+  const collapseAllParents = () => setExpandedParents(new Set());
+
   const displayFilters = React.useMemo(() => {
-    // TaskBoard excludes Done/Dropped from the stored status filter
+    // TaskBoard excludes Done/Dropped/Archived from the stored status filter
     return mergeViewFilters(storedFilters, {
-      excludeStatuses: ["Done", "Dropped"]
+      excludeStatuses: ["Done", "Dropped", "Archived"]
     });
   }, [storedFilters]);
 
@@ -104,6 +191,16 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
       setIsFiltersCollapsed(false);
     }
   }, [cardCompactness]);
+
+  React.useEffect(() => {
+    if (focusedTaskId && focusedTaskId !== lastHandledFocusIdRef.current && map[focusedTaskId] && focusView === "todolist") {
+      lastHandledFocusIdRef.current = focusedTaskId;
+      handleFocusOnTaskInternal(focusedTaskId);
+    }
+    if (!focusedTaskId) {
+      lastHandledFocusIdRef.current = null;
+    }
+  }, [focusedTaskId, focusView, map, handleFocusOnTaskInternal]);
 
   // Load filters on mount
   useEffect(() => {
@@ -334,7 +431,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
   }, [recomputeLines]);
 
   return (
-
+    <React.Profiler id="TaskBoard" onRender={otelProfilerCallback}>
     <div className="w-full h-full flex flex-col">
       <div className="mb-4 flex flex-col gap-2 shrink-0">
         <div className="flex items-center gap-2">
@@ -349,6 +446,26 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
           <span className="text-sm font-medium text-muted-foreground cursor-pointer select-none" onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}>
             Filters & Controls
           </span>
+          {focusView === "todolist" && (
+            <div className="flex items-center gap-1 ml-2">
+              <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={expandAllParents}>
+                <PlusCircle className="w-3.5 h-3.5 mr-1" /> Expand All
+              </Button>
+              <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={collapseAllParents}>
+                <MinusCircle className="w-3.5 h-3.5 mr-1" /> Collapse All
+              </Button>
+            </div>
+          )}
+          <div className="ml-auto">
+            <ToggleGroup type="single" value={focusView} onValueChange={handleFocusViewChange} aria-label="Focus Board View">
+              <ToggleGroupItem value="flow" aria-label="Flow View">
+                Flow
+              </ToggleGroupItem>
+              <ToggleGroupItem value="todolist" aria-label="Todolist View">
+                Todolist
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
         </div>
 
         {!isFiltersCollapsed && (
@@ -362,9 +479,45 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
         )}
       </div>
 
+      {focusView === "todolist" && (
+        <TodolistView
+          tasks={tasks}
+          displayFilters={displayFilters}
+          storedFilters={storedFilters}
+          loadingFilters={loadingFilters}
+          updateStatus={handleChangeStatus}
+          updateDifficulty={updateDifficulty}
+          updateCategory={updateCategory}
+          updateTitle={(id, title) => updateTitle(id, title)}
+          updateComment={updateComment}
+          updateTerminationDate={updateTerminationDate}
+          updateDurationInMinutes={updateDurationInMinutes}
+          updateUser={handleUpdateUser}
+          deleteTask={deleteTask}
+          duplicateTaskStructure={duplicateTaskStructure}
+          toggleUrgent={toggleUrgent}
+          toggleImpact={toggleImpact}
+          toggleMajorIncident={toggleMajorIncident}
+          toggleSprintTarget={toggleSprintTarget}
+          toggleDone={handleToggleDone}
+          toggleTimer={(id, userId) => toggleTimer(id, userId || currentUserId)}
+          createTask={createTask}
+          onFocusOnTask={handleFocusOnTaskInternal}
+          highlightedTaskId={highlightedTaskId}
+          scrollTodolistRowRef={scrollTodolistRowRef}
+          expandedParents={expandedParents}
+          onToggleExpand={(taskId: string) => {
+            setExpandedParents(prev => {
+              const next = new Set(prev);
+              if (next.has(taskId)) next.delete(taskId);
+              else next.add(taskId);
+              return next;
+            });
+          }}
+        />
+      )}
 
-
-
+      {focusView === "flow" && (
       <div className="relative flex-1 min-h-0">
         <div ref={containerRef} className="flex pb-4 relative gap-6 flex-nowrap justify-start h-full overflow-x-auto">
           <svg className="pointer-events-none absolute top-0 left-0 w-full h-full" width={containerRef.current?.clientWidth || 0} height={containerRef.current?.clientHeight || 0} style={{ overflow: "visible" }}>
@@ -635,7 +788,9 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null }> = ({ focusedTaskId 
           ))}
         </div>
       </div>
+      )}
     </div >
+    </React.Profiler>
   );
 };
 
