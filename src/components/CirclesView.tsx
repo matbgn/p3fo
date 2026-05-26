@@ -329,7 +329,14 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
   }, [circlesVersion, editDialogOpen, editMode, circles]);
 
   // Tree panel state
-  const [treePanelOpen, setTreePanelOpen] = useState(true);
+  const [treePanelOpen, setTreePanelOpen] = useState(!hideHeaderActions);
+
+  // Hide tree panel when entering focus mode
+  useEffect(() => {
+    if (hideHeaderActions) {
+      setTreePanelOpen(false);
+    }
+  }, [hideHeaderActions]);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
 
   // Generate unique color for hidden canvas hit detection
@@ -757,6 +764,9 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
 
     let isDragging = false;
     let pointerDown: { x: number; y: number } | null = null;
+    let pinchStartDist: number | null = null;
+    let pinchStartScale: number | null = null;
+    let pinchStartCenter: { x: number; y: number } | null = null;
     const DRAG_THRESHOLD = 4;
 
     /* Wheel zoom */
@@ -843,8 +853,7 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
     };
 
     /* Click-to-focus (only when not dragging), with double-click detection */
-    let clickTimer: ReturnType<typeof setTimeout> | null = null;
-    let pendingClickNode: CircleTreeNode | null = null;
+    let mouseClickTimer: ReturnType<typeof setTimeout> | null = null;
 
     const onMouseUp = (e: MouseEvent) => {
       const wasDragging = isDragging;
@@ -863,17 +872,20 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
       const color = `rgb(${px[0]},${px[1]},${px[2]})`;
       const clicked = colorToNodeRef.current.get(color);
 
-      if (clickTimer) {
-        clearTimeout(clickTimer);
-        clickTimer = null;
+      if (mouseClickTimer) {
+        clearTimeout(mouseClickTimer);
+        mouseClickTimer = null;
+        // Second click within window — double click
+        if (clicked && clicked.nodeType === 'role') {
+          openEditForNodeRef.current(clicked);
+        }
+        return;
       }
 
-      pendingClickNode = clicked || null;
-
       const clickedNode = clicked;
-      clickTimer = setTimeout(() => {
-        clickTimer = null;
-        if (pendingClickNode !== clickedNode) return;
+      const clickTime = performance.now();
+      mouseClickTimer = setTimeout(() => {
+        mouseClickTimer = null;
         if (clickedNode) {
           const cn = currentNodeRef.current;
           if (cn && clickedNode.id === cn.id && cn.parent) {
@@ -884,33 +896,145 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
         } else if (nodesRef.current.length > 0) {
           zoomToNode(nodesRef.current[0]);
         }
-        pendingClickNode = null;
-      }, 250);
+      }, 300);
     };
 
-    const onDoubleClick = (e: MouseEvent) => {
-      if (clickTimer) {
-        clearTimeout(clickTimer);
-        clickTimer = null;
-        pendingClickNode = null;
-      }
-
-      const rect = canvas.getBoundingClientRect();
-      const sX = hiddenCanvas.width / rect.width;
-      const sY = hiddenCanvas.height / rect.height;
-      const mx = (e.clientX - rect.left) * sX;
-      const my = (e.clientY - rect.top) * sY;
-      const hc = hiddenCanvas.getContext('2d', { willReadFrequently: true });
-      if (!hc) return;
-      const px = hc.getImageData(mx, my, 1, 1).data;
-      const color = `rgb(${px[0]},${px[1]},${px[2]})`;
-      const clicked = colorToNodeRef.current.get(color);
-      if (clicked && clicked.nodeType === 'role') {
-        openEditForNodeRef.current(clicked);
+    const onDoubleClick = () => {
+      // Handled by mouseup double-click timer above; prevent native dblclick from also firing
+      if (mouseClickTimer) {
+        clearTimeout(mouseClickTimer);
+        mouseClickTimer = null;
       }
     };
 
     const onLeave = () => { pointerDown = null; isDragging = false; };
+
+    /* Touch support for mobile */
+    const onTouchStart = (e: TouchEvent) => {
+      e.preventDefault();
+      if (e.touches.length === 1) {
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        pointerDown = { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+        isDragging = false;
+      } else if (e.touches.length === 2) {
+        // Pinch zoom - store initial distance and center
+        pinchStartDist = Math.sqrt(
+          Math.pow(e.touches[0].clientX - e.touches[1].clientX, 2) +
+          Math.pow(e.touches[0].clientY - e.touches[1].clientY, 2)
+        );
+        pinchStartScale = zoomInfoRef.current.scale;
+        pinchStartCenter = {
+          x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+          y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+        };
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      if (e.touches.length === 1 && pointerDown) {
+        // Single finger pan
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        const curX = touch.clientX - rect.left;
+        const curY = touch.clientY - rect.top;
+        const dx = curX - pointerDown.x;
+        const dy = curY - pointerDown.y;
+        if (!isDragging && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+          isDragging = true;
+        }
+        if (isDragging) {
+          const cur = zoomInfoRef.current;
+          const prevTouch = { x: pointerDown.x, y: pointerDown.y };
+          setZoomInfo(prev => ({
+            ...prev,
+            centerX: prev.centerX - (curX - prevTouch.x) / cur.scale,
+            centerY: prev.centerY - (curY - prevTouch.y) / cur.scale,
+          }));
+          pointerDown = { x: curX, y: curY };
+        }
+      } else if (e.touches.length === 2 && pinchStartDist !== null) {
+        // Pinch zoom
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const { width, height } = dimensionsRef.current;
+        const cx = width / 2;
+        const cy = height / 2;
+        const cur = zoomInfoRef.current;
+
+        const newScale = Math.min(Math.max(pinchStartScale! * (dist / pinchStartDist), 0.05), 20);
+        const rect = canvas.getBoundingClientRect();
+        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+
+        const worldX = cur.centerX + (midX - cx) / cur.scale;
+        const worldY = cur.centerY + (midY - cy) / cur.scale;
+
+        setZoomInfo({
+          centerX: worldX - (midX - cx) / newScale,
+          centerY: worldY - (midY - cy) / newScale,
+          scale: newScale,
+        });
+      }
+    };
+
+    let lastTapTime = 0;
+    let lastTapNode: CircleTreeNode | null = null;
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length === 0 && !isDragging && pointerDown) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = hiddenCanvas.width / rect.width;
+        const scaleY = hiddenCanvas.height / rect.height;
+        const touch = e.changedTouches[0];
+        const mx = (touch.clientX - rect.left) * scaleX;
+        const my = (touch.clientY - rect.top) * scaleY;
+        const hc = hiddenCanvas.getContext('2d', { willReadFrequently: true });
+        if (hc) {
+          const px = hc.getImageData(mx, my, 1, 1).data;
+          const color = `rgb(${px[0]},${px[1]},${px[2]})`;
+          const clicked = colorToNodeRef.current.get(color);
+
+          const now = performance.now();
+          if (clicked && clicked.id === lastTapNode?.id && now - lastTapTime < 500) {
+            // Double tap - edit role
+            lastTapTime = 0;
+            lastTapNode = null;
+            if (clicked.nodeType === 'role') {
+              openEditForNodeRef.current(clicked);
+            }
+          } else {
+            // Single tap - deferred to allow double-tap detection
+            lastTapTime = now;
+            lastTapNode = clicked || null;
+            const tapNode = clicked;
+            const tapTime = now;
+            setTimeout(() => {
+              if (lastTapTime !== tapTime || lastTapNode !== tapNode) return;
+              if (tapNode) {
+                const cn = currentNodeRef.current;
+                if (cn && tapNode.id === cn.id && cn.parent) {
+                  zoomToNode(cn.parent);
+                } else {
+                  zoomToNode(tapNode);
+                }
+              } else if (nodesRef.current.length > 0) {
+                zoomToNode(nodesRef.current[0]);
+              }
+            }, 300);
+          }
+        }
+      }
+      pointerDown = null;
+      isDragging = false;
+      if (e.touches.length < 2) {
+        pinchStartDist = null;
+        pinchStartScale = null;
+        pinchStartCenter = null;
+      }
+    };
 
     canvas.addEventListener('wheel', onWheel, { passive: false });
     canvas.addEventListener('mousedown', onMouseDown);
@@ -918,6 +1042,9 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
     canvas.addEventListener('mouseup', onMouseUp);
     canvas.addEventListener('mouseleave', onLeave);
     canvas.addEventListener('dblclick', onDoubleClick);
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd);
 
     return () => {
       canvas.removeEventListener('wheel', onWheel);
@@ -926,6 +1053,9 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
       canvas.removeEventListener('mouseup', onMouseUp);
       canvas.removeEventListener('mouseleave', onLeave);
       canvas.removeEventListener('dblclick', onDoubleClick);
+      canvas.removeEventListener('touchstart', onTouchStart);
+      canvas.removeEventListener('touchmove', onTouchMove);
+      canvas.removeEventListener('touchend', onTouchEnd);
     };
   }, [zoomToNode]);
 
@@ -1338,7 +1468,7 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
               {/* Tree Panel */}
               {treePanelOpen && (
                 <>
-                  <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
+                  <ResizablePanel id="circles-tree" order={1} defaultSize={25} minSize={15} maxSize={40}>
                     <div className="h-full overflow-hidden border-r bg-muted/30 flex flex-col">
                       <div className="shrink-0 p-2 border-b bg-muted/50">
                         <h3 className="text-sm font-medium text-muted-foreground">Organization Tree</h3>
@@ -1410,7 +1540,7 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
                 </>
               )}
               {/* Circle Canvas Panel */}
-              <ResizablePanel defaultSize={treePanelOpen ? 75 : 100}>
+              <ResizablePanel id="circles-canvas" order={2} defaultSize={treePanelOpen ? 75 : 100}>
                 <div className="relative w-full h-full" ref={containerRef}>
                   <canvas
                     ref={canvasRef}
@@ -1421,6 +1551,7 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
                       width: '100%',
                       height: '100%',
                       pointerEvents: isAnimating ? 'none' : 'auto',
+                      touchAction: 'none',
                     }}
                   />
                   <canvas
