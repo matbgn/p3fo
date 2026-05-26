@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { DreamView } from './DreamView';
 import { useViewNavigation, useViewDisplay } from '@/hooks/useView';
-import { useTasks, Task, TriageStatus } from '@/hooks/useTasks';
+import { useTasks, Task } from '@/hooks/useTasks';
 import { useAllTasks } from '@/hooks/useAllTasks';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { TaskCard } from './TaskCard';
+import { StoryboardCard } from './StoryboardCard';
 import ComparativePrioritizationView from './ComparativePrioritizationView';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +14,7 @@ import { FilterControls, Filters } from "./FilterControls";
 import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
 import { getDefaultFilters, validateFilters, mergeViewFilters } from "@/lib/filter-merge";
 import { COMPACTNESS_ULTRA, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
-import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { FocusModeProvider } from "./FocusModeProvider";
 import { FocusModeOverlay } from "./FocusModeOverlay";
 import { FocusModeBar } from './planView/FocusModeBar';
@@ -381,7 +381,7 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
         <CardContent className="flex-grow overflow-hidden">
           {activeView === 'storyboard' ? (
             <div
-              className="flex flex-nowrap overflow-x-auto h-full p-2 space-x-4"
+              className="flex flex-nowrap overflow-x-auto h-full p-2 gap-3"
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, '')}
             >
@@ -392,24 +392,8 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
                   const children = getAllChildren(task);
                   const isReordering = reorderingTaskId === task.id;
                   return (
-                    <div
-                      key={task.id}
-                      className="min-w-[300px] max-w-[300px] p-2 border rounded-lg shadow-sm bg-white dark:bg-gray-800 relative"
-                      draggable={!isReordering}
-                      onDragStart={(e) => handleDragStart(e, task.id)}
-                      onDragOver={handleDragOver}
-                      onDrop={(e) => handleDrop(e, task.id)}
-                      style={{
-                        opacity: draggedTaskId === task.id ? 0.5 : 1,
-                        border: draggedTaskId && draggedTaskId !== task.id ? '2px dashed #ccc' : '2px solid transparent',
-                      }}
-                    >
-                      {isReordering && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-background/80 rounded-lg z-10">
-                          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                        </div>
-                      )}
-                      <TaskCard
+                    <div key={task.id} className="flex flex-col gap-2 min-w-fit">
+                      <StoryboardCard
                         task={task}
                         tasks={tasks}
                         isHighlighted={task.id === focusedTaskId}
@@ -434,43 +418,48 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
                         disableReparenting={true}
                         open={!!openParents[task.id]}
                         onToggleOpen={toggleParent}
+                        isReordering={isReordering}
+                        isDragged={draggedTaskId === task.id}
+                        isDragOver={!!draggedTaskId && draggedTaskId !== task.id}
+                        draggable={!isReordering}
+                        onDragStart={(e) => handleDragStart(e, task.id)}
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, task.id)}
                       />
 
                       {openParents[task.id] && children.length > 0 && (
-                        <div className="mt-2 space-y-2">
+                        <div className="space-y-2">
                           <div className="text-xs font-medium text-muted-foreground px-1">
                             Subtasks of: {task.title}
                           </div>
                           {children.map(child => (
-                            <div
+                            <StoryboardCard
                               key={child.id}
-                              className="p-2 border rounded-md bg-muted/20"
-                            >
-                              <TaskCard
-                                task={child}
-                                tasks={tasks}
-                                isHighlighted={child.id === focusedTaskId}
-                                updateStatus={updateStatus}
-                                updateDifficulty={updateDifficulty}
-                                updateCategory={updateCategory}
-                                updateTitle={updateTitle}
-                                updateUser={(id, userId) => updateUser(id, userId === 'current-user' ? currentUserId : userId)}
-                                deleteTask={deleteTask}
-                                duplicateTaskStructure={duplicateTaskStructure}
-                                toggleUrgent={toggleUrgent}
-                                toggleImpact={toggleImpact}
-                                toggleMajorIncident={toggleMajorIncident}
-                                toggleSprintTarget={toggleSprintTarget}
-                                toggleDone={() => toggleDone(child.id)}
-                                toggleTimer={toggleTimer}
-                                reparent={reparent}
-                                onFocusOnTask={onFocusOnTask}
-                                updateTerminationDate={updateTerminationDate}
-                                updateComment={updateComment}
-                                updateDurationInMinutes={updateDurationInMinutes}
-                                disableReparenting={true}
-                              />
-                            </div>
+                              task={child}
+                              tasks={tasks}
+                              isHighlighted={child.id === focusedTaskId}
+                              updateStatus={updateStatus}
+                              updateDifficulty={updateDifficulty}
+                              updateCategory={updateCategory}
+                              updateTitle={updateTitle}
+                              updateUser={(id, userId) => updateUser(id, userId === 'current-user' ? currentUserId : userId)}
+                              deleteTask={deleteTask}
+                              duplicateTaskStructure={duplicateTaskStructure}
+                              toggleUrgent={toggleUrgent}
+                              toggleImpact={toggleImpact}
+                              toggleMajorIncident={toggleMajorIncident}
+                              toggleSprintTarget={toggleSprintTarget}
+                              toggleDone={() => toggleDone(child.id)}
+                              toggleTimer={toggleTimer}
+                              reparent={reparent}
+                              onFocusOnTask={onFocusOnTask}
+                              updateTerminationDate={updateTerminationDate}
+                              updateComment={updateComment}
+                              updateDurationInMinutes={updateDurationInMinutes}
+                              disableReparenting={true}
+                              isDragged={draggedTaskId === child.id}
+                              isDragOver={!!draggedTaskId && draggedTaskId !== child.id}
+                            />
                           ))}
                         </div>
                       )}

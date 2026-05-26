@@ -116,6 +116,7 @@ const Column: React.FC<{
               toggleTimer={onToggleTimer}
               isTriageBoard={true}
               reparent={onReparent}
+              disableReparenting
               onFocusOnTask={onFocusOnTask}
               updateTerminationDate={updateTerminationDate}
               updateDurationInMinutes={updateDurationInMinutes}
@@ -253,6 +254,7 @@ const Column: React.FC<{
                     toggleTimer={onToggleTimer}
                     isTriageBoard={true}
                     reparent={onReparent}
+                    disableReparenting
                     onFocusOnTask={onFocusOnTask}
                     updateTerminationDate={updateTerminationDate}
                     updateDurationInMinutes={updateDurationInMinutes}
