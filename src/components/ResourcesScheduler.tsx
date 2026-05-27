@@ -6,7 +6,6 @@ import { Task } from '@/hooks/useTasks';
 import { calculateAllTotalDifficulties, normalizePreferredDays } from '@/utils/scheduler-utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import {
     Tooltip,
     TooltipContent,
@@ -248,161 +247,157 @@ const ResourcesScheduler: React.FC<ResourcesSchedulerProps> = ({ onFocusOnTask, 
             </CardHeader>
             <CardContent
                 ref={containerRef}
-                className="flex-1 p-0 overflow-hidden relative flex flex-col"
+                className="flex-1 p-0 overflow-auto relative"
             >
-                <div className="flex flex-1 overflow-hidden">
-                    {/* Left Sidebar: Users */}
+                <div className="flex" style={{ minHeight: '100%' }}>
+                    {/* Left Sidebar: Users — sticky so it stays visible during horizontal scroll */}
                     <div
-                        className="shrink-0 border-r bg-background z-20 shadow-sm"
+                        className="shrink-0 border-r bg-background z-20 shadow-sm sticky left-0"
                         style={{ width: SIDEBAR_WIDTH }}
                     >
                         <div
-                            className="border-b bg-muted/30 flex items-center px-4 font-medium text-sm text-muted-foreground"
+                            className="border-b flex items-center px-4 font-medium text-sm text-muted-foreground sticky top-0 z-10 bg-background"
                             style={{ height: HEADER_HEIGHT }}
                         >
                             Team Members
                         </div>
 
-                        <ScrollArea className="h-[calc(100%-40px)]">
-                            {resources.map((user) => (
-                                <div
-                                    key={user.id}
-                                    className="flex items-center gap-3 px-4 border-b hover:bg-muted/50 transition-colors"
-                                    style={{ height: ROW_HEIGHT }}
-                                >
-                                    <UserAvatar
-                                        username={user.name}
-                                        logo={user.avatar}
-                                        size="md"
-                                        trigram={user.initials}
-                                        className="h-8 w-8"
-                                    />
-                                    <div className="min-w-0 flex-1">
-                                        <div className="text-sm font-medium truncate">{user.name}</div>
-                                        <div className="flex flex-col gap-1 mt-1">
-                                            <div className="text-xs text-muted-foreground">
-                                                {scheduledData[user.id]?.length || 0} tasks assigned
-                                            </div>
-                                            <DaySelector
-                                                value={user.preferredWorkingDays}
-                                                onChange={(val) => updateUser(user.id, { preferredWorkingDays: val })}
-                                                className="scale-75 origin-left"
-                                            />
+                        {resources.map((user) => (
+                            <div
+                                key={user.id}
+                                className="flex items-center gap-3 px-4 border-b hover:bg-muted/50 transition-colors"
+                                style={{ height: ROW_HEIGHT }}
+                            >
+                                <UserAvatar
+                                    username={user.name}
+                                    logo={user.avatar}
+                                    size="md"
+                                    trigram={user.initials}
+                                    className="h-8 w-8"
+                                />
+                                <div className="min-w-0 flex-1">
+                                    <div className="text-sm font-medium truncate">{user.name}</div>
+                                    <div className="flex flex-col gap-1 mt-1">
+                                        <div className="text-xs text-muted-foreground">
+                                            {scheduledData[user.id]?.length || 0} tasks assigned
                                         </div>
+                                        <DaySelector
+                                            value={user.preferredWorkingDays}
+                                            onChange={(val) => updateUser(user.id, { preferredWorkingDays: val })}
+                                            className="scale-75 origin-left"
+                                        />
                                     </div>
                                 </div>
-                            ))}
-                            {scheduledData['unassigned']?.length > 0 && (
-                                <div
-                                    className="flex items-center gap-3 px-4 border-b bg-muted/10"
-                                    style={{ height: ROW_HEIGHT }}
-                                >
-                                    <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
-                                        <UserIcon className="h-4 w-4" />
-                                    </div>
-                                    <div className="text-sm font-medium text-muted-foreground">Unassigned</div>
+                            </div>
+                        ))}
+                        {scheduledData['unassigned']?.length > 0 && (
+                            <div
+                                className="flex items-center gap-3 px-4 border-b bg-muted/10"
+                                style={{ height: ROW_HEIGHT }}
+                            >
+                                <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
+                                    <UserIcon className="h-4 w-4" />
                                 </div>
-                            )}
-                        </ScrollArea>
+                                <div className="text-sm font-medium text-muted-foreground">Unassigned</div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Right: Timeline */}
-                    <ScrollArea className="flex-1" orientation="horizontal">
-                        <div className="relative min-h-full">
-                            <div
-                                className="flex sticky top-0 z-10 bg-background border-b"
-                                style={{ height: HEADER_HEIGHT, width: calendarDays.length * dayWidth }}
-                            >
-                                {calendarDays.map((day, i) => {
-                                    const isToday = day.isSame(moment(), 'day');
-                                    const isWeekend = day.day() === 0 || day.day() === 6;
-                                    return (
-                                        <div
-                                            key={i}
-                                            className={cn(
-                                                "shrink-0 border-r px-2 flex flex-col justify-center text-xs",
-                                                isToday && "bg-blue-50/50",
-                                                isWeekend && "bg-slate-50/50"
-                                            )}
-                                            style={{ width: dayWidth }}
-                                        >
-                                            <div className={cn("font-medium", isToday && "text-blue-600")}>
-                                                {day.format('ddd D MMM')}
-                                            </div>
+                    <div className="flex-1 min-w-0">
+                        <div
+                            className="flex sticky top-0 z-10 bg-background border-b"
+                            style={{ height: HEADER_HEIGHT, width: calendarDays.length * dayWidth }}
+                        >
+                            {calendarDays.map((day, i) => {
+                                const isToday = day.isSame(moment(), 'day');
+                                const isWeekend = day.day() === 0 || day.day() === 6;
+                                return (
+                                    <div
+                                        key={i}
+                                        className={cn(
+                                            "shrink-0 border-r px-2 flex flex-col justify-center text-xs",
+                                            isToday && "bg-blue-50/50",
+                                            isWeekend && "bg-slate-50/50"
+                                        )}
+                                        style={{ width: dayWidth }}
+                                    >
+                                        <div className={cn("font-medium", isToday && "text-blue-600")}>
+                                            {day.format('ddd D MMM')}
                                         </div>
-                                    );
-                                })}
-                            </div>
-
-                            <div className="relative">
-                                <div className="absolute inset-0 flex pointer-events-none">
-                                    {calendarDays.map((_, i) => (
-                                        <div
-                                            key={i}
-                                            className="border-r h-full"
-                                            style={{ width: dayWidth }}
-                                        />
-                                    ))}
-                                </div>
-
-                                {resources.map((user) => (
-                                    <div
-                                        key={user.id}
-                                        className="relative border-b hover:bg-muted/10"
-                                        style={{ height: ROW_HEIGHT, width: calendarDays.length * dayWidth }}
-                                    >
-                                        {scheduledData[user.id]?.map((block, idx) => {
-                                            const left = getDateX(block.start);
-                                            const width = getDateX(block.end) - left;
-                                            if (left + width < 0) return null;
-
-                                            return (
-                                                <TooltipProvider key={block.task.id}>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <div
-                                                                className={cn(
-                                                                    "absolute top-2 bottom-2 rounded-md shadow-sm border px-2 flex flex-col justify-center cursor-pointer hover:brightness-95 transition-all text-[10px]",
-                                                                    block.task.urgent ? "bg-red-100 border-red-200 text-red-900" :
-                                                                        block.task.impact ? "bg-amber-100 border-amber-200 text-amber-900" :
-                                                                            "bg-blue-100 border-blue-200 text-blue-900"
-                                                                )}
-                                                                style={{
-                                                                    left: Math.max(0, left),
-                                                                    width: Math.max(5, width),
-                                                                    zIndex: 1
-                                                                }}
-                                                                onClick={() => onEditTask ? onEditTask(block.task) : onFocusOnTask(block.task.id)}
-                                                            >
-                                                                <div className="font-semibold truncate">{block.task.title}</div>
-                                                                <div className="opacity-75">{block.totalDifficulty} pts</div>
-                                                            </div>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>
-                                                            <div className="text-xs">
-                                                                <div className="font-bold">{block.task.title}</div>
-                                                                <div>Duration: {block.totalDifficulty} pts</div>
-                                                                <div>Start: {moment(block.start).format('MMM D')}</div>
-                                                                <div>End: {moment(block.end).format('MMM D')}</div>
-                                                            </div>
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                </TooltipProvider>
-                                            );
-                                        })}
                                     </div>
-                                ))}
-
-                                {scheduledData['unassigned']?.length > 0 && (
-                                    <div
-                                        className="relative border-b bg-muted/5"
-                                        style={{ height: ROW_HEIGHT, width: calendarDays.length * dayWidth }}
-                                    >
-                                    </div>
-                                )}
-                            </div>
+                                );
+                            })}
                         </div>
-                    </ScrollArea>
+
+                        <div className="relative" style={{ width: calendarDays.length * dayWidth }}>
+                            <div className="absolute inset-0 flex pointer-events-none">
+                                {calendarDays.map((_, i) => (
+                                    <div
+                                        key={i}
+                                        className="border-r h-full"
+                                        style={{ width: dayWidth }}
+                                    />
+                                ))}
+                            </div>
+
+                            {resources.map((user) => (
+                                <div
+                                    key={user.id}
+                                    className="relative border-b hover:bg-muted/10"
+                                    style={{ height: ROW_HEIGHT }}
+                                >
+                                    {scheduledData[user.id]?.map((block, idx) => {
+                                        const left = getDateX(block.start);
+                                        const width = getDateX(block.end) - left;
+                                        if (left + width < 0) return null;
+
+                                        return (
+                                            <TooltipProvider key={block.task.id}>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <div
+                                                            className={cn(
+                                                                "absolute top-2 bottom-2 rounded-md shadow-sm border px-2 flex flex-col justify-center cursor-pointer hover:brightness-95 transition-all text-[10px]",
+                                                                block.task.urgent ? "bg-red-100 border-red-200 text-red-900" :
+                                                                    block.task.impact ? "bg-amber-100 border-amber-200 text-amber-900" :
+                                                                        "bg-blue-100 border-blue-200 text-blue-900"
+                                                            )}
+                                                            style={{
+                                                                left: Math.max(0, left),
+                                                                width: Math.max(5, width),
+                                                                zIndex: 1
+                                                            }}
+                                                            onClick={() => onEditTask ? onEditTask(block.task) : onFocusOnTask(block.task.id)}
+                                                        >
+                                                            <div className="font-semibold truncate">{block.task.title}</div>
+                                                            <div className="opacity-75">{block.totalDifficulty} pts</div>
+                                                        </div>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <div className="text-xs">
+                                                            <div className="font-bold">{block.task.title}</div>
+                                                            <div>Duration: {block.totalDifficulty} pts</div>
+                                                            <div>Start: {moment(block.start).format('MMM D')}</div>
+                                                            <div>End: {moment(block.end).format('MMM D')}</div>
+                                                        </div>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
+                                        );
+                                    })}
+                                </div>
+                            ))}
+
+                            {scheduledData['unassigned']?.length > 0 && (
+                                <div
+                                    className="relative border-b bg-muted/5"
+                                    style={{ height: ROW_HEIGHT }}
+                                >
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </CardContent>
         </Card>
