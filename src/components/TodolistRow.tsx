@@ -199,7 +199,7 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
       <div
         ref={rowRef}
         className={cn(
-          "todolist-row grid items-center gap-2 px-2 py-1.5 border-b border-border transition-colors hover:bg-accent/30",
+          "todolist-row grid items-center gap-2 px-2 py-3.5 border-b border-border transition-colors hover:bg-accent/30",
           depth > 0 && "border-l-2 border-l-muted-foreground/30",
           isDone && "opacity-50",
           isHighlighted && "ring-2 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20",

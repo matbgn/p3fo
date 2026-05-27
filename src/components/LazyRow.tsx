@@ -23,7 +23,7 @@ const LazyRow: React.FC<{ children: React.ReactNode; className?: string }> = ({ 
   }, []);
 
   if (!isVisible) {
-    return <div ref={ref} className={className} style={{ height: "48px" }} />;
+    return <div ref={ref} className={className} style={{ height: "64px" }} />;
   }
 
   return <div ref={ref} className={className}>{children}</div>;
