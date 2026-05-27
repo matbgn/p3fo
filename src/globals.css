@@ -147,6 +147,30 @@
   body.rbc-dnd-active .rbc-slot-selection {
     display: none !important;
   }
+
+  /* Allow vertical touch scrolling on mobile inside/outside the calendar */
+  .rbc-calendar,
+  .rbc-month-view,
+  .rbc-time-view,
+  .rbc-time-content,
+  .rbc-day-slot,
+  .rbc-event,
+  .rbc-row-content,
+  .rbc-month-row,
+  .rbc-header,
+  .rbc-time-gutter,
+  .rbc-time-header,
+  .rbc-time-header-content,
+  .rbc-allday-cell,
+  .rbc-allday-events {
+    touch-action: pan-y !important;
+  }
+
+  /* Ensure the ProgramView scroll container allows touch panning */
+  .program-view-scroll-container {
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 @media print {

@@ -118,7 +118,7 @@ const ProgramTopViewInner: React.FC<ProgramTopViewProps> = ({ onFocusOnTask }) =
                             </div>
                         </CardHeader>
                     )}
-                    <CardContent className="flex-1 min-h-0 overflow-hidden p-0">
+                    <CardContent className="flex-1 min-h-0 overflow-y-auto p-0 program-view-scroll-container">
                         <ResourcesScheduler onFocusOnTask={onFocusOnTask} onEditTask={editTaskHandler} />
                     </CardContent>
                 </Card>
@@ -168,7 +168,7 @@ const ProgramTopViewInner: React.FC<ProgramTopViewProps> = ({ onFocusOnTask }) =
                         </div>
                     </CardHeader>
                 )}
-                <CardContent className="flex-1 min-h-0 overflow-hidden p-0">
+                <CardContent className="flex-1 min-h-0 overflow-y-auto p-0 program-view-scroll-container">
                     <ProgramView onFocusOnTask={onFocusOnTask} onEditTask={editTaskHandler} />
                 </CardContent>
             </Card>
