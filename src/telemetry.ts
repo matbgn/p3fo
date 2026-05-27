@@ -31,7 +31,9 @@ provider.register({
 
 registerInstrumentations({
   instrumentations: getWebAutoInstrumentations({
-    '@opentelemetry/instrumentation-document-load': {},
+    '@opentelemetry/instrumentation-document-load': {
+      enabled: false,
+    },
     '@opentelemetry/instrumentation-fetch': {
       propagateTraceHeaderCorsUrls: [
         /^http:\/\/localhost:\d+\/api/,
@@ -42,7 +44,9 @@ registerInstrumentations({
         /^http:\/\/localhost:\d+\/api/,
       ],
     },
-    '@opentelemetry/instrumentation-user-interaction': {},
+    '@opentelemetry/instrumentation-user-interaction': {
+      enabled: false,
+    },
   }),
 });
 
@@ -64,7 +68,7 @@ export function otelProfilerCallback(
   startTime: number,
   commitTime: number,
 ) {
-  if (actualDuration < 4) return; // skip renders faster than ~1 frame at 240fps
+  if (actualDuration < 16) return; // skip renders faster than 1 frame at 60fps
 
   // React Profiler startTime / commitTime are DOMHighResTimeStamps
   // (ms since navigation start). Convert to real wall-clock timestamps.

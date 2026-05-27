@@ -133,7 +133,7 @@ const Index: React.FC = () => {
 
   // Memoize each view element so switching tabs doesn't reconcile them.
   // Each element is re-created only when its own dependencies change, not when `view` changes.
-  const focusView = React.useMemo(() => <TaskBoard focusedTaskId={focusedTaskId} />, [focusedTaskId]);
+  const focusView = React.useMemo(() => <TaskBoard focusedTaskId={focusedTaskId} onFocusOnTask={handleFocusOnTask} />, [focusedTaskId, handleFocusOnTask]);
   const kanbanView = React.useMemo(() => <KanbanBoard onFocusOnTask={handleFocusOnTask} highlightedTaskId={focusedTaskId} />, [handleFocusOnTask, focusedTaskId]);
   const timetableView = React.useMemo(() => <Timetable onJumpToTask={handleFocusOnTask} />, [handleFocusOnTask]);
   const programView = React.useMemo(() => <LazyWrapper><ProgramTopView onFocusOnTask={handleFocusOnTask} /></LazyWrapper>, [handleFocusOnTask]);

@@ -54,6 +54,9 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: true, // This makes the dev server listen on all network interfaces
+      sourcemapIgnoreList(sourcePath) {
+        return sourcePath.includes('node_modules');
+      },
       allowedHosts: env.VITE_ALLOWED_HOSTS ? env.VITE_ALLOWED_HOSTS.split(',') : [],
       watch: {
         ignored: ['**/node_modules/**', '**/dist/**', '**/.git/**'],

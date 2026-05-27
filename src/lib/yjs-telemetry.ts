@@ -200,35 +200,24 @@ export interface InstrumentedYMap<T = unknown> {
   _raw: Y.Map<T>;
 }
 
+let yjsWriteSpanCounter = 0;
+
 export function instrumentYMap<T = unknown>(
   yMap: Y.Map<T>,
   mapName: string
 ): InstrumentedYMap<T> {
-  const handlerRegistry = new WeakMap<(event: Y.YMapEvent<T>) => void, (event: Y.YMapEvent<T>) => void>();
-
   return {
     get(key: string): T | undefined {
-      const span = tracer.startSpan('yjs.map.get', {
-        attributes: { 'yjs.map.name': mapName, 'yjs.map.key': key },
-      });
-      try {
-        return yMap.get(key);
-      } finally {
-        span.end();
-      }
+      return yMap.get(key);
     },
 
     set(key: string, value: T) {
-      const span = tracer.startSpan('yjs.map.set', {
-        attributes: { 'yjs.map.name': mapName, 'yjs.map.key': key },
-      });
-      try {
-        yMap.set(key, value);
-      } catch (e) {
-        span.recordException(e as Error);
-        span.setStatus({ code: SpanStatusCode.ERROR });
-        throw e;
-      } finally {
+      yMap.set(key, value);
+      yjsWriteSpanCounter++;
+      if (yjsWriteSpanCounter % 10 === 1) {
+        const span = tracer.startSpan('yjs.map.set', {
+          attributes: { 'yjs.map.name': mapName, 'yjs.map.key': key, 'telemetry.sampled': true },
+        });
         span.end();
       }
     },
@@ -264,56 +253,15 @@ export function instrumentYMap<T = unknown>(
     },
 
     has(key: string) {
-      const span = tracer.startSpan('yjs.map.has', {
-        attributes: { 'yjs.map.name': mapName, 'yjs.map.key': key },
-      });
-      try {
-        return yMap.has(key);
-      } finally {
-        span.end();
-      }
+      return yMap.has(key);
     },
 
     observe(handler: (event: Y.YMapEvent<T>) => void) {
-      const wrapped = (event: Y.YMapEvent<T>): void => {
-        const span = tracer.startSpan('yjs.map.observe', {
-          attributes: {
-            'yjs.map.name': mapName,
-            'yjs.map.changed_keys': Array.from(event.keysChanged),
-            'yjs.transaction.local': event.transaction.local,
-            'yjs.transaction.origin': String(event.transaction.origin ?? 'unknown'),
-          },
-        });
-        try {
-          const returnValue = handler(event);
-          const maybePromise = returnValue as unknown;
-          if (maybePromise instanceof Promise) {
-            (maybePromise as Promise<unknown>).catch((e: unknown) => {
-              span.recordException(e as Error);
-              span.setStatus({ code: SpanStatusCode.ERROR });
-            }).finally(() => span.end());
-            return;
-          }
-        } catch (e) {
-          span.recordException(e as Error);
-          span.setStatus({ code: SpanStatusCode.ERROR });
-          throw e;
-        } finally {
-          span.end();
-        }
-      };
-      handlerRegistry.set(handler, wrapped);
-      yMap.observe(wrapped);
+      yMap.observe(handler);
     },
 
     unobserve(handler: (event: Y.YMapEvent<T>) => void) {
-      const wrapped = handlerRegistry.get(handler);
-      if (wrapped) {
-        handlerRegistry.delete(handler);
-        yMap.unobserve(wrapped);
-      } else {
-        yMap.unobserve(handler);
-      }
+      yMap.unobserve(handler);
     },
 
     get size() {
@@ -333,14 +281,7 @@ export function instrumentYMap<T = unknown>(
     },
 
     toJSON() {
-      const span = tracer.startSpan('yjs.map.toJSON', {
-        attributes: { 'yjs.map.name': mapName, 'yjs.map.size': yMap.size },
-      });
-      try {
-        return yMap.toJSON();
-      } finally {
-        span.end();
-      }
+      return yMap.toJSON();
     },
 
     _raw: yMap,
