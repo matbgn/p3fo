@@ -109,6 +109,28 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
   ref
 ) => {
   const [isHovered, setIsHovered] = React.useState(false);
+  const hoverTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleMouseEnter = React.useCallback(() => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    setIsHovered(true);
+  }, []);
+
+  const handleMouseLeave = React.useCallback(() => {
+    hoverTimeoutRef.current = setTimeout(() => {
+      setIsHovered(false);
+    }, 300);
+  }, []);
+  React.useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+      }
+    };
+  }, []);
   const [isTimeSheetOpen, setIsTimeSheetOpen] = React.useState(false);
   const [isCommentModalOpen, setIsCommentModalOpen] = React.useState(false);
   const [commentText, setCommentText] = React.useState(task.comment || "");
@@ -223,8 +245,8 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
 
   return (
     <Card
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       ref={ref}
       className={cn(
         `mb-2 transition-all duration-200 hover:shadow-md ${isActive ? "ring-2 ring-primary" : ""} ${isHighlighted ? "ring-2 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20" : ""}`,
