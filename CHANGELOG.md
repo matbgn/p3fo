@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.24.0 (2026-05-27)
+
+### Features
+
+- **focus board:** add todolist view to task board (35cff1b)
+
+### Bug Fixes
+
+- **prioritization:** add sprint target filter (5587aa1)
+- **ressources view:** fix scrolling down on mobile (5cd895b)
+- **calendar view:** fix scrolling down on mobile (610c8f9)
+- **focus view:** ensure all children are deployed on expand all (3a0b4f2)
+- **task cards:** ensure dropdowns are still accessible on ultra compact mode (b67b542)
+
+---
+
 ## v0.23.0 (2026-05-26)
 
 ### Features
@@ -124,20 +140,5 @@
 ### Bug Fixes
 
 - **running timer:** stop and persist other running timers on toggle (79a7915)
-
----
-
-## v0.16.0 (2026-03-14)
-
-### Features
-
-- **persistence:** add bulk import/export for circles and reminders (dc8ba00)
-- **metrics:** use preferred days for pace projection (f8fd4e4)
-- **users:** add inline trigram editing UI (37fd1a2)
-
-### Bug Fixes
-
-- **filters:** prevent race condition clobbering persisted filters on views reload (04d3e9a)
-- **reminders:** add HTTP persistence adapter CRUD operations (970b511)
 
 ---
