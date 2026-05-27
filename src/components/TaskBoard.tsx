@@ -168,7 +168,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: (task
 
   const allParentIds = React.useMemo(() => {
     return tasks
-      .filter(t => !t.parentId && t.children && t.children.length > 0)
+      .filter(t => t.children && t.children.length > 0)
       .map(t => t.id);
   }, [tasks]);
 
