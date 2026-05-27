@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Task, useTasks } from '@/hooks/useTasks';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, CircleDot, Flame } from 'lucide-react';
+import { AlertTriangle, CircleDot, Flame, Crosshair } from 'lucide-react';
 import { saveFiltersToSessionStorage, loadFiltersFromSessionStorage } from "@/lib/filter-storage";
 import { getDefaultFilters, validateFilters } from "@/lib/filter-merge";
 import { Filters } from "./FilterControls";
@@ -49,6 +49,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
   const [filterUrgent, setFilterUrgent] = useState<boolean | null>(null); // null = all, true = only urgent, false = exclude urgent
   const [filterImpact, setFilterImpact] = useState<boolean | null>(null); // null = all, true = only impact, false = exclude impact
   const [filterIncident, setFilterIncident] = useState<boolean | null>(null); // null = all, true = only incident, false = exclude incident
+  const [filterSprintTarget, setFilterSprintTarget] = useState<boolean | null>(null); // null = all, true = only sprint target, false = exclude sprint target
   const [comparisonState, setComparisonState] = useState<{
     leftTask: Task | null;
     rightTask: Task | null;
@@ -64,12 +65,12 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
   });
   const [prioritizedResults, setPrioritizedResults] = useState<ComparisonResult[] | null>(null);
   const [initialTaskPriorities, setInitialTaskPriorities] = useState<Record<string, number | undefined>>({});
-  const topLevelTasks = tasks.filter(task => !task.parentId); // Filter for top-level tasks
+  const topLevelTasks = useMemo(() => tasks.filter(task => !task.parentId), [tasks]);
 
   // Effect to update session storage when filters change
   useEffect(() => {
     // Skip if filters haven't loaded yet
-    if (filterUrgent === null && filterImpact === null && filterIncident === null) return;
+    if (filterUrgent === null && filterImpact === null && filterIncident === null && filterSprintTarget === null) return;
     
     const newFilters: Filters = {
       ...getDefaultFilters(),
@@ -77,13 +78,24 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
       showUrgent: filterUrgent === null ? false : filterUrgent,
       showImpact: filterImpact === null ? false : filterImpact,
       showMajorIncident: filterIncident === null ? false : filterIncident,
+      showSprintTarget: filterSprintTarget === null ? false : filterSprintTarget,
     };
     setFilters(newFilters);
     saveFiltersToSessionStorage(newFilters);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterUrgent, filterImpact, filterIncident]);
+  }, [filterUrgent, filterImpact, filterIncident, filterSprintTarget]);
 
-  // Initialize selected tasks with all non-done, non-dropped top-level tasks
+  // Prune selected tasks when criticity filters change
+  useEffect(() => {
+    setSelectedTasks(prev => prev.filter(task => {
+      if (filterUrgent !== null && task.urgent !== filterUrgent) return false;
+      if (filterImpact !== null && task.impact !== filterImpact) return false;
+      if (filterIncident !== null && task.majorIncident !== filterIncident) return false;
+      if (filterSprintTarget !== null && task.sprintTarget !== filterSprintTarget) return false;
+      return true;
+    }));
+  }, [filterUrgent, filterImpact, filterIncident, filterSprintTarget]);
+
   useEffect(() => {
     setSelectedTasks(topLevelTasks.filter(task => task.triageStatus !== "Done" && task.triageStatus !== "Dropped"));
     setInitialTaskPriorities(Object.fromEntries(tasks.map(task => [task.id, task.priority])));
@@ -104,6 +116,11 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
 
       // Apply incident filter
       if (filterIncident !== null && task.majorIncident !== filterIncident) {
+        return false;
+      }
+
+      // Apply sprint target filter
+      if (filterSprintTarget !== null && task.sprintTarget !== filterSprintTarget) {
         return false;
       }
 
@@ -366,6 +383,36 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                       </Button>
                     </div>
                   </div>
+
+                  <div className="flex items-center space-x-2">
+                    <label className="text-sm">Sprint Target:</label>
+                    <div className="flex space-x-2">
+                      <Button
+                        size="sm"
+                        variant={filterSprintTarget === null ? "default" : "outline"}
+                        onClick={() => setFilterSprintTarget(null)}
+                        className="text-xs"
+                      >
+                        All
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={filterSprintTarget === true ? "default" : "outline"}
+                        onClick={() => setFilterSprintTarget(true)}
+                        className="text-xs"
+                      >
+                        Yes
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={filterSprintTarget === false ? "default" : "outline"}
+                        onClick={() => setFilterSprintTarget(false)}
+                        className="text-xs"
+                      >
+                        No
+                      </Button>
+                    </div>
+                  </div>
                 </div>
 
               </div>
@@ -400,6 +447,12 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                         <Badge variant="destructive" className="text-xs py-0.5 px-1.5 bg-red-700 hover:bg-red-800 text-white">
                           <Flame className="h-2.5 w-2.5 mr-1" />
                           Incident
+                        </Badge>
+                      )}
+                      {task.sprintTarget && (
+                        <Badge variant="secondary" className="text-xs py-0.5 px-1.5 bg-violet-500 hover:bg-violet-600 text-white">
+                          <Crosshair className="h-2.5 w-2.5 mr-1" />
+                          Sprint Target
                         </Badge>
                       )}
                     </div>
