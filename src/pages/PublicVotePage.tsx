@@ -3,19 +3,19 @@ import { useParams } from "react-router-dom";
 import { VoteEntity, VoteResponseEntity, VoteProposal, VoteLoop } from "@/lib/persistence-types";
 import { VOTING_MODES_LABELS, MJ_SCALE } from "@/components/planView/constants";
 import { tallyThumbsUp as tallyThumbsUpShared, tallyUDNeutral as tallyUDNeutralShared, tallyPoints as tallyPointsShared, tallyMajorityJudgment as tallyMJShared, tallyConsentLoop as tallyConsentLoopShared } from "@/lib/vote-tally";
+import { getVotingStrings } from "@/lib/voting-i18n";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import QRCodeBlock from "@/components/voting/QRCodeBlock";
 import {
   Vote,
   Trophy,
   Clock,
   Users,
   Link2,
-  Copy,
-  Check,
   ThumbsUp,
   ThumbsDown,
   Minus,
@@ -28,17 +28,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 
-const PHASE_LABELS: Record<string, string> = {
-  IDLE: "Draft",
-  OPEN: "Open",
-  CLOSED: "Closed",
-  FINALIZED: "Finalized",
-};
 
-const KIND_LABELS: Record<string, string> = {
-  consultation: "Consultation",
-  decision: "Decision",
-};
 
 async function fetchVote(slug: string): Promise<VoteEntity | null> {
   try {
@@ -140,6 +130,7 @@ function ensureVoterToken(slug: string): string {
 }
 
 const PublicVotePage: React.FC = () => {
+  const ts = getVotingStrings();
   const { slug } = useParams<{ slug: string }>();
   const [vote, setVote] = React.useState<VoteEntity | null>(null);
   const [responses, setResponses] = React.useState<VoteResponseEntity[]>([]);
@@ -149,7 +140,6 @@ const PublicVotePage: React.FC = () => {
   const [comment, setComment] = React.useState("");
   const [hasSubmitted, setHasSubmitted] = React.useState(false);
   const [showResults, setShowResults] = React.useState(false);
-  const [copied, setCopied] = React.useState(false);
   const [pointsBudget, setPointsBudget] = React.useState<Record<string, number>>({});
   const [audienceProposalText, setAudienceProposalText] = React.useState("");
   const [showPrevRounds, setShowPrevRounds] = React.useState(false);
@@ -166,7 +156,7 @@ const PublicVotePage: React.FC = () => {
       const v = await fetchVote(slug);
       if (!mounted) return;
       if (!v) {
-        setError("Vote not found");
+        setError(ts.messages.voteNotFound);
         setIsLoading(false);
         return;
       }
@@ -217,9 +207,6 @@ const PublicVotePage: React.FC = () => {
     return () => { mounted = false; };
   }, [refreshKey, slug, vote]);
 
-  const publicUrl =
-    typeof window !== "undefined" ? `${window.location.origin}/v/${slug}` : "";
-
   const handleSubmitVote = async (proposalId: string, value: number) => {
     if (!slug || !vote) return;
     const result = await submitResponse(slug, {
@@ -264,14 +251,6 @@ const PublicVotePage: React.FC = () => {
     setVoterValues((prev) => ({ ...prev, [proposalId]: newVal }));
   };
 
-  const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(publicUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch { /* clipboard unavailable in some contexts */ }
-  };
-
   const handleAudienceProposal = async () => {
     if (!slug || !audienceProposalText.trim()) return;
     const result = await submitAudienceProposal(slug, audienceProposalText.trim());
@@ -310,7 +289,7 @@ const PublicVotePage: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center text-gray-400">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-300 mx-auto mb-3" />
-          <p>Loading vote...</p>
+          <p>{ts.messages.loadingVote}</p>
         </div>
       </div>
     );
@@ -321,7 +300,7 @@ const PublicVotePage: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center text-gray-500">
           <Vote className="w-12 h-12 mx-auto mb-3 opacity-50" />
-          <p className="text-lg">{error || "Vote not found"}</p>
+          <p className="text-lg">{error || ts.messages.voteNotFound}</p>
         </div>
       </div>
     );
@@ -349,7 +328,7 @@ const PublicVotePage: React.FC = () => {
           <div className="border-2 border-blue-500 rounded-lg p-4 bg-blue-50 mb-6">
             <div className="flex items-center gap-2 mb-2">
               <Trophy className="w-5 h-5 text-blue-600" />
-              <span className="font-semibold text-blue-900">Outcome</span>
+              <span className="font-semibold text-blue-900">{ts.labels.outcome}</span>
             </div>
             <p className="text-sm text-blue-800">{vote.outcome.summary}</p>
             {vote.outcome.signature && (
@@ -376,10 +355,10 @@ const PublicVotePage: React.FC = () => {
                       : "secondary"
               }
             >
-              {PHASE_LABELS[vote.config.phase] || vote.config.phase}
+              {ts.phases[vote.config.phase] || vote.config.phase}
             </Badge>
             <Badge variant="outline">
-              {KIND_LABELS[vote.config.kind] || vote.config.kind}
+              {ts.kinds[vote.config.kind] || vote.config.kind}
             </Badge>
             <Badge variant="outline">
               {VOTING_MODES_LABELS[vote.config.mode] || vote.config.mode}
@@ -402,12 +381,12 @@ const PublicVotePage: React.FC = () => {
             )}
             <span className="flex items-center gap-1">
               <Users className="w-4 h-4" />
-              {totalVoters} voter{totalVoters !== 1 ? "s" : ""}
+               {totalVoters} {totalVoters !== 1 ? ts.labels.voters : ts.labels.voter}
             </span>
             {vote.linkedTaskId && (
               <span className="flex items-center gap-1 text-violet-500">
-                <ExternalLink className="w-4 h-4" />
-                Linked task
+                 <ExternalLink className="w-4 h-4" />
+                 {ts.labels.linkedTask}
               </span>
             )}
           </div>
@@ -415,26 +394,25 @@ const PublicVotePage: React.FC = () => {
 
         {!isActive && !isClosed && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 text-center">
-            <p className="text-yellow-700">
-              This vote is not yet open for responses.
-            </p>
+               <p className="text-yellow-700">
+                 {ts.messages.notOpenForResponses}
+               </p>
           </div>
         )}
 
         {isClosed && !isFinalized && (
           <div className="bg-gray-100 border border-gray-200 rounded-lg p-4 mb-6 text-center">
-            <p className="text-gray-600">
-              This vote is closed. No more responses are accepted.
-            </p>
+             <p className="text-gray-600">
+               {ts.messages.closedNoMoreResponses}
+             </p>
           </div>
         )}
 
         {isActive && hasSubmitted && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 text-center">
-            <p className="text-green-700">
-              Thanks, you voted! You can still change your vote while the vote is
-              open.
-            </p>
+             <p className="text-green-700">
+               {ts.messages.thanksVoted}
+             </p>
           </div>
         )}
 
@@ -460,8 +438,8 @@ const PublicVotePage: React.FC = () => {
                     rel="noopener noreferrer"
                     className="text-sm text-blue-500 hover:underline flex items-center gap-1 mb-3"
                   >
-                    <Link2 className="w-3 h-3" />
-                    More info
+                     <Link2 className="w-3 h-3" />
+                     {ts.buttons.moreInfo}
                   </a>
                 )}
 
@@ -485,15 +463,15 @@ const PublicVotePage: React.FC = () => {
                         >
                           <ThumbsUp className="w-4 h-4 mr-1" />
                           {voterValues[proposal.id] === 1
-                            ? "Voted"
-                            : "Vote"}
+                            ? ts.buttons.voted
+                            : ts.buttons.vote}
                         </Button>
                         {showResults &&
                           (() => {
                             const count = tallyThumbsUpResult(proposal.id);
                             return (
                               <span className="text-sm text-gray-500">
-                                {count} vote{count !== 1 ? "s" : ""}
+                                 {count} vote{count !== 1 ? "s" : ""}
                               </span>
                             );
                           })()}
@@ -610,9 +588,9 @@ const PublicVotePage: React.FC = () => {
 
                 {showResults && (
                   <div className="mt-4 pt-3 border-t">
-                    <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
-                      Results
-                    </h4>
+                     <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
+                       {ts.labels.results}
+                     </h4>
                     {mode === "THUMBS_UP" && (() => {
                       const count = tallyThumbsUpResult(proposal.id);
                       return (
@@ -666,13 +644,13 @@ const PublicVotePage: React.FC = () => {
                         </div>
                       );
                     })()}
-
+ 
                     {mode === "POINTS" && (() => {
                       const total = tallyPointsResult(proposal.id);
                       return (
                         <div className="flex items-center gap-2">
                           <span className="text-lg">&#x1FA99;</span>
-                          <span className="font-medium">{total} points</span>
+                          <span className="font-medium">{total} {ts.labels.points}</span>
                         </div>
                       );
                     })()}
@@ -685,7 +663,7 @@ const PublicVotePage: React.FC = () => {
                       return (
                         <div className="space-y-2">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm">Median:</span>
+                            <span className="text-sm">{ts.labels.medianColon}</span>
                             <span
                               className={`px-2 py-0.5 rounded text-xs text-white ${medianGrade?.color || "bg-gray-500"}`}
                             >
@@ -726,22 +704,21 @@ const PublicVotePage: React.FC = () => {
             <div className="space-y-4 mb-6">
               <div className="bg-white rounded-lg shadow-sm border p-5">
                 <h3 className="text-lg font-medium text-gray-900 mb-1">
-                  Consent Loop
-                  {currentOpenLoop && (
-                    <span className="ml-2 text-sm font-normal text-gray-500">
-                      — Round {currentOpenLoop.roundNumber} is open
-                    </span>
+                   {ts.modes.CONSENT_LOOP}
+                   {currentOpenLoop && (
+                     <span className="ml-2 text-sm font-normal text-gray-500">
+                       — Round {currentOpenLoop.roundNumber} is open
+                     </span>
                   )}
                 </h3>
                 <p className="text-sm text-gray-500 mb-4">
-                  This vote uses a consent-loop process with multiple rounds of
-                  refinement.
+                  {ts.messages.consentLoopProcess}
                 </p>
 
                 {currentOpenLoop && currentOpenLoop.proposalContent && (
                   <div className="mb-4 p-3 bg-gray-50 rounded border">
                     <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
-                      Current round proposal
+                      {ts.labels.currentRoundProposal}
                     </h4>
                     <div
                       className="prose prose-sm max-w-none"
@@ -786,7 +763,7 @@ const PublicVotePage: React.FC = () => {
                 {showResults && tally && tally.perRound.length > 0 && (
                   <div className="mt-4 pt-3 border-t">
                     <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
-                      Current round results
+                      {ts.labels.currentRoundResults}
                     </h4>
                     {(() => {
                       const currentRound = tally.perRound[tally.perRound.length - 1];
@@ -794,7 +771,7 @@ const PublicVotePage: React.FC = () => {
                       return (
                         <div className="space-y-2">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm">Median:</span>
+                            <span className="text-sm">{ts.labels.medianColon}</span>
                             <span className={`px-2 py-0.5 rounded text-xs text-white ${medianGrade?.color || "bg-gray-500"}`}>
                               {medianGrade?.icon} {medianGrade?.label}
                             </span>
@@ -829,24 +806,24 @@ const PublicVotePage: React.FC = () => {
                 ) : (
                   <ChevronDown className="w-4 h-4" />
                 )}
-                {showPrevRounds ? "Hide" : "Show"} previous rounds
+                {showPrevRounds ? ts.buttons.hide : ts.buttons.show} previous rounds
                 {sortedLoops.length > 0 && ` (${sortedLoops.filter((l) => l.closedAt).length} closed)`}
               </button>
 
               {showPrevRounds && tally && tally.perRound.length > 0 && (
                 <div className="bg-white rounded-lg shadow-sm border p-5">
                   <h4 className="text-sm font-medium text-gray-700 mb-3">
-                    Round-by-round summary
-                  </h4>
+                  {ts.labels.roundByRoundSummary}
+                </h4>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm border-collapse">
                       <thead>
                         <tr>
                           <th className="text-left py-2 px-3 border-b font-medium text-gray-600">
-                            Round
+                            {ts.labels.round}
                           </th>
                           <th className="text-center py-2 px-3 border-b font-medium text-gray-600">
-                            Median
+                            {ts.labels.median}
                           </th>
                           {[...MJ_SCALE].sort((a, b) => b.value - a.value).map((grade) => (
                             <th
@@ -868,7 +845,7 @@ const PublicVotePage: React.FC = () => {
                               className={isOpen ? "bg-blue-50 border-l-4 border-l-blue-400" : "hover:bg-gray-50"}
                             >
                               <td className="py-2 px-3 border-b font-medium">
-                                Round {round.roundNumber}
+                                {ts.labels.round} {round.roundNumber}
                               </td>
                               <td className="py-2 px-3 border-b text-center">
                                 {medianGrade && (
@@ -904,14 +881,14 @@ const PublicVotePage: React.FC = () => {
         {mode === "POINTS" && isActive && (
           <div className="bg-white rounded-lg shadow-sm border p-5 mb-6">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium">Submit your points</h3>
+              <h3 className="text-sm font-medium">{ts.buttons.submitPoints}</h3>
               <Button size="sm" onClick={handleSubmitAllVotes}>
-                Submit
+                {ts.buttons.submit}
               </Button>
             </div>
             <p className="text-xs text-gray-400">
-              Allocate points across proposals, then submit all at once. Total
-              budget: {vote.config.maxPointsPerUser || 10} points.
+              {ts.messages.allocatePointsBudget} Total
+              budget: {vote.config.maxPointsPerUser || 10} {ts.labels.points}.
             </p>
           </div>
         )}
@@ -920,19 +897,18 @@ const PublicVotePage: React.FC = () => {
           <div className="bg-white rounded-lg shadow-sm border p-5 mb-6">
             <label className="text-sm font-medium text-gray-700 flex items-center gap-1 mb-2">
               <MessageSquare className="w-4 h-4" />
-              Comment (optional)
+              {ts.labels.comment}
             </label>
             {showObjectionNudge && isNegativeVote && (
               <p className="text-xs text-amber-600 flex items-center gap-1 mb-2">
                 <AlertTriangle className="w-3 h-3" />
-                You picked a negative option. Sharing why helps the group &mdash; a
-                short comment goes a long way.
+                {ts.messages.negativeCommentNudge}
               </p>
             )}
             <Textarea
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              placeholder="Share your thoughts..."
+              placeholder={ts.placeholders.comment}
               rows={2}
             />
           </div>
@@ -943,13 +919,13 @@ const PublicVotePage: React.FC = () => {
           vote.config.allowAudienceProposals && (
             <div className="bg-white rounded-lg shadow-sm border p-5 mb-6">
               <h3 className="text-sm font-medium text-gray-700 mb-2">
-                Suggest a proposal
+                {ts.labels.suggestProposal}
               </h3>
               <div className="flex gap-2">
                 <Input
                   value={audienceProposalText}
                   onChange={(e) => setAudienceProposalText(e.target.value)}
-                  placeholder="Your proposal..."
+                  placeholder={ts.placeholders.proposal}
                   className="flex-1"
                 />
                 <Button
@@ -958,7 +934,7 @@ const PublicVotePage: React.FC = () => {
                   disabled={!audienceProposalText.trim()}
                 >
                   <Plus className="w-4 h-4 mr-1" />
-                  Add
+                  {ts.buttons.add}
                 </Button>
               </div>
             </div>
@@ -967,7 +943,7 @@ const PublicVotePage: React.FC = () => {
         {isClosed && (
           <div className="bg-white rounded-lg shadow-sm border p-5 mb-6">
             <h3 className="text-sm font-medium text-gray-700 mb-3">
-              Final Results
+              {ts.labels.finalResults}
             </h3>
             {mode !== "CONSENT_LOOP" && (
               <div className="space-y-3">
@@ -1029,11 +1005,11 @@ const PublicVotePage: React.FC = () => {
                       );
                     })()}
                     {mode === "POINTS" && (() => {
-                      const total = tallyPointsResult(proposal.id);
-                      return (
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg">&#x1FA99;</span>
-                          <span className="font-medium">{total} points</span>
+                       const total = tallyPointsResult(proposal.id);
+                       return (
+                         <div className="flex items-center gap-2">
+                           <span className="text-lg">&#x1FA99;</span>
+                           <span className="font-medium">{total} {ts.labels.points}</span>
                         </div>
                       );
                     })()}
@@ -1045,7 +1021,7 @@ const PublicVotePage: React.FC = () => {
                       return (
                         <div className="space-y-2">
                           <div className="flex items-center gap-2">
-                            <span>Median:</span>
+                            <span>{ts.labels.medianColon}</span>
                             <span
                               className={`px-2 py-0.5 rounded text-xs text-white ${medianGrade?.color || "bg-gray-500"}`}
                             >
@@ -1074,7 +1050,7 @@ const PublicVotePage: React.FC = () => {
             {!isAnonymous && responses.length > 0 && (
               <div className="mt-4 pt-3 border-t">
                 <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
-                  Voters
+                  {ts.labels.voters}
                 </h4>
                 <div className="space-y-1">
                   {responses.map((r) => (
@@ -1099,36 +1075,11 @@ const PublicVotePage: React.FC = () => {
         <Separator className="my-6" />
 
         <div className="bg-white rounded-lg shadow-sm border p-5">
-          <h3 className="text-sm font-medium text-gray-700 mb-3">Share</h3>
-          <div className="flex items-center gap-2 mb-3">
-            <code className="text-sm bg-gray-100 px-3 py-1.5 rounded flex-1 truncate">
-              {publicUrl}
-            </code>
-            <Button size="sm" variant="outline" onClick={handleCopyLink}>
-              {copied ? (
-                <Check className="w-4 h-4 mr-1" />
-              ) : (
-                <Copy className="w-4 h-4 mr-1" />
-              )}
-              {copied ? "Copied" : "Copy"}
-            </Button>
-          </div>
-          {vote.slug && (
-            <div className="mt-3">
-              <img
-                src={`/api/votes/${vote.slug}/qr.svg`}
-                alt="QR Code"
-                className="w-32 h-32 mx-auto"
-              />
-              <p className="text-xs text-gray-400 text-center mt-1">
-                Scan to vote
-              </p>
-            </div>
-          )}
+          {vote.slug && <QRCodeBlock slug={vote.slug} />}
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-6">
-          Powered by p3fo Voting
+          {ts.messages.poweredBy}
         </p>
       </div>
     </div>

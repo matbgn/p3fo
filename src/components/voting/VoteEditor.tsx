@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Save, X } from "lucide-react";
 import { VoteEntity, VoteMode, VoteKind, VoteConfig, VoteProposal } from "@/lib/persistence-types";
+import { getVotingStrings } from "@/lib/voting-i18n";
 import { KindSelector } from "./KindSelector";
 import { ModeSelector } from "./ModeSelector";
 import { ProposalEditor } from "./ProposalEditor";
@@ -44,6 +45,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
 }) => {
   const isEditing = !!vote;
   const isFinalized = vote?.config.phase === "FINALIZED";
+  const t = getVotingStrings();
 
   const [title, setTitle] = React.useState("");
   const [description, setDescription] = React.useState("");
@@ -141,35 +143,35 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit vote" : "Create vote"}</DialogTitle>
+          <DialogTitle>{isEditing ? t.pages.editVote : t.pages.createNewVote}</DialogTitle>
           <DialogDescription>
             {isEditing
               ? isFinalized
-                ? "This vote is finalized and read-only."
-                : "Update the vote settings and proposals."
-              : "Configure a new vote with proposals and voting mode."}
+                ? t.pages.closed
+                : t.buttons.saveChanges
+              : t.buttons.createVote}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="vote-title">Title</Label>
+            <Label htmlFor="vote-title">{t.labels.title}</Label>
             <Input
               id="vote-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="What should we decide?"
+              placeholder={t.placeholders.title}
               disabled={isFinalized}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="vote-description">Description</Label>
+            <Label htmlFor="vote-description">{t.labels.description}</Label>
             <Textarea
               id="vote-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional context for voters"
+              placeholder={t.placeholders.description}
               rows={2}
               disabled={isFinalized}
             />
@@ -178,7 +180,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
           <Separator />
 
           <div className="space-y-2">
-            <Label>Kind</Label>
+            <Label>{t.labels.kind}</Label>
             <KindSelector
               value={kind}
               onChange={setKind}
@@ -187,7 +189,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
           </div>
 
           <div className="space-y-2">
-            <Label>Mode</Label>
+            <Label>{t.labels.mode}</Label>
             <ModeSelector
               value={mode}
               onChange={setMode}
@@ -198,7 +200,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
           {mode === "POINTS" && (
             <div className="space-y-3 border rounded-md p-3 bg-gray-50">
               <div className="flex items-center justify-between">
-                <Label className="text-sm">Allow multiple votes per proposal</Label>
+                <Label className="text-sm">{t.labels.allowMultiple}</Label>
                 <Switch
                   checked={allowMultiple}
                   onCheckedChange={setAllowMultiple}
@@ -206,7 +208,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-sm">Max points per user</Label>
+                <Label className="text-sm">{t.labels.maxPointsPerUser}</Label>
                 <Input
                   type="number"
                   min={1}
@@ -222,7 +224,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
           {mode === "CONSENT_LOOP" && (
             <div className="space-y-3 border rounded-md p-3 bg-gray-50">
               <div className="space-y-1">
-                <Label className="text-sm">Max rounds</Label>
+                <Label className="text-sm">{t.labels.maxRounds}</Label>
                 <Input
                   type="number"
                   min={1}
@@ -234,7 +236,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
                 />
               </div>
               <div className="flex items-center justify-between">
-                <Label className="text-sm">Gating vote at end of round</Label>
+                <Label className="text-sm">{t.labels.gatingVote}</Label>
                 <Switch
                   checked={consentLoopGatingMode === "UD_NEUTRAL"}
                   onCheckedChange={(checked) =>
@@ -245,8 +247,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
               </div>
               {consentLoopGatingMode === "UD_NEUTRAL" && (
                 <p className="text-xs text-gray-400">
-                  After each round, the moderator runs a quick UD-Neutral check
-                  to avoid false blocks from low grades without real objections.
+                  {t.messages.gatingDescription}
                 </p>
               )}
             </div>
@@ -255,10 +256,10 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
           <Separator />
 
           <div className="space-y-3">
-            <Label className="text-base font-medium">Settings</Label>
+            <Label className="text-base font-medium">{t.labels.settings}</Label>
 
             <div className="flex items-center justify-between">
-              <Label className="text-sm">Anonymous voting</Label>
+              <Label className="text-sm">{t.labels.anonymousVoting}</Label>
               <Switch
                 checked={isAnonymous}
                 onCheckedChange={setIsAnonymous}
@@ -267,7 +268,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
             </div>
 
             <div className="flex items-center justify-between">
-              <Label className="text-sm">Allow free-text comments</Label>
+              <Label className="text-sm">{t.labels.allowFreeText}</Label>
               <Switch
                 checked={allowFreeText}
                 onCheckedChange={setAllowFreeText}
@@ -277,7 +278,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
 
             {showObjectionComment && (
               <div className="flex items-center justify-between">
-                <Label className="text-sm">Encourage voters to explain negative votes</Label>
+                <Label className="text-sm">{t.labels.encourageNegativeComments}</Label>
                 <Switch
                   checked={requireObjectionComment}
                   onCheckedChange={setRequireObjectionComment}
@@ -288,7 +289,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-sm">Open at</Label>
+                <Label className="text-sm">{t.labels.openAt}</Label>
                 <Input
                   type="datetime-local"
                   value={openAt}
@@ -297,7 +298,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-sm">Close at</Label>
+                <Label className="text-sm">{t.labels.closeAt}</Label>
                 <Input
                   type="datetime-local"
                   value={closeAt}
@@ -311,7 +312,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
           <Separator />
 
           <div className="space-y-2">
-            <Label className="text-base font-medium">Proposals</Label>
+            <Label className="text-base font-medium">{t.labels.proposals}</Label>
             <ProposalEditor
               proposals={proposals}
               onChange={setProposals}
@@ -329,7 +330,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
             onClick={() => onOpenChange(false)}
           >
             <X className="w-4 h-4 mr-2" />
-            Cancel
+            {t.buttons.cancel}
           </Button>
           {!isFinalized && (
             <Button
@@ -337,7 +338,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
               disabled={isSaving || !title.trim()}
             >
               <Save className="w-4 h-4 mr-2" />
-              {isSaving ? "Saving..." : isEditing ? "Save changes" : "Create vote"}
+              {isSaving ? t.buttons.saving : isEditing ? t.buttons.saveChanges : t.buttons.createVote}
             </Button>
           )}
         </DialogFooter>

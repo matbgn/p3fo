@@ -1,8 +1,10 @@
 import * as React from "react";
 import { useSearchParams } from "react-router-dom";
-import { Vote, Plus, BarChart3, Clock, Trash2, ExternalLink, Eye, Trophy, Edit, ToggleLeft, GitCompare, Shield } from "lucide-react";
+import { Vote, Plus, BarChart3, Clock, Trash2, ExternalLink, Eye, Trophy, Edit, ToggleLeft, GitCompare, Shield, Share2 } from "lucide-react";
 import { useVotes, useVoteResults } from "@/hooks/useVotes";
 import { useVoteLoops } from "@/hooks/useVoteLoops";
+import { getVotingStrings } from "@/lib/voting-i18n";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { VoteEntity, VoteKind } from "@/lib/persistence-types";
 import { VOTING_MODES_LABELS } from "@/components/planView/constants";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -16,15 +18,9 @@ import { LoopRoundEditor } from "@/components/voting/LoopRoundEditor";
 import { LoopRoundControls } from "@/components/voting/LoopRoundControls";
 import { LoopRoundDiffDialog } from "@/components/voting/LoopRoundDiffDialog";
 import { ModerationPanel } from "@/components/voting/ModerationPanel";
+import QRCodeBlock from "@/components/voting/QRCodeBlock";
 
 type VotingTab = "consultations" | "decisions";
-
-const PHASE_LABELS: Record<string, string> = {
-  IDLE: "Draft",
-  OPEN: "Open",
-  CLOSED: "Closed",
-  FINALIZED: "Finalized",
-};
 
 const PHASE_COLORS: Record<string, string> = {
   IDLE: "bg-gray-100 text-gray-700",
@@ -39,7 +35,8 @@ const VoteCard: React.FC<{
   onDelete: (id: string) => void;
   onOpenPublic: (slug: string) => void;
 }> = ({ vote, onSelect, onDelete, onOpenPublic }) => {
-  const phaseLabel = PHASE_LABELS[vote.config.phase] || vote.config.phase;
+  const t = getVotingStrings();
+  const phaseLabel = t.phases[vote.config.phase] || vote.config.phase;
   const phaseColor = PHASE_COLORS[vote.config.phase] || "bg-gray-100 text-gray-700";
   const modeLabel = VOTING_MODES_LABELS[vote.config.mode] || vote.config.mode;
 
@@ -87,18 +84,18 @@ const VoteCard: React.FC<{
         </span>
         {vote.config.kind === "decision" && (
           <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
-            Decision
+            {t.kinds.decision}
           </span>
         )}
         {vote.config.kind === "consultation" && (
           <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
-            Consultation
+            {t.kinds.consultation}
           </span>
         )}
         {vote.linkedTaskId && (
           <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700 flex items-center gap-1">
             <ExternalLink className="w-3 h-3" />
-            Linked task
+            {t.labels.linkedTask}
           </span>
         )}
       </div>
@@ -125,6 +122,7 @@ const ConsentLoopPanel: React.FC<{
   onFinalize: (verdict: "ADOPTED" | "WITHDRAWN" | "BLOCKED", finalLoopId?: string) => void;
   onUpdateRoundContent: (loopId: string, content: string) => void;
 }> = ({ vote, loops, responses, onOpenRound, onCloseRound, onFinalize, onUpdateRoundContent }) => {
+  const t = getVotingStrings();
   const [showDiffDialog, setShowDiffDialog] = React.useState(false);
   const { responses: voteResponses } = useVoteResults(vote.id);
   const firstProposalId = vote.proposals[0]?.id || "";
@@ -136,7 +134,7 @@ const ConsentLoopPanel: React.FC<{
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-gray-700">Round controls</h3>
+        <h3 className="text-sm font-medium text-gray-700">{t.labels.roundControls}</h3>
         {loops.filter((l) => l.closedAt).length >= 2 && (
           <Button
             size="sm"
@@ -144,7 +142,7 @@ const ConsentLoopPanel: React.FC<{
             onClick={() => setShowDiffDialog(true)}
           >
             <GitCompare className="w-4 h-4 mr-1" />
-            Compare rounds
+            {t.labels.roundComparison}
           </Button>
         )}
       </div>
@@ -171,7 +169,7 @@ const ConsentLoopPanel: React.FC<{
 
       <Separator />
 
-      <h3 className="text-sm font-medium text-gray-700">Per-round results</h3>
+      <h3 className="text-sm font-medium text-gray-700">{t.labels.perRoundResults}</h3>
       <LoopRoundTabs
         loops={loops}
         responses={voteResponses}
@@ -197,6 +195,7 @@ const VoteDetailPanel: React.FC<{
   onOpenPublic: (slug: string) => void;
   onPhaseChange: (id: string, phase: VoteEntity["config"]["phase"]) => void;
 }> = ({ vote, onBack, onEdit, onFinalize, onDelete, onOpenPublic, onPhaseChange }) => {
+  const t = getVotingStrings();
   const [showFinalizeDialog, setShowFinalizeDialog] = React.useState(false);
   const [activeDetailTab, setActiveDetailTab] = React.useState<"results" | "rounds" | "moderation">("results");
   const isDecision = vote.config.kind === "decision";
@@ -228,9 +227,9 @@ const VoteDetailPanel: React.FC<{
     const effectiveLoopId = finalLoopId || lastClosedLoop?.id;
 
     const summaries: Record<string, string> = {
-      ADOPTED: `Adopted at round ${lastClosedLoop?.roundNumber || "?"} — no remaining objections`,
-      WITHDRAWN: "Withdrawn — the proposer pulled the proposal",
-      BLOCKED: `Blocked — objection(s) at round ${lastClosedLoop?.roundNumber || "?"} could not be integrated`,
+      ADOPTED: t.messages.consentLoopAdopted,
+      WITHDRAWN: t.messages.consentLoopWithdrawn,
+      BLOCKED: t.messages.consentLoopBlocked,
     };
 
     await onFinalize({
@@ -262,6 +261,16 @@ const VoteDetailPanel: React.FC<{
           >
             <Eye className="w-4 h-4" />
           </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="sm" title="Share">
+                <Share2 className="w-4 h-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 p-4" align="end">
+              <QRCodeBlock slug={vote.slug} />
+            </PopoverContent>
+          </Popover>
           {!isFinalized && (
             <Button variant="ghost" size="sm" onClick={onEdit} title="Edit">
               <Edit className="w-4 h-4" />
@@ -278,7 +287,7 @@ const VoteDetailPanel: React.FC<{
             className="bg-green-600 hover:bg-green-700"
           >
             <ToggleLeft className="w-4 h-4 mr-1" />
-            Open vote
+            {t.buttons.openVote}
           </Button>
         )}
         {canClose && !isConsentLoop && (
@@ -287,7 +296,7 @@ const VoteDetailPanel: React.FC<{
             variant="outline"
             onClick={() => onPhaseChange(vote.id, "CLOSED")}
           >
-            Close vote
+            {t.buttons.closeVote}
           </Button>
         )}
         {canFinalize && !isConsentLoop && (
@@ -297,7 +306,7 @@ const VoteDetailPanel: React.FC<{
             className="bg-blue-600 hover:bg-blue-700"
           >
             <Trophy className="w-4 h-4 mr-1" />
-            Finalize
+            {t.buttons.finalize}
           </Button>
         )}
         {!isFinalized && (
@@ -308,7 +317,7 @@ const VoteDetailPanel: React.FC<{
             className="text-red-600 hover:text-red-700 hover:bg-red-50"
           >
             <Trash2 className="w-4 h-4 mr-1" />
-            Delete
+            {t.buttons.delete}
           </Button>
         )}
       </div>
@@ -317,11 +326,11 @@ const VoteDetailPanel: React.FC<{
         <div className="mb-4">
           <Tabs value={activeDetailTab} onValueChange={(v) => setActiveDetailTab(v as "results" | "rounds" | "moderation")}>
             <TabsList>
-              <TabsTrigger value="rounds">Rounds</TabsTrigger>
-              <TabsTrigger value="results">Results</TabsTrigger>
+              <TabsTrigger value="rounds">{t.labels.rounds}</TabsTrigger>
+              <TabsTrigger value="results">{t.labels.results}</TabsTrigger>
               <TabsTrigger value="moderation">
                 <Shield className="w-3 h-3 mr-1" />
-                Moderation
+                {t.labels.moderation}
               </TabsTrigger>
             </TabsList>
             <TabsContent value="rounds">
@@ -355,10 +364,10 @@ const VoteDetailPanel: React.FC<{
         <div className="mb-4">
           <Tabs value={activeDetailTab} onValueChange={(v) => setActiveDetailTab(v as "results" | "rounds" | "moderation")}>
             <TabsList>
-              <TabsTrigger value="results">Results</TabsTrigger>
+              <TabsTrigger value="results">{t.labels.results}</TabsTrigger>
               <TabsTrigger value="moderation">
                 <Shield className="w-3 h-3 mr-1" />
-                Moderation
+                {t.labels.moderation}
               </TabsTrigger>
             </TabsList>
             <TabsContent value="results">
@@ -390,6 +399,7 @@ const VoteDetailPanel: React.FC<{
 };
 
 const VotingPage: React.FC = () => {
+  const t = getVotingStrings();
   const [activeTab, setActiveTab] = React.useState<VotingTab>("consultations");
   const kind: VoteKind = activeTab === "consultations" ? "consultation" : "decision";
   const { votes, isLoading, createVote, updateVote, deleteVote, finalizeVote } = useVotes({ kind });
@@ -492,38 +502,38 @@ const VotingPage: React.FC = () => {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <Vote className="w-6 h-6 text-red-500" />
-          <h1 className="text-2xl font-semibold">Voting</h1>
+          <h1 className="text-2xl font-semibold">{t.labels.voting}</h1>
         </div>
         <Button
           onClick={handleCreate}
           className="bg-red-600 hover:bg-red-700"
         >
           <Plus className="w-4 h-4 mr-2" />
-          New {activeTab === "consultations" ? "Consultation" : "Decision"}
+          New {activeTab === "consultations" ? t.pages.newConsultation : t.pages.newDecision}
         </Button>
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as VotingTab)}>
         <TabsList>
-          <TabsTrigger value="consultations">Consultations</TabsTrigger>
-          <TabsTrigger value="decisions">Decisions</TabsTrigger>
+          <TabsTrigger value="consultations">{t.pages.consultations}</TabsTrigger>
+          <TabsTrigger value="decisions">{t.pages.decisions}</TabsTrigger>
         </TabsList>
 
         <TabsContent value={activeTab}>
           <div className="flex-1 overflow-auto mt-4">
             {isLoading ? (
               <div className="flex items-center justify-center h-full">
-                <p className="text-gray-400">Loading...</p>
+                <p className="text-gray-400">{t.messages.loading}</p>
               </div>
             ) : votes.length === 0 ? (
               <div className="flex items-center justify-center h-full">
                 <div className="text-center text-gray-400">
                   <Vote className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p className="text-lg">No {activeTab} yet</p>
+                  <p className="text-lg">{activeTab === "consultations" ? t.pages.noConsultationsYet : t.pages.noDecisionsYet}</p>
                   <p className="text-sm mt-1">
                     {activeTab === "consultations"
-                      ? "Create consultations to gather input from your audience"
-                      : "Create decisions with formal binding outcomes"}
+                      ? t.pages.createConsultationDescription
+                      : t.pages.createDecisionDescription}
                   </p>
                 </div>
               </div>

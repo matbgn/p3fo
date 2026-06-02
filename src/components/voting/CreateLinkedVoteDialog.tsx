@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { VoteEntity, VoteProposal } from "@/lib/persistence-types";
+import { getVotingStrings } from "@/lib/voting-i18n";
 import { ModeSelector } from "./ModeSelector";
 import { ProposalEditor } from "./ProposalEditor";
 
@@ -44,6 +45,7 @@ export const CreateLinkedVoteDialog: React.FC<CreateLinkedVoteDialogProps> = ({
     },
   ]);
   const [isSaving, setIsSaving] = React.useState(false);
+  const t = getVotingStrings();
 
   const autoTitle = `Task – ${taskTitle} – vote`;
 
@@ -87,7 +89,7 @@ export const CreateLinkedVoteDialog: React.FC<CreateLinkedVoteDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>New Linked Vote</DialogTitle>
+          <DialogTitle>{t.labels.newLinkedVote}</DialogTitle>
           <DialogDescription>
             Create a consultation vote linked to &ldquo;{taskTitle}&rdquo;
           </DialogDescription>
@@ -95,17 +97,17 @@ export const CreateLinkedVoteDialog: React.FC<CreateLinkedVoteDialogProps> = ({
 
         <div className="flex flex-col gap-4 py-4">
           <div className="flex flex-col gap-2">
-            <Label>Title</Label>
+            <Label>{t.labels.title}</Label>
             <Input value={autoTitle} readOnly className="bg-gray-50" />
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label>Voting Mode</Label>
+            <Label>{t.labels.votingMode}</Label>
             <ModeSelector value={mode} onChange={setMode} />
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label>Proposals</Label>
+            <Label>{t.labels.proposals}</Label>
             <ProposalEditor
               proposals={proposals}
               onChange={setProposals}
@@ -115,7 +117,7 @@ export const CreateLinkedVoteDialog: React.FC<CreateLinkedVoteDialogProps> = ({
           </div>
 
           <div className="flex items-center justify-between">
-            <Label htmlFor="linked-anon">Anonymous voting</Label>
+            <Label htmlFor="linked-anon">{t.labels.anonymousVoting}</Label>
             <Switch
               id="linked-anon"
               checked={isAnonymous}
@@ -124,7 +126,7 @@ export const CreateLinkedVoteDialog: React.FC<CreateLinkedVoteDialogProps> = ({
           </div>
 
           <div className="flex items-center justify-between">
-            <Label htmlFor="linked-freetext">Allow free-text comments</Label>
+            <Label htmlFor="linked-freetext">{t.labels.allowFreeText}</Label>
             <Switch
               id="linked-freetext"
               checked={allowFreeText}
@@ -135,20 +137,20 @@ export const CreateLinkedVoteDialog: React.FC<CreateLinkedVoteDialogProps> = ({
 
         <DialogFooter className="flex gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t.buttons.cancel}
           </Button>
           <Button
             variant="outline"
             onClick={() => handleSave(true)}
             disabled={isSaving}
           >
-            {isSaving ? "Creating..." : "Create & Close"}
+            {isSaving ? t.buttons.creating : t.buttons.createAndClose}
           </Button>
           <Button
             onClick={() => handleSave(false)}
             disabled={isSaving}
           >
-            {isSaving ? "Creating..." : "Create & Open"}
+            {isSaving ? t.buttons.creating : t.buttons.createAndOpen}
           </Button>
         </DialogFooter>
       </DialogContent>

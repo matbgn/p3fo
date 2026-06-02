@@ -21,6 +21,7 @@ import {
   RotateCcw,
   AlertTriangle,
 } from "lucide-react";
+import { getVotingStrings } from "@/lib/voting-i18n";
 
 interface LoopRoundControlsProps {
   vote: VoteEntity;
@@ -48,6 +49,7 @@ export const LoopRoundControls: React.FC<LoopRoundControlsProps> = ({
   onFinalize,
   isModerator = false,
 }) => {
+  const t = getVotingStrings();
   const [showGatingDialog, setShowGatingDialog] = React.useState(false);
   const [showFinalizeDialog, setShowFinalizeDialog] = React.useState(false);
   const [gatingValue, setGatingValue] = React.useState<-1 | 0 | 1>(0);
@@ -108,8 +110,8 @@ export const LoopRoundControls: React.FC<LoopRoundControlsProps> = ({
         <Trophy className="w-4 h-4 text-blue-600" />
         <span className="text-sm font-medium text-blue-800">
           {vote.outcome?.loopVerdict
-            ? EMPTY_CONSENT_LOOP_OUTCOMES[vote.outcome.loopVerdict]
-            : "This consent loop is finalized."}
+            ? EMPTY_CONSENT_LOOP_OUTCOMES[vote.outcome.loopVerdict] as string
+            : t.messages.consentLoopFinalized}
         </span>
       </div>
     );
@@ -144,7 +146,7 @@ export const LoopRoundControls: React.FC<LoopRoundControlsProps> = ({
         {atMaxRounds && !currentOpenLoop && (
           <p className="text-xs text-amber-600 flex items-center gap-1">
             <AlertTriangle className="w-3 h-3" />
-            Maximum rounds reached ({maxRounds}). You must finalize.
+            {t.messages.maxRoundsReached}
           </p>
         )}
 
@@ -155,7 +157,7 @@ export const LoopRoundControls: React.FC<LoopRoundControlsProps> = ({
             className="bg-blue-600 hover:bg-blue-700"
           >
             <Trophy className="w-4 h-4 mr-1" />
-            Finalize
+            {t.buttons.finalize}
           </Button>
         )}
 
@@ -164,10 +166,10 @@ export const LoopRoundControls: React.FC<LoopRoundControlsProps> = ({
             size="sm"
             variant="outline"
             className="border-blue-300 text-blue-600"
-            title="Only the owner can finalize. Request finalization from the owner."
+            title={t.messages.onlyOwnerCanFinalize}
           >
             <Trophy className="w-4 h-4 mr-1" />
-            Request finalization
+            {t.buttons.requestFinalization}
           </Button>
         )}
       </div>
@@ -180,9 +182,7 @@ export const LoopRoundControls: React.FC<LoopRoundControlsProps> = ({
               Round closed — Gating check
             </DialogTitle>
             <DialogDescription>
-              Did anyone want to block the proposal? This helps avoid false
-              blocks from grades like &ldquo;Insufficient&rdquo; without a
-              real objection.
+              {t.messages.gatingDescription}
             </DialogDescription>
           </DialogHeader>
 
@@ -194,22 +194,19 @@ export const LoopRoundControls: React.FC<LoopRoundControlsProps> = ({
             <div className="flex items-center space-x-2">
               <RadioGroupItem value="-1" id="block" />
               <Label htmlFor="block" className="flex items-center gap-1">
-                <Ban className="w-4 h-4 text-red-500" /> Block (objection
-                remains)
-              </Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="0" id="neutral" />
-              <Label htmlFor="neutral" className="flex items-center gap-1">
-                <RotateCcw className="w-4 h-4 text-yellow-500" /> Neutral
-                (uncertain)
-              </Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="1" id="for" />
-              <Label htmlFor="for" className="flex items-center gap-1">
-                <Play className="w-4 h-4 text-green-500" /> For it (no
-                objection)
+                <Ban className="w-4 h-4 text-red-500" /> {t.gating.block}
+               </Label>
+             </div>
+             <div className="flex items-center space-x-2">
+               <RadioGroupItem value="0" id="neutral" />
+               <Label htmlFor="neutral" className="flex items-center gap-1">
+                 <RotateCcw className="w-4 h-4 text-yellow-500" /> {t.gating.neutral}
+               </Label>
+             </div>
+             <div className="flex items-center space-x-2">
+               <RadioGroupItem value="1" id="for" />
+               <Label htmlFor="for" className="flex items-center gap-1">
+                 <Play className="w-4 h-4 text-green-500" /> {t.gating.forIt}
               </Label>
             </div>
           </RadioGroup>
@@ -217,12 +214,12 @@ export const LoopRoundControls: React.FC<LoopRoundControlsProps> = ({
           <Textarea
             value={gatingComment}
             onChange={(e) => setGatingComment(e.target.value)}
-            placeholder="Optional comment on the gating decision..."
+              placeholder={t.placeholders.gatingComment}
             rows={2}
           />
 
           <DialogFooter>
-            <Button onClick={handleGatingSubmit}>Confirm</Button>
+            <Button onClick={handleGatingSubmit}>{t.buttons.confirm}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -230,7 +227,7 @@ export const LoopRoundControls: React.FC<LoopRoundControlsProps> = ({
       <Dialog open={showFinalizeDialog} onOpenChange={setShowFinalizeDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Finalize consent loop</DialogTitle>
+            <DialogTitle>{t.buttons.finalizeConsentLoop}</DialogTitle>
             <DialogDescription>
               Choose the outcome for this consent loop. This action is
               irreversible.
@@ -248,11 +245,10 @@ export const LoopRoundControls: React.FC<LoopRoundControlsProps> = ({
               <RadioGroupItem value="ADOPTED" id="adopt" className="mt-1" />
               <Label htmlFor="adopt" className="flex-1">
                 <span className="font-medium flex items-center gap-1">
-                  <Trophy className="w-4 h-4 text-green-600" /> Adopt
-                </span>
-                <span className="text-xs text-gray-500 block">
-                  No remaining objections. The current round&apos;s proposal
-                  becomes the decision.
+                  <Trophy className="w-4 h-4 text-green-600" /> {t.buttons.adopt}
+                 </span>
+                 <span className="text-xs text-gray-500 block">
+                   {t.messages.consentLoopAdopted}
                 </span>
                 {!canAdopt && (
                   <span className="text-xs text-red-500 flex items-center gap-1 mt-1">
@@ -266,10 +262,10 @@ export const LoopRoundControls: React.FC<LoopRoundControlsProps> = ({
               <RadioGroupItem value="WITHDRAWN" id="withdraw" className="mt-1" />
               <Label htmlFor="withdraw" className="flex-1">
                 <span className="font-medium flex items-center gap-1">
-                  <XCircle className="w-4 h-4 text-yellow-600" /> Withdraw
-                </span>
-                <span className="text-xs text-gray-500 block">
-                  The proposer pulls the proposal. No decision is adopted.
+                  <XCircle className="w-4 h-4 text-yellow-600" /> {t.buttons.withdraw}
+                 </span>
+                 <span className="text-xs text-gray-500 block">
+                   {t.messages.consentLoopWithdrawn}
                 </span>
               </Label>
             </div>
@@ -277,11 +273,10 @@ export const LoopRoundControls: React.FC<LoopRoundControlsProps> = ({
               <RadioGroupItem value="BLOCKED" id="blocked" className="mt-1" />
               <Label htmlFor="blocked" className="flex-1">
                 <span className="font-medium flex items-center gap-1">
-                  <Ban className="w-4 h-4 text-red-600" /> Blocked
-                </span>
-                <span className="text-xs text-gray-500 block">
-                  Objection(s) at round{" "}
-                  {lastClosedLoop?.roundNumber || "?"} could not be integrated.
+                  <Ban className="w-4 h-4 text-red-600" /> {t.buttons.blocked}
+                 </span>
+                 <span className="text-xs text-gray-500 block">
+                   {t.messages.consentLoopBlocked}
                 </span>
               </Label>
             </div>
@@ -292,14 +287,14 @@ export const LoopRoundControls: React.FC<LoopRoundControlsProps> = ({
               variant="outline"
               onClick={() => setShowFinalizeDialog(false)}
             >
-              Cancel
+              {t.buttons.cancel}
             </Button>
             <Button
               onClick={handleFinalize}
               disabled={finalizeVerdict === "ADOPTED" && !canAdopt}
               className="bg-blue-600 hover:bg-blue-700"
             >
-              Finalize
+              {t.buttons.finalize}
             </Button>
           </DialogFooter>
         </DialogContent>

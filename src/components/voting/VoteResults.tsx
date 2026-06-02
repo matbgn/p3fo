@@ -3,6 +3,7 @@ import { VoteEntity } from "@/lib/persistence-types";
 import { VOTING_MODES_LABELS, MJ_SCALE } from "@/components/planView/constants";
 import { useVoteResults } from "@/hooks/useVotes";
 import { tallyThumbsUp, tallyUDNeutral, tallyPoints, tallyMajorityJudgment } from "@/lib/vote-tally";
+import { getVotingStrings } from "@/lib/voting-i18n";
 import { Badge } from "@/components/ui/badge";
 import { BarChart3, Users, MessageSquare, Trophy } from "lucide-react";
 
@@ -10,12 +11,6 @@ interface VoteResultsProps {
   vote: VoteEntity;
 }
 
-const PHASE_LABELS: Record<string, string> = {
-  IDLE: "Draft",
-  OPEN: "Open",
-  CLOSED: "Closed",
-  FINALIZED: "Finalized",
-};
 
 const PHASE_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   IDLE: "secondary",
@@ -25,6 +20,7 @@ const PHASE_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "
 };
 
 export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
+  const t = getVotingStrings();
   const { responses, isLoading } = useVoteResults(vote.id);
   const isAnonymous = vote.config.isAnonymous ?? true;
 
@@ -35,17 +31,17 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
         <Badge variant={PHASE_VARIANTS[vote.config.phase] || "secondary"}>
-          {PHASE_LABELS[vote.config.phase] || vote.config.phase}
+          {t.phases[vote.config.phase] || vote.config.phase}
         </Badge>
         <Badge variant="outline">{VOTING_MODES_LABELS[vote.config.mode]}</Badge>
-        <Badge variant="outline">{vote.config.kind === "decision" ? "Decision" : "Consultation"}</Badge>
+        <Badge variant="outline">{vote.config.kind === "decision" ? t.kinds.decision : t.kinds.consultation}</Badge>
       </div>
 
       {vote.outcome && (
         <div className="border-2 border-blue-500 rounded-lg p-4 bg-blue-50">
           <div className="flex items-center gap-2 mb-2">
             <Trophy className="w-5 h-5 text-blue-600" />
-            <span className="font-semibold text-blue-900">Outcome</span>
+            <span className="font-semibold text-blue-900">{t.labels.outcome}</span>
           </div>
           <p className="text-sm text-blue-800">{vote.outcome.summary}</p>
           {vote.outcome.signature && (
@@ -60,20 +56,20 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
       <div className="flex gap-4 text-sm text-gray-500">
         <span className="flex items-center gap-1">
           <Users className="w-4 h-4" />
-          {totalVoters} voter{totalVoters !== 1 ? "s" : ""}
+          {totalVoters} {totalVoters !== 1 ? t.labels.voters : t.labels.voter}
         </span>
         {commentsCount > 0 && (
           <span className="flex items-center gap-1">
             <MessageSquare className="w-4 h-4" />
-            {commentsCount} comment{commentsCount !== 1 ? "s" : ""}
+            {commentsCount} {commentsCount !== 1 ? t.labels.comments : t.labels.comment}
           </span>
         )}
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-gray-400">Loading results...</p>
+        <p className="text-sm text-gray-400">{t.messages.loadingResults}</p>
       ) : responses.length === 0 ? (
-        <p className="text-sm text-gray-400">No votes yet.</p>
+        <p className="text-sm text-gray-400">{t.messages.noVotesYet}</p>
       ) : (
         <div className="space-y-3">
           {vote.proposals.filter((p) => p.active).map((proposal) => {
@@ -144,7 +140,7 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
                   return (
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <span>Median:</span>
+                        <span>{t.labels.medianColon}</span>
                         <span className={`px-2 py-0.5 rounded text-xs text-white ${medianGrade?.color || "bg-gray-500"}`}>
                           {medianGrade?.icon} {medianGrade?.label}
                         </span>
@@ -165,7 +161,7 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
 
                 {vote.config.mode === "CONSENT_LOOP" && (
                   <p className="text-xs text-gray-400 italic">
-                    Consent Loop results are shown per round on the Rounds tab.
+                    {t.messages.consentLoopResultsPerRound}
                   </p>
                 )}
 

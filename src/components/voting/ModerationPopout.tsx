@@ -23,18 +23,15 @@ import {
   Eye,
   PenLine,
 } from "lucide-react";
+import { getVotingStrings } from "@/lib/voting-i18n";
 
-const PHASE_LABELS: Record<string, string> = {
-  IDLE: "Draft",
-  OPEN: "Open",
-  CLOSED: "Closed",
-  FINALIZED: "Finalized",
-};
+
 
 const LoopPanel: React.FC<{
   vote: VoteEntity;
   moderatorDisplayName: string;
 }> = ({ vote, moderatorDisplayName }) => {
+  const t = getVotingStrings();
   const { loops, openRound, closeRound, updateRoundContent } = useVoteLoops(vote.id);
   const { responses: voteResponses } = useVoteResults(vote.id);
   const [showDiffDialog, setShowDiffDialog] = React.useState(false);
@@ -69,10 +66,10 @@ const LoopPanel: React.FC<{
       winningProposalId: verdict === "ADOPTED" ? (vote.proposals[0]?.id || null) : null,
       summary:
         verdict === "ADOPTED"
-          ? `Adopted at round ${lastClosedLoop?.roundNumber || "?"} — no remaining objections`
+          ? t.messages.consentLoopAdopted
           : verdict === "WITHDRAWN"
-          ? "Withdrawn — the proposer pulled the proposal"
-          : `Blocked — objection(s) at round ${lastClosedLoop?.roundNumber || "?"} could not be integrated`,
+          ? t.messages.consentLoopWithdrawn
+          : t.messages.consentLoopBlocked,
       finalizedAt: new Date().toISOString(),
       finalizedByUserId: vote.ownerId,
       loopVerdict: verdict,
@@ -106,7 +103,7 @@ const LoopPanel: React.FC<{
 
       <Separator />
 
-      <h3 className="text-sm font-medium text-gray-700">Per-round results</h3>
+        <h3 className="text-sm font-medium text-gray-700">{t.labels.perRoundResults}</h3>
       <LoopRoundTabs
         loops={loops}
         responses={voteResponses}
@@ -120,7 +117,7 @@ const LoopPanel: React.FC<{
           variant="outline"
           onClick={() => setShowDiffDialog(true)}
         >
-          Compare rounds
+          {t.labels.roundComparison}
         </Button>
       )}
 
@@ -137,6 +134,7 @@ const ProposalEditorPanel: React.FC<{
   vote: VoteEntity;
   moderatorDisplayName: string;
 }> = ({ vote, moderatorDisplayName: _moderatorDisplayName }) => {
+  const t = getVotingStrings();
   const [proposals, setProposals] = React.useState(vote.proposals);
   const [isSaving, setIsSaving] = React.useState(false);
 
@@ -177,7 +175,7 @@ const ProposalEditorPanel: React.FC<{
                 rel="noopener noreferrer"
                 className="text-xs text-blue-500 hover:underline"
               >
-                Info link
+                {t.buttons.moreInfo}
               </a>
             )}
           </div>
@@ -191,13 +189,14 @@ const ProposalEditorPanel: React.FC<{
 
       <Button onClick={handleSave} disabled={isSaving} size="sm">
         <PenLine className="w-4 h-4 mr-1" />
-        {isSaving ? "Saving..." : "Save proposals"}
+        {isSaving ? t.buttons.saving : "Save proposals"}
       </Button>
     </div>
   );
 };
 
 export const ModerationPopout: React.FC = () => {
+  const t = getVotingStrings();
   const { token } = useParams<{ token: string }>();
   const { vote, moderator, isLoading, error } = useModeratorToken(token || null);
   const [activeTab, setActiveTab] = React.useState<"edit" | "results">("edit");
@@ -208,7 +207,7 @@ export const ModerationPopout: React.FC = () => {
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="text-center text-gray-400">
           <Vote className="w-12 h-12 mx-auto mb-3 animate-pulse" />
-          <p>Loading moderation view...</p>
+          <p>{t.messages.loadingModeration}</p>
         </div>
       </div>
     );
@@ -219,16 +218,16 @@ export const ModerationPopout: React.FC = () => {
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="text-center text-red-500 max-w-md">
           <AlertTriangle className="w-12 h-12 mx-auto mb-3" />
-          <p className="text-lg font-medium">Access denied</p>
+          <p className="text-lg font-medium">{t.messages.accessDenied}</p>
           <p className="text-sm mt-1">
-            {error || "This moderation link is invalid or has been revoked."}
+            {error || t.messages.invalidModLink}
           </p>
         </div>
       </div>
     );
   }
 
-  const phaseLabel = PHASE_LABELS[vote.config.phase] || vote.config.phase;
+  const phaseLabel = t.phases[vote.config.phase] || vote.config.phase;
   const modeLabel = VOTING_MODES_LABELS[vote.config.mode] || vote.config.mode;
   const publicUrl = `${window.location.origin}/v/${vote.slug}`;
 
@@ -268,10 +267,10 @@ export const ModerationPopout: React.FC = () => {
           <Badge variant="secondary" className="text-xs">
             {phaseLabel}
           </Badge>
-          {vote.config.kind === "decision" && (
-            <Badge className="text-xs bg-orange-100 text-orange-700">
-              Decision
-            </Badge>
+            {vote.config.kind === "decision" && (
+              <Badge className="text-xs bg-orange-100 text-orange-700">
+                {t.kinds.decision}
+              </Badge>
           )}
         </div>
       </header>
@@ -281,9 +280,9 @@ export const ModerationPopout: React.FC = () => {
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "edit" | "results")}>
             <TabsList>
               <TabsTrigger value="edit">
-                {isConsentLoop ? "Rounds" : "Proposals"}
+            {isConsentLoop ? t.labels.rounds : t.labels.proposals}
               </TabsTrigger>
-              <TabsTrigger value="results">Results</TabsTrigger>
+              <TabsTrigger value="results">{t.labels.results}</TabsTrigger>
             </TabsList>
             <TabsContent value="edit">
               <ProposalEditorPanel

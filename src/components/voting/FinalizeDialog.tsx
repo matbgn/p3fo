@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AlertTriangle, Trophy, X } from "lucide-react";
 import { VoteEntity } from "@/lib/persistence-types";
+import { getVotingStrings } from "@/lib/voting-i18n";
 
 interface FinalizeDialogProps {
   open: boolean;
@@ -33,6 +34,7 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
   const [signature, setSignature] = React.useState("");
   const [isSaving, setIsSaving] = React.useState(false);
   const [summary, setSummary] = React.useState("");
+  const t = getVotingStrings();
 
   React.useEffect(() => {
     if (open) {
@@ -75,10 +77,10 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Trophy className="w-5 h-5 text-blue-600" />
-            Finalize decision
+            {t.buttons.finalizeDecision}
           </DialogTitle>
           <DialogDescription>
-            Select the winning proposal and optionally add a signature. This action is irreversible.
+            {t.messages.selectWinningProposal}
           </DialogDescription>
         </DialogHeader>
 
@@ -87,19 +89,19 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
               <div className="flex items-start gap-2 p-3 rounded-md bg-amber-50 border border-amber-200">
                 <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                 <p className="text-sm text-amber-800">
-                  Moderators cannot finalize decisions. Request the owner to finalize.
+                  {t.messages.moderatorsCannotFinalize}
                 </p>
               </div>
             )}
             <div className="flex items-start gap-2 p-3 rounded-md bg-amber-50 border border-amber-200">
             <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
             <p className="text-sm text-amber-800">
-              Finalizing locks this vote. No further responses or edits will be accepted.
+              {t.messages.finalizingLocks}
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Winning proposal</Label>
+            <Label className="text-sm font-medium">{t.labels.winningProposal}</Label>
             <RadioGroup
               value={winningProposalId || "tie"}
               onValueChange={(v) => setWinningProposalId(v === "tie" ? null : v)}
@@ -115,28 +117,28 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
               <div className="flex items-center gap-2">
                 <RadioGroupItem value="tie" id="proposal-tie" />
                 <Label htmlFor="proposal-tie" className="text-sm text-gray-500 italic">
-                  Tie — no decision reached
+                  {t.messages.tieNoDecision}
                 </Label>
               </div>
             </RadioGroup>
           </div>
 
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Signature (optional)</Label>
+            <Label className="text-sm font-medium">{t.labels.signature}</Label>
             <Textarea
               value={signature}
               onChange={(e) => setSignature(e.target.value)}
-              placeholder="Add a formal decision text or note..."
+              placeholder={t.placeholders.signature}
               rows={3}
             />
           </div>
 
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Summary (optional)</Label>
+            <Label className="text-sm font-medium">{t.labels.summary}</Label>
             <Textarea
               value={summary}
               onChange={(e) => setSummary(e.target.value)}
-              placeholder="Override the auto-generated summary..."
+              placeholder={t.placeholders.summaryOverride}
               rows={2}
             />
           </div>
@@ -145,7 +147,7 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             <X className="w-4 h-4 mr-2" />
-            Cancel
+            {t.buttons.cancel}
           </Button>
           <Button
             onClick={handleFinalize}
@@ -153,7 +155,7 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
             className="bg-blue-600 hover:bg-blue-700"
           >
             <Trophy className="w-4 h-4 mr-2" />
-            {isSaving ? "Finalizing..." : "Finalize"}
+            {isSaving ? t.pages.finalizing : t.buttons.finalize}
           </Button>
         </DialogFooter>
       </DialogContent>

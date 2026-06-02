@@ -4,6 +4,7 @@ import cors from 'cors';
 import { createDbClient } from './db/index.js';
 import { DbClient } from './db/index.js';
 import { VoteKind } from '../src/lib/persistence-types.js';
+import QRCode from 'qrcode';
 import { WebSocketServer } from 'ws';
 import { setupWSConnection } from 'y-websocket/bin/utils';
 
@@ -822,6 +823,43 @@ app.post('/api/votes/import', express.json({ limit: '10mb' }), async (req: Reque
     console.error('Failed to import votes:', error);
     const message = error instanceof Error ? error.message : String(error);
     res.status(500).json({ error: 'Failed to import votes', details: message });
+  }
+});
+
+// Vote QR code endpoints
+app.get('/api/votes/:slug/qr.svg', async (req: Request, res: Response) => {
+  try {
+    const vote = await db.getVoteBySlug(req.params.slug);
+    if (!vote) {
+      return res.status(404).json({ error: 'Vote not found' });
+    }
+    const url = `${req.protocol}://${req.get('host')}/v/${vote.slug}`;
+    const svg = await QRCode.toString(url, { type: 'svg', width: 256, margin: 2 });
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.send(svg);
+  } catch (error: unknown) {
+    console.error('Error generating QR SVG:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to generate QR code', details: message });
+  }
+});
+
+app.get('/api/votes/:slug/qr.png', async (req: Request, res: Response) => {
+  try {
+    const vote = await db.getVoteBySlug(req.params.slug);
+    if (!vote) {
+      return res.status(404).json({ error: 'Vote not found' });
+    }
+    const url = `${req.protocol}://${req.get('host')}/v/${vote.slug}`;
+    const png = await QRCode.toBuffer(url, { type: 'png', width: 512, margin: 2 });
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.send(png);
+  } catch (error: unknown) {
+    console.error('Error generating QR PNG:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to generate QR code', details: message });
   }
 });
 

@@ -2,6 +2,7 @@ import * as React from "react";
 import { VoteLoop, VoteResponseEntity } from "@/lib/persistence-types";
 import { MJ_SCALE } from "@/components/planView/constants";
 import { tallyConsentLoop } from "@/lib/vote-tally";
+import { getVotingStrings } from "@/lib/voting-i18n";
 import { Badge } from "@/components/ui/badge";
 
 interface LoopRoundTabsProps {
@@ -17,6 +18,7 @@ export const LoopRoundTabs: React.FC<LoopRoundTabsProps> = ({
   proposalId,
   maxRounds,
 }) => {
+  const t = getVotingStrings();
   const tally = React.useMemo(
     () => tallyConsentLoop(loops, responses, proposalId),
     [loops, responses, proposalId]
@@ -25,7 +27,7 @@ export const LoopRoundTabs: React.FC<LoopRoundTabsProps> = ({
   if (tally.perRound.length === 0 && !tally.current) {
     return (
       <p className="text-sm text-gray-400 italic">
-        No rounds yet. Open the first round to begin the consent loop.
+        {t.messages.noRoundsYet}
       </p>
     );
   }
@@ -39,13 +41,13 @@ export const LoopRoundTabs: React.FC<LoopRoundTabsProps> = ({
           <thead>
             <tr>
               <th className="text-left py-2 px-3 border-b font-medium text-gray-600">
-                Round
+                {t.labels.round}
               </th>
               <th className="text-center py-2 px-3 border-b font-medium text-gray-600">
-                Median
+                {t.labels.median}
               </th>
               <th className="text-center py-2 px-3 border-b font-medium text-gray-600">
-                Status
+                {t.labels.status}
               </th>
               {sortedScale.map((grade) => (
                 <th
@@ -74,7 +76,7 @@ export const LoopRoundTabs: React.FC<LoopRoundTabsProps> = ({
                   }
                 >
                   <td className="py-2 px-3 border-b font-medium">
-                    Round {round.roundNumber}
+                    {t.labels.round} {round.roundNumber}
                   </td>
                   <td className="py-2 px-3 border-b text-center">
                     {round.median !== undefined && medianGrade && (
@@ -87,11 +89,11 @@ export const LoopRoundTabs: React.FC<LoopRoundTabsProps> = ({
                   </td>
                   <td className="py-2 px-3 border-b text-center">
                     {isOpen ? (
-                      <Badge variant="default">Open</Badge>
+                      <Badge variant="default">{t.phases.OPEN}</Badge>
                     ) : round.adopted ? (
-                      <Badge className="bg-green-600">Adopted</Badge>
+                      <Badge className="bg-green-600">{t.messages.consentLoopAdopted.split("—")[0].trim()}</Badge>
                     ) : (
-                      <Badge variant="outline">Closed</Badge>
+                      <Badge variant="outline">{t.phases.CLOSED}</Badge>
                     )}
                   </td>
                   {sortedScale.map((grade) => {
@@ -131,7 +133,7 @@ export const LoopRoundTabs: React.FC<LoopRoundTabsProps> = ({
 
       {maxRounds && (
         <p className="text-xs text-gray-400">
-          Maximum rounds: {maxRounds} (current: {tally.perRound.length})
+          {t.labels.maxRounds}: {maxRounds} ({t.labels.rounds.toLowerCase()}: {tally.perRound.length})
         </p>
       )}
     </div>

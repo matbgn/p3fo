@@ -14,6 +14,7 @@ import { deserializeBlocks } from "./BlockNoteProposalEditor";
 import { BlockNoteView } from "@blocknote/mantine";
 import { useCreateBlockNote } from "@blocknote/react";
 import { GitCompare } from "lucide-react";
+import { getVotingStrings } from "@/lib/voting-i18n";
 
 interface LoopRoundDiffDialogProps {
   open: boolean;
@@ -96,6 +97,7 @@ export const LoopRoundDiffDialog: React.FC<LoopRoundDiffDialogProps> = ({
   onOpenChange,
   loops,
 }) => {
+  const t = getVotingStrings();
   const sortedLoops = React.useMemo(
     () => [...loops].sort((a, b) => a.roundNumber - b.roundNumber),
     [loops]
@@ -120,14 +122,14 @@ export const LoopRoundDiffDialog: React.FC<LoopRoundDiffDialogProps> = ({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Round comparison</DialogTitle>
+            <DialogTitle>{t.labels.roundComparison}</DialogTitle>
             <DialogDescription>
-              At least two closed rounds are needed to compare.
+              {t.messages.needTwoClosedRounds}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Close
+              {t.buttons.close}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -147,16 +149,16 @@ export const LoopRoundDiffDialog: React.FC<LoopRoundDiffDialogProps> = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <GitCompare className="w-5 h-5" />
-            Round comparison
+            {t.labels.roundComparison}
           </DialogTitle>
           <DialogDescription>
-            Compare the proposal text between two rounds to see what changed.
+            {t.messages.compareRoundsDescription}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div className="space-y-1">
-            <Label className="text-xs">Left round</Label>
+            <Label className="text-xs">{t.labels.leftRound}</Label>
             <select
               className="w-full border rounded px-2 py-1 text-sm"
               value={leftIdx}
@@ -166,13 +168,13 @@ export const LoopRoundDiffDialog: React.FC<LoopRoundDiffDialogProps> = ({
             >
               {closedLoops.map((l, i) => (
                 <option key={l.id} value={i}>
-                  Round {l.roundNumber}
+                  {t.labels.round} {l.roundNumber}
                 </option>
               ))}
             </select>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Right round</Label>
+            <Label className="text-xs">{t.labels.rightRound}</Label>
             <select
               className="w-full border rounded px-2 py-1 text-sm"
               value={rightIdx}
@@ -182,7 +184,7 @@ export const LoopRoundDiffDialog: React.FC<LoopRoundDiffDialogProps> = ({
             >
               {closedLoops.map((l, i) => (
                 <option key={l.id} value={i}>
-                  Round {l.roundNumber}
+                  {t.labels.round} {l.roundNumber}
                 </option>
               ))}
             </select>
@@ -206,7 +208,7 @@ export const LoopRoundDiffDialog: React.FC<LoopRoundDiffDialogProps> = ({
 
         <div className="space-y-1">
           <h4 className="text-xs font-medium text-gray-400 mb-2">
-            Block-level diff
+            {t.labels.blockLevelDiff}
           </h4>
           <div className="border rounded p-2 max-h-48 overflow-y-auto space-y-0.5">
             {diff.map((d, i) => (
@@ -229,7 +231,7 @@ export const LoopRoundDiffDialog: React.FC<LoopRoundDiffDialogProps> = ({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Close
+            {t.buttons.close}
           </Button>
         </DialogFooter>
       </DialogContent>

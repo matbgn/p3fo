@@ -1,6 +1,6 @@
 import * as React from "react";
 import { VoteMode } from "@/lib/persistence-types";
-import { VOTING_MODES_LABELS } from "@/components/planView/constants";
+import { getVotingStrings } from "@/lib/voting-i18n";
 import { cn } from "@/lib/utils";
 import { ThumbsUp, Minus, Coins, Award, RotateCcw } from "lucide-react";
 
@@ -18,17 +18,10 @@ const MODE_ICONS: Record<VoteMode, React.ReactNode> = {
   CONSENT_LOOP: <RotateCcw className="w-4 h-4" />,
 };
 
-const MODE_DESCRIPTIONS: Record<VoteMode, string> = {
-  THUMBS_UP: "Simple yes vote per proposal",
-  THUMBS_UD_NEUTRAL: "Up, down, or neutral per proposal",
-  POINTS: "Distribute a budget of points",
-  MAJORITY_JUDGMENT: "Grade each proposal on a scale",
-  CONSENT_LOOP: "Iterative rounds until adopted or blocked",
-};
-
 const ALL_MODES: VoteMode[] = ["THUMBS_UP", "THUMBS_UD_NEUTRAL", "POINTS", "MAJORITY_JUDGMENT", "CONSENT_LOOP"];
 
 export const ModeSelector: React.FC<ModeSelectorProps> = ({ value, onChange, disabled }) => {
+  const t = getVotingStrings();
   return (
     <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
       {ALL_MODES.map((mode) => (
@@ -49,8 +42,8 @@ export const ModeSelector: React.FC<ModeSelectorProps> = ({ value, onChange, dis
             {MODE_ICONS[mode]}
           </span>
           <div className="min-w-0">
-            <div className="text-sm font-medium truncate">{VOTING_MODES_LABELS[mode]}</div>
-            <div className="text-xs text-gray-500 truncate">{MODE_DESCRIPTIONS[mode]}</div>
+            <div className="text-sm font-medium truncate">{t.modes[mode]}</div>
+            <div className="text-xs text-gray-500 truncate">{t.modeDescriptions[mode]}</div>
           </div>
         </button>
       ))}

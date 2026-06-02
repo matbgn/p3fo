@@ -15,6 +15,7 @@ import {
   Clock,
   Mail,
 } from "lucide-react";
+import { getVotingStrings } from "@/lib/voting-i18n";
 
 interface ModerationPanelProps {
   vote: VoteEntity;
@@ -27,6 +28,7 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({
   currentUserId,
   onOpenModerationPopout,
 }) => {
+  const t = getVotingStrings();
   const { moderators, isLoading, addModerator, revokeModerator } =
     useVoteModerators(vote.id);
   const [displayName, setDisplayName] = React.useState("");
@@ -68,14 +70,14 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({
   if (!isOwner) {
     return (
       <div className="p-4 text-center text-gray-400 text-sm">
-        Only the vote owner can manage moderators.
+        {t.messages.onlyOwnerCanManage}
       </div>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="p-4 text-center text-gray-400 text-sm">Loading...</div>
+      <div className="p-4 text-center text-gray-400 text-sm">{t.messages.loading}</div>
     );
   }
 
@@ -83,32 +85,31 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <Shield className="w-4 h-4 text-blue-600" />
-        <h3 className="text-sm font-medium text-gray-700">Moderators</h3>
+        <h3 className="text-sm font-medium text-gray-700">{t.labels.moderators}</h3>
         <Badge variant="secondary" className="text-xs">
           {moderators.length}
         </Badge>
       </div>
 
       <p className="text-xs text-gray-500">
-        Moderators can edit proposals, open/close rounds, and vote on gating
-        checks. They cannot finalize decisions or delete the vote.
+        {t.messages.moderatorDescription}
       </p>
 
       <Separator />
 
       <div className="space-y-2">
-        <Label className="text-xs font-medium">Add moderator</Label>
+        <Label className="text-xs font-medium">{t.buttons.addModerator}</Label>
         <div className="flex gap-2">
           <Input
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Display name"
+            placeholder={t.placeholders.displayName}
             className="h-8 text-sm flex-1"
           />
           <Input
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email (optional)"
+            placeholder={t.placeholders.email}
             className="h-8 text-sm flex-1"
           />
           <Button
@@ -118,14 +119,14 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({
             className="h-8"
           >
             <UserPlus className="w-3 h-3 mr-1" />
-            Add
+            {t.buttons.add}
           </Button>
         </div>
       </div>
 
       {moderators.length === 0 ? (
         <p className="text-xs text-gray-400 text-center py-4">
-          No moderators added yet.
+          {t.messages.noModerators}
         </p>
       ) : (
         <div className="space-y-2">
@@ -168,7 +169,7 @@ const ModeratorRow: React.FC<{
             variant={isActive ? "default" : "secondary"}
             className="text-[10px] px-1.5 py-0"
           >
-            {isActive ? "Active" : "Revoked"}
+            {isActive ? t.labels.active : "Revoked"}
           </Badge>
         </div>
         <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-400">
@@ -206,7 +207,7 @@ const ModeratorRow: React.FC<{
             title="Copy invitation link"
           >
             {isCopied ? (
-              <span className="text-green-600 text-xs">Copied!</span>
+              <span className="text-green-600 text-xs">{t.buttons.copied}</span>
             ) : (
               <Copy className="w-3 h-3" />
             )}
@@ -216,7 +217,7 @@ const ModeratorRow: React.FC<{
             variant="ghost"
             className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
             onClick={() => onRevoke(moderator.id)}
-            title="Revoke access"
+            title={t.buttons.delete}
           >
             <Trash2 className="w-3 h-3" />
           </Button>

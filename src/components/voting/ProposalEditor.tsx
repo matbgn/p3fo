@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Plus, Trash2, GripVertical, ExternalLink } from "lucide-react";
 import { VoteProposal, VoteKind } from "@/lib/persistence-types";
+import { getVotingStrings } from "@/lib/voting-i18n";
 import { BlockNoteProposalEditor } from "./BlockNoteProposalEditor";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -24,6 +25,7 @@ export const ProposalEditor: React.FC<ProposalEditorProps> = ({
   onAllowAudienceProposalsChange,
   readOnly = false,
 }) => {
+  const t = getVotingStrings();
   const updateProposal = (index: number, patch: Partial<VoteProposal>) => {
     const next = [...proposals];
     next[index] = { ...next[index], ...patch };
@@ -101,21 +103,21 @@ export const ProposalEditor: React.FC<ProposalEditorProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs text-gray-500 mb-1 block">
-                  Description (plain text)
+                  {t.labels.descriptionPlain}
                 </Label>
                 <Input
                   value={proposal.description || ""}
                   onChange={(e) =>
                     updateProposal(index, { description: e.target.value })
                   }
-                  placeholder="Optional short description"
+                  placeholder={t.placeholders.shortDescription}
                   disabled={readOnly}
                   className="text-sm"
                 />
               </div>
               <div>
                 <Label className="text-xs text-gray-500 mb-1 block">
-                  Info URL
+                  {t.labels.infoUrl}
                 </Label>
                 <div className="flex items-center gap-2">
                   <ExternalLink className="w-4 h-4 text-gray-400 shrink-0" />
@@ -124,7 +126,7 @@ export const ProposalEditor: React.FC<ProposalEditorProps> = ({
                     onChange={(e) =>
                       updateProposal(index, { infoUrl: e.target.value })
                     }
-                    placeholder="https://..."
+                    placeholder={t.placeholders.url}
                     disabled={readOnly}
                     className="text-sm"
                   />
@@ -134,7 +136,7 @@ export const ProposalEditor: React.FC<ProposalEditorProps> = ({
 
             <div>
               <Label className="text-xs text-gray-500 mb-1 block">
-                Content (rich text)
+                {t.labels.contentRich}
               </Label>
               <BlockNoteProposalEditor
                 value={proposal.content}
@@ -152,7 +154,7 @@ export const ProposalEditor: React.FC<ProposalEditorProps> = ({
                 }
                 disabled={readOnly}
               />
-              <Label className="text-xs text-gray-500">Active</Label>
+              <Label className="text-xs text-gray-500">{t.labels.active}</Label>
             </div>
           </div>
         </div>
@@ -167,7 +169,7 @@ export const ProposalEditor: React.FC<ProposalEditorProps> = ({
           className="w-full"
         >
           <Plus className="w-4 h-4 mr-2" />
-          Add proposal
+          {t.buttons.addProposal}
         </Button>
       )}
 
@@ -179,7 +181,7 @@ export const ProposalEditor: React.FC<ProposalEditorProps> = ({
             disabled={readOnly}
           />
           <Label className="text-sm text-gray-600">
-            Allow audience to add proposals
+            {t.labels.allowAudienceProposals}
           </Label>
         </div>
       )}
