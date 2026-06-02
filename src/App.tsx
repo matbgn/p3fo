@@ -15,6 +15,7 @@ import { UsersProvider } from "@/context/UsersContext";
 import { SettingsProvider } from "@/context/SettingsContext";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
+import PublicVotePage from "./pages/PublicVotePage";
 import { useReminderStore } from "./hooks/useReminders";
 import { ViewProvider } from "@/context/ViewContext";
 import { DEFAULT_TASKS_INITIALIZED_KEY } from "./hooks/useTasks";
@@ -102,6 +103,8 @@ const App = () => {
                       <div className="relative">
                         <BrowserRouter basename={import.meta.env.VITE_BASE_URL || "/p3fo"} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
                           <Routes>
+                            <Route path="/v/:slug" element={<PublicVotePage />} />
+                            <Route path="/v/:slug/m/:token" element={<PublicVotePage />} />
                             <Route path="/" element={<Index />} />
                             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                             <Route path="*" element={<NotFound />} />
