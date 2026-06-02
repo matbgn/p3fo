@@ -1,4 +1,4 @@
-import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, ReminderEntity, CircleEntity } from './persistence-types';
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType } from './persistence-types';
 
 // Storage keys
 const TASKS_STORAGE_KEY = 'dyad_task_board_v1';
@@ -10,6 +10,7 @@ const FERTILIZATION_BOARD_STORAGE_KEY = 'fertilizationBoard';
 const DREAM_BOARD_STORAGE_KEY = 'dreamBoard';
 const CIRCLES_STORAGE_KEY = 'p3fo_circles_v1';
 const REMINDERS_STORAGE_KEY = 'p3fo_reminders_v1';
+const FRAMEWORKS_STORAGE_KEY = 'p3fo_frameworks_v1';
 
 // Default values
 const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
@@ -652,6 +653,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       localStorage.removeItem(DREAM_BOARD_STORAGE_KEY);
       localStorage.removeItem(REMINDERS_STORAGE_KEY);
       localStorage.removeItem(CIRCLES_STORAGE_KEY);
+      localStorage.removeItem(FRAMEWORKS_STORAGE_KEY);
       sessionStorage.removeItem(FILTERS_STORAGE_KEY);
 
       // Clear dynamic keys (users and QoL surveys)
@@ -708,6 +710,114 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       localStorage.setItem(REMINDERS_STORAGE_KEY, JSON.stringify(reminders));
     } catch (error) {
       console.error('Error importing reminders to localStorage:', error);
+      throw error;
+    }
+  }
+
+  // Frameworks
+  async listFrameworks(frameworkType?: FrameworkType): Promise<FrameworkEntity[]> {
+    if (typeof window === 'undefined') {
+      return [];
+    }
+
+    try {
+      const stored = localStorage.getItem(FRAMEWORKS_STORAGE_KEY);
+      const all: FrameworkEntity[] = stored ? JSON.parse(stored) : [];
+      if (frameworkType) {
+        return all.filter(f => f.frameworkType === frameworkType);
+      }
+      return all;
+    } catch (error) {
+      console.error('Error reading frameworks from localStorage:', error);
+      return [];
+    }
+  }
+
+  async getFrameworkById(id: string): Promise<FrameworkEntity | null> {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    try {
+      const frameworks = await this.listFrameworks();
+      return frameworks.find(f => f.id === id) || null;
+    } catch (error) {
+      console.error('Error getting framework from localStorage:', error);
+      return null;
+    }
+  }
+
+  async createFramework(input: Partial<FrameworkEntity>): Promise<FrameworkEntity> {
+    if (typeof window === 'undefined') {
+      throw new Error('Cannot create framework in non-browser environment');
+    }
+
+    try {
+      const frameworks = await this.listFrameworks();
+      const now = new Date().toISOString();
+      const newFramework: FrameworkEntity = {
+        id: input.id || crypto.randomUUID(),
+        name: input.name || 'New Framework',
+        frameworkType: input.frameworkType || 'intentional',
+        parentId: input.parentId ?? null,
+        categories: input.categories || [],
+        createdAt: input.createdAt || now,
+        updatedAt: input.updatedAt || now,
+      };
+      frameworks.push(newFramework);
+      localStorage.setItem(FRAMEWORKS_STORAGE_KEY, JSON.stringify(frameworks));
+      return newFramework;
+    } catch (error) {
+      console.error('Error creating framework in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async updateFramework(id: string, patch: Partial<FrameworkEntity>): Promise<FrameworkEntity | null> {
+    if (typeof window === 'undefined') {
+      throw new Error('Cannot update framework in non-browser environment');
+    }
+
+    try {
+      const frameworks = await this.listFrameworks();
+      const index = frameworks.findIndex(f => f.id === id);
+      if (index === -1) {
+        console.warn('Update framework: not found', id);
+        return null;
+      }
+      frameworks[index] = { ...frameworks[index], ...patch, updatedAt: new Date().toISOString() };
+      localStorage.setItem(FRAMEWORKS_STORAGE_KEY, JSON.stringify(frameworks));
+      return frameworks[index];
+    } catch (error) {
+      console.error('Error updating framework in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async deleteFramework(id: string): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      const frameworks = await this.listFrameworks();
+      const filtered = frameworks.filter(f => f.id !== id);
+      localStorage.setItem(FRAMEWORKS_STORAGE_KEY, JSON.stringify(filtered));
+    } catch (error) {
+      console.error('Error deleting framework from localStorage:', error);
+      throw error;
+    }
+  }
+
+  async importFrameworks(frameworks: FrameworkEntity[]): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      localStorage.setItem(FRAMEWORKS_STORAGE_KEY, JSON.stringify(frameworks));
+    } catch (error) {
+      console.error('Error importing frameworks to localStorage:', error);
       throw error;
     }
   }

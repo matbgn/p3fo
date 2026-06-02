@@ -1,4 +1,4 @@
-import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, ReminderEntity, CircleEntity } from './persistence-types';
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType } from './persistence-types';
 import { DEFAULT_TASKS_INITIALIZED_KEY } from '@/hooks/useTasks';
 
 export class HttpApiPersistence implements PersistenceAdapter {
@@ -289,23 +289,18 @@ export class HttpApiPersistence implements PersistenceAdapter {
     // For now, let's assume we can import at module level.
     // But since this is a class method, let's use the valid imports.
     try {
-      const { doc, yTasks, yUserSettings, yFertilizationState, yFertilizationCards, yFertilizationColumns, yDreamState, yDreamCards, yDreamColumns, yCircles, ySystemState } = await import('./collaboration');
+      const { doc, yTasks, yUserSettings, yFertilizationState, yFertilizationCards, yFertilizationColumns, yDreamState, yDreamCards, yDreamColumns, yCircles, yFrameworks, ySystemState } = await import('./collaboration');
       doc.transact(() => {
-        // Clear tasks
         yTasks.clear();
-        // Clear user settings
         yUserSettings.clear();
-        // Clear fertilization board
         yFertilizationState.clear();
         yFertilizationCards.clear();
         yFertilizationColumns.clear();
-        // Clear dream board
         yDreamState.clear();
         yDreamCards.clear();
         yDreamColumns.clear();
-        // Clear circles
         yCircles.clear();
-        // Broadcast clear command to other clients
+        yFrameworks.clear();
         ySystemState.set('command', { type: 'CLEAR_ALL', timestamp: Date.now() });
       });
       console.log('Cleared Yjs shared documents and broadcasted CLEAR_ALL command');
@@ -323,6 +318,43 @@ export class HttpApiPersistence implements PersistenceAdapter {
     await this.makeRequest('/api/circles/import', {
       method: 'POST',
       body: JSON.stringify(circles),
+    });
+  }
+
+  // Frameworks
+  async listFrameworks(frameworkType?: FrameworkType): Promise<FrameworkEntity[]> {
+    const endpoint = frameworkType ? `/api/frameworks?frameworkType=${encodeURIComponent(frameworkType)}` : '/api/frameworks';
+    return this.makeRequest(endpoint);
+  }
+
+  async getFrameworkById(id: string): Promise<FrameworkEntity | null> {
+    return this.makeRequest(`/api/frameworks/${id}`);
+  }
+
+  async createFramework(input: Partial<FrameworkEntity>): Promise<FrameworkEntity> {
+    return this.makeRequest('/api/frameworks', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  async updateFramework(id: string, patch: Partial<FrameworkEntity>): Promise<FrameworkEntity | null> {
+    return this.makeRequest(`/api/frameworks/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  }
+
+  async deleteFramework(id: string): Promise<void> {
+    await this.makeRequest(`/api/frameworks/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async importFrameworks(frameworks: FrameworkEntity[]): Promise<void> {
+    await this.makeRequest('/api/frameworks/import', {
+      method: 'POST',
+      body: JSON.stringify(frameworks),
     });
   }
 

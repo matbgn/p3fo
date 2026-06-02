@@ -16,6 +16,7 @@ import {
   Calendar,
   Users,
   ShieldCheck,
+  Target,
 } from 'lucide-react';
 
 interface UmbrellaNavigationProps {
@@ -64,6 +65,8 @@ const SECTIONS: Section[] = [
     icon: <Sparkles className="w-5 h-5" />,
     position: 'bottom-left',
     views: [
+      { id: 'intentional-framework', label: 'Intention', icon: <Target className="w-3 h-3" />, view: 'dream', subView: 'intentionalFramework' },
+      { id: 'collaborative-framework', label: 'Collaboration', icon: <Users className="w-3 h-3" />, view: 'dream', subView: 'collaborativeFramework' },
       { id: 'dream-board', label: 'Dream Board', icon: <Sparkles className="w-3 h-3" />, view: 'dream', subView: 'dream' },
       { id: 'storyboard', label: 'Storyboard', icon: <LayoutDashboard className="w-3 h-3" />, view: 'dream', subView: 'storyboard' },
       { id: 'prioritization', label: 'Prioritization', icon: <ListChecks className="w-3 h-3" />, view: 'dream', subView: 'prioritization' },

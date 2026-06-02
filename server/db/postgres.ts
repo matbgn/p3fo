@@ -12,6 +12,8 @@ import type {
   CircleNodeType,
   CircleNodeModifier,
   ReminderEntity,
+  FrameworkEntity,
+  FrameworkType,
   MonthlyBalanceData
 } from '../../src/lib/persistence-types.js';
 
@@ -83,6 +85,16 @@ interface ReminderDbRow {
   snoozeDurationMinutes: number | null;
   originalTriggerDate: string | null;
   state: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface FrameworkDbRow {
+  id: string;
+  name: string;
+  frameworkType: string;
+  parentId: string | null;
+  categories: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -304,6 +316,20 @@ class PostgresClient implements DbClient {
       )
     `);
 
+    // Frameworks table
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS "frameworks" (
+        "id" TEXT PRIMARY KEY,
+        "name" TEXT NOT NULL,
+        "frameworkType" TEXT NOT NULL CHECK ("frameworkType" IN ('intentional', 'collaborative')),
+        "parentId" TEXT,
+        "categories" JSONB NOT NULL DEFAULT '[]',
+        "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL,
+        "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL,
+        CONSTRAINT "fk_frameworks_parent" FOREIGN KEY ("parentId") REFERENCES "frameworks" ("id") DEFERRABLE INITIALLY DEFERRED
+      )
+    `);
+
     // Create indexes for performance optimization
     // These indexes dramatically improve query performance when filtering by userId, parentId, or triageStatus
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId" ON "tasks"("userId")`);
@@ -323,6 +349,10 @@ class PostgresClient implements DbClient {
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_reminders_taskId" ON "reminders"("taskId")`);
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_reminders_state" ON "reminders"("state")`);
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_reminders_triggerDate" ON "reminders"("triggerDate")`);
+
+    // Frameworks indexes
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_frameworks_frameworkType" ON "frameworks"("frameworkType")`);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_frameworks_parentId" ON "frameworks"("parentId")`);
 
     // 2. Run migrations AFTER tables exist
     try {
@@ -1290,6 +1320,126 @@ class PostgresClient implements DbClient {
     }
   }
 
+  // Frameworks
+  async getFrameworks(frameworkType?: string): Promise<FrameworkEntity[]> {
+    let sql = 'SELECT * FROM "frameworks"';
+    const params: string[] = [];
+    if (frameworkType) {
+      sql += ' WHERE "frameworkType" = $1';
+      params.push(frameworkType);
+    }
+    sql += ' ORDER BY "createdAt" ASC';
+    const result = await this.pool.query(sql, params);
+    return result.rows.map((row: FrameworkDbRow) => this.mapFrameworkDbRowToEntity(row));
+  }
+
+  async getFrameworkById(id: string): Promise<FrameworkEntity | null> {
+    const result = await this.pool.query('SELECT * FROM "frameworks" WHERE "id" = $1', [id]);
+    if (result.rows.length === 0) return null;
+    return this.mapFrameworkDbRowToEntity(result.rows[0]);
+  }
+
+  async createFramework(input: Partial<FrameworkEntity>): Promise<FrameworkEntity> {
+    const now = new Date().toISOString();
+    const newFramework: FrameworkEntity = {
+      id: input.id || crypto.randomUUID(),
+      name: input.name || 'New Framework',
+      frameworkType: input.frameworkType || 'intentional',
+      parentId: input.parentId ?? null,
+      categories: input.categories || [],
+      createdAt: input.createdAt || now,
+      updatedAt: input.updatedAt || now,
+    };
+
+    await this.pool.query(`
+      INSERT INTO "frameworks"("id", "name", "frameworkType", "parentId", "categories", "createdAt", "updatedAt")
+      VALUES($1, $2, $3, $4, $5, $6, $7)
+    `, [
+      newFramework.id,
+      newFramework.name,
+      newFramework.frameworkType,
+      newFramework.parentId,
+      JSON.stringify(newFramework.categories),
+      newFramework.createdAt,
+      newFramework.updatedAt,
+    ]);
+
+    return newFramework;
+  }
+
+  async updateFramework(id: string, patch: Partial<FrameworkEntity>): Promise<FrameworkEntity | null> {
+    const current = await this.getFrameworkById(id);
+    if (!current) return null;
+
+    const updated = { ...current, ...patch, updatedAt: new Date().toISOString() };
+
+    await this.pool.query(`
+      UPDATE "frameworks" SET
+        "name" = $1, "frameworkType" = $2, "parentId" = $3, "categories" = $4, "updatedAt" = $5
+      WHERE "id" = $6
+    `, [
+      updated.name,
+      updated.frameworkType,
+      updated.parentId,
+      JSON.stringify(updated.categories),
+      updated.updatedAt,
+      updated.id,
+    ]);
+
+    return updated;
+  }
+
+  async deleteFramework(id: string): Promise<void> {
+    await this.pool.query('DELETE FROM "frameworks" WHERE "id" = $1', [id]);
+  }
+
+  async importFrameworks(frameworks: FrameworkEntity[]): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      for (const framework of frameworks) {
+        await client.query(`
+          INSERT INTO "frameworks"("id", "name", "frameworkType", "parentId", "categories", "createdAt", "updatedAt")
+          VALUES($1, $2, $3, $4, $5, $6, $7)
+          ON CONFLICT ("id") DO UPDATE SET
+            "name" = EXCLUDED."name",
+            "frameworkType" = EXCLUDED."frameworkType",
+            "parentId" = EXCLUDED."parentId",
+            "categories" = EXCLUDED."categories",
+            "updatedAt" = EXCLUDED."updatedAt"
+        `, [
+          framework.id,
+          framework.name,
+          framework.frameworkType,
+          framework.parentId,
+          JSON.stringify(framework.categories),
+          framework.createdAt,
+          framework.updatedAt,
+        ]);
+      }
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private mapFrameworkDbRowToEntity(row: FrameworkDbRow): FrameworkEntity {
+    return {
+      id: row.id,
+      name: row.name,
+      frameworkType: row.frameworkType as FrameworkType,
+      parentId: row.parentId,
+      categories: typeof row.categories === 'string' ? JSON.parse(row.categories) : (row.categories || []),
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
   private mapTaskDbRowToEntity(row: TaskDbRow): TaskEntity {
     return {
       ...row,
@@ -1363,6 +1513,7 @@ class PostgresClient implements DbClient {
       await client.query('DROP TABLE IF EXISTS "dreamBoard" CASCADE');
       await client.query('DROP TABLE IF EXISTS "circles" CASCADE');
       await client.query('DROP TABLE IF EXISTS "reminders" CASCADE');
+      await client.query('DROP TABLE IF EXISTS "frameworks" CASCADE');
 
       // Drop legacy tables if they exist
       await client.query('DROP TABLE IF EXISTS tasks CASCADE');

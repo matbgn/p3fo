@@ -509,6 +509,84 @@ app.post('/api/circles/import', express.json({ limit: '10mb' }), async (req: Req
   }
 });
 
+// Frameworks routes
+app.get('/api/frameworks', async (req: Request, res: Response) => {
+  try {
+    const frameworkType = req.query.frameworkType as string | undefined;
+    const frameworks = await db.getFrameworks(frameworkType);
+    res.json(frameworks);
+  } catch (error: unknown) {
+    console.error('Error fetching frameworks:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to fetch frameworks', details: message });
+  }
+});
+
+app.post('/api/frameworks', async (req: Request, res: Response) => {
+  try {
+    const framework = await db.createFramework(req.body);
+    res.status(201).json(framework);
+  } catch (error: unknown) {
+    console.error('Error creating framework:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to create framework', details: message });
+  }
+});
+
+app.get('/api/frameworks/:id', async (req: Request, res: Response) => {
+  try {
+    const framework = await db.getFrameworkById(req.params.id);
+    if (!framework) {
+      return res.status(404).json({ error: 'Framework not found' });
+    }
+    res.json(framework);
+  } catch (error: unknown) {
+    console.error('Error fetching framework:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to fetch framework', details: message });
+  }
+});
+
+app.patch('/api/frameworks/:id', async (req: Request, res: Response) => {
+  try {
+    const framework = await db.updateFramework(req.params.id, req.body);
+    if (!framework) {
+      return res.status(404).json({ error: 'Framework not found' });
+    }
+    res.json(framework);
+  } catch (error: unknown) {
+    console.error('Error updating framework:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to update framework', details: message });
+  }
+});
+
+app.delete('/api/frameworks/:id', async (req: Request, res: Response) => {
+  try {
+    await db.deleteFramework(req.params.id);
+    res.status(204).send();
+  } catch (error: unknown) {
+    console.error('Error deleting framework:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to delete framework', details: message });
+  }
+});
+
+app.post('/api/frameworks/import', express.json({ limit: '10mb' }), async (req: Request, res: Response) => {
+  try {
+    const frameworks = req.body;
+    if (!Array.isArray(frameworks)) {
+      return res.status(400).json({ error: 'Expected an array of frameworks' });
+    }
+    await db.importFrameworks(frameworks);
+    res.json({ ok: true });
+  } catch (error: unknown) {
+    console.error('Failed to import frameworks:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to import frameworks', details: message });
+  }
+});
+
 // Reminders routes
 app.get('/api/reminders', async (req: Request, res: Response) => {
   try {

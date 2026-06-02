@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { useReminderStore } from '@/hooks/useReminders';
 import { getPersistenceAdapter } from '@/lib/persistence-factory';
 import { QolSurveyResponseEntity, MonthlyBalanceData } from '@/lib/persistence-types';
-import { yUserSettings, yFertilizationState, yFertilizationCards, yFertilizationColumns, yDreamState, yDreamCards, yDreamColumns, yCircles, isCollaborationEnabled, doc } from '@/lib/collaboration';
+import { yUserSettings, yFertilizationState, yFertilizationCards, yFertilizationColumns, yDreamState, yDreamCards, yDreamColumns, yCircles, yFrameworks, yAppSettings, isCollaborationEnabled, doc } from '@/lib/collaboration';
 
 interface ImportedUserSettings {
   userId?: string;
@@ -143,8 +143,21 @@ const DataImporter: React.FC = () => {
                   timezone: importedData.settings.timezone,
                   country: importedData.settings.country,
                   region: importedData.settings.region,
+                  splitTime: importedData.settings.splitTime ? Number(importedData.settings.splitTime) : undefined,
+                  cardAgingBaseDays: importedData.settings.cardAgingBaseDays ? Number(importedData.settings.cardAgingBaseDays) : undefined,
+                  disabledModules: importedData.settings.disabledModules || undefined,
                 };
                 await adapter.updateAppSettings(appSettings);
+                // Sync to Yjs for cross-client synchronization
+                if (isCollaborationEnabled()) {
+                  doc.transact(() => {
+                    for (const [key, value] of Object.entries(appSettings)) {
+                      if (value !== undefined) {
+                        yAppSettings.set(key, JSON.stringify(value));
+                      }
+                    }
+                  });
+                }
               }
 
               // Import Fertilization Board (or legacy Celebration Board)
@@ -249,6 +262,20 @@ const DataImporter: React.FC = () => {
                     yCircles.clear();
                     importedData.circles.forEach((circle: { id: string; [key: string]: unknown }) => {
                       yCircles.set(circle.id, circle);
+                    });
+                  });
+                }
+              }
+
+              // Import Frameworks (bulk)
+              if (importedData.frameworks && Array.isArray(importedData.frameworks)) {
+                await adapter.importFrameworks(importedData.frameworks);
+                // Sync to Yjs for cross-client synchronization
+                if (isCollaborationEnabled()) {
+                  doc.transact(() => {
+                    yFrameworks.clear();
+                    importedData.frameworks.forEach((framework: { id: string; [key: string]: unknown }) => {
+                      yFrameworks.set(framework.id, framework);
                     });
                   });
                 }

@@ -75,7 +75,9 @@ export type ModuleId =
   | 'plan.circles'
   | 'plan.roles'
   | 'program.calendar'
-  | 'program.resources';
+  | 'program.resources'
+  | 'dream.intentionalFramework'
+  | 'dream.collaborativeFramework';
 
 export interface AppSettingsEntity {
   splitTime: number;
@@ -195,6 +197,14 @@ export interface PersistenceAdapter {
   // Circles
   listCircles(): Promise<CircleEntity[]>;
   importCircles(circles: CircleEntity[]): Promise<void>;
+
+  // Frameworks
+  listFrameworks(frameworkType?: FrameworkType): Promise<FrameworkEntity[]>;
+  getFrameworkById(id: string): Promise<FrameworkEntity | null>;
+  createFramework(input: Partial<FrameworkEntity>): Promise<FrameworkEntity>;
+  updateFramework(id: string, patch: Partial<FrameworkEntity>): Promise<FrameworkEntity | null>;
+  deleteFramework(id: string): Promise<void>;
+  importFrameworks(frameworks: FrameworkEntity[]): Promise<void>;
 }
 
 export type FactTag = 'A' | 'N' | 'K' | 'P';
@@ -314,6 +324,27 @@ export interface ReminderEntity {
   snoozeDurationMinutes?: number;
   originalTriggerDate?: string;
   state: 'scheduled' | 'triggered' | 'read' | 'dismissed';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type FrameworkType = 'intentional' | 'collaborative';
+
+export interface FrameworkCategory {
+  id: string;
+  label: string;
+  description: string;
+  optional?: boolean;
+  content: string;
+  order: number;
+}
+
+export interface FrameworkEntity {
+  id: string;
+  name: string;
+  frameworkType: FrameworkType;
+  parentId: string | null;
+  categories: FrameworkCategory[];
   createdAt: string;
   updatedAt: string;
 }
