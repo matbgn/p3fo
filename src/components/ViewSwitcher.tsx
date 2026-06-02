@@ -11,6 +11,7 @@ import {
   PartyPopper,
   Sparkles,
   MoreHorizontal,
+  Vote,
 } from 'lucide-react';
 import { useCursors } from '@/hooks/useCursors';
 import { Badge } from './ui/badge';
@@ -27,7 +28,7 @@ import {
 } from '@/components/ui/tooltip';
 import type { ModuleId } from '@/lib/persistence-types';
 
-type ViewId = "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "plan" | "dream" | "celebration";
+type ViewId = "focus" | "kanban" | "timetable" | "program" | "settings" | "metrics" | "plan" | "dream" | "celebration" | "voting";
 
 interface ViewSwitcherProps {
   value: ViewId;
@@ -58,6 +59,7 @@ const COLOR_MAP: Record<ViewId, ColorCategory> = {
   metrics: 'red',
   timetable: 'red',
   settings: 'red',
+  voting: 'red',
 };
 
 const COLOR_CLASSES: Record<ColorCategory, { active: string; inactive: string }> = {
@@ -89,6 +91,7 @@ const allViews: ViewOption[] = [
   { id: 'focus', label: 'Focus', icon: <ListChecks className="w-4 h-4" /> },
   { id: 'timetable', label: 'Timetable', icon: <Clock className="w-4 h-4" />, isUtility: true },
   { id: 'metrics', label: 'Metrics', icon: <BarChart3 className="w-4 h-4" />, isUtility: true},
+  { id: 'voting', label: 'Voting', icon: <Vote className="w-4 h-4" />, isUtility: true },
   { id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" />, isUtility: true },
 ];
 

@@ -61,7 +61,7 @@ export const ViewProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Auto-navigate away from disabled views
     useEffect(() => {
         if (disabledModules.includes(view as ModuleId)) {
-            const ALL_VIEWS: ViewType[] = ['kanban', 'focus', 'timetable', 'celebration', 'dream', 'plan', 'program', 'metrics', 'settings'];
+            const ALL_VIEWS: ViewType[] = ['kanban', 'focus', 'timetable', 'celebration', 'dream', 'plan', 'program', 'metrics', 'voting', 'settings'];
             const fallback = ALL_VIEWS.find(v => !disabledModules.includes(v as ModuleId)) || 'kanban';
             setView(fallback);
         }

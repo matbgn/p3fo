@@ -35,6 +35,7 @@ const ALL_MODULES: { id: ModuleId; label: string; description: string; isTopLeve
   { id: 'focus', label: 'Focus', description: 'Focus mode for concentrated task work', isTopLevel: true },
   { id: 'timetable', label: 'Timetable', description: 'Time-based view for hourly planning', isTopLevel: true },
   { id: 'metrics', label: 'Metrics', description: 'Performance metrics and dashboards', isTopLevel: true },
+  { id: 'voting', label: 'Voting', description: 'Run polls and formal decisions with your audience', isTopLevel: true },
 ];
 
 const SettingsPage: React.FC = () => {

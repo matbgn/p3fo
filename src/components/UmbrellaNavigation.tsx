@@ -17,6 +17,7 @@ import {
   Users,
   ShieldCheck,
   Target,
+  Vote,
 } from 'lucide-react';
 
 interface UmbrellaNavigationProps {
@@ -104,6 +105,7 @@ const SECTIONS: Section[] = [
 
 const CENTER_VIEWS: SubView[] = [
   { id: 'timetable', label: 'Timetable', icon: <Clock className="w-3 h-3" />, view: 'timetable' },
+  { id: 'voting', label: 'Voting', icon: <Vote className="w-3 h-3" />, view: 'voting' },
   { id: 'metrics', label: 'Metrics', icon: <BarChart3 className="w-3 h-3" />, view: 'metrics' },
   { id: 'settings', label: 'Settings', icon: <Settings className="w-3 h-3" />, view: 'settings' },
 ];
