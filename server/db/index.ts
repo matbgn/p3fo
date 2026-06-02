@@ -1,5 +1,5 @@
 // Database client interface and factory
-import { TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, FertilizationBoardEntity, DreamBoardEntity, CircleEntity, ReminderEntity, FrameworkEntity, FrameworkType } from '../../src/lib/persistence-types.js';
+import { TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, FertilizationBoardEntity, DreamBoardEntity, CircleEntity, ReminderEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind } from '../../src/lib/persistence-types.js';
 
 // Pagination options for queries
 export interface PaginationOptions {
@@ -85,6 +85,35 @@ export interface DbClient {
   updateFramework(id: string, data: Partial<FrameworkEntity>): Promise<FrameworkEntity | null>;
   deleteFramework(id: string): Promise<void>;
   importFrameworks(frameworks: FrameworkEntity[]): Promise<void>;
+
+  // Votes
+  getVotes(opts?: { linkedTaskId?: string; ownerId?: string; kind?: VoteKind }): Promise<VoteEntity[]>;
+  getVoteById(id: string): Promise<VoteEntity | null>;
+  getVoteBySlug(slug: string): Promise<VoteEntity | null>;
+  createVote(vote: Partial<VoteEntity>): Promise<VoteEntity>;
+  updateVote(id: string, data: Partial<VoteEntity>): Promise<VoteEntity | null>;
+  finalizeVote(id: string, outcome: VoteEntity['outcome']): Promise<VoteEntity | null>;
+  deleteVote(id: string): Promise<void>;
+  importVotes(items: VoteEntity[]): Promise<void>;
+
+  // Vote responses
+  getVoteResponses(voteId: string): Promise<VoteResponseEntity[]>;
+  createVoteResponse(voteId: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity>;
+  importVoteResponses(items: VoteResponseEntity[]): Promise<void>;
+
+  // Vote loops (CONSENT_LOOP)
+  getVoteLoops(voteId: string): Promise<VoteLoop[]>;
+  createVoteLoop(voteId: string, loop: Partial<VoteLoop>): Promise<VoteLoop>;
+  closeVoteLoop(loopId: string, gating: { value: -1 | 0 | 1; comment?: string }): Promise<VoteLoop | null>;
+  updateVoteLoop(loopId: string, patch: Partial<VoteLoop>): Promise<VoteLoop | null>;
+  importVoteLoops(items: VoteLoop[]): Promise<void>;
+
+  // Vote moderators
+  getVoteModerators(voteId: string): Promise<VoteModerator[]>;
+  addVoteModerator(voteId: string, input: { displayName: string; email?: string; addedByUserId: string }): Promise<VoteModerator>;
+  revokeVoteModerator(moderatorId: string): Promise<void>;
+  resolveVoteModeratorToken(token: string): Promise<{ vote: VoteEntity; moderator: VoteModerator } | null>;
+  importVoteModerators(items: VoteModerator[]): Promise<void>;
 
   // System
   clearAllData(): Promise<void>;

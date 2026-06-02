@@ -47,6 +47,7 @@ export interface TaskEntity {
   parentId: string | null; // For hierarchical tasks
   children?: string[]; // Add children array for hierarchical structure
   updatedAt?: string | null; // Last modification timestamp for card aging
+  linkedVoteIds?: string[];
 }
 
 export interface MonthlyBalanceData {
@@ -69,6 +70,7 @@ export type ModuleId =
   | 'timetable'
   | 'metrics'
   | 'settings'
+  | 'voting'
   | 'dream.dream'
   | 'dream.storyboard'
   | 'dream.prioritization'
@@ -205,6 +207,34 @@ export interface PersistenceAdapter {
   updateFramework(id: string, patch: Partial<FrameworkEntity>): Promise<FrameworkEntity | null>;
   deleteFramework(id: string): Promise<void>;
   importFrameworks(frameworks: FrameworkEntity[]): Promise<void>;
+
+  // Votes
+  listVotes(opts?: { linkedTaskId?: string; ownerId?: string; kind?: VoteKind }): Promise<VoteEntity[]>;
+  getVoteById(id: string): Promise<VoteEntity | null>;
+  getVoteBySlug(slug: string): Promise<VoteEntity | null>;
+  createVote(input: Partial<VoteEntity>): Promise<VoteEntity>;
+  updateVote(id: string, patch: Partial<VoteEntity>): Promise<VoteEntity | null>;
+  finalizeVote(id: string, outcome: VoteEntity['outcome']): Promise<VoteEntity | null>;
+  deleteVote(id: string): Promise<void>;
+  importVotes(items: VoteEntity[]): Promise<void>;
+
+  // Vote responses
+  listVoteResponses(voteId: string): Promise<VoteResponseEntity[]>;
+  importVoteResponses(items: VoteResponseEntity[]): Promise<void>;
+
+  // Vote loops (CONSENT_LOOP)
+  listVoteLoops(voteId: string): Promise<VoteLoop[]>;
+  createVoteLoop(voteId: string, loop: Partial<VoteLoop>): Promise<VoteLoop>;
+  updateVoteLoop(loopId: string, patch: Partial<VoteLoop>): Promise<VoteLoop | null>;
+  closeVoteLoop(loopId: string, gating: { value: -1 | 0 | 1; comment?: string }): Promise<VoteLoop | null>;
+  importVoteLoops(items: VoteLoop[]): Promise<void>;
+
+  // Vote moderators
+  listVoteModerators(voteId: string): Promise<VoteModerator[]>;
+  addVoteModerator(voteId: string, input: { displayName: string; email?: string }): Promise<VoteModerator>;
+  revokeVoteModerator(moderatorId: string): Promise<void>;
+  resolveVoteModerator(token: string): Promise<{ vote: VoteEntity; moderator: VoteModerator } | null>;
+  importVoteModerators(items: VoteModerator[]): Promise<void>;
 }
 
 export type FactTag = 'A' | 'N' | 'K' | 'P';
@@ -241,6 +271,97 @@ export type DreamColumn = FertilizationColumn;
 export type TimeFrame = '3mo' | '6mo' | '1y' | '2y' | '4y';
 export type VotingMode = 'THUMBS_UP' | 'THUMBS_UD_NEUTRAL' | 'POINTS' | 'MAJORITY_JUDGMENT';
 export type VotingPhase = 'IDLE' | 'VOTING' | 'REVEALED';
+
+export type VoteMode = VotingMode | 'CONSENT_LOOP';
+export type VoteKind = 'consultation' | 'decision';
+export type VotePhase = 'IDLE' | 'OPEN' | 'CLOSED' | 'FINALIZED';
+
+export interface VoteProposal {
+  id: string;
+  content: string;
+  description?: string;
+  infoUrl?: string;
+  position: number;
+  active: boolean;
+}
+
+export interface VoteConfig {
+  mode: VoteMode;
+  kind: VoteKind;
+  phase: VotePhase;
+  allowMultiple?: boolean;
+  maxPointsPerUser?: number;
+  mjLabels?: Record<number, string>;
+  isAnonymous?: boolean;
+  allowFreeText?: boolean;
+  requireObjectionComment?: boolean;
+  allowAudienceProposals?: boolean;
+  consentLoopMaxRounds?: number;
+  consentLoopGatingMode?: 'UD_NEUTRAL' | 'NONE';
+  isHiddenFromHome?: boolean;
+  openAt?: string;
+  closeAt?: string;
+}
+
+export interface VoteEntity {
+  id: string;
+  slug: string;
+  title: string;
+  description?: string;
+  ownerId: string;
+  proposals: VoteProposal[];
+  config: VoteConfig;
+  outcome?: {
+    winningProposalId: string | null;
+    summary: string;
+    finalizedAt: string;
+    finalizedByUserId: string;
+    signature?: string;
+    loopVerdict?: 'ADOPTED' | 'WITHDRAWN' | 'BLOCKED';
+    finalLoopId?: string;
+  };
+  moderationTokens?: VoteModerator[];
+  createdAt: string;
+  updatedAt: string;
+  linkedTaskId?: string;
+}
+
+export interface VoteResponseEntity {
+  id: string;
+  voteId: string;
+  proposalId: string | null;
+  loopId?: string;
+  userId: string | null;
+  voterToken: string;
+  value: number;
+  comment?: string;
+  submittedAt: string;
+}
+
+export interface VoteLoop {
+  id: string;
+  voteId: string;
+  roundNumber: number;
+  proposalContent: string;
+  openedAt: string;
+  closedAt?: string;
+  openedByUserId: string;
+  gatingValue?: -1 | 0 | 1;
+  gatingComment?: string;
+}
+
+export interface VoteModerator {
+  id: string;
+  voteId: string;
+  userId?: string;
+  displayName: string;
+  email?: string;
+  token: string;
+  addedByUserId: string;
+  addedAt: string;
+  active: boolean;
+  lastSeenAt?: string;
+}
 
 export interface FertilizationBoardEntity {
   moderatorId: string | null;

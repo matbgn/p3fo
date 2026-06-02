@@ -14,7 +14,12 @@ import type {
   ReminderEntity,
   FrameworkEntity,
   FrameworkType,
-  MonthlyBalanceData
+  MonthlyBalanceData,
+  VoteEntity,
+  VoteResponseEntity,
+  VoteLoop,
+  VoteModerator,
+  VoteKind
 } from '../../src/lib/persistence-types.js';
 
 // Raw database row types for pg (JSONB is already parsed, booleans are booleans)
@@ -95,6 +100,20 @@ interface FrameworkDbRow {
   frameworkType: string;
   parentId: string | null;
   categories: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface VoteDbRow {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  ownerId: string;
+  proposals: string;
+  config: string;
+  outcome: string | null;
+  linkedTaskId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -330,7 +349,70 @@ class PostgresClient implements DbClient {
       )
     `);
 
-    // Create indexes for performance optimization
+    // Votes table
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS "votes" (
+        "id" TEXT PRIMARY KEY,
+        "slug" TEXT NOT NULL UNIQUE,
+        "title" TEXT NOT NULL,
+        "description" TEXT,
+        "ownerId" TEXT NOT NULL,
+        "proposals" JSONB NOT NULL DEFAULT '[]',
+        "config" JSONB NOT NULL DEFAULT '{}',
+        "outcome" JSONB,
+        "linkedTaskId" TEXT,
+        "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL,
+        "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL
+      )
+    `);
+
+    // Vote responses table
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS "voteResponses" (
+        "id" TEXT PRIMARY KEY,
+        "voteId" TEXT NOT NULL REFERENCES "votes"("id") ON DELETE CASCADE,
+        "proposalId" TEXT,
+        "loopId" TEXT,
+        "userId" TEXT,
+        "voterToken" TEXT NOT NULL,
+        "value" DOUBLE PRECISION NOT NULL,
+        "comment" TEXT,
+        "submittedAt" TIMESTAMP WITH TIME ZONE NOT NULL,
+        UNIQUE("voteId", "voterToken")
+      )
+    `);
+
+    // Vote loops table (CONSENT_LOOP)
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS "voteLoops" (
+        "id" TEXT PRIMARY KEY,
+        "voteId" TEXT NOT NULL REFERENCES "votes"("id") ON DELETE CASCADE,
+        "roundNumber" INTEGER NOT NULL,
+        "proposalContent" TEXT NOT NULL,
+        "openedAt" TIMESTAMP WITH TIME ZONE NOT NULL,
+        "closedAt" TIMESTAMP WITH TIME ZONE,
+        "openedByUserId" TEXT NOT NULL,
+        "gatingValue" INTEGER,
+        "gatingComment" TEXT,
+        UNIQUE("voteId", "roundNumber")
+      )
+    `);
+
+    // Vote moderators table
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS "voteModerators" (
+        "id" TEXT PRIMARY KEY,
+        "voteId" TEXT NOT NULL REFERENCES "votes"("id") ON DELETE CASCADE,
+        "userId" TEXT,
+        "displayName" TEXT NOT NULL,
+        "email" TEXT,
+        "token" TEXT NOT NULL UNIQUE,
+        "addedByUserId" TEXT NOT NULL,
+        "addedAt" TIMESTAMP WITH TIME ZONE NOT NULL,
+        "active" BOOLEAN NOT NULL DEFAULT TRUE,
+        "lastSeenAt" TIMESTAMP WITH TIME ZONE
+      )
+    `);
     // These indexes dramatically improve query performance when filtering by userId, parentId, or triageStatus
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId" ON "tasks"("userId")`);
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_tasks_parentId" ON "tasks"("parentId")`);
@@ -353,6 +435,16 @@ class PostgresClient implements DbClient {
     // Frameworks indexes
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_frameworks_frameworkType" ON "frameworks"("frameworkType")`);
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_frameworks_parentId" ON "frameworks"("parentId")`);
+
+    // Votes indexes
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_votes_slug" ON "votes"("slug")`);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_votes_ownerId" ON "votes"("ownerId")`);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_votes_linkedTaskId" ON "votes"("linkedTaskId")`);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_voteResponses_voteId" ON "voteResponses"("voteId")`);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_voteResponses_loopId" ON "voteResponses"("loopId")`);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_voteLoops_voteId" ON "voteLoops"("voteId")`);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_voteModerators_voteId" ON "voteModerators"("voteId")`);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_voteModerators_token" ON "voteModerators"("token")`);
 
     // 2. Run migrations AFTER tables exist
     try {
@@ -1440,6 +1532,466 @@ class PostgresClient implements DbClient {
     };
   }
 
+  // Votes
+  async getVotes(opts?: { linkedTaskId?: string; ownerId?: string; kind?: VoteKind }): Promise<VoteEntity[]> {
+    const conditions: string[] = [];
+    const params: (string | null)[] = [];
+    let paramIdx = 1;
+
+    if (opts?.linkedTaskId) {
+      conditions.push(`"linkedTaskId" = $${paramIdx++}`);
+      params.push(opts.linkedTaskId);
+    }
+    if (opts?.ownerId) {
+      conditions.push(`"ownerId" = $${paramIdx++}`);
+      params.push(opts.ownerId);
+    }
+    if (opts?.kind) {
+      conditions.push(`"config"->>'kind' = $${paramIdx++}`);
+      params.push(opts.kind);
+    }
+
+    const whereClause = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
+    const result = await this.pool.query(`SELECT * FROM "votes"${whereClause} ORDER BY "createdAt" DESC`, params);
+    return result.rows.map((row: VoteDbRow) => this.mapVoteDbRowToEntity(row));
+  }
+
+  async getVoteById(id: string): Promise<VoteEntity | null> {
+    const result = await this.pool.query('SELECT * FROM "votes" WHERE "id" = $1', [id]);
+    if (result.rows.length === 0) return null;
+    return this.mapVoteDbRowToEntity(result.rows[0]);
+  }
+
+  async getVoteBySlug(slug: string): Promise<VoteEntity | null> {
+    const result = await this.pool.query('SELECT * FROM "votes" WHERE "slug" = $1', [slug]);
+    if (result.rows.length === 0) return null;
+    return this.mapVoteDbRowToEntity(result.rows[0]);
+  }
+
+  async createVote(input: Partial<VoteEntity>): Promise<VoteEntity> {
+    const now = new Date().toISOString();
+    const slug = input.slug || this.generateSlug();
+    const newVote: VoteEntity = {
+      id: input.id || crypto.randomUUID(),
+      slug,
+      title: input.title || 'New Vote',
+      description: input.description,
+      ownerId: input.ownerId || 'unknown',
+      proposals: input.proposals || [],
+      config: input.config || { mode: 'THUMBS_UP', kind: 'consultation', phase: 'IDLE' },
+      outcome: input.outcome,
+      createdAt: input.createdAt || now,
+      updatedAt: input.updatedAt || now,
+      linkedTaskId: input.linkedTaskId,
+    };
+
+    await this.pool.query(`
+      INSERT INTO "votes"("id", "slug", "title", "description", "ownerId", "proposals", "config", "outcome", "linkedTaskId", "createdAt", "updatedAt")
+      VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    `, [
+      newVote.id,
+      newVote.slug,
+      newVote.title,
+      newVote.description ?? null,
+      newVote.ownerId,
+      JSON.stringify(newVote.proposals),
+      JSON.stringify(newVote.config),
+      newVote.outcome ? JSON.stringify(newVote.outcome) : null,
+      newVote.linkedTaskId ?? null,
+      newVote.createdAt,
+      newVote.updatedAt,
+    ]);
+
+    return newVote;
+  }
+
+  async updateVote(id: string, patch: Partial<VoteEntity>): Promise<VoteEntity | null> {
+    const current = await this.getVoteById(id);
+    if (!current) return null;
+
+    if (current.config.phase === 'FINALIZED' && patch.config?.phase === 'FINALIZED') {
+      return current;
+    }
+
+    const updated: VoteEntity = {
+      ...current,
+      ...patch,
+      config: patch.config ? { ...current.config, ...patch.config } : current.config,
+      proposals: patch.proposals ?? current.proposals,
+      outcome: patch.outcome ?? current.outcome,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await this.pool.query(`
+      UPDATE "votes" SET
+        "title" = $1, "description" = $2, "ownerId" = $3, "proposals" = $4,
+        "config" = $5, "outcome" = $6, "linkedTaskId" = $7, "updatedAt" = $8
+      WHERE "id" = $9
+    `, [
+      updated.title,
+      updated.description ?? null,
+      updated.ownerId,
+      JSON.stringify(updated.proposals),
+      JSON.stringify(updated.config),
+      updated.outcome ? JSON.stringify(updated.outcome) : null,
+      updated.linkedTaskId ?? null,
+      updated.updatedAt,
+      updated.id,
+    ]);
+
+    return updated;
+  }
+
+  async finalizeVote(id: string, outcome: VoteEntity['outcome']): Promise<VoteEntity | null> {
+    const current = await this.getVoteById(id);
+    if (!current) return null;
+
+    const updated: VoteEntity = {
+      ...current,
+      config: { ...current.config, phase: 'FINALIZED' },
+      outcome,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await this.pool.query(`
+      UPDATE "votes" SET "config" = $1, "outcome" = $2, "updatedAt" = $3 WHERE "id" = $4
+    `, [
+      JSON.stringify(updated.config),
+      JSON.stringify(updated.outcome),
+      updated.updatedAt,
+      updated.id,
+    ]);
+
+    return updated;
+  }
+
+  async deleteVote(id: string): Promise<void> {
+    await this.pool.query('DELETE FROM "votes" WHERE "id" = $1', [id]);
+  }
+
+  async importVotes(items: VoteEntity[]): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      for (const vote of items) {
+        await client.query(`
+          INSERT INTO "votes"("id", "slug", "title", "description", "ownerId", "proposals", "config", "outcome", "linkedTaskId", "createdAt", "updatedAt")
+          VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          ON CONFLICT ("id") DO UPDATE SET
+            "slug" = EXCLUDED."slug",
+            "title" = EXCLUDED."title",
+            "description" = EXCLUDED."description",
+            "ownerId" = EXCLUDED."ownerId",
+            "proposals" = EXCLUDED."proposals",
+            "config" = EXCLUDED."config",
+            "outcome" = EXCLUDED."outcome",
+            "linkedTaskId" = EXCLUDED."linkedTaskId",
+            "updatedAt" = EXCLUDED."updatedAt"
+        `, [
+          vote.id,
+          vote.slug,
+          vote.title,
+          vote.description ?? null,
+          vote.ownerId,
+          JSON.stringify(vote.proposals),
+          JSON.stringify(vote.config),
+          vote.outcome ? JSON.stringify(vote.outcome) : null,
+          vote.linkedTaskId ?? null,
+          vote.createdAt,
+          vote.updatedAt,
+        ]);
+      }
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private generateSlug(): string {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let slug = '';
+    for (let i = 0; i < 7; i++) {
+      slug += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return slug;
+  }
+
+  private mapVoteDbRowToEntity(row: VoteDbRow): VoteEntity {
+    return {
+      id: row.id,
+      slug: row.slug,
+      title: row.title,
+      description: row.description ?? undefined,
+      ownerId: row.ownerId,
+      proposals: typeof row.proposals === 'string' ? JSON.parse(row.proposals) : (row.proposals || []),
+      config: typeof row.config === 'string' ? JSON.parse(row.config) : (row.config || {}),
+      outcome: row.outcome ? (typeof row.outcome === 'string' ? JSON.parse(row.outcome) : row.outcome) : undefined,
+      linkedTaskId: row.linkedTaskId ?? undefined,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  // Vote responses
+  async getVoteResponses(voteId: string): Promise<VoteResponseEntity[]> {
+    const result = await this.pool.query('SELECT * FROM "voteResponses" WHERE "voteId" = $1 ORDER BY "submittedAt" ASC', [voteId]);
+    return result.rows.map((row: Record<string, unknown>) => ({
+      id: row.id as string,
+      voteId: row.voteId as string,
+      proposalId: row.proposalId as string | null,
+      loopId: (row.loopId as string | null) ?? undefined,
+      userId: row.userId as string | null,
+      voterToken: row.voterToken as string,
+      value: row.value as number,
+      comment: (row.comment as string | null) ?? undefined,
+      submittedAt: row.submittedAt as string,
+    }));
+  }
+
+  async createVoteResponse(voteId: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity> {
+    const newResponse: VoteResponseEntity = {
+      id: response.id || crypto.randomUUID(),
+      voteId,
+      proposalId: response.proposalId ?? null,
+      loopId: response.loopId,
+      userId: response.userId ?? null,
+      voterToken: response.voterToken || crypto.randomUUID(),
+      value: response.value ?? 0,
+      comment: response.comment,
+      submittedAt: response.submittedAt || new Date().toISOString(),
+    };
+
+    await this.pool.query(`
+      INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt")
+      VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ON CONFLICT ("voteId", "voterToken") DO UPDATE SET
+        "proposalId" = EXCLUDED."proposalId",
+        "loopId" = EXCLUDED."loopId",
+        "userId" = EXCLUDED."userId",
+        "value" = EXCLUDED."value",
+        "comment" = EXCLUDED."comment",
+        "submittedAt" = EXCLUDED."submittedAt"
+    `, [
+      newResponse.id,
+      newResponse.voteId,
+      newResponse.proposalId,
+      newResponse.loopId ?? null,
+      newResponse.userId,
+      newResponse.voterToken,
+      newResponse.value,
+      newResponse.comment ?? null,
+      newResponse.submittedAt,
+    ]);
+
+    return newResponse;
+  }
+
+  async importVoteResponses(items: VoteResponseEntity[]): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const item of items) {
+        await client.query(`
+          INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt")
+          VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          ON CONFLICT ("voteId", "voterToken") DO UPDATE SET
+            "proposalId" = EXCLUDED."proposalId",
+            "value" = EXCLUDED."value",
+            "comment" = EXCLUDED."comment",
+            "submittedAt" = EXCLUDED."submittedAt"
+        `, [item.id, item.voteId, item.proposalId, item.loopId ?? null, item.userId, item.voterToken, item.value, item.comment ?? null, item.submittedAt]);
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // Vote loops (CONSENT_LOOP)
+  async getVoteLoops(voteId: string): Promise<VoteLoop[]> {
+    const result = await this.pool.query('SELECT * FROM "voteLoops" WHERE "voteId" = $1 ORDER BY "roundNumber" ASC', [voteId]);
+    return result.rows.map((row: Record<string, unknown>) => ({
+      id: row.id as string,
+      voteId: row.voteId as string,
+      roundNumber: row.roundNumber as number,
+      proposalContent: row.proposalContent as string,
+      openedAt: row.openedAt as string,
+      closedAt: (row.closedAt as string | null) ?? undefined,
+      openedByUserId: row.openedByUserId as string,
+      gatingValue: row.gatingValue != null ? (row.gatingValue as -1 | 0 | 1) : undefined,
+      gatingComment: (row.gatingComment as string | null) ?? undefined,
+    }));
+  }
+
+  async createVoteLoop(voteId: string, loop: Partial<VoteLoop>): Promise<VoteLoop> {
+    const newLoop: VoteLoop = {
+      id: loop.id || crypto.randomUUID(),
+      voteId,
+      roundNumber: loop.roundNumber ?? 1,
+      proposalContent: loop.proposalContent || '',
+      openedAt: loop.openedAt || new Date().toISOString(),
+      closedAt: loop.closedAt,
+      openedByUserId: loop.openedByUserId || 'unknown',
+      gatingValue: loop.gatingValue,
+      gatingComment: loop.gatingComment,
+    };
+
+    await this.pool.query(`
+      INSERT INTO "voteLoops"("id", "voteId", "roundNumber", "proposalContent", "openedAt", "closedAt", "openedByUserId", "gatingValue", "gatingComment")
+      VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `, [newLoop.id, newLoop.voteId, newLoop.roundNumber, newLoop.proposalContent, newLoop.openedAt, newLoop.closedAt ?? null, newLoop.openedByUserId, newLoop.gatingValue ?? null, newLoop.gatingComment ?? null]);
+
+    return newLoop;
+  }
+
+  async updateVoteLoop(loopId: string, patch: Partial<VoteLoop>): Promise<VoteLoop | null> {
+    const result = await this.pool.query('SELECT * FROM "voteLoops" WHERE "id" = $1', [loopId]);
+    if (result.rows.length === 0) return null;
+    const current = result.rows[0];
+
+    const updated = { ...current, ...patch };
+    await this.pool.query(`
+      UPDATE "voteLoops" SET "proposalContent" = $1, "closedAt" = $2, "gatingValue" = $3, "gatingComment" = $4 WHERE "id" = $5
+    `, [updated.proposalContent, updated.closedAt ?? null, updated.gatingValue ?? null, updated.gatingComment ?? null, loopId]);
+
+    return updated;
+  }
+
+  async closeVoteLoop(loopId: string, gating: { value: -1 | 0 | 1; comment?: string }): Promise<VoteLoop | null> {
+    const result = await this.pool.query('SELECT * FROM "voteLoops" WHERE "id" = $1', [loopId]);
+    if (result.rows.length === 0) return null;
+
+    const closedAt = new Date().toISOString();
+    await this.pool.query(`
+      UPDATE "voteLoops" SET "closedAt" = $1, "gatingValue" = $2, "gatingComment" = $3 WHERE "id" = $4
+    `, [closedAt, gating.value, gating.comment ?? null, loopId]);
+
+    const updatedResult = await this.pool.query('SELECT * FROM "voteLoops" WHERE "id" = $1', [loopId]);
+    return updatedResult.rows[0];
+  }
+
+  async importVoteLoops(items: VoteLoop[]): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const item of items) {
+        await client.query(`
+          INSERT INTO "voteLoops"("id", "voteId", "roundNumber", "proposalContent", "openedAt", "closedAt", "openedByUserId", "gatingValue", "gatingComment")
+          VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          ON CONFLICT ("voteId", "roundNumber") DO UPDATE SET
+            "proposalContent" = EXCLUDED."proposalContent",
+            "closedAt" = EXCLUDED."closedAt",
+            "gatingValue" = EXCLUDED."gatingValue",
+            "gatingComment" = EXCLUDED."gatingComment"
+        `, [item.id, item.voteId, item.roundNumber, item.proposalContent, item.openedAt, item.closedAt ?? null, item.openedByUserId, item.gatingValue ?? null, item.gatingComment ?? null]);
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // Vote moderators
+  async getVoteModerators(voteId: string): Promise<VoteModerator[]> {
+    const result = await this.pool.query('SELECT * FROM "voteModerators" WHERE "voteId" = $1 AND "active" = TRUE ORDER BY "addedAt" ASC', [voteId]);
+    return result.rows.map((row: Record<string, unknown>) => ({
+      id: row.id as string,
+      voteId: row.voteId as string,
+      userId: (row.userId as string | null) ?? undefined,
+      displayName: row.displayName as string,
+      email: (row.email as string | null) ?? undefined,
+      token: row.token as string,
+      addedByUserId: row.addedByUserId as string,
+      addedAt: row.addedAt as string,
+      active: row.active as boolean,
+      lastSeenAt: (row.lastSeenAt as string | null) ?? undefined,
+    }));
+  }
+
+  async addVoteModerator(voteId: string, input: { displayName: string; email?: string; addedByUserId: string }): Promise<VoteModerator> {
+    const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+
+    await this.pool.query(`
+      INSERT INTO "voteModerators"("id", "voteId", "userId", "displayName", "email", "token", "addedByUserId", "addedAt", "active")
+      VALUES($1, $2, $3, $4, $5, $6, $7, $8, TRUE)
+    `, [id, voteId, null, input.displayName, input.email ?? null, token, input.addedByUserId, now]);
+
+    return {
+      id,
+      voteId,
+      displayName: input.displayName,
+      email: input.email,
+      token,
+      addedByUserId: input.addedByUserId,
+      addedAt: now,
+      active: true,
+    };
+  }
+
+  async revokeVoteModerator(moderatorId: string): Promise<void> {
+    await this.pool.query('UPDATE "voteModerators" SET "active" = FALSE WHERE "id" = $1', [moderatorId]);
+  }
+
+  async resolveVoteModeratorToken(token: string): Promise<{ vote: VoteEntity; moderator: VoteModerator } | null> {
+    const result = await this.pool.query('SELECT * FROM "voteModerators" WHERE "token" = $1 AND "active" = TRUE', [token]);
+    if (result.rows.length === 0) return null;
+
+    const row = result.rows[0];
+    const moderator: VoteModerator = {
+      id: row.id,
+      voteId: row.voteId,
+      userId: row.userId ?? undefined,
+      displayName: row.displayName,
+      email: row.email ?? undefined,
+      token: row.token,
+      addedByUserId: row.addedByUserId,
+      addedAt: row.addedAt,
+      active: row.active,
+      lastSeenAt: row.lastSeenAt ?? undefined,
+    };
+
+    const vote = await this.getVoteById(moderator.voteId);
+    if (!vote) return null;
+
+    await this.pool.query('UPDATE "voteModerators" SET "lastSeenAt" = $1 WHERE "id" = $2', [new Date().toISOString(), moderator.id]);
+    return { vote, moderator };
+  }
+
+  async importVoteModerators(items: VoteModerator[]): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const item of items) {
+        await client.query(`
+          INSERT INTO "voteModerators"("id", "voteId", "userId", "displayName", "email", "token", "addedByUserId", "addedAt", "active", "lastSeenAt")
+          VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          ON CONFLICT ("token") DO UPDATE SET
+            "displayName" = EXCLUDED."displayName",
+            "active" = EXCLUDED."active"
+        `, [item.id, item.voteId, item.userId ?? null, item.displayName, item.email ?? null, item.token, item.addedByUserId, item.addedAt, item.active, item.lastSeenAt ?? null]);
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   private mapTaskDbRowToEntity(row: TaskDbRow): TaskEntity {
     return {
       ...row,
@@ -1514,6 +2066,10 @@ class PostgresClient implements DbClient {
       await client.query('DROP TABLE IF EXISTS "circles" CASCADE');
       await client.query('DROP TABLE IF EXISTS "reminders" CASCADE');
       await client.query('DROP TABLE IF EXISTS "frameworks" CASCADE');
+      await client.query('DROP TABLE IF EXISTS "votes" CASCADE');
+      await client.query('DROP TABLE IF EXISTS "voteResponses" CASCADE');
+      await client.query('DROP TABLE IF EXISTS "voteLoops" CASCADE');
+      await client.query('DROP TABLE IF EXISTS "voteModerators" CASCADE');
 
       // Drop legacy tables if they exist
       await client.query('DROP TABLE IF EXISTS tasks CASCADE');

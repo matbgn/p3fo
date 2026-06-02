@@ -3,6 +3,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { createDbClient } from './db/index.js';
 import { DbClient } from './db/index.js';
+import { VoteKind } from '../src/lib/persistence-types.js';
 import { WebSocketServer } from 'ws';
 import { setupWSConnection } from 'y-websocket/bin/utils';
 
@@ -584,6 +585,243 @@ app.post('/api/frameworks/import', express.json({ limit: '10mb' }), async (req: 
     console.error('Failed to import frameworks:', error);
     const message = error instanceof Error ? error.message : String(error);
     res.status(500).json({ error: 'Failed to import frameworks', details: message });
+  }
+});
+
+// Votes routes
+app.get('/api/votes', async (req: Request, res: Response) => {
+  try {
+    const opts: { linkedTaskId?: string; ownerId?: string; kind?: VoteKind } = {};
+    if (req.query.linkedTaskId) opts.linkedTaskId = req.query.linkedTaskId as string;
+    if (req.query.ownerId) opts.ownerId = req.query.ownerId as string;
+    if (req.query.kind) opts.kind = req.query.kind as VoteKind;
+    const votes = await db.getVotes(opts);
+    res.json(votes);
+  } catch (error: unknown) {
+    console.error('Error fetching votes:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to fetch votes', details: message });
+  }
+});
+
+app.post('/api/votes', async (req: Request, res: Response) => {
+  try {
+    const vote = await db.createVote(req.body);
+    res.status(201).json(vote);
+  } catch (error: unknown) {
+    console.error('Error creating vote:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to create vote', details: message });
+  }
+});
+
+app.get('/api/votes/:idOrSlug', async (req: Request, res: Response) => {
+  try {
+    const { idOrSlug } = req.params;
+    let vote = await db.getVoteById(idOrSlug);
+    if (!vote) {
+      vote = await db.getVoteBySlug(idOrSlug);
+    }
+    if (!vote) {
+      return res.status(404).json({ error: 'Vote not found' });
+    }
+    res.json(vote);
+  } catch (error: unknown) {
+    console.error('Error fetching vote:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to fetch vote', details: message });
+  }
+});
+
+app.put('/api/votes/:id', async (req: Request, res: Response) => {
+  try {
+    const vote = await db.updateVote(req.params.id, req.body);
+    if (!vote) {
+      return res.status(404).json({ error: 'Vote not found' });
+    }
+    res.json(vote);
+  } catch (error: unknown) {
+    console.error('Error updating vote:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to update vote', details: message });
+  }
+});
+
+app.post('/api/votes/:id/finalize', async (req: Request, res: Response) => {
+  try {
+    const vote = await db.getVoteById(req.params.id);
+    if (!vote) {
+      return res.status(404).json({ error: 'Vote not found' });
+    }
+    if (vote.config.kind !== 'decision') {
+      return res.status(400).json({ error: 'Only decision votes can be finalized' });
+    }
+    const outcome = req.body;
+    const finalized = await db.finalizeVote(req.params.id, outcome);
+    res.json(finalized);
+  } catch (error: unknown) {
+    console.error('Error finalizing vote:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to finalize vote', details: message });
+  }
+});
+
+app.delete('/api/votes/:id', async (req: Request, res: Response) => {
+  try {
+    await db.deleteVote(req.params.id);
+    res.status(204).send();
+  } catch (error: unknown) {
+    console.error('Error deleting vote:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to delete vote', details: message });
+  }
+});
+
+// Vote responses (public)
+app.post('/api/votes/:idOrSlug/responses', async (req: Request, res: Response) => {
+  try {
+    const { idOrSlug } = req.params;
+    let vote = await db.getVoteById(idOrSlug);
+    if (!vote) {
+      vote = await db.getVoteBySlug(idOrSlug);
+    }
+    if (!vote) {
+      return res.status(404).json({ error: 'Vote not found' });
+    }
+    if (vote.config.phase !== 'OPEN') {
+      return res.status(400).json({ error: 'Vote is not open for responses' });
+    }
+    const response = await db.createVoteResponse(vote.id, req.body);
+    res.status(201).json(response);
+  } catch (error: unknown) {
+    console.error('Error creating vote response:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to submit vote', details: message });
+  }
+});
+
+// Vote results (public)
+app.get('/api/votes/:idOrSlug/results', async (req: Request, res: Response) => {
+  try {
+    const { idOrSlug } = req.params;
+    let vote = await db.getVoteById(idOrSlug);
+    if (!vote) {
+      vote = await db.getVoteBySlug(idOrSlug);
+    }
+    if (!vote) {
+      return res.status(404).json({ error: 'Vote not found' });
+    }
+    const responses = await db.getVoteResponses(vote.id);
+    const safeResponses = vote.config.isAnonymous
+      ? responses.map(r => ({ ...r, userId: null }))
+      : responses;
+    res.json({ vote, responses: safeResponses, totalVotes: responses.length });
+  } catch (error: unknown) {
+    console.error('Error fetching vote results:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to fetch results', details: message });
+  }
+});
+
+// Vote loops (CONSENT_LOOP)
+app.get('/api/votes/:id/loops', async (req: Request, res: Response) => {
+  try {
+    const loops = await db.getVoteLoops(req.params.id);
+    res.json(loops);
+  } catch (error: unknown) {
+    console.error('Error fetching vote loops:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to fetch loops', details: message });
+  }
+});
+
+app.post('/api/votes/:id/loops', async (req: Request, res: Response) => {
+  try {
+    const loop = await db.createVoteLoop(req.params.id, req.body);
+    res.status(201).json(loop);
+  } catch (error: unknown) {
+    console.error('Error creating vote loop:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to create loop', details: message });
+  }
+});
+
+app.post('/api/votes/:id/loops/:loopId/close', async (req: Request, res: Response) => {
+  try {
+    const gating = req.body;
+    const loop = await db.closeVoteLoop(req.params.loopId, gating);
+    if (!loop) {
+      return res.status(404).json({ error: 'Loop not found' });
+    }
+    res.json(loop);
+  } catch (error: unknown) {
+    console.error('Error closing vote loop:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to close loop', details: message });
+  }
+});
+
+// Vote moderators
+app.get('/api/votes/:id/moderators', async (req: Request, res: Response) => {
+  try {
+    const moderators = await db.getVoteModerators(req.params.id);
+    res.json(moderators);
+  } catch (error: unknown) {
+    console.error('Error fetching vote moderators:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to fetch moderators', details: message });
+  }
+});
+
+app.post('/api/votes/:id/moderators', async (req: Request, res: Response) => {
+  try {
+    const moderator = await db.addVoteModerator(req.params.id, req.body);
+    res.status(201).json(moderator);
+  } catch (error: unknown) {
+    console.error('Error adding vote moderator:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to add moderator', details: message });
+  }
+});
+
+app.delete('/api/votes/:id/moderators/:moderatorId', async (req: Request, res: Response) => {
+  try {
+    await db.revokeVoteModerator(req.params.moderatorId);
+    res.status(204).send();
+  } catch (error: unknown) {
+    console.error('Error revoking vote moderator:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to revoke moderator', details: message });
+  }
+});
+
+app.get('/api/votes/moderate/:token', async (req: Request, res: Response) => {
+  try {
+    const result = await db.resolveVoteModeratorToken(req.params.token);
+    if (!result) {
+      return res.status(404).json({ error: 'Invalid moderator token' });
+    }
+    res.json(result);
+  } catch (error: unknown) {
+    console.error('Error resolving moderator token:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to resolve moderator token', details: message });
+  }
+});
+
+// Vote import
+app.post('/api/votes/import', express.json({ limit: '10mb' }), async (req: Request, res: Response) => {
+  try {
+    const items = req.body;
+    if (!Array.isArray(items)) {
+      return res.status(400).json({ error: 'Expected an array of votes' });
+    }
+    await db.importVotes(items);
+    res.json({ ok: true });
+  } catch (error: unknown) {
+    console.error('Failed to import votes:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to import votes', details: message });
   }
 });
 

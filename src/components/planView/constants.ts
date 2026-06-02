@@ -11,5 +11,6 @@ export const VOTING_MODES_LABELS = {
     'THUMBS_UP': 'Thumbs Up',
     'THUMBS_UD_NEUTRAL': 'Up / Down / Neutral',
     'POINTS': 'Points Budget',
-    'MAJORITY_JUDGMENT': 'Majority Judgment'
+    'MAJORITY_JUDGMENT': 'Majority Judgment',
+    'CONSENT_LOOP': 'Consent Loop'
 };
