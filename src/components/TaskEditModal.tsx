@@ -32,6 +32,7 @@ import { CategorySelect } from "./CategorySelect";
 import { TaskStatusSelect } from "./TaskStatusSelect";
 import { TimeSheet } from "./TimeSheet";
 import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
+import { LinkedVotePicker } from "@/components/voting/LinkedVotePicker";
 
 interface TaskEditModalProps {
     task: Task;
@@ -52,6 +53,7 @@ interface TaskEditModalProps {
     toggleSprintTarget: (id: string) => void;
     currentUserId: string | undefined;
     onToggleTimer?: (id: string, currentUserId?: string) => void;
+    updateLinkedVoteIds?: (id: string, linkedVoteIds: string[]) => void;
 }
 
 const DIFFICULTY_OPTIONS: Array<0.5 | 1 | 2 | 3 | 5 | 8> = [0.5, 1, 2, 3, 5, 8];
@@ -75,6 +77,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
     toggleSprintTarget,
     currentUserId,
     onToggleTimer,
+    updateLinkedVoteIds: updateLinkedVoteIdsProp,
 }) => {
     const { settings } = useSettingsContext();
     const weekStartsOn = settings.weekStartDay as 0 | 1;
@@ -379,8 +382,16 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
                                 <Switch id="sprintTarget" checked={activeTask.sprintTarget} onCheckedChange={() => toggleSprintTarget(activeTask.id)} />
                             </div>
                         </div>
+                        </div>
+                        {updateLinkedVoteIdsProp && (
+                          <div className="flex flex-col gap-2 pt-2 border-t">
+                            <LinkedVotePicker
+                              linkedVoteIds={activeTask.linkedVoteIds || []}
+                              onChange={(ids) => updateLinkedVoteIdsProp(activeTask.id, ids)}
+                            />
+                          </div>
+                        )}
                     </div>
-                </div>
 
                 <div className="flex justify-end gap-2 pt-4 border-t mt-auto">
                     <Button variant="outline" onClick={onClose}>Cancel</Button>

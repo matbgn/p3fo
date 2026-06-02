@@ -42,6 +42,7 @@ interface TaskDbRow {
   durationInMinutes: number | null;
   priority: number | null;
   userId: string | null;
+  linkedVoteIds: string[] | null;
 }
 
 interface UserSettingsDbRow {
@@ -189,6 +190,7 @@ class PostgresClient implements DbClient {
         "durationInMinutes" INTEGER,
         "priority" INTEGER,
         "userId" TEXT,
+        "linkedVoteIds" JSONB,
         CONSTRAINT "fk_tasks_parent" FOREIGN KEY ("parentId") REFERENCES "tasks" ("id") ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE
       )
     `);
@@ -590,6 +592,9 @@ class PostgresClient implements DbClient {
 
     // QolSurvey columns
     await runMigration('qolSurvey', 'user_id', 'userId');
+
+    // Tasks linkedVoteIds column
+    await addColumn('tasks', 'linkedVoteIds', 'JSONB');
   }
 
   async testConnection(): Promise<void> {
@@ -674,12 +679,13 @@ class PostgresClient implements DbClient {
       userId: input.userId || null,
       parentId: input.parentId || null,
       children: input.children || [],
+      linkedVoteIds: input.linkedVoteIds || undefined,
     };
 
     await this.pool.query(`
       INSERT INTO "tasks" ("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget",
-                         "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                         "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId", "linkedVoteIds")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
     `, [
       newTask.id,
       newTask.parentId,
@@ -699,6 +705,7 @@ class PostgresClient implements DbClient {
       newTask.durationInMinutes,
       newTask.priority,
       newTask.userId,
+      newTask.linkedVoteIds || null,
     ]);
 
     return newTask;
@@ -729,6 +736,7 @@ class PostgresClient implements DbClient {
       updatedTask.durationInMinutes,
       updatedTask.priority,
       updatedTask.userId,
+      updatedTask.linkedVoteIds ? JSON.stringify(updatedTask.linkedVoteIds) : null,
       id
     ];
 
@@ -737,8 +745,8 @@ class PostgresClient implements DbClient {
       SET "parentId" = $1, "title" = $2, "updatedAt" = $3, "triageStatus" = $4, "urgent" = $5,
           "impact" = $6, "majorIncident" = $7, "sprintTarget" = $8, "difficulty" = $9, "timer" = $10,
           "category" = $11, "terminationDate" = $12, "comment" = $13,
-          "durationInMinutes" = $14, "priority" = $15, "userId" = $16
-      WHERE "id" = $17
+          "durationInMinutes" = $14, "priority" = $15, "userId" = $16, "linkedVoteIds" = $17
+      WHERE "id" = $18
     `, params);
 
     return updatedTask;

@@ -41,6 +41,7 @@ interface TaskDbRow {
   durationInMinutes: number | null;
   priority: number | null;
   userId: string | null;
+  linkedVoteIds: string | null;
 }
 
 interface UserSettingsDbRow {
@@ -242,6 +243,7 @@ class SqliteClient implements DbClient {
         "priority" INTEGER,
         "updatedAt" TEXT,
         "userId" TEXT,
+        "linkedVoteIds" TEXT,
         FOREIGN KEY("parentId") REFERENCES "tasks"("id")
       )
     `);
@@ -615,6 +617,9 @@ class SqliteClient implements DbClient {
 
     // QolSurvey columns
     runMigration('qolSurvey', 'user_id', 'userId');
+
+    // Tasks linkedVoteIds column
+    addColumn('tasks', 'linkedVoteIds', 'TEXT');
   }
 
   async testConnection(): Promise<void> {
@@ -669,6 +674,7 @@ class SqliteClient implements DbClient {
       sprintTarget: Boolean(row.sprintTarget),
       timer: row.timer ? JSON.parse(row.timer) : { startTime: null, elapsedTime: 0, isRunning: false },
       updatedAt: row.updatedAt ?? undefined,
+      linkedVoteIds: row.linkedVoteIds ? JSON.parse(row.linkedVoteIds) : undefined,
     }));
 
     return { data, total };
@@ -687,6 +693,7 @@ class SqliteClient implements DbClient {
       sprintTarget: Boolean(row.sprintTarget),
       timer: row.timer ? JSON.parse(row.timer) : { startTime: null, elapsedTime: 0, isRunning: false },
       updatedAt: row.updatedAt ?? undefined,
+      linkedVoteIds: row.linkedVoteIds ? JSON.parse(row.linkedVoteIds) : undefined,
     };
   }
 
@@ -711,6 +718,7 @@ class SqliteClient implements DbClient {
       userId: input.userId || null,
       parentId: input.parentId || null,
       children: input.children || [],
+      linkedVoteIds: input.linkedVoteIds || undefined,
     };
 
     const params = {
@@ -732,11 +740,12 @@ class SqliteClient implements DbClient {
       durationInMinutes: newTask.durationInMinutes,
       priority: newTask.priority,
       userId: newTask.userId,
+      linkedVoteIds: newTask.linkedVoteIds ? JSON.stringify(newTask.linkedVoteIds) : null,
     };
 
     this.db.prepare(`
-      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget", "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId")
-      VALUES(@id, @parentId, @title, @createdAt, @updatedAt, @triageStatus, @urgent, @impact, @majorIncident, @sprintTarget, @difficulty, @timer, @category, @terminationDate, @comment, @durationInMinutes, @priority, @userId)
+      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget", "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId", "linkedVoteIds")
+      VALUES(@id, @parentId, @title, @createdAt, @updatedAt, @triageStatus, @urgent, @impact, @majorIncident, @sprintTarget, @difficulty, @timer, @category, @terminationDate, @comment, @durationInMinutes, @priority, @userId, @linkedVoteIds)
     `).run(params);
 
     return newTask;
@@ -768,6 +777,7 @@ class SqliteClient implements DbClient {
       durationInMinutes: updated.durationInMinutes,
       priority: updated.priority,
       userId: updated.userId,
+      linkedVoteIds: updated.linkedVoteIds ? JSON.stringify(updated.linkedVoteIds) : null,
     };
 
     this.db.prepare(`
@@ -787,7 +797,8 @@ class SqliteClient implements DbClient {
         "comment" = @comment,
         "durationInMinutes" = @durationInMinutes,
         "priority" = @priority,
-        "userId" = @userId
+        "userId" = @userId,
+        "linkedVoteIds" = @linkedVoteIds
       WHERE "id" = @id
         `).run(params);
 

@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useSearchParams } from "react-router-dom";
 import { Vote, Plus, BarChart3, Clock, Trash2, ExternalLink, Eye, Trophy, Edit, ToggleLeft, GitCompare, Shield } from "lucide-react";
 import { useVotes, useVoteResults } from "@/hooks/useVotes";
 import { useVoteLoops } from "@/hooks/useVoteLoops";
@@ -396,6 +397,18 @@ const VotingPage: React.FC = () => {
   const [selectedVote, setSelectedVote] = React.useState<VoteEntity | null>(null);
   const [editorOpen, setEditorOpen] = React.useState(false);
   const [editorVote, setEditorVote] = React.useState<VoteEntity | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  React.useEffect(() => {
+    const openVoteId = searchParams.get("openVoteId");
+    if (openVoteId && !selectedVote) {
+      const vote = votes.find((v) => v.id === openVoteId);
+      if (vote) {
+        setSelectedVote(vote);
+        setSearchParams({}, { replace: true });
+      }
+    }
+  }, [searchParams, votes, selectedVote, setSearchParams]);
 
   const handleCreate = () => {
     setEditorVote(null);
