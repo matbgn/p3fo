@@ -109,6 +109,7 @@ export const CreateLinkedVoteDialog: React.FC<CreateLinkedVoteDialogProps> = ({
             <ProposalEditor
               proposals={proposals}
               onChange={setProposals}
+              kind="consultation"
               readOnly={false}
             />
           </div>

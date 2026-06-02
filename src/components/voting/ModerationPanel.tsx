@@ -40,13 +40,10 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({
     if (!displayName.trim()) return;
     setIsAdding(true);
     try {
-      const moderator = await addModerator(
-        {
-          displayName: displayName.trim(),
-          email: email.trim() || undefined,
-        },
-        currentUserId
-      );
+      const moderator = await addModerator({
+        displayName: displayName.trim(),
+        email: email.trim() || undefined,
+      });
       if (moderator) {
         setDisplayName("");
         setEmail("");

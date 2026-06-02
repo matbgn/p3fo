@@ -47,15 +47,11 @@ export const useVoteModerators = (voteId: string) => {
   }, [voteId]);
 
   const addModerator = async (
-    input: { displayName: string; email?: string },
-    addedByUserId: string
+    input: { displayName: string; email?: string }
   ): Promise<VoteModerator | null> => {
     try {
       const adapter = await getPersistenceAdapter();
-      const moderator = await adapter.addVoteModerator(voteId, {
-        ...input,
-        addedByUserId,
-      });
+      const moderator = await adapter.addVoteModerator(voteId, input);
       setModerators((prev) => [...prev, moderator]);
       return moderator;
     } catch (error) {
