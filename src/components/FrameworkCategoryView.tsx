@@ -2,7 +2,7 @@ import * as React from "react";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css";
-import { doc, isCollaborationEnabled, provider } from "@/lib/collaboration";
+import { doc, isCollaborationEnabled, provider, yFrameworks } from "@/lib/collaboration";
 import { useUserSettings } from "@/hooks/useUserSettings";
 
 const CURSOR_COLORS = [
