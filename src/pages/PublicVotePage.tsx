@@ -2,6 +2,7 @@ import * as React from "react";
 import { useParams } from "react-router-dom";
 import { VoteEntity, VoteResponseEntity, VoteProposal } from "@/lib/persistence-types";
 import { VOTING_MODES_LABELS, MJ_SCALE } from "@/components/planView/constants";
+import { tallyThumbsUp as tallyThumbsUpShared, tallyUDNeutral as tallyUDNeutralShared, tallyPoints as tallyPointsShared, tallyMajorityJudgment as tallyMJShared } from "@/lib/vote-tally";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -313,36 +314,17 @@ const PublicVotePage: React.FC = () => {
   const activeProposals = vote.proposals.filter((p) => p.active);
   const totalVoters = new Set(responses.map((r) => r.voterToken)).size;
 
-  const tallyThumbsUp = (proposalId: string) =>
-    responses.filter((r) => r.proposalId === proposalId && r.value === 1).length;
+  const tallyThumbsUpResult = (proposalId: string) =>
+    tallyThumbsUpShared(responses, proposalId).count;
 
-  const tallyUDN = (proposalId: string) => {
-    const filtered = responses.filter((r) => r.proposalId === proposalId);
-    return {
-      up: filtered.filter((r) => r.value === 1).length,
-      neutral: filtered.filter((r) => r.value === 0).length,
-      down: filtered.filter((r) => r.value === -1).length,
-    };
-  };
+  const tallyUDNResult = (proposalId: string) =>
+    tallyUDNeutralShared(responses, proposalId);
 
-  const tallyPoints = (proposalId: string) => {
-    const filtered = responses.filter((r) => r.proposalId === proposalId);
-    return filtered.reduce((sum, r) => sum + r.value, 0);
-  };
+  const tallyPointsResult = (proposalId: string) =>
+    tallyPointsShared(responses, proposalId).total;
 
-  const tallyMJ = (proposalId: string) => {
-    const filtered = responses.filter((r) => r.proposalId === proposalId);
-    const values = filtered.map((r) => r.value).sort((a, b) => a - b);
-    const median =
-      values.length > 0 ? values[Math.floor(values.length / 2)] : 0;
-    const distribution: Record<number, number> = {};
-    for (const grade of MJ_SCALE) {
-      distribution[grade.value] = filtered.filter(
-        (r) => r.value === grade.value
-      ).length;
-    }
-    return { median, distribution };
-  };
+  const tallyMJResult = (proposalId: string) =>
+    tallyMJShared(responses, proposalId);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -492,7 +474,7 @@ const PublicVotePage: React.FC = () => {
                         </Button>
                         {showResults &&
                           (() => {
-                            const count = tallyThumbsUp(proposal.id);
+                            const count = tallyThumbsUpResult(proposal.id);
                             return (
                               <span className="text-sm text-gray-500">
                                 {count} vote{count !== 1 ? "s" : ""}
@@ -616,7 +598,7 @@ const PublicVotePage: React.FC = () => {
                       Results
                     </h4>
                     {mode === "THUMBS_UP" && (() => {
-                      const count = tallyThumbsUp(proposal.id);
+                      const count = tallyThumbsUpResult(proposal.id);
                       return (
                         <div className="flex items-center gap-2">
                           <span className="text-lg">&#x1F44D;</span>
@@ -634,7 +616,7 @@ const PublicVotePage: React.FC = () => {
                     })()}
 
                     {mode === "THUMBS_UD_NEUTRAL" && (() => {
-                      const t = tallyUDN(proposal.id);
+                      const t = tallyUDNResult(proposal.id);
                       const total = t.up + t.neutral + t.down || 1;
                       return (
                         <div className="space-y-1">
@@ -670,7 +652,7 @@ const PublicVotePage: React.FC = () => {
                     })()}
 
                     {mode === "POINTS" && (() => {
-                      const total = tallyPoints(proposal.id);
+                      const total = tallyPointsResult(proposal.id);
                       return (
                         <div className="flex items-center gap-2">
                           <span className="text-lg">&#x1FA99;</span>
@@ -680,7 +662,7 @@ const PublicVotePage: React.FC = () => {
                     })()}
 
                     {mode === "MAJORITY_JUDGMENT" && (() => {
-                      const t = tallyMJ(proposal.id);
+                      const t = tallyMJResult(proposal.id);
                       const medianGrade = MJ_SCALE.find(
                         (g) => g.value === t.median
                       );
@@ -833,7 +815,7 @@ const PublicVotePage: React.FC = () => {
                       Proposal {proposal.position + 1}
                     </h4>
                     {mode === "THUMBS_UP" && (() => {
-                      const count = tallyThumbsUp(proposal.id);
+                      const count = tallyThumbsUpResult(proposal.id);
                       return (
                         <div className="flex items-center gap-2">
                           <span className="text-lg">&#x1F44D;</span>
@@ -850,7 +832,7 @@ const PublicVotePage: React.FC = () => {
                       );
                     })()}
                     {mode === "THUMBS_UD_NEUTRAL" && (() => {
-                      const t = tallyUDN(proposal.id);
+                      const t = tallyUDNResult(proposal.id);
                       const total = t.up + t.neutral + t.down || 1;
                       return (
                         <div className="space-y-1">
@@ -885,7 +867,7 @@ const PublicVotePage: React.FC = () => {
                       );
                     })()}
                     {mode === "POINTS" && (() => {
-                      const total = tallyPoints(proposal.id);
+                      const total = tallyPointsResult(proposal.id);
                       return (
                         <div className="flex items-center gap-2">
                           <span className="text-lg">&#x1FA99;</span>
@@ -894,7 +876,7 @@ const PublicVotePage: React.FC = () => {
                       );
                     })()}
                     {mode === "MAJORITY_JUDGMENT" && (() => {
-                      const t = tallyMJ(proposal.id);
+                      const t = tallyMJResult(proposal.id);
                       const medianGrade = MJ_SCALE.find(
                         (g) => g.value === t.median
                       );

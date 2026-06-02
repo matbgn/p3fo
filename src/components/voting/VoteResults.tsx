@@ -1,7 +1,8 @@
 import * as React from "react";
-import { VoteEntity, VoteResponseEntity } from "@/lib/persistence-types";
+import { VoteEntity } from "@/lib/persistence-types";
 import { VOTING_MODES_LABELS, MJ_SCALE } from "@/components/planView/constants";
 import { useVoteResults } from "@/hooks/useVotes";
+import { tallyThumbsUp, tallyUDNeutral, tallyPoints, tallyMajorityJudgment } from "@/lib/vote-tally";
 import { Badge } from "@/components/ui/badge";
 import { BarChart3, Users, MessageSquare, Trophy } from "lucide-react";
 
@@ -22,35 +23,6 @@ const PHASE_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "
   CLOSED: "outline",
   FINALIZED: "destructive",
 };
-
-function tallyThumbsUp(responses: VoteResponseEntity[], proposalId: string): { count: number } {
-  return { count: responses.filter((r) => r.proposalId === proposalId && r.value === 1).length };
-}
-
-function tallyUDN(responses: VoteResponseEntity[], proposalId: string): { up: number; neutral: number; down: number } {
-  const filtered = responses.filter((r) => r.proposalId === proposalId);
-  return {
-    up: filtered.filter((r) => r.value === 1).length,
-    neutral: filtered.filter((r) => r.value === 0).length,
-    down: filtered.filter((r) => r.value === -1).length,
-  };
-}
-
-function tallyPoints(responses: VoteResponseEntity[], proposalId: string): { total: number } {
-  const filtered = responses.filter((r) => r.proposalId === proposalId);
-  return { total: filtered.reduce((sum, r) => sum + r.value, 0) };
-}
-
-function tallyMJ(responses: VoteResponseEntity[], proposalId: string): { median: number; distribution: Record<number, number> } {
-  const filtered = responses.filter((r) => r.proposalId === proposalId);
-  const distribution: Record<number, number> = {};
-  for (const grade of MJ_SCALE) {
-    distribution[grade.value] = filtered.filter((r) => r.value === grade.value).length;
-  }
-  const values = filtered.map((r) => r.value).sort((a, b) => a - b);
-  const median = values.length > 0 ? values[Math.floor(values.length / 2)] : 0;
-  return { median, distribution };
-}
 
 export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
   const { responses, isLoading } = useVoteResults(vote.id);
@@ -138,7 +110,7 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
                 })()}
 
                 {vote.config.mode === "THUMBS_UD_NEUTRAL" && (() => {
-                  const t = tallyUDN(responses, proposal.id);
+                  const t = tallyUDNeutral(responses, proposal.id);
                   const total = t.up + t.neutral + t.down || 1;
                   return (
                     <div className="space-y-1">
@@ -167,7 +139,7 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
                 })()}
 
                 {vote.config.mode === "MAJORITY_JUDGMENT" && (() => {
-                  const t = tallyMJ(responses, proposal.id);
+                  const t = tallyMajorityJudgment(responses, proposal.id);
                   const medianGrade = MJ_SCALE.find((g) => g.value === t.median);
                   return (
                     <div className="space-y-2">
