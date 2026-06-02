@@ -140,5 +140,18 @@
     "typescript-eslint": "^8.0.1",
     "vite": "^6.3.4",
     "vitest": "^4.0.18"
-  }
+  },
+  "description": "<div align=\"center\">   <img src=\"public/P3Fo_Logo.svg\" alt=\"P3Fo Logo\" width=\"200\" /> </div>",
+  "main": "eslint.config.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/matbgn/p3fo.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/matbgn/p3fo/issues"
+  },
+  "homepage": "https://github.com/matbgn/p3fo#readme"
 }

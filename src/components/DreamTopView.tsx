@@ -18,6 +18,8 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { FocusModeProvider } from "./FocusModeProvider";
 import { FocusModeOverlay } from "./FocusModeOverlay";
 import { FocusModeBar } from './planView/FocusModeBar';
+import { IntentionalFrameworkViewInner } from './IntentionalFrameworkView';
+import { CollaborativeFrameworkViewInner } from './CollaborativeFrameworkView';
 import { useFocusMode } from "@/hooks/useFocusMode";
 import type { ModuleId } from '@/lib/persistence-types';
 
@@ -25,10 +27,26 @@ interface DreamTopViewProps {
   onFocusOnTask: (taskId: string) => void;
 }
 
-type ActiveView = 'dream' | 'storyboard' | 'prioritization';
+type ActiveView = 'intentionalFramework' | 'collaborativeFramework' | 'dream' | 'storyboard' | 'prioritization';
 
 const ViewToggleButtons: React.FC<{ activeView: ActiveView; setActiveView: (v: ActiveView) => void; enabledSubViews: ActiveView[] }> = React.memo(({ activeView, setActiveView, enabledSubViews }) => (
   <div className="flex space-x-2">
+    {enabledSubViews.includes('intentionalFramework') && (
+    <Button
+      variant={activeView === 'intentionalFramework' ? 'default' : 'outline'}
+      onClick={() => setActiveView('intentionalFramework')}
+    >
+      Intention
+    </Button>
+    )}
+    {enabledSubViews.includes('collaborativeFramework') && (
+    <Button
+      variant={activeView === 'collaborativeFramework' ? 'default' : 'outline'}
+      onClick={() => setActiveView('collaborativeFramework')}
+    >
+      Collaboration
+    </Button>
+    )}
     {enabledSubViews.includes('dream') && (
     <Button
       variant={activeView === 'dream' ? 'default' : 'outline'}
@@ -37,20 +55,20 @@ const ViewToggleButtons: React.FC<{ activeView: ActiveView; setActiveView: (v: A
       Dream
     </Button>
     )}
-    {enabledSubViews.includes('prioritization') && (
-    <Button
-      variant={activeView === 'prioritization' ? 'default' : 'outline'}
-      onClick={() => setActiveView('prioritization')}
-    >
-      Prioritization
-    </Button>
-    )}
     {enabledSubViews.includes('storyboard') && (
     <Button
       variant={activeView === 'storyboard' ? 'default' : 'outline'}
       onClick={() => setActiveView('storyboard')}
     >
       Storyboard
+    </Button>
+    )}
+    {enabledSubViews.includes('prioritization') && (
+    <Button
+      variant={activeView === 'prioritization' ? 'default' : 'outline'}
+      onClick={() => setActiveView('prioritization')}
+    >
+      Prioritization
     </Button>
     )}
   </div>
@@ -64,7 +82,7 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
   const { userId: currentUserId } = useUserSettings();
   const { isFocusMode } = useFocusMode();
 
-  const enabledSubViews: ActiveView[] = (['dream', 'storyboard', 'prioritization'] as ActiveView[]).filter(
+  const enabledSubViews: ActiveView[] = (['intentionalFramework', 'collaborativeFramework', 'dream', 'storyboard', 'prioritization'] as ActiveView[]).filter(
     v => !disabledModules.includes(`dream.${v}` as ModuleId)
   );
 
@@ -127,7 +145,7 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
   // Consume pending sub-view from Umbrella navigation
   useEffect(() => {
     if (!pendingSubView) return;
-    const valid: ActiveView[] = ['dream', 'storyboard', 'prioritization'];
+    const valid: ActiveView[] = ['intentionalFramework', 'collaborativeFramework', 'dream', 'storyboard', 'prioritization'];
     if (valid.includes(pendingSubView as ActiveView) && enabledSubViews.includes(pendingSubView as ActiveView)) {
       setActiveView(pendingSubView as ActiveView);
       clearPendingSubView();
@@ -309,6 +327,52 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
               onPromoteToKanban={handlePromoteToKanban}
               focusModeHeaderContent={isFocusMode ? <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} enabledSubViews={enabledSubViews} /> : undefined}
             />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Render Intentional Framework sub-view
+  if (activeView === 'intentionalFramework') {
+    const viewTitle = 'Intentional Framework';
+    return (
+      <div className={`h-full flex flex-col ${isFocusMode ? 'relative' : ''}`}>
+        {isFocusMode && <FocusModeBar title={viewTitle} rightContent={<ViewToggleButtons activeView={activeView} setActiveView={setActiveView} enabledSubViews={enabledSubViews} />} />}
+        <Card className={`flex-1 flex flex-col border-0 shadow-none ${isFocusMode ? 'overflow-auto' : ''}`}>
+          {!isFocusMode && (
+            <CardHeader className="flex flex-col space-y-4 pb-2">
+              <div className="flex flex-row items-center justify-between">
+                <CardTitle>{viewTitle}</CardTitle>
+                <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} enabledSubViews={enabledSubViews} />
+              </div>
+            </CardHeader>
+          )}
+          <CardContent className="flex-grow overflow-auto">
+            <IntentionalFrameworkViewInner hideHeader />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Render Collaborative Framework sub-view
+  if (activeView === 'collaborativeFramework') {
+    const viewTitle = 'Collaborative Framework';
+    return (
+      <div className={`h-full flex flex-col ${isFocusMode ? 'relative' : ''}`}>
+        {isFocusMode && <FocusModeBar title={viewTitle} rightContent={<ViewToggleButtons activeView={activeView} setActiveView={setActiveView} enabledSubViews={enabledSubViews} />} />}
+        <Card className={`flex-1 flex flex-col border-0 shadow-none ${isFocusMode ? 'overflow-auto' : ''}`}>
+          {!isFocusMode && (
+            <CardHeader className="flex flex-col space-y-4 pb-2">
+              <div className="flex flex-row items-center justify-between">
+                <CardTitle>{viewTitle}</CardTitle>
+                <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} enabledSubViews={enabledSubViews} />
+              </div>
+            </CardHeader>
+          )}
+          <CardContent className="flex-grow overflow-auto">
+            <CollaborativeFrameworkViewInner hideHeader />
           </CardContent>
         </Card>
       </div>

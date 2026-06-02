@@ -26,6 +26,9 @@ export const yDreamColumns = instrumentYMap(doc.getMap('dreamColumns'), 'dreamCo
 // Export shared circles map for real-time sync
 export const yCircles = instrumentYMap(doc.getMap('circles'), 'circles');
 
+// Export shared frameworks map for real-time sync
+export const yFrameworks = instrumentYMap(doc.getMap('frameworks'), 'frameworks');
+
 // Export shared app settings map for cross-client synchronization
 export const yAppSettings = instrumentYMap(doc.getMap('appSettings'), 'appSettings');
 

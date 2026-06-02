@@ -1,5 +1,5 @@
 // Database client interface and factory
-import { TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, FertilizationBoardEntity, DreamBoardEntity, CircleEntity, ReminderEntity } from '../../src/lib/persistence-types.js';
+import { TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, FertilizationBoardEntity, DreamBoardEntity, CircleEntity, ReminderEntity, FrameworkEntity, FrameworkType } from '../../src/lib/persistence-types.js';
 
 // Pagination options for queries
 export interface PaginationOptions {
@@ -77,6 +77,14 @@ export interface DbClient {
   deleteCircle(id: string): Promise<void>;
   clearAllCircles(): Promise<void>;
   importCircles(circles: CircleEntity[]): Promise<void>;
+
+  // Frameworks
+  getFrameworks(frameworkType?: string): Promise<FrameworkEntity[]>;
+  getFrameworkById(id: string): Promise<FrameworkEntity | null>;
+  createFramework(framework: Partial<FrameworkEntity>): Promise<FrameworkEntity>;
+  updateFramework(id: string, data: Partial<FrameworkEntity>): Promise<FrameworkEntity | null>;
+  deleteFramework(id: string): Promise<void>;
+  importFrameworks(frameworks: FrameworkEntity[]): Promise<void>;
 
   // System
   clearAllData(): Promise<void>;

@@ -11,7 +11,9 @@ import type {
   CircleEntity,
   CircleNodeType,
   CircleNodeModifier,
-  ReminderEntity
+  ReminderEntity,
+  FrameworkEntity,
+  FrameworkType
 } from '../../src/lib/persistence-types.js';
 
 // Raw database row types (SQLite stores booleans as 0/1 integers and JSON as strings)
@@ -102,6 +104,16 @@ interface ReminderDbRow {
   snoozeDurationMinutes: number | null;
   originalTriggerDate: string | null;
   state: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface FrameworkDbRow {
+  id: string;
+  name: string;
+  frameworkType: string;
+  parentId: string | null;
+  categories: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -320,6 +332,20 @@ class SqliteClient implements DbClient {
       )
     `);
 
+    // Frameworks table (intentional & collaborative frameworks)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS "frameworks" (
+        "id" TEXT PRIMARY KEY,
+        "name" TEXT NOT NULL,
+        "frameworkType" TEXT NOT NULL CHECK("frameworkType" IN ('intentional', 'collaborative')),
+        "parentId" TEXT,
+        "categories" TEXT NOT NULL DEFAULT '[]',
+        "createdAt" TEXT NOT NULL,
+        "updatedAt" TEXT NOT NULL,
+        FOREIGN KEY("parentId") REFERENCES "frameworks"("id")
+      )
+    `);
+
     // Create indexes for performance optimization
     // These indexes dramatically improve query performance when filtering by userId, parentId, or triageStatus
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId" ON "tasks"("userId")`);
@@ -333,6 +359,10 @@ class SqliteClient implements DbClient {
     // Circles indexes
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_circles_parentId" ON "circles"("parentId")`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_circles_nodeType" ON "circles"("nodeType")`);
+
+    // Frameworks indexes
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_frameworks_frameworkType" ON "frameworks"("frameworkType")`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_frameworks_parentId" ON "frameworks"("parentId")`);
 
     // Reminders indexes
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_reminders_userId" ON "reminders"("userId")`);
@@ -1410,6 +1440,127 @@ class SqliteClient implements DbClient {
     }
   }
 
+  // Frameworks
+  async getFrameworks(frameworkType?: string): Promise<FrameworkEntity[]> {
+    let sql = 'SELECT * FROM "frameworks"';
+    const params: string[] = [];
+    if (frameworkType) {
+      sql += ' WHERE "frameworkType" = ?';
+      params.push(frameworkType);
+    }
+    sql += ' ORDER BY "createdAt" ASC';
+    const rows = this.db.prepare(sql).all(...params) as unknown as FrameworkDbRow[];
+    return rows.map(row => this.mapFrameworkDbRowToEntity(row));
+  }
+
+  async getFrameworkById(id: string): Promise<FrameworkEntity | null> {
+    const row = this.db.prepare('SELECT * FROM "frameworks" WHERE "id" = ?').get(id) as unknown as FrameworkDbRow | undefined;
+    if (!row) return null;
+    return this.mapFrameworkDbRowToEntity(row);
+  }
+
+  async createFramework(input: Partial<FrameworkEntity>): Promise<FrameworkEntity> {
+    const now = new Date().toISOString();
+    const newFramework: FrameworkEntity = {
+      id: input.id || crypto.randomUUID(),
+      name: input.name || 'New Framework',
+      frameworkType: input.frameworkType || 'intentional',
+      parentId: input.parentId ?? null,
+      categories: input.categories || [],
+      createdAt: input.createdAt || now,
+      updatedAt: input.updatedAt || now,
+    };
+
+    this.db.prepare(`
+      INSERT INTO "frameworks"("id", "name", "frameworkType", "parentId", "categories", "createdAt", "updatedAt")
+      VALUES(@id, @name, @frameworkType, @parentId, @categories, @createdAt, @updatedAt)
+    `).run({
+      id: newFramework.id,
+      name: newFramework.name,
+      frameworkType: newFramework.frameworkType,
+      parentId: newFramework.parentId,
+      categories: JSON.stringify(newFramework.categories),
+      createdAt: newFramework.createdAt,
+      updatedAt: newFramework.updatedAt,
+    });
+
+    return newFramework;
+  }
+
+  async updateFramework(id: string, patch: Partial<FrameworkEntity>): Promise<FrameworkEntity | null> {
+    const current = await this.getFrameworkById(id);
+    if (!current) return null;
+
+    const updated = { ...current, ...patch, updatedAt: new Date().toISOString() };
+
+    this.db.prepare(`
+      UPDATE "frameworks" SET
+        "name" = @name,
+        "frameworkType" = @frameworkType,
+        "parentId" = @parentId,
+        "categories" = @categories,
+        "updatedAt" = @updatedAt
+      WHERE "id" = @id
+    `).run({
+      id: updated.id,
+      name: updated.name,
+      frameworkType: updated.frameworkType,
+      parentId: updated.parentId,
+      categories: JSON.stringify(updated.categories),
+      updatedAt: updated.updatedAt,
+    });
+
+    return updated;
+  }
+
+  async deleteFramework(id: string): Promise<void> {
+    this.db.prepare('DELETE FROM "frameworks" WHERE "id" = ?').run(id);
+  }
+
+  async importFrameworks(frameworks: FrameworkEntity[]): Promise<void> {
+    const insertStmt = this.db.prepare(`
+      INSERT INTO "frameworks"("id", "name", "frameworkType", "parentId", "categories", "createdAt", "updatedAt")
+      VALUES(@id, @name, @frameworkType, @parentId, @categories, @createdAt, @updatedAt)
+      ON CONFLICT("id") DO UPDATE SET
+        "name" = excluded."name",
+        "frameworkType" = excluded."frameworkType",
+        "parentId" = excluded."parentId",
+        "categories" = excluded."categories",
+        "updatedAt" = excluded."updatedAt"
+    `);
+
+    this.db.exec('BEGIN');
+    try {
+      for (const framework of frameworks) {
+        insertStmt.run({
+          id: framework.id,
+          name: framework.name,
+          frameworkType: framework.frameworkType,
+          parentId: framework.parentId,
+          categories: JSON.stringify(framework.categories),
+          createdAt: framework.createdAt,
+          updatedAt: framework.updatedAt,
+        });
+      }
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  private mapFrameworkDbRowToEntity(row: FrameworkDbRow): FrameworkEntity {
+    return {
+      id: row.id,
+      name: row.name,
+      frameworkType: row.frameworkType as FrameworkType,
+      parentId: row.parentId,
+      categories: JSON.parse(row.categories || '[]'),
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
   private mapCircleDbRowToEntity(row: CircleDbRow): CircleEntity {
     return {
       id: row.id,
@@ -1461,6 +1612,7 @@ class SqliteClient implements DbClient {
       this.db.exec('DROP TABLE IF EXISTS "dreamBoard"');
       this.db.exec('DROP TABLE IF EXISTS "circles"');
       this.db.exec('DROP TABLE IF EXISTS "reminders"');
+      this.db.exec('DROP TABLE IF EXISTS "frameworks"');
 
       // Also drop legacy tables if they exist
       this.db.exec('DROP TABLE IF EXISTS tasks');

@@ -46,6 +46,9 @@ const DataExporter: React.FC = () => {
         timezone: appSettings.timezone,
         country: appSettings.country,
         region: appSettings.region,
+        splitTime: appSettings.splitTime?.toString(),
+        cardAgingBaseDays: appSettings.cardAgingBaseDays?.toString(),
+        disabledModules: appSettings.disabledModules,
       };
 
       // Fetch Fertilization Board state
@@ -60,6 +63,9 @@ const DataExporter: React.FC = () => {
       // Fetch ALL circles
       const allCircles = await adapter.listCircles();
 
+      // Fetch ALL frameworks
+      const allFrameworks = await adapter.listFrameworks();
+
       const exportData = {
         tasks: allTasks,
         scheduledReminders: allReminders, // Unified export using persistence layer
@@ -67,6 +73,7 @@ const DataExporter: React.FC = () => {
         fertilizationBoard: fertilizationBoardState, // Export Fertilization Board state
         dreamBoard: dreamBoardState, // Export Dream Board state
         circles: allCircles, // Export Circles
+        frameworks: allFrameworks, // Export Frameworks
         settings: settingsToExport,
         activeUserId: userId,
         allUserSettings, // Export all users for full restore
