@@ -125,15 +125,17 @@ export const useVotes = (opts?: { linkedTaskId?: string; ownerId?: string; kind?
 
     fetchVotes();
 
-    const unsubscribe = eventBus.subscribe("votesChanged", () => {
+    const handler = () => {
       if (mounted) {
         setVotesState([...votes]);
       }
-    });
+    };
+
+    eventBus.subscribe("votesChanged", handler);
 
     return () => {
       mounted = false;
-      unsubscribe();
+      eventBus.unsubscribe("votesChanged", handler);
     };
   }, [linkedTaskId, ownerId, kind]);
 

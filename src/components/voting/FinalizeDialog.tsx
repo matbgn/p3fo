@@ -19,6 +19,7 @@ interface FinalizeDialogProps {
   onOpenChange: (open: boolean) => void;
   vote: VoteEntity;
   onFinalize: (outcome: VoteEntity["outcome"]) => Promise<void>;
+  isModerator?: boolean;
 }
 
 export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
@@ -26,6 +27,7 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
   onOpenChange,
   vote,
   onFinalize,
+  isModerator = false,
 }) => {
   const [winningProposalId, setWinningProposalId] = React.useState<string | null>(null);
   const [signature, setSignature] = React.useState("");
@@ -80,8 +82,16 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="flex items-start gap-2 p-3 rounded-md bg-amber-50 border border-amber-200">
+          <div className="space-y-4">
+            {isModerator && (
+              <div className="flex items-start gap-2 p-3 rounded-md bg-amber-50 border border-amber-200">
+                <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-sm text-amber-800">
+                  Moderators cannot finalize decisions. Request the owner to finalize.
+                </p>
+              </div>
+            )}
+            <div className="flex items-start gap-2 p-3 rounded-md bg-amber-50 border border-amber-200">
             <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
             <p className="text-sm text-amber-800">
               Finalizing locks this vote. No further responses or edits will be accepted.
@@ -139,7 +149,7 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
           </Button>
           <Button
             onClick={handleFinalize}
-            disabled={isSaving}
+            disabled={isSaving || isModerator}
             className="bg-blue-600 hover:bg-blue-700"
           >
             <Trophy className="w-4 h-4 mr-2" />

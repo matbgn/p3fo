@@ -1,8 +1,8 @@
 import * as React from "react";
 import { useParams } from "react-router-dom";
-import { VoteEntity, VoteResponseEntity, VoteProposal } from "@/lib/persistence-types";
+import { VoteEntity, VoteResponseEntity, VoteProposal, VoteLoop } from "@/lib/persistence-types";
 import { VOTING_MODES_LABELS, MJ_SCALE } from "@/components/planView/constants";
-import { tallyThumbsUp as tallyThumbsUpShared, tallyUDNeutral as tallyUDNeutralShared, tallyPoints as tallyPointsShared, tallyMajorityJudgment as tallyMJShared } from "@/lib/vote-tally";
+import { tallyThumbsUp as tallyThumbsUpShared, tallyUDNeutral as tallyUDNeutralShared, tallyPoints as tallyPointsShared, tallyMajorityJudgment as tallyMJShared, tallyConsentLoop as tallyConsentLoopShared } from "@/lib/vote-tally";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -106,6 +106,16 @@ async function submitAudienceProposal(
   }
 }
 
+async function fetchLoops(voteId: string): Promise<VoteLoop[]> {
+  try {
+    const res = await fetch(`/api/votes/${voteId}/loops`);
+    if (!res.ok) return [];
+    return await res.json();
+  } catch {
+    return [];
+  }
+}
+
 function getVoterToken(slug: string): string | null {
   try {
     return localStorage.getItem(`voted_vote_${slug}`);
@@ -144,6 +154,7 @@ const PublicVotePage: React.FC = () => {
   const [audienceProposalText, setAudienceProposalText] = React.useState("");
   const [showPrevRounds, setShowPrevRounds] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
+  const [loops, setLoops] = React.useState<VoteLoop[]>([]);
 
   const voterToken = slug ? ensureVoterToken(slug) : "";
 
@@ -178,6 +189,11 @@ const PublicVotePage: React.FC = () => {
             setVoterValues(vals);
           }
         }
+      }
+
+      if (v.config.mode === "CONSENT_LOOP") {
+        const loopData = await fetchLoops(v.id);
+        if (mounted) setLoops(loopData);
       }
       setIsLoading(false);
     };
@@ -592,7 +608,7 @@ const PublicVotePage: React.FC = () => {
                   </div>
                 )}
 
-                {showResults && mode !== "CONSENT_LOOP" && (
+                {showResults && (
                   <div className="mt-4 pt-3 border-t">
                     <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
                       Results
@@ -698,46 +714,192 @@ const PublicVotePage: React.FC = () => {
           </div>
         )}
 
-        {mode === "CONSENT_LOOP" && (
-          <div className="bg-white rounded-lg shadow-sm border p-5 mb-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Consent Loop
-            </h3>
-            <p className="text-sm text-gray-500 mb-4">
-              This vote uses a consent-loop process with multiple rounds of
-              refinement.
-            </p>
-            {isActive && (
-              <div className="flex flex-wrap gap-2 mb-4">
-                {MJ_SCALE.map((grade) => (
-                  <button
-                    key={grade.value}
-                    onClick={() => {
-                      const firstProposal = activeProposals[0];
-                      if (firstProposal) {
-                        handleSubmitVote(firstProposal.id, grade.value);
-                      }
-                    }}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium text-white transition-colors ${grade.color} opacity-70 hover:opacity-100`}
-                  >
-                    {grade.icon} {grade.label}
-                  </button>
-                ))}
+        {mode === "CONSENT_LOOP" && (() => {
+          const sortedLoops = [...loops].sort((a, b) => a.roundNumber - b.roundNumber);
+          const currentOpenLoop = sortedLoops.find((l) => !l.closedAt);
+          const firstProposalId = activeProposals[0]?.id || "";
+          const tally = firstProposalId
+            ? tallyConsentLoopShared(loops, responses, firstProposalId)
+            : null;
+
+          return (
+            <div className="space-y-4 mb-6">
+              <div className="bg-white rounded-lg shadow-sm border p-5">
+                <h3 className="text-lg font-medium text-gray-900 mb-1">
+                  Consent Loop
+                  {currentOpenLoop && (
+                    <span className="ml-2 text-sm font-normal text-gray-500">
+                      — Round {currentOpenLoop.roundNumber} is open
+                    </span>
+                  )}
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  This vote uses a consent-loop process with multiple rounds of
+                  refinement.
+                </p>
+
+                {currentOpenLoop && currentOpenLoop.proposalContent && (
+                  <div className="mb-4 p-3 bg-gray-50 rounded border">
+                    <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
+                      Current round proposal
+                    </h4>
+                    <div
+                      className="prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{
+                        __html: (() => {
+                          try {
+                            const blocks = JSON.parse(currentOpenLoop.proposalContent);
+                            if (Array.isArray(blocks)) {
+                              return blocks
+                                .map((b: { content?: Array<{ text?: string }> }) => {
+                                  if (!b.content || !Array.isArray(b.content)) return "";
+                                  return `<p>${b.content.map((c: { text?: string }) => c.text || "").join("")}</p>`;
+                                })
+                                .join("");
+                            }
+                          } catch { /* empty */ }
+                          return currentOpenLoop.proposalContent;
+                        })(),
+                      }}
+                    />
+                  </div>
+                )}
+
+                {isActive && firstProposalId && (
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {MJ_SCALE.map((grade) => (
+                      <button
+                        key={grade.value}
+                        onClick={() => handleSubmitVote(firstProposalId, grade.value)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium text-white transition-colors ${
+                          voterValues[firstProposalId] === grade.value
+                            ? `${grade.color} ring-2 ring-offset-1 ring-gray-400`
+                            : `${grade.color} opacity-70 hover:opacity-100`
+                        }`}
+                      >
+                        {grade.icon} {grade.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {showResults && tally && tally.perRound.length > 0 && (
+                  <div className="mt-4 pt-3 border-t">
+                    <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
+                      Current round results
+                    </h4>
+                    {(() => {
+                      const currentRound = tally.perRound[tally.perRound.length - 1];
+                      const medianGrade = MJ_SCALE.find((g) => g.value === currentRound?.median);
+                      return (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm">Median:</span>
+                            <span className={`px-2 py-0.5 rounded text-xs text-white ${medianGrade?.color || "bg-gray-500"}`}>
+                              {medianGrade?.icon} {medianGrade?.label}
+                            </span>
+                          </div>
+                          <div className="flex h-3 rounded-full overflow-hidden">
+                            {[...MJ_SCALE].sort((a, b) => b.value - a.value).map((grade) => {
+                              const count = currentRound?.distribution[grade.value] || 0;
+                              const total = Object.values(currentRound?.distribution || {}).reduce((s, v) => s + v, 0);
+                              return (
+                                <div
+                                  key={grade.value}
+                                  className={`${grade.color}`}
+                                  style={{ width: `${total > 0 ? (count / total) * 100 : 0}%` }}
+                                  title={`${grade.label}: ${count}`}
+                                />
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
-            )}
-            <button
-              onClick={() => setShowPrevRounds(!showPrevRounds)}
-              className="text-sm text-blue-500 hover:underline flex items-center gap-1"
-            >
-              {showPrevRounds ? (
-                <ChevronUp className="w-4 h-4" />
-              ) : (
-                <ChevronDown className="w-4 h-4" />
+
+              <button
+                onClick={() => setShowPrevRounds(!showPrevRounds)}
+                className="text-sm text-blue-500 hover:underline flex items-center gap-1"
+              >
+                {showPrevRounds ? (
+                  <ChevronUp className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
+                {showPrevRounds ? "Hide" : "Show"} previous rounds
+                {sortedLoops.length > 0 && ` (${sortedLoops.filter((l) => l.closedAt).length} closed)`}
+              </button>
+
+              {showPrevRounds && tally && tally.perRound.length > 0 && (
+                <div className="bg-white rounded-lg shadow-sm border p-5">
+                  <h4 className="text-sm font-medium text-gray-700 mb-3">
+                    Round-by-round summary
+                  </h4>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        <tr>
+                          <th className="text-left py-2 px-3 border-b font-medium text-gray-600">
+                            Round
+                          </th>
+                          <th className="text-center py-2 px-3 border-b font-medium text-gray-600">
+                            Median
+                          </th>
+                          {[...MJ_SCALE].sort((a, b) => b.value - a.value).map((grade) => (
+                            <th
+                              key={grade.value}
+                              className="text-center py-2 px-2 border-b font-medium text-gray-600"
+                            >
+                              <span title={grade.label}>{grade.icon}</span>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tally.perRound.map((round) => {
+                          const medianGrade = MJ_SCALE.find((g) => g.value === round.median);
+                          const isOpen = !round.closed;
+                          return (
+                            <tr
+                              key={round.loopId}
+                              className={isOpen ? "bg-blue-50 border-l-4 border-l-blue-400" : "hover:bg-gray-50"}
+                            >
+                              <td className="py-2 px-3 border-b font-medium">
+                                Round {round.roundNumber}
+                              </td>
+                              <td className="py-2 px-3 border-b text-center">
+                                {medianGrade && (
+                                  <span className={`inline-block px-2 py-0.5 rounded text-xs text-white ${medianGrade.color}`}>
+                                    {medianGrade.icon} {medianGrade.label}
+                                  </span>
+                                )}
+                              </td>
+                              {[...MJ_SCALE].sort((a, b) => b.value - a.value).map((grade) => {
+                                const count = round.distribution[grade.value] || 0;
+                                return (
+                                  <td
+                                    key={grade.value}
+                                    className="py-2 px-2 border-b text-center"
+                                    title={`${grade.label}: ${count}`}
+                                  >
+                                    <span className="font-medium text-xs">{count}</span>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               )}
-              {showPrevRounds ? "Hide" : "Show"} previous rounds
-            </button>
-          </div>
-        )}
+            </div>
+          );
+        })()}
 
         {mode === "POINTS" && isActive && (
           <div className="bg-white rounded-lg shadow-sm border p-5 mb-6">

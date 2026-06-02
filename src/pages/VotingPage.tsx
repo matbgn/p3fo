@@ -1,13 +1,20 @@
 import * as React from "react";
-import { Vote, Plus, BarChart3, Clock, Trash2, ExternalLink, Eye, Trophy, Edit, ToggleLeft } from "lucide-react";
-import { useVotes } from "@/hooks/useVotes";
+import { Vote, Plus, BarChart3, Clock, Trash2, ExternalLink, Eye, Trophy, Edit, ToggleLeft, GitCompare, Shield } from "lucide-react";
+import { useVotes, useVoteResults } from "@/hooks/useVotes";
+import { useVoteLoops } from "@/hooks/useVoteLoops";
 import { VoteEntity, VoteKind } from "@/lib/persistence-types";
 import { VOTING_MODES_LABELS } from "@/components/planView/constants";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { VoteEditor } from "@/components/voting/VoteEditor";
 import { VoteResults } from "@/components/voting/VoteResults";
 import { FinalizeDialog } from "@/components/voting/FinalizeDialog";
+import { LoopRoundTabs } from "@/components/voting/LoopRoundTabs";
+import { LoopRoundEditor } from "@/components/voting/LoopRoundEditor";
+import { LoopRoundControls } from "@/components/voting/LoopRoundControls";
+import { LoopRoundDiffDialog } from "@/components/voting/LoopRoundDiffDialog";
+import { ModerationPanel } from "@/components/voting/ModerationPanel";
 
 type VotingTab = "consultations" | "decisions";
 
@@ -108,6 +115,78 @@ const VoteCard: React.FC<{
   );
 };
 
+const ConsentLoopPanel: React.FC<{
+  vote: VoteEntity;
+  loops: ReturnType<typeof useVoteLoops>["loops"];
+  responses: ReturnType<typeof useVotes>["votes"] extends (infer T)[] ? T[] : never;
+  onOpenRound: () => void;
+  onCloseRound: (gatingValue: -1 | 0 | 1, gatingComment?: string) => void;
+  onFinalize: (verdict: "ADOPTED" | "WITHDRAWN" | "BLOCKED", finalLoopId?: string) => void;
+  onUpdateRoundContent: (loopId: string, content: string) => void;
+}> = ({ vote, loops, responses, onOpenRound, onCloseRound, onFinalize, onUpdateRoundContent }) => {
+  const [showDiffDialog, setShowDiffDialog] = React.useState(false);
+  const { responses: voteResponses } = useVoteResults(vote.id);
+  const firstProposalId = vote.proposals[0]?.id || "";
+
+  const currentOpenLoop = [...loops]
+    .sort((a, b) => a.roundNumber - b.roundNumber)
+    .find((l) => !l.closedAt);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium text-gray-700">Round controls</h3>
+        {loops.filter((l) => l.closedAt).length >= 2 && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowDiffDialog(true)}
+          >
+            <GitCompare className="w-4 h-4 mr-1" />
+            Compare rounds
+          </Button>
+        )}
+      </div>
+
+      <LoopRoundControls
+        vote={vote}
+        loops={loops}
+        onOpenRound={onOpenRound}
+        onCloseRound={onCloseRound}
+        onFinalize={onFinalize}
+      />
+
+      <Separator />
+
+      <LoopRoundEditor
+        loop={currentOpenLoop || null}
+        onChange={(content) => {
+          if (currentOpenLoop) {
+            onUpdateRoundContent(currentOpenLoop.id, content);
+          }
+        }}
+        readOnly={vote.config.phase === "FINALIZED"}
+      />
+
+      <Separator />
+
+      <h3 className="text-sm font-medium text-gray-700">Per-round results</h3>
+      <LoopRoundTabs
+        loops={loops}
+        responses={voteResponses}
+        proposalId={firstProposalId}
+        maxRounds={vote.config.consentLoopMaxRounds}
+      />
+
+      <LoopRoundDiffDialog
+        open={showDiffDialog}
+        onOpenChange={setShowDiffDialog}
+        loops={loops}
+      />
+    </div>
+  );
+};
+
 const VoteDetailPanel: React.FC<{
   vote: VoteEntity;
   onBack: () => void;
@@ -118,11 +197,50 @@ const VoteDetailPanel: React.FC<{
   onPhaseChange: (id: string, phase: VoteEntity["config"]["phase"]) => void;
 }> = ({ vote, onBack, onEdit, onFinalize, onDelete, onOpenPublic, onPhaseChange }) => {
   const [showFinalizeDialog, setShowFinalizeDialog] = React.useState(false);
+  const [activeDetailTab, setActiveDetailTab] = React.useState<"results" | "rounds" | "moderation">("results");
   const isDecision = vote.config.kind === "decision";
   const isFinalized = vote.config.phase === "FINALIZED";
   const canFinalize = isDecision && (vote.config.phase === "CLOSED" || vote.config.phase === "OPEN");
   const canOpen = vote.config.phase === "IDLE";
   const canClose = vote.config.phase === "OPEN";
+  const isConsentLoop = vote.config.mode === "CONSENT_LOOP";
+
+  const { loops, openRound, closeRound, updateRoundContent } = useVoteLoops(vote.id);
+
+  const handleOpenRound = async () => {
+    const sortedLoops = [...loops].sort((a, b) => a.roundNumber - b.roundNumber);
+    const lastLoop = sortedLoops[sortedLoops.length - 1];
+    const inheritContent = lastLoop?.proposalContent || vote.proposals[0]?.content || "";
+    await openRound("me", inheritContent);
+  };
+
+  const handleCloseRound = async (gatingValue: -1 | 0 | 1, gatingComment?: string) => {
+    const currentOpenLoop = [...loops].sort((a, b) => a.roundNumber - b.roundNumber).find((l) => !l.closedAt);
+    if (currentOpenLoop) {
+      await closeRound(currentOpenLoop.id, gatingValue, gatingComment);
+    }
+  };
+
+  const handleConsentFinalize = async (verdict: "ADOPTED" | "WITHDRAWN" | "BLOCKED", finalLoopId?: string) => {
+    const sortedLoops = [...loops].sort((a, b) => a.roundNumber - b.roundNumber);
+    const lastClosedLoop = [...sortedLoops].reverse().find((l) => l.closedAt);
+    const effectiveLoopId = finalLoopId || lastClosedLoop?.id;
+
+    const summaries: Record<string, string> = {
+      ADOPTED: `Adopted at round ${lastClosedLoop?.roundNumber || "?"} — no remaining objections`,
+      WITHDRAWN: "Withdrawn — the proposer pulled the proposal",
+      BLOCKED: `Blocked — objection(s) at round ${lastClosedLoop?.roundNumber || "?"} could not be integrated`,
+    };
+
+    await onFinalize({
+      winningProposalId: verdict === "ADOPTED" ? (vote.proposals[0]?.id || null) : null,
+      summary: summaries[verdict],
+      finalizedAt: new Date().toISOString(),
+      finalizedByUserId: "me",
+      loopVerdict: verdict,
+      finalLoopId: effectiveLoopId,
+    });
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -162,7 +280,7 @@ const VoteDetailPanel: React.FC<{
             Open vote
           </Button>
         )}
-        {canClose && (
+        {canClose && !isConsentLoop && (
           <Button
             size="sm"
             variant="outline"
@@ -171,7 +289,7 @@ const VoteDetailPanel: React.FC<{
             Close vote
           </Button>
         )}
-        {canFinalize && (
+        {canFinalize && !isConsentLoop && (
           <Button
             size="sm"
             onClick={() => setShowFinalizeDialog(true)}
@@ -194,9 +312,71 @@ const VoteDetailPanel: React.FC<{
         )}
       </div>
 
-      <div className="flex-1 overflow-auto">
-        <VoteResults vote={vote} />
-      </div>
+      {isConsentLoop && (
+        <div className="mb-4">
+          <Tabs value={activeDetailTab} onValueChange={(v) => setActiveDetailTab(v as "results" | "rounds" | "moderation")}>
+            <TabsList>
+              <TabsTrigger value="rounds">Rounds</TabsTrigger>
+              <TabsTrigger value="results">Results</TabsTrigger>
+              <TabsTrigger value="moderation">
+                <Shield className="w-3 h-3 mr-1" />
+                Moderation
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="rounds">
+              <ConsentLoopPanel
+                vote={vote}
+                loops={loops}
+                responses={[]}
+                onOpenRound={handleOpenRound}
+                onCloseRound={handleCloseRound}
+                onFinalize={handleConsentFinalize}
+                onUpdateRoundContent={updateRoundContent}
+              />
+            </TabsContent>
+            <TabsContent value="results">
+              <VoteResults vote={vote} />
+            </TabsContent>
+            <TabsContent value="moderation">
+              <ModerationPanel
+                vote={vote}
+                currentUserId={vote.ownerId}
+                onOpenModerationPopout={(token) => {
+                  window.open(`${window.location.origin}/v/${vote.slug}/m/${token}`, "_blank");
+                }}
+              />
+            </TabsContent>
+          </Tabs>
+        </div>
+      )}
+
+      {!isConsentLoop && (
+        <div className="mb-4">
+          <Tabs value={activeDetailTab} onValueChange={(v) => setActiveDetailTab(v as "results" | "rounds" | "moderation")}>
+            <TabsList>
+              <TabsTrigger value="results">Results</TabsTrigger>
+              <TabsTrigger value="moderation">
+                <Shield className="w-3 h-3 mr-1" />
+                Moderation
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="results">
+              <div className="flex-1 overflow-auto">
+                <VoteResults vote={vote} />
+              </div>
+            </TabsContent>
+            <TabsContent value="moderation">
+              <ModerationPanel
+                vote={vote}
+                currentUserId={vote.ownerId}
+                onOpenModerationPopout={(token) => {
+                  window.open(`${window.location.origin}/v/${vote.slug}/m/${token}`, "_blank");
+                }}
+              />
+            </TabsContent>
+          </Tabs>
+        </div>
+      )}
 
       <FinalizeDialog
         open={showFinalizeDialog}
