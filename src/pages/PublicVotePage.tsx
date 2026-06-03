@@ -226,9 +226,14 @@ const PublicVotePage: React.FC = () => {
     if (!slug || !vote) return;
     let mounted = true;
     const refresh = async () => {
-      const r = await fetchResults(slug);
-      if (!mounted || !r) return;
-      setResponses(r.responses);
+      const [r, v] = await Promise.all([fetchResults(slug), fetchVote(slug)]);
+      if (!mounted) return;
+      if (r) setResponses(r.responses);
+      if (v) setVote(v);
+      if (v && v.config.mode === "CONSENT_LOOP") {
+        const loopData = await fetchLoops(v.id);
+        if (mounted) setLoops(loopData);
+      }
     };
     refresh();
     return () => { mounted = false; };

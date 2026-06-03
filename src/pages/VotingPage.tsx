@@ -4,6 +4,7 @@ import { Vote, Plus, BarChart3, Clock, Trash2, ExternalLink, Eye, Trophy, Edit, 
 import { useVotes, useVoteResults } from "@/hooks/useVotes";
 import { useVoteLoops } from "@/hooks/useVoteLoops";
 import { getPersistenceAdapter } from "@/lib/persistence-factory";
+import { eventBus } from "@/lib/events";
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { VoteEntity, VoteKind } from "@/lib/persistence-types";
@@ -134,8 +135,9 @@ const ConsentLoopPanel: React.FC<{
   onOpenRoundWithContent: (proposalId: string, content: string) => void;
   onCloseRound: (loopId: string) => void;
   onUpdateRoundContent: (loopId: string, content: string) => void;
+  onUpdateProposal: (proposalId: string, content: string) => void;
   isModerator?: boolean;
-}> = ({ vote, loops, responses, onOpenRound, onOpenRoundWithContent, onCloseRound, onUpdateRoundContent, isModerator }) => {
+}> = ({ vote, loops, responses, onOpenRound, onOpenRoundWithContent, onCloseRound, onUpdateRoundContent, onUpdateProposal, isModerator }) => {
   const t = getVotingStrings();
   const { responses: voteResponses } = useVoteResults(vote.id);
   const activeProposals = vote.proposals.filter((p) => p.active);
@@ -144,7 +146,6 @@ const ConsentLoopPanel: React.FC<{
   const [expandedProposalId, setExpandedProposalId] = React.useState<string>(activeProposals[0]?.id || "");
   const [diffOpen, setDiffOpen] = React.useState(false);
   const [diffProposalId, setDiffProposalId] = React.useState<string>("");
-  const [draftContent, setDraftContent] = React.useState<Record<string, string>>({});
 
   return (
     <div className="space-y-4">
@@ -179,11 +180,9 @@ const ConsentLoopPanel: React.FC<{
           .filter((l) => l.proposalId === proposal.id)
           .sort((a, b) => a.roundNumber - b.roundNumber);
         const currentOpenLoop = proposalLoops.find((l) => !l.closedAt);
-        const lastClosedLoop = [...proposalLoops].reverse().find((l) => l.closedAt);
         const canOpenNewRound = isOpen && !currentOpenLoop;
         const showPreRoundEditor = canOpenNewRound && (isModerator || vote.ownerId === "me");
-        const defaultDraft = lastClosedLoop?.proposalContent || proposal.content || "";
-        const currentDraft = draftContent[proposal.id] ?? defaultDraft;
+        const currentDraft = proposal.content || "";
 
         if (activeProposals.length > 1 && proposal.id !== expandedProposalId) {
           return null;
@@ -202,7 +201,7 @@ const ConsentLoopPanel: React.FC<{
                 vote={vote}
                 loops={loops}
                 proposalId={proposal.id}
-                onOpenRound={isModerator ? () => onOpenRoundWithContent(proposal.id, currentDraft) : onOpenRound}
+                onOpenRound={isModerator ? () => onOpenRoundWithContent(proposal.id, proposal.content || "") : onOpenRound}
                 onCloseRound={onCloseRound}
                 isModerator={isModerator}
               />
@@ -230,7 +229,7 @@ const ConsentLoopPanel: React.FC<{
                 onChange={(content) => {
                   onUpdateRoundContent(currentOpenLoop.id, content);
                 }}
-                readOnly={true}
+                readOnly={!(isModerator || vote.ownerId === "me")}
               />
             ) : showPreRoundEditor ? (
               <div className="space-y-3">
@@ -244,7 +243,7 @@ const ConsentLoopPanel: React.FC<{
                 </div>
                 <BlockNoteProposalEditor
                   value={currentDraft}
-                  onChange={(json) => setDraftContent((prev) => ({ ...prev, [proposal.id]: json }))}
+                  onChange={(json) => onUpdateProposal(proposal.id, json)}
                   placeholder="Modify the proposal text for the next round..."
                 />
               </div>
@@ -302,15 +301,12 @@ const VoteDetailPanel: React.FC<{
   const { loops, openRound, closeRound, updateRoundContent } = useVoteLoops(vote.id);
 
   const handleOpenRound = async (proposalId: string) => {
-    const proposalLoops = loops.filter((l) => l.proposalId === proposalId);
-    const lastLoop = [...proposalLoops].sort((a, b) => a.roundNumber - b.roundNumber).pop();
-
     const adapter = await getPersistenceAdapter();
     const freshVote = await adapter.getVoteById(vote.id);
     const sourceVote = freshVote || vote;
     const proposal = sourceVote.proposals.find((p) => p.id === proposalId);
 
-    const inheritContent = lastLoop?.proposalContent || proposal?.content || "";
+    const inheritContent = proposal?.content || "";
     await openRound(proposalId, "me", inheritContent);
   };
 
@@ -319,8 +315,32 @@ const VoteDetailPanel: React.FC<{
   };
 
   const handleCloseRound = async (loopId: string) => {
-    await closeRound(loopId);
+    const loop = loops.find((l) => l.id === loopId);
+    const updated = await closeRound(loopId);
+    if (updated && loop) {
+      const adapter = await getPersistenceAdapter();
+      const updatedProposals = vote.proposals.map((p) =>
+        p.id === loop.proposalId ? { ...p, content: updated.proposalContent || p.content } : p
+      );
+      await adapter.updateVote(vote.id, { proposals: updatedProposals });
+      eventBus.publish("votesChanged");
+    }
   };
+
+  const proposalUpdateTimers = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const handleUpdateProposal = React.useCallback(async (proposalId: string, content: string) => {
+    if (proposalUpdateTimers.current[proposalId]) {
+      clearTimeout(proposalUpdateTimers.current[proposalId]);
+    }
+    proposalUpdateTimers.current[proposalId] = setTimeout(async () => {
+      const adapter = await getPersistenceAdapter();
+      const updatedProposals = vote.proposals.map((p) =>
+        p.id === proposalId ? { ...p, content } : p
+      );
+      await adapter.updateVote(vote.id, { proposals: updatedProposals });
+      eventBus.publish("votesChanged");
+    }, 500);
+  }, [vote.id, vote.proposals]);
 
   return (
     <div className="flex flex-col h-full">
@@ -442,6 +462,7 @@ const VoteDetailPanel: React.FC<{
                 onOpenRoundWithContent={handleOpenRoundWithContent}
                 onCloseRound={handleCloseRound}
                 onUpdateRoundContent={updateRoundContent}
+                onUpdateProposal={handleUpdateProposal}
               />
             </TabsContent>
             <TabsContent value="results">

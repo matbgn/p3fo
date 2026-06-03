@@ -119,8 +119,11 @@ export const useModeratorToken = (token: string | null) => {
 
     resolveToken();
 
+    const interval = setInterval(resolveToken, 5000);
+
     return () => {
       mounted = false;
+      clearInterval(interval);
     };
   }, [token]);
 

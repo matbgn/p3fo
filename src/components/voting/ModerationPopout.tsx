@@ -41,19 +41,38 @@ const LoopPanel: React.FC<{
   const [expandedProposalId, setExpandedProposalId] = React.useState<string>(activeProposals[0]?.id || "");
   const [diffOpen, setDiffOpen] = React.useState(false);
   const [diffProposalId, setDiffProposalId] = React.useState<string>("");
-  const [draftContent, setDraftContent] = React.useState<Record<string, string>>({});
+  const proposalUpdateTimerRef = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const handleOpenRound = async (proposalId: string, content?: string) => {
-    const proposalLoops = loops.filter((l) => l.proposalId === proposalId);
-    const lastLoop = [...proposalLoops].sort((a, b) => a.roundNumber - b.roundNumber).pop();
     const proposal = vote.proposals.find((p) => p.id === proposalId);
-    const inheritContent = content || lastLoop?.proposalContent || proposal?.content || "";
+    const inheritContent = content || proposal?.content || "";
     await openRound(proposalId, moderatorDisplayName, inheritContent);
   };
 
   const handleCloseRound = async (loopId: string) => {
-    await closeRound(loopId);
+    const loop = loops.find((l) => l.id === loopId);
+    const updated = await closeRound(loopId);
+    if (updated && loop) {
+      const adapter = await getPersistenceAdapter();
+      const updatedProposals = vote.proposals.map((p) =>
+        p.id === loop.proposalId ? { ...p, content: updated.proposalContent || p.content } : p
+      );
+      await adapter.updateVote(vote.id, { proposals: updatedProposals });
+    }
   };
+
+  const handleUpdateProposal = React.useCallback(async (proposalId: string, content: string) => {
+    if (proposalUpdateTimerRef.current[proposalId]) {
+      clearTimeout(proposalUpdateTimerRef.current[proposalId]);
+    }
+    proposalUpdateTimerRef.current[proposalId] = setTimeout(async () => {
+      const adapter = await getPersistenceAdapter();
+      const updatedProposals = vote.proposals.map((p) =>
+        p.id === proposalId ? { ...p, content } : p
+      );
+      await adapter.updateVote(vote.id, { proposals: updatedProposals });
+    }, 500);
+  }, [vote.id, vote.proposals]);
 
   return (
     <div className="space-y-4">
@@ -88,10 +107,8 @@ const LoopPanel: React.FC<{
           .filter((l) => l.proposalId === proposal.id)
           .sort((a, b) => a.roundNumber - b.roundNumber);
         const currentOpenLoop = proposalLoops.find((l) => !l.closedAt);
-        const lastClosedLoop = [...proposalLoops].reverse().find((l) => l.closedAt);
         const canOpenNewRound = isOpen && !currentOpenLoop;
-        const defaultDraft = lastClosedLoop?.proposalContent || proposal.content || "";
-        const currentDraft = draftContent[proposal.id] ?? defaultDraft;
+        const currentDraft = proposal.content || "";
 
         if (activeProposals.length > 1 && proposal.id !== expandedProposalId) {
           return null;
@@ -104,7 +121,7 @@ const LoopPanel: React.FC<{
                 vote={vote}
                 loops={loops}
                 proposalId={proposal.id}
-                onOpenRound={() => handleOpenRound(proposal.id, currentDraft)}
+                onOpenRound={() => handleOpenRound(proposal.id, proposal.content || "")}
                 onCloseRound={handleCloseRound}
                 isModerator={true}
               />
@@ -132,7 +149,7 @@ const LoopPanel: React.FC<{
                 onChange={(content) => {
                   updateRoundContent(currentOpenLoop.id, content);
                 }}
-                readOnly={true}
+                readOnly={false}
               />
             ) : canOpenNewRound ? (
               <div className="space-y-3">
@@ -146,7 +163,7 @@ const LoopPanel: React.FC<{
                 </div>
                 <BlockNoteProposalEditor
                   value={currentDraft}
-                  onChange={(json) => setDraftContent((prev) => ({ ...prev, [proposal.id]: json }))}
+                  onChange={(json) => handleUpdateProposal(proposal.id, json)}
                   placeholder="Modify the proposal text for the next round..."
                 />
               </div>
