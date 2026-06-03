@@ -419,6 +419,8 @@ class PostgresClient implements DbClient {
         "openedAt" TIMESTAMP WITH TIME ZONE NOT NULL,
         "closedAt" TIMESTAMP WITH TIME ZONE,
         "openedByUserId" TEXT NOT NULL,
+        "gatingValue" INTEGER,
+        "gatingComment" TEXT,
         UNIQUE("voteId", "proposalId", "roundNumber")
       )
     `);
@@ -621,6 +623,26 @@ class PostgresClient implements DbClient {
 
     // VoteLoops proposalId column (per-proposal loops)
     await addColumn('voteLoops', 'proposalId', 'TEXT NOT NULL DEFAULT \'\'');
+    await addColumn('voteLoops', 'gatingValue', 'INTEGER');
+    await addColumn('voteLoops', 'gatingComment', 'TEXT');
+
+     await this.tryAddVoteLoopsUniqueConstraint();
+   }
+
+  private async tryAddVoteLoopsUniqueConstraint(): Promise<void> {
+    try {
+      const constraintCheck = await this.pool.query(
+        `SELECT 1 FROM information_schema.table_constraints
+         WHERE table_name = 'voteLoops' AND constraint_type = 'UNIQUE'`
+      );
+      if (constraintCheck.rows.length > 0) return;
+
+      await this.pool.query(
+        `ALTER TABLE "voteLoops" ADD CONSTRAINT "voteLoops_voteId_proposalId_roundNumber_key" UNIQUE ("voteId", "proposalId", "roundNumber")`
+      );
+    } catch (e) {
+      console.error('Error adding voteLoops unique constraint:', e);
+    }
   }
 
   async testConnection(): Promise<void> {

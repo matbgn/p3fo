@@ -630,6 +630,8 @@ class SqliteClient implements DbClient {
 
     // VoteLoops proposalId column (per-proposal loops)
     addColumn('voteLoops', 'proposalId', 'TEXT NOT NULL DEFAULT \'\'');
+
+    this.tryFixVoteLoopsUniqueConstraint();
   }
 
   async testConnection(): Promise<void> {
@@ -2024,6 +2026,49 @@ class SqliteClient implements DbClient {
     } catch (error) {
       this.db.exec('ROLLBACK');
       throw error;
+    }
+  }
+
+  private tryFixVoteLoopsUniqueConstraint(): void {
+    const tableRow = this.db.prepare(
+      `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'voteLoops'`
+    ).get() as { sql: string } | undefined;
+    if (!tableRow) return;
+    if (/UNIQUE\(\s*"voteId"\s*,\s*"proposalId"\s*,\s*"roundNumber"\s*\)/i.test(tableRow.sql)) return;
+
+    this.db.exec('PRAGMA foreign_keys=OFF');
+    this.db.exec('BEGIN');
+    try {
+      this.db.exec(`
+        CREATE TABLE "voteLoops_new" (
+          "id" TEXT PRIMARY KEY,
+          "voteId" TEXT NOT NULL REFERENCES "votes"("id") ON DELETE CASCADE,
+          "proposalId" TEXT NOT NULL DEFAULT '',
+          "roundNumber" INTEGER NOT NULL,
+          "proposalContent" TEXT NOT NULL,
+          "openedAt" TEXT NOT NULL,
+          "closedAt" TEXT,
+          "openedByUserId" TEXT NOT NULL,
+          "gatingValue" INTEGER,
+          "gatingComment" TEXT,
+          UNIQUE("voteId", "proposalId", "roundNumber")
+        )
+      `);
+      this.db.exec(`
+        INSERT INTO "voteLoops_new"
+          ("id", "voteId", "proposalId", "roundNumber", "proposalContent", "openedAt", "closedAt", "openedByUserId", "gatingValue", "gatingComment")
+        SELECT
+          "id", "voteId", "proposalId", "roundNumber", "proposalContent", "openedAt", "closedAt", "openedByUserId", "gatingValue", "gatingComment"
+        FROM "voteLoops"
+      `);
+      this.db.exec(`DROP TABLE "voteLoops"`);
+      this.db.exec(`ALTER TABLE "voteLoops_new" RENAME TO "voteLoops"`);
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    } finally {
+      this.db.exec('PRAGMA foreign_keys=ON');
     }
   }
 

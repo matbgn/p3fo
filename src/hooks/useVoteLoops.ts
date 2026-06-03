@@ -53,7 +53,9 @@ export const useVoteLoops = (voteId: string) => {
   ): Promise<VoteLoop | null> => {
     try {
       const adapter = await getPersistenceAdapter();
-      const existingProposalLoops = loops.filter((l) => l.proposalId === proposalId);
+      const freshLoops = await adapter.listVoteLoops(voteId);
+      setLoops(freshLoops);
+      const existingProposalLoops = freshLoops.filter((l) => l.proposalId === proposalId);
       const loop = await adapter.createVoteLoop(voteId, {
         proposalId,
         proposalContent: inheritFromContent || "",
