@@ -1,7 +1,8 @@
 import * as React from "react";
-import { VoteEntity } from "@/lib/persistence-types";
+import { VoteEntity, VoteLoop } from "@/lib/persistence-types";
 import { VOTING_MODES_LABELS, MJ_SCALE } from "@/components/planView/constants";
 import { useVoteResults } from "@/hooks/useVotes";
+import { useVoteLoops } from "@/hooks/useVoteLoops";
 import { tallyThumbsUp, tallyUDNeutral, tallyPoints, tallyMajorityJudgment, tallyConsentLoop } from "@/lib/vote-tally";
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +20,141 @@ const PHASE_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "
   FINALIZED: "destructive",
 };
 
+const ConsentLoopResults: React.FC<{ vote: VoteEntity }> = ({ vote }) => {
+  const t = getVotingStrings();
+  const { responses, isLoading: responsesLoading } = useVoteResults(vote.id);
+  const { loops, isLoading: loopsLoading } = useVoteLoops(vote.id);
+  const activeProposals = vote.proposals.filter((p) => p.active);
+
+  const tally = React.useMemo(
+    () => tallyConsentLoop(loops, responses, activeProposals.map((p) => p.id)),
+    [loops, responses, activeProposals]
+  );
+
+  if (responsesLoading || loopsLoading) {
+    return <p className="text-sm text-gray-400">{t.messages.loadingResults}</p>;
+  }
+
+  if (loops.length === 0) {
+    return <p className="text-sm text-gray-400 italic">{t.messages.noRoundsYet}</p>;
+  }
+
+  return (
+    <div className="space-y-4">
+      {activeProposals.map((proposal, idx) => {
+        const proposalTally = tally.proposals.find((p) => p.proposalId === proposal.id);
+        if (!proposalTally || proposalTally.perRound.length === 0) return null;
+
+        const openLoop = loops.find((l) => l.proposalId === proposal.id && !l.closedAt);
+        const closedRounds = proposalTally.perRound.filter((r) => r.closed);
+        const lastClosedRound = closedRounds.length > 0 ? closedRounds[closedRounds.length - 1] : null;
+
+        const displayRound = openLoop
+          ? (proposalTally.current ?? lastClosedRound ?? proposalTally.perRound[proposalTally.perRound.length - 1])
+          : (lastClosedRound ?? proposalTally.perRound[proposalTally.perRound.length - 1]);
+
+        if (!displayRound) return null;
+
+        const isAdopted = lastClosedRound?.adopted ?? false;
+        const isOpen = !!openLoop;
+        const roundNumber = openLoop
+          ? proposalTally.perRound.find((r) => r.loopId === openLoop.id)?.roundNumber
+            ?? proposalTally.perRound.length
+          : lastClosedRound?.roundNumber ?? proposalTally.perRound.length;
+        const totalVotes = MJ_SCALE.reduce(
+          (sum, grade) => sum + (displayRound.distribution[grade.value] || 0),
+          0
+        );
+        const medianGrade = MJ_SCALE.find((g) => g.value === displayRound.median);
+
+        const segments = MJ_SCALE
+          .map((grade) => ({
+            ...grade,
+            count: displayRound.distribution[grade.value] || 0,
+            percentage: totalVotes > 0
+              ? ((displayRound.distribution[grade.value] || 0) / totalVotes) * 100
+              : 0,
+          }))
+          .filter((d) => d.count > 0);
+
+        return (
+          <div
+            key={proposal.id}
+            className={`border rounded-lg p-3 ${
+              isAdopted ? "border-green-500 bg-green-50" : isOpen ? "border-blue-400 bg-blue-50" : "bg-white"
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-medium text-gray-900">
+                {proposal.description || `${t.labels.proposals} ${idx + 1}`}
+              </h4>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">
+                  {t.labels.round} {roundNumber}
+                </span>
+                {isOpen ? (
+                  <Badge variant="default">{t.phases.OPEN}</Badge>
+                ) : isAdopted ? (
+                  <Badge className="bg-green-600">{t.messages.consentLoopAdopted.split("—")[0].trim()}</Badge>
+                ) : (
+                  <Badge variant="outline">{t.phases.CLOSED}</Badge>
+                )}
+              </div>
+            </div>
+
+            {totalVotes > 0 ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-600">{t.labels.medianColon}</span>
+                  {medianGrade && (
+                    <span className={`px-2 py-0.5 rounded text-xs text-white ${medianGrade.color}`}>
+                      {medianGrade.icon} {medianGrade.label}
+                    </span>
+                  )}
+                  <span className="text-xs text-gray-500">
+                    ({totalVotes} {totalVotes !== 1 ? t.labels.voters : t.labels.voter})
+                  </span>
+                </div>
+                <div className="relative w-full h-6 flex rounded overflow-hidden bg-gray-100">
+                  {segments.map((item, index) => {
+                    const isMedian = item.value === displayRound.median;
+                    const isFirst = index === 0;
+                    const isLast = index === segments.length - 1;
+                    return (
+                      <div
+                        key={item.value}
+                        className={`h-full flex items-center justify-center relative ${item.color} ${
+                          isFirst ? "rounded-l" : ""
+                        } ${isLast ? "rounded-r" : ""} ${
+                          isMedian ? "ring-2 ring-white z-20 shadow-md scale-y-125 mx-0.5 rounded-sm origin-center" : ""
+                        }`}
+                        style={{ width: `${item.percentage}%` }}
+                        title={`${item.label}: ${item.count} votes (${item.percentage.toFixed(1)}%)`}
+                      >
+                        {item.percentage >= 10 && (
+                          <span className={`text-[10px] font-bold ${
+                            [1, 2].includes(item.value) ? "text-black" : "text-white"
+                          } drop-shadow-md`}>
+                            {item.percentage.toFixed(1)}%
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400 italic">
+                {isOpen ? t.messages.noVotesYet : t.messages.noVotesYet}
+              </p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
   const t = getVotingStrings();
   const { responses, isLoading } = useVoteResults(vote.id);
@@ -26,6 +162,51 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
 
   const totalVoters = new Set(responses.map((r) => r.voterToken)).size;
   const commentsCount = responses.filter((r) => r.comment).length;
+
+  if (vote.config.mode === "CONSENT_LOOP") {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Badge variant={PHASE_VARIANTS[vote.config.phase] || "secondary"}>
+            {t.phases[vote.config.phase] || vote.config.phase}
+          </Badge>
+          <Badge variant="outline">{VOTING_MODES_LABELS[vote.config.mode]}</Badge>
+          <Badge variant="outline">{vote.config.kind === "decision" ? t.kinds.decision : t.kinds.consultation}</Badge>
+        </div>
+
+        {vote.outcome && (
+          <div className="border-2 border-blue-500 rounded-lg p-4 bg-blue-50">
+            <div className="flex items-center gap-2 mb-2">
+              <Trophy className="w-5 h-5 text-blue-600" />
+              <span className="font-semibold text-blue-900">{t.labels.outcome}</span>
+            </div>
+            <p className="text-sm text-blue-800">{vote.outcome.summary}</p>
+            {vote.outcome.signature && (
+              <p className="text-sm text-blue-700 mt-1 italic">"{vote.outcome.signature}"</p>
+            )}
+            <p className="text-xs text-blue-500 mt-2">
+              Finalized {new Date(vote.outcome.finalizedAt).toLocaleString()}
+            </p>
+          </div>
+        )}
+
+        <div className="flex gap-4 text-sm text-gray-500">
+          <span className="flex items-center gap-1">
+            <Users className="w-4 h-4" />
+            {totalVoters} {totalVoters !== 1 ? t.labels.voters : t.labels.voter}
+          </span>
+          {commentsCount > 0 && (
+            <span className="flex items-center gap-1">
+              <MessageSquare className="w-4 h-4" />
+              {commentsCount} {commentsCount !== 1 ? t.labels.comments : t.labels.comment}
+            </span>
+          )}
+        </div>
+
+        <ConsentLoopResults vote={vote} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -156,14 +337,6 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
                         ))}
                       </div>
                     </div>
-                  );
-                })()}
-
-                {vote.config.mode === "CONSENT_LOOP" && (() => {
-                  return (
-                    <p className="text-xs text-gray-400 italic">
-                      {t.messages.consentLoopResultsPerRound}
-                    </p>
                   );
                 })()}
 
