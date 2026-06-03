@@ -997,6 +997,52 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
   }
 
+  async createVoteResponse(voteId: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity> {
+    const newResponse: VoteResponseEntity = {
+      id: response.id || crypto.randomUUID(),
+      voteId,
+      proposalId: response.proposalId ?? null,
+      loopId: response.loopId,
+      userId: response.userId ?? null,
+      voterToken: response.voterToken || crypto.randomUUID(),
+      value: response.value ?? 0,
+      comment: response.comment,
+      submittedAt: response.submittedAt || new Date().toISOString(),
+    };
+    const stored = localStorage.getItem(VOTE_RESPONSES_STORAGE_KEY);
+    const all: VoteResponseEntity[] = stored ? JSON.parse(stored) : [];
+    const filtered = all.filter(
+      r => !(
+        r.voteId === voteId &&
+        r.voterToken === newResponse.voterToken &&
+        (r.proposalId ?? null) === (newResponse.proposalId ?? null) &&
+        (r.loopId ?? null) === (newResponse.loopId ?? null)
+      ),
+    );
+    filtered.push(newResponse);
+    localStorage.setItem(VOTE_RESPONSES_STORAGE_KEY, JSON.stringify(filtered));
+    return newResponse;
+  }
+
+  async deleteVoteResponse(
+    voteId: string,
+    voterToken: string,
+    proposalId: string | null,
+    loopId: string | null = null,
+  ): Promise<void> {
+    const stored = localStorage.getItem(VOTE_RESPONSES_STORAGE_KEY);
+    const all: VoteResponseEntity[] = stored ? JSON.parse(stored) : [];
+    const filtered = all.filter(
+      r => !(
+        r.voteId === voteId &&
+        r.voterToken === voterToken &&
+        (r.proposalId ?? null) === (proposalId ?? null) &&
+        (r.loopId ?? null) === (loopId ?? null)
+      ),
+    );
+    localStorage.setItem(VOTE_RESPONSES_STORAGE_KEY, JSON.stringify(filtered));
+  }
+
   async importVoteResponses(items: VoteResponseEntity[]): Promise<void> {
     if (typeof window === 'undefined') return;
     try {

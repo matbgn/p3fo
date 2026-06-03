@@ -716,6 +716,37 @@ app.post('/api/votes/:idOrSlug/responses', async (req: Request, res: Response) =
   }
 });
 
+app.delete('/api/votes/:idOrSlug/responses', async (req: Request, res: Response) => {
+  try {
+    const { idOrSlug } = req.params;
+    const { voterToken, proposalId, loopId } = req.query;
+    if (typeof voterToken !== 'string') {
+      return res.status(400).json({ error: 'voterToken is required' });
+    }
+    let vote = await db.getVoteById(idOrSlug);
+    if (!vote) {
+      vote = await db.getVoteBySlug(idOrSlug);
+    }
+    if (!vote) {
+      return res.status(404).json({ error: 'Vote not found' });
+    }
+    if (vote.config.phase !== 'OPEN') {
+      return res.status(400).json({ error: 'Vote is not open for responses' });
+    }
+    await db.deleteVoteResponse(
+      vote.id,
+      voterToken,
+      typeof proposalId === 'string' ? proposalId : null,
+      typeof loopId === 'string' ? loopId : null,
+    );
+    res.status(204).send();
+  } catch (error: unknown) {
+    console.error('Error deleting vote response:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to withdraw vote', details: message });
+  }
+});
+
 // Vote results (public)
 app.get('/api/votes/:idOrSlug/results', async (req: Request, res: Response) => {
   try {

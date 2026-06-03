@@ -57,6 +57,9 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
   const [allowFreeText, setAllowFreeText] = React.useState(false);
   const [requireObjectionComment, setRequireObjectionComment] = React.useState(false);
   const [allowAudienceProposals, setAllowAudienceProposals] = React.useState(false);
+  const [showResultsBeforeClose, setShowResultsBeforeClose] = React.useState(false);
+  const [allowVoteChangeUntilClose, setAllowVoteChangeUntilClose] = React.useState(true);
+  const [multipleChoiceVote, setMultipleChoiceVote] = React.useState(true);
   const [maxPointsPerUser, setMaxPointsPerUser] = React.useState(10);
   const [allowMultiple, setAllowMultiple] = React.useState(false);
   const [consentLoopMaxRounds, setConsentLoopMaxRounds] = React.useState(10);
@@ -76,6 +79,9 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
       setAllowFreeText(vote.config.allowFreeText ?? false);
       setRequireObjectionComment(vote.config.requireObjectionComment ?? false);
       setAllowAudienceProposals(vote.config.allowAudienceProposals ?? false);
+      setShowResultsBeforeClose(vote.config.showResultsBeforeClose ?? false);
+      setAllowVoteChangeUntilClose(vote.config.allowVoteChangeUntilClose ?? true);
+      setMultipleChoiceVote(vote.config.multipleChoiceVote ?? true);
       setMaxPointsPerUser(vote.config.maxPointsPerUser ?? 10);
       setAllowMultiple(vote.config.allowMultiple ?? false);
       setConsentLoopMaxRounds(vote.config.consentLoopMaxRounds ?? 10);
@@ -92,6 +98,9 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
       setAllowFreeText(false);
       setRequireObjectionComment(false);
       setAllowAudienceProposals(false);
+      setShowResultsBeforeClose(false);
+      setAllowVoteChangeUntilClose(true);
+      setMultipleChoiceVote(true);
       setMaxPointsPerUser(10);
       setAllowMultiple(false);
       setConsentLoopMaxRounds(10);
@@ -117,6 +126,9 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
         allowFreeText,
         requireObjectionComment: showObjectionComment ? requireObjectionComment : undefined,
         allowAudienceProposals: kind === "consultation" ? allowAudienceProposals : undefined,
+        showResultsBeforeClose,
+        allowVoteChangeUntilClose,
+        multipleChoiceVote: mode !== "POINTS" && mode !== "CONSENT_LOOP" ? multipleChoiceVote : undefined,
         maxPointsPerUser: mode === "POINTS" ? maxPointsPerUser : undefined,
         allowMultiple: mode === "POINTS" ? allowMultiple : undefined,
         consentLoopMaxRounds: mode === "CONSENT_LOOP" ? consentLoopMaxRounds : undefined,
@@ -283,6 +295,35 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
                 <Switch
                   checked={requireObjectionComment}
                   onCheckedChange={setRequireObjectionComment}
+                  disabled={isFinalized}
+                />
+              </div>
+            )}
+
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">{t.labels.showResultsBeforeClose}</Label>
+              <Switch
+                checked={showResultsBeforeClose}
+                onCheckedChange={setShowResultsBeforeClose}
+                disabled={isFinalized}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">{t.labels.allowVoteChangeUntilClose}</Label>
+              <Switch
+                checked={allowVoteChangeUntilClose}
+                onCheckedChange={setAllowVoteChangeUntilClose}
+                disabled={isFinalized}
+              />
+            </div>
+
+            {mode !== "POINTS" && mode !== "CONSENT_LOOP" && (
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">{t.labels.multipleChoiceVote}</Label>
+                <Switch
+                  checked={multipleChoiceVote}
+                  onCheckedChange={setMultipleChoiceVote}
                   disabled={isFinalized}
                 />
               </div>

@@ -379,9 +379,33 @@ class PostgresClient implements DbClient {
         "voterToken" TEXT NOT NULL,
         "value" DOUBLE PRECISION NOT NULL,
         "comment" TEXT,
-        "submittedAt" TIMESTAMP WITH TIME ZONE NOT NULL,
-        UNIQUE("voteId", "voterToken")
+        "submittedAt" TIMESTAMP WITH TIME ZONE NOT NULL
       )
+    `);
+    // Replace legacy single-response-per-voter constraint with one that allows
+    // one response per (voter, proposal[, loop]) so multi-proposal votes work.
+    await this.pool.query(`
+      DO $$
+      DECLARE
+        constraint_record RECORD;
+      BEGIN
+        FOR constraint_record IN
+          SELECT conname FROM pg_constraint
+          WHERE conrelid = '"voteResponses"'::regclass
+            AND contype = 'u'
+            AND ARRAY(
+              SELECT attname FROM pg_attribute
+              WHERE attrelid = conrelid AND attnum = ANY(conkey)
+              ORDER BY array_position(conkey, attnum)
+            ) = ARRAY["voteId", "voterToken"]
+        LOOP
+          EXECUTE format('ALTER TABLE "voteResponses" DROP CONSTRAINT %I', constraint_record.conname);
+        END LOOP;
+      END $$;
+    `);
+    await this.pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "idx_voteResponses_voter_proposal_loop"
+        ON "voteResponses" ("voteId", "voterToken", COALESCE("proposalId", ''), COALESCE("loopId", ''))
     `);
 
     // Vote loops table (CONSENT_LOOP)
@@ -1789,13 +1813,14 @@ class PostgresClient implements DbClient {
     await this.pool.query(`
       INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt")
       VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      ON CONFLICT ("voteId", "voterToken") DO UPDATE SET
-        "proposalId" = EXCLUDED."proposalId",
-        "loopId" = EXCLUDED."loopId",
-        "userId" = EXCLUDED."userId",
-        "value" = EXCLUDED."value",
-        "comment" = EXCLUDED."comment",
-        "submittedAt" = EXCLUDED."submittedAt"
+      ON CONFLICT ("voteId", "voterToken", (COALESCE("proposalId", '')), (COALESCE("loopId", '')))
+        DO UPDATE SET
+          "proposalId" = EXCLUDED."proposalId",
+          "loopId" = EXCLUDED."loopId",
+          "userId" = EXCLUDED."userId",
+          "value" = EXCLUDED."value",
+          "comment" = EXCLUDED."comment",
+          "submittedAt" = EXCLUDED."submittedAt"
     `, [
       newResponse.id,
       newResponse.voteId,
@@ -1811,6 +1836,22 @@ class PostgresClient implements DbClient {
     return newResponse;
   }
 
+  async deleteVoteResponse(
+    voteId: string,
+    voterToken: string,
+    proposalId: string | null,
+    loopId: string | null = null,
+  ): Promise<void> {
+    await this.pool.query(
+      `DELETE FROM "voteResponses"
+       WHERE "voteId" = $1
+         AND "voterToken" = $2
+         AND COALESCE("proposalId", '') = COALESCE($3, '')
+         AND COALESCE("loopId", '') = COALESCE($4, '')`,
+      [voteId, voterToken, proposalId, loopId],
+    );
+  }
+
   async importVoteResponses(items: VoteResponseEntity[]): Promise<void> {
     const client = await this.pool.connect();
     try {
@@ -1819,11 +1860,12 @@ class PostgresClient implements DbClient {
         await client.query(`
           INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt")
           VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
-          ON CONFLICT ("voteId", "voterToken") DO UPDATE SET
-            "proposalId" = EXCLUDED."proposalId",
-            "value" = EXCLUDED."value",
-            "comment" = EXCLUDED."comment",
-            "submittedAt" = EXCLUDED."submittedAt"
+          ON CONFLICT ("voteId", "voterToken", (COALESCE("proposalId", '')), (COALESCE("loopId", '')))
+            DO UPDATE SET
+              "proposalId" = EXCLUDED."proposalId",
+              "value" = EXCLUDED."value",
+              "comment" = EXCLUDED."comment",
+              "submittedAt" = EXCLUDED."submittedAt"
         `, [item.id, item.voteId, item.proposalId, item.loopId ?? null, item.userId, item.voterToken, item.value, item.comment ?? null, item.submittedAt]);
       }
       await client.query('COMMIT');

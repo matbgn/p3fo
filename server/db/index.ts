@@ -100,6 +100,7 @@ export interface DbClient {
   // Vote responses
   getVoteResponses(voteId: string): Promise<VoteResponseEntity[]>;
   createVoteResponse(voteId: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity>;
+  deleteVoteResponse(voteId: string, voterToken: string, proposalId: string | null, loopId?: string | null): Promise<void>;
   importVoteResponses(items: VoteResponseEntity[]): Promise<void>;
 
   // Vote loops (CONSENT_LOOP)

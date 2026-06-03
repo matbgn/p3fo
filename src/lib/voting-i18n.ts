@@ -41,6 +41,7 @@ type VotingStrings = {
     hide: string;
     share: string;
     reset: string;
+    withdraw: string;
   };
   labels: {
     voting: string;
@@ -91,6 +92,9 @@ type VotingStrings = {
     contentRich: string;
     active: string;
     allowAudienceProposals: string;
+    showResultsBeforeClose: string;
+    allowVoteChangeUntilClose: string;
+    multipleChoiceVote: string;
     round: string;
     median: string;
     status: string;
@@ -251,6 +255,7 @@ const en: VotingStrings = {
     hide: "Hide",
     share: "Share",
     reset: "Reset",
+    withdraw: "Withdraw",
   },
   labels: {
     voting: "Voting",
@@ -301,6 +306,9 @@ const en: VotingStrings = {
     contentRich: "Content (rich text)",
     active: "Active",
     allowAudienceProposals: "Allow audience to add proposals",
+    showResultsBeforeClose: "Show results before close",
+    allowVoteChangeUntilClose: "Allow vote change until close",
+    multipleChoiceVote: "Multiple choice vote",
     round: "Round",
     median: "Median",
     status: "Status",
@@ -461,6 +469,7 @@ const fr: VotingStrings = {
     hide: "Masquer",
     share: "Partager",
     reset: "R\u00e9initialiser",
+    withdraw: "Retirer",
   },
   labels: {
     voting: "Vote",
@@ -511,6 +520,9 @@ const fr: VotingStrings = {
     contentRich: "Contenu (texte riche)",
     active: "Actif",
     allowAudienceProposals: "Autoriser le public \u00e0 ajouter des propositions",
+    showResultsBeforeClose: "Afficher les r\u00e9sultats avant la fermeture",
+    allowVoteChangeUntilClose: "Autoriser le changement de vote jusqu'\u00e0 la fermeture",
+    multipleChoiceVote: "Vote \u00e0 choix multiple",
     round: "Tour",
     median: "M\u00e9diane",
     status: "Statut",

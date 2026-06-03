@@ -432,9 +432,18 @@ class SqliteClient implements DbClient {
         "voterToken" TEXT NOT NULL,
         "value" REAL NOT NULL,
         "comment" TEXT,
-        "submittedAt" TEXT NOT NULL,
-        UNIQUE("voteId", "voterToken")
+        "submittedAt" TEXT NOT NULL
       )
+    `);
+    // Replace legacy single-response-per-voter constraint with one that allows
+    // one response per (voter, proposal[, loop]) so multi-proposal votes work.
+    this.tryDropLegacyVoteResponseConstraint();
+    // Drop the non-COALESCE version of the new index if it was created in a
+    // previous (buggy) migration, so we can recreate it with COALESCE below.
+    this.db.exec(`DROP INDEX IF EXISTS "idx_voteResponses_voter_proposal_loop"`);
+    this.db.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "idx_voteResponses_voter_proposal_loop"
+        ON "voteResponses" ("voteId", "voterToken", COALESCE("proposalId", ''), COALESCE("loopId", ''))
     `);
 
     // Vote loops table (CONSENT_LOOP)
@@ -1947,7 +1956,7 @@ class SqliteClient implements DbClient {
     this.db.prepare(`
       INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt")
       VALUES(@id, @voteId, @proposalId, @loopId, @userId, @voterToken, @value, @comment, @submittedAt)
-      ON CONFLICT("voteId", "voterToken") DO UPDATE SET
+      ON CONFLICT("voteId", "voterToken", COALESCE("proposalId", ''), COALESCE("loopId", '')) DO UPDATE SET
         "proposalId" = excluded."proposalId",
         "loopId" = excluded."loopId",
         "userId" = excluded."userId",
@@ -1969,11 +1978,26 @@ class SqliteClient implements DbClient {
     return newResponse;
   }
 
+  async deleteVoteResponse(
+    voteId: string,
+    voterToken: string,
+    proposalId: string | null,
+    loopId: string | null = null,
+  ): Promise<void> {
+    this.db.prepare(`
+      DELETE FROM "voteResponses"
+      WHERE "voteId" = @voteId
+        AND "voterToken" = @voterToken
+        AND COALESCE("proposalId", '') = COALESCE(@proposalId, '')
+        AND COALESCE("loopId", '') = COALESCE(@loopId, '')
+    `).run({ voteId, voterToken, proposalId, loopId });
+  }
+
   async importVoteResponses(items: VoteResponseEntity[]): Promise<void> {
     const insertStmt = this.db.prepare(`
       INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt")
       VALUES(@id, @voteId, @proposalId, @loopId, @userId, @voterToken, @value, @comment, @submittedAt)
-      ON CONFLICT("voteId", "voterToken") DO UPDATE SET
+      ON CONFLICT("voteId", "voterToken", COALESCE("proposalId", ''), COALESCE("loopId", '')) DO UPDATE SET
         "proposalId" = excluded."proposalId",
         "value" = excluded."value",
         "comment" = excluded."comment",
@@ -1999,6 +2023,49 @@ class SqliteClient implements DbClient {
     } catch (error) {
       this.db.exec('ROLLBACK');
       throw error;
+    }
+  }
+
+  private tryDropLegacyVoteResponseConstraint(): void {
+    // SQLite doesn't support dropping a UNIQUE constraint from a table definition
+    // without recreating the table. Detect the legacy schema and rebuild.
+    const tableRow = this.db.prepare(
+      `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'voteResponses'`
+    ).get() as { sql: string } | undefined;
+    if (!tableRow) return;
+    if (!/UNIQUE\(\s*"voteId"\s*,\s*"voterToken"\s*\)/i.test(tableRow.sql)) return;
+
+    this.db.exec('PRAGMA foreign_keys=OFF');
+    this.db.exec('BEGIN');
+    try {
+      this.db.exec(`
+        CREATE TABLE "voteResponses_new" (
+          "id" TEXT PRIMARY KEY,
+          "voteId" TEXT NOT NULL REFERENCES "votes"("id") ON DELETE CASCADE,
+          "proposalId" TEXT,
+          "loopId" TEXT,
+          "userId" TEXT,
+          "voterToken" TEXT NOT NULL,
+          "value" REAL NOT NULL,
+          "comment" TEXT,
+          "submittedAt" TEXT NOT NULL
+        )
+      `);
+      this.db.exec(`
+        INSERT INTO "voteResponses_new"
+          ("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt")
+        SELECT
+          "id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt"
+        FROM "voteResponses"
+      `);
+      this.db.exec(`DROP TABLE "voteResponses"`);
+      this.db.exec(`ALTER TABLE "voteResponses_new" RENAME TO "voteResponses"`);
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    } finally {
+      this.db.exec('PRAGMA foreign_keys=ON');
     }
   }
 

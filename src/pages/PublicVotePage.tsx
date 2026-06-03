@@ -26,6 +26,7 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronUp,
+  X,
 } from "lucide-react";
 
 
@@ -76,6 +77,27 @@ async function submitResponse(
     return await res.json();
   } catch {
     return null;
+  }
+}
+
+async function deleteResponse(
+  slug: string,
+  body: { voterToken: string; proposalId: string; loopId?: string | null }
+): Promise<boolean> {
+  try {
+    const params = new URLSearchParams({ voterToken: body.voterToken, proposalId: body.proposalId });
+    if (body.loopId) params.set("loopId", body.loopId);
+    const res = await fetch(`/api/votes/${slug}/responses?${params.toString()}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Unknown error" }));
+      console.error("Vote withdrawal error:", err.error);
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -140,6 +162,9 @@ const PublicVotePage: React.FC = () => {
   const [comment, setComment] = React.useState("");
   const [hasSubmitted, setHasSubmitted] = React.useState(false);
   const [showResults, setShowResults] = React.useState(false);
+  const canChangeVote = vote ? (vote.config.allowVoteChangeUntilClose ?? true) : true;
+  const showResultsAlways = vote ? (vote.config.showResultsBeforeClose ?? false) : false;
+  const isSingleProposal = vote ? !(vote.config.multipleChoiceVote ?? true) : false;
   const [pointsBudget, setPointsBudget] = React.useState<Record<string, number>>({});
   const [audienceProposalText, setAudienceProposalText] = React.useState("");
   const [showPrevRounds, setShowPrevRounds] = React.useState(false);
@@ -181,6 +206,10 @@ const PublicVotePage: React.FC = () => {
         }
       }
 
+      if (v.config.showResultsBeforeClose ?? false) {
+        setShowResults(true);
+      }
+
       if (v.config.mode === "CONSENT_LOOP") {
         const loopData = await fetchLoops(v.id);
         if (mounted) setLoops(loopData);
@@ -209,6 +238,18 @@ const PublicVotePage: React.FC = () => {
 
   const handleSubmitVote = async (proposalId: string, value: number) => {
     if (!slug || !vote) return;
+
+    // In single-choice mode, withdraw any existing vote on a different proposal
+    // before submitting the new one, so the server tally reflects the switch.
+    if (isSingleProposal) {
+      const previousProposalId = Object.keys(voterValues).find(
+        (id) => id !== proposalId,
+      );
+      if (previousProposalId) {
+        await deleteResponse(slug, { voterToken, proposalId: previousProposalId });
+      }
+    }
+
     const result = await submitResponse(slug, {
       proposalId,
       value,
@@ -218,7 +259,27 @@ const PublicVotePage: React.FC = () => {
     if (result) {
       setHasSubmitted(true);
       setShowResults(true);
-      setVoterValues((prev) => ({ ...prev, [proposalId]: value }));
+      if (isSingleProposal) {
+        setVoterValues({ [proposalId]: value });
+      } else {
+        setVoterValues((prev) => ({ ...prev, [proposalId]: value }));
+      }
+      setRefreshKey((k) => k + 1);
+    }
+  };
+
+  const handleWithdrawVote = async (proposalId: string) => {
+    if (!slug || !vote) return;
+    const ok = await deleteResponse(slug, { voterToken, proposalId });
+    if (ok) {
+      setVoterValues((prev) => {
+        const next = { ...prev };
+        delete next[proposalId];
+        if (Object.keys(next).length === 0) {
+          setHasSubmitted(false);
+        }
+        return next;
+      });
       setRefreshKey((k) => k + 1);
     }
   };
@@ -443,10 +504,10 @@ const PublicVotePage: React.FC = () => {
                   </a>
                 )}
 
-                {isActive && (
+                {isActive && (canChangeVote || !hasSubmitted) && (
                   <div className="mt-3">
                     {mode === "THUMBS_UP" && (
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
                         <Button
                           size="sm"
                           variant={
@@ -454,7 +515,13 @@ const PublicVotePage: React.FC = () => {
                               ? "default"
                               : "outline"
                           }
-                          onClick={() => handleSubmitVote(proposal.id, 1)}
+                          onClick={() => {
+                            if (voterValues[proposal.id] === 1) {
+                              handleWithdrawVote(proposal.id);
+                            } else {
+                              handleSubmitVote(proposal.id, 1);
+                            }
+                          }}
                           className={
                             voterValues[proposal.id] === 1
                               ? "bg-green-600 hover:bg-green-700"
@@ -466,6 +533,17 @@ const PublicVotePage: React.FC = () => {
                             ? ts.buttons.voted
                             : ts.buttons.vote}
                         </Button>
+                        {voterValues[proposal.id] === 1 && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleWithdrawVote(proposal.id)}
+                            title={ts.buttons.withdraw}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        )}
                         {showResults &&
                           (() => {
                             const count = tallyThumbsUpResult(proposal.id);
@@ -742,7 +820,7 @@ const PublicVotePage: React.FC = () => {
                   </div>
                 )}
 
-                {isActive && firstProposalId && (
+                {isActive && firstProposalId && (canChangeVote || !hasSubmitted) && (
                   <div className="flex flex-wrap gap-2 mb-4">
                     {MJ_SCALE.map((grade) => (
                       <button
@@ -878,7 +956,7 @@ const PublicVotePage: React.FC = () => {
           );
         })()}
 
-        {mode === "POINTS" && isActive && (
+        {mode === "POINTS" && isActive && (canChangeVote || !hasSubmitted) && (
           <div className="bg-white rounded-lg shadow-sm border p-5 mb-6">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-medium">{ts.buttons.submitPoints}</h3>
@@ -893,7 +971,7 @@ const PublicVotePage: React.FC = () => {
           </div>
         )}
 
-        {isActive && vote.config.allowFreeText && (
+        {isActive && vote.config.allowFreeText && (canChangeVote || !hasSubmitted) && (
           <div className="bg-white rounded-lg shadow-sm border p-5 mb-6">
             <label className="text-sm font-medium text-gray-700 flex items-center gap-1 mb-2">
               <MessageSquare className="w-4 h-4" />
@@ -915,6 +993,7 @@ const PublicVotePage: React.FC = () => {
         )}
 
         {isActive &&
+          (canChangeVote || !hasSubmitted) &&
           vote.config.kind === "consultation" &&
           vote.config.allowAudienceProposals && (
             <div className="bg-white rounded-lg shadow-sm border p-5 mb-6">

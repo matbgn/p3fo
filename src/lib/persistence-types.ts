@@ -221,6 +221,8 @@ export interface PersistenceAdapter {
 
   // Vote responses
   listVoteResponses(voteId: string): Promise<VoteResponseEntity[]>;
+  createVoteResponse?(voteId: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity>;
+  deleteVoteResponse?(voteId: string, voterToken: string, proposalId: string | null, loopId?: string | null): Promise<void>;
   importVoteResponses(items: VoteResponseEntity[]): Promise<void>;
 
   // Vote loops (CONSENT_LOOP)
@@ -297,6 +299,9 @@ export interface VoteConfig {
   allowFreeText?: boolean;
   requireObjectionComment?: boolean;
   allowAudienceProposals?: boolean;
+  showResultsBeforeClose?: boolean;
+  allowVoteChangeUntilClose?: boolean;
+  multipleChoiceVote?: boolean;
   consentLoopMaxRounds?: number;
   consentLoopGatingMode?: 'UD_NEUTRAL' | 'NONE';
   isHiddenFromHome?: boolean;

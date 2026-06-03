@@ -419,6 +419,27 @@ export class HttpApiPersistence implements PersistenceAdapter {
     return this.makeRequest(`/api/votes/${voteId}/results`).then((r: { responses: VoteResponseEntity[] }) => r.responses || []);
   }
 
+  async createVoteResponse(voteId: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity> {
+    return this.makeRequest(`/api/votes/${voteId}/responses`, {
+      method: 'POST',
+      body: JSON.stringify(response),
+    });
+  }
+
+  async deleteVoteResponse(
+    voteId: string,
+    voterToken: string,
+    proposalId: string | null,
+    loopId: string | null = null,
+  ): Promise<void> {
+    const params = new URLSearchParams({ voterToken });
+    if (proposalId) params.set('proposalId', proposalId);
+    if (loopId) params.set('loopId', loopId);
+    await this.makeRequest(`/api/votes/${voteId}/responses?${params.toString()}`, {
+      method: 'DELETE',
+    });
+  }
+
   async importVoteResponses(items: VoteResponseEntity[]): Promise<void> {
     await this.makeRequest('/api/vote-responses/import', {
       method: 'POST',
