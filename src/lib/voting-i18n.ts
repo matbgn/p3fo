@@ -40,6 +40,8 @@ type VotingStrings = {
     hide: string;
     share: string;
     reset: string;
+    openRound: string;
+    closeRound: string;
   };
   labels: {
     voting: string;
@@ -242,6 +244,8 @@ const en: VotingStrings = {
     hide: "Hide",
     share: "Share",
     reset: "Reset",
+    openRound: "Open round",
+    closeRound: "Close round",
   },
   labels: {
     voting: "Voting",
@@ -444,6 +448,8 @@ const fr: VotingStrings = {
     hide: "Masquer",
     share: "Partager",
     reset: "R\u00e9initialiser",
+    openRound: "Ouvrir le tour",
+    closeRound: "Fermer le tour",
   },
   labels: {
     voting: "Vote",

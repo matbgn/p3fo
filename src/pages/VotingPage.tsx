@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useSearchParams } from "react-router-dom";
-import { Vote, Plus, BarChart3, Clock, Trash2, ExternalLink, Eye, Trophy, Edit, ToggleLeft, Shield, Share2, RotateCcw } from "lucide-react";
+import { Vote, Plus, BarChart3, Clock, Trash2, ExternalLink, Eye, Trophy, Edit, ToggleLeft, Shield, Share2, RotateCcw, GitCompare } from "lucide-react";
 import { useVotes, useVoteResults } from "@/hooks/useVotes";
 import { useVoteLoops } from "@/hooks/useVoteLoops";
 import { getPersistenceAdapter } from "@/lib/persistence-factory";
@@ -11,6 +11,7 @@ import { VOTING_MODES_LABELS } from "@/components/planView/constants";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Label } from "@/components/ui/label";
 import { VoteEditor } from "@/components/voting/VoteEditor";
 import { VoteResults } from "@/components/voting/VoteResults";
 import { FinalizeDialog } from "@/components/voting/FinalizeDialog";
@@ -26,6 +27,8 @@ import {
 import { LoopRoundTabs } from "@/components/voting/LoopRoundTabs";
 import { LoopRoundEditor } from "@/components/voting/LoopRoundEditor";
 import { LoopRoundControls } from "@/components/voting/LoopRoundControls";
+import { LoopRoundDiffDialog } from "@/components/voting/LoopRoundDiffDialog";
+import { BlockNoteProposalEditor } from "@/components/voting/BlockNoteProposalEditor";
 import { ModerationPanel } from "@/components/voting/ModerationPanel";
 import QRCodeBlock from "@/components/voting/QRCodeBlock";
 import { deserializeBlocks } from "@/components/voting/BlockNoteProposalEditor";
@@ -128,14 +131,20 @@ const ConsentLoopPanel: React.FC<{
   loops: ReturnType<typeof useVoteLoops>["loops"];
   responses: ReturnType<typeof useVotes>["votes"] extends (infer T)[] ? T[] : never;
   onOpenRound: (proposalId: string) => void;
+  onOpenRoundWithContent: (proposalId: string, content: string) => void;
   onCloseRound: (loopId: string) => void;
   onUpdateRoundContent: (loopId: string, content: string) => void;
-}> = ({ vote, loops, responses, onOpenRound, onCloseRound, onUpdateRoundContent }) => {
+  isModerator?: boolean;
+}> = ({ vote, loops, responses, onOpenRound, onOpenRoundWithContent, onCloseRound, onUpdateRoundContent, isModerator }) => {
   const t = getVotingStrings();
   const { responses: voteResponses } = useVoteResults(vote.id);
   const activeProposals = vote.proposals.filter((p) => p.active);
+  const isOpen = vote.config.phase === "OPEN";
 
   const [expandedProposalId, setExpandedProposalId] = React.useState<string>(activeProposals[0]?.id || "");
+  const [diffOpen, setDiffOpen] = React.useState(false);
+  const [diffProposalId, setDiffProposalId] = React.useState<string>("");
+  const [draftContent, setDraftContent] = React.useState<Record<string, string>>({});
 
   return (
     <div className="space-y-4">
@@ -170,6 +179,11 @@ const ConsentLoopPanel: React.FC<{
           .filter((l) => l.proposalId === proposal.id)
           .sort((a, b) => a.roundNumber - b.roundNumber);
         const currentOpenLoop = proposalLoops.find((l) => !l.closedAt);
+        const lastClosedLoop = [...proposalLoops].reverse().find((l) => l.closedAt);
+        const canOpenNewRound = isOpen && !currentOpenLoop;
+        const showPreRoundEditor = canOpenNewRound && (isModerator || vote.ownerId === "me");
+        const defaultDraft = lastClosedLoop?.proposalContent || proposal.content || "";
+        const currentDraft = draftContent[proposal.id] ?? defaultDraft;
 
         if (activeProposals.length > 1 && proposal.id !== expandedProposalId) {
           return null;
@@ -183,26 +197,62 @@ const ConsentLoopPanel: React.FC<{
               </h4>
             )}
 
-            <LoopRoundControls
-              vote={vote}
-              loops={loops}
-              proposalId={proposal.id}
-              onOpenRound={onOpenRound}
-              onCloseRound={onCloseRound}
-            />
+            <div className="flex items-center gap-2 flex-wrap">
+              <LoopRoundControls
+                vote={vote}
+                loops={loops}
+                proposalId={proposal.id}
+                onOpenRound={isModerator ? () => onOpenRoundWithContent(proposal.id, currentDraft) : onOpenRound}
+                onCloseRound={onCloseRound}
+                isModerator={isModerator}
+              />
+              {proposalLoops.filter((l) => l.closedAt).length >= 2 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setDiffProposalId(proposal.id);
+                    setDiffOpen(true);
+                  }}
+                >
+                  <GitCompare className="w-4 h-4 mr-1" />
+                  {t.labels.roundComparison}
+                </Button>
+              )}
+            </div>
 
             <Separator />
 
-            <LoopRoundEditor
-              loop={currentOpenLoop || null}
-              vote={vote}
-              onChange={(content) => {
-                if (currentOpenLoop) {
+            {currentOpenLoop ? (
+              <LoopRoundEditor
+                loop={currentOpenLoop}
+                vote={vote}
+                onChange={(content) => {
                   onUpdateRoundContent(currentOpenLoop.id, content);
-                }
-              }}
-              readOnly={vote.config.phase === "FINALIZED"}
-            />
+                }}
+                readOnly={true}
+              />
+            ) : showPreRoundEditor ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">
+                    {t.labels.currentRoundProposal} — {t.labels.round} {proposalLoops.length + 1}
+                  </Label>
+                  <span className="text-xs text-blue-500 font-medium">
+                    Editable before starting round
+                  </span>
+                </div>
+                <BlockNoteProposalEditor
+                  value={currentDraft}
+                  onChange={(json) => setDraftContent((prev) => ({ ...prev, [proposal.id]: json }))}
+                  placeholder="Modify the proposal text for the next round..."
+                />
+              </div>
+            ) : currentOpenLoop === undefined && proposalLoops.length === 0 ? (
+              <p className="text-sm text-gray-400 italic">
+                {t.messages.noRoundsYet}
+              </p>
+            ) : null}
 
             <Separator />
 
@@ -215,6 +265,14 @@ const ConsentLoopPanel: React.FC<{
           </div>
         );
       })}
+
+      <LoopRoundDiffDialog
+        open={diffOpen}
+        onOpenChange={setDiffOpen}
+        loops={loops}
+        proposalId={diffProposalId}
+        proposalLabel={activeProposals.find((p) => p.id === diffProposalId)?.description}
+      />
     </div>
   );
 };
@@ -254,6 +312,10 @@ const VoteDetailPanel: React.FC<{
 
     const inheritContent = lastLoop?.proposalContent || proposal?.content || "";
     await openRound(proposalId, "me", inheritContent);
+  };
+
+  const handleOpenRoundWithContent = async (proposalId: string, content: string) => {
+    await openRound(proposalId, "me", content);
   };
 
   const handleCloseRound = async (loopId: string) => {
@@ -377,6 +439,7 @@ const VoteDetailPanel: React.FC<{
                 loops={loops}
                 responses={[]}
                 onOpenRound={handleOpenRound}
+                onOpenRoundWithContent={handleOpenRoundWithContent}
                 onCloseRound={handleCloseRound}
                 onUpdateRoundContent={updateRoundContent}
               />

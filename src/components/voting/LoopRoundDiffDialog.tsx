@@ -20,6 +20,8 @@ interface LoopRoundDiffDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   loops: VoteLoop[];
+  proposalId?: string;
+  proposalLabel?: string;
 }
 
 function blocksToText(json: string): string[] {
@@ -38,7 +40,7 @@ function computeBlockDiff(
 ): Array<{
   type: "added" | "removed" | "unchanged";
   line: string;
-}> {
+}>  {
   const result: Array<{
     type: "added" | "removed" | "unchanged";
     line: string;
@@ -96,14 +98,20 @@ export const LoopRoundDiffDialog: React.FC<LoopRoundDiffDialogProps> = ({
   open,
   onOpenChange,
   loops,
+  proposalId,
+  proposalLabel,
 }) => {
   const t = getVotingStrings();
-  const sortedLoops = React.useMemo(
-    () => [...loops].sort((a, b) => a.roundNumber - b.roundNumber),
-    [loops]
-  );
 
-  const closedLoops = sortedLoops.filter((l) => l.closedAt);
+  const proposalLoops = React.useMemo(() => {
+    let filtered = [...loops];
+    if (proposalId) {
+      filtered = filtered.filter((l) => l.proposalId === proposalId);
+    }
+    return filtered.sort((a, b) => a.roundNumber - b.roundNumber);
+  }, [loops, proposalId]);
+
+  const closedLoops = proposalLoops.filter((l) => l.closedAt);
 
   const [leftIdx, setLeftIdx] = React.useState(0);
   const [rightIdx, setRightIdx] = React.useState(
@@ -143,13 +151,19 @@ export const LoopRoundDiffDialog: React.FC<LoopRoundDiffDialogProps> = ({
   const rightLines = blocksToText(rightLoop.proposalContent);
   const diff = computeBlockDiff(leftLines, rightLines);
 
+  const titleSuffix = proposalLabel
+    ? ` — ${proposalLabel}`
+    : proposalId
+      ? ` — ${t.labels.proposals}`
+      : "";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <GitCompare className="w-5 h-5" />
-            {t.labels.roundComparison}
+            {t.labels.roundComparison}{titleSuffix}
           </DialogTitle>
           <DialogDescription>
             {t.messages.compareRoundsDescription}
@@ -194,13 +208,13 @@ export const LoopRoundDiffDialog: React.FC<LoopRoundDiffDialogProps> = ({
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div>
             <h4 className="text-xs font-medium text-gray-400 mb-2">
-              Round {leftLoop.roundNumber}
+              {t.labels.round} {leftLoop.roundNumber}
             </h4>
             <ReadOnlyBlockView json={leftLoop.proposalContent} />
           </div>
           <div>
             <h4 className="text-xs font-medium text-gray-400 mb-2">
-              Round {rightLoop.roundNumber}
+              {t.labels.round} {rightLoop.roundNumber}
             </h4>
             <ReadOnlyBlockView json={rightLoop.proposalContent} />
           </div>

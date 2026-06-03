@@ -9,11 +9,13 @@ import { VOTING_MODES_LABELS, MJ_SCALE } from "@/components/planView/constants";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { VoteResults } from "@/components/voting/VoteResults";
 import { LoopRoundControls } from "@/components/voting/LoopRoundControls";
 import { LoopRoundEditor } from "@/components/voting/LoopRoundEditor";
 import { LoopRoundTabs } from "@/components/voting/LoopRoundTabs";
+import { LoopRoundDiffDialog } from "@/components/voting/LoopRoundDiffDialog";
 import { BlockNoteProposalEditor } from "@/components/voting/BlockNoteProposalEditor";
 import {
   Vote,
@@ -21,6 +23,7 @@ import {
   AlertTriangle,
   Eye,
   PenLine,
+  GitCompare,
 } from "lucide-react";
 import { getVotingStrings } from "@/lib/voting-i18n";
 
@@ -34,13 +37,17 @@ const LoopPanel: React.FC<{
   const { loops, openRound, closeRound, updateRoundContent } = useVoteLoops(vote.id);
   const { responses: voteResponses } = useVoteResults(vote.id);
   const activeProposals = vote.proposals.filter((p) => p.active);
+  const isOpen = vote.config.phase === "OPEN";
   const [expandedProposalId, setExpandedProposalId] = React.useState<string>(activeProposals[0]?.id || "");
+  const [diffOpen, setDiffOpen] = React.useState(false);
+  const [diffProposalId, setDiffProposalId] = React.useState<string>("");
+  const [draftContent, setDraftContent] = React.useState<Record<string, string>>({});
 
-  const handleOpenRound = async (proposalId: string) => {
+  const handleOpenRound = async (proposalId: string, content?: string) => {
     const proposalLoops = loops.filter((l) => l.proposalId === proposalId);
     const lastLoop = [...proposalLoops].sort((a, b) => a.roundNumber - b.roundNumber).pop();
     const proposal = vote.proposals.find((p) => p.id === proposalId);
-    const inheritContent = lastLoop?.proposalContent || proposal?.content || "";
+    const inheritContent = content || lastLoop?.proposalContent || proposal?.content || "";
     await openRound(proposalId, moderatorDisplayName, inheritContent);
   };
 
@@ -81,6 +88,10 @@ const LoopPanel: React.FC<{
           .filter((l) => l.proposalId === proposal.id)
           .sort((a, b) => a.roundNumber - b.roundNumber);
         const currentOpenLoop = proposalLoops.find((l) => !l.closedAt);
+        const lastClosedLoop = [...proposalLoops].reverse().find((l) => l.closedAt);
+        const canOpenNewRound = isOpen && !currentOpenLoop;
+        const defaultDraft = lastClosedLoop?.proposalContent || proposal.content || "";
+        const currentDraft = draftContent[proposal.id] ?? defaultDraft;
 
         if (activeProposals.length > 1 && proposal.id !== expandedProposalId) {
           return null;
@@ -88,27 +99,62 @@ const LoopPanel: React.FC<{
 
         return (
           <div key={proposal.id} className="space-y-4 border rounded-lg p-4">
-            <LoopRoundControls
-              vote={vote}
-              loops={loops}
-              proposalId={proposal.id}
-              onOpenRound={handleOpenRound}
-              onCloseRound={handleCloseRound}
-              isModerator={true}
-            />
+            <div className="flex items-center gap-2 flex-wrap">
+              <LoopRoundControls
+                vote={vote}
+                loops={loops}
+                proposalId={proposal.id}
+                onOpenRound={() => handleOpenRound(proposal.id, currentDraft)}
+                onCloseRound={handleCloseRound}
+                isModerator={true}
+              />
+              {proposalLoops.filter((l) => l.closedAt).length >= 2 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setDiffProposalId(proposal.id);
+                    setDiffOpen(true);
+                  }}
+                >
+                  <GitCompare className="w-4 h-4 mr-1" />
+                  {t.labels.roundComparison}
+                </Button>
+              )}
+            </div>
 
             <Separator />
 
-            <LoopRoundEditor
-              loop={currentOpenLoop || null}
-              vote={vote}
-              onChange={(content) => {
-                if (currentOpenLoop) {
+            {currentOpenLoop ? (
+              <LoopRoundEditor
+                loop={currentOpenLoop}
+                vote={vote}
+                onChange={(content) => {
                   updateRoundContent(currentOpenLoop.id, content);
-                }
-              }}
-              readOnly={vote.config.phase === "FINALIZED"}
-            />
+                }}
+                readOnly={true}
+              />
+            ) : canOpenNewRound ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">
+                    {t.labels.currentRoundProposal} — {t.labels.round} {proposalLoops.length + 1}
+                  </Label>
+                  <span className="text-xs text-blue-500 font-medium">
+                    Editable before starting round
+                  </span>
+                </div>
+                <BlockNoteProposalEditor
+                  value={currentDraft}
+                  onChange={(json) => setDraftContent((prev) => ({ ...prev, [proposal.id]: json }))}
+                  placeholder="Modify the proposal text for the next round..."
+                />
+              </div>
+            ) : proposalLoops.length === 0 ? (
+              <p className="text-sm text-gray-400 italic">
+                {t.messages.noRoundsYet}
+              </p>
+            ) : null}
 
             <Separator />
 
@@ -121,6 +167,14 @@ const LoopPanel: React.FC<{
           </div>
         );
       })}
+
+      <LoopRoundDiffDialog
+        open={diffOpen}
+        onOpenChange={setDiffOpen}
+        loops={loops}
+        proposalId={diffProposalId}
+        proposalLabel={activeProposals.find((p) => p.id === diffProposalId)?.description}
+      />
     </div>
   );
 };

@@ -155,6 +155,7 @@ const ModeratorRow: React.FC<{
   onOpenPopout: (token: string) => void;
   copiedToken: string | null;
 }> = ({ moderator, voteSlug, onCopyLink, onRevoke, onOpenPopout, copiedToken }) => {
+  const t = getVotingStrings();
   const isActive = moderator.active;
   const isCopied = copiedToken === moderator.token;
 
