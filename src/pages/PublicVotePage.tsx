@@ -61,6 +61,7 @@ async function submitResponse(
     value: number;
     voterToken: string;
     comment?: string;
+    loopId?: string;
   }
 ): Promise<VoteResponseEntity | null> {
   try {
@@ -233,7 +234,7 @@ const PublicVotePage: React.FC = () => {
     return () => { mounted = false; };
   }, [refreshKey, slug, vote]);
 
-  const handleSubmitVote = async (proposalId: string, value: number) => {
+  const handleSubmitVote = async (proposalId: string, value: number, loopId?: string) => {
     if (!slug || !vote) return;
 
     // In single-choice mode, withdraw any existing vote on a different proposal
@@ -252,6 +253,7 @@ const PublicVotePage: React.FC = () => {
       value,
       voterToken,
       comment: comment || undefined,
+      loopId,
     });
     if (result) {
       setHasSubmitted(true);
@@ -787,6 +789,14 @@ const PublicVotePage: React.FC = () => {
             ? tallyConsentLoopShared(loops, responses, firstProposalId)
             : null;
 
+          // Use the current round's refined content if it exists, otherwise
+          // fall back to concatenating all active proposals from the vote.
+          const fallbackContent = activeProposals
+            .map((p) => p.content)
+            .filter((c) => c && c.trim().length > 0)
+            .join("\n\n");
+          const displayContent = currentOpenLoop?.proposalContent || fallbackContent;
+
           return (
             <div className="space-y-4 mb-6">
               <div className="bg-white rounded-lg shadow-sm border p-5">
@@ -796,13 +806,13 @@ const PublicVotePage: React.FC = () => {
                      <span className="ml-2 text-sm font-normal text-gray-500">
                        — Round {currentOpenLoop.roundNumber} is open
                      </span>
-                  )}
+                   )}
                 </h3>
                 <p className="text-sm text-gray-500 mb-4">
                   {ts.messages.consentLoopProcess}
                 </p>
 
-                {currentOpenLoop && currentOpenLoop.proposalContent && (
+                {displayContent && (
                   <div className="mb-4 p-3 bg-gray-50 rounded border">
                     <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
                       {ts.labels.currentRoundProposal}
@@ -812,7 +822,7 @@ const PublicVotePage: React.FC = () => {
                       dangerouslySetInnerHTML={{
                         __html: (() => {
                           try {
-                            const blocks = JSON.parse(currentOpenLoop.proposalContent);
+                            const blocks = JSON.parse(displayContent);
                             if (Array.isArray(blocks)) {
                               return blocks
                                 .map((b: { content?: Array<{ text?: string }> }) => {
@@ -822,19 +832,19 @@ const PublicVotePage: React.FC = () => {
                                 .join("");
                             }
                           } catch { /* empty */ }
-                          return currentOpenLoop.proposalContent;
+                          return displayContent;
                         })(),
                       }}
                     />
                   </div>
                 )}
 
-                {isActive && firstProposalId && (canChangeVote || !hasSubmitted) && (
+                {isActive && firstProposalId && currentOpenLoop && (canChangeVote || !hasSubmitted) && (
                   <div className="flex flex-wrap gap-2 mb-4">
                     {MJ_SCALE.map((grade) => (
                       <button
                         key={grade.value}
-                        onClick={() => handleSubmitVote(firstProposalId, grade.value)}
+                        onClick={() => handleSubmitVote(firstProposalId, grade.value, currentOpenLoop.id)}
                         className={`px-3 py-1.5 rounded-full text-xs font-medium text-white transition-colors ${
                           voterValues[firstProposalId] === grade.value
                             ? `${grade.color} ring-2 ring-offset-1 ring-gray-400`
@@ -847,7 +857,7 @@ const PublicVotePage: React.FC = () => {
                   </div>
                 )}
 
-                {showResults && tally && tally.perRound.length > 0 && (
+                {(isClosed || showResultsBeforeClose) && tally && tally.perRound.length > 0 && (
                   <div className="mt-4 pt-3 border-t">
                     <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
                       {ts.labels.currentRoundResults}
@@ -864,7 +874,7 @@ const PublicVotePage: React.FC = () => {
                             </span>
                           </div>
                           <div className="flex h-3 rounded-full overflow-hidden">
-                            {[...MJ_SCALE].sort((a, b) => b.value - a.value).map((grade) => {
+                            {MJ_SCALE.map((grade) => {
                               const count = currentRound?.distribution[grade.value] || 0;
                               const total = Object.values(currentRound?.distribution || {}).reduce((s, v) => s + v, 0);
                               return (

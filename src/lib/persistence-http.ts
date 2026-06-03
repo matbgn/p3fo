@@ -460,14 +460,14 @@ export class HttpApiPersistence implements PersistenceAdapter {
   }
 
   async updateVoteLoop(loopId: string, patch: Partial<VoteLoop>): Promise<VoteLoop | null> {
-    return this.makeRequest(`/api/vote-loops/${loopId}`, {
+    return this.makeRequest(`/api/votes/loops/${loopId}`, {
       method: 'PUT',
       body: JSON.stringify(patch),
     });
   }
 
   async closeVoteLoop(loopId: string, gating: { value: -1 | 0 | 1; comment?: string }): Promise<VoteLoop | null> {
-    return this.makeRequest(`/api/vote-loops/${loopId}/close`, {
+    return this.makeRequest(`/api/votes/loops/${loopId}/close`, {
       method: 'POST',
       body: JSON.stringify(gating),
     });

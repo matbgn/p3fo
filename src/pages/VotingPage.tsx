@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Vote, Plus, BarChart3, Clock, Trash2, ExternalLink, Eye, Trophy, Edit, ToggleLeft, GitCompare, Shield, Share2, RotateCcw } from "lucide-react";
 import { useVotes, useVoteResults } from "@/hooks/useVotes";
 import { useVoteLoops } from "@/hooks/useVoteLoops";
+import { getPersistenceAdapter } from "@/lib/persistence-factory";
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { VoteEntity, VoteKind } from "@/lib/persistence-types";
@@ -28,8 +29,31 @@ import { LoopRoundControls } from "@/components/voting/LoopRoundControls";
 import { LoopRoundDiffDialog } from "@/components/voting/LoopRoundDiffDialog";
 import { ModerationPanel } from "@/components/voting/ModerationPanel";
 import QRCodeBlock from "@/components/voting/QRCodeBlock";
+import { deserializeBlocks } from "@/components/voting/BlockNoteProposalEditor";
 
 type VotingTab = "consultations" | "decisions";
+
+function mergeProposalContents(contents: string[]): string {
+  const allBlocks: unknown[] = [];
+  for (const c of contents) {
+    if (!c || c.trim().length === 0) continue;
+    try {
+      const parsed = JSON.parse(c);
+      if (Array.isArray(parsed)) {
+        allBlocks.push(...parsed);
+        continue;
+      }
+    } catch {
+      // not JSON, treat as plain text paragraph
+    }
+    allBlocks.push({ type: "paragraph", content: [{ type: "text", text: c }] });
+  }
+  return JSON.stringify(
+    allBlocks.length > 0
+      ? allBlocks
+      : [{ type: "paragraph", content: [{ type: "text", text: "" }] }],
+  );
+}
 
 const PHASE_COLORS: Record<string, string> = {
   IDLE: "bg-gray-100 text-gray-700",
@@ -168,6 +192,7 @@ const ConsentLoopPanel: React.FC<{
 
       <LoopRoundEditor
         loop={currentOpenLoop || null}
+        vote={vote}
         onChange={(content) => {
           if (currentOpenLoop) {
             onUpdateRoundContent(currentOpenLoop.id, content);
@@ -222,7 +247,19 @@ const VoteDetailPanel: React.FC<{
   const handleOpenRound = async () => {
     const sortedLoops = [...loops].sort((a, b) => a.roundNumber - b.roundNumber);
     const lastLoop = sortedLoops[sortedLoops.length - 1];
-    const inheritContent = lastLoop?.proposalContent || vote.proposals[0]?.content || "";
+
+    // Re-fetch the vote to get the latest proposals content (the prop may be stale).
+    const adapter = await getPersistenceAdapter();
+    const freshVote = await adapter.getVoteById(vote.id);
+    const sourceVote = freshVote || vote;
+
+    const fallbackProposalContents = sourceVote.proposals
+      .filter((p) => p.active)
+      .map((p) => p.content)
+      .filter((c) => c && c.trim().length > 0);
+    const inheritContent = lastLoop?.proposalContent
+      || (fallbackProposalContents.length > 0 ? mergeProposalContents(fallbackProposalContents) : "")
+      || "";
     await openRound("me", inheritContent);
   };
 
@@ -506,6 +543,39 @@ const VotingPage: React.FC = () => {
     });
     if (selectedVote?.id === id) {
       setSelectedVote({ ...selectedVote, config: { ...selectedVote.config, phase } });
+    }
+
+    // For CONSENT_LOOP mode, automatically open the first round when the vote
+    // transitions to OPEN so voters can immediately see and grade the proposal.
+    if (
+      phase === "OPEN" &&
+      vote.config.mode === "CONSENT_LOOP" &&
+      vote.config.phase !== "OPEN"
+    ) {
+      try {
+        const adapter = await getPersistenceAdapter();
+        // Re-fetch the vote to get the latest proposals content (the state
+        // snapshot may be stale right after a save).
+        const freshVote = await adapter.getVoteById(id);
+        const sourceVote = freshVote || vote;
+        const existingLoops = await adapter.listVoteLoops(id);
+        const hasOpenRound = existingLoops.some((l) => !l.closedAt);
+        if (!hasOpenRound) {
+          const proposalContents = sourceVote.proposals
+            .filter((p) => p.active)
+            .map((p) => p.content)
+            .filter((c) => c && c.trim().length > 0);
+          const initialContent = mergeProposalContents(proposalContents);
+          await adapter.createVoteLoop(id, {
+            proposalContent: initialContent,
+            openedByUserId: "me",
+            openedAt: new Date().toISOString(),
+            roundNumber: existingLoops.length + 1,
+          });
+        }
+      } catch (error) {
+        console.error("Error auto-opening first round:", error);
+      }
     }
   };
 

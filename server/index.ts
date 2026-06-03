@@ -793,7 +793,7 @@ app.post('/api/votes/:id/loops', async (req: Request, res: Response) => {
   }
 });
 
-app.post('/api/votes/:id/loops/:loopId/close', async (req: Request, res: Response) => {
+app.post('/api/votes/loops/:loopId/close', async (req: Request, res: Response) => {
   try {
     const gating = req.body;
     const loop = await db.closeVoteLoop(req.params.loopId, gating);
@@ -805,6 +805,32 @@ app.post('/api/votes/:id/loops/:loopId/close', async (req: Request, res: Respons
     console.error('Error closing vote loop:', error);
     const message = error instanceof Error ? error.message : String(error);
     res.status(500).json({ error: 'Failed to close loop', details: message });
+  }
+});
+
+app.put('/api/votes/loops/:loopId', async (req: Request, res: Response) => {
+  try {
+    const loop = await db.updateVoteLoop(req.params.loopId, req.body);
+    if (!loop) {
+      return res.status(404).json({ error: 'Loop not found' });
+    }
+    res.json(loop);
+  } catch (error: unknown) {
+    console.error('Error updating vote loop:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to update loop', details: message });
+  }
+});
+
+app.post('/api/vote-loops/import', async (req: Request, res: Response) => {
+  try {
+    const items: VoteLoop[] = req.body;
+    await db.importVoteLoops(items);
+    res.status(204).send();
+  } catch (error: unknown) {
+    console.error('Error importing vote loops:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to import vote loops', details: message });
   }
 });
 

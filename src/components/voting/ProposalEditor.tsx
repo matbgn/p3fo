@@ -2,7 +2,7 @@ import * as React from "react";
 import { Plus, Trash2, GripVertical, ExternalLink } from "lucide-react";
 import { VoteProposal, VoteKind } from "@/lib/persistence-types";
 import { getVotingStrings } from "@/lib/voting-i18n";
-import { BlockNoteProposalEditor } from "./BlockNoteProposalEditor";
+import { BlockNoteProposalEditor, BlockNoteProposalEditorHandle } from "./BlockNoteProposalEditor";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -17,15 +17,36 @@ interface ProposalEditorProps {
   readOnly?: boolean;
 }
 
-export const ProposalEditor: React.FC<ProposalEditorProps> = ({
+export interface ProposalEditorHandle {
+  flush: () => VoteProposal[];
+}
+
+export const ProposalEditor = React.forwardRef<ProposalEditorHandle, ProposalEditorProps>(({
   proposals,
   onChange,
   kind,
   allowAudienceProposals = false,
   onAllowAudienceProposalsChange,
   readOnly = false,
-}) => {
+}, ref) => {
   const t = getVotingStrings();
+  const editorRefs = React.useRef<(BlockNoteProposalEditorHandle | null)[]>([]);
+  const proposalsRef = React.useRef(proposals);
+  proposalsRef.current = proposals;
+
+  React.useImperativeHandle(ref, () => ({
+    flush: () => {
+      const updated = [...proposalsRef.current];
+      editorRefs.current.forEach((editor, i) => {
+        if (editor && i < updated.length) {
+          updated[i] = { ...updated[i], content: editor.flush() };
+        }
+      });
+      onChange(updated);
+      return updated;
+    },
+  }), [onChange]);
+
   const updateProposal = (index: number, patch: Partial<VoteProposal>) => {
     const next = [...proposals];
     next[index] = { ...next[index], ...patch };
@@ -139,6 +160,7 @@ export const ProposalEditor: React.FC<ProposalEditorProps> = ({
                 {t.labels.contentRich}
               </Label>
               <BlockNoteProposalEditor
+                ref={(el) => { editorRefs.current[index] = el; }}
                 value={proposal.content}
                 onChange={(json) => updateProposal(index, { content: json })}
                 placeholder={`Write proposal ${index + 1} here...`}
@@ -187,4 +209,6 @@ export const ProposalEditor: React.FC<ProposalEditorProps> = ({
       )}
     </div>
   );
-};
+});
+
+ProposalEditor.displayName = "ProposalEditor";

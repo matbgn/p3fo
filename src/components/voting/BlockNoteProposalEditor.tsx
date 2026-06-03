@@ -50,20 +50,34 @@ interface BlockNoteProposalEditorProps {
   className?: string;
 }
 
-export const BlockNoteProposalEditor: React.FC<BlockNoteProposalEditorProps> = ({
-  value,
-  onChange,
-  placeholder = "Write your proposal here...",
-  readOnly = false,
-  className,
-}) => {
+export interface BlockNoteProposalEditorHandle {
+  flush: () => string;
+}
+
+export const BlockNoteProposalEditor = React.forwardRef<
+  BlockNoteProposalEditorHandle,
+  BlockNoteProposalEditorProps
+>(({ value, onChange, placeholder = "Write your proposal here...", readOnly = false, className }, ref) => {
   const didInitRef = React.useRef(false);
   const prevJsonRef = React.useRef(value);
+  const editorRef = React.useRef<any>(null);
 
   const editor = useCreateBlockNote({
     initialContent: deserializeBlocks(value),
     placeholders: { default: placeholder },
   });
+
+  editorRef.current = editor;
+
+  React.useImperativeHandle(ref, () => ({
+    flush: () => {
+      if (!editorRef.current) return prevJsonRef.current;
+      const json = serializeBlocks(editorRef.current);
+      prevJsonRef.current = json;
+      onChange(json);
+      return json;
+    },
+  }), [onChange]);
 
   React.useEffect(() => {
     if (!editor || didInitRef.current) return;
@@ -115,7 +129,9 @@ export const BlockNoteProposalEditor: React.FC<BlockNoteProposalEditorProps> = (
       />
     </div>
   );
-};
+});
+
+BlockNoteProposalEditor.displayName = "BlockNoteProposalEditor";
 
 // eslint-disable-next-line react-refresh/only-export-components
 export { deserializeBlocks };

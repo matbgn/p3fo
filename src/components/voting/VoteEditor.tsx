@@ -18,7 +18,7 @@ import { VoteEntity, VoteMode, VoteKind, VoteConfig, VoteProposal } from "@/lib/
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { KindSelector } from "./KindSelector";
 import { ModeSelector } from "./ModeSelector";
-import { ProposalEditor } from "./ProposalEditor";
+import { ProposalEditor, ProposalEditorHandle } from "./ProposalEditor";
 
 interface VoteEditorProps {
   open: boolean;
@@ -47,6 +47,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
   const isFinalized = vote?.config.phase === "FINALIZED";
   const hasStarted = isEditing && vote?.config.phase !== "IDLE";
   const t = getVotingStrings();
+  const proposalEditorRef = React.useRef<ProposalEditorHandle>(null);
 
   const [title, setTitle] = React.useState("");
   const [description, setDescription] = React.useState("");
@@ -116,6 +117,10 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
   const handleSave = async () => {
     if (!title.trim()) return;
 
+    // Flush any pending BlockNote editor content into the proposals state
+    // before reading it for the save payload.
+    const flushedProposals = proposalEditorRef.current?.flush() ?? proposals;
+
     setIsSaving(true);
     try {
       const config: VoteConfig = {
@@ -142,7 +147,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
         title: title.trim(),
         description: description.trim() || undefined,
         ownerId: vote?.ownerId || "me",
-        proposals: proposals.filter((p) => p.active),
+        proposals: flushedProposals.filter((p) => p.active),
         config,
       });
 
@@ -356,6 +361,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
           <div className="space-y-2">
             <Label className="text-base font-medium">{t.labels.proposals}</Label>
             <ProposalEditor
+              ref={proposalEditorRef}
               proposals={proposals}
               onChange={setProposals}
               kind={kind}
