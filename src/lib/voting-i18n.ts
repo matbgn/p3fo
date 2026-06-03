@@ -10,6 +10,7 @@ type VotingStrings = {
     voted: string;
     submit: string;
     submitPoints: string;
+    submitAllVotes: string;
     cancel: string;
     confirm: string;
     close: string;
@@ -218,6 +219,7 @@ const en: VotingStrings = {
     voted: "Voted",
     submit: "Submit",
     submitPoints: "Submit your points",
+    submitAllVotes: "Submit all votes",
     cancel: "Cancel",
     confirm: "Confirm",
     close: "Close",
@@ -426,6 +428,7 @@ const fr: VotingStrings = {
     voted: "Vot\u00e9",
     submit: "Soumettre",
     submitPoints: "Soumettre vos points",
+    submitAllVotes: "Soumettre tous les votes",
     cancel: "Annuler",
     confirm: "Confirmer",
     close: "Fermer",

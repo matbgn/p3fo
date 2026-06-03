@@ -189,12 +189,16 @@ const PublicVotePage: React.FC = () => {
   const [comment, setComment] = React.useState("");
   const [hasSubmitted, setHasSubmitted] = React.useState(false);
   const [justVoted, setJustVoted] = React.useState(false);
+  const [submittedVoterValues, setSubmittedVoterValues] = React.useState<Record<string, number>>({});
   const canChangeVote = vote ? (vote.config.allowVoteChangeUntilClose ?? true) : true;
   const votedAndLocked = hasSubmitted && !canChangeVote;
   const showResultsBeforeClose = vote ? (vote.config.showResultsBeforeClose ?? false) : false;
   const isClosed = vote?.config.phase === "CLOSED" || vote?.config.phase === "FINALIZED";
   const isSingleProposal = vote ? !(vote.config.multipleChoiceVote ?? true) : false;
   const showResults = vote ? (isClosed || showResultsBeforeClose) : false;
+  const hasPendingVotes = !isSingleProposal && Object.keys(voterValues).length > 0 && (
+    !hasSubmitted || JSON.stringify(voterValues) !== JSON.stringify(submittedVoterValues)
+  );
   const [pointsBudget, setPointsBudget] = React.useState<Record<string, number>>({});
   const [audienceProposalText, setAudienceProposalText] = React.useState("");
   const [showPrevRounds, setShowPrevRounds] = React.useState(false);
@@ -355,8 +359,24 @@ const PublicVotePage: React.FC = () => {
     };
   }, [slug, voteNotFoundMsg]);
 
+  const handleToggleVoteLocal = (proposalId: string, value: number) => {
+    setVoterValues((prev) => {
+      if (prev[proposalId] === value) {
+        const next = { ...prev };
+        delete next[proposalId];
+        return next;
+      }
+      return { ...prev, [proposalId]: value };
+    });
+  };
+
   const handleSubmitVote = async (proposalId: string, value: number, loopId?: string) => {
     if (!slug || !vote) return;
+
+    if (!isSingleProposal && mode !== "CONSENT_LOOP") {
+      handleToggleVoteLocal(proposalId, value);
+      return;
+    }
 
     // In single-choice mode, withdraw any existing vote on a different proposal
     // before submitting the new one, so the server tally reflects the switch.
@@ -418,6 +438,7 @@ const PublicVotePage: React.FC = () => {
     }
     setHasSubmitted(true);
     setJustVoted(true);
+    setSubmittedVoterValues({ ...voterValues });
     refreshData();
   };
 
@@ -609,6 +630,7 @@ const PublicVotePage: React.FC = () => {
         )}
 
         {mode !== "CONSENT_LOOP" && (
+          <>
           <div className="space-y-4 mb-6">
             {activeProposals.map((proposal) => (
               <div
@@ -648,7 +670,11 @@ const PublicVotePage: React.FC = () => {
                           }
                           onClick={() => {
                             if (voterValues[proposal.id] === 1) {
-                              handleWithdrawVote(proposal.id);
+                              if (!isSingleProposal) {
+                                handleToggleVoteLocal(proposal.id, 1);
+                              } else {
+                                handleWithdrawVote(proposal.id);
+                              }
                             } else {
                               handleSubmitVote(proposal.id, 1);
                             }
@@ -913,6 +939,14 @@ const PublicVotePage: React.FC = () => {
               </div>
             ))}
           </div>
+          {!isSingleProposal && isActive && hasPendingVotes && (
+            <div className="flex justify-center mt-2">
+              <Button onClick={handleSubmitAllVotes}>
+                {ts.buttons.submitAllVotes}
+              </Button>
+            </div>
+          )}
+          </>
         )}
 
         {mode === "CONSENT_LOOP" && (() => {
