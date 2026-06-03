@@ -782,195 +782,224 @@ const PublicVotePage: React.FC = () => {
         )}
 
         {mode === "CONSENT_LOOP" && (() => {
-          const sortedLoops = [...loops].sort((a, b) => a.roundNumber - b.roundNumber);
-          const currentOpenLoop = sortedLoops.find((l) => !l.closedAt);
-          const firstProposalId = activeProposals[0]?.id || "";
-          const tally = firstProposalId
-            ? tallyConsentLoopShared(loops, responses, firstProposalId)
-            : null;
-
-          // Use the current round's refined content if it exists, otherwise
-          // fall back to concatenating all active proposals from the vote.
-          const fallbackContent = activeProposals
-            .map((p) => p.content)
-            .filter((c) => c && c.trim().length > 0)
-            .join("\n\n");
-          const displayContent = currentOpenLoop?.proposalContent || fallbackContent;
+          const allTally = tallyConsentLoopShared(loops, responses, activeProposals.map((p) => p.id));
 
           return (
             <div className="space-y-4 mb-6">
               <div className="bg-white rounded-lg shadow-sm border p-5">
                 <h3 className="text-lg font-medium text-gray-900 mb-1">
                    {ts.modes.CONSENT_LOOP}
-                   {currentOpenLoop && (
-                     <span className="ml-2 text-sm font-normal text-gray-500">
-                       — Round {currentOpenLoop.roundNumber} is open
-                     </span>
-                   )}
                 </h3>
                 <p className="text-sm text-gray-500 mb-4">
                   {ts.messages.consentLoopProcess}
                 </p>
-
-                {displayContent && (
-                  <div className="mb-4 p-3 bg-gray-50 rounded border">
-                    <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
-                      {ts.labels.currentRoundProposal}
-                    </h4>
-                    <div
-                      className="prose prose-sm max-w-none"
-                      dangerouslySetInnerHTML={{
-                        __html: (() => {
-                          try {
-                            const blocks = JSON.parse(displayContent);
-                            if (Array.isArray(blocks)) {
-                              return blocks
-                                .map((b: { content?: Array<{ text?: string }> }) => {
-                                  if (!b.content || !Array.isArray(b.content)) return "";
-                                  return `<p>${b.content.map((c: { text?: string }) => c.text || "").join("")}</p>`;
-                                })
-                                .join("");
-                            }
-                          } catch { /* empty */ }
-                          return displayContent;
-                        })(),
-                      }}
-                    />
-                  </div>
-                )}
-
-                {isActive && firstProposalId && currentOpenLoop && (canChangeVote || !hasSubmitted) && (
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {MJ_SCALE.map((grade) => (
-                      <button
-                        key={grade.value}
-                        onClick={() => handleSubmitVote(firstProposalId, grade.value, currentOpenLoop.id)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-medium text-white transition-colors ${
-                          voterValues[firstProposalId] === grade.value
-                            ? `${grade.color} ring-2 ring-offset-1 ring-gray-400`
-                            : `${grade.color} opacity-70 hover:opacity-100`
-                        }`}
-                      >
-                        {grade.icon} {grade.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {(isClosed || showResultsBeforeClose) && tally && tally.perRound.length > 0 && (
-                  <div className="mt-4 pt-3 border-t">
-                    <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
-                      {ts.labels.currentRoundResults}
-                    </h4>
-                    {(() => {
-                      const currentRound = tally.perRound[tally.perRound.length - 1];
-                      const medianGrade = MJ_SCALE.find((g) => g.value === currentRound?.median);
-                      return (
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm">{ts.labels.medianColon}</span>
-                            <span className={`px-2 py-0.5 rounded text-xs text-white ${medianGrade?.color || "bg-gray-500"}`}>
-                              {medianGrade?.icon} {medianGrade?.label}
-                            </span>
-                          </div>
-                          <div className="flex h-3 rounded-full overflow-hidden">
-                            {MJ_SCALE.map((grade) => {
-                              const count = currentRound?.distribution[grade.value] || 0;
-                              const total = Object.values(currentRound?.distribution || {}).reduce((s, v) => s + v, 0);
-                              return (
-                                <div
-                                  key={grade.value}
-                                  className={`${grade.color}`}
-                                  style={{ width: `${total > 0 ? (count / total) * 100 : 0}%` }}
-                                  title={`${grade.label}: ${count}`}
-                                />
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
               </div>
 
-              <button
-                onClick={() => setShowPrevRounds(!showPrevRounds)}
-                className="text-sm text-blue-500 hover:underline flex items-center gap-1"
-              >
-                {showPrevRounds ? (
-                  <ChevronUp className="w-4 h-4" />
-                ) : (
-                  <ChevronDown className="w-4 h-4" />
-                )}
-                {showPrevRounds ? ts.buttons.hide : ts.buttons.show} previous rounds
-                {sortedLoops.length > 0 && ` (${sortedLoops.filter((l) => l.closedAt).length} closed)`}
-              </button>
+              {activeProposals.map((proposal, proposalIndex) => {
+                const proposalLoops = [...loops]
+                  .filter((l) => l.proposalId === proposal.id)
+                  .sort((a, b) => a.roundNumber - b.roundNumber);
+                const currentOpenLoop = proposalLoops.find((l) => !l.closedAt);
+                const proposalTally = allTally.proposals.find((p) => p.proposalId === proposal.id);
 
-              {showPrevRounds && tally && tally.perRound.length > 0 && (
-                <div className="bg-white rounded-lg shadow-sm border p-5">
-                  <h4 className="text-sm font-medium text-gray-700 mb-3">
-                  {ts.labels.roundByRoundSummary}
-                </h4>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm border-collapse">
-                      <thead>
-                        <tr>
-                          <th className="text-left py-2 px-3 border-b font-medium text-gray-600">
-                            {ts.labels.round}
-                          </th>
-                          <th className="text-center py-2 px-3 border-b font-medium text-gray-600">
-                            {ts.labels.median}
-                          </th>
-                          {MJ_SCALE.map((grade) => (
-                            <th
-                              key={grade.value}
-                              className="text-center py-2 px-2 border-b font-medium text-gray-600"
-                            >
-                              <span title={grade.label}>{grade.icon}</span>
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {tally.perRound.map((round) => {
-                          const medianGrade = MJ_SCALE.find((g) => g.value === round.median);
-                          const isOpen = !round.closed;
+                const displayContent = currentOpenLoop?.proposalContent || proposal.content || "";
+
+                return (
+                  <div key={proposal.id} className="bg-white rounded-lg shadow-sm border p-5">
+                    <h4 className="text-base font-medium text-gray-900 mb-2">
+                      {activeProposals.length > 1 && (
+                        <span className="text-gray-500 font-normal mr-1">Proposal {proposalIndex + 1}:</span>
+                      )}
+                      {proposal.description || `Proposal ${proposalIndex + 1}`}
+                    </h4>
+
+                    {currentOpenLoop && (
+                      <span className="text-xs text-green-600 font-medium">
+                        {ts.labels.round} {currentOpenLoop.roundNumber} — {ts.phases.OPEN}
+                      </span>
+                    )}
+
+                    {displayContent && (
+                      <div className="mb-4 p-3 bg-gray-50 rounded border">
+                        <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
+                          {ts.labels.currentRoundProposal}
+                        </h4>
+                        <div
+                          className="prose prose-sm max-w-none"
+                          dangerouslySetInnerHTML={{
+                            __html: (() => {
+                              try {
+                                const blocks = JSON.parse(displayContent);
+                                if (Array.isArray(blocks)) {
+                                  return blocks
+                                    .map((b: { content?: Array<{ text?: string }> }) => {
+                                      if (!b.content || !Array.isArray(b.content)) return "";
+                                      return `<p>${b.content.map((c: { text?: string }) => c.text || "").join("")}</p>`;
+                                    })
+                                    .join("");
+                                }
+                              } catch { /* empty */ }
+                              return displayContent;
+                            })(),
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {isActive && currentOpenLoop && (canChangeVote || !hasSubmitted) && (
+                      <div className="flex flex-wrap gap-2 mb-4">
+                        {MJ_SCALE.map((grade) => (
+                          <button
+                            key={grade.value}
+                            onClick={() => handleSubmitVote(proposal.id, grade.value, currentOpenLoop.id)}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium text-white transition-colors ${
+                              voterValues[proposal.id] === grade.value
+                                ? `${grade.color} ring-2 ring-offset-1 ring-gray-400`
+                                : `${grade.color} opacity-70 hover:opacity-100`
+                            }`}
+                          >
+                            {grade.icon} {grade.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {(isClosed || showResultsBeforeClose) && proposalTally && proposalTally.current && (
+                      <div className="mt-4 pt-3 border-t">
+                        <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
+                          {ts.labels.currentRoundResults}
+                        </h4>
+                        {(() => {
+                          const medianGrade = MJ_SCALE.find((g) => g.value === proposalTally.current!.median);
                           return (
-                            <tr
-                              key={round.loopId}
-                              className={isOpen ? "bg-blue-50 border-l-4 border-l-blue-400" : "hover:bg-gray-50"}
-                            >
-                              <td className="py-2 px-3 border-b font-medium">
-                                {ts.labels.round} {round.roundNumber}
-                              </td>
-                              <td className="py-2 px-3 border-b text-center">
-                                {medianGrade && (
-                                  <span className={`inline-block px-2 py-0.5 rounded text-xs text-white ${medianGrade.color}`}>
-                                    {medianGrade.icon} {medianGrade.label}
-                                  </span>
-                                )}
-                              </td>
-                            {MJ_SCALE.map((grade) => {
-                                const count = round.distribution[grade.value] || 0;
-                                return (
-                                  <td
-                                    key={grade.value}
-                                    className="py-2 px-2 border-b text-center"
-                                    title={`${grade.label}: ${count}`}
-                                  >
-                                    <span className="font-medium text-xs">{count}</span>
-                                  </td>
-                                );
-                              })}
-                            </tr>
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm">{ts.labels.medianColon}</span>
+                                <span className={`px-2 py-0.5 rounded text-xs text-white ${medianGrade?.color || "bg-gray-500"}`}>
+                                  {medianGrade?.icon} {medianGrade?.label}
+                                </span>
+                              </div>
+                              <div className="flex h-3 rounded-full overflow-hidden">
+                                {MJ_SCALE.map((grade) => {
+                                  const count = proposalTally.current!.distribution[grade.value] || 0;
+                                  const total = Object.values(proposalTally.current!.distribution).reduce((s, v) => s + v, 0);
+                                  return (
+                                    <div
+                                      key={grade.value}
+                                      className={`${grade.color}`}
+                                      style={{ width: `${total > 0 ? (count / total) * 100 : 0}%` }}
+                                      title={`${grade.label}: ${count}`}
+                                    />
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {(() => {
+                const closedLoops = [...loops].filter((l) => l.closedAt);
+                if (closedLoops.length === 0) return null;
+                return (
+                  <>
+                    <button
+                      onClick={() => setShowPrevRounds(!showPrevRounds)}
+                      className="text-sm text-blue-500 hover:underline flex items-center gap-1"
+                    >
+                      {showPrevRounds ? (
+                        <ChevronUp className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )}
+                      {showPrevRounds ? ts.buttons.hide : ts.buttons.show} previous rounds
+                      {` (${closedLoops.length} closed)`}
+                    </button>
+
+                    {showPrevRounds && allTally.proposals.some((p) => p.perRound.length > 0) && (
+                      <div className="bg-white rounded-lg shadow-sm border p-5">
+                        <h4 className="text-sm font-medium text-gray-700 mb-3">
+                          {ts.labels.roundByRoundSummary}
+                        </h4>
+                        {activeProposals.map((proposal) => {
+                          const proposalTally = allTally.proposals.find((p) => p.proposalId === proposal.id);
+                          if (!proposalTally || proposalTally.perRound.length === 0) return null;
+                          return (
+                            <div key={proposal.id} className="mb-4 last:mb-0">
+                              {activeProposals.length > 1 && (
+                                <h5 className="text-xs font-medium text-gray-500 mb-1">
+                                  {proposal.description || `Proposal ${activeProposals.indexOf(proposal) + 1}`}
+                                </h5>
+                              )}
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-sm border-collapse">
+                                  <thead>
+                                    <tr>
+                                      <th className="text-left py-2 px-3 border-b font-medium text-gray-600">
+                                        {ts.labels.round}
+                                      </th>
+                                      <th className="text-center py-2 px-3 border-b font-medium text-gray-600">
+                                        {ts.labels.median}
+                                      </th>
+                                      {MJ_SCALE.map((grade) => (
+                                        <th
+                                          key={grade.value}
+                                          className="text-center py-2 px-2 border-b font-medium text-gray-600"
+                                        >
+                                          <span title={grade.label}>{grade.icon}</span>
+                                        </th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {proposalTally.perRound.map((round) => {
+                                      const medianGrade = MJ_SCALE.find((g) => g.value === round.median);
+                                      const isOpen = !round.closed;
+                                      return (
+                                        <tr
+                                          key={round.loopId}
+                                          className={isOpen ? "bg-blue-50 border-l-4 border-l-blue-400" : "hover:bg-gray-50"}
+                                        >
+                                          <td className="py-2 px-3 border-b font-medium">
+                                            {ts.labels.round} {round.roundNumber}
+                                          </td>
+                                          <td className="py-2 px-3 border-b text-center">
+                                            {medianGrade && (
+                                              <span className={`inline-block px-2 py-0.5 rounded text-xs text-white ${medianGrade.color}`}>
+                                                {medianGrade.icon} {medianGrade.label}
+                                              </span>
+                                            )}
+                                          </td>
+                                        {MJ_SCALE.map((grade) => {
+                                            const count = round.distribution[grade.value] || 0;
+                                            return (
+                                              <td
+                                                key={grade.value}
+                                                className="py-2 px-2 border-b text-center"
+                                                title={`${grade.label}: ${count}`}
+                                              >
+                                                <span className="font-medium text-xs">{count}</span>
+                                              </td>
+                                            );
+                                          })}
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
                           );
                         })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           );
         })()}

@@ -106,7 +106,7 @@ export interface DbClient {
   // Vote loops (CONSENT_LOOP)
   getVoteLoops(voteId: string): Promise<VoteLoop[]>;
   createVoteLoop(voteId: string, loop: Partial<VoteLoop>): Promise<VoteLoop>;
-  closeVoteLoop(loopId: string, gating: { value: -1 | 0 | 1; comment?: string }): Promise<VoteLoop | null>;
+  closeVoteLoop(loopId: string): Promise<VoteLoop | null>;
   updateVoteLoop(loopId: string, patch: Partial<VoteLoop>): Promise<VoteLoop | null>;
   importVoteLoops(items: VoteLoop[]): Promise<void>;
 

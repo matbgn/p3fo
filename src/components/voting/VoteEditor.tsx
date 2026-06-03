@@ -63,8 +63,6 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
   const [multipleChoiceVote, setMultipleChoiceVote] = React.useState(true);
   const [maxPointsPerUser, setMaxPointsPerUser] = React.useState(10);
   const [allowMultiple, setAllowMultiple] = React.useState(false);
-  const [consentLoopMaxRounds, setConsentLoopMaxRounds] = React.useState(10);
-  const [consentLoopGatingMode, setConsentLoopGatingMode] = React.useState<"UD_NEUTRAL" | "NONE">("UD_NEUTRAL");
   const [isSaving, setIsSaving] = React.useState(false);
   const [openAt, setOpenAt] = React.useState("");
   const [closeAt, setCloseAt] = React.useState("");
@@ -85,8 +83,6 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
       setMultipleChoiceVote(vote.config.multipleChoiceVote ?? true);
       setMaxPointsPerUser(vote.config.maxPointsPerUser ?? 10);
       setAllowMultiple(vote.config.allowMultiple ?? false);
-      setConsentLoopMaxRounds(vote.config.consentLoopMaxRounds ?? 10);
-      setConsentLoopGatingMode(vote.config.consentLoopGatingMode ?? "UD_NEUTRAL");
       setOpenAt(vote.config.openAt || "");
       setCloseAt(vote.config.closeAt || "");
     } else {
@@ -104,8 +100,6 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
       setMultipleChoiceVote(true);
       setMaxPointsPerUser(10);
       setAllowMultiple(false);
-      setConsentLoopMaxRounds(10);
-      setConsentLoopGatingMode("UD_NEUTRAL");
       setOpenAt("");
       setCloseAt("");
     }
@@ -136,8 +130,6 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
         multipleChoiceVote: mode !== "POINTS" && mode !== "CONSENT_LOOP" ? multipleChoiceVote : undefined,
         maxPointsPerUser: mode === "POINTS" ? maxPointsPerUser : undefined,
         allowMultiple: mode === "POINTS" ? allowMultiple : undefined,
-        consentLoopMaxRounds: mode === "CONSENT_LOOP" ? consentLoopMaxRounds : undefined,
-        consentLoopGatingMode: mode === "CONSENT_LOOP" ? consentLoopGatingMode : undefined,
         openAt: openAt || undefined,
         closeAt: closeAt || undefined,
       };
@@ -240,34 +232,10 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
           )}
 
           {mode === "CONSENT_LOOP" && (
-            <div className="space-y-3 border rounded-md p-3 bg-gray-50">
-              <div className="space-y-1">
-                <Label className="text-sm">{t.labels.maxRounds}</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={consentLoopMaxRounds}
-                  onChange={(e) => setConsentLoopMaxRounds(parseInt(e.target.value, 10) || 10)}
-                  disabled={isFinalized}
-                  className="w-24"
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <Label className="text-sm">{t.labels.gatingVote}</Label>
-                <Switch
-                  checked={consentLoopGatingMode === "UD_NEUTRAL"}
-                  onCheckedChange={(checked) =>
-                    setConsentLoopGatingMode(checked ? "UD_NEUTRAL" : "NONE")
-                  }
-                  disabled={isFinalized}
-                />
-              </div>
-              {consentLoopGatingMode === "UD_NEUTRAL" && (
-                <p className="text-xs text-gray-400">
-                  {t.messages.gatingDescription}
-                </p>
-              )}
+            <div className="border rounded-md p-3 bg-gray-50">
+              <p className="text-xs text-gray-500">
+                {t.messages.consentLoopProcess}
+              </p>
             </div>
           )}
 

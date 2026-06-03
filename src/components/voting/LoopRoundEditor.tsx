@@ -3,6 +3,7 @@ import { VoteEntity, VoteLoop } from "@/lib/persistence-types";
 import { BlockNoteProposalEditor } from "./BlockNoteProposalEditor";
 import { Label } from "@/components/ui/label";
 import { Clock } from "lucide-react";
+import { getVotingStrings } from "@/lib/voting-i18n";
 
 interface LoopRoundEditorProps {
   loop: VoteLoop | null;
@@ -17,6 +18,8 @@ export const LoopRoundEditor: React.FC<LoopRoundEditorProps> = ({
   onChange,
   readOnly = false,
 }) => {
+  const t = getVotingStrings();
+
   if (!loop) {
     return (
       <p className="text-sm text-gray-400 italic">
@@ -25,28 +28,25 @@ export const LoopRoundEditor: React.FC<LoopRoundEditorProps> = ({
     );
   }
 
+  const proposal = vote?.proposals.find((p) => p.id === loop.proposalId);
+  const proposalLabel = proposal?.description || proposal?.content
+    ? `${t.labels.round} ${loop.roundNumber}`
+    : `${t.labels.round} ${loop.roundNumber}`;
+
   const elapsed = loop.openedAt
     ? Math.floor(
         (Date.now() - new Date(loop.openedAt).getTime()) / 60000
       )
     : 0;
 
-  // If the round has no content yet, fall back to the vote's proposals so the
-  // moderator can immediately see and edit the original proposal text.
-  const fallbackContent = vote
-    ? vote.proposals
-        .filter((p) => p.active)
-        .map((p) => p.content)
-        .filter((c) => c && c.trim().length > 0)
-        .join("\n\n")
-    : "";
+  const fallbackContent = proposal?.content || "";
   const displayValue = loop.proposalContent || fallbackContent || "";
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <Label className="text-sm font-medium">
-          Round {loop.roundNumber} — Proposal text
+          {proposalLabel}
         </Label>
         {!loop.closedAt && (
           <span className="text-xs text-gray-400 flex items-center gap-1">

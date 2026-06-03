@@ -20,7 +20,8 @@ export interface MJTally {
   distribution: Record<number, number>;
 }
 
-export interface ConsentLoopTally {
+export interface ProposalLoopTally {
+  proposalId: string;
   perRound: Array<{
     roundNumber: number;
     loopId: string;
@@ -30,6 +31,10 @@ export interface ConsentLoopTally {
     closed: boolean;
   }>;
   current: MJTally | null;
+}
+
+export interface ConsentLoopTally {
+  proposals: ProposalLoopTally[];
 }
 
 export function tallyThumbsUp(
@@ -89,38 +94,46 @@ export function getMJMedianFromRecord(votes: Record<string, number>): number | n
 export function tallyConsentLoop(
   loops: VoteLoop[],
   responses: VoteResponseEntity[],
-  proposalId: string
+  proposalIds: string[]
 ): ConsentLoopTally {
-  if (loops.length === 0) return { perRound: [], current: null };
+  const proposals: ProposalLoopTally[] = proposalIds.map((proposalId) => {
+    const proposalLoops = loops
+      .filter((l) => l.proposalId === proposalId)
+      .sort((a, b) => a.roundNumber - b.roundNumber);
 
-  const sortedLoops = [...loops].sort((a, b) => a.roundNumber - b.roundNumber);
+    if (proposalLoops.length === 0) {
+      return { proposalId, perRound: [], current: null };
+    }
 
-  const perRound = sortedLoops.map((loop) => {
-    const loopResponses = responses.filter(
-      (r) => r.proposalId === proposalId && r.loopId === loop.id
-    );
-    const mj = computeMJFromValues(loopResponses.map((r) => r.value));
-    const bottomGrades = (mj.distribution[0] || 0) + (mj.distribution[-1] || 0);
-    return {
-      roundNumber: loop.roundNumber,
-      loopId: loop.id,
-      median: mj.median,
-      distribution: mj.distribution,
-      adopted: bottomGrades === 0,
-      closed: !!loop.closedAt,
-    };
+    const perRound = proposalLoops.map((loop) => {
+      const loopResponses = responses.filter(
+        (r) => r.proposalId === proposalId && r.loopId === loop.id
+      );
+      const mj = computeMJFromValues(loopResponses.map((r) => r.value));
+      const bottomGrades = (mj.distribution[0] || 0) + (mj.distribution[-1] || 0);
+      return {
+        roundNumber: loop.roundNumber,
+        loopId: loop.id,
+        median: mj.median,
+        distribution: mj.distribution,
+        adopted: bottomGrades === 0,
+        closed: !!loop.closedAt,
+      };
+    });
+
+    const currentOpenLoop = proposalLoops.find((l) => !l.closedAt);
+    let current: MJTally | null = null;
+    if (currentOpenLoop) {
+      const loopResponses = responses.filter(
+        (r) => r.proposalId === proposalId && r.loopId === currentOpenLoop.id
+      );
+      current = computeMJFromValues(loopResponses.map((r) => r.value));
+    }
+
+    return { proposalId, perRound, current };
   });
 
-  const currentOpenLoop = sortedLoops.find((l) => !l.closedAt);
-  let current: MJTally | null = null;
-  if (currentOpenLoop) {
-    const loopResponses = responses.filter(
-      (r) => r.proposalId === proposalId && r.loopId === currentOpenLoop.id
-    );
-    current = computeMJFromValues(loopResponses.map((r) => r.value));
-  }
-
-  return { perRound, current };
+  return { proposals };
 }
 
 export function calculateCardVoteScore(

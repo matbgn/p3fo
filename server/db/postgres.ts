@@ -413,14 +413,13 @@ class PostgresClient implements DbClient {
       CREATE TABLE IF NOT EXISTS "voteLoops" (
         "id" TEXT PRIMARY KEY,
         "voteId" TEXT NOT NULL REFERENCES "votes"("id") ON DELETE CASCADE,
+        "proposalId" TEXT NOT NULL DEFAULT '',
         "roundNumber" INTEGER NOT NULL,
         "proposalContent" TEXT NOT NULL,
         "openedAt" TIMESTAMP WITH TIME ZONE NOT NULL,
         "closedAt" TIMESTAMP WITH TIME ZONE,
         "openedByUserId" TEXT NOT NULL,
-        "gatingValue" INTEGER,
-        "gatingComment" TEXT,
-        UNIQUE("voteId", "roundNumber")
+        UNIQUE("voteId", "proposalId", "roundNumber")
       )
     `);
 
@@ -619,6 +618,9 @@ class PostgresClient implements DbClient {
 
     // Tasks linkedVoteIds column
     await addColumn('tasks', 'linkedVoteIds', 'JSONB');
+
+    // VoteLoops proposalId column (per-proposal loops)
+    await addColumn('voteLoops', 'proposalId', 'TEXT NOT NULL DEFAULT \'\'');
   }
 
   async testConnection(): Promise<void> {
@@ -1879,17 +1881,16 @@ class PostgresClient implements DbClient {
 
   // Vote loops (CONSENT_LOOP)
   async getVoteLoops(voteId: string): Promise<VoteLoop[]> {
-    const result = await this.pool.query('SELECT * FROM "voteLoops" WHERE "voteId" = $1 ORDER BY "roundNumber" ASC', [voteId]);
+    const result = await this.pool.query('SELECT * FROM "voteLoops" WHERE "voteId" = $1 ORDER BY "proposalId" ASC, "roundNumber" ASC', [voteId]);
     return result.rows.map((row: Record<string, unknown>) => ({
       id: row.id as string,
       voteId: row.voteId as string,
+      proposalId: row.proposalId as string,
       roundNumber: row.roundNumber as number,
       proposalContent: row.proposalContent as string,
       openedAt: row.openedAt as string,
       closedAt: (row.closedAt as string | null) ?? undefined,
       openedByUserId: row.openedByUserId as string,
-      gatingValue: row.gatingValue != null ? (row.gatingValue as -1 | 0 | 1) : undefined,
-      gatingComment: (row.gatingComment as string | null) ?? undefined,
     }));
   }
 
@@ -1897,19 +1898,18 @@ class PostgresClient implements DbClient {
     const newLoop: VoteLoop = {
       id: loop.id || crypto.randomUUID(),
       voteId,
+      proposalId: loop.proposalId || '',
       roundNumber: loop.roundNumber ?? 1,
       proposalContent: loop.proposalContent || '',
       openedAt: loop.openedAt || new Date().toISOString(),
       closedAt: loop.closedAt,
       openedByUserId: loop.openedByUserId || 'unknown',
-      gatingValue: loop.gatingValue,
-      gatingComment: loop.gatingComment,
     };
 
     await this.pool.query(`
-      INSERT INTO "voteLoops"("id", "voteId", "roundNumber", "proposalContent", "openedAt", "closedAt", "openedByUserId", "gatingValue", "gatingComment")
-      VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
-    `, [newLoop.id, newLoop.voteId, newLoop.roundNumber, newLoop.proposalContent, newLoop.openedAt, newLoop.closedAt ?? null, newLoop.openedByUserId, newLoop.gatingValue ?? null, newLoop.gatingComment ?? null]);
+      INSERT INTO "voteLoops"("id", "voteId", "proposalId", "roundNumber", "proposalContent", "openedAt", "closedAt", "openedByUserId")
+      VALUES($1, $2, $3, $4, $5, $6, $7, $8)
+    `, [newLoop.id, newLoop.voteId, newLoop.proposalId, newLoop.roundNumber, newLoop.proposalContent, newLoop.openedAt, newLoop.closedAt ?? null, newLoop.openedByUserId]);
 
     return newLoop;
   }
@@ -1921,20 +1921,20 @@ class PostgresClient implements DbClient {
 
     const updated = { ...current, ...patch };
     await this.pool.query(`
-      UPDATE "voteLoops" SET "proposalContent" = $1, "closedAt" = $2, "gatingValue" = $3, "gatingComment" = $4 WHERE "id" = $5
-    `, [updated.proposalContent, updated.closedAt ?? null, updated.gatingValue ?? null, updated.gatingComment ?? null, loopId]);
+      UPDATE "voteLoops" SET "proposalContent" = $1, "closedAt" = $2 WHERE "id" = $3
+    `, [updated.proposalContent, updated.closedAt ?? null, loopId]);
 
     return updated;
   }
 
-  async closeVoteLoop(loopId: string, gating: { value: -1 | 0 | 1; comment?: string }): Promise<VoteLoop | null> {
+  async closeVoteLoop(loopId: string): Promise<VoteLoop | null> {
     const result = await this.pool.query('SELECT * FROM "voteLoops" WHERE "id" = $1', [loopId]);
     if (result.rows.length === 0) return null;
 
     const closedAt = new Date().toISOString();
     await this.pool.query(`
-      UPDATE "voteLoops" SET "closedAt" = $1, "gatingValue" = $2, "gatingComment" = $3 WHERE "id" = $4
-    `, [closedAt, gating.value, gating.comment ?? null, loopId]);
+      UPDATE "voteLoops" SET "closedAt" = $1 WHERE "id" = $2
+    `, [closedAt, loopId]);
 
     const updatedResult = await this.pool.query('SELECT * FROM "voteLoops" WHERE "id" = $1', [loopId]);
     return updatedResult.rows[0];
@@ -1946,14 +1946,12 @@ class PostgresClient implements DbClient {
       await client.query('BEGIN');
       for (const item of items) {
         await client.query(`
-          INSERT INTO "voteLoops"("id", "voteId", "roundNumber", "proposalContent", "openedAt", "closedAt", "openedByUserId", "gatingValue", "gatingComment")
-          VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
-          ON CONFLICT ("voteId", "roundNumber") DO UPDATE SET
+          INSERT INTO "voteLoops"("id", "voteId", "proposalId", "roundNumber", "proposalContent", "openedAt", "closedAt", "openedByUserId")
+          VALUES($1, $2, $3, $4, $5, $6, $7, $8)
+          ON CONFLICT ("voteId", "proposalId", "roundNumber") DO UPDATE SET
             "proposalContent" = EXCLUDED."proposalContent",
-            "closedAt" = EXCLUDED."closedAt",
-            "gatingValue" = EXCLUDED."gatingValue",
-            "gatingComment" = EXCLUDED."gatingComment"
-        `, [item.id, item.voteId, item.roundNumber, item.proposalContent, item.openedAt, item.closedAt ?? null, item.openedByUserId, item.gatingValue ?? null, item.gatingComment ?? null]);
+            "closedAt" = EXCLUDED."closedAt"
+        `, [item.id, item.voteId, item.proposalId, item.roundNumber, item.proposalContent, item.openedAt, item.closedAt ?? null, item.openedByUserId]);
       }
       await client.query('COMMIT');
     } catch (error) {

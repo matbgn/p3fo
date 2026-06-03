@@ -28,6 +28,7 @@ function makeLoop(overrides: Partial<VoteLoop> = {}): VoteLoop {
   return {
     id: 'loop1',
     voteId: 'v1',
+    proposalId: 'p1',
     roundNumber: 1,
     proposalContent: '[]',
     openedAt: '2026-01-01T00:00:00Z',
@@ -190,106 +191,82 @@ describe('getMJMedianFromRecord', () => {
 })
 
 describe('tallyConsentLoop', () => {
-  it('returns empty result for no loops', () => {
-    const result = tallyConsentLoop([], [], 'p1')
-    expect(result.perRound).toEqual([])
-    expect(result.current).toBeNull()
+  it('returns empty proposals when no proposal IDs given', () => {
+    const result = tallyConsentLoop([], [], [])
+    expect(result.proposals).toEqual([])
   })
 
-  it('computes per-round MJ tallies for closed loops', () => {
+  it('returns empty per-proposal result when loops exist for a different proposal', () => {
+    const loops = [makeLoop({ id: 'l1', proposalId: 'p1' })]
+    const result = tallyConsentLoop(loops, [], ['p2'])
+    expect(result.proposals).toHaveLength(1)
+    expect(result.proposals[0].proposalId).toBe('p2')
+    expect(result.proposals[0].perRound).toEqual([])
+    expect(result.proposals[0].current).toBeNull()
+  })
+
+  it('computes per-proposal per-round MJ tallies', () => {
     const loops = [
-      makeLoop({
-        id: 'l1',
-        roundNumber: 1,
-        closedAt: '2026-01-02T00:00:00Z',
-      }),
-      makeLoop({
-        id: 'l2',
-        roundNumber: 2,
-        closedAt: '2026-01-03T00:00:00Z',
-      }),
+      makeLoop({ id: 'l1', proposalId: 'p1', roundNumber: 1, closedAt: '2026-01-02T00:00:00Z' }),
+      makeLoop({ id: 'l2', proposalId: 'p1', roundNumber: 2, closedAt: '2026-01-03T00:00:00Z' }),
+      makeLoop({ id: 'l3', proposalId: 'p2', roundNumber: 1 }),
     ]
     const responses = [
       makeResponse({ proposalId: 'p1', loopId: 'l1', value: 4 }),
       makeResponse({ proposalId: 'p1', loopId: 'l1', value: 3, id: 'r2', voterToken: 't2' }),
       makeResponse({ proposalId: 'p1', loopId: 'l2', value: 2, id: 'r3', voterToken: 't3' }),
       makeResponse({ proposalId: 'p1', loopId: 'l2', value: 1, id: 'r4', voterToken: 't4' }),
+      makeResponse({ proposalId: 'p2', loopId: 'l3', value: 4, id: 'r5', voterToken: 't5' }),
     ]
-    const result = tallyConsentLoop(loops, responses, 'p1')
+    const result = tallyConsentLoop(loops, responses, ['p1', 'p2'])
 
-    expect(result.perRound).toHaveLength(2)
-    expect(result.perRound[0].roundNumber).toBe(1)
-    expect(result.perRound[0].loopId).toBe('l1')
-    expect(result.perRound[0].median).toBe(3)
-    expect(result.perRound[0].closed).toBe(true)
-    expect(result.perRound[1].roundNumber).toBe(2)
-    expect(result.perRound[1].median).toBe(1)
-    expect(result.perRound[1].closed).toBe(true)
-    expect(result.current).toBeNull()
-  })
+    expect(result.proposals).toHaveLength(2)
 
-  it('sets adopted=true when bottom grades have zero votes', () => {
-    const loop = makeLoop({ id: 'l1', roundNumber: 1 })
-    const responses = [
-      makeResponse({ proposalId: 'p1', loopId: 'l1', value: 4 }),
-      makeResponse({ proposalId: 'p1', loopId: 'l1', value: 3, id: 'r2', voterToken: 't2' }),
-    ]
-    const result = tallyConsentLoop([loop], responses, 'p1')
-    expect(result.perRound[0].adopted).toBe(true)
+    const p1 = result.proposals[0]
+    expect(p1.proposalId).toBe('p1')
+    expect(p1.perRound).toHaveLength(2)
+    expect(p1.perRound[0].roundNumber).toBe(1)
+    expect(p1.perRound[0].median).toBe(3)
+    expect(p1.perRound[0].closed).toBe(true)
+    expect(p1.perRound[0].adopted).toBe(true)
+    expect(p1.perRound[1].roundNumber).toBe(2)
+    expect(p1.perRound[1].median).toBe(1)
+    expect(p1.perRound[1].closed).toBe(true)
+    expect(p1.current).toBeNull()
+
+    const p2 = result.proposals[1]
+    expect(p2.proposalId).toBe('p2')
+    expect(p2.perRound).toHaveLength(1)
+    expect(p2.perRound[0].adopted).toBe(true)
+    expect(p2.current).not.toBeNull()
+    expect(p2.current!.median).toBe(4)
   })
 
   it('sets adopted=false when bottom grades have votes', () => {
-    const loop = makeLoop({ id: 'l1', roundNumber: 1 })
+    const loop = makeLoop({ id: 'l1', proposalId: 'p1', roundNumber: 1 })
     const responses = [
       makeResponse({ proposalId: 'p1', loopId: 'l1', value: 4 }),
       makeResponse({ proposalId: 'p1', loopId: 'l1', value: -1, id: 'r2', voterToken: 't2' }),
     ]
-    const result = tallyConsentLoop([loop], responses, 'p1')
-    expect(result.perRound[0].adopted).toBe(false)
+    const result = tallyConsentLoop([loop], responses, ['p1'])
+    expect(result.proposals[0].perRound[0].adopted).toBe(false)
   })
 
-  it('sets adopted=false when only grade 0 (Insufficient) is present', () => {
-    const loop = makeLoop({ id: 'l1', roundNumber: 1 })
+  it('sets adopted=false when only grade 0 is present', () => {
+    const loop = makeLoop({ id: 'l1', proposalId: 'p1', roundNumber: 1 })
     const responses = [
       makeResponse({ proposalId: 'p1', loopId: 'l1', value: 3 }),
       makeResponse({ proposalId: 'p1', loopId: 'l1', value: 0, id: 'r2', voterToken: 't2' }),
     ]
-    const result = tallyConsentLoop([loop], responses, 'p1')
-    expect(result.perRound[0].adopted).toBe(false)
+    const result = tallyConsentLoop([loop], responses, ['p1'])
+    expect(result.proposals[0].perRound[0].adopted).toBe(false)
   })
 
-  it('sets current toMJ tally for open (non-closed) loop', () => {
-    const openLoop = makeLoop({ id: 'lopen', roundNumber: 1, closedAt: undefined })
-    const responses = [
-      makeResponse({ proposalId: 'p1', loopId: 'lopen', value: 2 }),
-      makeResponse({ proposalId: 'p1', loopId: 'lopen', value: 4, id: 'r2', voterToken: 't2' }),
-    ]
-    const result = tallyConsentLoop([openLoop], responses, 'p1')
-    expect(result.current).not.toBeNull()
-    expect(result.current!.median).toBe(2)
-  })
-
-  it('sets current to null when no open loop exists', () => {
-    const closedLoop = makeLoop({ id: 'l1', roundNumber: 1, closedAt: '2026-01-02T00:00:00Z' })
-    const result = tallyConsentLoop([closedLoop], [], 'p1')
-    expect(result.current).toBeNull()
-  })
-
-  it('filters responses by proposalId', () => {
-    const loop = makeLoop({ id: 'l1', roundNumber: 1 })
-    const responses = [
-      makeResponse({ proposalId: 'p1', loopId: 'l1', value: 4 }),
-      makeResponse({ proposalId: 'p2', loopId: 'l1', value: -1, id: 'r2', voterToken: 't2' }),
-    ]
-    const result = tallyConsentLoop([loop], responses, 'p1')
-    expect(result.perRound[0].median).toBe(4)
-  })
-
-  it('handles 3-round consent loop lifecycle', () => {
+  it('handles 3-round lifecycle for single proposal', () => {
     const loops = [
-      makeLoop({ id: 'round1', roundNumber: 1, closedAt: '2026-01-02T00:00:00Z' }),
-      makeLoop({ id: 'round2', roundNumber: 2, closedAt: '2026-01-03T00:00:00Z' }),
-      makeLoop({ id: 'round3', roundNumber: 3 }),
+      makeLoop({ id: 'round1', proposalId: 'p1', roundNumber: 1, closedAt: '2026-01-02T00:00:00Z' }),
+      makeLoop({ id: 'round2', proposalId: 'p1', roundNumber: 2, closedAt: '2026-01-03T00:00:00Z' }),
+      makeLoop({ id: 'round3', proposalId: 'p1', roundNumber: 3 }),
     ]
     const responses = [
       makeResponse({ id: 'r1', proposalId: 'p1', loopId: 'round1', value: 2 }),
@@ -299,31 +276,50 @@ describe('tallyConsentLoop', () => {
       makeResponse({ id: 'r5', proposalId: 'p1', loopId: 'round3', value: 4 }),
       makeResponse({ id: 'r6', proposalId: 'p1', loopId: 'round3', value: 3, voterToken: 't4' }),
     ]
-    const result = tallyConsentLoop(loops, responses, 'p1')
+    const result = tallyConsentLoop(loops, responses, ['p1'])
 
-    expect(result.perRound).toHaveLength(3)
-    expect(result.perRound[0].adopted).toBe(false)
-    expect(result.perRound[0].closed).toBe(true)
-    expect(result.perRound[1].adopted).toBe(false)
-    expect(result.perRound[1].closed).toBe(true)
-    expect(result.perRound[2].adopted).toBe(true)
-    expect(result.perRound[2].closed).toBe(false)
-    expect(result.current).not.toBeNull()
-    expect(result.current!.median).toBe(3)
+    const p1 = result.proposals[0]
+    expect(p1.perRound).toHaveLength(3)
+    expect(p1.perRound[0].adopted).toBe(false)
+    expect(p1.perRound[0].closed).toBe(true)
+    expect(p1.perRound[1].adopted).toBe(false)
+    expect(p1.perRound[1].closed).toBe(true)
+    expect(p1.perRound[2].adopted).toBe(true)
+    expect(p1.perRound[2].closed).toBe(false)
+    expect(p1.current).not.toBeNull()
+    expect(p1.current!.median).toBe(3)
   })
 
   it('sorts loops by roundNumber regardless of input order', () => {
     const loops = [
-      makeLoop({ id: 'l2', roundNumber: 2, closedAt: '2026-01-03T00:00:00Z' }),
-      makeLoop({ id: 'l1', roundNumber: 1, closedAt: '2026-01-02T00:00:00Z' }),
+      makeLoop({ id: 'l2', proposalId: 'p1', roundNumber: 2, closedAt: '2026-01-03T00:00:00Z' }),
+      makeLoop({ id: 'l1', proposalId: 'p1', roundNumber: 1, closedAt: '2026-01-02T00:00:00Z' }),
     ]
     const responses = [
       makeResponse({ id: 'r1', proposalId: 'p1', loopId: 'l1', value: 1 }),
       makeResponse({ id: 'r2', proposalId: 'p1', loopId: 'l2', value: 3, voterToken: 't2' }),
     ]
-    const result = tallyConsentLoop(loops, responses, 'p1')
-    expect(result.perRound[0].roundNumber).toBe(1)
-    expect(result.perRound[1].roundNumber).toBe(2)
+    const result = tallyConsentLoop(loops, responses, ['p1'])
+    expect(result.proposals[0].perRound[0].roundNumber).toBe(1)
+    expect(result.proposals[0].perRound[1].roundNumber).toBe(2)
+  })
+
+  it('handles multiple proposals independently', () => {
+    const loops = [
+      makeLoop({ id: 'l1', proposalId: 'p1', roundNumber: 1 }),
+      makeLoop({ id: 'l2', proposalId: 'p2', roundNumber: 1 }),
+    ]
+    const responses = [
+      makeResponse({ proposalId: 'p1', loopId: 'l1', value: 4 }),
+      makeResponse({ proposalId: 'p2', loopId: 'l2', value: 1 }),
+    ]
+    const result = tallyConsentLoop(loops, responses, ['p1', 'p2'])
+
+    expect(result.proposals).toHaveLength(2)
+    expect(result.proposals[0].proposalId).toBe('p1')
+    expect(result.proposals[0].current!.median).toBe(4)
+    expect(result.proposals[1].proposalId).toBe('p2')
+    expect(result.proposals[1].current!.median).toBe(1)
   })
 })
 

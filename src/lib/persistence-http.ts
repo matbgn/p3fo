@@ -466,10 +466,9 @@ export class HttpApiPersistence implements PersistenceAdapter {
     });
   }
 
-  async closeVoteLoop(loopId: string, gating: { value: -1 | 0 | 1; comment?: string }): Promise<VoteLoop | null> {
+  async closeVoteLoop(loopId: string): Promise<VoteLoop | null> {
     return this.makeRequest(`/api/votes/loops/${loopId}/close`, {
       method: 'POST',
-      body: JSON.stringify(gating),
     });
   }
 

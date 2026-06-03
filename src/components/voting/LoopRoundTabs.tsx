@@ -1,7 +1,7 @@
 import * as React from "react";
 import { VoteLoop, VoteResponseEntity } from "@/lib/persistence-types";
 import { MJ_SCALE } from "@/components/planView/constants";
-import { tallyConsentLoop } from "@/lib/vote-tally";
+import { tallyConsentLoop, ProposalLoopTally } from "@/lib/vote-tally";
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { Badge } from "@/components/ui/badge";
 
@@ -9,22 +9,24 @@ interface LoopRoundTabsProps {
   loops: VoteLoop[];
   responses: VoteResponseEntity[];
   proposalId: string;
-  maxRounds?: number;
+  proposalLabel?: string;
 }
 
 export const LoopRoundTabs: React.FC<LoopRoundTabsProps> = ({
   loops,
   responses,
   proposalId,
-  maxRounds,
+  proposalLabel,
 }) => {
   const t = getVotingStrings();
   const tally = React.useMemo(
-    () => tallyConsentLoop(loops, responses, proposalId),
+    () => tallyConsentLoop(loops, responses, [proposalId]),
     [loops, responses, proposalId]
   );
 
-  if (tally.perRound.length === 0 && !tally.current) {
+  const proposalTally: ProposalLoopTally | undefined = tally.proposals[0];
+
+  if (!proposalTally || (proposalTally.perRound.length === 0 && !proposalTally.current)) {
     return (
       <p className="text-sm text-gray-400 italic">
         {t.messages.noRoundsYet}
@@ -34,6 +36,9 @@ export const LoopRoundTabs: React.FC<LoopRoundTabsProps> = ({
 
   return (
     <div className="space-y-4">
+      {proposalLabel && (
+        <h4 className="text-sm font-medium text-gray-700">{proposalLabel}</h4>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           <thead>
@@ -58,7 +63,7 @@ export const LoopRoundTabs: React.FC<LoopRoundTabsProps> = ({
             </tr>
           </thead>
           <tbody>
-            {tally.perRound.map((round) => {
+            {proposalTally.perRound.map((round) => {
               const medianGrade = MJ_SCALE.find(
                 (g) => g.value === round.median
               );
@@ -128,12 +133,6 @@ export const LoopRoundTabs: React.FC<LoopRoundTabsProps> = ({
           </tbody>
         </table>
       </div>
-
-      {maxRounds && (
-        <p className="text-xs text-gray-400">
-          {t.labels.maxRounds}: {maxRounds} ({t.labels.rounds.toLowerCase()}: {tally.perRound.length})
-        </p>
-      )}
     </div>
   );
 };

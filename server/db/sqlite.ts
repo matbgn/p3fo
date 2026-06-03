@@ -153,13 +153,12 @@ interface VoteResponseDbRow {
 interface VoteLoopDbRow {
   id: string;
   voteId: string;
+  proposalId: string;
   roundNumber: number;
   proposalContent: string;
   openedAt: string;
   closedAt: string | null;
   openedByUserId: string;
-  gatingValue: number | null;
-  gatingComment: string | null;
 }
 
 interface VoteModeratorDbRow {
@@ -451,14 +450,13 @@ class SqliteClient implements DbClient {
       CREATE TABLE IF NOT EXISTS "voteLoops" (
         "id" TEXT PRIMARY KEY,
         "voteId" TEXT NOT NULL REFERENCES "votes"("id") ON DELETE CASCADE,
+        "proposalId" TEXT NOT NULL,
         "roundNumber" INTEGER NOT NULL,
         "proposalContent" TEXT NOT NULL,
         "openedAt" TEXT NOT NULL,
         "closedAt" TEXT,
         "openedByUserId" TEXT NOT NULL,
-        "gatingValue" INTEGER,
-        "gatingComment" TEXT,
-        UNIQUE("voteId", "roundNumber")
+        UNIQUE("voteId", "proposalId", "roundNumber")
       )
     `);
 
@@ -629,6 +627,9 @@ class SqliteClient implements DbClient {
 
     // Tasks linkedVoteIds column
     addColumn('tasks', 'linkedVoteIds', 'TEXT');
+
+    // VoteLoops proposalId column (per-proposal loops)
+    addColumn('voteLoops', 'proposalId', 'TEXT NOT NULL DEFAULT \'\'');
   }
 
   async testConnection(): Promise<void> {
@@ -2085,7 +2086,7 @@ class SqliteClient implements DbClient {
 
   // Vote loops (CONSENT_LOOP)
   async getVoteLoops(voteId: string): Promise<VoteLoop[]> {
-    const rows = this.db.prepare('SELECT * FROM "voteLoops" WHERE "voteId" = ? ORDER BY "roundNumber" ASC').all(voteId) as unknown as VoteLoopDbRow[];
+    const rows = this.db.prepare('SELECT * FROM "voteLoops" WHERE "voteId" = ? ORDER BY "proposalId" ASC, "roundNumber" ASC').all(voteId) as unknown as VoteLoopDbRow[];
     return rows.map(row => this.mapVoteLoopDbRowToEntity(row));
   }
 
@@ -2093,28 +2094,26 @@ class SqliteClient implements DbClient {
     const newLoop: VoteLoop = {
       id: loop.id || crypto.randomUUID(),
       voteId,
+      proposalId: loop.proposalId || '',
       roundNumber: loop.roundNumber ?? 1,
       proposalContent: loop.proposalContent || '',
       openedAt: loop.openedAt || new Date().toISOString(),
       closedAt: loop.closedAt,
       openedByUserId: loop.openedByUserId || 'unknown',
-      gatingValue: loop.gatingValue,
-      gatingComment: loop.gatingComment,
     };
 
     this.db.prepare(`
-      INSERT INTO "voteLoops"("id", "voteId", "roundNumber", "proposalContent", "openedAt", "closedAt", "openedByUserId", "gatingValue", "gatingComment")
-      VALUES(@id, @voteId, @roundNumber, @proposalContent, @openedAt, @closedAt, @openedByUserId, @gatingValue, @gatingComment)
+      INSERT INTO "voteLoops"("id", "voteId", "proposalId", "roundNumber", "proposalContent", "openedAt", "closedAt", "openedByUserId")
+      VALUES(@id, @voteId, @proposalId, @roundNumber, @proposalContent, @openedAt, @closedAt, @openedByUserId)
     `).run({
       id: newLoop.id,
       voteId: newLoop.voteId,
+      proposalId: newLoop.proposalId,
       roundNumber: newLoop.roundNumber,
       proposalContent: newLoop.proposalContent,
       openedAt: newLoop.openedAt,
       closedAt: newLoop.closedAt ?? null,
       openedByUserId: newLoop.openedByUserId,
-      gatingValue: newLoop.gatingValue ?? null,
-      gatingComment: newLoop.gatingComment ?? null,
     });
 
     return newLoop;
@@ -2130,36 +2129,28 @@ class SqliteClient implements DbClient {
     this.db.prepare(`
       UPDATE "voteLoops" SET
         "proposalContent" = @proposalContent,
-        "closedAt" = @closedAt,
-        "gatingValue" = @gatingValue,
-        "gatingComment" = @gatingComment
+        "closedAt" = @closedAt
       WHERE "id" = @id
     `).run({
       id: updated.id,
       proposalContent: updated.proposalContent,
       closedAt: updated.closedAt ?? null,
-      gatingValue: updated.gatingValue ?? null,
-      gatingComment: updated.gatingComment ?? null,
     });
 
     return updated;
   }
 
-  async closeVoteLoop(loopId: string, gating: { value: -1 | 0 | 1; comment?: string }): Promise<VoteLoop | null> {
+  async closeVoteLoop(loopId: string): Promise<VoteLoop | null> {
     const rows = this.db.prepare('SELECT * FROM "voteLoops" WHERE "id" = ?').all(loopId) as unknown as VoteLoopDbRow[];
     if (rows.length === 0) return null;
 
     this.db.prepare(`
       UPDATE "voteLoops" SET
-        "closedAt" = @closedAt,
-        "gatingValue" = @gatingValue,
-        "gatingComment" = @gatingComment
+        "closedAt" = @closedAt
       WHERE "id" = @id
     `).run({
       id: loopId,
       closedAt: new Date().toISOString(),
-      gatingValue: gating.value,
-      gatingComment: gating.comment ?? null,
     });
 
     const updatedRows = this.db.prepare('SELECT * FROM "voteLoops" WHERE "id" = ?').all(loopId) as unknown as VoteLoopDbRow[];
@@ -2168,13 +2159,11 @@ class SqliteClient implements DbClient {
 
   async importVoteLoops(items: VoteLoop[]): Promise<void> {
     const insertStmt = this.db.prepare(`
-      INSERT INTO "voteLoops"("id", "voteId", "roundNumber", "proposalContent", "openedAt", "closedAt", "openedByUserId", "gatingValue", "gatingComment")
-      VALUES(@id, @voteId, @roundNumber, @proposalContent, @openedAt, @closedAt, @openedByUserId, @gatingValue, @gatingComment)
-      ON CONFLICT("voteId", "roundNumber") DO UPDATE SET
+      INSERT INTO "voteLoops"("id", "voteId", "proposalId", "roundNumber", "proposalContent", "openedAt", "closedAt", "openedByUserId")
+      VALUES(@id, @voteId, @proposalId, @roundNumber, @proposalContent, @openedAt, @closedAt, @openedByUserId)
+      ON CONFLICT("voteId", "proposalId", "roundNumber") DO UPDATE SET
         "proposalContent" = excluded."proposalContent",
-        "closedAt" = excluded."closedAt",
-        "gatingValue" = excluded."gatingValue",
-        "gatingComment" = excluded."gatingComment"
+        "closedAt" = excluded."closedAt"
     `);
 
     this.db.exec('BEGIN');
@@ -2183,13 +2172,12 @@ class SqliteClient implements DbClient {
         insertStmt.run({
           id: item.id,
           voteId: item.voteId,
+          proposalId: item.proposalId,
           roundNumber: item.roundNumber,
           proposalContent: item.proposalContent,
           openedAt: item.openedAt,
           closedAt: item.closedAt ?? null,
           openedByUserId: item.openedByUserId,
-          gatingValue: item.gatingValue ?? null,
-          gatingComment: item.gatingComment ?? null,
         });
       }
       this.db.exec('COMMIT');
@@ -2203,13 +2191,12 @@ class SqliteClient implements DbClient {
     return {
       id: row.id,
       voteId: row.voteId,
+      proposalId: row.proposalId,
       roundNumber: row.roundNumber,
       proposalContent: row.proposalContent,
       openedAt: row.openedAt,
       closedAt: row.closedAt ?? undefined,
       openedByUserId: row.openedByUserId,
-      gatingValue: row.gatingValue as -1 | 0 | 1 | undefined ?? undefined,
-      gatingComment: row.gatingComment ?? undefined,
     };
   }
 

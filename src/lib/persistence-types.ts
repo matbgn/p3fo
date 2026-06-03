@@ -229,7 +229,7 @@ export interface PersistenceAdapter {
   listVoteLoops(voteId: string): Promise<VoteLoop[]>;
   createVoteLoop(voteId: string, loop: Partial<VoteLoop>): Promise<VoteLoop>;
   updateVoteLoop(loopId: string, patch: Partial<VoteLoop>): Promise<VoteLoop | null>;
-  closeVoteLoop(loopId: string, gating: { value: -1 | 0 | 1; comment?: string }): Promise<VoteLoop | null>;
+  closeVoteLoop(loopId: string): Promise<VoteLoop | null>;
   importVoteLoops(items: VoteLoop[]): Promise<void>;
 
   // Vote moderators
@@ -302,8 +302,6 @@ export interface VoteConfig {
   showResultsBeforeClose?: boolean;
   allowVoteChangeUntilClose?: boolean;
   multipleChoiceVote?: boolean;
-  consentLoopMaxRounds?: number;
-  consentLoopGatingMode?: 'UD_NEUTRAL' | 'NONE';
   isHiddenFromHome?: boolean;
   openAt?: string;
   closeAt?: string;
@@ -323,8 +321,6 @@ export interface VoteEntity {
     finalizedAt: string;
     finalizedByUserId: string;
     signature?: string;
-    loopVerdict?: 'ADOPTED' | 'WITHDRAWN' | 'BLOCKED';
-    finalLoopId?: string;
   };
   moderationTokens?: VoteModerator[];
   createdAt: string;
@@ -347,13 +343,12 @@ export interface VoteResponseEntity {
 export interface VoteLoop {
   id: string;
   voteId: string;
+  proposalId: string;
   roundNumber: number;
   proposalContent: string;
   openedAt: string;
   closedAt?: string;
   openedByUserId: string;
-  gatingValue?: -1 | 0 | 1;
-  gatingComment?: string;
 }
 
 export interface VoteModerator {

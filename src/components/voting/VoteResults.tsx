@@ -2,7 +2,7 @@ import * as React from "react";
 import { VoteEntity } from "@/lib/persistence-types";
 import { VOTING_MODES_LABELS, MJ_SCALE } from "@/components/planView/constants";
 import { useVoteResults } from "@/hooks/useVotes";
-import { tallyThumbsUp, tallyUDNeutral, tallyPoints, tallyMajorityJudgment } from "@/lib/vote-tally";
+import { tallyThumbsUp, tallyUDNeutral, tallyPoints, tallyMajorityJudgment, tallyConsentLoop } from "@/lib/vote-tally";
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { Badge } from "@/components/ui/badge";
 import { BarChart3, Users, MessageSquare, Trophy } from "lucide-react";
@@ -159,11 +159,13 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
                   );
                 })()}
 
-                {vote.config.mode === "CONSENT_LOOP" && (
-                  <p className="text-xs text-gray-400 italic">
-                    {t.messages.consentLoopResultsPerRound}
-                  </p>
-                )}
+                {vote.config.mode === "CONSENT_LOOP" && (() => {
+                  return (
+                    <p className="text-xs text-gray-400 italic">
+                      {t.messages.consentLoopResultsPerRound}
+                    </p>
+                  );
+                })()}
 
                 {!isAnonymous && (() => {
                   const voterRows = responses.filter((r) => r.proposalId === proposal.id);

@@ -1073,13 +1073,12 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       const newLoop: VoteLoop = {
         id: loop.id || crypto.randomUUID(),
         voteId,
+        proposalId: loop.proposalId || '',
         roundNumber: loop.roundNumber ?? 1,
         proposalContent: loop.proposalContent || '',
         openedAt: loop.openedAt || new Date().toISOString(),
         closedAt: loop.closedAt,
         openedByUserId: loop.openedByUserId || 'unknown',
-        gatingValue: loop.gatingValue,
-        gatingComment: loop.gatingComment,
       };
       all.push(newLoop);
       localStorage.setItem(VOTE_LOOPS_STORAGE_KEY, JSON.stringify(all));
@@ -1106,14 +1105,14 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
   }
 
-  async closeVoteLoop(loopId: string, gating: { value: -1 | 0 | 1; comment?: string }): Promise<VoteLoop | null> {
+  async closeVoteLoop(loopId: string): Promise<VoteLoop | null> {
     if (typeof window === 'undefined') throw new Error('Cannot close vote loop in non-browser environment');
     try {
       const stored = localStorage.getItem(VOTE_LOOPS_STORAGE_KEY);
       const all: VoteLoop[] = stored ? JSON.parse(stored) : [];
       const index = all.findIndex(l => l.id === loopId);
       if (index === -1) return null;
-      all[index] = { ...all[index], closedAt: new Date().toISOString(), gatingValue: gating.value, gatingComment: gating.comment };
+      all[index] = { ...all[index], closedAt: new Date().toISOString() };
       localStorage.setItem(VOTE_LOOPS_STORAGE_KEY, JSON.stringify(all));
       return all[index];
     } catch (error) {

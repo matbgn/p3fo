@@ -47,16 +47,19 @@ export const useVoteLoops = (voteId: string) => {
   }, [voteId]);
 
   const openRound = async (
+    proposalId: string,
     openedByUserId: string,
     inheritFromContent?: string
   ): Promise<VoteLoop | null> => {
     try {
       const adapter = await getPersistenceAdapter();
+      const existingProposalLoops = loops.filter((l) => l.proposalId === proposalId);
       const loop = await adapter.createVoteLoop(voteId, {
+        proposalId,
         proposalContent: inheritFromContent || "",
         openedByUserId,
         openedAt: new Date().toISOString(),
-        roundNumber: loops.length + 1,
+        roundNumber: existingProposalLoops.length + 1,
       });
       setLoops((prev) => [...prev, loop]);
       return loop;
@@ -66,17 +69,10 @@ export const useVoteLoops = (voteId: string) => {
     }
   };
 
-  const closeRound = async (
-    loopId: string,
-    gatingValue: -1 | 0 | 1,
-    gatingComment?: string
-  ): Promise<VoteLoop | null> => {
+  const closeRound = async (loopId: string): Promise<VoteLoop | null> => {
     try {
       const adapter = await getPersistenceAdapter();
-      const updated = await adapter.closeVoteLoop(loopId, {
-        value: gatingValue,
-        comment: gatingComment,
-      });
+      const updated = await adapter.closeVoteLoop(loopId);
       if (updated) {
         setLoops((prev) => prev.map((l) => (l.id === loopId ? updated : l)));
       }

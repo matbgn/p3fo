@@ -14,7 +14,6 @@ import { VoteResults } from "@/components/voting/VoteResults";
 import { LoopRoundControls } from "@/components/voting/LoopRoundControls";
 import { LoopRoundEditor } from "@/components/voting/LoopRoundEditor";
 import { LoopRoundTabs } from "@/components/voting/LoopRoundTabs";
-import { LoopRoundDiffDialog } from "@/components/voting/LoopRoundDiffDialog";
 import { BlockNoteProposalEditor } from "@/components/voting/BlockNoteProposalEditor";
 import {
   Vote,
@@ -34,98 +33,94 @@ const LoopPanel: React.FC<{
   const t = getVotingStrings();
   const { loops, openRound, closeRound, updateRoundContent } = useVoteLoops(vote.id);
   const { responses: voteResponses } = useVoteResults(vote.id);
-  const [showDiffDialog, setShowDiffDialog] = React.useState(false);
+  const activeProposals = vote.proposals.filter((p) => p.active);
+  const [expandedProposalId, setExpandedProposalId] = React.useState<string>(activeProposals[0]?.id || "");
 
-  const sortedLoops = React.useMemo(
-    () => [...loops].sort((a, b) => a.roundNumber - b.roundNumber),
-    [loops]
-  );
-  const currentOpenLoop = sortedLoops.find((l) => !l.closedAt);
-  const lastClosedLoop = [...sortedLoops].reverse().find((l) => l.closedAt);
-  const firstProposalId = vote.proposals[0]?.id || "";
-
-  const handleOpenRound = async () => {
-    const lastLoop = sortedLoops[sortedLoops.length - 1];
-    const inheritContent = lastLoop?.proposalContent || vote.proposals[0]?.content || "";
-    await openRound(moderatorDisplayName, inheritContent);
+  const handleOpenRound = async (proposalId: string) => {
+    const proposalLoops = loops.filter((l) => l.proposalId === proposalId);
+    const lastLoop = [...proposalLoops].sort((a, b) => a.roundNumber - b.roundNumber).pop();
+    const proposal = vote.proposals.find((p) => p.id === proposalId);
+    const inheritContent = lastLoop?.proposalContent || proposal?.content || "";
+    await openRound(proposalId, moderatorDisplayName, inheritContent);
   };
 
-  const handleCloseRound = async (gatingValue: -1 | 0 | 1, gatingComment?: string) => {
-    if (currentOpenLoop) {
-      await closeRound(currentOpenLoop.id, gatingValue, gatingComment);
-    }
-  };
-
-  const handleFinalize = async (
-    verdict: "ADOPTED" | "WITHDRAWN" | "BLOCKED",
-    finalLoopId?: string
-  ) => {
-    const effectiveLoopId = finalLoopId || lastClosedLoop?.id;
-    const adapter = await getPersistenceAdapter();
-    await adapter.finalizeVote(vote.id, {
-      winningProposalId: verdict === "ADOPTED" ? (vote.proposals[0]?.id || null) : null,
-      summary:
-        verdict === "ADOPTED"
-          ? t.messages.consentLoopAdopted
-          : verdict === "WITHDRAWN"
-          ? t.messages.consentLoopWithdrawn
-          : t.messages.consentLoopBlocked,
-      finalizedAt: new Date().toISOString(),
-      finalizedByUserId: vote.ownerId,
-      loopVerdict: verdict,
-      finalLoopId: effectiveLoopId,
-    });
-    window.location.reload();
+  const handleCloseRound = async (loopId: string) => {
+    await closeRound(loopId);
   };
 
   return (
     <div className="space-y-4">
-      <LoopRoundControls
-        vote={vote}
-        loops={loops}
-        onOpenRound={handleOpenRound}
-        onCloseRound={handleCloseRound}
-        onFinalize={handleFinalize}
-        isModerator={true}
-      />
-
-      <Separator />
-
-      <LoopRoundEditor
-        loop={currentOpenLoop || null}
-        onChange={(content) => {
-          if (currentOpenLoop) {
-            updateRoundContent(currentOpenLoop.id, content);
-          }
-        }}
-        readOnly={vote.config.phase === "FINALIZED"}
-      />
-
-      <Separator />
-
-        <h3 className="text-sm font-medium text-gray-700">{t.labels.perRoundResults}</h3>
-      <LoopRoundTabs
-        loops={loops}
-        responses={voteResponses}
-        proposalId={firstProposalId}
-        maxRounds={vote.config.consentLoopMaxRounds}
-      />
-
-      {sortedLoops.filter((l) => l.closedAt).length >= 2 && (
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setShowDiffDialog(true)}
-        >
-          {t.labels.roundComparison}
-        </Button>
+      {activeProposals.length > 1 && (
+        <div className="flex gap-2 mb-2">
+          {activeProposals.map((p) => {
+            const proposalLoops = loops.filter((l) => l.proposalId === p.id);
+            const currentOpenLoop = proposalLoops.find((l) => !l.closedAt);
+            const isExpanded = expandedProposalId === p.id;
+            return (
+              <button
+                key={p.id}
+                onClick={() => setExpandedProposalId(p.id)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  isExpanded
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {p.description || `Proposal ${(activeProposals.indexOf(p) + 1)}`}
+                {currentOpenLoop && (
+                  <span className="ml-1 inline-block w-2 h-2 rounded-full bg-green-400" />
+                )}
+              </button>
+            );
+          })}
+        </div>
       )}
 
-      <LoopRoundDiffDialog
-        open={showDiffDialog}
-        onOpenChange={setShowDiffDialog}
-        loops={loops}
-      />
+      {activeProposals.map((proposal) => {
+        const proposalLoops = loops
+          .filter((l) => l.proposalId === proposal.id)
+          .sort((a, b) => a.roundNumber - b.roundNumber);
+        const currentOpenLoop = proposalLoops.find((l) => !l.closedAt);
+
+        if (activeProposals.length > 1 && proposal.id !== expandedProposalId) {
+          return null;
+        }
+
+        return (
+          <div key={proposal.id} className="space-y-4 border rounded-lg p-4">
+            <LoopRoundControls
+              vote={vote}
+              loops={loops}
+              proposalId={proposal.id}
+              onOpenRound={handleOpenRound}
+              onCloseRound={handleCloseRound}
+              isModerator={true}
+            />
+
+            <Separator />
+
+            <LoopRoundEditor
+              loop={currentOpenLoop || null}
+              vote={vote}
+              onChange={(content) => {
+                if (currentOpenLoop) {
+                  updateRoundContent(currentOpenLoop.id, content);
+                }
+              }}
+              readOnly={vote.config.phase === "FINALIZED"}
+            />
+
+            <Separator />
+
+            <h3 className="text-sm font-medium text-gray-700">{t.labels.perRoundResults}</h3>
+            <LoopRoundTabs
+              loops={loops}
+              responses={voteResponses}
+              proposalId={proposal.id}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 };

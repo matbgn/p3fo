@@ -795,8 +795,7 @@ app.post('/api/votes/:id/loops', async (req: Request, res: Response) => {
 
 app.post('/api/votes/loops/:loopId/close', async (req: Request, res: Response) => {
   try {
-    const gating = req.body;
-    const loop = await db.closeVoteLoop(req.params.loopId, gating);
+    const loop = await db.closeVoteLoop(req.params.loopId);
     if (!loop) {
       return res.status(404).json({ error: 'Loop not found' });
     }

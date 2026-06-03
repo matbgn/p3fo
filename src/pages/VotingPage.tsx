@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useSearchParams } from "react-router-dom";
-import { Vote, Plus, BarChart3, Clock, Trash2, ExternalLink, Eye, Trophy, Edit, ToggleLeft, GitCompare, Shield, Share2, RotateCcw } from "lucide-react";
+import { Vote, Plus, BarChart3, Clock, Trash2, ExternalLink, Eye, Trophy, Edit, ToggleLeft, Shield, Share2, RotateCcw } from "lucide-react";
 import { useVotes, useVoteResults } from "@/hooks/useVotes";
 import { useVoteLoops } from "@/hooks/useVoteLoops";
 import { getPersistenceAdapter } from "@/lib/persistence-factory";
@@ -26,34 +26,11 @@ import {
 import { LoopRoundTabs } from "@/components/voting/LoopRoundTabs";
 import { LoopRoundEditor } from "@/components/voting/LoopRoundEditor";
 import { LoopRoundControls } from "@/components/voting/LoopRoundControls";
-import { LoopRoundDiffDialog } from "@/components/voting/LoopRoundDiffDialog";
 import { ModerationPanel } from "@/components/voting/ModerationPanel";
 import QRCodeBlock from "@/components/voting/QRCodeBlock";
 import { deserializeBlocks } from "@/components/voting/BlockNoteProposalEditor";
 
 type VotingTab = "consultations" | "decisions";
-
-function mergeProposalContents(contents: string[]): string {
-  const allBlocks: unknown[] = [];
-  for (const c of contents) {
-    if (!c || c.trim().length === 0) continue;
-    try {
-      const parsed = JSON.parse(c);
-      if (Array.isArray(parsed)) {
-        allBlocks.push(...parsed);
-        continue;
-      }
-    } catch {
-      // not JSON, treat as plain text paragraph
-    }
-    allBlocks.push({ type: "paragraph", content: [{ type: "text", text: c }] });
-  }
-  return JSON.stringify(
-    allBlocks.length > 0
-      ? allBlocks
-      : [{ type: "paragraph", content: [{ type: "text", text: "" }] }],
-  );
-}
 
 const PHASE_COLORS: Record<string, string> = {
   IDLE: "bg-gray-100 text-gray-700",
@@ -150,72 +127,94 @@ const ConsentLoopPanel: React.FC<{
   vote: VoteEntity;
   loops: ReturnType<typeof useVoteLoops>["loops"];
   responses: ReturnType<typeof useVotes>["votes"] extends (infer T)[] ? T[] : never;
-  onOpenRound: () => void;
-  onCloseRound: (gatingValue: -1 | 0 | 1, gatingComment?: string) => void;
-  onFinalize: (verdict: "ADOPTED" | "WITHDRAWN" | "BLOCKED", finalLoopId?: string) => void;
+  onOpenRound: (proposalId: string) => void;
+  onCloseRound: (loopId: string) => void;
   onUpdateRoundContent: (loopId: string, content: string) => void;
-}> = ({ vote, loops, responses, onOpenRound, onCloseRound, onFinalize, onUpdateRoundContent }) => {
+}> = ({ vote, loops, responses, onOpenRound, onCloseRound, onUpdateRoundContent }) => {
   const t = getVotingStrings();
-  const [showDiffDialog, setShowDiffDialog] = React.useState(false);
   const { responses: voteResponses } = useVoteResults(vote.id);
-  const firstProposalId = vote.proposals[0]?.id || "";
+  const activeProposals = vote.proposals.filter((p) => p.active);
 
-  const currentOpenLoop = [...loops]
-    .sort((a, b) => a.roundNumber - b.roundNumber)
-    .find((l) => !l.closedAt);
+  const [expandedProposalId, setExpandedProposalId] = React.useState<string>(activeProposals[0]?.id || "");
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-gray-700">{t.labels.roundControls}</h3>
-        {loops.filter((l) => l.closedAt).length >= 2 && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setShowDiffDialog(true)}
-          >
-            <GitCompare className="w-4 h-4 mr-1" />
-            {t.labels.roundComparison}
-          </Button>
-        )}
-      </div>
+      {activeProposals.length > 1 && (
+        <div className="flex gap-2 mb-2">
+          {activeProposals.map((p) => {
+            const proposalLoops = loops.filter((l) => l.proposalId === p.id);
+            const currentOpenLoop = proposalLoops.find((l) => !l.closedAt);
+            const isExpanded = expandedProposalId === p.id;
+            return (
+              <button
+                key={p.id}
+                onClick={() => setExpandedProposalId(p.id)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  isExpanded
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {p.description || `Proposal ${(activeProposals.indexOf(p) + 1)}`}
+                {currentOpenLoop && (
+                  <span className="ml-1 inline-block w-2 h-2 rounded-full bg-green-400" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-      <LoopRoundControls
-        vote={vote}
-        loops={loops}
-        onOpenRound={onOpenRound}
-        onCloseRound={onCloseRound}
-        onFinalize={onFinalize}
-      />
+      {activeProposals.map((proposal) => {
+        const proposalLoops = loops
+          .filter((l) => l.proposalId === proposal.id)
+          .sort((a, b) => a.roundNumber - b.roundNumber);
+        const currentOpenLoop = proposalLoops.find((l) => !l.closedAt);
 
-      <Separator />
+        if (activeProposals.length > 1 && proposal.id !== expandedProposalId) {
+          return null;
+        }
 
-      <LoopRoundEditor
-        loop={currentOpenLoop || null}
-        vote={vote}
-        onChange={(content) => {
-          if (currentOpenLoop) {
-            onUpdateRoundContent(currentOpenLoop.id, content);
-          }
-        }}
-        readOnly={vote.config.phase === "FINALIZED"}
-      />
+        return (
+          <div key={proposal.id} className="space-y-4 border rounded-lg p-4">
+            {activeProposals.length > 1 && (
+              <h4 className="text-sm font-medium text-gray-800 mb-2">
+                {proposal.description || `Proposal ${(activeProposals.indexOf(proposal) + 1)}`}
+              </h4>
+            )}
 
-      <Separator />
+            <LoopRoundControls
+              vote={vote}
+              loops={loops}
+              proposalId={proposal.id}
+              onOpenRound={onOpenRound}
+              onCloseRound={onCloseRound}
+            />
 
-      <h3 className="text-sm font-medium text-gray-700">{t.labels.perRoundResults}</h3>
-      <LoopRoundTabs
-        loops={loops}
-        responses={voteResponses}
-        proposalId={firstProposalId}
-        maxRounds={vote.config.consentLoopMaxRounds}
-      />
+            <Separator />
 
-      <LoopRoundDiffDialog
-        open={showDiffDialog}
-        onOpenChange={setShowDiffDialog}
-        loops={loops}
-      />
+            <LoopRoundEditor
+              loop={currentOpenLoop || null}
+              vote={vote}
+              onChange={(content) => {
+                if (currentOpenLoop) {
+                  onUpdateRoundContent(currentOpenLoop.id, content);
+                }
+              }}
+              readOnly={vote.config.phase === "FINALIZED"}
+            />
+
+            <Separator />
+
+            <h3 className="text-sm font-medium text-gray-700">{t.labels.perRoundResults}</h3>
+            <LoopRoundTabs
+              loops={loops}
+              responses={voteResponses}
+              proposalId={proposal.id}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 };
@@ -244,51 +243,21 @@ const VoteDetailPanel: React.FC<{
 
   const { loops, openRound, closeRound, updateRoundContent } = useVoteLoops(vote.id);
 
-  const handleOpenRound = async () => {
-    const sortedLoops = [...loops].sort((a, b) => a.roundNumber - b.roundNumber);
-    const lastLoop = sortedLoops[sortedLoops.length - 1];
+  const handleOpenRound = async (proposalId: string) => {
+    const proposalLoops = loops.filter((l) => l.proposalId === proposalId);
+    const lastLoop = [...proposalLoops].sort((a, b) => a.roundNumber - b.roundNumber).pop();
 
-    // Re-fetch the vote to get the latest proposals content (the prop may be stale).
     const adapter = await getPersistenceAdapter();
     const freshVote = await adapter.getVoteById(vote.id);
     const sourceVote = freshVote || vote;
+    const proposal = sourceVote.proposals.find((p) => p.id === proposalId);
 
-    const fallbackProposalContents = sourceVote.proposals
-      .filter((p) => p.active)
-      .map((p) => p.content)
-      .filter((c) => c && c.trim().length > 0);
-    const inheritContent = lastLoop?.proposalContent
-      || (fallbackProposalContents.length > 0 ? mergeProposalContents(fallbackProposalContents) : "")
-      || "";
-    await openRound("me", inheritContent);
+    const inheritContent = lastLoop?.proposalContent || proposal?.content || "";
+    await openRound(proposalId, "me", inheritContent);
   };
 
-  const handleCloseRound = async (gatingValue: -1 | 0 | 1, gatingComment?: string) => {
-    const currentOpenLoop = [...loops].sort((a, b) => a.roundNumber - b.roundNumber).find((l) => !l.closedAt);
-    if (currentOpenLoop) {
-      await closeRound(currentOpenLoop.id, gatingValue, gatingComment);
-    }
-  };
-
-  const handleConsentFinalize = async (verdict: "ADOPTED" | "WITHDRAWN" | "BLOCKED", finalLoopId?: string) => {
-    const sortedLoops = [...loops].sort((a, b) => a.roundNumber - b.roundNumber);
-    const lastClosedLoop = [...sortedLoops].reverse().find((l) => l.closedAt);
-    const effectiveLoopId = finalLoopId || lastClosedLoop?.id;
-
-    const summaries: Record<string, string> = {
-      ADOPTED: t.messages.consentLoopAdopted,
-      WITHDRAWN: t.messages.consentLoopWithdrawn,
-      BLOCKED: t.messages.consentLoopBlocked,
-    };
-
-    await onFinalize({
-      winningProposalId: verdict === "ADOPTED" ? (vote.proposals[0]?.id || null) : null,
-      summary: summaries[verdict],
-      finalizedAt: new Date().toISOString(),
-      finalizedByUserId: "me",
-      loopVerdict: verdict,
-      finalLoopId: effectiveLoopId,
-    });
+  const handleCloseRound = async (loopId: string) => {
+    await closeRound(loopId);
   };
 
   return (
@@ -359,6 +328,15 @@ const VoteDetailPanel: React.FC<{
             {t.buttons.closeVote}
           </Button>
         )}
+        {canClose && isConsentLoop && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onPhaseChange(vote.id, "CLOSED")}
+          >
+            {t.buttons.closeVote}
+          </Button>
+        )}
         {canFinalize && !isConsentLoop && (
           <Button
             size="sm"
@@ -400,7 +378,6 @@ const VoteDetailPanel: React.FC<{
                 responses={[]}
                 onOpenRound={handleOpenRound}
                 onCloseRound={handleCloseRound}
-                onFinalize={handleConsentFinalize}
                 onUpdateRoundContent={updateRoundContent}
               />
             </TabsContent>
@@ -545,8 +522,8 @@ const VotingPage: React.FC = () => {
       setSelectedVote({ ...selectedVote, config: { ...selectedVote.config, phase } });
     }
 
-    // For CONSENT_LOOP mode, automatically open the first round when the vote
-    // transitions to OPEN so voters can immediately see and grade the proposal.
+    // For CONSENT_LOOP mode, automatically open the first round for each
+    // active proposal when the vote transitions to OPEN.
     if (
       phase === "OPEN" &&
       vote.config.mode === "CONSENT_LOOP" &&
@@ -554,24 +531,25 @@ const VotingPage: React.FC = () => {
     ) {
       try {
         const adapter = await getPersistenceAdapter();
-        // Re-fetch the vote to get the latest proposals content (the state
-        // snapshot may be stale right after a save).
         const freshVote = await adapter.getVoteById(id);
         const sourceVote = freshVote || vote;
         const existingLoops = await adapter.listVoteLoops(id);
-        const hasOpenRound = existingLoops.some((l) => !l.closedAt);
-        if (!hasOpenRound) {
-          const proposalContents = sourceVote.proposals
-            .filter((p) => p.active)
-            .map((p) => p.content)
-            .filter((c) => c && c.trim().length > 0);
-          const initialContent = mergeProposalContents(proposalContents);
-          await adapter.createVoteLoop(id, {
-            proposalContent: initialContent,
-            openedByUserId: "me",
-            openedAt: new Date().toISOString(),
-            roundNumber: existingLoops.length + 1,
-          });
+        const activeProposals = sourceVote.proposals.filter((p) => p.active);
+
+        for (const proposal of activeProposals) {
+          const hasOpenRound = existingLoops.some(
+            (l) => l.proposalId === proposal.id && !l.closedAt
+          );
+          if (!hasOpenRound) {
+            const proposalLoops = existingLoops.filter((l) => l.proposalId === proposal.id);
+            await adapter.createVoteLoop(id, {
+              proposalId: proposal.id,
+              proposalContent: proposal.content || "",
+              openedByUserId: "me",
+              openedAt: new Date().toISOString(),
+              roundNumber: proposalLoops.length + 1,
+            });
+          }
         }
       } catch (error) {
         console.error("Error auto-opening first round:", error);
