@@ -28,7 +28,6 @@ type VotingStrings = {
     saveChanges: string;
     finalize: string;
     finalizeDecision: string;
-    finalizeConsentLoop: string;
     openVote: string;
     closeVote: string;
     requestFinalization: string;
@@ -41,7 +40,6 @@ type VotingStrings = {
     hide: string;
     share: string;
     reset: string;
-    withdraw: string;
   };
   labels: {
     voting: string;
@@ -78,8 +76,6 @@ type VotingStrings = {
     currentRoundProposal: string;
     currentRoundResults: string;
     roundByRoundSummary: string;
-    maxRounds: string;
-    gatingVote: string;
     maxPointsPerUser: string;
     allowMultiple: string;
     anonymousVoting: string;
@@ -100,11 +96,6 @@ type VotingStrings = {
     status: string;
     points: string;
     medianColon: string;
-  };
-  gating: {
-    block: string;
-    neutral: string;
-    forIt: string;
   };
   messages: {
     loading: string;
@@ -128,7 +119,6 @@ type VotingStrings = {
     invalidModLink: string;
     moderatorsCannotFinalize: string;
     onlyOwnerCanFinalize: string;
-    maxRoundsReached: string;
     roundClosedCannotEdit: string;
     consentLoopFinalized: string;
     consentLoopResultsPerRound: string;
@@ -139,7 +129,6 @@ type VotingStrings = {
     poweredBy: string;
     needTwoClosedRounds: string;
     compareRoundsDescription: string;
-    gatingDescription: string;
     moderatorDescription: string;
     consentLoopAdopted: string;
     consentLoopWithdrawn: string;
@@ -162,7 +151,6 @@ type VotingStrings = {
     shortDescription: string;
     displayName: string;
     email: string;
-    gatingComment: string;
     refineProposal: string;
   };
   pages: {
@@ -242,7 +230,6 @@ const en: VotingStrings = {
     saveChanges: "Save changes",
     finalize: "Finalize",
     finalizeDecision: "Finalize decision",
-    finalizeConsentLoop: "Finalize consent loop",
     openVote: "Open vote",
     closeVote: "Close vote",
     requestFinalization: "Request finalization",
@@ -255,7 +242,6 @@ const en: VotingStrings = {
     hide: "Hide",
     share: "Share",
     reset: "Reset",
-    withdraw: "Withdraw",
   },
   labels: {
     voting: "Voting",
@@ -292,8 +278,6 @@ const en: VotingStrings = {
     currentRoundProposal: "Current round proposal",
     currentRoundResults: "Current round results",
     roundByRoundSummary: "Round-by-round summary",
-    maxRounds: "Max rounds",
-    gatingVote: "Gating vote at end of round",
     maxPointsPerUser: "Max points per user",
     allowMultiple: "Allow multiple votes per proposal",
     anonymousVoting: "Anonymous voting",
@@ -314,11 +298,6 @@ const en: VotingStrings = {
     status: "Status",
     points: "points",
     medianColon: "Median:",
-  },
-  gating: {
-    block: "Block (objection remains)",
-    neutral: "Neutral (uncertain)",
-    forIt: "For it (no objection)",
   },
   messages: {
     loading: "Loading...",
@@ -342,7 +321,6 @@ const en: VotingStrings = {
     invalidModLink: "This moderation link is invalid or has been revoked.",
     moderatorsCannotFinalize: "Moderators cannot finalize decisions. Request the owner to finalize.",
     onlyOwnerCanFinalize: "Only the owner can finalize. Request finalization from the owner.",
-    maxRoundsReached: "Maximum rounds reached. You must finalize.",
     roundClosedCannotEdit: "This round is closed and cannot be edited.",
     consentLoopFinalized: "This consent loop is finalized.",
     consentLoopResultsPerRound: "Consent Loop results are shown per round on the Rounds tab.",
@@ -353,7 +331,6 @@ const en: VotingStrings = {
     poweredBy: "Powered by p3fo Voting",
     needTwoClosedRounds: "At least two closed rounds are needed to compare.",
     compareRoundsDescription: "Compare the proposal text between two rounds to see what changed.",
-    gatingDescription: "Did anyone want to block the proposal? This helps avoid false blocks from grades like \u201cInsufficient\u201d without a real objection.",
     moderatorDescription: "Moderators can edit proposals, open/close rounds, and vote on gating checks. They cannot finalize decisions or delete the vote.",
     consentLoopAdopted: "Adopted — no remaining objections",
     consentLoopWithdrawn: "Withdrawn — the proposer pulled the proposal",
@@ -376,7 +353,6 @@ const en: VotingStrings = {
     shortDescription: "Optional short description",
     displayName: "Display name",
     email: "Email (optional)",
-    gatingComment: "Optional comment on the gating decision...",
     refineProposal: "Refine the proposal text for this round...",
   },
   pages: {
@@ -456,7 +432,6 @@ const fr: VotingStrings = {
     saveChanges: "Enregistrer les modifications",
     finalize: "Finaliser",
     finalizeDecision: "Finaliser la d\u00e9cision",
-    finalizeConsentLoop: "Finaliser la boucle de consentement",
     openVote: "Ouvrir le vote",
     closeVote: "Fermer le vote",
     requestFinalization: "Demander la finalisation",
@@ -469,7 +444,6 @@ const fr: VotingStrings = {
     hide: "Masquer",
     share: "Partager",
     reset: "R\u00e9initialiser",
-    withdraw: "Retirer",
   },
   labels: {
     voting: "Vote",
@@ -506,8 +480,6 @@ const fr: VotingStrings = {
     currentRoundProposal: "Proposition du tour en cours",
     currentRoundResults: "R\u00e9sultats du tour en cours",
     roundByRoundSummary: "R\u00e9sum\u00e9 tour par tour",
-    maxRounds: "Tours maximum",
-    gatingVote: "Vote de validation en fin de tour",
     maxPointsPerUser: "Points maximum par utilisateur",
     allowMultiple: "Autoriser plusieurs votes par proposition",
     anonymousVoting: "Vote anonyme",
@@ -528,11 +500,6 @@ const fr: VotingStrings = {
     status: "Statut",
     points: "points",
     medianColon: "M\u00e9diane\u00a0:",
-  },
-  gating: {
-    block: "Bloquer (objection persiste)",
-    neutral: "Neutre (incertain)",
-    forIt: "Pour (pas d'objection)",
   },
   messages: {
     loading: "Chargement...",
@@ -556,7 +523,6 @@ const fr: VotingStrings = {
     invalidModLink: "Ce lien de mod\u00e9ration est invalide ou a \u00e9t\u00e9 r\u00e9voqu\u00e9.",
     moderatorsCannotFinalize: "Les mod\u00e9rateurs ne peuvent pas finaliser les d\u00e9cisions. Demandez au propri\u00e9taire de finaliser.",
     onlyOwnerCanFinalize: "Seul le propri\u00e9taire peut finaliser. Demandez la finalisation au propri\u00e9taire.",
-    maxRoundsReached: "Nombre maximum de tours atteint. Vous devez finaliser.",
     roundClosedCannotEdit: "Ce tour est ferm\u00e9 et ne peut plus \u00eatre modifi\u00e9.",
     consentLoopFinalized: "Cette boucle de consentement est finalis\u00e9e.",
     consentLoopResultsPerRound: "Les r\u00e9sultats de la boucle de consentement sont affich\u00e9s par tour dans l'onglet Tours.",
@@ -567,7 +533,6 @@ const fr: VotingStrings = {
     poweredBy: "Propuls\u00e9 par p3fo Voting",
     needTwoClosedRounds: "Au moins deux tours ferm\u00e9s sont n\u00e9cessaires pour comparer.",
     compareRoundsDescription: "Comparez le texte des propositions entre deux tours pour voir les changements.",
-    gatingDescription: "Quelqu'un voulait-il bloquer la proposition\u00a0? Cela permet d'\u00e9viter les faux blocages dus aux notes basses sans r\u00e9elle objection.",
     moderatorDescription: "Les mod\u00e9rateurs peuvent modifier les propositions, ouvrir/fermer les tours et voter sur les validations. Ils ne peuvent ni finaliser les d\u00e9cisions ni supprimer le vote.",
     consentLoopAdopted: "Adopt\u00e9 \u2014 plus d'objection restante",
     consentLoopWithdrawn: "Retir\u00e9 \u2014 le proposeur a retir\u00e9 la proposition",
@@ -590,7 +555,6 @@ const fr: VotingStrings = {
     shortDescription: "Description courte optionnelle",
     displayName: "Nom affich\u00e9",
     email: "E-mail (optionnel)",
-    gatingComment: "Commentaire optionnel sur la d\u00e9cision de validation...",
     refineProposal: "Affinez le texte de la proposition pour ce tour...",
   },
   pages: {
