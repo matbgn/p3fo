@@ -178,7 +178,7 @@ const ConsentLoopPanel: React.FC<{
     } finally {
       setSavingDraft((prev) => ({ ...prev, [proposalId]: false }));
     }
-  }, [draftChanges, vote.id, vote]);
+  }, [draftChanges, vote]);
 
   React.useEffect(() => {
     const keys = Object.keys(savedDrafts);

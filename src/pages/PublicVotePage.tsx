@@ -1099,67 +1099,74 @@ const PublicVotePage: React.FC = () => {
                                               : 0,
                                         }))
                                         .filter((d) => d.count > 0);
+                                      const loopForRound = loopById.get(round.loopId);
+                                      const proposalContent = loopForRound?.proposalContent;
                                       return (
-                                        <tr
+                                        <LoopRoundProposalTooltip
                                           key={round.loopId}
-                                          className={isOpen ? "bg-blue-50 border-l-4 border-l-blue-400" : "hover:bg-gray-50"}
+                                          proposalContent={proposalContent}
+                                          roundNumber={round.roundNumber}
                                         >
-                                          <td className="py-2 px-3 border-b font-medium">
-                                            {ts.labels.round} {round.roundNumber}
-                                          </td>
-                                          <td className="py-2 px-3 border-b text-center">
-                                            {medianGrade && (
-                                              <span className={`inline-block px-2 py-0.5 rounded text-xs text-white ${medianGrade.color}`}>
-                                                {medianGrade.icon} {medianGrade.label}
-                                              </span>
-                                            )}
-                                          </td>
-                                          <td className="py-2 px-3 border-b text-center text-xs text-gray-500">
-                                            {isOpen ? ts.phases.OPEN : ts.phases.CLOSED}
-                                          </td>
-                                          <td
-                                            colSpan={MJ_SCALE.length}
-                                            className="py-2 px-2 border-b"
+                                          <tr
+                                            className={isOpen ? "bg-blue-50 border-l-4 border-l-blue-400 cursor-help" : "hover:bg-gray-50 cursor-help"}
                                           >
-                                            {roundTotal > 0 ? (
-                                              <div className="relative w-full h-6 flex rounded overflow-hidden bg-gray-100">
-                                                {roundSegments.map((item, index) => {
-                                                  const isMedian = item.value === round.median;
-                                                  const isFirst = index === 0;
-                                                  const isLast = index === roundSegments.length - 1;
-                                                  return (
-                                                    <div
-                                                      key={item.value}
-                                                      className={`h-full flex items-center justify-center relative ${item.color} ${
-                                                        isFirst ? "rounded-l" : ""
-                                                      } ${isLast ? "rounded-r" : ""} ${
-                                                        isMedian
-                                                          ? "ring-2 ring-white z-20 shadow-md scale-y-125 mx-0.5 rounded-sm origin-center"
-                                                          : ""
-                                                      }`}
-                                                      style={{ width: `${item.percentage}%` }}
-                                                      title={`${item.label}: ${item.count} votes (${item.percentage.toFixed(1)}%)`}
-                                                    >
-                                                      {item.percentage >= 10 && (
-                                                        <span
-                                                          className={`text-[10px] font-bold ${
-                                                            [1, 2].includes(item.value) ? "text-black" : "text-white"
-                                                          } drop-shadow-md`}
-                                                        >
-                                                          {item.percentage.toFixed(1)}%
-                                                        </span>
-                                                      )}
-                                                    </div>
-                                                  );
-                                                })}
-                                              </div>
-                                            ) : (
-                                              <div className="w-full h-6 bg-gray-50 rounded flex items-center justify-center text-[10px] text-gray-400">
-                                                —
-                                              </div>
-                                            )}
-                                          </td>
-                                        </tr>
+                                            <td className="py-2 px-3 border-b font-medium">
+                                              {ts.labels.round} {round.roundNumber}
+                                            </td>
+                                            <td className="py-2 px-3 border-b text-center">
+                                              {medianGrade && (
+                                                <span className={`inline-block px-2 py-0.5 rounded text-xs text-white ${medianGrade.color}`}>
+                                                  {medianGrade.icon} {medianGrade.label}
+                                                </span>
+                                              )}
+                                            </td>
+                                            <td className="py-2 px-3 border-b text-center text-xs text-gray-500">
+                                              {isOpen ? ts.phases.OPEN : ts.phases.CLOSED}
+                                            </td>
+                                            <td
+                                              colSpan={MJ_SCALE.length}
+                                              className="py-2 px-2 border-b"
+                                            >
+                                              {roundTotal > 0 ? (
+                                                <div className="relative w-full h-6 flex rounded overflow-hidden bg-gray-100">
+                                                  {roundSegments.map((item, index) => {
+                                                    const isMedian = item.value === round.median;
+                                                    const isFirst = index === 0;
+                                                    const isLast = index === roundSegments.length - 1;
+                                                    return (
+                                                      <div
+                                                        key={item.value}
+                                                        className={`h-full flex items-center justify-center relative ${item.color} ${
+                                                          isFirst ? "rounded-l" : ""
+                                                        } ${isLast ? "rounded-r" : ""} ${
+                                                          isMedian
+                                                            ? "ring-2 ring-white z-20 shadow-md scale-y-125 mx-0.5 rounded-sm origin-center"
+                                                            : ""
+                                                        }`}
+                                                        style={{ width: `${item.percentage}%` }}
+                                                        title={`${item.label}: ${item.count} votes (${item.percentage.toFixed(1)}%)`}
+                                                      >
+                                                        {item.percentage >= 10 && (
+                                                          <span
+                                                            className={`text-[10px] font-bold ${
+                                                              [1, 2].includes(item.value) ? "text-black" : "text-white"
+                                                            } drop-shadow-md`}
+                                                          >
+                                                            {item.percentage.toFixed(1)}%
+                                                          </span>
+                                                        )}
+                                                      </div>
+                                                    );
+                                                  })}
+                                                </div>
+                                              ) : (
+                                                <div className="w-full h-6 bg-gray-50 rounded flex items-center justify-center text-[10px] text-gray-400">
+                                                  —
+                                                </div>
+                                              )}
+                                            </td>
+                                          </tr>
+                                        </LoopRoundProposalTooltip>
                                       );
                                     })}
                                   </tbody>
