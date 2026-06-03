@@ -1865,7 +1865,7 @@ class SqliteClient implements DbClient {
 
     const row = this.db.prepare(`
       UPDATE "votes" SET "config" = json_set("config", '$.phase', 'IDLE'), "outcome" = NULL, "updatedAt" = ? WHERE "id" = ? RETURNING *
-    `).get(new Date().toISOString(), id) as VoteDbRow | undefined;
+    `).get(new Date().toISOString(), id) as unknown as VoteDbRow | undefined;
     if (!row) return null;
     return this.mapVoteDbRowToEntity(row);
   }

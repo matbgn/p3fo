@@ -301,6 +301,7 @@ const VoteDetailPanel: React.FC<{
   const { loops, openRound, closeRound, updateRoundContent } = useVoteLoops(vote.id);
 
   const handleOpenRound = async (proposalId: string) => {
+    await flushProposalUpdate(proposalId);
     const adapter = await getPersistenceAdapter();
     const freshVote = await adapter.getVoteById(vote.id);
     const sourceVote = freshVote || vote;
@@ -310,8 +311,14 @@ const VoteDetailPanel: React.FC<{
     await openRound(proposalId, "me", inheritContent);
   };
 
-  const handleOpenRoundWithContent = async (proposalId: string, content: string) => {
-    await openRound(proposalId, "me", content);
+  const handleOpenRoundWithContent = async (proposalId: string, _content: string) => {
+    await flushProposalUpdate(proposalId);
+    const adapter = await getPersistenceAdapter();
+    const freshVote = await adapter.getVoteById(vote.id);
+    const sourceVote = freshVote || vote;
+    const proposal = sourceVote.proposals.find((p) => p.id === proposalId);
+    const inheritContent = proposal?.content || "";
+    await openRound(proposalId, "me", inheritContent);
   };
 
   const handleCloseRound = async (loopId: string) => {
@@ -328,19 +335,37 @@ const VoteDetailPanel: React.FC<{
   };
 
   const proposalUpdateTimers = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const flushProposalUpdate = React.useCallback(async (proposalId?: string) => {
+    if (proposalId) {
+      if (proposalUpdateTimers.current[proposalId]) {
+        clearTimeout(proposalUpdateTimers.current[proposalId]);
+        delete proposalUpdateTimers.current[proposalId];
+      }
+    } else {
+      Object.keys(proposalUpdateTimers.current).forEach((key) => {
+        clearTimeout(proposalUpdateTimers.current[key]);
+      });
+      proposalUpdateTimers.current = {};
+    }
+  }, []);
+  const voteRef = React.useRef(vote);
+  voteRef.current = vote;
   const handleUpdateProposal = React.useCallback(async (proposalId: string, content: string) => {
     if (proposalUpdateTimers.current[proposalId]) {
       clearTimeout(proposalUpdateTimers.current[proposalId]);
     }
     proposalUpdateTimers.current[proposalId] = setTimeout(async () => {
+      const v = voteRef.current;
       const adapter = await getPersistenceAdapter();
-      const updatedProposals = vote.proposals.map((p) =>
+      const freshVote = await adapter.getVoteById(v.id);
+      const sourceVote = freshVote || v;
+      const updatedProposals = sourceVote.proposals.map((p) =>
         p.id === proposalId ? { ...p, content } : p
       );
-      await adapter.updateVote(vote.id, { proposals: updatedProposals });
+      await adapter.updateVote(v.id, { proposals: updatedProposals });
       eventBus.publish("votesChanged");
     }, 500);
-  }, [vote.id, vote.proposals]);
+  }, []);
 
   return (
     <div className="flex flex-col h-full">

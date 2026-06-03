@@ -3,7 +3,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { createDbClient } from './db/index.js';
 import { DbClient } from './db/index.js';
-import { VoteKind } from '../src/lib/persistence-types.js';
+import { VoteKind, VoteLoop } from '../src/lib/persistence-types.js';
 import QRCode from 'qrcode';
 import { WebSocketServer } from 'ws';
 import { setupWSConnection } from 'y-websocket/bin/utils';

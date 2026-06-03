@@ -147,6 +147,9 @@ export const LoopRoundDiffDialog: React.FC<LoopRoundDiffDialogProps> = ({
 
   const leftLoop = closedLoops[leftIdx];
   const rightLoop = closedLoops[rightIdx];
+  if (!leftLoop || !rightLoop) {
+    return null;
+  }
   const leftLines = blocksToText(leftLoop.proposalContent);
   const rightLines = blocksToText(rightLoop.proposalContent);
   const diff = computeBlockDiff(leftLines, rightLines);

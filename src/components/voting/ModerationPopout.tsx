@@ -5,6 +5,7 @@ import { useVoteLoops } from "@/hooks/useVoteLoops";
 import { useVoteResults } from "@/hooks/useVotes";
 import { VoteEntity, VoteLoop } from "@/lib/persistence-types";
 import { getPersistenceAdapter } from "@/lib/persistence-factory";
+import { eventBus } from "@/lib/events";
 import { VOTING_MODES_LABELS, MJ_SCALE } from "@/components/planView/constants";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,10 +43,27 @@ const LoopPanel: React.FC<{
   const [diffOpen, setDiffOpen] = React.useState(false);
   const [diffProposalId, setDiffProposalId] = React.useState<string>("");
   const proposalUpdateTimerRef = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const flushProposalUpdate = React.useCallback(async (proposalId?: string) => {
+    if (proposalId) {
+      if (proposalUpdateTimerRef.current[proposalId]) {
+        clearTimeout(proposalUpdateTimerRef.current[proposalId]);
+        delete proposalUpdateTimerRef.current[proposalId];
+      }
+    } else {
+      Object.keys(proposalUpdateTimerRef.current).forEach((key) => {
+        clearTimeout(proposalUpdateTimerRef.current[key]);
+      });
+      proposalUpdateTimerRef.current = {};
+    }
+  }, []);
 
-  const handleOpenRound = async (proposalId: string, content?: string) => {
-    const proposal = vote.proposals.find((p) => p.id === proposalId);
-    const inheritContent = content || proposal?.content || "";
+  const handleOpenRound = async (proposalId: string, _content?: string) => {
+    await flushProposalUpdate(proposalId);
+    const adapter = await getPersistenceAdapter();
+    const freshVote = await adapter.getVoteById(vote.id);
+    const sourceVote = freshVote || vote;
+    const proposal = sourceVote.proposals.find((p) => p.id === proposalId);
+    const inheritContent = proposal?.content || "";
     await openRound(proposalId, moderatorDisplayName, inheritContent);
   };
 
@@ -61,18 +79,24 @@ const LoopPanel: React.FC<{
     }
   };
 
+  const voteRef = React.useRef(vote);
+  voteRef.current = vote;
   const handleUpdateProposal = React.useCallback(async (proposalId: string, content: string) => {
     if (proposalUpdateTimerRef.current[proposalId]) {
       clearTimeout(proposalUpdateTimerRef.current[proposalId]);
     }
     proposalUpdateTimerRef.current[proposalId] = setTimeout(async () => {
+      const v = voteRef.current;
       const adapter = await getPersistenceAdapter();
-      const updatedProposals = vote.proposals.map((p) =>
+      const freshVote = await adapter.getVoteById(v.id);
+      const sourceVote = freshVote || v;
+      const updatedProposals = sourceVote.proposals.map((p) =>
         p.id === proposalId ? { ...p, content } : p
       );
-      await adapter.updateVote(vote.id, { proposals: updatedProposals });
+      await adapter.updateVote(v.id, { proposals: updatedProposals });
+      eventBus.publish("votesChanged");
     }, 500);
-  }, [vote.id, vote.proposals]);
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -121,7 +145,7 @@ const LoopPanel: React.FC<{
                 vote={vote}
                 loops={loops}
                 proposalId={proposal.id}
-                onOpenRound={() => handleOpenRound(proposal.id, proposal.content || "")}
+                onOpenRound={() => handleOpenRound(proposal.id)}
                 onCloseRound={handleCloseRound}
                 isModerator={true}
               />
