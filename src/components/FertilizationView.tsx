@@ -841,7 +841,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
         const medianValue = getMJMedian(votes);
 
         // Calculate distribution
-        const distribution = MJ_SCALE.slice().reverse().map(grade => {
+        const distribution = MJ_SCALE.map(grade => {
             const count = Object.values(votes).filter(v => v === grade.value).length;
             const percentage = (count / totalVotes) * 100;
             return {

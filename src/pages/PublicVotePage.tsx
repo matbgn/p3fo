@@ -702,20 +702,20 @@ const PublicVotePage: React.FC = () => {
                       return (
                         <div className="space-y-1">
                           <div className="flex gap-3 text-sm">
-                            <span className="text-green-600">
-                              &#x1F44D; {t.up}
+                            <span className="text-red-600">
+                              &#x1F44E; {t.down}
                             </span>
                             <span className="text-yellow-600">
                               &#x1F610; {t.neutral}
                             </span>
-                            <span className="text-red-600">
-                              &#x1F44E; {t.down}
+                            <span className="text-green-600">
+                              &#x1F44D; {t.up}
                             </span>
                           </div>
                           <div className="flex h-2 rounded-full overflow-hidden">
                             <div
-                              className="bg-green-500"
-                              style={{ width: `${(t.up / total) * 100}%` }}
+                              className="bg-red-500"
+                              style={{ width: `${(t.down / total) * 100}%` }}
                             />
                             <div
                               className="bg-yellow-400"
@@ -724,8 +724,8 @@ const PublicVotePage: React.FC = () => {
                               }}
                             />
                             <div
-                              className="bg-red-500"
-                              style={{ width: `${(t.down / total) * 100}%` }}
+                              className="bg-green-500"
+                              style={{ width: `${(t.up / total) * 100}%` }}
                             />
                           </div>
                         </div>
@@ -912,7 +912,7 @@ const PublicVotePage: React.FC = () => {
                           <th className="text-center py-2 px-3 border-b font-medium text-gray-600">
                             {ts.labels.median}
                           </th>
-                          {[...MJ_SCALE].sort((a, b) => b.value - a.value).map((grade) => (
+                          {MJ_SCALE.map((grade) => (
                             <th
                               key={grade.value}
                               className="text-center py-2 px-2 border-b font-medium text-gray-600"
@@ -941,7 +941,7 @@ const PublicVotePage: React.FC = () => {
                                   </span>
                                 )}
                               </td>
-                              {[...MJ_SCALE].sort((a, b) => b.value - a.value).map((grade) => {
+                            {MJ_SCALE.map((grade) => {
                                 const count = round.distribution[grade.value] || 0;
                                 return (
                                   <td
@@ -1063,20 +1063,20 @@ const PublicVotePage: React.FC = () => {
                       return (
                         <div className="space-y-1">
                           <div className="flex gap-3 text-sm">
-                            <span className="text-green-600">
-                              &#x1F44D; {t.up}
+                            <span className="text-red-600">
+                              &#x1F44E; {t.down}
                             </span>
                             <span className="text-yellow-600">
                               &#x1F610; {t.neutral}
                             </span>
-                            <span className="text-red-600">
-                              &#x1F44E; {t.down}
+                            <span className="text-green-600">
+                              &#x1F44D; {t.up}
                             </span>
                           </div>
                           <div className="flex h-2 rounded-full overflow-hidden">
                             <div
-                              className="bg-green-500"
-                              style={{ width: `${(t.up / total) * 100}%` }}
+                              className="bg-red-500"
+                              style={{ width: `${(t.down / total) * 100}%` }}
                             />
                             <div
                               className="bg-yellow-400"
@@ -1085,8 +1085,8 @@ const PublicVotePage: React.FC = () => {
                               }}
                             />
                             <div
-                              className="bg-red-500"
-                              style={{ width: `${(t.down / total) * 100}%` }}
+                              className="bg-green-500"
+                              style={{ width: `${(t.up / total) * 100}%` }}
                             />
                           </div>
                         </div>

@@ -32,8 +32,6 @@ export const LoopRoundTabs: React.FC<LoopRoundTabsProps> = ({
     );
   }
 
-  const sortedScale = [...MJ_SCALE].sort((a, b) => b.value - a.value);
-
   return (
     <div className="space-y-4">
       <div className="overflow-x-auto">
@@ -49,7 +47,7 @@ export const LoopRoundTabs: React.FC<LoopRoundTabsProps> = ({
               <th className="text-center py-2 px-3 border-b font-medium text-gray-600">
                 {t.labels.status}
               </th>
-              {sortedScale.map((grade) => (
+              {MJ_SCALE.map((grade) => (
                 <th
                   key={grade.value}
                   className="text-center py-2 px-2 border-b font-medium text-gray-600"
@@ -96,7 +94,7 @@ export const LoopRoundTabs: React.FC<LoopRoundTabsProps> = ({
                       <Badge variant="outline">{t.phases.CLOSED}</Badge>
                     )}
                   </td>
-                  {sortedScale.map((grade) => {
+                  {MJ_SCALE.map((grade) => {
                     const count = round.distribution[grade.value] || 0;
                     const total = Object.values(round.distribution).reduce(
                       (s, v) => s + v,
