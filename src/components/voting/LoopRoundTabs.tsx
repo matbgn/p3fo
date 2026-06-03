@@ -39,6 +39,7 @@ export const LoopRoundTabs: React.FC<LoopRoundTabsProps> = ({
       {proposalLabel && (
         <h4 className="text-sm font-medium text-gray-700">{proposalLabel}</h4>
       )}
+
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse">
           <thead>
@@ -57,7 +58,10 @@ export const LoopRoundTabs: React.FC<LoopRoundTabsProps> = ({
                   key={grade.value}
                   className="text-center py-2 px-2 border-b font-medium text-gray-600"
                 >
-                  <span title={grade.label}>{grade.icon}</span>
+                  <div className="flex items-center justify-center gap-1">
+                    <div className={`w-3 h-3 rounded ${grade.color}`}></div>
+                    <span className="text-[10px]">{grade.label}</span>
+                  </div>
                 </th>
               ))}
             </tr>
@@ -68,6 +72,20 @@ export const LoopRoundTabs: React.FC<LoopRoundTabsProps> = ({
                 (g) => g.value === round.median
               );
               const isOpen = !round.closed;
+              const roundTotal = MJ_SCALE.reduce(
+                (sum, grade) => sum + (round.distribution[grade.value] || 0),
+                0
+              );
+              const roundSegments = MJ_SCALE
+                .map((grade) => ({
+                  ...grade,
+                  count: round.distribution[grade.value] || 0,
+                  percentage:
+                    roundTotal > 0
+                      ? ((round.distribution[grade.value] || 0) / roundTotal) * 100
+                      : 0,
+                }))
+                .filter((d) => d.count > 0);
 
               return (
                 <tr
@@ -99,34 +117,48 @@ export const LoopRoundTabs: React.FC<LoopRoundTabsProps> = ({
                       <Badge variant="outline">{t.phases.CLOSED}</Badge>
                     )}
                   </td>
-                  {MJ_SCALE.map((grade) => {
-                    const count = round.distribution[grade.value] || 0;
-                    const total = Object.values(round.distribution).reduce(
-                      (s, v) => s + v,
-                      0
-                    );
-                    const pct = total > 0 ? (count / total) * 100 : 0;
-
-                    return (
-                      <td
-                        key={grade.value}
-                        className="py-2 px-2 border-b text-center"
-                        title={`${grade.label}: ${count}`}
-                      >
-                        <div className="flex flex-col items-center gap-0.5">
-                          <span className="font-medium text-xs">{count}</span>
-                          {count > 0 && (
-                            <div className="w-8 h-1 rounded-full overflow-hidden bg-gray-100">
-                              <div
-                                className={`h-full rounded-full ${grade.color}`}
-                                style={{ width: `${pct}%` }}
-                              />
+                  <td
+                    colSpan={MJ_SCALE.length}
+                    className="py-2 px-2 border-b"
+                  >
+                    {roundTotal > 0 ? (
+                      <div className="relative w-full h-6 flex rounded overflow-hidden bg-gray-100">
+                        {roundSegments.map((item, index) => {
+                          const isMedian = item.value === round.median;
+                          const isFirst = index === 0;
+                          const isLast = index === roundSegments.length - 1;
+                          return (
+                            <div
+                              key={item.value}
+                              className={`h-full flex items-center justify-center relative ${item.color} ${
+                                isFirst ? "rounded-l" : ""
+                              } ${isLast ? "rounded-r" : ""} ${
+                                isMedian
+                                  ? "ring-2 ring-white z-20 shadow-md scale-y-125 mx-0.5 rounded-sm origin-center"
+                                  : ""
+                              }`}
+                              style={{ width: `${item.percentage}%` }}
+                              title={`${item.label}: ${item.count} votes (${item.percentage.toFixed(1)}%)`}
+                            >
+                              {item.percentage >= 10 && (
+                                <span
+                                  className={`text-[10px] font-bold ${
+                                    [1, 2].includes(item.value) ? "text-black" : "text-white"
+                                  } drop-shadow-md`}
+                                >
+                                  {item.percentage.toFixed(1)}%
+                                </span>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      </td>
-                    );
-                  })}
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="w-full h-6 bg-gray-50 rounded flex items-center justify-center text-[10px] text-gray-400">
+                        —
+                      </div>
+                    )}
+                  </td>
                 </tr>
               );
             })}

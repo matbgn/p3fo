@@ -304,7 +304,7 @@ const en: VotingStrings = {
     allowVoteChangeUntilClose: "Allow vote change until close",
     multipleChoiceVote: "Multiple choice vote",
     round: "Round",
-    median: "Median",
+    median: "Majority Mention",
     status: "Status",
     points: "points",
     medianColon: "Median:",
