@@ -42,6 +42,7 @@ type VotingStrings = {
     reset: string;
     openRound: string;
     closeRound: string;
+    saveDraft: string;
   };
   labels: {
     voting: string;
@@ -77,6 +78,8 @@ type VotingStrings = {
     rightRound: string;
     currentRoundProposal: string;
     currentRoundResults: string;
+    draftSaved: string;
+    draftUnsaved: string;
     roundByRoundSummary: string;
     maxPointsPerUser: string;
     allowMultiple: string;
@@ -246,6 +249,7 @@ const en: VotingStrings = {
     reset: "Reset",
     openRound: "Open round",
     closeRound: "Close round",
+    saveDraft: "Save draft",
   },
   labels: {
     voting: "Voting",
@@ -281,6 +285,8 @@ const en: VotingStrings = {
     rightRound: "Right round",
     currentRoundProposal: "Current round proposal",
     currentRoundResults: "Current round results",
+    draftSaved: "Draft saved",
+    draftUnsaved: "Unsaved changes",
     roundByRoundSummary: "Round-by-round summary",
     maxPointsPerUser: "Max points per user",
     allowMultiple: "Allow multiple votes per proposal",
@@ -450,6 +456,7 @@ const fr: VotingStrings = {
     reset: "R\u00e9initialiser",
     openRound: "Ouvrir le tour",
     closeRound: "Fermer le tour",
+    saveDraft: "Enregistrer le brouillon",
   },
   labels: {
     voting: "Vote",
@@ -485,6 +492,8 @@ const fr: VotingStrings = {
     rightRound: "Tour de droite",
     currentRoundProposal: "Proposition du tour en cours",
     currentRoundResults: "R\u00e9sultats du tour en cours",
+    draftSaved: "Brouillon enregistr\u00e9",
+    draftUnsaved: "Modifications non enregistr\u00e9es",
     roundByRoundSummary: "R\u00e9sum\u00e9 tour par tour",
     maxPointsPerUser: "Points maximum par utilisateur",
     allowMultiple: "Autoriser plusieurs votes par proposition",

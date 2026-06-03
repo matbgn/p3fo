@@ -62,6 +62,8 @@ export const BlockNoteProposalEditor = React.forwardRef<
   const prevJsonRef = React.useRef(value);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editorRef = React.useRef<any>(null);
+  const onChangeRef = React.useRef(onChange);
+  onChangeRef.current = onChange;
 
   const editor = useCreateBlockNote({
     initialContent: deserializeBlocks(value),
@@ -75,10 +77,10 @@ export const BlockNoteProposalEditor = React.forwardRef<
       if (!editorRef.current) return prevJsonRef.current;
       const json = serializeBlocks(editorRef.current);
       prevJsonRef.current = json;
-      onChange(json);
+      onChangeRef.current(json);
       return json;
     },
-  }), [onChange]);
+  }), []);
 
   React.useEffect(() => {
     if (!editor || didInitRef.current) return;
@@ -89,13 +91,13 @@ export const BlockNoteProposalEditor = React.forwardRef<
       const json = serializeBlocks(_editor);
       if (json !== prevJsonRef.current) {
         prevJsonRef.current = json;
-        onChange(json);
+        onChangeRef.current(json);
       }
     });
     /* eslint-enable @typescript-eslint/no-explicit-any */
 
     return () => unsubscribe();
-  }, [editor, onChange]);
+  }, [editor]);
 
   React.useLayoutEffect(() => {
     if (!editor || !didInitRef.current) return;

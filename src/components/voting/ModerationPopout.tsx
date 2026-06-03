@@ -3,9 +3,8 @@ import { useParams } from "react-router-dom";
 import { useModeratorToken } from "@/hooks/useVoteModerators";
 import { useVoteLoops } from "@/hooks/useVoteLoops";
 import { useVoteResults } from "@/hooks/useVotes";
-import { VoteEntity, VoteLoop } from "@/lib/persistence-types";
+import { VoteEntity } from "@/lib/persistence-types";
 import { getPersistenceAdapter } from "@/lib/persistence-factory";
-import { eventBus } from "@/lib/events";
 import { VOTING_MODES_LABELS, MJ_SCALE } from "@/components/planView/constants";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +24,7 @@ import {
   Eye,
   PenLine,
   GitCompare,
+  Save,
 } from "lucide-react";
 import { getVotingStrings } from "@/lib/voting-i18n";
 
@@ -42,30 +42,69 @@ const LoopPanel: React.FC<{
   const [expandedProposalId, setExpandedProposalId] = React.useState<string>(activeProposals[0]?.id || "");
   const [diffOpen, setDiffOpen] = React.useState(false);
   const [diffProposalId, setDiffProposalId] = React.useState<string>("");
-  const proposalUpdateTimerRef = React.useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const flushProposalUpdate = React.useCallback(async (proposalId?: string) => {
-    if (proposalId) {
-      if (proposalUpdateTimerRef.current[proposalId]) {
-        clearTimeout(proposalUpdateTimerRef.current[proposalId]);
-        delete proposalUpdateTimerRef.current[proposalId];
-      }
-    } else {
-      Object.keys(proposalUpdateTimerRef.current).forEach((key) => {
-        clearTimeout(proposalUpdateTimerRef.current[key]);
-      });
-      proposalUpdateTimerRef.current = {};
-    }
+  const [draftChanges, setDraftChanges] = React.useState<Record<string, string>>({});
+  const [savingDraft, setSavingDraft] = React.useState<Record<string, boolean>>({});
+  const [savedDrafts, setSavedDrafts] = React.useState<Record<string, string>>({});
+
+  const handleDraftChange = React.useCallback((proposalId: string, content: string) => {
+    setDraftChanges((prev) => ({ ...prev, [proposalId]: content }));
   }, []);
 
-  const handleOpenRound = async (proposalId: string, _content?: string) => {
-    await flushProposalUpdate(proposalId);
+  const handleSaveDraft = React.useCallback(async (proposalId: string): Promise<string | null> => {
+    const content = draftChanges[proposalId];
+    if (content === undefined) return null;
+    setSavingDraft((prev) => ({ ...prev, [proposalId]: true }));
+    try {
+      const adapter = await getPersistenceAdapter();
+      const freshVote = await adapter.getVoteById(vote.id);
+      const sourceVote = freshVote || vote;
+      const updatedProposals = sourceVote.proposals.map((p) =>
+        p.id === proposalId ? { ...p, content } : p
+      );
+      await adapter.updateVote(vote.id, { proposals: updatedProposals });
+      setSavedDrafts((prev) => ({ ...prev, [proposalId]: content }));
+      setDraftChanges((prev) => {
+        const next = { ...prev };
+        delete next[proposalId];
+        return next;
+      });
+      return content;
+    } catch (error) {
+      console.error("Error saving draft:", error);
+      return null;
+    } finally {
+      setSavingDraft((prev) => ({ ...prev, [proposalId]: false }));
+    }
+  }, [draftChanges, vote]);
+
+  React.useEffect(() => {
+    const keys = Object.keys(savedDrafts);
+    if (keys.length === 0) return;
+    const stale: string[] = [];
+    for (const proposalId of keys) {
+      const proposal = vote.proposals.find((p) => p.id === proposalId);
+      if (proposal && proposal.content === savedDrafts[proposalId]) {
+        stale.push(proposalId);
+      }
+    }
+    if (stale.length > 0) {
+      setSavedDrafts((prev) => {
+        const next = { ...prev };
+        for (const id of stale) delete next[id];
+        return next;
+      });
+    }
+  }, [vote.proposals, savedDrafts]);
+
+  const handleOpenRound = React.useCallback(async (proposalId: string) => {
+    await handleSaveDraft(proposalId);
     const adapter = await getPersistenceAdapter();
     const freshVote = await adapter.getVoteById(vote.id);
     const sourceVote = freshVote || vote;
     const proposal = sourceVote.proposals.find((p) => p.id === proposalId);
     const inheritContent = proposal?.content || "";
     await openRound(proposalId, moderatorDisplayName, inheritContent);
-  };
+  }, [handleSaveDraft, openRound, vote, moderatorDisplayName]);
 
   const handleCloseRound = async (loopId: string) => {
     const loop = loops.find((l) => l.id === loopId);
@@ -78,25 +117,6 @@ const LoopPanel: React.FC<{
       await adapter.updateVote(vote.id, { proposals: updatedProposals });
     }
   };
-
-  const voteRef = React.useRef(vote);
-  voteRef.current = vote;
-  const handleUpdateProposal = React.useCallback(async (proposalId: string, content: string) => {
-    if (proposalUpdateTimerRef.current[proposalId]) {
-      clearTimeout(proposalUpdateTimerRef.current[proposalId]);
-    }
-    proposalUpdateTimerRef.current[proposalId] = setTimeout(async () => {
-      const v = voteRef.current;
-      const adapter = await getPersistenceAdapter();
-      const freshVote = await adapter.getVoteById(v.id);
-      const sourceVote = freshVote || v;
-      const updatedProposals = sourceVote.proposals.map((p) =>
-        p.id === proposalId ? { ...p, content } : p
-      );
-      await adapter.updateVote(v.id, { proposals: updatedProposals });
-      eventBus.publish("votesChanged");
-    }, 500);
-  }, []);
 
   return (
     <div className="space-y-4">
@@ -132,7 +152,9 @@ const LoopPanel: React.FC<{
           .sort((a, b) => a.roundNumber - b.roundNumber);
         const currentOpenLoop = proposalLoops.find((l) => !l.closedAt);
         const canOpenNewRound = isOpen && !currentOpenLoop;
-        const currentDraft = proposal.content || "";
+        const hasDraftChange = draftChanges[proposal.id] !== undefined;
+        const isSavingThis = !!savingDraft[proposal.id];
+        const currentDraft = hasDraftChange ? draftChanges[proposal.id]! : (savedDrafts[proposal.id] || proposal.content || "");
 
         if (activeProposals.length > 1 && proposal.id !== expandedProposalId) {
           return null;
@@ -181,15 +203,32 @@ const LoopPanel: React.FC<{
                   <Label className="text-sm font-medium">
                     {t.labels.currentRoundProposal} — {t.labels.round} {proposalLoops.length + 1}
                   </Label>
-                  <span className="text-xs text-blue-500 font-medium">
-                    Editable before starting round
+                  <span className={`text-xs font-medium ${hasDraftChange ? "text-amber-600" : "text-blue-500"}`}>
+                    {hasDraftChange ? t.labels.draftUnsaved : "Editable before starting round"}
                   </span>
                 </div>
                 <BlockNoteProposalEditor
                   value={currentDraft}
-                  onChange={(json) => handleUpdateProposal(proposal.id, json)}
+                  onChange={(json) => handleDraftChange(proposal.id, json)}
                   placeholder="Modify the proposal text for the next round..."
                 />
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => handleSaveDraft(proposal.id)}
+                    disabled={!hasDraftChange || isSavingThis}
+                    variant={hasDraftChange ? "default" : "outline"}
+                    className={hasDraftChange ? "bg-blue-600 hover:bg-blue-700" : ""}
+                  >
+                    <Save className="w-3 h-3 mr-1" />
+                    {isSavingThis ? t.buttons.saving : t.buttons.saveDraft}
+                  </Button>
+                  {!hasDraftChange && (
+                    <span className="text-xs text-green-600 font-medium">
+                      {t.labels.draftSaved}
+                    </span>
+                  )}
+                </div>
               </div>
             ) : proposalLoops.length === 0 ? (
               <p className="text-sm text-gray-400 italic">
