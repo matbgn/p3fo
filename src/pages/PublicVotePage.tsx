@@ -1108,7 +1108,7 @@ const PublicVotePage: React.FC = () => {
                                           roundNumber={round.roundNumber}
                                         >
                                           <tr
-                                            className={isOpen ? "bg-blue-50 border-l-4 border-l-blue-400 cursor-help" : "hover:bg-gray-50 cursor-help"}
+                                            className={isOpen ? "bg-blue-50 border-l-4 border-l-blue-400" : "hover:bg-gray-50"}
                                           >
                                             <td className="py-2 px-3 border-b font-medium">
                                               {ts.labels.round} {round.roundNumber}
