@@ -368,8 +368,8 @@ const en: VotingStrings = {
   pages: {
     consultations: "Consultations",
     decisions: "Decisions",
-    newConsultation: "New Consultation",
-    newDecision: "New Decision",
+    newConsultation: "Consultation",
+    newDecision: "Decision",
     noConsultationsYet: "No consultations yet",
     noDecisionsYet: "No decisions yet",
     createConsultationDescription: "Create consultations to gather input from your audience",
