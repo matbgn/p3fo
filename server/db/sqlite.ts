@@ -1849,6 +1849,17 @@ class SqliteClient implements DbClient {
     this.db.prepare('DELETE FROM "votes" WHERE "id" = ?').run(id);
   }
 
+  async resetVote(id: string): Promise<VoteEntity | null> {
+    this.db.prepare('DELETE FROM "voteResponses" WHERE "voteId" = ?').run(id);
+    this.db.prepare('DELETE FROM "voteLoops" WHERE "voteId" = ?').run(id);
+
+    const row = this.db.prepare(`
+      UPDATE "votes" SET "config" = json_set("config", '$.phase', 'IDLE'), "outcome" = NULL, "updatedAt" = ? WHERE "id" = ? RETURNING *
+    `).get(new Date().toISOString(), id) as VoteDbRow | undefined;
+    if (!row) return null;
+    return this.mapVoteDbRowToEntity(row);
+  }
+
   async importVotes(items: VoteEntity[]): Promise<void> {
     const insertStmt = this.db.prepare(`
       INSERT INTO "votes"("id", "slug", "title", "description", "ownerId", "proposals", "config", "outcome", "linkedTaskId", "createdAt", "updatedAt")

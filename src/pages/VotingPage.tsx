@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useSearchParams } from "react-router-dom";
-import { Vote, Plus, BarChart3, Clock, Trash2, ExternalLink, Eye, Trophy, Edit, ToggleLeft, GitCompare, Shield, Share2 } from "lucide-react";
+import { Vote, Plus, BarChart3, Clock, Trash2, ExternalLink, Eye, Trophy, Edit, ToggleLeft, GitCompare, Shield, Share2, RotateCcw } from "lucide-react";
 import { useVotes, useVoteResults } from "@/hooks/useVotes";
 import { useVoteLoops } from "@/hooks/useVoteLoops";
 import { getVotingStrings } from "@/lib/voting-i18n";
@@ -13,6 +13,15 @@ import { Separator } from "@/components/ui/separator";
 import { VoteEditor } from "@/components/voting/VoteEditor";
 import { VoteResults } from "@/components/voting/VoteResults";
 import { FinalizeDialog } from "@/components/voting/FinalizeDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { LoopRoundTabs } from "@/components/voting/LoopRoundTabs";
 import { LoopRoundEditor } from "@/components/voting/LoopRoundEditor";
 import { LoopRoundControls } from "@/components/voting/LoopRoundControls";
@@ -192,17 +201,20 @@ const VoteDetailPanel: React.FC<{
   onEdit: () => void;
   onFinalize: (outcome: VoteEntity["outcome"]) => Promise<void>;
   onDelete: (id: string) => void;
+  onReset: (id: string) => void;
   onOpenPublic: (slug: string) => void;
   onPhaseChange: (id: string, phase: VoteEntity["config"]["phase"]) => void;
-}> = ({ vote, onBack, onEdit, onFinalize, onDelete, onOpenPublic, onPhaseChange }) => {
+}> = ({ vote, onBack, onEdit, onFinalize, onDelete, onReset, onOpenPublic, onPhaseChange }) => {
   const t = getVotingStrings();
   const [showFinalizeDialog, setShowFinalizeDialog] = React.useState(false);
+  const [showResetDialog, setShowResetDialog] = React.useState(false);
   const [activeDetailTab, setActiveDetailTab] = React.useState<"results" | "rounds" | "moderation">("results");
   const isDecision = vote.config.kind === "decision";
   const isFinalized = vote.config.phase === "FINALIZED";
   const canFinalize = isDecision && (vote.config.phase === "CLOSED" || vote.config.phase === "OPEN");
   const canOpen = vote.config.phase === "IDLE";
   const canClose = vote.config.phase === "OPEN";
+  const canReset = !isFinalized && !canOpen;
   const isConsentLoop = vote.config.mode === "CONSENT_LOOP";
 
   const { loops, openRound, closeRound, updateRoundContent } = useVoteLoops(vote.id);
@@ -271,7 +283,18 @@ const VoteDetailPanel: React.FC<{
               <QRCodeBlock slug={vote.slug} />
             </PopoverContent>
           </Popover>
-          {!isFinalized && (
+        {canReset && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setShowResetDialog(true)}
+            className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+          >
+            <RotateCcw className="w-4 h-4 mr-1" />
+            {t.buttons.reset}
+          </Button>
+        )}
+        {!isFinalized && (
             <Button variant="ghost" size="sm" onClick={onEdit} title="Edit">
               <Edit className="w-4 h-4" />
             </Button>
@@ -394,6 +417,28 @@ const VoteDetailPanel: React.FC<{
         vote={vote}
         onFinalize={onFinalize}
       />
+
+      <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <AlertDialogContent>
+          <AlertDialogTitle>{t.buttons.reset}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {t.messages.resetConfirm}
+            <span className="block mt-2 text-orange-600 font-medium">{t.messages.resetWarning}</span>
+          </AlertDialogDescription>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t.buttons.cancel}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                onReset(vote.id);
+                setShowResetDialog(false);
+              }}
+              className="bg-orange-600 hover:bg-orange-700"
+            >
+              {t.buttons.reset}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
@@ -402,7 +447,7 @@ const VotingPage: React.FC = () => {
   const t = getVotingStrings();
   const [activeTab, setActiveTab] = React.useState<VotingTab>("consultations");
   const kind: VoteKind = activeTab === "consultations" ? "consultation" : "decision";
-  const { votes, isLoading, createVote, updateVote, deleteVote, finalizeVote } = useVotes({ kind });
+  const { votes, isLoading, createVote, updateVote, deleteVote, finalizeVote, resetVote } = useVotes({ kind });
 
   const [selectedVote, setSelectedVote] = React.useState<VoteEntity | null>(null);
   const [editorOpen, setEditorOpen] = React.useState(false);
@@ -476,6 +521,13 @@ const VotingPage: React.FC = () => {
     }
   };
 
+  const handleReset = async (id: string) => {
+    const updated = await resetVote(id);
+    if (updated && selectedVote?.id === id) {
+      setSelectedVote(updated);
+    }
+  };
+
   const handleOpenPublic = (slug: string) => {
     window.open(`${window.location.origin}/v/${slug}`, "_blank");
   };
@@ -490,6 +542,7 @@ const VotingPage: React.FC = () => {
           onEdit={handleEditVote}
           onFinalize={handleFinalize}
           onDelete={handleDelete}
+          onReset={handleReset}
           onOpenPublic={handleOpenPublic}
           onPhaseChange={handlePhaseChange}
         />

@@ -91,6 +91,21 @@ const deleteVote = async (id: string): Promise<void> => {
   }
 };
 
+const resetVote = async (id: string): Promise<VoteEntity | null> => {
+  try {
+    const adapter = await getPersistenceAdapter();
+    const updated = await adapter.resetVote(id);
+    if (updated) {
+      votes = votes.map(v => v.id === id ? updated : v);
+      eventBus.publish("votesChanged");
+    }
+    return updated;
+  } catch (error) {
+    console.error("Error resetting vote:", error);
+    return null;
+  }
+};
+
 const submitVoteResponse = async (voteIdOrSlug: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity | null> => {
   try {
     const adapter = await getPersistenceAdapter();
@@ -149,6 +164,7 @@ export const useVotes = (opts?: { linkedTaskId?: string; ownerId?: string; kind?
     updateVote,
     finalizeVote,
     deleteVote,
+    resetVote,
   };
 };
 

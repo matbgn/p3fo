@@ -678,6 +678,21 @@ app.delete('/api/votes/:id', async (req: Request, res: Response) => {
   }
 });
 
+app.post('/api/votes/:id/reset', async (req: Request, res: Response) => {
+  try {
+    const reset = await db.resetVote(req.params.id);
+    if (!reset) {
+      res.status(404).json({ error: 'Vote not found' });
+      return;
+    }
+    res.json(reset);
+  } catch (error: unknown) {
+    console.error('Error resetting vote:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to reset vote', details: message });
+  }
+});
+
 // Vote responses (public)
 app.post('/api/votes/:idOrSlug/responses', async (req: Request, res: Response) => {
   try {

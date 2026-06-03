@@ -1677,6 +1677,18 @@ class PostgresClient implements DbClient {
     await this.pool.query('DELETE FROM "votes" WHERE "id" = $1', [id]);
   }
 
+  async resetVote(id: string): Promise<VoteEntity | null> {
+    await this.pool.query('DELETE FROM "voteResponses" WHERE "voteId" = $1', [id]);
+    await this.pool.query('DELETE FROM "voteLoops" WHERE "voteId" = $1', [id]);
+
+    const result = await this.pool.query(
+      `UPDATE "votes" SET "config" = jsonb_set("config", '{phase}', '"IDLE"'), "outcome" = NULL, "updatedAt" = $1 WHERE "id" = $2 RETURNING *`,
+      [new Date().toISOString(), id],
+    );
+    if (result.rows.length === 0) return null;
+    return this.mapVoteDbRowToEntity(result.rows[0]);
+  }
+
   async importVotes(items: VoteEntity[]): Promise<void> {
     const client = await this.pool.connect();
     try {

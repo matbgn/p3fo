@@ -938,6 +938,43 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
   }
 
+  async resetVote(id: string): Promise<VoteEntity | null> {
+    if (typeof window === 'undefined') {
+      throw new Error('Cannot reset vote in non-browser environment');
+    }
+
+    try {
+      const votes = await this.listVotes();
+      const index = votes.findIndex(v => v.id === id);
+      if (index === -1) return null;
+
+      votes[index] = {
+        ...votes[index],
+        config: { ...votes[index].config, phase: 'IDLE' },
+        outcome: undefined,
+        updatedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(VOTES_STORAGE_KEY, JSON.stringify(votes));
+
+      const storedResponses = localStorage.getItem(VOTE_RESPONSES_STORAGE_KEY);
+      if (storedResponses) {
+        const all: VoteResponseEntity[] = JSON.parse(storedResponses);
+        localStorage.setItem(VOTE_RESPONSES_STORAGE_KEY, JSON.stringify(all.filter(r => r.voteId !== id)));
+      }
+
+      const storedLoops = localStorage.getItem(VOTE_LOOPS_STORAGE_KEY);
+      if (storedLoops) {
+        const all: VoteLoop[] = JSON.parse(storedLoops);
+        localStorage.setItem(VOTE_LOOPS_STORAGE_KEY, JSON.stringify(all.filter(l => l.voteId !== id)));
+      }
+
+      return votes[index];
+    } catch (error) {
+      console.error('Error resetting vote in localStorage:', error);
+      throw error;
+    }
+  }
+
   async importVotes(items: VoteEntity[]): Promise<void> {
     if (typeof window === 'undefined') return;
     try {

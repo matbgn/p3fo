@@ -216,6 +216,7 @@ export interface PersistenceAdapter {
   updateVote(id: string, patch: Partial<VoteEntity>): Promise<VoteEntity | null>;
   finalizeVote(id: string, outcome: VoteEntity['outcome']): Promise<VoteEntity | null>;
   deleteVote(id: string): Promise<void>;
+  resetVote(id: string): Promise<VoteEntity | null>;
   importVotes(items: VoteEntity[]): Promise<void>;
 
   // Vote responses

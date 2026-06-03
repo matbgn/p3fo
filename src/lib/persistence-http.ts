@@ -401,6 +401,12 @@ export class HttpApiPersistence implements PersistenceAdapter {
     await this.makeRequest(`/api/votes/${id}`, { method: 'DELETE' });
   }
 
+  async resetVote(id: string): Promise<VoteEntity | null> {
+    return this.makeRequest(`/api/votes/${id}/reset`, {
+      method: 'POST',
+    });
+  }
+
   async importVotes(items: VoteEntity[]): Promise<void> {
     await this.makeRequest('/api/votes/import', {
       method: 'POST',

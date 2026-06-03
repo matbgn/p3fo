@@ -40,6 +40,7 @@ type VotingStrings = {
     show: string;
     hide: string;
     share: string;
+    reset: string;
   };
   labels: {
     voting: string;
@@ -141,6 +142,8 @@ type VotingStrings = {
     consentLoopBlocked: string;
     tieNoDecision: string;
     allocatePointsBudget: string;
+    resetConfirm: string;
+    resetWarning: string;
   };
   placeholders: {
     title: string;
@@ -247,6 +250,7 @@ const en: VotingStrings = {
     show: "Show",
     hide: "Hide",
     share: "Share",
+    reset: "Reset",
   },
   labels: {
     voting: "Voting",
@@ -348,6 +352,8 @@ const en: VotingStrings = {
     consentLoopBlocked: "Blocked — objection(s) could not be integrated",
     tieNoDecision: "Tie — no decision reached",
     allocatePointsBudget: "Allocate points across proposals, then submit all at once.",
+    resetConfirm: "Reset this vote? All responses and loop rounds will be permanently deleted.",
+    resetWarning: "This will delete all votes and rounds, and revert the vote to Draft. This cannot be undone.",
   },
   placeholders: {
     title: "What should we decide?",
@@ -454,6 +460,7 @@ const fr: VotingStrings = {
     show: "Afficher",
     hide: "Masquer",
     share: "Partager",
+    reset: "R\u00e9initialiser",
   },
   labels: {
     voting: "Vote",
@@ -555,6 +562,8 @@ const fr: VotingStrings = {
     consentLoopBlocked: "Bloqu\u00e9 \u2014 des objections n'ont pas pu \u00eatre int\u00e9gr\u00e9es",
     tieNoDecision: "\u00c9galit\u00e9 \u2014 aucune d\u00e9cision atteinte",
     allocatePointsBudget: "R\u00e9partissez les points entre les propositions, puis soumettez-les tous en une fois.",
+    resetConfirm: "R\u00e9initialiser ce vote\u00a0? Toutes les r\u00e9ponses et les tours seront d\u00e9finitivement supprim\u00e9s.",
+    resetWarning: "Cela supprimera tous les votes et les tours, et r\u00e9tablira le vote en Brouillon. Cette action est irr\u00e9versible.",
   },
   placeholders: {
     title: "Que devons-nous d\u00e9cider\u00a0?",
