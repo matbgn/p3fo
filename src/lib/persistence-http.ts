@@ -289,7 +289,7 @@ export class HttpApiPersistence implements PersistenceAdapter {
     // For now, let's assume we can import at module level.
     // But since this is a class method, let's use the valid imports.
     try {
-      const { doc, yTasks, yUserSettings, yFertilizationState, yFertilizationCards, yFertilizationColumns, yDreamState, yDreamCards, yDreamColumns, yCircles, yFrameworks, ySystemState } = await import('./collaboration');
+      const { doc, yTasks, yUserSettings, yFertilizationState, yFertilizationCards, yFertilizationColumns, yDreamState, yDreamCards, yDreamColumns, yCircles, yFrameworks, ySystemState, yVoteProposals, yVoteLoops, yVoteResponses } = await import('./collaboration');
       doc.transact(() => {
         yTasks.clear();
         yUserSettings.clear();
@@ -301,6 +301,9 @@ export class HttpApiPersistence implements PersistenceAdapter {
         yDreamColumns.clear();
         yCircles.clear();
         yFrameworks.clear();
+        yVoteProposals.clear();
+        yVoteLoops.clear();
+        yVoteResponses.clear();
         ySystemState.set('command', { type: 'CLEAR_ALL', timestamp: Date.now() });
       });
       console.log('Cleared Yjs shared documents and broadcasted CLEAR_ALL command');

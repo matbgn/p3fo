@@ -1,6 +1,6 @@
 type EventHandler = (data?: unknown) => void;
 
-const BATCHED_EVENTS = new Set(["tasksChanged", "userSettingsChanged", "appSettingsChanged"]);
+const BATCHED_EVENTS = new Set(["tasksChanged", "userSettingsChanged", "appSettingsChanged", "voteResponsesChanged", "voteLoopsChanged"]);
 const DEBOUNCE_MS = 100;
 
 class EventBus {

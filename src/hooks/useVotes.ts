@@ -2,14 +2,90 @@ import * as React from "react";
 import { eventBus } from "@/lib/events";
 import { VoteEntity, VoteResponseEntity, VoteKind } from "@/lib/persistence-types";
 import { getPersistenceAdapter } from "@/lib/persistence-factory";
+import { yVoteProposals, yVoteResponses, initializeCollaboration, isCollaborationEnabled, doc } from "@/lib/collaboration";
+import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
 
 let votes: VoteEntity[] = [];
+
+if (!PERSISTENCE_CONFIG.FORCE_BROWSER) {
+  initializeCollaboration();
+}
+
+const parseYjsValue = (v: unknown): VoteEntity | null => {
+  if (!v) return null;
+  if (typeof v === "object" && v !== null && "toJSON" in v) return (v as { toJSON: () => VoteEntity }).toJSON() as VoteEntity;
+  return JSON.parse(JSON.stringify(v)) as VoteEntity;
+};
+
+const parseYjsResponseValue = (v: unknown): VoteResponseEntity | null => {
+  if (!v) return null;
+  if (typeof v === "object" && v !== null && "toJSON" in v) return (v as { toJSON: () => VoteResponseEntity }).toJSON() as VoteResponseEntity;
+  return JSON.parse(JSON.stringify(v)) as VoteResponseEntity;
+};
+
+const syncVoteToYjs = (id: string, vote: VoteEntity) => {
+  if (isCollaborationEnabled()) {
+    yVoteProposals.set(id, vote);
+  }
+};
+
+export const syncResponsesToYjs = (voteId: string, responses: VoteResponseEntity[]) => {
+  if (!isCollaborationEnabled()) return;
+  doc.transact(() => {
+    const keysToDelete: string[] = [];
+    yVoteResponses.forEach((v, k) => {
+      const parsed = parseYjsResponseValue(v);
+      if (parsed && parsed.voteId === voteId && !responses.some(r => r.id === parsed.id)) {
+        keysToDelete.push(k as string);
+      }
+    });
+    keysToDelete.forEach(k => yVoteResponses.delete(k));
+    responses.forEach(r => yVoteResponses.set(r.id, r));
+  });
+};
+
+const syncVotesToYjs = () => {
+  if (!isCollaborationEnabled()) return;
+  doc.transact(() => {
+    const currentIds = Array.from(yVoteProposals.keys()) as string[];
+    const newIds = votes.map(v => v.id);
+    currentIds.forEach(id => {
+      if (!newIds.includes(id)) {
+        yVoteProposals.delete(id);
+      }
+    });
+    votes.forEach(vote => {
+      yVoteProposals.set(vote.id, vote);
+    });
+  });
+};
+
+const syncResponseToYjs = (response: VoteResponseEntity) => {
+  if (isCollaborationEnabled()) {
+    yVoteResponses.set(response.id, response);
+  }
+};
+
+if (isCollaborationEnabled()) {
+  yVoteProposals.observe(() => {
+    const newVotes = (Array.from(yVoteProposals.values()) as unknown[])
+      .map(v => parseYjsValue(v))
+      .filter((v): v is VoteEntity => v !== null);
+    votes = newVotes;
+    eventBus.publish("votesChanged");
+  });
+
+  yVoteResponses.observe(() => {
+    eventBus.publish("voteResponsesChanged");
+  });
+}
 
 const loadVotes = async (opts?: { linkedTaskId?: string; ownerId?: string; kind?: VoteKind }): Promise<VoteEntity[]> => {
   try {
     const adapter = await getPersistenceAdapter();
     votes = await adapter.listVotes(opts);
     eventBus.publish("votesChanged");
+    syncVotesToYjs();
     return votes;
   } catch (error) {
     console.error("Error loading votes:", error);
@@ -42,6 +118,7 @@ const createVote = async (input: Partial<VoteEntity>): Promise<VoteEntity | null
     const adapter = await getPersistenceAdapter();
     const vote = await adapter.createVote(input);
     votes = [...votes, vote];
+    syncVoteToYjs(vote.id, vote);
     eventBus.publish("votesChanged");
     return vote;
   } catch (error) {
@@ -56,6 +133,7 @@ const updateVote = async (id: string, patch: Partial<VoteEntity>): Promise<VoteE
     const updated = await adapter.updateVote(id, patch);
     if (updated) {
       votes = votes.map(v => v.id === id ? updated : v);
+      syncVoteToYjs(id, updated);
       eventBus.publish("votesChanged");
     }
     return updated;
@@ -71,6 +149,7 @@ const finalizeVote = async (id: string, outcome: VoteEntity['outcome']): Promise
     const updated = await adapter.finalizeVote(id, outcome);
     if (updated) {
       votes = votes.map(v => v.id === id ? updated : v);
+      syncVoteToYjs(id, updated);
       eventBus.publish("votesChanged");
     }
     return updated;
@@ -85,6 +164,9 @@ const deleteVote = async (id: string): Promise<void> => {
     const adapter = await getPersistenceAdapter();
     await adapter.deleteVote(id);
     votes = votes.filter(v => v.id !== id);
+    if (isCollaborationEnabled()) {
+      yVoteProposals.delete(id);
+    }
     eventBus.publish("votesChanged");
   } catch (error) {
     console.error("Error deleting vote:", error);
@@ -97,6 +179,7 @@ const resetVote = async (id: string): Promise<VoteEntity | null> => {
     const updated = await adapter.resetVote(id);
     if (updated) {
       votes = votes.map(v => v.id === id ? updated : v);
+      syncVoteToYjs(id, updated);
       eventBus.publish("votesChanged");
     }
     return updated;
@@ -172,10 +255,21 @@ export const useVoteResults = (voteId: string) => {
   const [responses, setResponses] = React.useState<VoteResponseEntity[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
 
+  const fetchResults = React.useCallback(async () => {
+    try {
+      const adapter = await getPersistenceAdapter();
+      const result = await adapter.listVoteResponses(voteId);
+      setResponses(result);
+      syncResponsesToYjs(voteId, result);
+    } catch (error) {
+      console.error("Error loading vote results:", error);
+    }
+  }, [voteId]);
+
   React.useEffect(() => {
     let mounted = true;
 
-    const fetchResults = async () => {
+    const initialFetch = async () => {
       setIsLoading(true);
       try {
         const adapter = await getPersistenceAdapter();
@@ -184,31 +278,40 @@ export const useVoteResults = (voteId: string) => {
           setResponses(result);
           setIsLoading(false);
         }
+        syncResponsesToYjs(voteId, result);
       } catch (error) {
         console.error("Error loading vote results:", error);
         if (mounted) setIsLoading(false);
       }
     };
 
-    fetchResults();
+    initialFetch();
 
-    const interval = setInterval(fetchResults, 5000);
+    const yjsHandler = () => {
+      if (!mounted) return;
+      const allResponses = (Array.from(yVoteResponses.values()) as unknown[])
+        .map(v => parseYjsResponseValue(v))
+        .filter((v): v is VoteResponseEntity => v !== null);
+      const voteResponses = allResponses.filter(r => r.voteId === voteId);
+      setResponses(voteResponses);
+    };
 
+    if (isCollaborationEnabled()) {
+      yVoteResponses.observe(yjsHandler);
+      return () => {
+        mounted = false;
+        yVoteResponses.unobserve(yjsHandler);
+      };
+    }
+
+    const interval = setInterval(initialFetch, 5000);
     return () => {
       mounted = false;
       clearInterval(interval);
     };
   }, [voteId]);
 
-  return { responses, isLoading, refetch: async () => {
-    try {
-      const adapter = await getPersistenceAdapter();
-      const result = await adapter.listVoteResponses(voteId);
-      setResponses(result);
-    } catch (error) {
-      console.error("Error refetching vote results:", error);
-    }
-  }};
+  return { responses, isLoading, refetch: fetchResults };
 };
 
 export const useVoterToken = (slug: string) => {

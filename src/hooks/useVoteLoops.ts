@@ -1,6 +1,46 @@
 import * as React from "react";
 import { VoteLoop } from "@/lib/persistence-types";
 import { getPersistenceAdapter } from "@/lib/persistence-factory";
+import { yVoteLoops, initializeCollaboration, isCollaborationEnabled, doc } from "@/lib/collaboration";
+import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
+import { eventBus } from "@/lib/events";
+
+if (!PERSISTENCE_CONFIG.FORCE_BROWSER) {
+  initializeCollaboration();
+}
+
+const parseYjsLoopValue = (v: unknown): VoteLoop | null => {
+  if (!v) return null;
+  if (typeof v === "object" && v !== null && "toJSON" in v) return (v as { toJSON: () => VoteLoop }).toJSON() as VoteLoop;
+  return JSON.parse(JSON.stringify(v)) as VoteLoop;
+};
+
+const syncLoopToYjs = (loop: VoteLoop) => {
+  if (isCollaborationEnabled()) {
+    yVoteLoops.set(loop.id, loop);
+  }
+};
+
+const syncLoopsToYjs = (voteId: string, loops: VoteLoop[]) => {
+  if (!isCollaborationEnabled()) return;
+  doc.transact(() => {
+    const keysToDelete: string[] = [];
+    yVoteLoops.forEach((v, k) => {
+      const parsed = parseYjsLoopValue(v);
+      if (parsed && parsed.voteId === voteId && !loops.some(l => l.id === parsed.id)) {
+        keysToDelete.push(k as string);
+      }
+    });
+    keysToDelete.forEach(k => yVoteLoops.delete(k));
+    loops.forEach(l => yVoteLoops.set(l.id, l));
+  });
+};
+
+if (isCollaborationEnabled()) {
+  yVoteLoops.observe(() => {
+    eventBus.publish("voteLoopsChanged");
+  });
+}
 
 export const useVoteLoops = (voteId: string) => {
   const [loops, setLoops] = React.useState<VoteLoop[]>([]);
@@ -11,6 +51,7 @@ export const useVoteLoops = (voteId: string) => {
       const adapter = await getPersistenceAdapter();
       const result = await adapter.listVoteLoops(voteId);
       setLoops(result);
+      syncLoopsToYjs(voteId, result);
       return result;
     } catch (error) {
       console.error("Error loading vote loops:", error);
@@ -21,7 +62,7 @@ export const useVoteLoops = (voteId: string) => {
   React.useEffect(() => {
     let mounted = true;
 
-    const fetchLoops = async () => {
+    const initialFetch = async () => {
       setIsLoading(true);
       try {
         const adapter = await getPersistenceAdapter();
@@ -30,16 +71,33 @@ export const useVoteLoops = (voteId: string) => {
           setLoops(result);
           setIsLoading(false);
         }
+        syncLoopsToYjs(voteId, result);
       } catch (error) {
         console.error("Error loading vote loops:", error);
         if (mounted) setIsLoading(false);
       }
     };
 
-    fetchLoops();
+    initialFetch();
 
-    const interval = setInterval(fetchLoops, 5000);
+    const yjsHandler = () => {
+      if (!mounted) return;
+      const allLoops = (Array.from(yVoteLoops.values()) as unknown[])
+        .map(v => parseYjsLoopValue(v))
+        .filter((v): v is VoteLoop => v !== null);
+      const voteLoops = allLoops.filter(l => l.voteId === voteId);
+      setLoops(voteLoops);
+    };
 
+    if (isCollaborationEnabled()) {
+      yVoteLoops.observe(yjsHandler);
+      return () => {
+        mounted = false;
+        yVoteLoops.unobserve(yjsHandler);
+      };
+    }
+
+    const interval = setInterval(initialFetch, 5000);
     return () => {
       mounted = false;
       clearInterval(interval);
@@ -55,6 +113,7 @@ export const useVoteLoops = (voteId: string) => {
       const adapter = await getPersistenceAdapter();
       const freshLoops = await adapter.listVoteLoops(voteId);
       setLoops(freshLoops);
+      syncLoopsToYjs(voteId, freshLoops);
       const existingProposalLoops = freshLoops.filter((l) => l.proposalId === proposalId);
       const loop = await adapter.createVoteLoop(voteId, {
         proposalId,
@@ -64,6 +123,7 @@ export const useVoteLoops = (voteId: string) => {
         roundNumber: existingProposalLoops.length + 1,
       });
       setLoops((prev) => [...prev, loop]);
+      syncLoopToYjs(loop);
       return loop;
     } catch (error) {
       console.error("Error opening round:", error);
@@ -77,6 +137,7 @@ export const useVoteLoops = (voteId: string) => {
       const updated = await adapter.closeVoteLoop(loopId);
       if (updated) {
         setLoops((prev) => prev.map((l) => (l.id === loopId ? updated : l)));
+        syncLoopToYjs(updated);
       }
       return updated;
     } catch (error) {
@@ -96,6 +157,7 @@ export const useVoteLoops = (voteId: string) => {
       });
       if (updated) {
         setLoops((prev) => prev.map((l) => (l.id === loopId ? updated : l)));
+        syncLoopToYjs(updated);
       }
       return updated;
     } catch (error) {

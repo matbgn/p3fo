@@ -10,6 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import QRCodeBlock from "@/components/voting/QRCodeBlock";
+import { LoopRoundProposalTooltip } from "@/components/voting/LoopRoundProposalTooltip";
+import { yVoteProposals, yVoteLoops, yVoteResponses, isCollaborationEnabled, initializeCollaboration } from "@/lib/collaboration";
+import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
+import { syncResponsesToYjs } from "@/hooks/useVotes";
 import {
   Vote,
   Trophy,
@@ -28,6 +32,28 @@ import {
   ChevronUp,
   X,
 } from "lucide-react";
+
+if (!PERSISTENCE_CONFIG.FORCE_BROWSER) {
+  initializeCollaboration();
+}
+
+const parseYjsValue = (v: unknown): VoteEntity | null => {
+  if (!v) return null;
+  if (typeof v === "object" && v !== null && "toJSON" in v) return (v as { toJSON: () => VoteEntity }).toJSON() as VoteEntity;
+  return JSON.parse(JSON.stringify(v)) as VoteEntity;
+};
+
+const parseYjsLoopValue = (v: unknown): VoteLoop | null => {
+  if (!v) return null;
+  if (typeof v === "object" && v !== null && "toJSON" in v) return (v as { toJSON: () => VoteLoop }).toJSON() as VoteLoop;
+  return JSON.parse(JSON.stringify(v)) as VoteLoop;
+};
+
+const parseYjsResponseValue = (v: unknown): VoteResponseEntity | null => {
+  if (!v) return null;
+  if (typeof v === "object" && v !== null && "toJSON" in v) return (v as { toJSON: () => VoteResponseEntity }).toJSON() as VoteResponseEntity;
+  return JSON.parse(JSON.stringify(v)) as VoteResponseEntity;
+};
 
 
 
@@ -171,10 +197,43 @@ const PublicVotePage: React.FC = () => {
   const [pointsBudget, setPointsBudget] = React.useState<Record<string, number>>({});
   const [audienceProposalText, setAudienceProposalText] = React.useState("");
   const [showPrevRounds, setShowPrevRounds] = React.useState(false);
-  const [refreshKey, setRefreshKey] = React.useState(0);
+
   const [loops, setLoops] = React.useState<VoteLoop[]>([]);
 
+  const loopById = React.useMemo(() => {
+    const m = new Map<string, VoteLoop>();
+    for (const l of loops) m.set(l.id, l);
+    return m;
+  }, [loops]);
+
+  const voteRef = React.useRef(vote);
+  voteRef.current = vote;
+
   const voterToken = slug ? ensureVoterToken(slug) : "";
+
+  const refreshData = React.useCallback(async () => {
+    if (!slug || !vote) return;
+    const [r, v] = await Promise.all([fetchResults(slug), fetchVote(slug)]);
+    if (r) {
+      setResponses(r.responses);
+      if (isCollaborationEnabled() && v) {
+        syncResponsesToYjs(v.id, r.responses);
+      }
+    }
+    if (v) {
+      setVote(v);
+      if (isCollaborationEnabled()) {
+        yVoteProposals.set(v.id, v);
+      }
+    }
+    if (v && v.config.mode === "CONSENT_LOOP") {
+      const loopData = await fetchLoops(v.id);
+      setLoops(loopData);
+      if (isCollaborationEnabled()) {
+        loopData.forEach(l => yVoteLoops.set(l.id, l));
+      }
+    }
+  }, [slug, vote]);
 
   const voteNotFoundMsg = ts.messages.voteNotFound;
 
@@ -191,11 +250,17 @@ const PublicVotePage: React.FC = () => {
         return;
       }
       setVote(v);
+      if (isCollaborationEnabled()) {
+        yVoteProposals.set(v.id, v);
+      }
 
       const r = await fetchResults(slug);
       if (!mounted) return;
       if (r) {
         setResponses(r.responses);
+        if (isCollaborationEnabled()) {
+          syncResponsesToYjs(v.id, r.responses);
+        }
         const myToken = getVoterToken(slug);
         if (myToken) {
           const myResponses = r.responses.filter((x) => x.voterToken === myToken);
@@ -212,34 +277,82 @@ const PublicVotePage: React.FC = () => {
 
       if (v.config.mode === "CONSENT_LOOP") {
         const loopData = await fetchLoops(v.id);
-        if (mounted) setLoops(loopData);
+        if (mounted) {
+          setLoops(loopData);
+          if (isCollaborationEnabled()) {
+            loopData.forEach(l => yVoteLoops.set(l.id, l));
+          }
+        }
       }
       setIsLoading(false);
     };
     load();
-    const interval = setInterval(() => setRefreshKey((k) => k + 1), 5000);
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, [slug, voteNotFoundMsg]);
 
-  React.useEffect(() => {
-    if (!slug || !vote) return;
-    let mounted = true;
-    const refresh = async () => {
-      const [r, v] = await Promise.all([fetchResults(slug), fetchVote(slug)]);
+    const yjsVoteHandler = () => {
       if (!mounted) return;
-      if (r) setResponses(r.responses);
-      if (v) setVote(v);
-      if (v && v.config.mode === "CONSENT_LOOP") {
-        const loopData = await fetchLoops(v.id);
-        if (mounted) setLoops(loopData);
+      if (isCollaborationEnabled()) {
+        const allVotes = (Array.from(yVoteProposals.values()) as unknown[])
+          .map(v => parseYjsValue(v))
+          .filter((v): v is VoteEntity => v !== null);
+        const matched = allVotes.find(vt => vt.slug === slug);
+        if (matched) setVote(matched);
       }
     };
-    refresh();
-    return () => { mounted = false; };
-  }, [refreshKey, slug, vote]);
+
+    const yjsResponseHandler = () => {
+      if (!mounted) return;
+      if (isCollaborationEnabled()) {
+        const allResponses = (Array.from(yVoteResponses.values()) as unknown[])
+          .map(v => parseYjsResponseValue(v))
+          .filter((v): v is VoteResponseEntity => v !== null);
+        const currentVoteId = voteRef.current?.id;
+        if (currentVoteId) {
+          setResponses(allResponses.filter(r => r.voteId === currentVoteId));
+        }
+      }
+    };
+
+    const yjsLoopHandler = () => {
+      if (!mounted) return;
+      if (isCollaborationEnabled()) {
+        const allLoops = (Array.from(yVoteLoops.values()) as unknown[])
+          .map(v => parseYjsLoopValue(v))
+          .filter((v): v is VoteLoop => v !== null);
+        const currentVoteId = voteRef.current?.id;
+        if (currentVoteId) {
+          setLoops(allLoops.filter(l => l.voteId === currentVoteId));
+        }
+      }
+    };
+
+    if (isCollaborationEnabled()) {
+      yVoteProposals.observe(yjsVoteHandler);
+      yVoteResponses.observe(yjsResponseHandler);
+      yVoteLoops.observe(yjsLoopHandler);
+    } else {
+      const interval = setInterval(async () => {
+        const [r, v] = await Promise.all([fetchResults(slug!), fetchVote(slug!)]);
+        if (!mounted) return;
+        if (r) setResponses(r.responses);
+        if (v) setVote(v);
+        if (v && v.config.mode === "CONSENT_LOOP") {
+          const loopData = await fetchLoops(v.id);
+          if (mounted) setLoops(loopData);
+        }
+      }, 5000);
+      return () => {
+        mounted = false;
+        clearInterval(interval);
+      };
+    }
+
+    return () => {
+      mounted = false;
+      yVoteProposals.unobserve(yjsVoteHandler);
+      yVoteResponses.unobserve(yjsResponseHandler);
+      yVoteLoops.unobserve(yjsLoopHandler);
+    };
+  }, [slug, voteNotFoundMsg]);
 
   const handleSubmitVote = async (proposalId: string, value: number, loopId?: string) => {
     if (!slug || !vote) return;
@@ -270,7 +383,7 @@ const PublicVotePage: React.FC = () => {
       } else {
         setVoterValues((prev) => ({ ...prev, [proposalId]: value }));
       }
-      setRefreshKey((k) => k + 1);
+      refreshData();
     }
   };
 
@@ -287,7 +400,7 @@ const PublicVotePage: React.FC = () => {
         }
         return next;
       });
-      setRefreshKey((k) => k + 1);
+      refreshData();
     }
   };
 
@@ -304,7 +417,7 @@ const PublicVotePage: React.FC = () => {
     }
     setHasSubmitted(true);
     setJustVoted(true);
-    setRefreshKey((k) => k + 1);
+    refreshData();
   };
 
   const handlePointsChange = (proposalId: string, delta: number) => {
@@ -329,7 +442,7 @@ const PublicVotePage: React.FC = () => {
     const result = await submitAudienceProposal(slug, audienceProposalText.trim());
     if (result) {
       setAudienceProposalText("");
-      setRefreshKey((k) => k + 1);
+      refreshData();
     }
   };
 
@@ -952,12 +1065,18 @@ const PublicVotePage: React.FC = () => {
                                       <th className="text-center py-2 px-3 border-b font-medium text-gray-600">
                                         {ts.labels.median}
                                       </th>
+                                      <th className="text-center py-2 px-3 border-b font-medium text-gray-600">
+                                        {ts.labels.status}
+                                      </th>
                                       {MJ_SCALE.map((grade) => (
                                         <th
                                           key={grade.value}
                                           className="text-center py-2 px-2 border-b font-medium text-gray-600"
                                         >
-                                          <span title={grade.label}>{grade.icon}</span>
+                                          <div className="flex items-center justify-center gap-1">
+                                            <div className={`w-3 h-3 rounded ${grade.color}`}></div>
+                                            <span className="text-[10px]">{grade.label}</span>
+                                          </div>
                                         </th>
                                       ))}
                                     </tr>
@@ -966,6 +1085,20 @@ const PublicVotePage: React.FC = () => {
                                     {proposalTally.perRound.map((round) => {
                                       const medianGrade = MJ_SCALE.find((g) => g.value === round.median);
                                       const isOpen = !round.closed;
+                                      const roundTotal = MJ_SCALE.reduce(
+                                        (sum, grade) => sum + (round.distribution[grade.value] || 0),
+                                        0
+                                      );
+                                      const roundSegments = MJ_SCALE
+                                        .map((grade) => ({
+                                          ...grade,
+                                          count: round.distribution[grade.value] || 0,
+                                          percentage:
+                                            roundTotal > 0
+                                              ? ((round.distribution[grade.value] || 0) / roundTotal) * 100
+                                              : 0,
+                                        }))
+                                        .filter((d) => d.count > 0);
                                       return (
                                         <tr
                                           key={round.loopId}
@@ -981,18 +1114,51 @@ const PublicVotePage: React.FC = () => {
                                               </span>
                                             )}
                                           </td>
-                                        {MJ_SCALE.map((grade) => {
-                                            const count = round.distribution[grade.value] || 0;
-                                            return (
-                                              <td
-                                                key={grade.value}
-                                                className="py-2 px-2 border-b text-center"
-                                                title={`${grade.label}: ${count}`}
-                                              >
-                                                <span className="font-medium text-xs">{count}</span>
-                                              </td>
-                                            );
-                                          })}
+                                          <td className="py-2 px-3 border-b text-center text-xs text-gray-500">
+                                            {isOpen ? ts.phases.OPEN : ts.phases.CLOSED}
+                                          </td>
+                                          <td
+                                            colSpan={MJ_SCALE.length}
+                                            className="py-2 px-2 border-b"
+                                          >
+                                            {roundTotal > 0 ? (
+                                              <div className="relative w-full h-6 flex rounded overflow-hidden bg-gray-100">
+                                                {roundSegments.map((item, index) => {
+                                                  const isMedian = item.value === round.median;
+                                                  const isFirst = index === 0;
+                                                  const isLast = index === roundSegments.length - 1;
+                                                  return (
+                                                    <div
+                                                      key={item.value}
+                                                      className={`h-full flex items-center justify-center relative ${item.color} ${
+                                                        isFirst ? "rounded-l" : ""
+                                                      } ${isLast ? "rounded-r" : ""} ${
+                                                        isMedian
+                                                          ? "ring-2 ring-white z-20 shadow-md scale-y-125 mx-0.5 rounded-sm origin-center"
+                                                          : ""
+                                                      }`}
+                                                      style={{ width: `${item.percentage}%` }}
+                                                      title={`${item.label}: ${item.count} votes (${item.percentage.toFixed(1)}%)`}
+                                                    >
+                                                      {item.percentage >= 10 && (
+                                                        <span
+                                                          className={`text-[10px] font-bold ${
+                                                            [1, 2].includes(item.value) ? "text-black" : "text-white"
+                                                          } drop-shadow-md`}
+                                                        >
+                                                          {item.percentage.toFixed(1)}%
+                                                        </span>
+                                                      )}
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            ) : (
+                                              <div className="w-full h-6 bg-gray-50 rounded flex items-center justify-center text-[10px] text-gray-400">
+                                                —
+                                              </div>
+                                            )}
+                                          </td>
                                         </tr>
                                       );
                                     })}
