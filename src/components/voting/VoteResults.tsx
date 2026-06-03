@@ -7,6 +7,7 @@ import { tallyThumbsUp, tallyUDNeutral, tallyPoints, tallyMajorityJudgment, tall
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { Badge } from "@/components/ui/badge";
 import { BarChart3, Users, MessageSquare, Trophy } from "lucide-react";
+import { LoopRoundProposalTooltip } from "./LoopRoundProposalTooltip";
 
 interface VoteResultsProps {
   vote: VoteEntity;
@@ -77,9 +78,16 @@ const ConsentLoopResults: React.FC<{ vote: VoteEntity }> = ({ vote }) => {
           }))
           .filter((d) => d.count > 0);
 
+        const lastLoop = openLoop || (lastClosedRound ? loops.find((l) => l.id === lastClosedRound.loopId) : undefined);
+        const proposalContent = lastLoop?.proposalContent || proposal.content;
+
         return (
-          <div
+          <LoopRoundProposalTooltip
             key={proposal.id}
+            proposalContent={proposalContent}
+            roundNumber={roundNumber}
+          >
+          <div
             className={`border rounded-lg p-3 ${
               isAdopted ? "border-green-500 bg-green-50" : isOpen ? "border-blue-400 bg-blue-50" : "bg-white"
             }`}
@@ -149,6 +157,7 @@ const ConsentLoopResults: React.FC<{ vote: VoteEntity }> = ({ vote }) => {
               </p>
             )}
           </div>
+          </LoopRoundProposalTooltip>
         );
       })}
     </div>

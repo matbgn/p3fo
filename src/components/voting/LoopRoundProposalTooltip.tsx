@@ -1,9 +1,10 @@
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { deserializeBlocks } from "./BlockNoteProposalEditor";
 import { getVotingStrings } from "@/lib/voting-i18n";
 
 interface LoopRoundProposalTooltipProps {
-  children: React.ReactNode;
+  children: React.ReactElement;
   proposalContent: string | undefined;
   roundNumber: number;
 }
@@ -32,8 +33,6 @@ export const LoopRoundProposalTooltip: React.FC<LoopRoundProposalTooltipProps> =
   const t = getVotingStrings();
   const [open, setOpen] = React.useState(false);
   const [pos, setPos] = React.useState<{ top: number; left: number; placement: "right" | "left" } | null>(null);
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  const tooltipRef = React.useRef<HTMLDivElement>(null);
   const timeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const mousePosRef = React.useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
@@ -76,22 +75,34 @@ export const LoopRoundProposalTooltip: React.FC<LoopRoundProposalTooltipProps> =
   const text = blocksToPlainText(proposalContent);
   const hasContent = text.length > 0;
 
+  const trigger = React.cloneElement(children, {
+    onMouseEnter: (e: React.MouseEvent) => {
+      show();
+      children.props.onMouseEnter?.(e);
+    },
+    onMouseLeave: (e: React.MouseEvent) => {
+      hide();
+      children.props.onMouseLeave?.(e);
+    },
+    onMouseMove: (e: React.MouseEvent) => {
+      handleMouseMove(e);
+      children.props.onMouseMove?.(e);
+    },
+    onFocus: (e: React.FocusEvent) => {
+      show();
+      children.props.onFocus?.(e);
+    },
+    onBlur: (e: React.FocusEvent) => {
+      hide();
+      children.props.onBlur?.(e);
+    },
+  });
+
   return (
     <>
-      <div
-        ref={containerRef}
-        onMouseEnter={show}
-        onMouseLeave={hide}
-        onMouseMove={handleMouseMove}
-        onFocus={show}
-        onBlur={hide}
-        className="contents"
-      >
-        {children}
-      </div>
-      {open && pos && (
+      {trigger}
+      {open && pos && createPortal(
         <div
-          ref={tooltipRef}
           className="fixed z-50 max-w-md w-72 bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-left"
           style={{ top: pos.top, left: pos.left }}
           onMouseEnter={() => {
@@ -110,7 +121,8 @@ export const LoopRoundProposalTooltip: React.FC<LoopRoundProposalTooltipProps> =
           ) : (
             <div className="text-xs text-gray-400 italic">(empty)</div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

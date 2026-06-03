@@ -1020,7 +1020,7 @@ const PublicVotePage: React.FC = () => {
                           <button
                             key={grade.value}
                             onClick={() => handleSubmitVote(proposal.id, grade.value, currentOpenLoop.id)}
-                            disabled={votedAndLocked}
+                            disabled={!!voterValues[proposal.id] && !canChangeVote}
                             className={`px-3 py-1.5 rounded-full text-xs font-medium text-white transition-colors ${
                               voterValues[proposal.id] === grade.value
                                 ? `${grade.color} ring-2 ring-offset-1 ring-gray-400`
