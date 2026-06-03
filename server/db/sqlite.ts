@@ -13,7 +13,12 @@ import type {
   CircleNodeModifier,
   ReminderEntity,
   FrameworkEntity,
-  FrameworkType
+  FrameworkType,
+  VoteEntity,
+  VoteResponseEntity,
+  VoteLoop,
+  VoteModerator,
+  VoteKind
 } from '../../src/lib/persistence-types.js';
 
 // Raw database row types (SQLite stores booleans as 0/1 integers and JSON as strings)
@@ -36,6 +41,7 @@ interface TaskDbRow {
   durationInMinutes: number | null;
   priority: number | null;
   userId: string | null;
+  linkedVoteIds: string | null;
 }
 
 interface UserSettingsDbRow {
@@ -118,6 +124,56 @@ interface FrameworkDbRow {
   updatedAt: string;
 }
 
+interface VoteDbRow {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  ownerId: string;
+  proposals: string;
+  config: string;
+  outcome: string | null;
+  linkedTaskId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface VoteResponseDbRow {
+  id: string;
+  voteId: string;
+  proposalId: string | null;
+  loopId: string | null;
+  userId: string | null;
+  voterToken: string;
+  value: number;
+  comment: string | null;
+  submittedAt: string;
+}
+
+interface VoteLoopDbRow {
+  id: string;
+  voteId: string;
+  proposalId: string;
+  roundNumber: number;
+  proposalContent: string;
+  openedAt: string;
+  closedAt: string | null;
+  openedByUserId: string;
+}
+
+interface VoteModeratorDbRow {
+  id: string;
+  voteId: string;
+  userId: string | null;
+  displayName: string;
+  email: string | null;
+  token: string;
+  addedByUserId: string;
+  addedAt: string;
+  active: number;
+  lastSeenAt: string | null;
+}
+
 // Default values
 const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
   userId: 'default-user',
@@ -186,6 +242,7 @@ class SqliteClient implements DbClient {
         "priority" INTEGER,
         "updatedAt" TEXT,
         "userId" TEXT,
+        "linkedVoteIds" TEXT,
         FOREIGN KEY("parentId") REFERENCES "tasks"("id")
       )
     `);
@@ -346,6 +403,79 @@ class SqliteClient implements DbClient {
       )
     `);
 
+    // Votes table
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS "votes" (
+        "id" TEXT PRIMARY KEY,
+        "slug" TEXT NOT NULL UNIQUE,
+        "title" TEXT NOT NULL,
+        "description" TEXT,
+        "ownerId" TEXT NOT NULL,
+        "proposals" TEXT NOT NULL DEFAULT '[]',
+        "config" TEXT NOT NULL DEFAULT '{}',
+        "outcome" TEXT,
+        "linkedTaskId" TEXT,
+        "createdAt" TEXT NOT NULL,
+        "updatedAt" TEXT NOT NULL
+      )
+    `);
+
+    // Vote responses table
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS "voteResponses" (
+        "id" TEXT PRIMARY KEY,
+        "voteId" TEXT NOT NULL REFERENCES "votes"("id") ON DELETE CASCADE,
+        "proposalId" TEXT,
+        "loopId" TEXT,
+        "userId" TEXT,
+        "voterToken" TEXT NOT NULL,
+        "value" REAL NOT NULL,
+        "comment" TEXT,
+        "submittedAt" TEXT NOT NULL
+      )
+    `);
+    // Replace legacy single-response-per-voter constraint with one that allows
+    // one response per (voter, proposal[, loop]) so multi-proposal votes work.
+    this.tryDropLegacyVoteResponseConstraint();
+    // Drop the non-COALESCE version of the new index if it was created in a
+    // previous (buggy) migration, so we can recreate it with COALESCE below.
+    this.db.exec(`DROP INDEX IF EXISTS "idx_voteResponses_voter_proposal_loop"`);
+    this.db.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "idx_voteResponses_voter_proposal_loop"
+        ON "voteResponses" ("voteId", "voterToken", COALESCE("proposalId", ''), COALESCE("loopId", ''))
+    `);
+
+    // Vote loops table (CONSENT_LOOP)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS "voteLoops" (
+        "id" TEXT PRIMARY KEY,
+        "voteId" TEXT NOT NULL REFERENCES "votes"("id") ON DELETE CASCADE,
+        "proposalId" TEXT NOT NULL,
+        "roundNumber" INTEGER NOT NULL,
+        "proposalContent" TEXT NOT NULL,
+        "openedAt" TEXT NOT NULL,
+        "closedAt" TEXT,
+        "openedByUserId" TEXT NOT NULL,
+        UNIQUE("voteId", "proposalId", "roundNumber")
+      )
+    `);
+
+    // Vote moderators table
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS "voteModerators" (
+        "id" TEXT PRIMARY KEY,
+        "voteId" TEXT NOT NULL REFERENCES "votes"("id") ON DELETE CASCADE,
+        "userId" TEXT,
+        "displayName" TEXT NOT NULL,
+        "email" TEXT,
+        "token" TEXT NOT NULL UNIQUE,
+        "addedByUserId" TEXT NOT NULL,
+        "addedAt" TEXT NOT NULL,
+        "active" INTEGER NOT NULL DEFAULT 1,
+        "lastSeenAt" TEXT
+      )
+    `);
+
     // Create indexes for performance optimization
     // These indexes dramatically improve query performance when filtering by userId, parentId, or triageStatus
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId" ON "tasks"("userId")`);
@@ -363,6 +493,16 @@ class SqliteClient implements DbClient {
     // Frameworks indexes
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_frameworks_frameworkType" ON "frameworks"("frameworkType")`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_frameworks_parentId" ON "frameworks"("parentId")`);
+
+    // Votes indexes
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_votes_slug" ON "votes"("slug")`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_votes_ownerId" ON "votes"("ownerId")`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_votes_linkedTaskId" ON "votes"("linkedTaskId")`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_voteResponses_voteId" ON "voteResponses"("voteId")`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_voteResponses_loopId" ON "voteResponses"("loopId")`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_voteLoops_voteId" ON "voteLoops"("voteId")`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_voteModerators_voteId" ON "voteModerators"("voteId")`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_voteModerators_token" ON "voteModerators"("token")`);
 
     // Reminders indexes
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_reminders_userId" ON "reminders"("userId")`);
@@ -484,6 +624,14 @@ class SqliteClient implements DbClient {
 
     // QolSurvey columns
     runMigration('qolSurvey', 'user_id', 'userId');
+
+    // Tasks linkedVoteIds column
+    addColumn('tasks', 'linkedVoteIds', 'TEXT');
+
+    // VoteLoops proposalId column (per-proposal loops)
+    addColumn('voteLoops', 'proposalId', 'TEXT NOT NULL DEFAULT \'\'');
+
+    this.tryFixVoteLoopsUniqueConstraint();
   }
 
   async testConnection(): Promise<void> {
@@ -538,6 +686,7 @@ class SqliteClient implements DbClient {
       sprintTarget: Boolean(row.sprintTarget),
       timer: row.timer ? JSON.parse(row.timer) : { startTime: null, elapsedTime: 0, isRunning: false },
       updatedAt: row.updatedAt ?? undefined,
+      linkedVoteIds: row.linkedVoteIds ? JSON.parse(row.linkedVoteIds) : undefined,
     }));
 
     return { data, total };
@@ -556,6 +705,7 @@ class SqliteClient implements DbClient {
       sprintTarget: Boolean(row.sprintTarget),
       timer: row.timer ? JSON.parse(row.timer) : { startTime: null, elapsedTime: 0, isRunning: false },
       updatedAt: row.updatedAt ?? undefined,
+      linkedVoteIds: row.linkedVoteIds ? JSON.parse(row.linkedVoteIds) : undefined,
     };
   }
 
@@ -580,6 +730,7 @@ class SqliteClient implements DbClient {
       userId: input.userId || null,
       parentId: input.parentId || null,
       children: input.children || [],
+      linkedVoteIds: input.linkedVoteIds || undefined,
     };
 
     const params = {
@@ -601,11 +752,12 @@ class SqliteClient implements DbClient {
       durationInMinutes: newTask.durationInMinutes,
       priority: newTask.priority,
       userId: newTask.userId,
+      linkedVoteIds: newTask.linkedVoteIds ? JSON.stringify(newTask.linkedVoteIds) : null,
     };
 
     this.db.prepare(`
-      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget", "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId")
-      VALUES(@id, @parentId, @title, @createdAt, @updatedAt, @triageStatus, @urgent, @impact, @majorIncident, @sprintTarget, @difficulty, @timer, @category, @terminationDate, @comment, @durationInMinutes, @priority, @userId)
+      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget", "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId", "linkedVoteIds")
+      VALUES(@id, @parentId, @title, @createdAt, @updatedAt, @triageStatus, @urgent, @impact, @majorIncident, @sprintTarget, @difficulty, @timer, @category, @terminationDate, @comment, @durationInMinutes, @priority, @userId, @linkedVoteIds)
     `).run(params);
 
     return newTask;
@@ -637,6 +789,7 @@ class SqliteClient implements DbClient {
       durationInMinutes: updated.durationInMinutes,
       priority: updated.priority,
       userId: updated.userId,
+      linkedVoteIds: updated.linkedVoteIds ? JSON.stringify(updated.linkedVoteIds) : null,
     };
 
     this.db.prepare(`
@@ -656,7 +809,8 @@ class SqliteClient implements DbClient {
         "comment" = @comment,
         "durationInMinutes" = @durationInMinutes,
         "priority" = @priority,
-        "userId" = @userId
+        "userId" = @userId,
+        "linkedVoteIds" = @linkedVoteIds
       WHERE "id" = @id
         `).run(params);
 
@@ -1561,6 +1715,636 @@ class SqliteClient implements DbClient {
     };
   }
 
+  // Votes
+  async getVotes(opts?: { linkedTaskId?: string; ownerId?: string; kind?: VoteKind }): Promise<VoteEntity[]> {
+    const conditions: string[] = [];
+    const params: string[] = [];
+
+    if (opts?.linkedTaskId) {
+      conditions.push('"linkedTaskId" = ?');
+      params.push(opts.linkedTaskId);
+    }
+    if (opts?.ownerId) {
+      conditions.push('"ownerId" = ?');
+      params.push(opts.ownerId);
+    }
+    if (opts?.kind) {
+      conditions.push("json_extract(\"config\", '$.kind') = ?");
+      params.push(opts.kind);
+    }
+
+    const whereClause = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
+    const rows = this.db.prepare(`SELECT * FROM "votes"${whereClause} ORDER BY "createdAt" DESC`).all(...params) as unknown as VoteDbRow[];
+    return rows.map(row => this.mapVoteDbRowToEntity(row));
+  }
+
+  async getVoteById(id: string): Promise<VoteEntity | null> {
+    const row = this.db.prepare('SELECT * FROM "votes" WHERE "id" = ?').get(id) as unknown as VoteDbRow | undefined;
+    if (!row) return null;
+    return this.mapVoteDbRowToEntity(row);
+  }
+
+  async getVoteBySlug(slug: string): Promise<VoteEntity | null> {
+    const row = this.db.prepare('SELECT * FROM "votes" WHERE "slug" = ?').get(slug) as unknown as VoteDbRow | undefined;
+    if (!row) return null;
+    return this.mapVoteDbRowToEntity(row);
+  }
+
+  async createVote(input: Partial<VoteEntity>): Promise<VoteEntity> {
+    const now = new Date().toISOString();
+    const slug = input.slug || this.generateSlug();
+    const newVote: VoteEntity = {
+      id: input.id || crypto.randomUUID(),
+      slug,
+      title: input.title || 'New Vote',
+      description: input.description,
+      ownerId: input.ownerId || 'unknown',
+      proposals: input.proposals || [],
+      config: input.config || { mode: 'THUMBS_UP', kind: 'consultation', phase: 'IDLE' },
+      outcome: input.outcome,
+      createdAt: input.createdAt || now,
+      updatedAt: input.updatedAt || now,
+      linkedTaskId: input.linkedTaskId,
+    };
+
+    this.db.prepare(`
+      INSERT INTO "votes"("id", "slug", "title", "description", "ownerId", "proposals", "config", "outcome", "linkedTaskId", "createdAt", "updatedAt")
+      VALUES(@id, @slug, @title, @description, @ownerId, @proposals, @config, @outcome, @linkedTaskId, @createdAt, @updatedAt)
+    `).run({
+      id: newVote.id,
+      slug: newVote.slug,
+      title: newVote.title,
+      description: newVote.description ?? null,
+      ownerId: newVote.ownerId,
+      proposals: JSON.stringify(newVote.proposals),
+      config: JSON.stringify(newVote.config),
+      outcome: newVote.outcome ? JSON.stringify(newVote.outcome) : null,
+      linkedTaskId: newVote.linkedTaskId ?? null,
+      createdAt: newVote.createdAt,
+      updatedAt: newVote.updatedAt,
+    });
+
+    return newVote;
+  }
+
+  async updateVote(id: string, patch: Partial<VoteEntity>): Promise<VoteEntity | null> {
+    const current = await this.getVoteById(id);
+    if (!current) return null;
+
+    if (current.config.phase === 'FINALIZED' && patch.config?.phase === 'FINALIZED') {
+      return current;
+    }
+
+    const updated: VoteEntity = {
+      ...current,
+      ...patch,
+      config: patch.config ? { ...current.config, ...patch.config } : current.config,
+      proposals: patch.proposals ?? current.proposals,
+      outcome: patch.outcome ?? current.outcome,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.db.prepare(`
+      UPDATE "votes" SET
+        "title" = @title,
+        "description" = @description,
+        "ownerId" = @ownerId,
+        "proposals" = @proposals,
+        "config" = @config,
+        "outcome" = @outcome,
+        "linkedTaskId" = @linkedTaskId,
+        "updatedAt" = @updatedAt
+      WHERE "id" = @id
+    `).run({
+      id: updated.id,
+      title: updated.title,
+      description: updated.description ?? null,
+      ownerId: updated.ownerId,
+      proposals: JSON.stringify(updated.proposals),
+      config: JSON.stringify(updated.config),
+      outcome: updated.outcome ? JSON.stringify(updated.outcome) : null,
+      linkedTaskId: updated.linkedTaskId ?? null,
+      updatedAt: updated.updatedAt,
+    });
+
+    return updated;
+  }
+
+  async finalizeVote(id: string, outcome: VoteEntity['outcome']): Promise<VoteEntity | null> {
+    const current = await this.getVoteById(id);
+    if (!current) return null;
+
+    const updated: VoteEntity = {
+      ...current,
+      config: { ...current.config, phase: 'FINALIZED' },
+      outcome,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.db.prepare(`
+      UPDATE "votes" SET
+        "config" = @config,
+        "outcome" = @outcome,
+        "updatedAt" = @updatedAt
+      WHERE "id" = @id
+    `).run({
+      id: updated.id,
+      config: JSON.stringify(updated.config),
+      outcome: JSON.stringify(updated.outcome),
+      updatedAt: updated.updatedAt,
+    });
+
+    return updated;
+  }
+
+  async deleteVote(id: string): Promise<void> {
+    this.db.prepare('DELETE FROM "votes" WHERE "id" = ?').run(id);
+  }
+
+  async resetVote(id: string): Promise<VoteEntity | null> {
+    this.db.prepare('DELETE FROM "voteResponses" WHERE "voteId" = ?').run(id);
+    this.db.prepare('DELETE FROM "voteLoops" WHERE "voteId" = ?').run(id);
+
+    const row = this.db.prepare(`
+      UPDATE "votes" SET "config" = json_set("config", '$.phase', 'IDLE'), "outcome" = NULL, "updatedAt" = ? WHERE "id" = ? RETURNING *
+    `).get(new Date().toISOString(), id) as unknown as VoteDbRow | undefined;
+    if (!row) return null;
+    return this.mapVoteDbRowToEntity(row);
+  }
+
+  async importVotes(items: VoteEntity[]): Promise<void> {
+    const insertStmt = this.db.prepare(`
+      INSERT INTO "votes"("id", "slug", "title", "description", "ownerId", "proposals", "config", "outcome", "linkedTaskId", "createdAt", "updatedAt")
+      VALUES(@id, @slug, @title, @description, @ownerId, @proposals, @config, @outcome, @linkedTaskId, @createdAt, @updatedAt)
+      ON CONFLICT("id") DO UPDATE SET
+        "slug" = excluded."slug",
+        "title" = excluded."title",
+        "description" = excluded."description",
+        "ownerId" = excluded."ownerId",
+        "proposals" = excluded."proposals",
+        "config" = excluded."config",
+        "outcome" = excluded."outcome",
+        "linkedTaskId" = excluded."linkedTaskId",
+        "updatedAt" = excluded."updatedAt"
+    `);
+
+    this.db.exec('BEGIN');
+    try {
+      for (const vote of items) {
+        insertStmt.run({
+          id: vote.id,
+          slug: vote.slug,
+          title: vote.title,
+          description: vote.description ?? null,
+          ownerId: vote.ownerId,
+          proposals: JSON.stringify(vote.proposals),
+          config: JSON.stringify(vote.config),
+          outcome: vote.outcome ? JSON.stringify(vote.outcome) : null,
+          linkedTaskId: vote.linkedTaskId ?? null,
+          createdAt: vote.createdAt,
+          updatedAt: vote.updatedAt,
+        });
+      }
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  private generateSlug(): string {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let slug = '';
+    for (let i = 0; i < 7; i++) {
+      slug += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return slug;
+  }
+
+  private mapVoteDbRowToEntity(row: VoteDbRow): VoteEntity {
+    return {
+      id: row.id,
+      slug: row.slug,
+      title: row.title,
+      description: row.description ?? undefined,
+      ownerId: row.ownerId,
+      proposals: JSON.parse(row.proposals || '[]'),
+      config: JSON.parse(row.config || '{}'),
+      outcome: row.outcome ? JSON.parse(row.outcome) : undefined,
+      linkedTaskId: row.linkedTaskId ?? undefined,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  // Vote responses
+  async getVoteResponses(voteId: string): Promise<VoteResponseEntity[]> {
+    const rows = this.db.prepare('SELECT * FROM "voteResponses" WHERE "voteId" = ? ORDER BY "submittedAt" ASC').all(voteId) as unknown as VoteResponseDbRow[];
+    return rows.map(row => this.mapVoteResponseDbRowToEntity(row));
+  }
+
+  async createVoteResponse(voteId: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity> {
+    const newResponse: VoteResponseEntity = {
+      id: response.id || crypto.randomUUID(),
+      voteId,
+      proposalId: response.proposalId ?? null,
+      loopId: response.loopId,
+      userId: response.userId ?? null,
+      voterToken: response.voterToken || crypto.randomUUID(),
+      value: response.value ?? 0,
+      comment: response.comment,
+      submittedAt: response.submittedAt || new Date().toISOString(),
+    };
+
+    this.db.prepare(`
+      INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt")
+      VALUES(@id, @voteId, @proposalId, @loopId, @userId, @voterToken, @value, @comment, @submittedAt)
+      ON CONFLICT("voteId", "voterToken", COALESCE("proposalId", ''), COALESCE("loopId", '')) DO UPDATE SET
+        "proposalId" = excluded."proposalId",
+        "loopId" = excluded."loopId",
+        "userId" = excluded."userId",
+        "value" = excluded."value",
+        "comment" = excluded."comment",
+        "submittedAt" = excluded."submittedAt"
+    `).run({
+      id: newResponse.id,
+      voteId: newResponse.voteId,
+      proposalId: newResponse.proposalId,
+      loopId: newResponse.loopId ?? null,
+      userId: newResponse.userId,
+      voterToken: newResponse.voterToken,
+      value: newResponse.value,
+      comment: newResponse.comment ?? null,
+      submittedAt: newResponse.submittedAt,
+    });
+
+    return newResponse;
+  }
+
+  async deleteVoteResponse(
+    voteId: string,
+    voterToken: string,
+    proposalId: string | null,
+    loopId: string | null = null,
+  ): Promise<void> {
+    this.db.prepare(`
+      DELETE FROM "voteResponses"
+      WHERE "voteId" = @voteId
+        AND "voterToken" = @voterToken
+        AND COALESCE("proposalId", '') = COALESCE(@proposalId, '')
+        AND COALESCE("loopId", '') = COALESCE(@loopId, '')
+    `).run({ voteId, voterToken, proposalId, loopId });
+  }
+
+  async importVoteResponses(items: VoteResponseEntity[]): Promise<void> {
+    const insertStmt = this.db.prepare(`
+      INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt")
+      VALUES(@id, @voteId, @proposalId, @loopId, @userId, @voterToken, @value, @comment, @submittedAt)
+      ON CONFLICT("voteId", "voterToken", COALESCE("proposalId", ''), COALESCE("loopId", '')) DO UPDATE SET
+        "proposalId" = excluded."proposalId",
+        "value" = excluded."value",
+        "comment" = excluded."comment",
+        "submittedAt" = excluded."submittedAt"
+    `);
+
+    this.db.exec('BEGIN');
+    try {
+      for (const item of items) {
+        insertStmt.run({
+          id: item.id,
+          voteId: item.voteId,
+          proposalId: item.proposalId,
+          loopId: item.loopId ?? null,
+          userId: item.userId,
+          voterToken: item.voterToken,
+          value: item.value,
+          comment: item.comment ?? null,
+          submittedAt: item.submittedAt,
+        });
+      }
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  private tryFixVoteLoopsUniqueConstraint(): void {
+    const tableRow = this.db.prepare(
+      `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'voteLoops'`
+    ).get() as { sql: string } | undefined;
+    if (!tableRow) return;
+    if (/UNIQUE\(\s*"voteId"\s*,\s*"proposalId"\s*,\s*"roundNumber"\s*\)/i.test(tableRow.sql)) return;
+
+    this.db.exec('PRAGMA foreign_keys=OFF');
+    this.db.exec('BEGIN');
+    try {
+      this.db.exec(`
+        CREATE TABLE "voteLoops_new" (
+          "id" TEXT PRIMARY KEY,
+          "voteId" TEXT NOT NULL REFERENCES "votes"("id") ON DELETE CASCADE,
+          "proposalId" TEXT NOT NULL DEFAULT '',
+          "roundNumber" INTEGER NOT NULL,
+          "proposalContent" TEXT NOT NULL,
+          "openedAt" TEXT NOT NULL,
+          "closedAt" TEXT,
+          "openedByUserId" TEXT NOT NULL,
+          "gatingValue" INTEGER,
+          "gatingComment" TEXT,
+          UNIQUE("voteId", "proposalId", "roundNumber")
+        )
+      `);
+      this.db.exec(`
+        INSERT INTO "voteLoops_new"
+          ("id", "voteId", "proposalId", "roundNumber", "proposalContent", "openedAt", "closedAt", "openedByUserId", "gatingValue", "gatingComment")
+        SELECT
+          "id", "voteId", "proposalId", "roundNumber", "proposalContent", "openedAt", "closedAt", "openedByUserId", "gatingValue", "gatingComment"
+        FROM "voteLoops"
+      `);
+      this.db.exec(`DROP TABLE "voteLoops"`);
+      this.db.exec(`ALTER TABLE "voteLoops_new" RENAME TO "voteLoops"`);
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    } finally {
+      this.db.exec('PRAGMA foreign_keys=ON');
+    }
+  }
+
+  private tryDropLegacyVoteResponseConstraint(): void {
+    // SQLite doesn't support dropping a UNIQUE constraint from a table definition
+    // without recreating the table. Detect the legacy schema and rebuild.
+    const tableRow = this.db.prepare(
+      `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'voteResponses'`
+    ).get() as { sql: string } | undefined;
+    if (!tableRow) return;
+    if (!/UNIQUE\(\s*"voteId"\s*,\s*"voterToken"\s*\)/i.test(tableRow.sql)) return;
+
+    this.db.exec('PRAGMA foreign_keys=OFF');
+    this.db.exec('BEGIN');
+    try {
+      this.db.exec(`
+        CREATE TABLE "voteResponses_new" (
+          "id" TEXT PRIMARY KEY,
+          "voteId" TEXT NOT NULL REFERENCES "votes"("id") ON DELETE CASCADE,
+          "proposalId" TEXT,
+          "loopId" TEXT,
+          "userId" TEXT,
+          "voterToken" TEXT NOT NULL,
+          "value" REAL NOT NULL,
+          "comment" TEXT,
+          "submittedAt" TEXT NOT NULL
+        )
+      `);
+      this.db.exec(`
+        INSERT INTO "voteResponses_new"
+          ("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt")
+        SELECT
+          "id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt"
+        FROM "voteResponses"
+      `);
+      this.db.exec(`DROP TABLE "voteResponses"`);
+      this.db.exec(`ALTER TABLE "voteResponses_new" RENAME TO "voteResponses"`);
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    } finally {
+      this.db.exec('PRAGMA foreign_keys=ON');
+    }
+  }
+
+  private mapVoteResponseDbRowToEntity(row: VoteResponseDbRow): VoteResponseEntity {
+    return {
+      id: row.id,
+      voteId: row.voteId,
+      proposalId: row.proposalId,
+      loopId: row.loopId ?? undefined,
+      userId: row.userId,
+      voterToken: row.voterToken,
+      value: row.value,
+      comment: row.comment ?? undefined,
+      submittedAt: row.submittedAt,
+    };
+  }
+
+  // Vote loops (CONSENT_LOOP)
+  async getVoteLoops(voteId: string): Promise<VoteLoop[]> {
+    const rows = this.db.prepare('SELECT * FROM "voteLoops" WHERE "voteId" = ? ORDER BY "proposalId" ASC, "roundNumber" ASC').all(voteId) as unknown as VoteLoopDbRow[];
+    return rows.map(row => this.mapVoteLoopDbRowToEntity(row));
+  }
+
+  async createVoteLoop(voteId: string, loop: Partial<VoteLoop>): Promise<VoteLoop> {
+    const newLoop: VoteLoop = {
+      id: loop.id || crypto.randomUUID(),
+      voteId,
+      proposalId: loop.proposalId || '',
+      roundNumber: loop.roundNumber ?? 1,
+      proposalContent: loop.proposalContent || '',
+      openedAt: loop.openedAt || new Date().toISOString(),
+      closedAt: loop.closedAt,
+      openedByUserId: loop.openedByUserId || 'unknown',
+    };
+
+    this.db.prepare(`
+      INSERT INTO "voteLoops"("id", "voteId", "proposalId", "roundNumber", "proposalContent", "openedAt", "closedAt", "openedByUserId")
+      VALUES(@id, @voteId, @proposalId, @roundNumber, @proposalContent, @openedAt, @closedAt, @openedByUserId)
+    `).run({
+      id: newLoop.id,
+      voteId: newLoop.voteId,
+      proposalId: newLoop.proposalId,
+      roundNumber: newLoop.roundNumber,
+      proposalContent: newLoop.proposalContent,
+      openedAt: newLoop.openedAt,
+      closedAt: newLoop.closedAt ?? null,
+      openedByUserId: newLoop.openedByUserId,
+    });
+
+    return newLoop;
+  }
+
+  async updateVoteLoop(loopId: string, patch: Partial<VoteLoop>): Promise<VoteLoop | null> {
+    const rows = this.db.prepare('SELECT * FROM "voteLoops" WHERE "id" = ?').all(loopId) as unknown as VoteLoopDbRow[];
+    if (rows.length === 0) return null;
+    const current = this.mapVoteLoopDbRowToEntity(rows[0]);
+
+    const updated: VoteLoop = { ...current, ...patch };
+
+    this.db.prepare(`
+      UPDATE "voteLoops" SET
+        "proposalContent" = @proposalContent,
+        "closedAt" = @closedAt
+      WHERE "id" = @id
+    `).run({
+      id: updated.id,
+      proposalContent: updated.proposalContent,
+      closedAt: updated.closedAt ?? null,
+    });
+
+    return updated;
+  }
+
+  async closeVoteLoop(loopId: string): Promise<VoteLoop | null> {
+    const rows = this.db.prepare('SELECT * FROM "voteLoops" WHERE "id" = ?').all(loopId) as unknown as VoteLoopDbRow[];
+    if (rows.length === 0) return null;
+
+    this.db.prepare(`
+      UPDATE "voteLoops" SET
+        "closedAt" = @closedAt
+      WHERE "id" = @id
+    `).run({
+      id: loopId,
+      closedAt: new Date().toISOString(),
+    });
+
+    const updatedRows = this.db.prepare('SELECT * FROM "voteLoops" WHERE "id" = ?').all(loopId) as unknown as VoteLoopDbRow[];
+    return this.mapVoteLoopDbRowToEntity(updatedRows[0]);
+  }
+
+  async importVoteLoops(items: VoteLoop[]): Promise<void> {
+    const insertStmt = this.db.prepare(`
+      INSERT INTO "voteLoops"("id", "voteId", "proposalId", "roundNumber", "proposalContent", "openedAt", "closedAt", "openedByUserId")
+      VALUES(@id, @voteId, @proposalId, @roundNumber, @proposalContent, @openedAt, @closedAt, @openedByUserId)
+      ON CONFLICT("voteId", "proposalId", "roundNumber") DO UPDATE SET
+        "proposalContent" = excluded."proposalContent",
+        "closedAt" = excluded."closedAt"
+    `);
+
+    this.db.exec('BEGIN');
+    try {
+      for (const item of items) {
+        insertStmt.run({
+          id: item.id,
+          voteId: item.voteId,
+          proposalId: item.proposalId,
+          roundNumber: item.roundNumber,
+          proposalContent: item.proposalContent,
+          openedAt: item.openedAt,
+          closedAt: item.closedAt ?? null,
+          openedByUserId: item.openedByUserId,
+        });
+      }
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  private mapVoteLoopDbRowToEntity(row: VoteLoopDbRow): VoteLoop {
+    return {
+      id: row.id,
+      voteId: row.voteId,
+      proposalId: row.proposalId,
+      roundNumber: row.roundNumber,
+      proposalContent: row.proposalContent,
+      openedAt: row.openedAt,
+      closedAt: row.closedAt ?? undefined,
+      openedByUserId: row.openedByUserId,
+    };
+  }
+
+  // Vote moderators
+  async getVoteModerators(voteId: string): Promise<VoteModerator[]> {
+    const rows = this.db.prepare('SELECT * FROM "voteModerators" WHERE "voteId" = ? AND "active" = 1 ORDER BY "addedAt" ASC').all(voteId) as unknown as VoteModeratorDbRow[];
+    return rows.map(row => this.mapVoteModeratorDbRowToEntity(row));
+  }
+
+  async addVoteModerator(voteId: string, input: { displayName: string; email?: string; addedByUserId: string }): Promise<VoteModerator> {
+    const newModerator: VoteModerator = {
+      id: crypto.randomUUID(),
+      voteId,
+      displayName: input.displayName,
+      email: input.email,
+      token: crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, ''),
+      addedByUserId: input.addedByUserId,
+      addedAt: new Date().toISOString(),
+      active: true,
+    };
+
+    this.db.prepare(`
+      INSERT INTO "voteModerators"("id", "voteId", "userId", "displayName", "email", "token", "addedByUserId", "addedAt", "active", "lastSeenAt")
+      VALUES(@id, @voteId, @userId, @displayName, @email, @token, @addedByUserId, @addedAt, @active, @lastSeenAt)
+    `).run({
+      id: newModerator.id,
+      voteId: newModerator.voteId,
+      userId: newModerator.userId ?? null,
+      displayName: newModerator.displayName,
+      email: newModerator.email ?? null,
+      token: newModerator.token,
+      addedByUserId: newModerator.addedByUserId,
+      addedAt: newModerator.addedAt,
+      active: 1,
+      lastSeenAt: null,
+    });
+
+    return newModerator;
+  }
+
+  async revokeVoteModerator(moderatorId: string): Promise<void> {
+    this.db.prepare('UPDATE "voteModerators" SET "active" = 0 WHERE "id" = ?').run(moderatorId);
+  }
+
+  async resolveVoteModeratorToken(token: string): Promise<{ vote: VoteEntity; moderator: VoteModerator } | null> {
+    const rows = this.db.prepare('SELECT * FROM "voteModerators" WHERE "token" = ? AND "active" = 1').all(token) as unknown as VoteModeratorDbRow[];
+    if (rows.length === 0) return null;
+    const moderator = this.mapVoteModeratorDbRowToEntity(rows[0]);
+    const vote = await this.getVoteById(moderator.voteId);
+    if (!vote) return null;
+
+    this.db.prepare('UPDATE "voteModerators" SET "lastSeenAt" = ? WHERE "id" = ?').run(new Date().toISOString(), moderator.id);
+
+    return { vote, moderator };
+  }
+
+  async importVoteModerators(items: VoteModerator[]): Promise<void> {
+    const insertStmt = this.db.prepare(`
+      INSERT INTO "voteModerators"("id", "voteId", "userId", "displayName", "email", "token", "addedByUserId", "addedAt", "active", "lastSeenAt")
+      VALUES(@id, @voteId, @userId, @displayName, @email, @token, @addedByUserId, @addedAt, @active, @lastSeenAt)
+      ON CONFLICT("token") DO UPDATE SET
+        "displayName" = excluded."displayName",
+        "active" = excluded."active"
+    `);
+
+    this.db.exec('BEGIN');
+    try {
+      for (const item of items) {
+        insertStmt.run({
+          id: item.id,
+          voteId: item.voteId,
+          userId: item.userId ?? null,
+          displayName: item.displayName,
+          email: item.email ?? null,
+          token: item.token,
+          addedByUserId: item.addedByUserId,
+          addedAt: item.addedAt,
+          active: item.active ? 1 : 0,
+          lastSeenAt: item.lastSeenAt ?? null,
+        });
+      }
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  private mapVoteModeratorDbRowToEntity(row: VoteModeratorDbRow): VoteModerator {
+    return {
+      id: row.id,
+      voteId: row.voteId,
+      userId: row.userId ?? undefined,
+      displayName: row.displayName,
+      email: row.email ?? undefined,
+      token: row.token,
+      addedByUserId: row.addedByUserId,
+      addedAt: row.addedAt,
+      active: row.active === 1,
+      lastSeenAt: row.lastSeenAt ?? undefined,
+    };
+  }
+
   private mapCircleDbRowToEntity(row: CircleDbRow): CircleEntity {
     return {
       id: row.id,
@@ -1613,6 +2397,10 @@ class SqliteClient implements DbClient {
       this.db.exec('DROP TABLE IF EXISTS "circles"');
       this.db.exec('DROP TABLE IF EXISTS "reminders"');
       this.db.exec('DROP TABLE IF EXISTS "frameworks"');
+      this.db.exec('DROP TABLE IF EXISTS "votes"');
+      this.db.exec('DROP TABLE IF EXISTS "voteResponses"');
+      this.db.exec('DROP TABLE IF EXISTS "voteLoops"');
+      this.db.exec('DROP TABLE IF EXISTS "voteModerators"');
 
       // Also drop legacy tables if they exist
       this.db.exec('DROP TABLE IF EXISTS tasks');

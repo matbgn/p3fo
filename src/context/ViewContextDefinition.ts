@@ -10,7 +10,8 @@ export type ViewType =
     | "metrics"
     | "plan"
     | "dream"
-    | "celebration";
+    | "celebration"
+    | "voting";
 
 export const COMPACTNESS_ULTRA = 0;
 export const COMPACTNESS_COMPACT = 1;

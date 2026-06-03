@@ -5,6 +5,7 @@ import { useReminderStore } from '@/hooks/useReminders';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { getPersistenceAdapter } from '@/lib/persistence-factory';
 import { convertEntitiesToTasks } from '@/lib/task-conversions';
+import { VoteResponseEntity, VoteLoop, VoteModerator } from '@/lib/persistence-types';
 
 const DataExporter: React.FC = () => {
   const { allTasks: tasks } = useTasks();
@@ -66,17 +67,38 @@ const DataExporter: React.FC = () => {
       // Fetch ALL frameworks
       const allFrameworks = await adapter.listFrameworks();
 
+      // Fetch ALL votes from persistence
+      const allVotes = await adapter.listVotes();
+
+      // Fetch vote responses, loops, and moderators for each vote
+      const allVoteResponses: VoteResponseEntity[] = [];
+      const allVoteLoops: VoteLoop[] = [];
+      const allVoteModerators: VoteModerator[] = [];
+      for (const vote of allVotes) {
+        const responses = await adapter.listVoteResponses(vote.id);
+        allVoteResponses.push(...responses);
+        const loops = await adapter.listVoteLoops(vote.id);
+        allVoteLoops.push(...loops);
+        const moderators = await adapter.listVoteModerators(vote.id);
+        allVoteModerators.push(...moderators);
+      }
+
       const exportData = {
+        schemaVersion: 2,
         tasks: allTasks,
-        scheduledReminders: allReminders, // Unified export using persistence layer
-        qolSurveyResponses: allQolSurveyResponses, // Export all users' QoL data
-        fertilizationBoard: fertilizationBoardState, // Export Fertilization Board state
-        dreamBoard: dreamBoardState, // Export Dream Board state
-        circles: allCircles, // Export Circles
-        frameworks: allFrameworks, // Export Frameworks
+        scheduledReminders: allReminders,
+        qolSurveyResponses: allQolSurveyResponses,
+        fertilizationBoard: fertilizationBoardState,
+        dreamBoard: dreamBoardState,
+        circles: allCircles,
+        frameworks: allFrameworks,
         settings: settingsToExport,
         activeUserId: userId,
-        allUserSettings, // Export all users for full restore
+        allUserSettings,
+        votes: allVotes,
+        voteResponses: allVoteResponses,
+        voteLoops: allVoteLoops,
+        voteModerators: allVoteModerators,
       };
 
       const data = JSON.stringify(exportData, null, 2);

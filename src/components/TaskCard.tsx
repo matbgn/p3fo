@@ -3,11 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { GripVertical, Folder, AlertTriangle, CircleDot, Trash2, Clock2, Clock, Play, Pause, ChevronDown, ChevronRight, Flame, FileText, BellRing, CalendarIcon, User, Crosshair } from "lucide-react";
+import { GripVertical, Folder, AlertTriangle, CircleDot, Trash2, Clock2, Clock, Play, Pause, ChevronDown, ChevronRight, Flame, FileText, BellRing, CalendarIcon, User, Crosshair, Vote as VoteIcon } from "lucide-react";
 import { TaskStatusSelect } from "./TaskStatusSelect";
 import { useTasks, Task, Category, TriageStatus } from "@/hooks/useTasks";
 import { Badge } from "@/components/ui/badge";
 import { eventBus } from "@/lib/events";
+import { LinkedVoteButton } from "@/components/voting/LinkedVoteButton";
+import { CreateLinkedVoteDialog } from "@/components/voting/CreateLinkedVoteDialog";
+import { useVotes } from "@/hooks/useVotes";
 import {
   Dialog,
   DialogContent,
@@ -144,6 +147,14 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
   const { scheduledReminders, reminders, updateScheduledReminderTriggerDate, dismissReminder } = useReminderStore();
   const { userSettings, userId: currentUserId } = useUserSettings();
   const { settings } = useSettingsContext();
+  const { votes, createVote, loadVotes } = useVotes();
+  const [linkedVoteDialogOpen, setLinkedVoteDialogOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    if (task.linkedVoteIds && task.linkedVoteIds.length > 0) {
+      loadVotes();
+    }
+  }, [task.linkedVoteIds, loadVotes]);
   const weekStartsOn = settings.weekStartDay as 0 | 1;
   const { cardCompactness } = useViewDisplay();
   const aging = useCardAging(task);
@@ -203,7 +214,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
   //   setIsReminderActive(activeReminder);
   // }, [task.id, scheduledReminders]);
 
-  const { calculateTotalTime, calculateTotalDifficulty } = useTasks();
+  const { calculateTotalTime, calculateTotalDifficulty, updateLinkedVoteIds } = useTasks();
   const hasSubtasks = task.children && task.children.length > 0;
   const canHaveTimer = !hasSubtasks; // Only tasks without children can have timers
   const totalDifficulty = hasSubtasks ? calculateTotalDifficulty(task.id) : task.difficulty || 0;
@@ -790,6 +801,19 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                   >
                     <Crosshair className={`h-4 w-4 ${task.sprintTarget ? "text-violet-500" : "text-gray-400"}`} />
                   </Button>
+                  <LinkedVoteButton
+                    taskId={task.id}
+                    taskTitle={task.title}
+                    linkedVoteIds={task.linkedVoteIds}
+                    linkedVotes={votes.filter((v) => task.linkedVoteIds?.includes(v.id))}
+                    onNavigateToVote={(voteId) => {
+                      const vote = votes.find((v) => v.id === voteId);
+                      if (vote?.slug) {
+                        window.open(`${window.location.origin}/v/${vote.slug}`, "_blank");
+                      }
+                    }}
+                    onCreateLinkedVote={() => setLinkedVoteDialogOpen(true)}
+                  />
                   <Button
                     size="sm"
                     variant="ghost"
@@ -875,8 +899,26 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
           toggleSprintTarget={toggleSprintTarget}
           onToggleTimer={toggleTimer}
           currentUserId={currentUserId}
+          updateLinkedVoteIds={updateLinkedVoteIds}
         />
       )}
+      {/* Create Linked Vote Dialog */}
+      <CreateLinkedVoteDialog
+        open={linkedVoteDialogOpen}
+        onOpenChange={setLinkedVoteDialogOpen}
+        taskId={task.id}
+        taskTitle={task.title}
+        taskComment={task.comment}
+        onSave={async (input) => {
+          const newVote = await createVote(input);
+          if (newVote) {
+            const currentIds = task.linkedVoteIds || [];
+            await updateLinkedVoteIds(task.id, [...currentIds, newVote.id]);
+            setLinkedVoteDialogOpen(false);
+          }
+          return newVote;
+        }}
+      />
       {/* Comment Modal */}
       {isCommentModalOpen && (
         <Dialog open={isCommentModalOpen} onOpenChange={setIsCommentModalOpen}>

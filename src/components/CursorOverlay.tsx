@@ -7,6 +7,7 @@ export const CursorOverlay = () => {
     const cursors = useCursors();
     const { view } = useViewNavigation();
     const [isVisible, setIsVisible] = useState(true);
+    const isPublicVotePage = window.location.pathname.includes('/v/');
 
     useEffect(() => {
         const handleVisibilityChange = (e: CustomEvent<{ visible: boolean }>) => {
@@ -19,7 +20,7 @@ export const CursorOverlay = () => {
         };
     }, []);
 
-    if (!isVisible) return null;
+    if (!isVisible || isPublicVotePage) return null;
 
     return (
         <div className="pointer-events-none fixed inset-0 z-[9999] overflow-hidden">

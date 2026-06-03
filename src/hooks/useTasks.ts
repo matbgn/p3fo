@@ -58,6 +58,7 @@ export type Task = {
   priority?: number; // New field for explicit prioritization
   userId?: string; // User assigned to this task
   updatedAt?: number; // Last modification timestamp for card aging
+  linkedVoteIds?: string[]; // IDs of VoteEntity linked to this task
 };
 
 
@@ -1403,6 +1404,26 @@ export function useTasks() {
         console.error("Error updating priority:", error);
       }
 
+
+      eventBus.publish("tasksChanged");
+    }, []),
+    updateLinkedVoteIds: React.useCallback(async (taskId: string, linkedVoteIds: string[]) => {
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      updateTaskInTasks(taskId, (t) => ({ ...t, linkedVoteIds }));
+
+      try {
+        const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+        const adapter = await persistence;
+        const updatedTask = tasks.find(t => t.id === taskId);
+        if (updatedTask) {
+          const entity = { ...taskToEntity(updatedTask), linkedVoteIds };
+          await adapter.updateTask(taskId, entity);
+        }
+      } catch (error) {
+        console.error("Error updating linkedVoteIds:", error);
+      }
 
       eventBus.publish("tasksChanged");
     }, []),

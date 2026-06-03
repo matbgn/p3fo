@@ -35,6 +35,11 @@ export const yAppSettings = instrumentYMap(doc.getMap('appSettings'), 'appSettin
 // Export shared system state (for global commands like Clear All)
 export const ySystemState = instrumentYMap(doc.getMap('systemState'), 'systemState');
 
+// Export shared vote maps for real-time collaboration
+export const yVoteProposals = instrumentYMap(doc.getMap('voteProposals'), 'voteProposals');
+export const yVoteLoops = instrumentYMap(doc.getMap('voteLoops'), 'voteLoops');
+export const yVoteResponses = instrumentYMap(doc.getMap('voteResponses'), 'voteResponses');
+
 // Provider and awareness are nullable - only initialized when NOT in browser-only mode
 export let provider: WebsocketProvider | null = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

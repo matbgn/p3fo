@@ -42,6 +42,7 @@ export const convertEntitiesToTasks = (entities: TaskEntity[]): Task[] => {
             priority: entity.priority || 0,
             userId: entity.userId || undefined,
             updatedAt: entity.updatedAt ? new Date(entity.updatedAt).getTime() : undefined,
+            linkedVoteIds: entity.linkedVoteIds || undefined,
         };
         taskMap[task.id] = task;
     });
@@ -83,6 +84,7 @@ export const taskToEntity = (task: Task): TaskEntity => ({
     parentId: task.parentId || null,
     children: task.children || [],
     updatedAt: task.updatedAt ? new Date(task.updatedAt).toISOString() : null,
+    linkedVoteIds: task.linkedVoteIds || undefined,
 });
 
 /**
@@ -143,6 +145,7 @@ export const taskPatchToEntity = (
             ? new Date(patch.updatedAt).toISOString()
             : null;
     }
+    if (patch.linkedVoteIds !== undefined) entity.linkedVoteIds = patch.linkedVoteIds;
 
     return entity;
 };

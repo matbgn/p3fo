@@ -689,7 +689,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
           <span className="ml-1 text-muted-foreground">({totalVotes} votes)</span>
         </div>
         <div className="space-y-1">
-          {MJ_SCALE.slice().reverse().map(grade => {
+          {MJ_SCALE.map(grade => {
             const count = Object.values(votes).filter(v => v === grade.value).length;
             const percentage = Math.round((count / totalVotes) * 100);
             return (

@@ -1,4 +1,4 @@
-import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType } from './persistence-types';
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind } from './persistence-types';
 import { DEFAULT_TASKS_INITIALIZED_KEY } from '@/hooks/useTasks';
 
 export class HttpApiPersistence implements PersistenceAdapter {
@@ -289,7 +289,7 @@ export class HttpApiPersistence implements PersistenceAdapter {
     // For now, let's assume we can import at module level.
     // But since this is a class method, let's use the valid imports.
     try {
-      const { doc, yTasks, yUserSettings, yFertilizationState, yFertilizationCards, yFertilizationColumns, yDreamState, yDreamCards, yDreamColumns, yCircles, yFrameworks, ySystemState } = await import('./collaboration');
+      const { doc, yTasks, yUserSettings, yFertilizationState, yFertilizationCards, yFertilizationColumns, yDreamState, yDreamCards, yDreamColumns, yCircles, yFrameworks, ySystemState, yVoteProposals, yVoteLoops, yVoteResponses } = await import('./collaboration');
       doc.transact(() => {
         yTasks.clear();
         yUserSettings.clear();
@@ -301,6 +301,9 @@ export class HttpApiPersistence implements PersistenceAdapter {
         yDreamColumns.clear();
         yCircles.clear();
         yFrameworks.clear();
+        yVoteProposals.clear();
+        yVoteLoops.clear();
+        yVoteResponses.clear();
         ySystemState.set('command', { type: 'CLEAR_ALL', timestamp: Date.now() });
       });
       console.log('Cleared Yjs shared documents and broadcasted CLEAR_ALL command');
@@ -355,6 +358,154 @@ export class HttpApiPersistence implements PersistenceAdapter {
     await this.makeRequest('/api/frameworks/import', {
       method: 'POST',
       body: JSON.stringify(frameworks),
+    });
+  }
+
+  // Votes
+  async listVotes(opts?: { linkedTaskId?: string; ownerId?: string; kind?: VoteKind }): Promise<VoteEntity[]> {
+    const params = new URLSearchParams();
+    if (opts?.linkedTaskId) params.set('linkedTaskId', opts.linkedTaskId);
+    if (opts?.ownerId) params.set('ownerId', opts.ownerId);
+    if (opts?.kind) params.set('kind', opts.kind);
+    const qs = params.toString();
+    return this.makeRequest(`/api/votes${qs ? `?${qs}` : ''}`);
+  }
+
+  async getVoteById(id: string): Promise<VoteEntity | null> {
+    return this.makeRequest(`/api/votes/${id}`);
+  }
+
+  async getVoteBySlug(slug: string): Promise<VoteEntity | null> {
+    return this.makeRequest(`/api/votes/${slug}`);
+  }
+
+  async createVote(input: Partial<VoteEntity>): Promise<VoteEntity> {
+    return this.makeRequest('/api/votes', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  async updateVote(id: string, patch: Partial<VoteEntity>): Promise<VoteEntity | null> {
+    return this.makeRequest(`/api/votes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    });
+  }
+
+  async finalizeVote(id: string, outcome: VoteEntity['outcome']): Promise<VoteEntity | null> {
+    return this.makeRequest(`/api/votes/${id}/finalize`, {
+      method: 'POST',
+      body: JSON.stringify(outcome),
+    });
+  }
+
+  async deleteVote(id: string): Promise<void> {
+    await this.makeRequest(`/api/votes/${id}`, { method: 'DELETE' });
+  }
+
+  async resetVote(id: string): Promise<VoteEntity | null> {
+    return this.makeRequest(`/api/votes/${id}/reset`, {
+      method: 'POST',
+    });
+  }
+
+  async importVotes(items: VoteEntity[]): Promise<void> {
+    await this.makeRequest('/api/votes/import', {
+      method: 'POST',
+      body: JSON.stringify(items),
+    });
+  }
+
+  // Vote responses
+  async listVoteResponses(voteId: string): Promise<VoteResponseEntity[]> {
+    return this.makeRequest(`/api/votes/${voteId}/results`).then((r: { responses: VoteResponseEntity[] }) => r.responses || []);
+  }
+
+  async createVoteResponse(voteId: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity> {
+    return this.makeRequest(`/api/votes/${voteId}/responses`, {
+      method: 'POST',
+      body: JSON.stringify(response),
+    });
+  }
+
+  async deleteVoteResponse(
+    voteId: string,
+    voterToken: string,
+    proposalId: string | null,
+    loopId: string | null = null,
+  ): Promise<void> {
+    const params = new URLSearchParams({ voterToken });
+    if (proposalId) params.set('proposalId', proposalId);
+    if (loopId) params.set('loopId', loopId);
+    await this.makeRequest(`/api/votes/${voteId}/responses?${params.toString()}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async importVoteResponses(items: VoteResponseEntity[]): Promise<void> {
+    await this.makeRequest('/api/vote-responses/import', {
+      method: 'POST',
+      body: JSON.stringify(items),
+    });
+  }
+
+  // Vote loops
+  async listVoteLoops(voteId: string): Promise<VoteLoop[]> {
+    return this.makeRequest(`/api/votes/${voteId}/loops`);
+  }
+
+  async createVoteLoop(voteId: string, loop: Partial<VoteLoop>): Promise<VoteLoop> {
+    return this.makeRequest(`/api/votes/${voteId}/loops`, {
+      method: 'POST',
+      body: JSON.stringify(loop),
+    });
+  }
+
+  async updateVoteLoop(loopId: string, patch: Partial<VoteLoop>): Promise<VoteLoop | null> {
+    return this.makeRequest(`/api/votes/loops/${loopId}`, {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    });
+  }
+
+  async closeVoteLoop(loopId: string): Promise<VoteLoop | null> {
+    return this.makeRequest(`/api/votes/loops/${loopId}/close`, {
+      method: 'POST',
+    });
+  }
+
+  async importVoteLoops(items: VoteLoop[]): Promise<void> {
+    await this.makeRequest('/api/vote-loops/import', {
+      method: 'POST',
+      body: JSON.stringify(items),
+    });
+  }
+
+  // Vote moderators
+  async listVoteModerators(voteId: string): Promise<VoteModerator[]> {
+    return this.makeRequest(`/api/votes/${voteId}/moderators`);
+  }
+
+  async addVoteModerator(voteId: string, input: { displayName: string; email?: string }): Promise<VoteModerator> {
+    return this.makeRequest(`/api/votes/${voteId}/moderators`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  async revokeVoteModerator(moderatorId: string): Promise<void> {
+    await this.makeRequest(`/api/vote-moderators/${moderatorId}`, { method: 'DELETE' });
+  }
+
+  async resolveVoteModerator(token: string): Promise<{ vote: VoteEntity; moderator: VoteModerator } | null> {
+    return this.makeRequest(`/api/votes/moderate/${token}`);
+  }
+
+  async importVoteModerators(items: VoteModerator[]): Promise<void> {
+    await this.makeRequest('/api/vote-moderators/import', {
+      method: 'POST',
+      body: JSON.stringify(items),
     });
   }
 

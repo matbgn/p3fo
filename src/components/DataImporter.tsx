@@ -7,6 +7,8 @@ import { getPersistenceAdapter } from '@/lib/persistence-factory';
 import { QolSurveyResponseEntity, MonthlyBalanceData } from '@/lib/persistence-types';
 import { yUserSettings, yFertilizationState, yFertilizationCards, yFertilizationColumns, yDreamState, yDreamCards, yDreamColumns, yCircles, yFrameworks, yAppSettings, isCollaborationEnabled, doc } from '@/lib/collaboration';
 
+const CURRENT_SCHEMA_VERSION = 2;
+
 interface ImportedUserSettings {
   userId?: string;
   username?: string;
@@ -40,6 +42,13 @@ const DataImporter: React.FC = () => {
         if (e.target?.result) {
           try {
             const importedData = JSON.parse(e.target.result as string);
+
+            // Schema version check
+            if (importedData.schemaVersion !== undefined && importedData.schemaVersion > CURRENT_SCHEMA_VERSION) {
+              alert(`Cannot import data: schema version ${importedData.schemaVersion} is newer than supported version ${CURRENT_SCHEMA_VERSION}. Please update the application.`);
+              return;
+            }
+
             const adapter = await getPersistenceAdapter();
 
             if (Array.isArray(importedData)) {
@@ -279,6 +288,26 @@ const DataImporter: React.FC = () => {
                     });
                   });
                 }
+              }
+
+              // Import Votes (bulk)
+              if (importedData.votes && Array.isArray(importedData.votes)) {
+                await adapter.importVotes(importedData.votes);
+              }
+
+              // Import Vote Responses (bulk)
+              if (importedData.voteResponses && Array.isArray(importedData.voteResponses)) {
+                await adapter.importVoteResponses(importedData.voteResponses);
+              }
+
+              // Import Vote Loops (bulk)
+              if (importedData.voteLoops && Array.isArray(importedData.voteLoops)) {
+                await adapter.importVoteLoops(importedData.voteLoops);
+              }
+
+              // Import Vote Moderators (bulk)
+              if (importedData.voteModerators && Array.isArray(importedData.voteModerators)) {
+                await adapter.importVoteModerators(importedData.voteModerators);
               }
 
               // RESTORE ACTIVE USER IDENTITY

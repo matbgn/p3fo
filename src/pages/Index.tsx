@@ -6,6 +6,7 @@ import { Timetable } from "@/components/Timetable";
 const ProgramTopView = React.lazy(() => import("@/components/ProgramTopView"));
 import SettingsPage from "./SettingsPage";
 const MetricsPage = React.lazy(() => import("./MetricsPage"));
+const VotingPage = React.lazy(() => import("./VotingPage"));
 
 
 import { useUserSettingsContext } from "@/context/UserSettingsContext";
@@ -141,6 +142,7 @@ const Index: React.FC = () => {
   const celebrationView = React.useMemo(() => <LazyWrapper><CelebrationView onFocusOnTask={handleFocusOnTask} /></LazyWrapper>, [handleFocusOnTask]);
   const dreamView = React.useMemo(() => <LazyWrapper><DreamTopView onFocusOnTask={handleFocusOnTask} /></LazyWrapper>, [handleFocusOnTask]);
   const metricsView = React.useMemo(() => <LazyWrapper><MetricsPage /></LazyWrapper>, []);
+  const votingView = React.useMemo(() => <LazyWrapper><VotingPage /></LazyWrapper>, []);
   const settingsView = React.useMemo(() => <SettingsPage />, []);
 
   return (
@@ -210,6 +212,11 @@ const Index: React.FC = () => {
         {!disabledModules.includes('metrics' as ModuleId) && (
         <div style={view === "metrics" ? activeStyle : hiddenStyle}>
           {mountedViews.has("metrics") && metricsView}
+        </div>
+        )}
+        {!disabledModules.includes('voting' as ModuleId) && (
+        <div style={view === "voting" ? activeStyle : hiddenStyle}>
+          {mountedViews.has("voting") && votingView}
         </div>
         )}
         {!disabledModules.includes('settings' as ModuleId) && (

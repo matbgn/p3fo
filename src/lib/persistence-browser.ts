@@ -1,4 +1,4 @@
-import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType } from './persistence-types';
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind } from './persistence-types';
 
 // Storage keys
 const TASKS_STORAGE_KEY = 'dyad_task_board_v1';
@@ -11,6 +11,10 @@ const DREAM_BOARD_STORAGE_KEY = 'dreamBoard';
 const CIRCLES_STORAGE_KEY = 'p3fo_circles_v1';
 const REMINDERS_STORAGE_KEY = 'p3fo_reminders_v1';
 const FRAMEWORKS_STORAGE_KEY = 'p3fo_frameworks_v1';
+const VOTES_STORAGE_KEY = 'p3fo_votes_v1';
+const VOTE_RESPONSES_STORAGE_KEY = 'p3fo_vote_responses_v1';
+const VOTE_LOOPS_STORAGE_KEY = 'p3fo_vote_loops_v1';
+const VOTE_MODERATORS_STORAGE_KEY = 'p3fo_vote_moderators_v1';
 
 // Default values
 const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
@@ -818,6 +822,388 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       localStorage.setItem(FRAMEWORKS_STORAGE_KEY, JSON.stringify(frameworks));
     } catch (error) {
       console.error('Error importing frameworks to localStorage:', error);
+      throw error;
+    }
+  }
+
+  // Votes
+  async listVotes(opts?: { linkedTaskId?: string; ownerId?: string; kind?: VoteKind }): Promise<VoteEntity[]> {
+    try {
+      const stored = localStorage.getItem(VOTES_STORAGE_KEY);
+      const all: VoteEntity[] = stored ? JSON.parse(stored) : [];
+      if (opts?.linkedTaskId) return all.filter(v => v.linkedTaskId === opts.linkedTaskId);
+      if (opts?.ownerId) return all.filter(v => v.ownerId === opts.ownerId);
+      if (opts?.kind) return all.filter(v => v.config.kind === opts.kind);
+      return all;
+    } catch (error) {
+      console.error('Error reading votes from localStorage:', error);
+      return [];
+    }
+  }
+
+  async getVoteById(id: string): Promise<VoteEntity | null> {
+    try {
+      const votes = await this.listVotes();
+      return votes.find(v => v.id === id) || null;
+    } catch (error) {
+      console.error('Error getting vote from localStorage:', error);
+      return null;
+    }
+  }
+
+  async getVoteBySlug(slug: string): Promise<VoteEntity | null> {
+    try {
+      const votes = await this.listVotes();
+      return votes.find(v => v.slug === slug) || null;
+    } catch (error) {
+      console.error('Error getting vote by slug from localStorage:', error);
+      return null;
+    }
+  }
+
+  async createVote(input: Partial<VoteEntity>): Promise<VoteEntity> {
+    if (typeof window === 'undefined') {
+      throw new Error('Cannot create vote in non-browser environment');
+    }
+
+    try {
+      const votes = await this.listVotes();
+      const slug = input.slug || Math.random().toString(36).substring(2, 9);
+      const newVote: VoteEntity = {
+        id: input.id || crypto.randomUUID(),
+        slug,
+        title: input.title || 'New Vote',
+        description: input.description,
+        ownerId: input.ownerId || 'unknown',
+        proposals: input.proposals || [],
+        config: input.config || { mode: 'THUMBS_UP', kind: 'consultation', phase: 'IDLE' },
+        outcome: input.outcome,
+        createdAt: input.createdAt || new Date().toISOString(),
+        updatedAt: input.updatedAt || new Date().toISOString(),
+        linkedTaskId: input.linkedTaskId,
+      };
+      votes.push(newVote);
+      localStorage.setItem(VOTES_STORAGE_KEY, JSON.stringify(votes));
+      return newVote;
+    } catch (error) {
+      console.error('Error creating vote in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async updateVote(id: string, patch: Partial<VoteEntity>): Promise<VoteEntity | null> {
+    if (typeof window === 'undefined') {
+      throw new Error('Cannot update vote in non-browser environment');
+    }
+
+    try {
+      const votes = await this.listVotes();
+      const index = votes.findIndex(v => v.id === id);
+      if (index === -1) return null;
+      votes[index] = { ...votes[index], ...patch, config: { ...votes[index].config, ...patch.config }, updatedAt: new Date().toISOString() };
+      localStorage.setItem(VOTES_STORAGE_KEY, JSON.stringify(votes));
+      return votes[index];
+    } catch (error) {
+      console.error('Error updating vote in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async finalizeVote(id: string, outcome: VoteEntity['outcome']): Promise<VoteEntity | null> {
+    if (typeof window === 'undefined') {
+      throw new Error('Cannot finalize vote in non-browser environment');
+    }
+
+    try {
+      const votes = await this.listVotes();
+      const index = votes.findIndex(v => v.id === id);
+      if (index === -1) return null;
+      votes[index] = { ...votes[index], config: { ...votes[index].config, phase: 'FINALIZED' }, outcome, updatedAt: new Date().toISOString() };
+      localStorage.setItem(VOTES_STORAGE_KEY, JSON.stringify(votes));
+      return votes[index];
+    } catch (error) {
+      console.error('Error finalizing vote in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async deleteVote(id: string): Promise<void> {
+    try {
+      const votes = await this.listVotes();
+      const filtered = votes.filter(v => v.id !== id);
+      localStorage.setItem(VOTES_STORAGE_KEY, JSON.stringify(filtered));
+    } catch (error) {
+      console.error('Error deleting vote from localStorage:', error);
+      throw error;
+    }
+  }
+
+  async resetVote(id: string): Promise<VoteEntity | null> {
+    if (typeof window === 'undefined') {
+      throw new Error('Cannot reset vote in non-browser environment');
+    }
+
+    try {
+      const votes = await this.listVotes();
+      const index = votes.findIndex(v => v.id === id);
+      if (index === -1) return null;
+
+      votes[index] = {
+        ...votes[index],
+        config: { ...votes[index].config, phase: 'IDLE' },
+        outcome: undefined,
+        updatedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(VOTES_STORAGE_KEY, JSON.stringify(votes));
+
+      const storedResponses = localStorage.getItem(VOTE_RESPONSES_STORAGE_KEY);
+      if (storedResponses) {
+        const all: VoteResponseEntity[] = JSON.parse(storedResponses);
+        localStorage.setItem(VOTE_RESPONSES_STORAGE_KEY, JSON.stringify(all.filter(r => r.voteId !== id)));
+      }
+
+      const storedLoops = localStorage.getItem(VOTE_LOOPS_STORAGE_KEY);
+      if (storedLoops) {
+        const all: VoteLoop[] = JSON.parse(storedLoops);
+        localStorage.setItem(VOTE_LOOPS_STORAGE_KEY, JSON.stringify(all.filter(l => l.voteId !== id)));
+      }
+
+      return votes[index];
+    } catch (error) {
+      console.error('Error resetting vote in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async importVotes(items: VoteEntity[]): Promise<void> {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(VOTES_STORAGE_KEY, JSON.stringify(items));
+    } catch (error) {
+      console.error('Error importing votes to localStorage:', error);
+      throw error;
+    }
+  }
+
+  // Vote responses
+  async listVoteResponses(voteId: string): Promise<VoteResponseEntity[]> {
+    try {
+      const stored = localStorage.getItem(VOTE_RESPONSES_STORAGE_KEY);
+      const all: VoteResponseEntity[] = stored ? JSON.parse(stored) : [];
+      return all.filter(r => r.voteId === voteId);
+    } catch (error) {
+      console.error('Error reading vote responses from localStorage:', error);
+      return [];
+    }
+  }
+
+  async createVoteResponse(voteId: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity> {
+    const newResponse: VoteResponseEntity = {
+      id: response.id || crypto.randomUUID(),
+      voteId,
+      proposalId: response.proposalId ?? null,
+      loopId: response.loopId,
+      userId: response.userId ?? null,
+      voterToken: response.voterToken || crypto.randomUUID(),
+      value: response.value ?? 0,
+      comment: response.comment,
+      submittedAt: response.submittedAt || new Date().toISOString(),
+    };
+    const stored = localStorage.getItem(VOTE_RESPONSES_STORAGE_KEY);
+    const all: VoteResponseEntity[] = stored ? JSON.parse(stored) : [];
+    const filtered = all.filter(
+      r => !(
+        r.voteId === voteId &&
+        r.voterToken === newResponse.voterToken &&
+        (r.proposalId ?? null) === (newResponse.proposalId ?? null) &&
+        (r.loopId ?? null) === (newResponse.loopId ?? null)
+      ),
+    );
+    filtered.push(newResponse);
+    localStorage.setItem(VOTE_RESPONSES_STORAGE_KEY, JSON.stringify(filtered));
+    return newResponse;
+  }
+
+  async deleteVoteResponse(
+    voteId: string,
+    voterToken: string,
+    proposalId: string | null,
+    loopId: string | null = null,
+  ): Promise<void> {
+    const stored = localStorage.getItem(VOTE_RESPONSES_STORAGE_KEY);
+    const all: VoteResponseEntity[] = stored ? JSON.parse(stored) : [];
+    const filtered = all.filter(
+      r => !(
+        r.voteId === voteId &&
+        r.voterToken === voterToken &&
+        (r.proposalId ?? null) === (proposalId ?? null) &&
+        (r.loopId ?? null) === (loopId ?? null)
+      ),
+    );
+    localStorage.setItem(VOTE_RESPONSES_STORAGE_KEY, JSON.stringify(filtered));
+  }
+
+  async importVoteResponses(items: VoteResponseEntity[]): Promise<void> {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(VOTE_RESPONSES_STORAGE_KEY, JSON.stringify(items));
+    } catch (error) {
+      console.error('Error importing vote responses to localStorage:', error);
+      throw error;
+    }
+  }
+
+  // Vote loops
+  async listVoteLoops(voteId: string): Promise<VoteLoop[]> {
+    try {
+      const stored = localStorage.getItem(VOTE_LOOPS_STORAGE_KEY);
+      const all: VoteLoop[] = stored ? JSON.parse(stored) : [];
+      return all.filter(l => l.voteId === voteId);
+    } catch (error) {
+      console.error('Error reading vote loops from localStorage:', error);
+      return [];
+    }
+  }
+
+  async createVoteLoop(voteId: string, loop: Partial<VoteLoop>): Promise<VoteLoop> {
+    if (typeof window === 'undefined') throw new Error('Cannot create vote loop in non-browser environment');
+    try {
+      const stored = localStorage.getItem(VOTE_LOOPS_STORAGE_KEY);
+      const all: VoteLoop[] = stored ? JSON.parse(stored) : [];
+      const newLoop: VoteLoop = {
+        id: loop.id || crypto.randomUUID(),
+        voteId,
+        proposalId: loop.proposalId || '',
+        roundNumber: loop.roundNumber ?? 1,
+        proposalContent: loop.proposalContent || '',
+        openedAt: loop.openedAt || new Date().toISOString(),
+        closedAt: loop.closedAt,
+        openedByUserId: loop.openedByUserId || 'unknown',
+      };
+      all.push(newLoop);
+      localStorage.setItem(VOTE_LOOPS_STORAGE_KEY, JSON.stringify(all));
+      return newLoop;
+    } catch (error) {
+      console.error('Error creating vote loop in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async updateVoteLoop(loopId: string, patch: Partial<VoteLoop>): Promise<VoteLoop | null> {
+    if (typeof window === 'undefined') throw new Error('Cannot update vote loop in non-browser environment');
+    try {
+      const stored = localStorage.getItem(VOTE_LOOPS_STORAGE_KEY);
+      const all: VoteLoop[] = stored ? JSON.parse(stored) : [];
+      const index = all.findIndex(l => l.id === loopId);
+      if (index === -1) return null;
+      all[index] = { ...all[index], ...patch };
+      localStorage.setItem(VOTE_LOOPS_STORAGE_KEY, JSON.stringify(all));
+      return all[index];
+    } catch (error) {
+      console.error('Error updating vote loop in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async closeVoteLoop(loopId: string): Promise<VoteLoop | null> {
+    if (typeof window === 'undefined') throw new Error('Cannot close vote loop in non-browser environment');
+    try {
+      const stored = localStorage.getItem(VOTE_LOOPS_STORAGE_KEY);
+      const all: VoteLoop[] = stored ? JSON.parse(stored) : [];
+      const index = all.findIndex(l => l.id === loopId);
+      if (index === -1) return null;
+      all[index] = { ...all[index], closedAt: new Date().toISOString() };
+      localStorage.setItem(VOTE_LOOPS_STORAGE_KEY, JSON.stringify(all));
+      return all[index];
+    } catch (error) {
+      console.error('Error closing vote loop in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async importVoteLoops(items: VoteLoop[]): Promise<void> {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(VOTE_LOOPS_STORAGE_KEY, JSON.stringify(items));
+    } catch (error) {
+      console.error('Error importing vote loops to localStorage:', error);
+      throw error;
+    }
+  }
+
+  // Vote moderators
+  async listVoteModerators(voteId: string): Promise<VoteModerator[]> {
+    try {
+      const stored = localStorage.getItem(VOTE_MODERATORS_STORAGE_KEY);
+      const all: VoteModerator[] = stored ? JSON.parse(stored) : [];
+      return all.filter(m => m.voteId === voteId && m.active);
+    } catch (error) {
+      console.error('Error reading vote moderators from localStorage:', error);
+      return [];
+    }
+  }
+
+  async addVoteModerator(voteId: string, input: { displayName: string; email?: string }): Promise<VoteModerator> {
+    if (typeof window === 'undefined') throw new Error('Cannot add moderator in non-browser environment');
+    try {
+      const stored = localStorage.getItem(VOTE_MODERATORS_STORAGE_KEY);
+      const all: VoteModerator[] = stored ? JSON.parse(stored) : [];
+      const newModerator: VoteModerator = {
+        id: crypto.randomUUID(),
+        voteId,
+        displayName: input.displayName,
+        email: input.email,
+        token: crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, ''),
+        addedByUserId: 'unknown',
+        addedAt: new Date().toISOString(),
+        active: true,
+      };
+      all.push(newModerator);
+      localStorage.setItem(VOTE_MODERATORS_STORAGE_KEY, JSON.stringify(all));
+      return newModerator;
+    } catch (error) {
+      console.error('Error adding vote moderator in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async revokeVoteModerator(moderatorId: string): Promise<void> {
+    if (typeof window === 'undefined') throw new Error('Cannot revoke moderator in non-browser environment');
+    try {
+      const stored = localStorage.getItem(VOTE_MODERATORS_STORAGE_KEY);
+      const all: VoteModerator[] = stored ? JSON.parse(stored) : [];
+      const index = all.findIndex(m => m.id === moderatorId);
+      if (index !== -1) {
+        all[index].active = false;
+        localStorage.setItem(VOTE_MODERATORS_STORAGE_KEY, JSON.stringify(all));
+      }
+    } catch (error) {
+      console.error('Error revoking vote moderator in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async resolveVoteModerator(token: string): Promise<{ vote: VoteEntity; moderator: VoteModerator } | null> {
+    try {
+      const stored = localStorage.getItem(VOTE_MODERATORS_STORAGE_KEY);
+      const all: VoteModerator[] = stored ? JSON.parse(stored) : [];
+      const moderator = all.find(m => m.token === token && m.active);
+      if (!moderator) return null;
+      const vote = await this.getVoteById(moderator.voteId);
+      if (!vote) return null;
+      return { vote, moderator };
+    } catch (error) {
+      console.error('Error resolving moderator token in localStorage:', error);
+      return null;
+    }
+  }
+
+  async importVoteModerators(items: VoteModerator[]): Promise<void> {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(VOTE_MODERATORS_STORAGE_KEY, JSON.stringify(items));
+    } catch (error) {
+      console.error('Error importing vote moderators to localStorage:', error);
       throw error;
     }
   }
