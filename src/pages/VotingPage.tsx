@@ -628,7 +628,8 @@ const VotingPage: React.FC = () => {
 
   const handleEditVote = () => {
     if (selectedVote) {
-      setEditorVote(selectedVote);
+      const freshVote = votes.find((v) => v.id === selectedVote.id) || selectedVote;
+      setEditorVote({ ...freshVote });
       setEditorOpen(true);
     }
   };
