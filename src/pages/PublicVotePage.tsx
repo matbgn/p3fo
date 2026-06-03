@@ -302,12 +302,17 @@ const PublicVotePage: React.FC = () => {
 
   const handlePointsChange = (proposalId: string, delta: number) => {
     if (!vote) return;
-    const maxPoints = vote.config.maxPointsPerUser || 10;
+    const maxBudget = vote.config.maxPointsPerUser || 10;
+    const allowMultiple = vote.config.allowMultiple ?? false;
+    const perProposalCap = allowMultiple ? maxBudget : 1;
     const currentTotal = Object.entries(pointsBudget)
       .filter(([id]) => id !== proposalId)
       .reduce((sum, [, v]) => sum + v, 0);
     const current = pointsBudget[proposalId] || 0;
-    const newVal = Math.max(0, Math.min(maxPoints - currentTotal, current + delta));
+    const newVal = Math.max(
+      0,
+      Math.min(perProposalCap, Math.min(maxBudget - currentTotal, current + delta)),
+    );
     setPointsBudget((prev) => ({ ...prev, [proposalId]: newVal }));
     setVoterValues((prev) => ({ ...prev, [proposalId]: newVal }));
   };
@@ -612,35 +617,43 @@ const PublicVotePage: React.FC = () => {
                       </div>
                     )}
 
-                    {mode === "POINTS" && (
-                      <div className="flex items-center gap-3">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handlePointsChange(proposal.id, -1)}
-                          disabled={(pointsBudget[proposal.id] || 0) <= 0}
-                        >
-                          <MinusCircle className="w-4 h-4" />
-                        </Button>
-                        <span className="text-lg font-medium w-8 text-center">
-                          {pointsBudget[proposal.id] || 0}
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handlePointsChange(proposal.id, 1)}
-                          disabled={
-                            (pointsBudget[proposal.id] || 0) >=
-                            (vote.config.maxPointsPerUser || 10)
-                          }
-                        >
-                          <Plus className="w-4 h-4" />
-                        </Button>
-                        <span className="text-xs text-gray-400">
-                          / {vote.config.maxPointsPerUser || 10}
-                        </span>
-                      </div>
-                    )}
+                    {mode === "POINTS" && (() => {
+                      const maxBudget = vote.config.maxPointsPerUser || 10;
+                      const allowMultiple = vote.config.allowMultiple ?? false;
+                      const perProposalCap = allowMultiple ? maxBudget : 1;
+                      const currentVal = pointsBudget[proposal.id] || 0;
+                      const otherTotal = Object.entries(pointsBudget)
+                        .filter(([id]) => id !== proposal.id)
+                        .reduce((sum, [, v]) => sum + v, 0);
+                      const canIncrement =
+                        currentVal < perProposalCap && currentVal < maxBudget - otherTotal;
+                      return (
+                        <div className="flex items-center gap-3">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handlePointsChange(proposal.id, -1)}
+                            disabled={currentVal <= 0}
+                          >
+                            <MinusCircle className="w-4 h-4" />
+                          </Button>
+                          <span className="text-lg font-medium w-8 text-center">
+                            {currentVal}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handlePointsChange(proposal.id, 1)}
+                            disabled={!canIncrement}
+                          >
+                            <Plus className="w-4 h-4" />
+                          </Button>
+                          <span className="text-xs text-gray-400">
+                            / {allowMultiple ? maxBudget : 1} {ts.labels.points}
+                          </span>
+                        </div>
+                      );
+                    })()}
 
                     {mode === "MAJORITY_JUDGMENT" && (
                       <div className="flex flex-wrap gap-2">
