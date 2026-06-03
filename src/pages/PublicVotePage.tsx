@@ -193,7 +193,7 @@ const PublicVotePage: React.FC = () => {
   const showResultsBeforeClose = vote ? (vote.config.showResultsBeforeClose ?? false) : false;
   const isClosed = vote?.config.phase === "CLOSED" || vote?.config.phase === "FINALIZED";
   const isSingleProposal = vote ? !(vote.config.multipleChoiceVote ?? true) : false;
-  const showResults = vote ? (isClosed || showResultsBeforeClose || justVoted) : false;
+  const showResults = vote ? (isClosed || showResultsBeforeClose) : false;
   const [pointsBudget, setPointsBudget] = React.useState<Record<string, number>>({});
   const [audienceProposalText, setAudienceProposalText] = React.useState("");
   const [showPrevRounds, setShowPrevRounds] = React.useState(false);
