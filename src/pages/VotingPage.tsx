@@ -493,6 +493,12 @@ const VotingPage: React.FC = () => {
           onOpenPublic={handleOpenPublic}
           onPhaseChange={handlePhaseChange}
         />
+        <VoteEditor
+          open={editorOpen}
+          onOpenChange={setEditorOpen}
+          vote={editorVote}
+          onSave={handleSaveVote}
+        />
       </div>
     );
   }

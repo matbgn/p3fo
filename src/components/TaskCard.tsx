@@ -807,7 +807,10 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                     linkedVoteIds={task.linkedVoteIds}
                     linkedVotes={votes.filter((v) => task.linkedVoteIds?.includes(v.id))}
                     onNavigateToVote={(voteId) => {
-                      window.open(`${window.location.origin}/voting?openVoteId=${voteId}`, "_blank");
+                      const vote = votes.find((v) => v.id === voteId);
+                      if (vote?.slug) {
+                        window.open(`${window.location.origin}/v/${vote.slug}`, "_blank");
+                      }
                     }}
                     onCreateLinkedVote={() => setLinkedVoteDialogOpen(true)}
                   />

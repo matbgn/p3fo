@@ -78,7 +78,7 @@ export const CreateLinkedVoteDialog: React.FC<CreateLinkedVoteDialogProps> = ({
       if (result && andClose) {
         onOpenChange(false);
       } else if (result) {
-        window.open(`${window.location.origin}/voting?openVoteId=${result.id}`, "_self");
+        window.open(`${window.location.origin}/v/${result.slug}`, "_self");
       }
     } finally {
       setIsSaving(false);

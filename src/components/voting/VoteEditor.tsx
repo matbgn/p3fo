@@ -45,6 +45,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
 }) => {
   const isEditing = !!vote;
   const isFinalized = vote?.config.phase === "FINALIZED";
+  const hasStarted = isEditing && vote?.config.phase !== "IDLE";
   const t = getVotingStrings();
 
   const [title, setTitle] = React.useState("");
@@ -184,7 +185,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
             <KindSelector
               value={kind}
               onChange={setKind}
-              disabled={isEditing || isFinalized}
+              disabled={hasStarted || isFinalized}
             />
           </div>
 
@@ -193,7 +194,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
             <ModeSelector
               value={mode}
               onChange={setMode}
-              disabled={isEditing || isFinalized}
+              disabled={hasStarted || isFinalized}
             />
           </div>
 
