@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Temporal } from "@js-temporal/polyfill";
 import {
   Dialog,
   DialogContent,
@@ -13,12 +14,19 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Save, X } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
+import { Save, X, CalendarIcon, Clock } from "lucide-react";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 import { VoteEntity, VoteMode, VoteKind, VoteConfig, VoteProposal } from "@/lib/persistence-types";
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { KindSelector } from "./KindSelector";
 import { ModeSelector } from "./ModeSelector";
 import { ProposalEditor, ProposalEditorHandle } from "./ProposalEditor";
+import { useSettingsContext } from "@/context/SettingsContext";
+import { instantToPlainDateTime, plainDateTimeToTimestamp } from "@/lib/format-utils";
 
 interface VoteEditorProps {
   open: boolean;
@@ -64,8 +72,16 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
   const [maxPointsPerUser, setMaxPointsPerUser] = React.useState(10);
   const [allowMultiple, setAllowMultiple] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
-  const [openAt, setOpenAt] = React.useState("");
-  const [closeAt, setCloseAt] = React.useState("");
+  const [openAt, setOpenAt] = React.useState<number | null>(null);
+  const [closeAt, setCloseAt] = React.useState<number | null>(null);
+  const [timePickerOpen, setTimePickerOpen] = React.useState(false);
+  const [timePickerConfig, setTimePickerConfig] = React.useState<{
+    type: "openAt" | "closeAt";
+    initialTime: number;
+  } | null>(null);
+  const { settings } = useSettingsContext();
+  const timezone = settings.timezone || "Europe/Zurich";
+  const weekStartsOn = settings.weekStartDay as 0 | 1;
 
   React.useEffect(() => {
     if (vote) {
@@ -83,8 +99,8 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
       setMultipleChoiceVote(vote.config.multipleChoiceVote ?? true);
       setMaxPointsPerUser(vote.config.maxPointsPerUser ?? 10);
       setAllowMultiple(vote.config.allowMultiple ?? false);
-      setOpenAt(vote.config.openAt || "");
-      setCloseAt(vote.config.closeAt || "");
+      setOpenAt(vote.config.openAt ? new Date(vote.config.openAt).getTime() : null);
+      setCloseAt(vote.config.closeAt ? new Date(vote.config.closeAt).getTime() : null);
     } else {
       setTitle("");
       setDescription("");
@@ -100,8 +116,8 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
       setMultipleChoiceVote(true);
       setMaxPointsPerUser(10);
       setAllowMultiple(false);
-      setOpenAt("");
-      setCloseAt("");
+      setOpenAt(null);
+      setCloseAt(null);
     }
   }, [vote, open]);
 
@@ -130,8 +146,8 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
         multipleChoiceVote: mode !== "POINTS" && mode !== "CONSENT_LOOP" ? multipleChoiceVote : undefined,
         maxPointsPerUser: mode === "POINTS" ? maxPointsPerUser : undefined,
         allowMultiple: mode === "POINTS" ? allowMultiple : undefined,
-        openAt: openAt || undefined,
-        closeAt: closeAt || undefined,
+        openAt: openAt ? new Date(openAt).toISOString() : undefined,
+        closeAt: closeAt ? new Date(closeAt).toISOString() : undefined,
       };
 
       await onSave({
@@ -305,21 +321,123 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-sm">{t.labels.openAt}</Label>
-                <Input
-                  type="datetime-local"
-                  value={openAt}
-                  onChange={(e) => setOpenAt(e.target.value)}
-                  disabled={isFinalized}
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !openAt && "text-muted-foreground"
+                      )}
+                      disabled={isFinalized}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {openAt ? format(new Date(openAt), "PPP p") : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={openAt ? new Date(openAt) : undefined}
+                      onSelect={(date) => {
+                        if (!date) return;
+                        const currentPdt = openAt
+                          ? instantToPlainDateTime(Temporal.Instant.fromEpochMilliseconds(openAt), timezone)
+                          : instantToPlainDateTime(Temporal.Now.instant(), timezone);
+                        const newPdt = Temporal.PlainDateTime.from({
+                          year: date.getFullYear(),
+                          month: date.getMonth() + 1,
+                          day: date.getDate(),
+                          hour: currentPdt.hour,
+                          minute: currentPdt.minute,
+                          second: currentPdt.second,
+                        });
+                        setOpenAt(plainDateTimeToTimestamp(newPdt, timezone));
+                      }}
+                      initialFocus
+                      weekStartsOn={weekStartsOn}
+                    />
+                    <div className="p-3 border-t border-border">
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start"
+                        onClick={() => {
+                          setTimePickerConfig({ type: "openAt", initialTime: openAt || Date.now() });
+                          setTimePickerOpen(true);
+                        }}
+                      >
+                        <Clock className="mr-2 h-4 w-4" />
+                        {openAt ? format(new Date(openAt), "HH:mm") : <span className="text-muted-foreground">Set time...</span>}
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                {openAt && !isFinalized && (
+                  <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setOpenAt(null)}>
+                    Clear
+                  </Button>
+                )}
               </div>
               <div className="space-y-1">
                 <Label className="text-sm">{t.labels.closeAt}</Label>
-                <Input
-                  type="datetime-local"
-                  value={closeAt}
-                  onChange={(e) => setCloseAt(e.target.value)}
-                  disabled={isFinalized}
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !closeAt && "text-muted-foreground"
+                      )}
+                      disabled={isFinalized}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {closeAt ? format(new Date(closeAt), "PPP p") : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={closeAt ? new Date(closeAt) : undefined}
+                      onSelect={(date) => {
+                        if (!date) return;
+                        const currentPdt = closeAt
+                          ? instantToPlainDateTime(Temporal.Instant.fromEpochMilliseconds(closeAt), timezone)
+                          : openAt
+                            ? instantToPlainDateTime(Temporal.Instant.fromEpochMilliseconds(openAt), timezone)
+                            : instantToPlainDateTime(Temporal.Now.instant(), timezone);
+                        const newPdt = Temporal.PlainDateTime.from({
+                          year: date.getFullYear(),
+                          month: date.getMonth() + 1,
+                          day: date.getDate(),
+                          hour: currentPdt.hour,
+                          minute: currentPdt.minute,
+                          second: currentPdt.second,
+                        });
+                        setCloseAt(plainDateTimeToTimestamp(newPdt, timezone));
+                      }}
+                      initialFocus
+                      weekStartsOn={weekStartsOn}
+                    />
+                    <div className="p-3 border-t border-border">
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start"
+                        onClick={() => {
+                          setTimePickerConfig({ type: "closeAt", initialTime: closeAt || openAt || Date.now() });
+                          setTimePickerOpen(true);
+                        }}
+                      >
+                        <Clock className="mr-2 h-4 w-4" />
+                        {closeAt ? format(new Date(closeAt), "HH:mm") : <span className="text-muted-foreground">Set time...</span>}
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                {closeAt && !isFinalized && (
+                  <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setCloseAt(null)}>
+                    Clear
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -358,6 +476,34 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
             </Button>
           )}
         </DialogFooter>
+        {timePickerConfig && (
+          <TimePickerDialog
+            isOpen={timePickerOpen}
+            onClose={() => setTimePickerOpen(false)}
+            initialTime={timePickerConfig.initialTime}
+            onTimeChange={(timestamp) => {
+              const instant = Temporal.Instant.fromEpochMilliseconds(timestamp);
+              const pdt = instant.toZonedDateTimeISO(timezone).toPlainDateTime();
+              const currentDate = timePickerConfig.type === "openAt" ? openAt : closeAt;
+              let finalPdt: Temporal.PlainDateTime;
+              if (currentDate) {
+                const currentPdt = instantToPlainDateTime(
+                  Temporal.Instant.fromEpochMilliseconds(currentDate),
+                  timezone
+                );
+                finalPdt = currentPdt.with({ hour: pdt.hour, minute: pdt.minute, second: 0 });
+              } else {
+                finalPdt = pdt.with({ second: 0 });
+              }
+              const epochMs = plainDateTimeToTimestamp(finalPdt, timezone);
+              if (timePickerConfig.type === "openAt") {
+                setOpenAt(epochMs);
+              } else {
+                setCloseAt(epochMs);
+              }
+            }}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
