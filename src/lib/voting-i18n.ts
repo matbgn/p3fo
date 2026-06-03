@@ -117,6 +117,7 @@ type VotingStrings = {
     notOpenForResponses: string;
     closedNoMoreResponses: string;
     thanksVoted: string;
+    thanksVotedNoChange: string;
     finalizingLocks: string;
     selectWinningProposal: string;
     onlyOwnerCanManage: string;
@@ -324,6 +325,7 @@ const en: VotingStrings = {
     notOpenForResponses: "This vote is not yet open for responses.",
     closedNoMoreResponses: "This vote is closed. No more responses are accepted.",
     thanksVoted: "Thanks, you voted! You can still change your vote while the vote is open.",
+    thanksVotedNoChange: "Thanks, you voted! Your vote is final and cannot be changed.",
     finalizingLocks: "Finalizing locks this vote. No further responses or edits will be accepted.",
     selectWinningProposal: "Select the winning proposal and optionally add a signature. This action is irreversible.",
     onlyOwnerCanManage: "Only the vote owner can manage moderators.",
@@ -531,6 +533,7 @@ const fr: VotingStrings = {
     notOpenForResponses: "Ce vote n'est pas encore ouvert aux r\u00e9ponses.",
     closedNoMoreResponses: "Ce vote est ferm\u00e9. Aucune r\u00e9ponse suppl\u00e9mentaire n'est accept\u00e9e.",
     thanksVoted: "Merci, vous avez vot\u00e9\u00a0! Vous pouvez encore modifier votre vote tant que le vote est ouvert.",
+    thanksVotedNoChange: "Merci, vous avez vot\u00e9\u00a0! Votre vote est d\u00e9finitif et ne peut pas \u00eatre modifi\u00e9.",
     finalizingLocks: "La finalisation verrouille ce vote. Aucune r\u00e9ponse ou modification ne sera accept\u00e9e.",
     selectWinningProposal: "S\u00e9lectionnez la proposition gagnante et ajoutez optionnellement une signature. Cette action est irr\u00e9versible.",
     onlyOwnerCanManage: "Seul le propri\u00e9taire du vote peut g\u00e9rer les mod\u00e9rateurs.",

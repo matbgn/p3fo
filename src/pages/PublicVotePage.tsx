@@ -190,6 +190,7 @@ const PublicVotePage: React.FC = () => {
   const [hasSubmitted, setHasSubmitted] = React.useState(false);
   const [justVoted, setJustVoted] = React.useState(false);
   const canChangeVote = vote ? (vote.config.allowVoteChangeUntilClose ?? true) : true;
+  const votedAndLocked = hasSubmitted && !canChangeVote;
   const showResultsBeforeClose = vote ? (vote.config.showResultsBeforeClose ?? false) : false;
   const isClosed = vote?.config.phase === "CLOSED" || vote?.config.phase === "FINALIZED";
   const isSingleProposal = vote ? !(vote.config.multipleChoiceVote ?? true) : false;
@@ -592,10 +593,17 @@ const PublicVotePage: React.FC = () => {
           </div>
         )}
 
-        {isActive && hasSubmitted && (
+        {isActive && hasSubmitted && !votedAndLocked && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 text-center">
              <p className="text-green-700">
                {ts.messages.thanksVoted}
+             </p>
+          </div>
+        )}
+        {isActive && votedAndLocked && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-center">
+             <p className="text-blue-700">
+               {ts.messages.thanksVotedNoChange}
              </p>
           </div>
         )}
@@ -627,7 +635,7 @@ const PublicVotePage: React.FC = () => {
                   </a>
                 )}
 
-                {isActive && (canChangeVote || !hasSubmitted) && (
+                {isActive && (
                   <div className="mt-3">
                     {mode === "THUMBS_UP" && (
                       <div className="flex items-center gap-2">
@@ -645,6 +653,7 @@ const PublicVotePage: React.FC = () => {
                               handleSubmitVote(proposal.id, 1);
                             }
                           }}
+                          disabled={votedAndLocked}
                           className={
                             voterValues[proposal.id] === 1
                               ? "bg-green-600 hover:bg-green-700"
@@ -661,6 +670,7 @@ const PublicVotePage: React.FC = () => {
                             size="sm"
                             variant="ghost"
                             onClick={() => handleWithdrawVote(proposal.id)}
+                            disabled={votedAndLocked}
                             title={ts.buttons.withdraw}
                             className="text-red-600 hover:text-red-700 hover:bg-red-50"
                           >
@@ -689,6 +699,7 @@ const PublicVotePage: React.FC = () => {
                               : "outline"
                           }
                           onClick={() => handleSubmitVote(proposal.id, -1)}
+                          disabled={votedAndLocked}
                           className={
                             voterValues[proposal.id] === -1
                               ? "bg-red-600 hover:bg-red-700"
@@ -706,6 +717,7 @@ const PublicVotePage: React.FC = () => {
                               : "outline"
                           }
                           onClick={() => handleSubmitVote(proposal.id, 0)}
+                          disabled={votedAndLocked}
                           className={
                             voterValues[proposal.id] === 0
                               ? "bg-yellow-500 hover:bg-yellow-600"
@@ -723,6 +735,7 @@ const PublicVotePage: React.FC = () => {
                               : "outline"
                           }
                           onClick={() => handleSubmitVote(proposal.id, 1)}
+                          disabled={votedAndLocked}
                           className={
                             voterValues[proposal.id] === 1
                               ? "bg-green-600 hover:bg-green-700"
@@ -751,7 +764,7 @@ const PublicVotePage: React.FC = () => {
                             size="sm"
                             variant="outline"
                             onClick={() => handlePointsChange(proposal.id, -1)}
-                            disabled={currentVal <= 0}
+                            disabled={currentVal <= 0 || votedAndLocked}
                           >
                             <MinusCircle className="w-4 h-4" />
                           </Button>
@@ -762,7 +775,7 @@ const PublicVotePage: React.FC = () => {
                             size="sm"
                             variant="outline"
                             onClick={() => handlePointsChange(proposal.id, 1)}
-                            disabled={!canIncrement}
+                            disabled={!canIncrement || votedAndLocked}
                           >
                             <Plus className="w-4 h-4" />
                           </Button>
@@ -781,6 +794,7 @@ const PublicVotePage: React.FC = () => {
                             onClick={() =>
                               handleSubmitVote(proposal.id, grade.value)
                             }
+                            disabled={votedAndLocked}
                             className={`px-3 py-1.5 rounded-full text-xs font-medium text-white transition-colors ${
                               voterValues[proposal.id] === grade.value
                                 ? `${grade.color} ring-2 ring-offset-1 ring-gray-400`
@@ -966,12 +980,13 @@ const PublicVotePage: React.FC = () => {
                       </div>
                     )}
 
-                    {isActive && currentOpenLoop && (canChangeVote || !hasSubmitted) && (
+                    {isActive && currentOpenLoop && (
                       <div className="flex flex-wrap gap-2 mb-4">
                         {MJ_SCALE.map((grade) => (
                           <button
                             key={grade.value}
                             onClick={() => handleSubmitVote(proposal.id, grade.value, currentOpenLoop.id)}
+                            disabled={votedAndLocked}
                             className={`px-3 py-1.5 rounded-full text-xs font-medium text-white transition-colors ${
                               voterValues[proposal.id] === grade.value
                                 ? `${grade.color} ring-2 ring-offset-1 ring-gray-400`
@@ -1184,11 +1199,11 @@ const PublicVotePage: React.FC = () => {
           );
         })()}
 
-        {mode === "POINTS" && isActive && (canChangeVote || !hasSubmitted) && (
+        {mode === "POINTS" && isActive && (
           <div className="bg-white rounded-lg shadow-sm border p-5 mb-6">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-medium">{ts.buttons.submitPoints}</h3>
-              <Button size="sm" onClick={handleSubmitAllVotes}>
+              <Button size="sm" onClick={handleSubmitAllVotes} disabled={votedAndLocked}>
                 {ts.buttons.submit}
               </Button>
             </div>
@@ -1199,7 +1214,7 @@ const PublicVotePage: React.FC = () => {
           </div>
         )}
 
-        {isActive && vote.config.allowFreeText && (canChangeVote || !hasSubmitted) && (
+        {isActive && vote.config.allowFreeText && (
           <div className="bg-white rounded-lg shadow-sm border p-5 mb-6">
             <label className="text-sm font-medium text-gray-700 flex items-center gap-1 mb-2">
               <MessageSquare className="w-4 h-4" />
@@ -1216,12 +1231,12 @@ const PublicVotePage: React.FC = () => {
               onChange={(e) => setComment(e.target.value)}
               placeholder={ts.placeholders.comment}
               rows={2}
+              disabled={votedAndLocked}
             />
           </div>
         )}
 
         {isActive &&
-          (canChangeVote || !hasSubmitted) &&
           vote.config.kind === "consultation" &&
           vote.config.allowAudienceProposals && (
             <div className="bg-white rounded-lg shadow-sm border p-5 mb-6">
@@ -1234,11 +1249,12 @@ const PublicVotePage: React.FC = () => {
                   onChange={(e) => setAudienceProposalText(e.target.value)}
                   placeholder={ts.placeholders.proposal}
                   className="flex-1"
+                  disabled={votedAndLocked}
                 />
                 <Button
                   size="sm"
                   onClick={handleAudienceProposal}
-                  disabled={!audienceProposalText.trim()}
+                  disabled={!audienceProposalText.trim() || votedAndLocked}
                 >
                   <Plus className="w-4 h-4 mr-1" />
                   {ts.buttons.add}
