@@ -161,10 +161,12 @@ const PublicVotePage: React.FC = () => {
   const [voterValues, setVoterValues] = React.useState<Record<string, number>>({});
   const [comment, setComment] = React.useState("");
   const [hasSubmitted, setHasSubmitted] = React.useState(false);
-  const [showResults, setShowResults] = React.useState(false);
+  const [justVoted, setJustVoted] = React.useState(false);
   const canChangeVote = vote ? (vote.config.allowVoteChangeUntilClose ?? true) : true;
-  const showResultsAlways = vote ? (vote.config.showResultsBeforeClose ?? false) : false;
+  const showResultsBeforeClose = vote ? (vote.config.showResultsBeforeClose ?? false) : false;
+  const isClosed = vote?.config.phase === "CLOSED" || vote?.config.phase === "FINALIZED";
   const isSingleProposal = vote ? !(vote.config.multipleChoiceVote ?? true) : false;
+  const showResults = vote ? (isClosed || showResultsBeforeClose || justVoted) : false;
   const [pointsBudget, setPointsBudget] = React.useState<Record<string, number>>({});
   const [audienceProposalText, setAudienceProposalText] = React.useState("");
   const [showPrevRounds, setShowPrevRounds] = React.useState(false);
@@ -196,7 +198,6 @@ const PublicVotePage: React.FC = () => {
           const myResponses = r.responses.filter((x) => x.voterToken === myToken);
           if (myResponses.length > 0) {
             setHasSubmitted(true);
-            setShowResults(true);
             const vals: Record<string, number> = {};
             myResponses.forEach((x) => {
               if (x.proposalId) vals[x.proposalId] = x.value;
@@ -204,10 +205,6 @@ const PublicVotePage: React.FC = () => {
             setVoterValues(vals);
           }
         }
-      }
-
-      if (v.config.showResultsBeforeClose ?? false) {
-        setShowResults(true);
       }
 
       if (v.config.mode === "CONSENT_LOOP") {
@@ -258,7 +255,7 @@ const PublicVotePage: React.FC = () => {
     });
     if (result) {
       setHasSubmitted(true);
-      setShowResults(true);
+      setJustVoted(true);
       if (isSingleProposal) {
         setVoterValues({ [proposalId]: value });
       } else {
@@ -277,6 +274,7 @@ const PublicVotePage: React.FC = () => {
         delete next[proposalId];
         if (Object.keys(next).length === 0) {
           setHasSubmitted(false);
+          setJustVoted(false);
         }
         return next;
       });
@@ -296,7 +294,7 @@ const PublicVotePage: React.FC = () => {
       });
     }
     setHasSubmitted(true);
-    setShowResults(true);
+    setJustVoted(true);
     setRefreshKey((k) => k + 1);
   };
 
@@ -327,8 +325,6 @@ const PublicVotePage: React.FC = () => {
   };
 
   const isActive = vote?.config.phase === "OPEN";
-  const isClosed =
-    vote?.config.phase === "CLOSED" || vote?.config.phase === "FINALIZED";
   const isFinalized = vote?.config.phase === "FINALIZED";
   const isAnonymous = vote?.config.isAnonymous ?? true;
 

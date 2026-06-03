@@ -90,15 +90,15 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
                 </div>
 
                 {vote.config.mode === "THUMBS_UP" && (() => {
-                  const t = tallyThumbsUp(responses, proposal.id);
+                  const tally = tallyThumbsUp(responses, proposal.id);
                   return (
                     <div className="flex items-center gap-2">
                       <span className="text-lg">👍</span>
-                      <span className="font-medium">{t.count}</span>
+                      <span className="font-medium">{tally.count}</span>
                       <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden ml-2">
                         <div
                           className="h-full bg-green-500 rounded-full"
-                          style={{ width: `${totalVoters > 0 ? (t.count / totalVoters) * 100 : 0}%` }}
+                          style={{ width: `${totalVoters > 0 ? (tally.count / totalVoters) * 100 : 0}%` }}
                         />
                       </div>
                     </div>
@@ -106,37 +106,37 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
                 })()}
 
                 {vote.config.mode === "THUMBS_UD_NEUTRAL" && (() => {
-                  const t = tallyUDNeutral(responses, proposal.id);
-                  const total = t.up + t.neutral + t.down || 1;
+                  const tally = tallyUDNeutral(responses, proposal.id);
+                  const total = tally.up + tally.neutral + tally.down || 1;
                   return (
                     <div className="space-y-1">
                       <div className="flex gap-3 text-sm">
-                        <span className="text-green-600">👍 {t.up}</span>
-                        <span className="text-yellow-600">😐 {t.neutral}</span>
-                        <span className="text-red-600">👎 {t.down}</span>
+                        <span className="text-green-600">👍 {tally.up}</span>
+                        <span className="text-yellow-600">😐 {tally.neutral}</span>
+                        <span className="text-red-600">👎 {tally.down}</span>
                       </div>
                       <div className="flex h-2 rounded-full overflow-hidden">
-                        <div className="bg-green-500" style={{ width: `${(t.up / total) * 100}%` }} />
-                        <div className="bg-yellow-400" style={{ width: `${(t.neutral / total) * 100}%` }} />
-                        <div className="bg-red-500" style={{ width: `${(t.down / total) * 100}%` }} />
+                        <div className="bg-green-500" style={{ width: `${(tally.up / total) * 100}%` }} />
+                        <div className="bg-yellow-400" style={{ width: `${(tally.neutral / total) * 100}%` }} />
+                        <div className="bg-red-500" style={{ width: `${(tally.down / total) * 100}%` }} />
                       </div>
                     </div>
                   );
                 })()}
 
                 {vote.config.mode === "POINTS" && (() => {
-                  const t = tallyPoints(responses, proposal.id);
+                  const tally = tallyPoints(responses, proposal.id);
                   return (
                     <div className="flex items-center gap-2">
                       <span className="text-lg">🪙</span>
-                      <span className="font-medium">{t.total} points</span>
+                      <span className="font-medium">{tally.total} {t.labels.points}</span>
                     </div>
                   );
                 })()}
 
                 {vote.config.mode === "MAJORITY_JUDGMENT" && (() => {
-                  const t = tallyMajorityJudgment(responses, proposal.id);
-                  const medianGrade = MJ_SCALE.find((g) => g.value === t.median);
+                  const tally = tallyMajorityJudgment(responses, proposal.id);
+                  const medianGrade = MJ_SCALE.find((g) => g.value === tally.median);
                   return (
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
@@ -150,8 +150,8 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
                           <div
                             key={grade.value}
                             className={`${grade.color}`}
-                            style={{ width: `${((t.distribution[grade.value] || 0) / (responses.length || 1)) * 100}%` }}
-                            title={`${grade.label}: ${t.distribution[grade.value] || 0}`}
+                            style={{ width: `${((tally.distribution[grade.value] || 0) / (responses.length || 1)) * 100}%` }}
+                            title={`${grade.label}: ${tally.distribution[grade.value] || 0}`}
                           />
                         ))}
                       </div>
