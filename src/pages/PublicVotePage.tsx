@@ -176,6 +176,8 @@ const PublicVotePage: React.FC = () => {
 
   const voterToken = slug ? ensureVoterToken(slug) : "";
 
+  const voteNotFoundMsg = ts.messages.voteNotFound;
+
   React.useEffect(() => {
     if (!slug) return;
     let mounted = true;
@@ -184,7 +186,7 @@ const PublicVotePage: React.FC = () => {
       const v = await fetchVote(slug);
       if (!mounted) return;
       if (!v) {
-        setError(ts.messages.voteNotFound);
+        setError(voteNotFoundMsg);
         setIsLoading(false);
         return;
       }
@@ -220,7 +222,7 @@ const PublicVotePage: React.FC = () => {
       mounted = false;
       clearInterval(interval);
     };
-  }, [slug]);
+  }, [slug, voteNotFoundMsg]);
 
   React.useEffect(() => {
     if (!slug || !vote) return;

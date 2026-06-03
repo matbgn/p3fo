@@ -60,6 +60,7 @@ export const BlockNoteProposalEditor = React.forwardRef<
 >(({ value, onChange, placeholder = "Write your proposal here...", readOnly = false, className }, ref) => {
   const didInitRef = React.useRef(false);
   const prevJsonRef = React.useRef(value);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editorRef = React.useRef<any>(null);
 
   const editor = useCreateBlockNote({
