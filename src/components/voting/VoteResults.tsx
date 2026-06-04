@@ -8,6 +8,7 @@ import { getVotingStrings } from "@/lib/voting-i18n";
 import { Badge } from "@/components/ui/badge";
 import { BarChart3, Users, MessageSquare, Trophy } from "lucide-react";
 import { LoopRoundProposalTooltip } from "./LoopRoundProposalTooltip";
+import { ProposalContentDisplay } from "./ProposalContentDisplay";
 
 interface VoteResultsProps {
   vote: VoteEntity;
@@ -278,6 +279,7 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
                     Proposal {proposal.position + 1}
                   </h4>
                 </div>
+                {proposal.content && <ProposalContentDisplay content={proposal.content} className="mb-2" />}
 
                 {vote.config.mode === "THUMBS_UP" && (() => {
                   const tally = tallyThumbsUp(responses, proposal.id);
