@@ -12,16 +12,21 @@ services:
       - PORT=5173
       - VITE_BASE_URL=${VITE_BASE_URL:-/}
       - P3FO_DB_CLIENT=${P3FO_DB_CLIENT:-sqlite}
-      - P3FO_DB_SQLITE_FILE=${P3FO_DB_SQLITE_FILE:-/home/appuser/data/p3fo.db}
+      - P3FO_DB_SQLITE_FILE=${P3FO_DB_SQLITE_FILE:-/home/nonroot/data/p3fo.db}
       - P3FO_DB_URL=${P3FO_DB_URL}
     volumes:
-      - p3fo_data:/home/appuser/data
+      - p3fo_data:/home/nonroot/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5173/api/health"]
+      test: ["CMD", "/nodejs/bin/node", "-e", "const h=require('http');h.get('http://localhost:5173/api/health',r=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
 
 volumes:

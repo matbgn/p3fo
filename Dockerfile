@@ -1,5 +1,5 @@
 # Stage 1: Build the application
-FROM node:24-slim AS build
+FROM node:26-slim AS build
 
 ARG VITE_BASE_URL=/
 ENV VITE_BASE_URL=$VITE_BASE_URL
@@ -9,8 +9,8 @@ WORKDIR /app
 # Install necessary build tools
 RUN apt-get update && apt-get install -y build-essential
 
-# Enable corepack to use pnpm from packageManager field
-RUN corepack enable
+# Install pnpm directly (corepack was removed in Node 26)
+RUN npm install -g pnpm@11.5.3
 
 # Copy package files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -25,45 +25,26 @@ COPY . .
 RUN pnpm run build && \
     pnpm exec tsc --project tsconfig.server.json
 
-# Stage 2: Create the runtime image
-FROM node:24-slim
+# Stage 2: Create data directory (distroless has no shell)
+FROM node:26-slim AS prep
+RUN mkdir -p /home/nonroot/data && chown -R 65534:65534 /home/nonroot
+
+# Stage 3: Create the runtime image
+FROM gcr.io/distroless/nodejs26-debian13:nonroot
 
 WORKDIR /app
 
-# Install necessary runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    coreutils bash curl unzip \
-    && rm -rf /var/lib/apt/lists/*
-
-# Enable corepack for pnpm
-RUN corepack enable
-
-# Create a non-root user to run the container
-RUN groupadd -r appuser && useradd -r -g appuser -m -d /home/appuser appuser
-
-# Set Node environment to production
 ENV NODE_ENV=production
 ENV PORT=5173
 ENV VITE_BASE_URL=/
 
-# Copy the built files with correct ownership
-COPY --chown=appuser:appuser --from=build /app/dist ./dist
-COPY --chown=appuser:appuser --from=build /app/node_modules ./node_modules
-COPY --chown=appuser:appuser --from=build /app/package*.json ./
+COPY --chown=nonroot:nonroot --from=build /app/dist ./dist
+COPY --chown=nonroot:nonroot --from=build /app/node_modules ./node_modules
+COPY --chown=nonroot:nonroot --from=build /app/package*.json ./
+COPY --chown=nonroot:nonroot --from=prep /home/nonroot /home/nonroot
 
-# Copy startup script
-COPY --chown=appuser:appuser docker/start.sh /app/start.sh
-RUN chmod +x /app/start.sh
+USER nonroot:nonroot
 
-# Create and prepare directories with proper permissions
-RUN mkdir -p /home/appuser/data && \
-    chown -R appuser:appuser /home/appuser
-
-# Switch to non-root user
-USER appuser
-
-# Expose the port the app runs on
 EXPOSE 5173
 
-# Set the entrypoint
-ENTRYPOINT ["/app/start.sh"]
+CMD ["dist/server/server/index.js"]

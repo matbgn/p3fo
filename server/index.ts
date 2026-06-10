@@ -707,6 +707,49 @@ app.post('/api/votes/:idOrSlug/responses', async (req: Request, res: Response) =
     if (vote.config.phase !== 'OPEN') {
       return res.status(400).json({ error: 'Vote is not open for responses' });
     }
+
+    const { value } = req.body;
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return res.status(400).json({ error: 'Invalid vote value: must be a finite number' });
+    }
+
+    const mode = vote.config.mode;
+    const MAX_MJ = 5;
+    const MIN_MJ = -1;
+    let valueError: string | null = null;
+
+    switch (mode) {
+      case 'THUMBS_UP':
+        if (value !== 1) valueError = 'THUMBS_UP votes must have value 1';
+        break;
+      case 'THUMBS_UD_NEUTRAL':
+        if (![-1, 0, 1].includes(value)) valueError = 'THUMBS_UD_NEUTRAL votes must be -1, 0, or 1';
+        break;
+      case 'POINTS': {
+        const maxPts = vote.config.maxPointsPerUser ?? 10;
+        if (!Number.isInteger(value) || value < 0 || value > maxPts) {
+          valueError = `POINTS votes must be an integer between 0 and ${maxPts}`;
+        }
+        break;
+      }
+      case 'MAJORITY_JUDGMENT':
+        if (value < MIN_MJ || value > MAX_MJ || !Number.isInteger(value)) {
+          valueError = 'MAJORITY_JUDGMENT votes must be an integer between -1 and 5';
+        }
+        break;
+      case 'CONSENT_LOOP':
+        if (value < MIN_MJ || value > MAX_MJ || !Number.isInteger(value)) {
+          valueError = 'CONSENT_LOOP votes must be an integer between -1 and 5';
+        }
+        break;
+      default:
+        valueError = `Unknown vote mode: ${mode}`;
+    }
+
+    if (valueError) {
+      return res.status(400).json({ error: valueError });
+    }
+
     const response = await db.createVoteResponse(vote.id, req.body);
     res.status(201).json(response);
   } catch (error: unknown) {
