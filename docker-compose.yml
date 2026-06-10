@@ -22,7 +22,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-    read_only: true
     tmpfs:
       - /tmp
     security_opt:

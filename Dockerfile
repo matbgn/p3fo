@@ -27,7 +27,7 @@ RUN pnpm run build && \
 
 # Stage 2: Create data directory (distroless has no shell)
 FROM node:26-slim AS prep
-RUN mkdir -p /home/nonroot/data && chown -R 65534:65534 /home/nonroot
+RUN mkdir -p /home/nonroot/data && chown -R 65532:65532 /home/nonroot
 
 # Stage 3: Create the runtime image
 FROM gcr.io/distroless/nodejs26-debian13:nonroot
