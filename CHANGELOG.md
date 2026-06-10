@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.25.1 (2026-06-10)
+
+### Bug Fixes
+
+- **voting tool:** display rich text content of proposal's to public view (2971f16)
+
+---
+
 ## v0.25.0 (2026-06-03)
 
 ### Features
@@ -157,16 +165,5 @@
 - **tests:** syntax (a9da54a)
 - **common:** use selected user settings in projections (2ffa708)
 - **kanban:** only count leaf tasks in total difficulty calculations (a78544e)
-
----
-
-## v0.17.1 (2026-03-18)
-
-### Bug Fixes
-
-- **ressources plan:** handle empty inputs on preferred days (0ed0cd2)
-- **timetable:** make overlap arcs reactive to filter and view changes (0a34c54)
-- **running timer:** only stop timers belonging to current user (535889c)
-- **running timer:** filter timer stops by current user only (3cb47ef)
 
 ---
