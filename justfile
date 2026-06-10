@@ -45,6 +45,7 @@ check:
   npx tsc -b --noEmit
   @echo "Running ESLint..."
   npx eslint --max-warnings 0
+  just check-node-versions
 
 # --- Version Management Tasks ---
 sync-versions version:
@@ -244,3 +245,67 @@ version:
   @echo "Next git-sv version (next): $(git-sv nv)"
   @if [ -f VERSION ]; then echo "Local VERSION file: $(cat VERSION)"; fi
   @echo "package.json version: $(jq -r '.version' package.json)"
+
+# --- Check that Node and pnpm versions are aligned across all config files ---
+check-node-versions:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  errors=0
+
+  echo "Checking version alignment across .tool-versions, package.json, Dockerfile, and deploy.yml..."
+
+  # --- Node.js ---
+  node_tool=$(grep '^nodejs' .tool-versions | awk '{print $2}')
+  node_pkg=$(jq -r '.engines.node // empty' package.json 2>/dev/null || true)
+  node_docker=$(grep -oP 'FROM node:\K[0-9]+' Dockerfile | head -1)
+  node_ci=$(grep -oP "node-version: '?\\K[^']*" .github/workflows/deploy.yml | head -1)
+
+  echo "  .tool-versions  node: $node_tool"
+  echo "  package.json     node: ${node_pkg:-<not set>}"
+  echo "  Dockerfile       node: $node_docker"
+  echo "  deploy.yml       node: $node_ci"
+
+  node_major_tool="${node_tool%%.*}"
+  if [ "$node_major_tool" != "$node_docker" ]; then
+    echo "  ERROR: .tool-versions node major ($node_major_tool) != Dockerfile ($node_docker)" >&2
+    errors=$((errors + 1))
+  fi
+  if [ "$node_major_tool" != "$node_ci" ]; then
+    echo "  ERROR: .tool-versions node major ($node_major_tool) != deploy.yml ($node_ci)" >&2
+    errors=$((errors + 1))
+  fi
+  if [ -n "$node_pkg" ] && [ "$node_major_tool" != "${node_pkg%%.*}" ]; then
+    echo "  ERROR: .tool-versions node major ($node_major_tool) != package.json engines ($node_pkg)" >&2
+    errors=$((errors + 1))
+  fi
+
+  # --- pnpm ---
+  pnpm_tool=$(grep '^pnpm' .tool-versions | awk '{print $2}')
+  pnpm_pkg=$(jq -r '.packageManager' package.json | sed 's/pnpm@//')
+  pnpm_docker=$(grep -oP 'pnpm@\K[0-9.]+' Dockerfile | head -1)
+  pnpm_ci=$(grep -oP 'pnpm@\K[0-9.]+' .github/workflows/deploy.yml | head -1)
+
+  echo "  .tool-versions  pnpm: $pnpm_tool"
+  echo "  package.json     pnpm: $pnpm_pkg"
+  echo "  Dockerfile       pnpm: $pnpm_docker"
+  echo "  deploy.yml       pnpm: $pnpm_ci"
+
+  if [ "$pnpm_tool" != "$pnpm_pkg" ]; then
+    echo "  ERROR: .tool-versions pnpm ($pnpm_tool) != package.json ($pnpm_pkg)" >&2
+    errors=$((errors + 1))
+  fi
+  if [ "$pnpm_tool" != "$pnpm_docker" ]; then
+    echo "  ERROR: .tool-versions pnpm ($pnpm_tool) != Dockerfile ($pnpm_docker)" >&2
+    errors=$((errors + 1))
+  fi
+  if [ "$pnpm_tool" != "$pnpm_ci" ]; then
+    echo "  ERROR: .tool-versions pnpm ($pnpm_tool) != deploy.yml ($pnpm_ci)" >&2
+    errors=$((errors + 1))
+  fi
+
+  if [ "$errors" -eq 0 ]; then
+    echo "All versions are aligned."
+  else
+    echo "$errors error(s) found." >&2
+    exit 1
+  fi
