@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import QRCodeBlock from "@/components/voting/QRCodeBlock";
 import { LoopRoundProposalTooltip } from "@/components/voting/LoopRoundProposalTooltip";
+import { ProposalContentDisplay } from "@/components/voting/ProposalContentDisplay";
 import { yVoteProposals, yVoteLoops, yVoteResponses, isCollaborationEnabled, initializeCollaboration } from "@/lib/collaboration";
 import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
 import { syncResponsesToYjs } from "@/hooks/useVotes";
@@ -645,6 +646,7 @@ const PublicVotePage: React.FC = () => {
                     {proposal.description}
                   </p>
                 )}
+                {proposal.content && <ProposalContentDisplay content={proposal.content} className="mb-3" />}
                 {proposal.infoUrl && (
                   <a
                     href={proposal.infoUrl}
@@ -992,25 +994,7 @@ const PublicVotePage: React.FC = () => {
                         <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
                           {ts.labels.currentRoundProposal}
                         </h4>
-                        <div
-                          className="prose prose-sm max-w-none"
-                          dangerouslySetInnerHTML={{
-                            __html: (() => {
-                              try {
-                                const blocks = JSON.parse(displayContent);
-                                if (Array.isArray(blocks)) {
-                                  return blocks
-                                    .map((b: { content?: Array<{ text?: string }> }) => {
-                                      if (!b.content || !Array.isArray(b.content)) return "";
-                                      return `<p>${b.content.map((c: { text?: string }) => c.text || "").join("")}</p>`;
-                                    })
-                                    .join("");
-                                }
-                              } catch { /* empty */ }
-                              return displayContent;
-                            })(),
-                          }}
-                        />
+                        <ProposalContentDisplay content={displayContent} />
                       </div>
                     )}
 
@@ -1309,6 +1293,7 @@ const PublicVotePage: React.FC = () => {
                     <h4 className="text-sm font-medium text-gray-900 mb-2">
                       Proposal {proposal.position + 1}
                     </h4>
+                    {proposal.content && <ProposalContentDisplay content={proposal.content} className="mb-2" />}
                     {mode === "THUMBS_UP" && (() => {
                       const count = tallyThumbsUpResult(proposal.id);
                       return (

@@ -1,5 +1,55 @@
 # Changelog
 
+## v0.25.1 (2026-06-10)
+
+### Bug Fixes
+
+- **voting tool:** display rich text content of proposal's to public view (2971f16)
+
+---
+
+## v0.25.0 (2026-06-03)
+
+### Features
+
+- **voting tool:** add submit-all-votes flow for multi-proposal voting when single vote is expected (34bd46d)
+- **voting:** real-time updates via Yjs for vote proposals, loops, and responses (0084565)
+- **voting:** restore per-proposal diff dialog, add pre-round editor, disable editing during active round (d06af2c)
+- **voting:** Redesign CONSENT_LOOP as per-proposal loops (5f128a8)
+- **voting:** offer a reset votes option (339f288)
+- **voting:** Phase 10+11 — unit tests + i18n (EN/FR) (a8ecce6)
+- **voting:** add Vitest unit tests for vote-tally.ts (32cd9ff)
+- **voting:** add vote data to global export/import (Phase 9) (0251cba)
+- **voting:** Phase 7 — TaskCard-to-Vote linking (e8802b0)
+- **voting:** Phase 5-6 — CONSENT_LOOP mode + multi-moderator & moderation pop-out (4b403e7)
+- **voting:** extract shared tally functions into src/lib/vote-tally.ts (8f34c71)
+- **voting:** add PublicVotePage with /v/:slug routes for anonymous voting (9f01a5d)
+- **voting:** Phase 2 — BlockNote proposals & manager UI components (dd102cd)
+- **voting:** add data model, DB schema, REST routes, adapters, and hooks (391cdd0)
+- **dream phase:** add intentional and collaborative frameworks (bd581e7)
+
+### Bug Fixes
+
+- **voting tool:** replace datetime-local inputs with shared calendar picker (fddf82b)
+- **voting tool:** keep vote UI visible and disabled after voting when changes not allowed (3d9b2ee)
+- **voting tool:** ensure moderator get a fresh modal settings view (6f7e200)
+- **voting tool:** prevent showing results to public when toggle is not activated (2b4ab10)
+- **voting tool:** render live per-proposal results overview in consent loop (85236b2)
+- **voting tool:** permit mulitple proposals opening vote at once (d62144d)
+- **voting tool:** offer ability for the moderator to edit consent loop proposition before next round (3d884d2)
+- CONSENT_LOOP draft persistence and build errors (6cc0675)
+- resolve lint errors in PublicVotePage and BlockNoteProposalEditor (acccb5c)
+- **voting:** remove stale i18n keys and fix duplicate withdraw key (6ae469a)
+- **voting tool:** make consent loop mode kind of work (7e48e7c)
+- **voting tool:** fix do not show result before close in MJ (4d746d8)
+- **voting tool:** fix points vote with caping option (2fba169)
+- **voting tool:** fix thumbs up single VS multiple choice vote (9102d8c)
+- **voting:** correct modal opening (3a21565)
+- **voting:** fix TS build errors in CreateLinkedVoteDialog and useVoteModerators (9230cc8)
+- **dream phase:** import missing yFrameworks (f07bb4d)
+
+---
+
 ## v0.24.0 (2026-05-27)
 
 ### Features
@@ -115,30 +165,5 @@
 - **tests:** syntax (a9da54a)
 - **common:** use selected user settings in projections (2ffa708)
 - **kanban:** only count leaf tasks in total difficulty calculations (a78544e)
-
----
-
-## v0.17.1 (2026-03-18)
-
-### Bug Fixes
-
-- **ressources plan:** handle empty inputs on preferred days (0ed0cd2)
-- **timetable:** make overlap arcs reactive to filter and view changes (0a34c54)
-- **running timer:** only stop timers belonging to current user (535889c)
-- **running timer:** filter timer stops by current user only (3cb47ef)
-
----
-
-## v0.17.0 (2026-03-14)
-
-### Features
-
-- **timetable:** add overlapping time entry detection (991dd8e)
-- **time-picker-dialog:** add keyboard input for direct time entry (cb2d48c)
-- **running timer:** centralize QuickTimer with user-specific filtering and resume (873304b)
-
-### Bug Fixes
-
-- **running timer:** stop and persist other running timers on toggle (79a7915)
 
 ---
