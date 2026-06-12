@@ -12,6 +12,9 @@ function playChime(type: 'work' | 'break'): void {
     if (!audioCtx) {
       audioCtx = new AudioContext();
     }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
     const ctx = audioCtx;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -198,7 +201,7 @@ export const usePomodoroTimer = () => {
 
     const sessionStartedAt = s.startedAt;
 
-    if (cfg.autoStartBreak) {
+    if (focusConfigRef.current.autoStartBreak) {
       const breakState: PomodoroState = {
         phase: nextBreak,
         startedAt: Date.now(),
@@ -236,7 +239,7 @@ export const usePomodoroTimer = () => {
     const sessionPhase = s.phase;
     const sessionStartedAt = s.startedAt;
 
-    if (cfg.autoStartWork) {
+    if (focusConfigRef.current.autoStartWork) {
       const workState: PomodoroState = {
         phase: 'work',
         startedAt: Date.now(),
@@ -297,6 +300,7 @@ export const usePomodoroTimer = () => {
     stateRef.current = workState;
 
     notifyPhaseChange('work');
+    eventBus.publish('pomodoroStarted', {});
     startTick(() => onWorkCompleteRef.current());
   }, [startTick, notifyPhaseChange]);
 
@@ -361,7 +365,7 @@ export const usePomodoroTimer = () => {
       const newCycleCount = s.cycleCount + 1;
       setLastCompletedCycleIndex(newCycleCount - 1);
 
-      if (configRef.current.autoStartBreak) {
+      if (focusConfigRef.current.autoStartBreak) {
         const breakState: PomodoroState = {
           ...s,
           phase: nextBreak,
@@ -392,7 +396,7 @@ export const usePomodoroTimer = () => {
       recordSession('work', taskIdRef.current, false, sessionStartedAt);
     } else if (s.phase === 'short-break' || s.phase === 'long-break') {
       const newCycleCount = s.phase === 'long-break' ? 0 : s.cycleCount;
-      if (configRef.current.autoStartWork) {
+      if (focusConfigRef.current.autoStartWork) {
         const workState: PomodoroState = {
           ...s,
           phase: 'work',

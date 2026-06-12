@@ -3,8 +3,6 @@ export interface PomodoroConfig {
   breakDuration: number;
   longBreakDuration: number;
   cyclesBeforeLongBreak: number;
-  autoStartWork: boolean;
-  autoStartBreak: boolean;
   pomodoroEnabled: boolean;
 }
 
@@ -36,6 +34,8 @@ export interface FocusModeConfig {
   wakeLock: boolean;
   soundNotifications: boolean;
   showFocusOverlay: boolean;
+  autoStartBreak: boolean;
+  autoStartWork: boolean;
 }
 
 export const DEFAULT_POMODORO_CONFIG: PomodoroConfig = {
@@ -43,8 +43,6 @@ export const DEFAULT_POMODORO_CONFIG: PomodoroConfig = {
   breakDuration: 5 * 60 * 1000,
   longBreakDuration: 15 * 60 * 1000,
   cyclesBeforeLongBreak: 4,
-  autoStartWork: false,
-  autoStartBreak: true,
   pomodoroEnabled: false,
 };
 
@@ -55,4 +53,6 @@ export const DEFAULT_FOCUS_MODE_CONFIG: FocusModeConfig = {
   wakeLock: true,
   soundNotifications: true,
   showFocusOverlay: false,
+  autoStartBreak: true,
+  autoStartWork: false,
 };

@@ -4,6 +4,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { usePersistence } from "@/hooks/usePersistence";
 import { AppSettingsEntity } from '@/lib/persistence-types';
 import { DEFAULT_POMODORO_CONFIG, DEFAULT_FOCUS_MODE_CONFIG, PomodoroConfig, FocusModeConfig } from '@/lib/pomodoro-types';
+import { DEFAULT_TRAVELER_CONFIG, TravelerConfig } from '@/lib/traveler-types';
 import { normalizePreferredDays } from '@/utils/scheduler-utils';
 import { yAppSettings, isCollaborationEnabled, doc } from '@/lib/collaboration';
 import { eventBus } from '@/lib/events';
@@ -34,6 +35,7 @@ export interface CombinedSettings {
     disabledModules: import('@/lib/persistence-types').ModuleId[];
     pomodoroConfig: PomodoroConfig;
     focusModeConfig: FocusModeConfig;
+    travelerConfig: TravelerConfig;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -72,6 +74,7 @@ const defaultCombinedSettings: CombinedSettings = {
     disabledModules: [],
     pomodoroConfig: DEFAULT_POMODORO_CONFIG,
     focusModeConfig: DEFAULT_FOCUS_MODE_CONFIG,
+    travelerConfig: DEFAULT_TRAVELER_CONFIG,
 };
 
 interface SettingsContextType {
@@ -120,6 +123,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 disabledModules: (appSettings.disabledModules as import('@/lib/persistence-types').ModuleId[]) || [],
                 pomodoroConfig: appSettings.pomodoroConfig ?? DEFAULT_POMODORO_CONFIG,
                 focusModeConfig: appSettings.focusModeConfig ?? DEFAULT_FOCUS_MODE_CONFIG,
+                travelerConfig: appSettings.travelerConfig ?? DEFAULT_TRAVELER_CONFIG,
             };
 
             if (userSettings) {
@@ -162,6 +166,23 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 if (userSettings.focusModeConfig) {
                     merged.focusModeConfig = userSettings.focusModeConfig;
                 }
+
+                if (userSettings.travelerConfig) {
+                    merged.travelerConfig = userSettings.travelerConfig;
+                }
+            }
+
+            // Migration: move autoStartBreak/autoStartWork from pomodoroConfig to focusModeConfig
+            const storedPomodoro = merged.pomodoroConfig as Record<string, unknown> | undefined;
+            if (storedPomodoro && ('autoStartBreak' in storedPomodoro || 'autoStartWork' in storedPomodoro)) {
+                const fc = { ...merged.focusModeConfig };
+                if ('autoStartBreak' in storedPomodoro && typeof storedPomodoro.autoStartBreak === 'boolean') {
+                    fc.autoStartBreak = storedPomodoro.autoStartBreak as boolean;
+                }
+                if ('autoStartWork' in storedPomodoro && typeof storedPomodoro.autoStartWork === 'boolean') {
+                    fc.autoStartWork = storedPomodoro.autoStartWork as boolean;
+                }
+                merged.focusModeConfig = fc;
             }
 
             setSettings(prev => {
@@ -256,7 +277,21 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 disabledModules: (appSettings.disabledModules as import('@/lib/persistence-types').ModuleId[]) || [],
                 pomodoroConfig: appSettings.pomodoroConfig ?? DEFAULT_POMODORO_CONFIG,
                 focusModeConfig: appSettings.focusModeConfig ?? DEFAULT_FOCUS_MODE_CONFIG,
+                travelerConfig: appSettings.travelerConfig ?? DEFAULT_TRAVELER_CONFIG,
             };
+
+            // Migration: move autoStartBreak/autoStartWork from pomodoroConfig to focusModeConfig
+            const storedPomodoro2 = freshAppValues.pomodoroConfig as Record<string, unknown> | undefined;
+            if (storedPomodoro2 && ('autoStartBreak' in storedPomodoro2 || 'autoStartWork' in storedPomodoro2)) {
+                const fc = { ...freshAppValues.focusModeConfig };
+                if ('autoStartBreak' in storedPomodoro2 && typeof storedPomodoro2.autoStartBreak === 'boolean') {
+                    fc.autoStartBreak = storedPomodoro2.autoStartBreak as boolean;
+                }
+                if ('autoStartWork' in storedPomodoro2 && typeof storedPomodoro2.autoStartWork === 'boolean') {
+                    fc.autoStartWork = storedPomodoro2.autoStartWork as boolean;
+                }
+                freshAppValues.focusModeConfig = fc;
+            }
 
             setSettings(prev => {
                 const next = { ...prev };
@@ -388,6 +423,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
             if (updates.focusModeConfig !== undefined) {
                 if (userSettings) addToUser('focusModeConfig', updates.focusModeConfig);
                 else addToApp('focusModeConfig', updates.focusModeConfig);
+            }
+            if (updates.travelerConfig !== undefined) {
+                if (userSettings) addToUser('travelerConfig', updates.travelerConfig);
+                else addToApp('travelerConfig', updates.travelerConfig);
             }
 
             if (Object.keys(userUpdates).length > 0 && userSettings) {

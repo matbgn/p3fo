@@ -14,7 +14,9 @@ import { UserSettingsProvider } from "@/context/UserSettingsContext";
 import { UsersProvider } from "@/context/UsersContext";
 import { SettingsProvider } from "@/context/SettingsContext";
 import { PomodoroProvider } from "@/context/PomodoroContext";
+import { TravelerProvider } from "@/context/TravelerContext";
 import { usePomodoro } from "@/hooks/usePomodoro";
+import { useTraveler } from "@/hooks/useTraveler";
 import { PomodoroPiPWindow } from "@/components/PomodoroPiPWindow";
 import { PomodoroFocusOverlay } from "@/components/PomodoroFocusOverlay";
 import { PomodoroTransitionAlert } from "@/components/PomodoroTransitionAlert";
@@ -39,24 +41,14 @@ import { CursorOverlay } from "@/components/CursorOverlay";
 const App = () => {
   const { checkAndTriggerReminders } = useReminderStore();
 
-  // Notification logic is now handled by NotificationManager
-
-  // Notification logic is now handled by NotificationManager
-
-
-  // Listen for global system commands (like Clear All Data)
   useEffect(() => {
     import('@/lib/collaboration').then(({ yTasks, yUserSettings, yFertilizationState, yFertilizationCards, yFertilizationColumns, yDreamState, yDreamCards, yDreamColumns, yCircles, ySystemState, doc }) => {
       const observer = () => {
         const command = ySystemState.get('command') as { type: string, timestamp: number } | undefined;
         if (command && command.type === 'CLEAR_ALL') {
-          // Check if this command is recent (e.g. within last 10 seconds)
-          // or we could just trust it if we haven't processed it.
-          // Simple approach: if timestamp > startup time, assume it's new.
           const startupTime = window._appStartupTime || 0;
           if (command.timestamp > startupTime) {
             console.log('Received global CLEAR_ALL command. Wiping data...');
-            // Clear Yjs shared documents first (tasks, users, boards and circles)
             doc.transact(() => {
               yTasks.clear();
               yUserSettings.clear();
@@ -68,9 +60,7 @@ const App = () => {
               yDreamColumns.clear();
               yCircles.clear();
             });
-            // Wipe data
             localStorage.clear();
-            // Preserve the initialized flag to prevent default tasks from being recreated
             localStorage.setItem(DEFAULT_TASKS_INITIALIZED_KEY, 'true');
             sessionStorage.clear();
             window.indexedDB.databases().then(dbs => {
@@ -80,14 +70,11 @@ const App = () => {
               window.indexedDB.deleteDatabase('p3fo-yjs-tasks');
             });
 
-            // Reload to reset state
-            // Give a small delay for DB deletion
             setTimeout(() => window.location.reload(), 500);
           }
         }
       };
       ySystemState.observe(observer);
-      // Set startup time to avoid reacting to old commands persisted in Yjs if not cleared
       window._appStartupTime = Date.now();
 
       return () => ySystemState.unobserve(observer);
@@ -104,24 +91,25 @@ const App = () => {
                   <UsersProvider>
                     <SettingsProvider>
                       <PomodoroProvider>
-                        <PomodoroOverlays />
-                        <ViewProvider>
-                          <Toaster />
-                          <Sonner />
-                          <CursorOverlay />
-                          <NotificationManager />
-                          <div className="relative">
-                            <BrowserRouter basename={import.meta.env.VITE_BASE_URL || "/p3fo"} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-                              <Routes>
-                                <Route path="/v/:slug" element={<PublicVotePage />} />
-                                <Route path="/v/:slug/m/:token" element={<ModerationPopout />} />
-                                <Route path="/" element={<Index />} />
-                                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                                <Route path="*" element={<NotFound />} />
-                              </Routes>
-                            </BrowserRouter>
-                          </div>
-                        </ViewProvider>
+                        <TravelerProvider>
+                          <TimerOverlays />
+                          <ViewProvider>
+                            <Toaster />
+                            <Sonner />
+                            <CursorOverlay />
+                            <NotificationManager />
+                            <div className="relative">
+                              <BrowserRouter basename={import.meta.env.VITE_BASE_URL || "/p3fo"} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                                <Routes>
+                                  <Route path="/v/:slug" element={<PublicVotePage />} />
+                                  <Route path="/v/:slug/m/:token" element={<ModerationPopout />} />
+                                  <Route path="/" element={<Index />} />
+                                  <Route path="*" element={<NotFound />} />
+                                </Routes>
+                              </BrowserRouter>
+                            </div>
+                          </ViewProvider>
+                        </TravelerProvider>
                       </PomodoroProvider>
                     </SettingsProvider>
                   </UsersProvider>
@@ -134,7 +122,7 @@ const App = () => {
   );
 };
 
-const PomodoroOverlays: React.FC = () => {
+const TimerOverlays: React.FC = () => {
   const { focusConfig } = usePomodoro();
   return (
     <>

@@ -15,7 +15,7 @@ const StatCard: React.FC<{ label: string; count: number; minutes: number; avg: n
     <div className="mt-1 flex items-baseline gap-2">
       <span className="text-2xl font-bold">{count}</span>
       <span className="text-sm text-muted-foreground">
-        pomodoro{count !== 1 ? 's' : ''}
+        session{count !== 1 ? 's' : ''}
       </span>
     </div>
     <div className="text-sm text-muted-foreground mt-0.5">
@@ -65,7 +65,7 @@ const PomodoroStats: React.FC<PomodoroStatsProps> = ({ stats, userId: _userId })
               />
               <YAxis fontSize={10} allowDecimals={false} />
               <Tooltip
-                formatter={(value: number) => [value, 'Pomodoros']}
+                formatter={(value: number) => [value, 'Focus Sessions']}
                 labelFormatter={(label: number) => `${label}:00`}
               />
               <Bar dataKey="count" radius={[2, 2, 0, 0]}>
@@ -87,7 +87,7 @@ const PomodoroStats: React.FC<PomodoroStatsProps> = ({ stats, userId: _userId })
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="name" fontSize={10} />
               <YAxis fontSize={10} allowDecimals={false} />
-              <Tooltip formatter={(value: number) => [value, 'Pomodoros']} />
+              <Tooltip formatter={(value: number) => [value, 'Focus Sessions']} />
               <Bar dataKey="count" radius={[2, 2, 0, 0]}>
                 {weeklyData.map((entry, index) => (
                   <Cell

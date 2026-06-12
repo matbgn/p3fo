@@ -107,8 +107,8 @@ const PomodoroHeatmap: React.FC<PomodoroHeatmapProps> = ({ sessions, weeks = 39 
       }
     });
 
-    const tooltip = d3.select('body').selectAll('.pomodoro-heatmap-tooltip').data([null]).join('div')
-      .attr('class', 'pomodoro-heatmap-tooltip')
+    const tooltip = d3.select('body').selectAll('.focus-heatmap-tooltip').data([null]).join('div')
+      .attr('class', 'focus-heatmap-tooltip')
       .style('position', 'fixed')
       .style('padding', '6px 10px')
       .style('background', 'hsl(var(--popover))')
@@ -133,7 +133,7 @@ const PomodoroHeatmap: React.FC<PomodoroHeatmapProps> = ({ sessions, weeks = 39 
         const dateStr = d3.timeFormat('%a %b %d, %Y')(d.date);
         tooltip
           .style('opacity', 1)
-          .html(`<strong>${d.count}</strong> pomodoro${d.count !== 1 ? 's' : ''} on ${dateStr}`);
+          .html(`<strong>${d.count}</strong> session${d.count !== 1 ? 's' : ''} on ${dateStr}`);
       })
       .on('mousemove', (event) => {
         tooltip

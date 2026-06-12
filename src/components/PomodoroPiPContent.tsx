@@ -1,7 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { PomodoroPhase } from '@/lib/pomodoro-types';
-import { Pause, Play, SkipForward, RotateCcw, Bell, Pin } from 'lucide-react';
+import { Pause, Play, SkipForward, RotateCcw, Bell, Pin, Coffee, ChartNoAxesGantt, Apple, PlaneTakeoff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SimpleDropdown } from '@/components/ui/simple-dropdown';
+
+type ActiveTechnique = 'pomodoro' | 'traveler';
 
 interface PomodoroPiPContentProps {
   phase: PomodoroPhase;
@@ -20,6 +23,9 @@ interface PomodoroPiPContentProps {
   onReset: () => void;
   onStartWork: () => void;
   onDismissTransition: () => void;
+  onSelectActiveTechnique?: (t: ActiveTechnique) => void;
+  activeTechnique?: ActiveTechnique;
+  travelerEnabled?: boolean;
 }
 
 type LayoutSize = 'minimal' | 'compact' | 'normal' | 'spacious';
@@ -44,8 +50,21 @@ const formatTime = (ms: number): string => {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 };
 
+function getLayoutSize(w: number, h: number): LayoutSize {
+  if (w < 140 || h < 120) return 'minimal';
+  if (w < 260 || h < 240) return 'compact';
+  if (w < 420 || h < 340) return 'normal';
+  return 'spacious';
+}
+
 function useLayoutSize(containerRef: React.RefObject<HTMLDivElement | null>): LayoutSize {
   const [size, setSize] = useState<LayoutSize>('normal');
+
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    setSize(getLayoutSize(el.offsetWidth, el.offsetHeight));
+  }, [containerRef]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -56,15 +75,7 @@ function useLayoutSize(containerRef: React.RefObject<HTMLDivElement | null>): La
         const borderBox = entry.borderBoxSize?.[0];
         const w = borderBox ? borderBox.inlineSize : entry.contentRect.width;
         const h = borderBox ? borderBox.blockSize : entry.contentRect.height;
-        if (w < 130 || h < 100) {
-          setSize('minimal');
-        } else if (w < 180) {
-          setSize('compact');
-        } else if (w < 280) {
-          setSize('normal');
-        } else {
-          setSize('spacious');
-        }
+        setSize(getLayoutSize(w, h));
       }
     });
 
@@ -92,6 +103,9 @@ export const PomodoroPiPContent: React.FC<PomodoroPiPContentProps> = ({
   onReset,
   onStartWork,
   onDismissTransition,
+  onSelectActiveTechnique,
+  activeTechnique = 'pomodoro',
+  travelerEnabled,
 }) => {
   const transition = phaseTransition ? transitionLabels[phaseTransition] : null;
   const [showPinHint, setShowPinHint] = useState(false);
@@ -184,14 +198,16 @@ export const PomodoroPiPContent: React.FC<PomodoroPiPContentProps> = ({
       <div ref={containerRef} className={`flex flex-col items-center justify-center h-full w-full p-1.5 ${config.bg} transition-colors duration-500`}>
         <div className="flex items-baseline gap-1.5 mb-1">
           <div className={`w-1.5 h-1.5 rounded-full ${config.barColor}`} />
+          {phase !== 'idle' && (
+            phase === 'work' ? (
+              <ChartNoAxesGantt className={`h-3 w-3 ${config.color}`} />
+            ) : (
+              <Coffee className={`h-3 w-3 ${config.color}`} />
+            )
+          )}
           <span className={`font-bold font-mono text-sm ${config.color}`}>
             {phase === 'idle' ? '--:--' : formatTime(remaining)}
           </span>
-          {phase !== 'idle' && (
-            <span className={`text-[9px] font-medium ${config.color} opacity-70`}>
-              {config.label}
-            </span>
-          )}
         </div>
 
         <div className="w-full h-1 rounded-full bg-muted/30 mb-1.5 overflow-hidden">
@@ -267,8 +283,27 @@ export const PomodoroPiPContent: React.FC<PomodoroPiPContentProps> = ({
   const dotSize = isCompact ? 'w-1 h-1' : 'w-2 h-2';
   const dotGap = isCompact ? 'gap-0.5' : 'gap-1';
 
+  const techniqueOptions = travelerEnabled
+    ? [
+        { value: 'pomodoro', label: 'Pomodoro', icon: <Apple className="h-3 w-3" /> },
+        { value: 'traveler', label: 'Traveler', icon: <PlaneTakeoff className="h-3 w-3" /> },
+      ]
+    : [{ value: 'pomodoro', label: 'Pomodoro', icon: <Apple className="h-3 w-3" /> }];
+
   return (
     <div ref={containerRef} className={`flex flex-col items-center justify-center h-full w-full ${isCompact ? 'p-1' : isSpacious ? 'p-6' : 'p-3'} ${config.bg} transition-colors duration-500`}>
+      {onSelectActiveTechnique && phase === 'idle' && !isCompact && (
+        <div className="flex items-center gap-1.5 mb-2">
+          <SimpleDropdown
+            value={activeTechnique}
+            onValueChange={(v) => onSelectActiveTechnique(v as ActiveTechnique)}
+            options={techniqueOptions}
+            placeholder="Technique"
+            className={isSpacious ? 'w-28' : 'w-24'}
+            triggerClassName={isSpacious ? 'h-8 text-xs px-2' : 'h-7 text-[10px] px-1.5'}
+          />
+        </div>
+      )}
       <div className={`relative flex items-center justify-center ${isCompact ? 'mb-1' : 'mb-2'}`}>
         <svg width={circleSize} height={circleSize} viewBox={viewBox} className="transform -rotate-90">
           <circle
@@ -298,10 +333,12 @@ export const PomodoroPiPContent: React.FC<PomodoroPiPContentProps> = ({
           <span className={`font-bold font-mono ${isCompact ? 'text-sm' : 'text-2xl'} ${config.color}`}>
             {phase === 'idle' ? '--:--' : formatTime(remaining)}
           </span>
-          {!isCompact && (
-            <span className={`text-xs font-medium ${config.color}`}>
-              {config.label}
-            </span>
+          {!isCompact && phase !== 'idle' && (
+            phase === 'work' ? (
+              <ChartNoAxesGantt className={`${isCompact ? 'h-3 w-3' : 'h-5 w-5'} ${config.color}`} />
+            ) : (
+              <Coffee className={`${isCompact ? 'h-3 w-3' : 'h-5 w-5'} ${config.color}`} />
+            )
           )}
         </div>
       </div>

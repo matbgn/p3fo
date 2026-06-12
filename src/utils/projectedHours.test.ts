@@ -3,6 +3,7 @@ import { calculateProjection, getProjectedHoursForActualMonth, getHistoricalHour
 import type { CombinedSettings } from '@/context/SettingsContext';
 import type { Task } from '@/hooks/useTasks';
 import { DEFAULT_POMODORO_CONFIG, DEFAULT_FOCUS_MODE_CONFIG } from '@/lib/pomodoro-types';
+import { DEFAULT_TRAVELER_CONFIG } from '@/lib/traveler-types';
 
 const mockSettings: CombinedSettings = {
     userWorkloadPercentage: 100,
@@ -26,6 +27,7 @@ const mockSettings: CombinedSettings = {
     disabledModules: [],
     pomodoroConfig: DEFAULT_POMODORO_CONFIG,
     focusModeConfig: DEFAULT_FOCUS_MODE_CONFIG,
+    travelerConfig: DEFAULT_TRAVELER_CONFIG,
 };
 
 const makeTaskWithTimer = (startTime: number, endTime: number, userId?: string): Task => ({

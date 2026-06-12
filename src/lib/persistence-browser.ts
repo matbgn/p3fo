@@ -1,5 +1,6 @@
 import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from './persistence-types';
 import { DEFAULT_POMODORO_CONFIG, DEFAULT_FOCUS_MODE_CONFIG } from './pomodoro-types';
+import { DEFAULT_TRAVELER_CONFIG } from './traveler-types';
 
 // Storage keys
 const TASKS_STORAGE_KEY = 'dyad_task_board_v1';
@@ -42,6 +43,7 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
   disabledModules: [],
   pomodoroConfig: DEFAULT_POMODORO_CONFIG,
   focusModeConfig: DEFAULT_FOCUS_MODE_CONFIG,
+  travelerConfig: DEFAULT_TRAVELER_CONFIG,
 };
 
 export class BrowserJsonPersistence implements PersistenceAdapter {

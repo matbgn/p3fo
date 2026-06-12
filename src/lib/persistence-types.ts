@@ -2,8 +2,11 @@
 // Matches the existing structures in useTasks, useUserSettings, useSettings, filter-storage, QoLIndexSurveyPage
 
 import { PomodoroConfig, FocusModeConfig, PomodoroSession } from './pomodoro-types';
+import { TravelerConfig } from './traveler-types';
 export type { PomodoroConfig, FocusModeConfig, PomodoroSession } from './pomodoro-types';
 export { DEFAULT_POMODORO_CONFIG, DEFAULT_FOCUS_MODE_CONFIG } from './pomodoro-types';
+export type { TravelerConfig } from './traveler-types';
+export { DEFAULT_TRAVELER_CONFIG } from './traveler-types';
 
 export type TriageStatus = "Backlog" | "Ready" | "WIP" | "Blocked" | "Done" | "Dropped";
 
@@ -104,6 +107,7 @@ export interface AppSettingsEntity {
   disabledModules?: ModuleId[];
   pomodoroConfig?: PomodoroConfig;
   focusModeConfig?: FocusModeConfig;
+  travelerConfig?: TravelerConfig;
 }
 
 export interface UserSettingsEntity {
@@ -122,6 +126,7 @@ export interface UserSettingsEntity {
   trigram?: string;
   pomodoroConfig?: PomodoroConfig;
   focusModeConfig?: FocusModeConfig;
+  travelerConfig?: TravelerConfig;
 }
 
 export interface QolSurveyResponseEntity {

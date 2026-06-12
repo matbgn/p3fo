@@ -35,12 +35,12 @@ const PomodoroStatsTab: React.FC<{ userId: string }> = ({ userId }) => {
       eventBus.publish('pomodoroSessionCompleted');
       reload();
     } catch (error) {
-      console.error('Error resetting pomodoro stats:', error);
+      console.error('Error resetting focus session stats:', error);
     }
   };
 
   if (isLoading) {
-    return <LoadingSpinner label="Loading pomodoro stats..." className="h-full" />;
+    return <LoadingSpinner label="Loading focus session stats..." className="h-full" />;
   }
 
   return (
@@ -48,7 +48,7 @@ const PomodoroStatsTab: React.FC<{ userId: string }> = ({ userId }) => {
       <PomodoroStats stats={stats} userId={userId} />
       <div className="rounded-lg border bg-card text-card-foreground p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-medium">Pomodoro Activity</h3>
+          <h3 className="text-sm font-medium">Focus Session Activity</h3>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
@@ -58,9 +58,9 @@ const PomodoroStatsTab: React.FC<{ userId: string }> = ({ userId }) => {
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Reset Pomodoro Stats?</AlertDialogTitle>
+                  <AlertDialogTitle>Reset Focus Session Stats?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will permanently delete all your pomodoro session history, including the heatmap and statistics. This action cannot be undone.
+                    This will permanently delete all your focus session history, including the heatmap and statistics. This action cannot be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -192,7 +192,7 @@ const MetricsPage: React.FC = () => {
               className={`px-4 py-2 font-medium ${activeTab === "pomodoro" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
               onClick={() => setActiveTab("pomodoro")}
             >
-              Pomodoro
+              Focus Sessions
             </button>
           </div>
 
@@ -207,7 +207,7 @@ const MetricsPage: React.FC = () => {
             ) : activeTab === "individual-qol" ? (
               selectedUserId && selectedUserId !== "unassigned" ? <QoLSurvey userId={selectedUserId} /> : <div>Please select a user to view survey</div>
             ) : activeTab === "pomodoro" ? (
-              selectedUserId && selectedUserId !== "unassigned" ? <PomodoroStatsTab userId={selectedUserId} /> : <div>Please select a user to view pomodoro stats</div>
+              selectedUserId && selectedUserId !== "unassigned" ? <PomodoroStatsTab userId={selectedUserId} /> : <div>Please select a user to view focus session stats</div>
             ) : (
               <div className="flex items-center justify-center h-full">
                 <p className="text-muted-foreground">Graphics content for {activeTab} will appear here</p>

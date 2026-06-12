@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { GripVertical, Folder, AlertTriangle, CircleDot, Trash2, Clock2, Clock, Play, Pause, ChevronDown, ChevronRight, Flame, FileText, BellRing, CalendarIcon, User, Crosshair, Vote as VoteIcon, SkipForward, Timer as TimerIcon } from "lucide-react";
+import { GripVertical, Folder, AlertTriangle, CircleDot, Trash2, Clock2, Clock, Play, Pause, ChevronDown, ChevronRight, Flame, FileText, BellRing, CalendarIcon, User, Crosshair, Vote as VoteIcon } from "lucide-react";
 import { TaskStatusSelect } from "./TaskStatusSelect";
 import { useTasks, Task, Category, TriageStatus } from "@/hooks/useTasks";
 import { Badge } from "@/components/ui/badge";
@@ -46,24 +46,6 @@ import { TaskEditModal } from "./TaskEditModal";
 import { useCardAging } from "@/hooks/useCardAging";
 import { AgingDecorations } from "@/components/AgingOverlays";
 import { LiveTimeBadge, EditableTitle, DIFFICULTY_OPTIONS, getDifficultyColor, DifficultyBadge } from "./SharedTaskControls";
-import { usePomodoro } from "@/hooks/usePomodoro";
-import { PomodoroPhase } from "@/lib/pomodoro-types";
-
-const phaseDotColor: Record<PomodoroPhase, string> = {
-  idle: 'bg-muted-foreground/30',
-  work: 'bg-red-500',
-  'short-break': 'bg-green-500',
-  'long-break': 'bg-blue-500',
-};
-
-const formatPomodoroTime = (ms: number): string => {
-  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-};
-
-
 
 interface TaskCardProps {
   task: Task;
@@ -164,7 +146,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
   const { userSettings, userId: currentUserId } = useUserSettings();
   const { settings } = useSettingsContext();
   const { votes, createVote, loadVotes } = useVotes();
-  const pomodoro = usePomodoro();
+
   const [linkedVoteDialogOpen, setLinkedVoteDialogOpen] = React.useState(false);
 
   React.useEffect(() => {
@@ -234,8 +216,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
   const { calculateTotalTime, calculateTotalDifficulty, updateLinkedVoteIds } = useTasks();
   const hasSubtasks = task.children && task.children.length > 0;
   const canHaveTimer = !hasSubtasks; // Only tasks without children can have timers
-  const pomodoroOnThisTask = pomodoro.pomodoroEnabled && pomodoro.state.phase !== 'idle' && pomodoro.currentTaskId === task.id;
-  const pomodoroActiveElsewhere = pomodoro.pomodoroEnabled && pomodoro.state.phase !== 'idle' && pomodoro.currentTaskId !== task.id && pomodoro.currentTaskId !== undefined;
+
   const taskTimerRunning = task.timer?.some(e => !e.endTime);
   const totalDifficulty = hasSubtasks ? calculateTotalDifficulty(task.id) : task.difficulty || 0;
   const totalTime = hasSubtasks ? calculateTotalTime(task.id) : (task.timer || []).reduce((acc, entry) => {
@@ -363,44 +344,20 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
          {!hasSubtasks && (
            isUltraCompact ? (
              <div className={`flex items-center gap-2 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
-               {isHovered && (
-                 <>
-                   {pomodoroOnThisTask ? (
-                     <>
-                       <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${phaseDotColor[pomodoro.state.phase]}`} title={`Pomodoro: ${pomodoro.state.phase}`} />
-                       <span className="text-xs font-mono font-semibold">{formatPomodoroTime(pomodoro.remaining)}</span>
-                       {pomodoro.isRunning && !pomodoro.isPaused ? (
-                         <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={(e) => { e.stopPropagation(); pomodoro.pause(); }}>
-                           <Pause className="h-4 w-4" />
-                         </Button>
-                       ) : pomodoro.isPaused ? (
-                         <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={(e) => { e.stopPropagation(); pomodoro.resume(); }}>
-                           <Play className="h-4 w-4" />
-                         </Button>
-                       ) : null}
-                       <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={(e) => { e.stopPropagation(); pomodoro.reset(); }} title="End Pomodoro">
-                         <SkipForward className="h-4 w-4" />
-                       </Button>
-                     </>
-                   ) : (
-                     <Button
-                       size="sm"
-                       variant="ghost"
-                       className="h-6 w-6 p-0"
-                       onClick={(e) => {
-                         e.stopPropagation();
-                         if (pomodoro.pomodoroEnabled && !pomodoroActiveElsewhere) {
-                           pomodoro.startWork(task.id);
-                           if (!taskTimerRunning) toggleTimer(task.id, currentUserId);
-                         } else {
-                           toggleTimer(task.id, currentUserId);
-                         }
-                       }}
-                     >
-                       {taskTimerRunning ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                     </Button>
-                   )}
-                   <Button
+                {isHovered && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 w-6 p-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleTimer(task.id, currentUserId);
+                      }}
+                    >
+                      {taskTimerRunning ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                    </Button>
+                    <Button
                      size="sm"
                      variant="ghost"
                      className="h-6 w-6 p-0"
@@ -412,56 +369,21 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                )}
              </div>
            ) : (
-             <div className="flex items-center gap-2">
-               {pomodoroOnThisTask ? (
-                 <>
-                   <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${phaseDotColor[pomodoro.state.phase]}`} title={`Pomodoro: ${pomodoro.state.phase}`} />
-                   <span className="text-xs font-mono font-semibold">{formatPomodoroTime(pomodoro.remaining)}</span>
-                   {pomodoro.isRunning && !pomodoro.isPaused ? (
-                     <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={(e) => { e.stopPropagation(); pomodoro.pause(); }}>
-                       <Pause className="h-4 w-4" />
-                     </Button>
-                   ) : pomodoro.isPaused ? (
-                     <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={(e) => { e.stopPropagation(); pomodoro.resume(); }}>
-                       <Play className="h-4 w-4" />
-                     </Button>
-                   ) : null}
-                   <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={(e) => { e.stopPropagation(); pomodoro.reset(); }} title="End Pomodoro">
-                     <SkipForward className="h-4 w-4" />
-                   </Button>
-                 </>
-               ) : (
-                 <>
-                   <Button
-                     size="sm"
-                     variant="ghost"
-                     className="h-6 w-6 p-0"
-                     onClick={(e) => {
-                       e.stopPropagation();
-                       if (pomodoro.pomodoroEnabled && !pomodoroActiveElsewhere) {
-                         pomodoro.startWork(task.id);
-                         if (!taskTimerRunning) toggleTimer(task.id, currentUserId);
-                       } else {
-                         toggleTimer(task.id, currentUserId);
-                       }
-                     }}
-                   >
-                     {taskTimerRunning ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                   </Button>
-                   {pomodoro.pomodoroEnabled && !pomodoroActiveElsewhere && !pomodoroOnThisTask && taskTimerRunning && (
-                     <Button
-                       size="sm"
-                       variant="ghost"
-                       className="h-6 w-6 p-0 text-muted-foreground/60 hover:text-red-500"
-                       onClick={(e) => { e.stopPropagation(); pomodoro.startWork(task.id); }}
-                       title="Start Pomodoro"
-                     >
-                       <TimerIcon className="h-4 w-4" />
-                     </Button>
-                   )}
-                 </>
-               )}
-               <Button
+              <div className="flex items-center gap-2">
+                <>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleTimer(task.id, currentUserId);
+                    }}
+                  >
+                    {taskTimerRunning ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                  </Button>
+                </>
+                <Button
                  size="sm"
                  variant="ghost"
                  className="h-6 w-6 p-0"
