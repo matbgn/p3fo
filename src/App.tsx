@@ -13,6 +13,11 @@ import { UserProvider } from "@/context/UserContext";
 import { UserSettingsProvider } from "@/context/UserSettingsContext";
 import { UsersProvider } from "@/context/UsersContext";
 import { SettingsProvider } from "@/context/SettingsContext";
+import { PomodoroProvider } from "@/context/PomodoroContext";
+import { usePomodoro } from "@/hooks/usePomodoro";
+import { PomodoroPiPWindow } from "@/components/PomodoroPiPWindow";
+import { PomodoroFocusOverlay } from "@/components/PomodoroFocusOverlay";
+import { PomodoroTransitionAlert } from "@/components/PomodoroTransitionAlert";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import PublicVotePage from "./pages/PublicVotePage";
@@ -33,6 +38,8 @@ import { CursorOverlay } from "@/components/CursorOverlay";
 
 const App = () => {
   const { checkAndTriggerReminders } = useReminderStore();
+
+  // Notification logic is now handled by NotificationManager
 
   // Notification logic is now handled by NotificationManager
 
@@ -94,33 +101,47 @@ const App = () => {
           <PersistenceProvider>
             <UserProvider>
               <UserSettingsProvider>
-                <UsersProvider>
-                  <SettingsProvider>
-                    <ViewProvider>
-                      <Toaster />
-                      <Sonner />
-                      <CursorOverlay />
-                      <NotificationManager />
-                      <div className="relative">
-                        <BrowserRouter basename={import.meta.env.VITE_BASE_URL || "/p3fo"} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-                          <Routes>
-                            <Route path="/v/:slug" element={<PublicVotePage />} />
-                            <Route path="/v/:slug/m/:token" element={<ModerationPopout />} />
-                            <Route path="/" element={<Index />} />
-                            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                            <Route path="*" element={<NotFound />} />
-                          </Routes>
-                        </BrowserRouter>
-                      </div>
-                    </ViewProvider>
-                  </SettingsProvider>
-                </UsersProvider>
+                  <UsersProvider>
+                    <SettingsProvider>
+                      <PomodoroProvider>
+                        <PomodoroOverlays />
+                        <ViewProvider>
+                          <Toaster />
+                          <Sonner />
+                          <CursorOverlay />
+                          <NotificationManager />
+                          <div className="relative">
+                            <BrowserRouter basename={import.meta.env.VITE_BASE_URL || "/p3fo"} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                              <Routes>
+                                <Route path="/v/:slug" element={<PublicVotePage />} />
+                                <Route path="/v/:slug/m/:token" element={<ModerationPopout />} />
+                                <Route path="/" element={<Index />} />
+                                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                                <Route path="*" element={<NotFound />} />
+                              </Routes>
+                            </BrowserRouter>
+                          </div>
+                        </ViewProvider>
+                      </PomodoroProvider>
+                    </SettingsProvider>
+                  </UsersProvider>
               </UserSettingsProvider>
             </UserProvider>
           </PersistenceProvider>
         </TooltipProvider>
       </QueryClientProvider>
     </Profiler>
+  );
+};
+
+const PomodoroOverlays: React.FC = () => {
+  const { focusConfig } = usePomodoro();
+  return (
+    <>
+      <PomodoroTransitionAlert />
+      <PomodoroPiPWindow />
+      {focusConfig.showFocusOverlay && <PomodoroFocusOverlay />}
+    </>
   );
 };
 

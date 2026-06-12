@@ -1,6 +1,10 @@
 // Types for the persistence layer
 // Matches the existing structures in useTasks, useUserSettings, useSettings, filter-storage, QoLIndexSurveyPage
 
+import { PomodoroConfig, FocusModeConfig, PomodoroSession } from './pomodoro-types';
+export type { PomodoroConfig, FocusModeConfig, PomodoroSession } from './pomodoro-types';
+export { DEFAULT_POMODORO_CONFIG, DEFAULT_FOCUS_MODE_CONFIG } from './pomodoro-types';
+
 export type TriageStatus = "Backlog" | "Ready" | "WIP" | "Blocked" | "Done" | "Dropped";
 
 export type Category =
@@ -98,6 +102,8 @@ export interface AppSettingsEntity {
   region?: string;
   cardAgingBaseDays?: number;
   disabledModules?: ModuleId[];
+  pomodoroConfig?: PomodoroConfig;
+  focusModeConfig?: FocusModeConfig;
 }
 
 export interface UserSettingsEntity {
@@ -112,8 +118,10 @@ export interface UserSettingsEntity {
   timezone?: string;
   weekStartDay?: 0 | 1;
   defaultPlanView?: 'week' | 'month';
-  preferredWorkingDays?: number[] | Record<string, number>; // Legacy array or new map (day -> percentage)
+  preferredWorkingDays?: number[] | Record<string, number>;
   trigram?: string;
+  pomodoroConfig?: PomodoroConfig;
+  focusModeConfig?: FocusModeConfig;
 }
 
 export interface QolSurveyResponseEntity {
@@ -238,6 +246,13 @@ export interface PersistenceAdapter {
   revokeVoteModerator(moderatorId: string): Promise<void>;
   resolveVoteModerator(token: string): Promise<{ vote: VoteEntity; moderator: VoteModerator } | null>;
   importVoteModerators(items: VoteModerator[]): Promise<void>;
+
+  // Pomodoro sessions
+  listPomodoroSessions(userId?: string, since?: number): Promise<PomodoroSession[]>;
+  createPomodoroSession(session: PomodoroSession): Promise<PomodoroSession>;
+  deletePomodoroSession(id: string): Promise<void>;
+  clearAllPomodoroSessions(): Promise<void>;
+  deletePomodoroSessionsByUser(userId: string): Promise<void>;
 }
 
 export type FactTag = 'A' | 'N' | 'K' | 'P';

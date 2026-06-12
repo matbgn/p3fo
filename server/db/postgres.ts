@@ -19,7 +19,8 @@ import type {
   VoteResponseEntity,
   VoteLoop,
   VoteModerator,
-  VoteKind
+  VoteKind,
+  PomodoroSession
 } from '../../src/lib/persistence-types.js';
 
 // Raw database row types for pg (JSONB is already parsed, booleans are booleans)
@@ -59,6 +60,8 @@ interface UserSettingsDbRow {
   defaultPlanView: string | null;
   preferredWorkingDays: number[] | Record<string, number> | null;
   trigram: string | null;
+  pomodoroConfig: Record<string, unknown> | null;
+  focusModeConfig: Record<string, unknown> | null;
 }
 
 interface CircleDbRow {
@@ -144,8 +147,24 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
   country: 'CH',
   region: 'BE',
   disabledModules: [],
+  pomodoroConfig: {
+    workDuration: 25 * 60 * 1000,
+    breakDuration: 5 * 60 * 1000,
+    longBreakDuration: 15 * 60 * 1000,
+    cyclesBeforeLongBreak: 4,
+    autoStartWork: false,
+    autoStartBreak: true,
+    pomodoroEnabled: false,
+  },
+  focusModeConfig: {
+    enablePiP: true,
+    pipWidth: 240,
+    pipHeight: 220,
+    wakeLock: true,
+    soundNotifications: true,
+    showFocusOverlay: false,
+  },
 };
-
 export async function createPostgresClient(connectionString?: string): Promise<DbClient> {
   // Use connection string from parameter or environment variable
   const dbUrl = connectionString || process.env.DATABASE_URL;
@@ -210,7 +229,9 @@ class PostgresClient implements DbClient {
         "weekStartDay" INTEGER,
         "defaultPlanView" TEXT,
         "preferredWorkingDays" JSONB,
-        "trigram" TEXT
+        "trigram" TEXT,
+        "pomodoroConfig" JSONB,
+        "focusModeConfig" JSONB
       )
     `);
 
@@ -440,6 +461,20 @@ class PostgresClient implements DbClient {
         "lastSeenAt" TIMESTAMP WITH TIME ZONE
       )
     `);
+
+    // Create pomodoroSessions table
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS "pomodoroSessions" (
+        "id" TEXT PRIMARY KEY,
+        "taskId" TEXT REFERENCES "tasks"("id") ON DELETE SET NULL,
+        "userId" TEXT NOT NULL,
+        "startTime" BIGINT NOT NULL,
+        "endTime" BIGINT NOT NULL,
+        "phase" TEXT NOT NULL,
+        "duration" BIGINT NOT NULL,
+        "completed" BOOLEAN NOT NULL DEFAULT FALSE
+      )
+    `);
     // These indexes dramatically improve query performance when filtering by userId, parentId, or triageStatus
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId" ON "tasks"("userId")`);
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_tasks_parentId" ON "tasks"("parentId")`);
@@ -472,6 +507,10 @@ class PostgresClient implements DbClient {
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_voteLoops_voteId" ON "voteLoops"("voteId")`);
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_voteModerators_voteId" ON "voteModerators"("voteId")`);
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_voteModerators_token" ON "voteModerators"("token")`);
+
+    // Pomodoro sessions indexes
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_pomodoro_userId" ON "pomodoroSessions"("userId")`);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_pomodoro_startTime" ON "pomodoroSessions"("startTime")`);
 
     // 2. Run migrations AFTER tables exist
     try {
@@ -598,6 +637,8 @@ class PostgresClient implements DbClient {
     await addColumn('userSettings', 'defaultPlanView', 'TEXT');
     await addColumn('userSettings', 'preferredWorkingDays', 'JSONB');
     await addColumn('userSettings', 'trigram', 'TEXT');
+    await addColumn('userSettings', 'pomodoroConfig', 'JSONB');
+    await addColumn('userSettings', 'focusModeConfig', 'JSONB');
 
     // AppSettings columns
     await runMigration('appSettings', 'split_time', 'splitTime');
@@ -614,6 +655,8 @@ class PostgresClient implements DbClient {
 
     await addColumn('appSettings', 'cardAgingBaseDays', 'REAL DEFAULT 30');
     await addColumn('appSettings', 'disabledModules', 'JSONB');
+await addColumn('appSettings', 'pomodoroConfig', 'JSONB');
+await addColumn('appSettings', 'focusModeConfig', 'JSONB');
 
     // QolSurvey columns
     await runMigration('qolSurvey', 'user_id', 'userId');
@@ -924,8 +967,8 @@ class PostgresClient implements DbClient {
     const updated = { ...current, ...data, userId };
 
     await this.pool.query(`
-      INSERT INTO "userSettings" ("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness", "weekStartDay", "defaultPlanView", "preferredWorkingDays", "trigram")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      INSERT INTO "userSettings" ("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness", "weekStartDay", "defaultPlanView", "preferredWorkingDays", "trigram", "pomodoroConfig", "focusModeConfig")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       ON CONFLICT ("userId") DO UPDATE SET
         "username" = EXCLUDED."username",
         "logo" = EXCLUDED."logo",
@@ -938,7 +981,9 @@ class PostgresClient implements DbClient {
         "weekStartDay" = EXCLUDED."weekStartDay",
         "defaultPlanView" = EXCLUDED."defaultPlanView",
         "preferredWorkingDays" = EXCLUDED."preferredWorkingDays",
-        "trigram" = EXCLUDED."trigram"
+        "trigram" = EXCLUDED."trigram",
+        "pomodoroConfig" = EXCLUDED."pomodoroConfig",
+        "focusModeConfig" = EXCLUDED."focusModeConfig"
     `, [
       updated.userId,
       updated.username,
@@ -952,7 +997,9 @@ class PostgresClient implements DbClient {
       updated.weekStartDay ?? null,
       updated.defaultPlanView ?? null,
       updated.preferredWorkingDays ? JSON.stringify(updated.preferredWorkingDays) : null,
-      updated.trigram ?? null
+      updated.trigram ?? null,
+      updated.pomodoroConfig ? JSON.stringify(updated.pomodoroConfig) : null,
+      updated.focusModeConfig ? JSON.stringify(updated.focusModeConfig) : null,
     ]);
 
     return updated;
@@ -999,6 +1046,8 @@ class PostgresClient implements DbClient {
         country: row.country ?? 'CH',
         region: row.region ?? 'BE',
         disabledModules: typeof row.disabledModules === 'string' ? JSON.parse(row.disabledModules) : (row.disabledModules ?? []),
+        pomodoroConfig: typeof row.pomodoroConfig === 'string' ? JSON.parse(row.pomodoroConfig) : (row.pomodoroConfig ?? DEFAULT_APP_SETTINGS.pomodoroConfig),
+        focusModeConfig: typeof row.focusModeConfig === 'string' ? JSON.parse(row.focusModeConfig) : (row.focusModeConfig ?? DEFAULT_APP_SETTINGS.focusModeConfig),
       };
     }
     return DEFAULT_APP_SETTINGS;
@@ -1012,8 +1061,8 @@ class PostgresClient implements DbClient {
       INSERT INTO "appSettings" ("id", "splitTime", "userWorkloadPercentage", "weeksComputation", 
                                 "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal",
                                 "hoursToBeDoneByDay", "vacationLimitMultiplier", "hourlyBalanceLimitUpper",
-                                "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region", "disabledModules")
-      VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                                "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region", "disabledModules", "pomodoroConfig", "focusModeConfig")
+      VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       ON CONFLICT ("id") DO UPDATE SET
         "splitTime" = EXCLUDED."splitTime",
         "userWorkloadPercentage" = EXCLUDED."userWorkloadPercentage",
@@ -1030,7 +1079,9 @@ class PostgresClient implements DbClient {
         "timezone" = EXCLUDED."timezone",
         "country" = EXCLUDED."country",
         "region" = EXCLUDED."region",
-        "disabledModules" = EXCLUDED."disabledModules"
+        "disabledModules" = EXCLUDED."disabledModules",
+        "pomodoroConfig" = EXCLUDED."pomodoroConfig",
+        "focusModeConfig" = EXCLUDED."focusModeConfig"
     `, [
       updated.splitTime,
       updated.userWorkloadPercentage,
@@ -1048,6 +1099,8 @@ class PostgresClient implements DbClient {
       updated.country,
       updated.region,
       JSON.stringify(updated.disabledModules ?? []),
+      JSON.stringify(updated.pomodoroConfig ?? DEFAULT_APP_SETTINGS.pomodoroConfig),
+      JSON.stringify(updated.focusModeConfig ?? DEFAULT_APP_SETTINGS.focusModeConfig),
     ]);
 
     return updated;
@@ -2091,6 +2144,8 @@ class PostgresClient implements DbClient {
       defaultPlanView: row.defaultPlanView as 'week' | 'month' | undefined,
       preferredWorkingDays: row.preferredWorkingDays || undefined,
       trigram: row.trigram || undefined,
+      pomodoroConfig: row.pomodoroConfig ? (typeof row.pomodoroConfig === 'string' ? JSON.parse(row.pomodoroConfig) : row.pomodoroConfig) : undefined,
+      focusModeConfig: row.focusModeConfig ? (typeof row.focusModeConfig === 'string' ? JSON.parse(row.focusModeConfig) : row.focusModeConfig) : undefined,
     };
   }
 
@@ -2132,6 +2187,65 @@ class PostgresClient implements DbClient {
     };
   }
 
+  // Pomodoro sessions
+  async listPomodoroSessions(userId?: string, since?: number): Promise<PomodoroSession[]> {
+    const conditions: string[] = [];
+    const params: (string | number)[] = [];
+    let paramIndex = 1;
+
+    if (userId) {
+      conditions.push(`"userId" = $${paramIndex++}`);
+      params.push(userId);
+    }
+    if (since) {
+      conditions.push(`"startTime" >= $${paramIndex++}`);
+      params.push(since);
+    }
+
+    const whereClause = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
+    const result = await this.pool.query(`SELECT * FROM "pomodoroSessions"${whereClause} ORDER BY "startTime" DESC`, params);
+
+    return result.rows.map(row => ({
+      id: row.id,
+      taskId: row.taskId ?? undefined,
+      userId: row.userId,
+      startTime: Number(row.startTime),
+      endTime: Number(row.endTime),
+      phase: row.phase,
+      duration: Number(row.duration),
+      completed: row.completed === true || row.completed === 1,
+    }));
+  }
+
+  async createPomodoroSession(session: PomodoroSession): Promise<PomodoroSession> {
+    await this.pool.query(`
+      INSERT INTO "pomodoroSessions" ("id", "taskId", "userId", "startTime", "endTime", "phase", "duration", "completed")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `, [
+      session.id,
+      session.taskId ?? null,
+      session.userId,
+      session.startTime,
+      session.endTime,
+      session.phase,
+      session.duration,
+      session.completed,
+    ]);
+    return session;
+  }
+
+  async deletePomodoroSession(id: string): Promise<void> {
+    await this.pool.query('DELETE FROM "pomodoroSessions" WHERE "id" = $1', [id]);
+  }
+
+  async clearAllPomodoroSessions(): Promise<void> {
+    await this.pool.query('DELETE FROM "pomodoroSessions"');
+  }
+
+  async deletePomodoroSessionsByUser(userId: string): Promise<void> {
+    await this.pool.query('DELETE FROM "pomodoroSessions" WHERE "userId" = $1', [userId]);
+  }
+
   async clearAllData(): Promise<void> {
     const client = await this.pool.connect();
     try {
@@ -2152,6 +2266,7 @@ class PostgresClient implements DbClient {
       await client.query('DROP TABLE IF EXISTS "voteResponses" CASCADE');
       await client.query('DROP TABLE IF EXISTS "voteLoops" CASCADE');
       await client.query('DROP TABLE IF EXISTS "voteModerators" CASCADE');
+await client.query('DROP TABLE IF EXISTS "pomodoroSessions" CASCADE');
 
       // Drop legacy tables if they exist
       await client.query('DROP TABLE IF EXISTS tasks CASCADE');

@@ -1,5 +1,5 @@
 // Database client interface and factory
-import { TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, FertilizationBoardEntity, DreamBoardEntity, CircleEntity, ReminderEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind } from '../../src/lib/persistence-types.js';
+import { TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, FertilizationBoardEntity, DreamBoardEntity, CircleEntity, ReminderEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from '../../src/lib/persistence-types.js';
 
 // Pagination options for queries
 export interface PaginationOptions {
@@ -116,6 +116,13 @@ export interface DbClient {
   revokeVoteModerator(moderatorId: string): Promise<void>;
   resolveVoteModeratorToken(token: string): Promise<{ vote: VoteEntity; moderator: VoteModerator } | null>;
   importVoteModerators(items: VoteModerator[]): Promise<void>;
+
+  // Pomodoro sessions
+  listPomodoroSessions(userId?: string, since?: number): Promise<PomodoroSession[]>;
+  createPomodoroSession(session: PomodoroSession): Promise<PomodoroSession>;
+  deletePomodoroSession(id: string): Promise<void>;
+  clearAllPomodoroSessions(): Promise<void>;
+  deletePomodoroSessionsByUser(userId: string): Promise<void>;
 
   // System
   clearAllData(): Promise<void>;

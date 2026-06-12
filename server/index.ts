@@ -1074,6 +1074,64 @@ app.post('/api/reminders/import', express.json({ limit: '10mb' }), async (req: R
   }
 });
 
+// Pomodoro session routes
+app.get('/api/pomodoro-sessions', async (req: Request, res: Response) => {
+  try {
+    const userId = req.query.userId as string | undefined;
+    const since = req.query.since ? Number(req.query.since) : undefined;
+    const sessions = await db.listPomodoroSessions(userId, since);
+    res.json({ data: sessions });
+  } catch (error: unknown) {
+    console.error('Error fetching pomodoro sessions:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to fetch pomodoro sessions', details: message });
+  }
+});
+
+app.post('/api/pomodoro-sessions', async (req: Request, res: Response) => {
+  try {
+    const session = await db.createPomodoroSession(req.body);
+    res.status(201).json(session);
+  } catch (error: unknown) {
+    console.error('Error creating pomodoro session:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to create pomodoro session', details: message });
+  }
+});
+
+app.delete('/api/pomodoro-sessions/:id', async (req: Request, res: Response) => {
+  try {
+    await db.deletePomodoroSession(req.params.id);
+    res.status(204).send();
+  } catch (error: unknown) {
+    console.error('Error deleting pomodoro session:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to delete pomodoro session', details: message });
+  }
+});
+
+app.post('/api/pomodoro-sessions/clear', async (req: Request, res: Response) => {
+  try {
+    await db.clearAllPomodoroSessions();
+    res.json({ success: true });
+  } catch (error: unknown) {
+    console.error('Error clearing pomodoro sessions:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to clear pomodoro sessions', details: message });
+  }
+});
+
+app.delete('/api/pomodoro-sessions/user/:userId', async (req: Request, res: Response) => {
+  try {
+    await db.deletePomodoroSessionsByUser(req.params.userId);
+    res.status(204).send();
+  } catch (error: unknown) {
+    console.error('Error deleting pomodoro sessions by user:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to delete pomodoro sessions for user', details: message });
+  }
+});
+
 // Error handling middleware
 app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
   console.error('Unhandled error:', error);
