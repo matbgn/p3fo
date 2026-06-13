@@ -14,12 +14,12 @@ type PipSizeValue = typeof PIP_SIZES[number]['value'];
 
 function getPipSizeValue(config: FocusModeConfig): PipSizeValue {
   const match = PIP_SIZES.find(s => s.width === config.pipWidth && s.height === config.pipHeight);
-  return match?.value ?? 'small';
+  return match?.value ?? 'normal';
 }
 
 function getPipDimensions(value: PipSizeValue): { pipWidth: number; pipHeight: number } {
   const match = PIP_SIZES.find(s => s.value === value);
-  return match ? { pipWidth: match.width, pipHeight: match.height } : { pipWidth: 240, pipHeight: 220 };
+  return match ? { pipWidth: match.width, pipHeight: match.height } : { pipWidth: 320, pipHeight: 400 };
 }
 
 const FocusModeSettings: React.FC = () => {

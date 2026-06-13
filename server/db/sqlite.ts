@@ -224,23 +224,23 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
     breakDuration: 5 * 60 * 1000,
     longBreakDuration: 15 * 60 * 1000,
     cyclesBeforeLongBreak: 4,
-    pomodoroEnabled: false,
+    pomodoroEnabled: true,
   },
   focusModeConfig: {
     enablePiP: true,
-    pipWidth: 120,
-    pipHeight: 100,
+    pipWidth: 320,
+    pipHeight: 400,
     wakeLock: true,
     soundNotifications: true,
     showFocusOverlay: false,
-    autoStartBreak: true,
+    autoStartBreak: false,
     autoStartWork: false,
   },
   travelerConfig: {
     travelMode: 'flight',
     departure: '',
     destination: '',
-    enabled: false,
+    enabled: true,
   },
 };
 

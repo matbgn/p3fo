@@ -178,7 +178,7 @@ export const DEFAULT_TRAVELER_CONFIG: TravelerConfig = {
   travelMode: 'flight',
   departure: '',
   destination: '',
-  enabled: false,
+  enabled: true,
 };
 
 export const INITIAL_TRAVELER_STATE: TravelerState = {

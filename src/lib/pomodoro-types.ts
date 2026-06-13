@@ -46,13 +46,13 @@ export const DEFAULT_POMODORO_CONFIG: PomodoroConfig = {
   breakDuration: 5 * 60 * 1000,
   longBreakDuration: 15 * 60 * 1000,
   cyclesBeforeLongBreak: 4,
-  pomodoroEnabled: false,
+  pomodoroEnabled: true,
 };
 
 export const DEFAULT_FOCUS_MODE_CONFIG: FocusModeConfig = {
   enablePiP: true,
-  pipWidth: 120,
-  pipHeight: 100,
+  pipWidth: 320,
+  pipHeight: 400,
   wakeLock: true,
   soundNotifications: true,
   showFocusOverlay: false,
