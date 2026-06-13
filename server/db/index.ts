@@ -119,7 +119,7 @@ export interface DbClient {
 
   // Pomodoro sessions
   listPomodoroSessions(userId?: string, since?: number): Promise<PomodoroSession[]>;
-  createPomodoroSession(session: PomodoroSession): Promise<PomodoroSession>;
+  createPomodoroSession(session: PomodoroSession): Promise<PomodoroSession & { warnings?: string[] }>;
   deletePomodoroSession(id: string): Promise<void>;
   clearAllPomodoroSessions(): Promise<void>;
   deletePomodoroSessionsByUser(userId: string): Promise<void>;

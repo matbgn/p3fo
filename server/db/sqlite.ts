@@ -2498,12 +2498,15 @@ class SqliteClient implements DbClient {
     }));
   }
 
-  async createPomodoroSession(session: PomodoroSession): Promise<PomodoroSession> {
-    // Nullify taskId if it doesn't reference an existing task (FK constraint)
+  async createPomodoroSession(session: PomodoroSession): Promise<PomodoroSession & { warnings?: string[] }> {
     let taskId = session.taskId ?? null;
+    const warnings: string[] = [];
     if (taskId !== null) {
       const task = this.db.prepare('SELECT "id" FROM "tasks" WHERE "id" = ?').get(taskId);
-      if (!task) taskId = null;
+      if (!task) {
+        taskId = null;
+        warnings.push(`taskId "${session.taskId}" does not exist; session saved without task link`);
+      }
     }
     this.db.prepare(`
       INSERT INTO "pomodoroSessions"("id", "taskId", "userId", "startTime", "endTime", "phase", "duration", "completed")
@@ -2518,7 +2521,9 @@ class SqliteClient implements DbClient {
       session.duration,
       session.completed ? 1 : 0,
     );
-    return session;
+    const result: PomodoroSession & { warnings?: string[] } = { ...session, taskId: taskId ?? undefined };
+    if (warnings.length > 0) result.warnings = warnings;
+    return result;
   }
 
   async deletePomodoroSession(id: string): Promise<void> {

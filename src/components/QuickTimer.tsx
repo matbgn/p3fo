@@ -12,9 +12,10 @@ import { useTraveler } from "@/hooks/useTraveler";
 import { setTravelerIdleState, registerTravelerStartFn, registerTravelerSearchFn, registerTravelerResetFn, registerPomodoroStartFn, setSearchLoading, subscribeTravelerIdle, readTravelerIdleSnapshot } from "@/lib/traveler-idle-state";
 import { useDocumentPiP } from "@/hooks/useDocumentPiP";
 import { PomodoroPhase } from "@/lib/pomodoro-types";
-import { CITIES, getCityByCode, TravelMode, getShortFlightDestinations, getFlightDurationMs, getFlightDurationColor } from "@/lib/traveler-types";
+import { CITIES, getCityByCode, TravelMode, TravelerConfig, DEFAULT_TRAVELER_CONFIG, getShortFlightDestinations, getFlightDurationMs, getFlightDurationColor } from "@/lib/traveler-types";
 import { fetchFlightDuration, getTrainDuration, computeBreakDuration, formatDuration } from "@/lib/traveler-api";
 import { eventBus } from "@/lib/events";
+import { useSettingsContext } from "@/context/SettingsContext";
 
 const phaseDotColor: Record<PomodoroPhase, string> = {
   idle: 'bg-muted-foreground/30',
@@ -59,12 +60,18 @@ export const QuickTimer: React.FC<{
   const pomodoro = usePomodoro();
   const traveler = useTraveler();
   const { isSupported: pipSupported, isPiPActive, openPiP, closePiP } = useDocumentPiP();
+  const { settings, updateSettings } = useSettingsContext();
 
   const [timerMode, setTimerMode] = useState<TimerMode>('pomodoro');
   const [departure, setDeparture] = useState(traveler.config.departure);
   const [destination, setDestination] = useState(traveler.config.destination);
   const [travelMode, setTravelMode] = useState<TravelMode>(traveler.config.travelMode);
   const [durationPreview, setDurationPreview] = useState<{ travelMs: number; breakMs: number } | null>(null);
+
+  const persistTravelerConfig = useCallback((patch: Partial<TravelerConfig>) => {
+    const current = settings.travelerConfig ?? DEFAULT_TRAVELER_CONFIG;
+    updateSettings({ travelerConfig: { ...current, ...patch } }, 'user');
+  }, [settings.travelerConfig, updateSettings]);
   const [durationLoading, setDurationLoading] = useState(false);
 
   // Derived flags used both by the sync effect below and by the JSX

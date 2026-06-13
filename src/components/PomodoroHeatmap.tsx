@@ -21,7 +21,7 @@ const PomodoroHeatmap: React.FC<PomodoroHeatmapProps> = ({ sessions, weeks = 39 
   const dailyCounts = useMemo(() => {
     const map = new Map<string, number>();
     for (const s of sessions) {
-      if (s.phase !== 'work' || !s.completed) continue;
+      if (s.phase !== 'work' || !s.completed || s.kind === 'traveler') continue;
       const d = new Date(s.startTime);
       const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       map.set(dayKey, (map.get(dayKey) || 0) + 1);

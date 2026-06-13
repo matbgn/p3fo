@@ -87,6 +87,7 @@ export const usePomodoroTimer = () => {
       phase,
       duration: Date.now() - startedAt,
       completed,
+      kind: 'pomodoro',
     };
 
     try {

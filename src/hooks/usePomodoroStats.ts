@@ -88,7 +88,7 @@ export const usePomodoroStats = (userId: string) => {
     const weekStart = startOfWeek(now);
     const monthStart = startOfMonth(now);
 
-    const workSessions = (Array.isArray(sessions) ? sessions : []).filter(s => s.phase === 'work' && s.completed);
+    const workSessions = (Array.isArray(sessions) ? sessions : []).filter(s => s.phase === 'work' && s.completed && s.kind !== 'traveler');
 
     let today = 0;
     let week = 0;

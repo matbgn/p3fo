@@ -2233,11 +2233,15 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     }));
   }
 
-  async createPomodoroSession(session: PomodoroSession): Promise<PomodoroSession> {
+  async createPomodoroSession(session: PomodoroSession): Promise<PomodoroSession & { warnings?: string[] }> {
     let taskId = session.taskId ?? null;
+    const warnings: string[] = [];
     if (taskId !== null) {
       const res = await this.pool.query('SELECT "id" FROM "tasks" WHERE "id" = $1', [taskId]);
-      if (res.rowCount === 0) taskId = null;
+      if (res.rowCount === 0) {
+        taskId = null;
+        warnings.push(`taskId "${session.taskId}" does not exist; session saved without task link`);
+      }
     }
     await this.pool.query(`
       INSERT INTO "pomodoroSessions" ("id", "taskId", "userId", "startTime", "endTime", "phase", "duration", "completed")
@@ -2252,7 +2256,9 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       session.duration,
       session.completed,
     ]);
-    return session;
+    const result: PomodoroSession & { warnings?: string[] } = { ...session, taskId: taskId ?? undefined };
+    if (warnings.length > 0) result.warnings = warnings;
+    return result;
   }
 
   async deletePomodoroSession(id: string): Promise<void> {

@@ -52,7 +52,7 @@ export const useTravelerTimer = () => {
 
   const recordSession = useCallback(async (phase: 'work' | 'break', completed: boolean) => {
     const s = stateRef.current;
-    if (!s.startedAt || s.departure === '' || s.destination === '') return;
+    if (!s.startedAt) return;
 
     const session: PomodoroSession = {
       id: crypto.randomUUID(),
@@ -63,6 +63,7 @@ export const useTravelerTimer = () => {
       phase: phase === 'work' ? 'work' : 'short-break',
       duration: Date.now() - s.startedAt,
       completed,
+      kind: 'traveler',
     };
 
     try {

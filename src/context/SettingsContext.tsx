@@ -173,7 +173,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
             }
 
             // Migration: move autoStartBreak/autoStartWork from pomodoroConfig to focusModeConfig
-            const storedPomodoro = merged.pomodoroConfig as Record<string, unknown> | undefined;
+            const storedPomodoro = merged.pomodoroConfig as unknown as Record<string, unknown> | undefined;
             if (storedPomodoro && ('autoStartBreak' in storedPomodoro || 'autoStartWork' in storedPomodoro)) {
                 const fc = { ...merged.focusModeConfig };
                 if ('autoStartBreak' in storedPomodoro && typeof storedPomodoro.autoStartBreak === 'boolean') {
@@ -186,7 +186,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 const cleaned = { ...storedPomodoro };
                 delete cleaned.autoStartBreak;
                 delete cleaned.autoStartWork;
-                merged.pomodoroConfig = cleaned as typeof merged.pomodoroConfig;
+                merged.pomodoroConfig = cleaned as unknown as typeof merged.pomodoroConfig;
             }
 
             setSettings(prev => {
@@ -285,7 +285,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
             };
 
             // Migration: move autoStartBreak/autoStartWork from pomodoroConfig to focusModeConfig
-            const storedPomodoro2 = freshAppValues.pomodoroConfig as Record<string, unknown> | undefined;
+            const storedPomodoro2 = freshAppValues.pomodoroConfig as unknown as Record<string, unknown> | undefined;
             if (storedPomodoro2 && ('autoStartBreak' in storedPomodoro2 || 'autoStartWork' in storedPomodoro2)) {
                 const fc = { ...freshAppValues.focusModeConfig };
                 if ('autoStartBreak' in storedPomodoro2 && typeof storedPomodoro2.autoStartBreak === 'boolean') {
@@ -298,7 +298,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 const cleaned = { ...storedPomodoro2 };
                 delete cleaned.autoStartBreak;
                 delete cleaned.autoStartWork;
-                freshAppValues.pomodoroConfig = cleaned as typeof freshAppValues.pomodoroConfig;
+                freshAppValues.pomodoroConfig = cleaned as unknown as typeof freshAppValues.pomodoroConfig;
             }
 
             setSettings(prev => {

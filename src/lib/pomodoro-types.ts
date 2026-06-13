@@ -8,6 +8,8 @@ export interface PomodoroConfig {
 
 export type PomodoroPhase = 'idle' | 'work' | 'short-break' | 'long-break';
 
+export type PomodoroSessionKind = 'pomodoro' | 'traveler';
+
 export interface PomodoroSession {
   id: string;
   taskId?: string;
@@ -17,6 +19,7 @@ export interface PomodoroSession {
   phase: PomodoroPhase;
   duration: number;
   completed: boolean;
+  kind?: PomodoroSessionKind;
 }
 
 export interface PomodoroState {

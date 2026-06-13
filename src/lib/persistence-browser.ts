@@ -1239,7 +1239,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
   }
 
-  async createPomodoroSession(session: PomodoroSession): Promise<PomodoroSession> {
+  async createPomodoroSession(session: PomodoroSession): Promise<PomodoroSession & { warnings?: string[] }> {
     if (typeof window === 'undefined') {
       throw new Error('Cannot create pomodoro session in non-browser environment');
     }

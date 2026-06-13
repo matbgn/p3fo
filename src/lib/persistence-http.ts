@@ -528,7 +528,7 @@ export class HttpApiPersistence implements PersistenceAdapter {
     return wrapped.data ?? [];
   }
 
-  async createPomodoroSession(session: PomodoroSession): Promise<PomodoroSession> {
+  async createPomodoroSession(session: PomodoroSession): Promise<PomodoroSession & { warnings?: string[] }> {
     return this.makeRequest('/api/pomodoro-sessions', {
       method: 'POST',
       body: JSON.stringify(session),

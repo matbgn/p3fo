@@ -15,8 +15,6 @@ import { UsersProvider } from "@/context/UsersContext";
 import { SettingsProvider } from "@/context/SettingsContext";
 import { PomodoroProvider } from "@/context/PomodoroContext";
 import { TravelerProvider } from "@/context/TravelerContext";
-import { usePomodoro } from "@/hooks/usePomodoro";
-import { useTraveler } from "@/hooks/useTraveler";
 import { PomodoroPiPWindow } from "@/components/PomodoroPiPWindow";
 import { PomodoroFocusOverlay } from "@/components/PomodoroFocusOverlay";
 import { PomodoroTransitionAlert } from "@/components/PomodoroTransitionAlert";
@@ -27,6 +25,9 @@ import ModerationPopout from "./components/voting/ModerationPopout";
 import { useReminderStore } from "./hooks/useReminders";
 import { ViewProvider } from "@/context/ViewContext";
 import { DEFAULT_TASKS_INITIALIZED_KEY } from "./hooks/useTasks";
+import { destroyTravelerIdleState } from "@/lib/traveler-idle-state";
+import { useSettingsContext } from "@/context/SettingsContext";
+import { DEFAULT_FOCUS_MODE_CONFIG } from "@/lib/pomodoro-types";
 
 declare global {
   interface Window {
@@ -81,6 +82,12 @@ const App = () => {
     });
   }, []);
 
+  useEffect(() => {
+    return () => {
+      destroyTravelerIdleState();
+    };
+  }, []);
+
   return (
     <Profiler id="Root-App" onRender={otelProfilerCallback}>
       <QueryClientProvider client={queryClient}>
@@ -123,7 +130,8 @@ const App = () => {
 };
 
 const TimerOverlays: React.FC = () => {
-  const { focusConfig } = usePomodoro();
+  const { settings } = useSettingsContext();
+  const focusConfig = settings.focusModeConfig ?? DEFAULT_FOCUS_MODE_CONFIG;
   return (
     <>
       <PomodoroTransitionAlert />
