@@ -58,7 +58,7 @@ export const usePomodoroStats = (userId: string) => {
     try {
       const adapter = await getPersistenceAdapter();
       const result = await adapter.listPomodoroSessions(userId);
-      const arr = Array.isArray(result) ? result : Array.isArray((result as { data: PomodoroSession[] }).data) ? (result as { data: PomodoroSession[] }).data : [];
+      const arr = Array.isArray(result) ? result : [];
       setSessions(arr);
     } catch (error) {
       console.error('Error loading pomodoro sessions for stats:', error);

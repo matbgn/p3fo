@@ -183,6 +183,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                     fc.autoStartWork = storedPomodoro.autoStartWork as boolean;
                 }
                 merged.focusModeConfig = fc;
+                const cleaned = { ...storedPomodoro };
+                delete cleaned.autoStartBreak;
+                delete cleaned.autoStartWork;
+                merged.pomodoroConfig = cleaned as typeof merged.pomodoroConfig;
             }
 
             setSettings(prev => {
@@ -291,6 +295,10 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                     fc.autoStartWork = storedPomodoro2.autoStartWork as boolean;
                 }
                 freshAppValues.focusModeConfig = fc;
+                const cleaned = { ...storedPomodoro2 };
+                delete cleaned.autoStartBreak;
+                delete cleaned.autoStartWork;
+                freshAppValues.pomodoroConfig = cleaned as typeof freshAppValues.pomodoroConfig;
             }
 
             setSettings(prev => {

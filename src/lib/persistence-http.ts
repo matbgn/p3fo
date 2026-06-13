@@ -523,7 +523,9 @@ export class HttpApiPersistence implements PersistenceAdapter {
     if (since) params.set('since', since.toString());
     const qs = params.toString();
     const result = await this.makeRequest(`/api/pomodoro-sessions${qs ? `?${qs}` : ''}`);
-    return (result as { data: PomodoroSession[] }).data ?? result;
+    if (Array.isArray(result)) return result;
+    const wrapped = result as { data: PomodoroSession[] };
+    return wrapped.data ?? [];
   }
 
   async createPomodoroSession(session: PomodoroSession): Promise<PomodoroSession> {

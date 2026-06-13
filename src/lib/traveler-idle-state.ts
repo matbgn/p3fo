@@ -151,3 +151,13 @@ export const useTravelerIdleState = (): TravelerIdleState => {
  * (e.g. clearing local state when the store resets via a PiP action).
  */
 export const readTravelerIdleSnapshot = () => ({ ...state, searchLoading });
+
+export const destroyTravelerIdleState = () => {
+  state = { ...initial };
+  searchLoading = false;
+  startFns.clear();
+  searchFns.clear();
+  pomodoroStartFns.clear();
+  resetFns.clear();
+  listeners.clear();
+};
