@@ -18,7 +18,8 @@ import type {
   VoteResponseEntity,
   VoteLoop,
   VoteModerator,
-  VoteKind
+  VoteKind,
+  PomodoroSession
 } from '../../src/lib/persistence-types.js';
 
 // Raw database row types (SQLite stores booleans as 0/1 integers and JSON as strings)
@@ -58,6 +59,9 @@ interface UserSettingsDbRow {
   defaultPlanView: string | null;
   preferredWorkingDays: string | null;
   trigram: string | null;
+  pomodoroConfig: string | null;
+  focusModeConfig: string | null;
+  travelerConfig: string | null;
 }
 
 interface AppSettingsDbRow {
@@ -78,6 +82,9 @@ interface AppSettingsDbRow {
   country: string | null;
   region: string | null;
   disabledModules: string | null;
+  pomodoroConfig: string | null;
+  focusModeConfig: string | null;
+  travelerConfig: string | null;
 }
 
 interface CircleDbRow {
@@ -174,6 +181,17 @@ interface VoteModeratorDbRow {
   lastSeenAt: string | null;
 }
 
+interface PomodoroSessionDbRow {
+  id: string;
+  taskId: string | null;
+  userId: string;
+  startTime: number;
+  endTime: number;
+  phase: string;
+  duration: number;
+  completed: number;
+}
+
 // Default values
 const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
   userId: 'default-user',
@@ -201,6 +219,29 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
   country: 'CH',
   region: 'BE',
   disabledModules: [],
+  pomodoroConfig: {
+    workDuration: 25 * 60 * 1000,
+    breakDuration: 5 * 60 * 1000,
+    longBreakDuration: 15 * 60 * 1000,
+    cyclesBeforeLongBreak: 4,
+    pomodoroEnabled: false,
+  },
+  focusModeConfig: {
+    enablePiP: true,
+    pipWidth: 120,
+    pipHeight: 100,
+    wakeLock: true,
+    soundNotifications: true,
+    showFocusOverlay: false,
+    autoStartBreak: true,
+    autoStartWork: false,
+  },
+  travelerConfig: {
+    travelMode: 'flight',
+    departure: '',
+    destination: '',
+    enabled: false,
+  },
 };
 
 
@@ -476,6 +517,20 @@ class SqliteClient implements DbClient {
       )
     `);
 
+    // Create pomodoroSessions table
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS "pomodoroSessions" (
+        "id" TEXT PRIMARY KEY,
+        "taskId" TEXT REFERENCES "tasks"("id") ON DELETE SET NULL,
+        "userId" TEXT NOT NULL,
+        "startTime" INTEGER NOT NULL,
+        "endTime" INTEGER NOT NULL,
+        "phase" TEXT NOT NULL,
+        "duration" INTEGER NOT NULL,
+        "completed" INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+
     // Create indexes for performance optimization
     // These indexes dramatically improve query performance when filtering by userId, parentId, or triageStatus
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId" ON "tasks"("userId")`);
@@ -509,6 +564,10 @@ class SqliteClient implements DbClient {
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_reminders_taskId" ON "reminders"("taskId")`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_reminders_state" ON "reminders"("state")`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_reminders_triggerDate" ON "reminders"("triggerDate")`);
+
+    // Pomodoro sessions indexes
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_pomodoro_userId" ON "pomodoroSessions"("userId")`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_pomodoro_startTime" ON "pomodoroSessions"("startTime")`);
 
     // Now run migrations AFTER tables exist
     try {
@@ -605,6 +664,9 @@ class SqliteClient implements DbClient {
     addColumn('userSettings', 'defaultPlanView', 'TEXT');
     addColumn('userSettings', 'preferredWorkingDays', 'TEXT');
     addColumn('userSettings', 'trigram', 'TEXT');
+    addColumn('userSettings', 'pomodoroConfig', 'TEXT');
+    addColumn('userSettings', 'focusModeConfig', 'TEXT');
+    addColumn('userSettings', 'travelerConfig', 'TEXT');
 
     // AppSettings columns
     runMigration('appSettings', 'split_time', 'splitTime');
@@ -621,6 +683,9 @@ class SqliteClient implements DbClient {
 
     addColumn('appSettings', 'cardAgingBaseDays', 'REAL DEFAULT 30');
     addColumn('appSettings', 'disabledModules', 'TEXT');
+    addColumn('appSettings', 'pomodoroConfig', 'TEXT');
+    addColumn('appSettings', 'focusModeConfig', 'TEXT');
+    addColumn('appSettings', 'travelerConfig', 'TEXT');
 
     // QolSurvey columns
     runMigration('qolSurvey', 'user_id', 'userId');
@@ -975,6 +1040,9 @@ class SqliteClient implements DbClient {
       defaultPlanView: row.defaultPlanView as 'week' | 'month' | undefined,
       preferredWorkingDays: row.preferredWorkingDays ? JSON.parse(row.preferredWorkingDays) : undefined,
       trigram: row.trigram || undefined,
+      pomodoroConfig: row.pomodoroConfig ? JSON.parse(row.pomodoroConfig) : undefined,
+      focusModeConfig: row.focusModeConfig ? JSON.parse(row.focusModeConfig) : undefined,
+      travelerConfig: row.travelerConfig ? JSON.parse(row.travelerConfig) : undefined,
     };
   }
 
@@ -995,12 +1063,15 @@ class SqliteClient implements DbClient {
       weekStartDay: updated.weekStartDay ?? null,
       defaultPlanView: updated.defaultPlanView ?? null,
       preferredWorkingDays: updated.preferredWorkingDays ? JSON.stringify(updated.preferredWorkingDays) : null,
-      trigram: updated.trigram ?? null
+      trigram: updated.trigram ?? null,
+      pomodoroConfig: updated.pomodoroConfig ? JSON.stringify(updated.pomodoroConfig) : null,
+      focusModeConfig: updated.focusModeConfig ? JSON.stringify(updated.focusModeConfig) : null,
+      travelerConfig: updated.travelerConfig ? JSON.stringify(updated.travelerConfig) : null,
     };
 
     this.db.prepare(`
-      INSERT INTO "userSettings"("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness", "weekStartDay", "defaultPlanView", "preferredWorkingDays", "trigram")
-      VALUES(@userId, @username, @logo, @hasCompletedOnboarding, @workload, @splitTime, @monthlyBalances, @timezone, @cardCompactness, @weekStartDay, @defaultPlanView, @preferredWorkingDays, @trigram)
+      INSERT INTO "userSettings"("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness", "weekStartDay", "defaultPlanView", "preferredWorkingDays", "trigram", "pomodoroConfig", "focusModeConfig", "travelerConfig")
+      VALUES(@userId, @username, @logo, @hasCompletedOnboarding, @workload, @splitTime, @monthlyBalances, @timezone, @cardCompactness, @weekStartDay, @defaultPlanView, @preferredWorkingDays, @trigram, @pomodoroConfig, @focusModeConfig, @travelerConfig)
       ON CONFLICT("userId") DO UPDATE SET
       "username" = excluded."username",
         "logo" = excluded."logo",
@@ -1013,7 +1084,10 @@ class SqliteClient implements DbClient {
         "weekStartDay" = excluded."weekStartDay",
         "defaultPlanView" = excluded."defaultPlanView",
         "preferredWorkingDays" = excluded."preferredWorkingDays",
-        "trigram" = excluded."trigram"
+        "trigram" = excluded."trigram",
+        "pomodoroConfig" = excluded."pomodoroConfig",
+        "focusModeConfig" = excluded."focusModeConfig",
+        "travelerConfig" = excluded."travelerConfig"
           `).run(params);
 
     return updated;
@@ -1029,6 +1103,9 @@ class SqliteClient implements DbClient {
       defaultPlanView: row.defaultPlanView as 'week' | 'month' | undefined,
       preferredWorkingDays: row.preferredWorkingDays ? JSON.parse(row.preferredWorkingDays) : undefined,
       trigram: row.trigram || undefined,
+      pomodoroConfig: row.pomodoroConfig ? JSON.parse(row.pomodoroConfig) : undefined,
+      focusModeConfig: row.focusModeConfig ? JSON.parse(row.focusModeConfig) : undefined,
+      travelerConfig: row.travelerConfig ? JSON.parse(row.travelerConfig) : undefined,
     }));
   }
 
@@ -1091,6 +1168,9 @@ class SqliteClient implements DbClient {
       country: row.country ?? 'CH',
       region: row.region ?? 'BE',
       disabledModules: row.disabledModules ? JSON.parse(row.disabledModules) : [],
+      pomodoroConfig: row.pomodoroConfig ? JSON.parse(row.pomodoroConfig) : DEFAULT_APP_SETTINGS.pomodoroConfig,
+      focusModeConfig: row.focusModeConfig ? JSON.parse(row.focusModeConfig) : DEFAULT_APP_SETTINGS.focusModeConfig,
+      travelerConfig: row.travelerConfig ? JSON.parse(row.travelerConfig) : DEFAULT_APP_SETTINGS.travelerConfig,
     };
   }
 
@@ -1102,11 +1182,14 @@ class SqliteClient implements DbClient {
       ...updated,
       id: 1,
       disabledModules: JSON.stringify(updated.disabledModules ?? []),
+      pomodoroConfig: JSON.stringify(updated.pomodoroConfig ?? DEFAULT_APP_SETTINGS.pomodoroConfig),
+      focusModeConfig: JSON.stringify(updated.focusModeConfig ?? DEFAULT_APP_SETTINGS.focusModeConfig),
+      travelerConfig: JSON.stringify(updated.travelerConfig ?? DEFAULT_APP_SETTINGS.travelerConfig),
     };
 
     this.db.prepare(`
-      INSERT INTO "appSettings"("id", "splitTime", "userWorkloadPercentage", "weeksComputation", "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal", "hoursToBeDoneByDay", "vacationLimitMultiplier", "hourlyBalanceLimitUpper", "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region", "disabledModules")
-      VALUES(@id, @splitTime, @userWorkloadPercentage, @weeksComputation, @highImpactTaskGoal, @failureRateGoal, @qliGoal, @newCapabilitiesGoal, @hoursToBeDoneByDay, @vacationLimitMultiplier, @hourlyBalanceLimitUpper, @hourlyBalanceLimitLower, @cardAgingBaseDays, @timezone, @country, @region, @disabledModules)
+      INSERT INTO "appSettings"("id", "splitTime", "userWorkloadPercentage", "weeksComputation", "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal", "hoursToBeDoneByDay", "vacationLimitMultiplier", "hourlyBalanceLimitUpper", "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region", "disabledModules", "pomodoroConfig", "focusModeConfig", "travelerConfig")
+      VALUES(@id, @splitTime, @userWorkloadPercentage, @weeksComputation, @highImpactTaskGoal, @failureRateGoal, @qliGoal, @newCapabilitiesGoal, @hoursToBeDoneByDay, @vacationLimitMultiplier, @hourlyBalanceLimitUpper, @hourlyBalanceLimitLower, @cardAgingBaseDays, @timezone, @country, @region, @disabledModules, @pomodoroConfig, @focusModeConfig, @travelerConfig)
       ON CONFLICT("id") DO UPDATE SET
         "splitTime" = excluded."splitTime",
         "userWorkloadPercentage" = excluded."userWorkloadPercentage",
@@ -1123,7 +1206,10 @@ class SqliteClient implements DbClient {
         "timezone" = excluded."timezone",
         "country" = excluded."country",
         "region" = excluded."region",
-        "disabledModules" = excluded."disabledModules"
+        "disabledModules" = excluded."disabledModules",
+        "pomodoroConfig" = excluded."pomodoroConfig",
+        "focusModeConfig" = excluded."focusModeConfig",
+        "travelerConfig" = excluded."travelerConfig"
     `).run(params);
 
     return updated;
@@ -2383,6 +2469,75 @@ class SqliteClient implements DbClient {
     };
   }
 
+  // Pomodoro sessions
+  async listPomodoroSessions(userId?: string, since?: number): Promise<PomodoroSession[]> {
+    const conditions: string[] = [];
+    const params: (string | number)[] = [];
+
+    if (userId) {
+      conditions.push('"userId" = ?');
+      params.push(userId);
+    }
+    if (since) {
+      conditions.push('"startTime" >= ?');
+      params.push(since);
+    }
+
+    const whereClause = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
+    const rows = this.db.prepare(`SELECT * FROM "pomodoroSessions"${whereClause} ORDER BY "startTime" DESC`).all(...params) as unknown as PomodoroSessionDbRow[];
+
+    return rows.map(row => ({
+      id: row.id,
+      taskId: row.taskId ?? undefined,
+      userId: row.userId,
+      startTime: row.startTime,
+      endTime: row.endTime,
+      phase: row.phase as 'work' | 'short-break' | 'long-break',
+      duration: row.duration,
+      completed: row.completed === 1,
+    }));
+  }
+
+  async createPomodoroSession(session: PomodoroSession): Promise<PomodoroSession & { warnings?: string[] }> {
+    let taskId = session.taskId ?? null;
+    const warnings: string[] = [];
+    if (taskId !== null) {
+      const task = this.db.prepare('SELECT "id" FROM "tasks" WHERE "id" = ?').get(taskId);
+      if (!task) {
+        taskId = null;
+        warnings.push(`taskId "${session.taskId}" does not exist; session saved without task link`);
+      }
+    }
+    this.db.prepare(`
+      INSERT INTO "pomodoroSessions"("id", "taskId", "userId", "startTime", "endTime", "phase", "duration", "completed")
+      VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      session.id,
+      taskId,
+      session.userId,
+      session.startTime,
+      session.endTime,
+      session.phase,
+      session.duration,
+      session.completed ? 1 : 0,
+    );
+    const result: PomodoroSession & { warnings?: string[] } = { ...session, taskId: taskId ?? undefined };
+    if (warnings.length > 0) result.warnings = warnings;
+    return result;
+  }
+
+  async deletePomodoroSession(id: string): Promise<void> {
+    this.db.prepare('DELETE FROM "pomodoroSessions" WHERE "id" = ?').run(id);
+  }
+
+  async clearAllPomodoroSessions(): Promise<void> {
+    this.db.exec('DELETE FROM "pomodoroSessions"');
+  }
+
+  async deletePomodoroSessionsByUser(userId: string): Promise<void> {
+    this.db.prepare('DELETE FROM "pomodoroSessions" WHERE "userId" = ?').run(userId);
+  }
+
   async clearAllData(): Promise<void> {
     // Drop all tables to prompt a full schema reset on next initialize or strictly here
     this.db.exec('BEGIN');
@@ -2401,6 +2556,7 @@ class SqliteClient implements DbClient {
       this.db.exec('DROP TABLE IF EXISTS "voteResponses"');
       this.db.exec('DROP TABLE IF EXISTS "voteLoops"');
       this.db.exec('DROP TABLE IF EXISTS "voteModerators"');
+      this.db.exec('DROP TABLE IF EXISTS "pomodoroSessions"');
 
       // Also drop legacy tables if they exist
       this.db.exec('DROP TABLE IF EXISTS tasks');

@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.26.0 (2026-06-13)
+
+### Features
+
+- **pomodoro:** add traveler timer mode alongside pomodoro (fb8cfed)
+- **pomodoro:** add pomodoro technique integration (31a3fbb)
+
+### Bug Fixes
+
+- **pomodoro:** distinguish traveler from pomodoro sessions and improve robustness (2bf4b48)
+- **pomodoro:** fix config defaults and deduplicate chime logic (97677c4)
+
+---
+
 ## v0.25.1 (2026-06-10)
 
 ### Bug Fixes
@@ -154,16 +168,5 @@
 ### Features
 
 - **common:** implement card aging with visual feedback (877483e)
-
----
-
-## v0.17.2 (2026-04-08)
-
-### Bug Fixes
-
-- **metrics:** compute metrics per EFT instead of per user pool (739435f)
-- **tests:** syntax (a9da54a)
-- **common:** use selected user settings in projections (2ffa708)
-- **kanban:** only count leaf tasks in total difficulty calculations (a78544e)
 
 ---

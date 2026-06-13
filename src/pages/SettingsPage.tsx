@@ -18,6 +18,9 @@ import { TimePickerDialog } from '@/components/ui/time-picker-dialog';
 import { Switch } from '@/components/ui/switch';
 import { useState } from 'react';
 import type { ModuleId } from '@/lib/persistence-types';
+import PomodoroSettings from '@/components/PomodoroSettings';
+import TravelerSettings from '@/components/TravelerSettings';
+import FocusModeSettings from '@/components/FocusModeSettings';
 
 const ALL_MODULES: { id: ModuleId; label: string; description: string; isTopLevel: boolean }[] = [
   { id: 'celebration', label: 'Celebration', description: 'Fertilization Board for achievements and celebrations', isTopLevel: true },
@@ -265,6 +268,18 @@ const SettingsPage: React.FC = () => {
                   </p>
                 </div>
               </div>
+            </div>
+
+            <div className="pt-6 border-t">
+              <PomodoroSettings />
+            </div>
+
+            <div className="pt-6 border-t">
+              <TravelerSettings />
+            </div>
+
+            <div className="pt-6 border-t">
+              <FocusModeSettings />
             </div>
           </TabsContent>
 

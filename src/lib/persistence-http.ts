@@ -1,4 +1,4 @@
-import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind } from './persistence-types';
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from './persistence-types';
 import { DEFAULT_TASKS_INITIALIZED_KEY } from '@/hooks/useTasks';
 
 export class HttpApiPersistence implements PersistenceAdapter {
@@ -513,6 +513,43 @@ export class HttpApiPersistence implements PersistenceAdapter {
     await this.makeRequest('/api/reminders/import', {
       method: 'POST',
       body: JSON.stringify(reminders),
+    });
+  }
+
+  // Pomodoro sessions
+  async listPomodoroSessions(userId?: string, since?: number): Promise<PomodoroSession[]> {
+    const params = new URLSearchParams();
+    if (userId) params.set('userId', userId);
+    if (since) params.set('since', since.toString());
+    const qs = params.toString();
+    const result = await this.makeRequest(`/api/pomodoro-sessions${qs ? `?${qs}` : ''}`);
+    if (Array.isArray(result)) return result;
+    const wrapped = result as { data: PomodoroSession[] };
+    return wrapped.data ?? [];
+  }
+
+  async createPomodoroSession(session: PomodoroSession): Promise<PomodoroSession & { warnings?: string[] }> {
+    return this.makeRequest('/api/pomodoro-sessions', {
+      method: 'POST',
+      body: JSON.stringify(session),
+    });
+  }
+
+  async deletePomodoroSession(id: string): Promise<void> {
+    await this.makeRequest(`/api/pomodoro-sessions/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async clearAllPomodoroSessions(): Promise<void> {
+    await this.makeRequest('/api/pomodoro-sessions/clear', {
+      method: 'POST',
+    });
+  }
+
+  async deletePomodoroSessionsByUser(userId: string): Promise<void> {
+    await this.makeRequest(`/api/pomodoro-sessions/user/${encodeURIComponent(userId)}`, {
+      method: 'DELETE',
     });
   }
 }

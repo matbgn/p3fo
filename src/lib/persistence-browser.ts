@@ -1,4 +1,6 @@
-import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind } from './persistence-types';
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from './persistence-types';
+import { DEFAULT_POMODORO_CONFIG, DEFAULT_FOCUS_MODE_CONFIG } from './pomodoro-types';
+import { DEFAULT_TRAVELER_CONFIG } from './traveler-types';
 
 // Storage keys
 const TASKS_STORAGE_KEY = 'dyad_task_board_v1';
@@ -15,6 +17,7 @@ const VOTES_STORAGE_KEY = 'p3fo_votes_v1';
 const VOTE_RESPONSES_STORAGE_KEY = 'p3fo_vote_responses_v1';
 const VOTE_LOOPS_STORAGE_KEY = 'p3fo_vote_loops_v1';
 const VOTE_MODERATORS_STORAGE_KEY = 'p3fo_vote_moderators_v1';
+const POMODORO_SESSIONS_STORAGE_KEY = 'p3fo_pomodoro_sessions_v1';
 
 // Default values
 const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
@@ -38,6 +41,9 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
   hoursToBeDoneByDay: 8,
   cardAgingBaseDays: 30,
   disabledModules: [],
+  pomodoroConfig: DEFAULT_POMODORO_CONFIG,
+  focusModeConfig: DEFAULT_FOCUS_MODE_CONFIG,
+  travelerConfig: DEFAULT_TRAVELER_CONFIG,
 };
 
 export class BrowserJsonPersistence implements PersistenceAdapter {
@@ -658,6 +664,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       localStorage.removeItem(REMINDERS_STORAGE_KEY);
       localStorage.removeItem(CIRCLES_STORAGE_KEY);
       localStorage.removeItem(FRAMEWORKS_STORAGE_KEY);
+      localStorage.removeItem(POMODORO_SESSIONS_STORAGE_KEY);
       sessionStorage.removeItem(FILTERS_STORAGE_KEY);
 
       // Clear dynamic keys (users and QoL surveys)
@@ -1204,6 +1211,91 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       localStorage.setItem(VOTE_MODERATORS_STORAGE_KEY, JSON.stringify(items));
     } catch (error) {
       console.error('Error importing vote moderators to localStorage:', error);
+      throw error;
+    }
+  }
+
+  // Pomodoro sessions
+  async listPomodoroSessions(userId?: string, since?: number): Promise<PomodoroSession[]> {
+    if (typeof window === 'undefined') {
+      return [];
+    }
+
+    try {
+      const stored = localStorage.getItem(POMODORO_SESSIONS_STORAGE_KEY);
+      let all: PomodoroSession[] = stored ? JSON.parse(stored) : [];
+
+      if (userId) {
+        all = all.filter((s: PomodoroSession) => s.userId === userId);
+      }
+      if (since) {
+        all = all.filter((s: PomodoroSession) => s.startTime >= since);
+      }
+
+      return all;
+    } catch (error) {
+      console.error('Error reading pomodoro sessions from localStorage:', error);
+      return [];
+    }
+  }
+
+  async createPomodoroSession(session: PomodoroSession): Promise<PomodoroSession & { warnings?: string[] }> {
+    if (typeof window === 'undefined') {
+      throw new Error('Cannot create pomodoro session in non-browser environment');
+    }
+
+    try {
+      const sessions = await this.listPomodoroSessions();
+      sessions.push(session);
+      localStorage.setItem(POMODORO_SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
+      return session;
+    } catch (error) {
+      console.error('Error creating pomodoro session in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async deletePomodoroSession(id: string): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      const sessions = await this.listPomodoroSessions();
+      const filtered = sessions.filter((s: PomodoroSession) => s.id !== id);
+      localStorage.setItem(POMODORO_SESSIONS_STORAGE_KEY, JSON.stringify(filtered));
+    } catch (error) {
+      console.error('Error deleting pomodoro session from localStorage:', error);
+      throw error;
+    }
+  }
+
+  async clearAllPomodoroSessions(): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      localStorage.removeItem(POMODORO_SESSIONS_STORAGE_KEY);
+    } catch (error) {
+      console.error('Error clearing pomodoro sessions from localStorage:', error);
+      throw error;
+    }
+  }
+
+  async deletePomodoroSessionsByUser(userId: string): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      const stored = localStorage.getItem(POMODORO_SESSIONS_STORAGE_KEY);
+      if (!stored) return;
+      const all: PomodoroSession[] = JSON.parse(stored);
+      const filtered = all.filter((s: PomodoroSession) => s.userId !== userId);
+      localStorage.setItem(POMODORO_SESSIONS_STORAGE_KEY, JSON.stringify(filtered));
+    } catch (error) {
+      console.error('Error deleting pomodoro sessions by user from localStorage:', error);
       throw error;
     }
   }

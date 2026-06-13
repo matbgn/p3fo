@@ -47,8 +47,6 @@ import { useCardAging } from "@/hooks/useCardAging";
 import { AgingDecorations } from "@/components/AgingOverlays";
 import { LiveTimeBadge, EditableTitle, DIFFICULTY_OPTIONS, getDifficultyColor, DifficultyBadge } from "./SharedTaskControls";
 
-
-
 interface TaskCardProps {
   task: Task;
   tasks: Task[];
@@ -148,6 +146,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
   const { userSettings, userId: currentUserId } = useUserSettings();
   const { settings } = useSettingsContext();
   const { votes, createVote, loadVotes } = useVotes();
+
   const [linkedVoteDialogOpen, setLinkedVoteDialogOpen] = React.useState(false);
 
   React.useEffect(() => {
@@ -217,6 +216,8 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
   const { calculateTotalTime, calculateTotalDifficulty, updateLinkedVoteIds } = useTasks();
   const hasSubtasks = task.children && task.children.length > 0;
   const canHaveTimer = !hasSubtasks; // Only tasks without children can have timers
+
+  const taskTimerRunning = task.timer?.some(e => !e.endTime);
   const totalDifficulty = hasSubtasks ? calculateTotalDifficulty(task.id) : task.difficulty || 0;
   const totalTime = hasSubtasks ? calculateTotalTime(task.id) : (task.timer || []).reduce((acc, entry) => {
     if (entry.endTime) {
@@ -339,11 +340,36 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
              </>
            )}
          </div>
-        {/* Timer controls - show in Compact/Full always, Ultra Compact on hover */}
-        {!hasSubtasks && (
-          isUltraCompact ? (
-            <div className={`flex items-center gap-2 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
-              {isHovered && (
+         {/* Timer controls - show in Compact/Full always, Ultra Compact on hover */}
+         {!hasSubtasks && (
+           isUltraCompact ? (
+             <div className={`flex items-center gap-2 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
+                {isHovered && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 w-6 p-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleTimer(task.id, currentUserId);
+                      }}
+                    >
+                      {taskTimerRunning ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                    </Button>
+                    <Button
+                     size="sm"
+                     variant="ghost"
+                     className="h-6 w-6 p-0"
+                     onClick={(e) => { e.stopPropagation(); setIsTimeSheetOpen(true); }}
+                   >
+                     <Clock2 className="h-4 w-4" />
+                   </Button>
+                 </>
+               )}
+             </div>
+           ) : (
+              <div className="flex items-center gap-2">
                 <>
                   <Button
                     size="sm"
@@ -354,49 +380,20 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                       toggleTimer(task.id, currentUserId);
                     }}
                   >
-                    {task.timer?.some(e => !e.endTime) ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-6 w-6 p-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsTimeSheetOpen(true);
-                    }}
-                  >
-                    <Clock2 className="h-4 w-4" />
+                    {taskTimerRunning ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                   </Button>
                 </>
-              )}
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 w-6 p-0"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleTimer(task.id, currentUserId);
-                }}
-              >
-                {task.timer?.some(e => !e.endTime) ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 w-6 p-0"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsTimeSheetOpen(true);
-                }}
-              >
-                <Clock2 className="h-4 w-4" />
-              </Button>
-            </div>
-          )
-        )}
+                <Button
+                 size="sm"
+                 variant="ghost"
+                 className="h-6 w-6 p-0"
+                 onClick={(e) => { e.stopPropagation(); setIsTimeSheetOpen(true); }}
+               >
+                 <Clock2 className="h-4 w-4" />
+               </Button>
+             </div>
+           )
+         )}
          {/* Date picker toggle - show in Compact/Full always, Ultra Compact on hover */}
          {!task.parentId && (
            isUltraCompact ? (

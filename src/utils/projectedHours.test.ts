@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import { calculateProjection, getProjectedHoursForActualMonth, getHistoricalHourlyBalances, getVacationsBalances } from './projectedHours';
 import type { CombinedSettings } from '@/context/SettingsContext';
 import type { Task } from '@/hooks/useTasks';
+import { DEFAULT_POMODORO_CONFIG, DEFAULT_FOCUS_MODE_CONFIG } from '@/lib/pomodoro-types';
+import { DEFAULT_TRAVELER_CONFIG } from '@/lib/traveler-types';
 
 const mockSettings: CombinedSettings = {
     userWorkloadPercentage: 100,
@@ -23,6 +25,9 @@ const mockSettings: CombinedSettings = {
     timezone: 'Europe/Zurich',
     cardAgingBaseDays: 30,
     disabledModules: [],
+    pomodoroConfig: DEFAULT_POMODORO_CONFIG,
+    focusModeConfig: DEFAULT_FOCUS_MODE_CONFIG,
+    travelerConfig: DEFAULT_TRAVELER_CONFIG,
 };
 
 const makeTaskWithTimer = (startTime: number, endTime: number, userId?: string): Task => ({

@@ -3,6 +3,8 @@ import * as Y from 'yjs';
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { usePersistence } from "@/hooks/usePersistence";
 import { AppSettingsEntity } from '@/lib/persistence-types';
+import { DEFAULT_POMODORO_CONFIG, DEFAULT_FOCUS_MODE_CONFIG, PomodoroConfig, FocusModeConfig } from '@/lib/pomodoro-types';
+import { DEFAULT_TRAVELER_CONFIG, TravelerConfig } from '@/lib/traveler-types';
 import { normalizePreferredDays } from '@/utils/scheduler-utils';
 import { yAppSettings, isCollaborationEnabled, doc } from '@/lib/collaboration';
 import { eventBus } from '@/lib/events';
@@ -31,6 +33,9 @@ export interface CombinedSettings {
     region: string;
     trigram?: string;
     disabledModules: import('@/lib/persistence-types').ModuleId[];
+    pomodoroConfig: PomodoroConfig;
+    focusModeConfig: FocusModeConfig;
+    travelerConfig: TravelerConfig;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -67,6 +72,9 @@ const defaultCombinedSettings: CombinedSettings = {
     region: 'BE',
     trigram: undefined,
     disabledModules: [],
+    pomodoroConfig: DEFAULT_POMODORO_CONFIG,
+    focusModeConfig: DEFAULT_FOCUS_MODE_CONFIG,
+    travelerConfig: DEFAULT_TRAVELER_CONFIG,
 };
 
 interface SettingsContextType {
@@ -113,6 +121,9 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 preferredWorkingDays: { '1': 1, '2': 1, '3': 1, '4': 1, '5': 1 },
                 trigram: undefined,
                 disabledModules: (appSettings.disabledModules as import('@/lib/persistence-types').ModuleId[]) || [],
+                pomodoroConfig: appSettings.pomodoroConfig ?? DEFAULT_POMODORO_CONFIG,
+                focusModeConfig: appSettings.focusModeConfig ?? DEFAULT_FOCUS_MODE_CONFIG,
+                travelerConfig: appSettings.travelerConfig ?? DEFAULT_TRAVELER_CONFIG,
             };
 
             if (userSettings) {
@@ -147,6 +158,35 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                     Object.entries(normalized).forEach(([k, v]) => { stringKeyed[k] = v; });
                     merged.preferredWorkingDays = stringKeyed;
                 }
+
+                if (userSettings.pomodoroConfig) {
+                    merged.pomodoroConfig = userSettings.pomodoroConfig;
+                }
+
+                if (userSettings.focusModeConfig) {
+                    merged.focusModeConfig = userSettings.focusModeConfig;
+                }
+
+                if (userSettings.travelerConfig) {
+                    merged.travelerConfig = userSettings.travelerConfig;
+                }
+            }
+
+            // Migration: move autoStartBreak/autoStartWork from pomodoroConfig to focusModeConfig
+            const storedPomodoro = merged.pomodoroConfig as unknown as Record<string, unknown> | undefined;
+            if (storedPomodoro && ('autoStartBreak' in storedPomodoro || 'autoStartWork' in storedPomodoro)) {
+                const fc = { ...merged.focusModeConfig };
+                if ('autoStartBreak' in storedPomodoro && typeof storedPomodoro.autoStartBreak === 'boolean') {
+                    fc.autoStartBreak = storedPomodoro.autoStartBreak as boolean;
+                }
+                if ('autoStartWork' in storedPomodoro && typeof storedPomodoro.autoStartWork === 'boolean') {
+                    fc.autoStartWork = storedPomodoro.autoStartWork as boolean;
+                }
+                merged.focusModeConfig = fc;
+                const cleaned = { ...storedPomodoro };
+                delete cleaned.autoStartBreak;
+                delete cleaned.autoStartWork;
+                merged.pomodoroConfig = cleaned as unknown as typeof merged.pomodoroConfig;
             }
 
             setSettings(prev => {
@@ -239,7 +279,27 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 country: appSettings.country || 'CH',
                 region: appSettings.region || 'BE',
                 disabledModules: (appSettings.disabledModules as import('@/lib/persistence-types').ModuleId[]) || [],
+                pomodoroConfig: appSettings.pomodoroConfig ?? DEFAULT_POMODORO_CONFIG,
+                focusModeConfig: appSettings.focusModeConfig ?? DEFAULT_FOCUS_MODE_CONFIG,
+                travelerConfig: appSettings.travelerConfig ?? DEFAULT_TRAVELER_CONFIG,
             };
+
+            // Migration: move autoStartBreak/autoStartWork from pomodoroConfig to focusModeConfig
+            const storedPomodoro2 = freshAppValues.pomodoroConfig as unknown as Record<string, unknown> | undefined;
+            if (storedPomodoro2 && ('autoStartBreak' in storedPomodoro2 || 'autoStartWork' in storedPomodoro2)) {
+                const fc = { ...freshAppValues.focusModeConfig };
+                if ('autoStartBreak' in storedPomodoro2 && typeof storedPomodoro2.autoStartBreak === 'boolean') {
+                    fc.autoStartBreak = storedPomodoro2.autoStartBreak as boolean;
+                }
+                if ('autoStartWork' in storedPomodoro2 && typeof storedPomodoro2.autoStartWork === 'boolean') {
+                    fc.autoStartWork = storedPomodoro2.autoStartWork as boolean;
+                }
+                freshAppValues.focusModeConfig = fc;
+                const cleaned = { ...storedPomodoro2 };
+                delete cleaned.autoStartBreak;
+                delete cleaned.autoStartWork;
+                freshAppValues.pomodoroConfig = cleaned as unknown as typeof freshAppValues.pomodoroConfig;
+            }
 
             setSettings(prev => {
                 const next = { ...prev };
@@ -364,6 +424,18 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
             if (updates.country !== undefined) addToApp('country', updates.country);
             if (updates.region !== undefined) addToApp('region', updates.region);
             if (updates.disabledModules !== undefined) addToApp('disabledModules', updates.disabledModules);
+            if (updates.pomodoroConfig !== undefined) {
+                if (userSettings) addToUser('pomodoroConfig', updates.pomodoroConfig);
+                else addToApp('pomodoroConfig', updates.pomodoroConfig);
+            }
+            if (updates.focusModeConfig !== undefined) {
+                if (userSettings) addToUser('focusModeConfig', updates.focusModeConfig);
+                else addToApp('focusModeConfig', updates.focusModeConfig);
+            }
+            if (updates.travelerConfig !== undefined) {
+                if (userSettings) addToUser('travelerConfig', updates.travelerConfig);
+                else addToApp('travelerConfig', updates.travelerConfig);
+            }
 
             if (Object.keys(userUpdates).length > 0 && userSettings) {
                 await updateUserSettings({ ...userSettings, ...userUpdates });

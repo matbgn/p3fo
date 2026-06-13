@@ -7,7 +7,10 @@ import Forecast from "@/components/Forecast/Forecast";
 import HourlyBalance from "@/components/HourlyBalance";
 import VacationsBalance from "@/components/VacationsBalance";
 import QoLSurvey from "@/components/QoLSurvey";
+import PomodoroStats from "@/components/PomodoroStats";
+import PomodoroHeatmap from "@/components/PomodoroHeatmap";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { usePomodoroStats } from "@/hooks/usePomodoroStats";
 
 import { useUsersContext } from "@/context/UsersContext";
 import { useUserSettings } from "@/hooks/useUserSettings";
@@ -16,6 +19,64 @@ import { loadFiltersFromSessionStorage, saveFiltersToSessionStorage } from "@/li
 import { getDefaultFilters } from "@/lib/filter-merge";
 import { Filters } from "@/components/FilterControls";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Trash2 } from "lucide-react";
+import { getPersistenceAdapter } from "@/lib/persistence-factory";
+import { eventBus } from "@/lib/events";
+
+const PomodoroStatsTab: React.FC<{ userId: string }> = ({ userId }) => {
+  const { sessions, stats, isLoading, reload } = usePomodoroStats(userId);
+
+  const handleReset = async () => {
+    try {
+      const adapter = await getPersistenceAdapter();
+      await adapter.deletePomodoroSessionsByUser(userId);
+      eventBus.publish('pomodoroSessionCompleted');
+      reload();
+    } catch (error) {
+      console.error('Error resetting focus session stats:', error);
+    }
+  };
+
+  if (isLoading) {
+    return <LoadingSpinner label="Loading focus session stats..." className="h-full" />;
+  }
+
+  return (
+    <div className="space-y-6">
+      <PomodoroStats stats={stats} userId={userId} />
+      <div className="rounded-lg border bg-card text-card-foreground p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-medium">Focus Session Activity</h3>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
+                <Trash2 className="h-4 w-4 mr-1" />
+                Reset Stats
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                  <AlertDialogTitle>Reset Focus Session Stats?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    This will permanently delete all your focus session history, including the heatmap and statistics. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleReset} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Delete All Sessions
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+        <PomodoroHeatmap sessions={sessions} />
+      </div>
+    </div>
+  );
+};
 
 const MetricsPage: React.FC = () => {
   const [activeTab, setActiveTab] = React.useState("forecast");
@@ -127,6 +188,12 @@ const MetricsPage: React.FC = () => {
             >
               Individual QoL
             </button>
+            <button
+              className={`px-4 py-2 font-medium ${activeTab === "pomodoro" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              onClick={() => setActiveTab("pomodoro")}
+            >
+              Focus Sessions
+            </button>
           </div>
 
           {/* Graphics area */}
@@ -139,6 +206,8 @@ const MetricsPage: React.FC = () => {
               <VacationsBalance userId={selectedUserId} />
             ) : activeTab === "individual-qol" ? (
               selectedUserId && selectedUserId !== "unassigned" ? <QoLSurvey userId={selectedUserId} /> : <div>Please select a user to view survey</div>
+            ) : activeTab === "pomodoro" ? (
+              selectedUserId && selectedUserId !== "unassigned" ? <PomodoroStatsTab userId={selectedUserId} /> : <div>Please select a user to view focus session stats</div>
             ) : (
               <div className="flex items-center justify-center h-full">
                 <p className="text-muted-foreground">Graphics content for {activeTab} will appear here</p>

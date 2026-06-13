@@ -13,6 +13,11 @@ import { UserProvider } from "@/context/UserContext";
 import { UserSettingsProvider } from "@/context/UserSettingsContext";
 import { UsersProvider } from "@/context/UsersContext";
 import { SettingsProvider } from "@/context/SettingsContext";
+import { PomodoroProvider } from "@/context/PomodoroContext";
+import { TravelerProvider } from "@/context/TravelerContext";
+import { PomodoroPiPWindow } from "@/components/PomodoroPiPWindow";
+import { PomodoroFocusOverlay } from "@/components/PomodoroFocusOverlay";
+import { PomodoroTransitionAlert } from "@/components/PomodoroTransitionAlert";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import PublicVotePage from "./pages/PublicVotePage";
@@ -20,6 +25,9 @@ import ModerationPopout from "./components/voting/ModerationPopout";
 import { useReminderStore } from "./hooks/useReminders";
 import { ViewProvider } from "@/context/ViewContext";
 import { DEFAULT_TASKS_INITIALIZED_KEY } from "./hooks/useTasks";
+import { destroyTravelerIdleState } from "@/lib/traveler-idle-state";
+import { useSettingsContext } from "@/context/SettingsContext";
+import { DEFAULT_FOCUS_MODE_CONFIG } from "@/lib/pomodoro-types";
 
 declare global {
   interface Window {
@@ -34,22 +42,14 @@ import { CursorOverlay } from "@/components/CursorOverlay";
 const App = () => {
   const { checkAndTriggerReminders } = useReminderStore();
 
-  // Notification logic is now handled by NotificationManager
-
-
-  // Listen for global system commands (like Clear All Data)
   useEffect(() => {
     import('@/lib/collaboration').then(({ yTasks, yUserSettings, yFertilizationState, yFertilizationCards, yFertilizationColumns, yDreamState, yDreamCards, yDreamColumns, yCircles, ySystemState, doc }) => {
       const observer = () => {
         const command = ySystemState.get('command') as { type: string, timestamp: number } | undefined;
         if (command && command.type === 'CLEAR_ALL') {
-          // Check if this command is recent (e.g. within last 10 seconds)
-          // or we could just trust it if we haven't processed it.
-          // Simple approach: if timestamp > startup time, assume it's new.
           const startupTime = window._appStartupTime || 0;
           if (command.timestamp > startupTime) {
             console.log('Received global CLEAR_ALL command. Wiping data...');
-            // Clear Yjs shared documents first (tasks, users, boards and circles)
             doc.transact(() => {
               yTasks.clear();
               yUserSettings.clear();
@@ -61,9 +61,7 @@ const App = () => {
               yDreamColumns.clear();
               yCircles.clear();
             });
-            // Wipe data
             localStorage.clear();
-            // Preserve the initialized flag to prevent default tasks from being recreated
             localStorage.setItem(DEFAULT_TASKS_INITIALIZED_KEY, 'true');
             sessionStorage.clear();
             window.indexedDB.databases().then(dbs => {
@@ -73,18 +71,21 @@ const App = () => {
               window.indexedDB.deleteDatabase('p3fo-yjs-tasks');
             });
 
-            // Reload to reset state
-            // Give a small delay for DB deletion
             setTimeout(() => window.location.reload(), 500);
           }
         }
       };
       ySystemState.observe(observer);
-      // Set startup time to avoid reacting to old commands persisted in Yjs if not cleared
       window._appStartupTime = Date.now();
 
       return () => ySystemState.unobserve(observer);
     });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      destroyTravelerIdleState();
+    };
   }, []);
 
   return (
@@ -94,33 +95,49 @@ const App = () => {
           <PersistenceProvider>
             <UserProvider>
               <UserSettingsProvider>
-                <UsersProvider>
-                  <SettingsProvider>
-                    <ViewProvider>
-                      <Toaster />
-                      <Sonner />
-                      <CursorOverlay />
-                      <NotificationManager />
-                      <div className="relative">
-                        <BrowserRouter basename={import.meta.env.VITE_BASE_URL || "/p3fo"} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-                          <Routes>
-                            <Route path="/v/:slug" element={<PublicVotePage />} />
-                            <Route path="/v/:slug/m/:token" element={<ModerationPopout />} />
-                            <Route path="/" element={<Index />} />
-                            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                            <Route path="*" element={<NotFound />} />
-                          </Routes>
-                        </BrowserRouter>
-                      </div>
-                    </ViewProvider>
-                  </SettingsProvider>
-                </UsersProvider>
+                  <UsersProvider>
+                    <SettingsProvider>
+                      <PomodoroProvider>
+                        <TravelerProvider>
+                          <TimerOverlays />
+                          <ViewProvider>
+                            <Toaster />
+                            <Sonner />
+                            <CursorOverlay />
+                            <NotificationManager />
+                            <div className="relative">
+                              <BrowserRouter basename={import.meta.env.VITE_BASE_URL || "/p3fo"} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                                <Routes>
+                                  <Route path="/v/:slug" element={<PublicVotePage />} />
+                                  <Route path="/v/:slug/m/:token" element={<ModerationPopout />} />
+                                  <Route path="/" element={<Index />} />
+                                  <Route path="*" element={<NotFound />} />
+                                </Routes>
+                              </BrowserRouter>
+                            </div>
+                          </ViewProvider>
+                        </TravelerProvider>
+                      </PomodoroProvider>
+                    </SettingsProvider>
+                  </UsersProvider>
               </UserSettingsProvider>
             </UserProvider>
           </PersistenceProvider>
         </TooltipProvider>
       </QueryClientProvider>
     </Profiler>
+  );
+};
+
+const TimerOverlays: React.FC = () => {
+  const { settings } = useSettingsContext();
+  const focusConfig = settings.focusModeConfig ?? DEFAULT_FOCUS_MODE_CONFIG;
+  return (
+    <>
+      <PomodoroTransitionAlert />
+      <PomodoroPiPWindow />
+      {focusConfig.showFocusOverlay && <PomodoroFocusOverlay />}
+    </>
   );
 };
 
