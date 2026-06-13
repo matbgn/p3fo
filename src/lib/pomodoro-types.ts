@@ -56,6 +56,6 @@ export const DEFAULT_FOCUS_MODE_CONFIG: FocusModeConfig = {
   wakeLock: true,
   soundNotifications: true,
   showFocusOverlay: false,
-  autoStartBreak: true,
+  autoStartBreak: false,
   autoStartWork: false,
 };
