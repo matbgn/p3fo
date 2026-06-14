@@ -84,7 +84,7 @@ const DataExporter: React.FC = () => {
       }
 
       const exportData = {
-        schemaVersion: 2,
+        schemaVersion: 3,
         tasks: allTasks,
         scheduledReminders: allReminders,
         qolSurveyResponses: allQolSurveyResponses,

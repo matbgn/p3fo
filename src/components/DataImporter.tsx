@@ -7,7 +7,7 @@ import { getPersistenceAdapter } from '@/lib/persistence-factory';
 import { QolSurveyResponseEntity, MonthlyBalanceData } from '@/lib/persistence-types';
 import { yUserSettings, yFertilizationState, yFertilizationCards, yFertilizationColumns, yDreamState, yDreamCards, yDreamColumns, yCircles, yFrameworks, yAppSettings, isCollaborationEnabled, doc } from '@/lib/collaboration';
 
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 3;
 
 interface ImportedUserSettings {
   userId?: string;
@@ -171,10 +171,17 @@ const DataImporter: React.FC = () => {
 
               // Import Fertilization Board (or legacy Celebration Board)
               if (importedData.fertilizationBoard) {
-                await adapter.updateFertilizationBoardState(importedData.fertilizationBoard);
+                const board = importedData.fertilizationBoard;
+                const migratedCards = (board.cards || []).map((c: { offlineVotes?: number | Record<string, number>; [key: string]: unknown }) => ({
+                  ...c,
+                  offlineVotes: typeof c.offlineVotes === 'number'
+                    ? c.offlineVotes > 0 ? { offline_1: c.offlineVotes } : {}
+                    : (c.offlineVotes || {}),
+                }));
+                const migratedBoard = { ...board, cards: migratedCards };
+                await adapter.updateFertilizationBoardState(migratedBoard);
                 // Sync to Yjs for cross-client synchronization
                 if (isCollaborationEnabled()) {
-                  const board = importedData.fertilizationBoard;
                   doc.transact(() => {
                     yFertilizationState.set('moderatorId', board.moderatorId ?? null);
                     yFertilizationState.set('isSessionActive', board.isSessionActive ?? false);
@@ -185,20 +192,28 @@ const DataImporter: React.FC = () => {
                     yFertilizationState.set('areCursorsVisible', board.areCursorsVisible ?? true);
                     yFertilizationState.set('showAllLinks', board.showAllLinks ?? false);
                     if (board.maxPointsPerUser !== undefined) yFertilizationState.set('maxPointsPerUser', board.maxPointsPerUser);
+                    if (board.showOfflineVotesPanel !== undefined) yFertilizationState.set('showOfflineVotesPanel', board.showOfflineVotesPanel);
                     // Clear and repopulate columns
                     yFertilizationColumns.clear();
                     board.columns?.forEach(col => yFertilizationColumns.set(col.id, col));
                     // Clear and repopulate cards
                     yFertilizationCards.clear();
-                    board.cards?.forEach(card => yFertilizationCards.set(card.id, card));
+                    migratedCards.forEach(card => yFertilizationCards.set(card.id, card));
                   });
                 }
               } else if (importedData.celebrationBoard) {
                 // Backward compatibility for legacy export
-                await adapter.updateFertilizationBoardState(importedData.celebrationBoard);
+                const board = importedData.celebrationBoard;
+                const migratedCards = (board.cards || []).map((c: { offlineVotes?: number | Record<string, number>; [key: string]: unknown }) => ({
+                  ...c,
+                  offlineVotes: typeof c.offlineVotes === 'number'
+                    ? c.offlineVotes > 0 ? { offline_1: c.offlineVotes } : {}
+                    : (c.offlineVotes || {}),
+                }));
+                const migratedBoard = { ...board, cards: migratedCards };
+                await adapter.updateFertilizationBoardState(migratedBoard);
                 // Sync to Yjs for cross-client synchronization
                 if (isCollaborationEnabled()) {
-                  const board = importedData.celebrationBoard;
                   doc.transact(() => {
                     yFertilizationState.set('moderatorId', board.moderatorId ?? null);
                     yFertilizationState.set('isSessionActive', board.isSessionActive ?? false);
@@ -209,22 +224,30 @@ const DataImporter: React.FC = () => {
                     yFertilizationState.set('areCursorsVisible', board.areCursorsVisible ?? true);
                     yFertilizationState.set('showAllLinks', board.showAllLinks ?? false);
                     if (board.maxPointsPerUser !== undefined) yFertilizationState.set('maxPointsPerUser', board.maxPointsPerUser);
+                    if (board.showOfflineVotesPanel !== undefined) yFertilizationState.set('showOfflineVotesPanel', board.showOfflineVotesPanel);
                     // Clear and repopulate columns
                     yFertilizationColumns.clear();
                     board.columns?.forEach(col => yFertilizationColumns.set(col.id, col));
                     // Clear and repopulate cards
                     yFertilizationCards.clear();
-                    board.cards?.forEach(card => yFertilizationCards.set(card.id, card));
+                    migratedCards.forEach(card => yFertilizationCards.set(card.id, card));
                   });
                 }
               }
 
               // Import Dream Board
               if (importedData.dreamBoard) {
-                await adapter.updateDreamBoardState(importedData.dreamBoard);
+                const board = importedData.dreamBoard;
+                const migratedCards = (board.cards || []).map((c: { offlineVotes?: number | Record<string, number>; [key: string]: unknown }) => ({
+                  ...c,
+                  offlineVotes: typeof c.offlineVotes === 'number'
+                    ? c.offlineVotes > 0 ? { offline_1: c.offlineVotes } : {}
+                    : (c.offlineVotes || {}),
+                }));
+                const migratedBoard = { ...board, cards: migratedCards };
+                await adapter.updateDreamBoardState(migratedBoard);
                 // Sync to Yjs for cross-client synchronization
                 if (isCollaborationEnabled()) {
-                  const board = importedData.dreamBoard;
                   doc.transact(() => {
                     yDreamState.set('moderatorId', board.moderatorId ?? null);
                     yDreamState.set('isSessionActive', board.isSessionActive ?? false);
@@ -236,6 +259,7 @@ const DataImporter: React.FC = () => {
                     yDreamState.set('showAllLinks', board.showAllLinks ?? false);
                     if (board.maxPointsPerUser !== undefined) yDreamState.set('maxPointsPerUser', board.maxPointsPerUser);
                     if (board.mjLabels !== undefined) yDreamState.set('mjLabels', board.mjLabels);
+                    if (board.showOfflineVotesPanel !== undefined) yDreamState.set('showOfflineVotesPanel', board.showOfflineVotesPanel);
                     yDreamState.set('isTimelineExpanded', board.isTimelineExpanded ?? false);
                     yDreamState.set('timeSortDirection', board.timeSortDirection ?? 'nearest');
                     // Clear and repopulate columns
@@ -243,7 +267,7 @@ const DataImporter: React.FC = () => {
                     board.columns?.forEach(col => yDreamColumns.set(col.id, col));
                     // Clear and repopulate cards
                     yDreamCards.clear();
-                    board.cards?.forEach(card => yDreamCards.set(card.id, card));
+                    migratedCards.forEach(card => yDreamCards.set(card.id, card));
                   });
                 }
               }

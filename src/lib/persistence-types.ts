@@ -266,16 +266,17 @@ export interface FertilizationCard {
   id: string;
   columnId: string;
   content: string;
-  authorId: string | null; // null for anonymous cards
-  votes: Record<string, number>; // UserId -> VoteValue
-  isRevealed: boolean; // For hidden edition
-  linkedCardIds?: string[]; // IDs of linked cards
-  promotedTaskId?: string | null; // ID of task created from this card (for legacy display)
-  factTag?: FactTag; // Achieved / Non-Achieved / Key numbers / Planned (facts column only)
+  authorId: string | null;
+  votes: Record<string, number>;
+  offlineVotes: Record<string, number>;
+  isRevealed: boolean;
+  linkedCardIds?: string[];
+  promotedTaskId?: string | null;
+  factTag?: FactTag;
 }
 
 export interface DreamCard extends FertilizationCard {
-  timeFrame: TimeFrame; // Required for Dreams column cards
+  timeFrame: TimeFrame;
 }
 
 export interface FertilizationColumn {
@@ -392,15 +393,16 @@ export interface FertilizationBoardEntity {
   timer: {
     isRunning: boolean;
     startTime: number | null;
-    duration: number; // in seconds
+    duration: number;
   } | null;
-  hiddenEdition: boolean; // Global flag for hidden edition mode
+  hiddenEdition: boolean;
   votingMode: VotingMode;
   votingPhase: VotingPhase;
-  maxPointsPerUser?: number; // Configurable max points for POINTS voting mode
-  mjLabels?: Record<number, string>; // Global override for Majority Judgment grade labels
-  areCursorsVisible?: boolean; // Control cursor visibility for all users
-  showAllLinks?: boolean; // Control global link visibility
+  maxPointsPerUser?: number;
+  mjLabels?: Record<number, string>;
+  areCursorsVisible?: boolean;
+  showAllLinks?: boolean;
+  showOfflineVotesPanel?: boolean;
 }
 
 export interface DreamBoardEntity {
@@ -411,17 +413,18 @@ export interface DreamBoardEntity {
   timer: {
     isRunning: boolean;
     startTime: number | null;
-    duration: number; // in seconds
+    duration: number;
   } | null;
-  hiddenEdition: boolean; // Global flag for hidden edition mode
+  hiddenEdition: boolean;
   votingMode: VotingMode;
   votingPhase: VotingPhase;
-  maxPointsPerUser?: number; // Configurable max points for POINTS voting mode
-  isTimelineExpanded: boolean; // Dream-specific timeline expansion state
-  timeSortDirection: 'nearest' | 'farthest'; // Dream-specific sorting direction
-  areCursorsVisible?: boolean; // Control cursor visibility for all users
-  showAllLinks?: boolean; // Control global link visibility
-  mjLabels?: Record<number, string>; // Global override for Majority Judgment grade labels
+  maxPointsPerUser?: number;
+  isTimelineExpanded: boolean;
+  timeSortDirection: 'nearest' | 'farthest';
+  areCursorsVisible?: boolean;
+  showAllLinks?: boolean;
+  mjLabels?: Record<number, string>;
+  showOfflineVotesPanel?: boolean;
 }
 
 // Circles (EasyCIRCLE) - Organizational structure visualization

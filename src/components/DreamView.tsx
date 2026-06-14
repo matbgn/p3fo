@@ -56,6 +56,7 @@ type VotingMode = 'THUMBS_UP' | 'THUMBS_UD_NEUTRAL' | 'POINTS' | 'MAJORITY_JUDGM
 type VotingPhase = 'IDLE' | 'VOTING' | 'REVEALED';
 
 import { MJ_SCALE, VOTING_MODES_LABELS } from './planView/constants';
+import { BoardOptions, BoardTypeConfig } from './planView/BoardOptions';
 
 // Default columns for Dream Board
 const DEFAULT_DREAM_COLUMNS: DreamColumn[] = [
@@ -307,7 +308,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
     if (!boardState || !isModerator) return;
     if (!confirm(`Are you sure you want to reset all votes in the "${boardState.columns.find(c => c.id === columnId)?.title}" column? This will clear every vote in this column but keep all cards.`)) return;
     const newCards = boardState.cards.map(c =>
-      c.columnId === columnId ? { ...c, votes: {} } : c
+      c.columnId === columnId ? { ...c, votes: {}, offlineVotes: {} } : c
     );
     const newColumns = boardState.columns.map(col =>
       col.id === columnId ? { ...col, votingPhase: 'IDLE' as VotingPhase } : col
@@ -390,6 +391,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
     const timeSortDirection = (yDreamState.get('timeSortDirection') as 'nearest' | 'farthest') || 'nearest';
     const areCursorsVisible = yDreamState.get('areCursorsVisible') as boolean ?? true;
     const showAllLinks = yDreamState.get('showAllLinks') as boolean ?? false;
+    const showOfflineVotesPanel = yDreamState.get('showOfflineVotesPanel') as boolean | undefined;
     const mjLabels = yDreamState.get('mjLabels') as Record<number, string> | undefined;
 
     // Ensure columns are complete (merge with defaults)
@@ -417,6 +419,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
       timeSortDirection,
       areCursorsVisible,
       showAllLinks,
+      showOfflineVotesPanel,
       mjLabels
     };
   }, []);
@@ -437,6 +440,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
       yDreamState.set('isTimelineExpanded', state.isTimelineExpanded);
       yDreamState.set('timeSortDirection', state.timeSortDirection);
       yDreamState.set('showAllLinks', state.showAllLinks);
+      if (state.showOfflineVotesPanel !== undefined) yDreamState.set('showOfflineVotesPanel', state.showOfflineVotesPanel);
       if (state.maxPointsPerUser !== undefined) yDreamState.set('maxPointsPerUser', state.maxPointsPerUser);
       if (state.mjLabels !== undefined) yDreamState.set('mjLabels', state.mjLabels);
 
@@ -548,6 +552,24 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
 
   const isModerator = boardState?.moderatorId === currentUserId || boardState?.moderatorId === null;
 
+  const boardConfig: BoardTypeConfig = {
+    type: 'dream',
+    exportData: () => boardState ? { schemaVersion: 3, boardType: 'dream', ...boardState } : { schemaVersion: 3, boardType: 'dream' },
+    importData: async (data: Record<string, unknown>) => {
+      const boardData = data as unknown as DreamBoardEntity;
+      const cards = (boardData.cards || []).map((c: DreamCard & { offlineVotes?: number | Record<string, number> }) => ({
+        ...c,
+        offlineVotes: typeof c.offlineVotes === 'number'
+          ? c.offlineVotes > 0 ? { offline_1: c.offlineVotes } : {}
+          : (c.offlineVotes || {}),
+      }));
+      await saveBoard({ ...boardData, cards } as DreamBoardEntity);
+      if (isCollaborationEnabled()) {
+        syncBoardToYjs({ ...boardData, cards } as DreamBoardEntity);
+      }
+    },
+  };
+
   const {
     timeLeft,
     formatTime,
@@ -646,7 +668,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
   const resetVotes = async () => {
     if (!boardState || !isModerator) return;
     if (!confirm('Are you sure you want to reset all votes? This will clear every vote but keep all cards.')) return;
-    const newCards = boardState.cards.map(c => ({ ...c, votes: {} }));
+    const newCards = boardState.cards.map(c => ({ ...c, votes: {}, offlineVotes: {} }));
     await saveBoard({ ...boardState, cards: newCards, votingPhase: 'IDLE' as VotingPhase });
   };
 
@@ -655,13 +677,15 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
     const mode = columnId ? getColumnVotingMode(columnId) : boardState.votingMode;
     const votes = card.votes || {};
     const values = Object.values(votes);
-    if (values.length === 0) return 0;
+    const offlineValues = Object.values(card.offlineVotes || {});
+    const allValues = [...values, ...offlineValues];
+    if (allValues.length === 0) return 0;
     switch (mode) {
-      case 'THUMBS_UP': return values.filter(v => v === 1).length;
-      case 'THUMBS_UD_NEUTRAL': return values.reduce((acc, v) => acc + v, 0);
-      case 'POINTS': return values.reduce((acc, v) => acc + v, 0);
+      case 'THUMBS_UP': return allValues.filter(v => v > 0).length;
+      case 'THUMBS_UD_NEUTRAL': return allValues.reduce((acc, v) => acc + v, 0);
+      case 'POINTS': return allValues.reduce((acc, v) => acc + v, 0);
       case 'MAJORITY_JUDGMENT': {
-        const sorted = [...values].sort((a, b) => a - b);
+        const sorted = [...allValues].sort((a, b) => a - b);
         const midIndex = Math.ceil(sorted.length / 2) - 1;
         return sorted[Math.max(0, midIndex)];
       }
@@ -756,6 +780,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
       content,
       authorId: anonymous ? null : currentUserId,
       votes: {},
+      offlineVotes: {},
       isRevealed: true,
       timeFrame: targetTimeFrame,
     };
@@ -799,6 +824,14 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
     const newState = { ...boardState, cards: boardState.cards.map(c => c.id === cardId ? { ...c, authorId } : c) };
     await saveBoard(newState);
   }, [boardState, saveBoard]);
+
+  const updateOfflineVotes = async (cardId: string, newValue: Record<string, number>) => {
+    if (!boardState || !isModerator) return;
+    const newCards = boardState.cards.map(c =>
+      c.id === cardId ? { ...c, offlineVotes: newValue } : c
+    );
+    await saveBoard({ ...boardState, cards: newCards });
+  };
 
   const toggleTimelineExpansion = useCallback(async () => {
     if (!boardState) return;
@@ -859,7 +892,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
       else cards = cards.filter(c => c.authorId === filterState.userId);
     }
     if (filterState.minLikes > 0) {
-      cards = cards.filter(c => Object.values(c.votes || {}).filter(v => v > 0).length >= filterState.minLikes);
+      cards = cards.filter(c => Object.values(c.votes || {}).filter(v => v > 0).length + Object.values(c.offlineVotes || {}).filter(v => v > 0).length >= filterState.minLikes);
     }
     if (filterState.tags.length > 0) {
       cards = cards.filter(c =>
@@ -1216,6 +1249,13 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
                     {boardState.showAllLinks ? <Unlink className="mr-2 h-4 w-4" /> : <Link className="mr-2 h-4 w-4" />}
                     {boardState.showAllLinks ? 'Hide Links' : 'Show Links'}
                   </Button>
+
+                  <BoardOptions
+                    showOfflineVotesPanel={boardState.showOfflineVotesPanel ?? false}
+                    onToggleOfflineVotesPanel={(show) => saveBoard({ ...boardState, showOfflineVotesPanel: show })}
+                    boardConfig={boardConfig}
+                    isModerator={!!isModerator}
+                  />
                 </>
               )}
 
@@ -1420,6 +1460,8 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
                   return (
                   <CardView
                     card={card}
+                    onOfflineVotesChange={updateOfflineVotes}
+                    showOfflineVotesPanel={boardState.showOfflineVotesPanel ?? false}
                     tags={(!boardState.isTimelineExpanded && card.columnId === 'dreams') ? [{
                       label: TIME_FRAME_LABELS[card.timeFrame],
                       className: (() => {
