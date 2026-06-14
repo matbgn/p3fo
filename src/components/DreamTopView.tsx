@@ -93,6 +93,9 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
   const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(false);
   const [loadingFilters, setLoadingFilters] = useState(true);
   const [input, setInput] = useState("");
+  const storyboardContainerRef = React.useRef<HTMLDivElement>(null);
+  const autoScrollRafRef = React.useRef<number | null>(null);
+  const autoScrollDirectionRef = React.useRef<number>(0);
 
   const [storedFilters, setStoredFilters] = useState<Filters>(() => getDefaultFilters());
 
@@ -253,12 +256,47 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
     e.dataTransfer.setData('text/plain', taskId);
   };
 
+  const stopAutoScroll = React.useCallback(() => {
+    autoScrollDirectionRef.current = 0;
+    if (autoScrollRafRef.current !== null) {
+      cancelAnimationFrame(autoScrollRafRef.current);
+      autoScrollRafRef.current = null;
+    }
+  }, []);
+
+  const tickAutoScroll = React.useCallback(() => {
+    const container = storyboardContainerRef.current;
+    if (!container || autoScrollDirectionRef.current === 0) {
+      autoScrollRafRef.current = null;
+      return;
+    }
+    const speed = 12; // px per frame
+    container.scrollLeft += autoScrollDirectionRef.current * speed;
+    autoScrollRafRef.current = requestAnimationFrame(tickAutoScroll);
+  }, []);
+
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+    if (activeView !== 'storyboard') return;
+    const container = storyboardContainerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const EDGE = 60;
+    const clientX = e.clientX;
+    let direction = 0;
+    if (clientX - rect.left < EDGE) direction = -1;
+    else if (rect.right - clientX < EDGE) direction = 1;
+    if (direction !== autoScrollDirectionRef.current) {
+      autoScrollDirectionRef.current = direction;
+      if (direction !== 0 && autoScrollRafRef.current === null) {
+        autoScrollRafRef.current = requestAnimationFrame(tickAutoScroll);
+      }
+    }
   };
 
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>, targetTaskId: string) => {
+    stopAutoScroll();
     e.preventDefault();
     e.stopPropagation();
     if (!draggedTaskId || draggedTaskId === targetTaskId) {
@@ -464,8 +502,13 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
           {activeView === 'storyboard' ? (
             <div
               className="flex flex-nowrap overflow-x-auto h-full p-2 gap-3"
+              ref={storyboardContainerRef}
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, '')}
+              onDragEndCapture={stopAutoScroll}
+              onDragLeave={(e) => {
+                if (e.currentTarget === e.target) stopAutoScroll();
+              }}
             >
               {prioritizedTasks.length === 0 ? (
                 <div className="text-muted-foreground p-4">No tasks to plan.</div>

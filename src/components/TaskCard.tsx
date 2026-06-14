@@ -732,8 +732,8 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
           />
         </div>
       )}
-      {/* Category Select - show in Full only */}
-      {canHaveTimer && isFull && (
+      {/* Category Select - show in Full or when hovered (any compactness) */}
+      {canHaveTimer && (isFull || isHovered) && (
         <div className="flex flex-col gap-2 w-full">
           <CategorySelect
             value={task.category || "none"}

@@ -359,9 +359,10 @@ const ResourcesScheduler: React.FC<ResourcesSchedulerProps> = ({ onFocusOnTask, 
                                                         <div
                                                             className={cn(
                                                                 "absolute top-2 bottom-2 rounded-md shadow-sm border px-2 flex flex-col justify-center cursor-pointer hover:brightness-95 transition-all text-[10px]",
-                                                                block.task.urgent ? "bg-red-100 border-red-200 text-red-900" :
-                                                                    block.task.impact ? "bg-amber-100 border-amber-200 text-amber-900" :
-                                                                        "bg-blue-100 border-blue-200 text-blue-900"
+                                                                block.task.sprintTarget ? "bg-violet-100 border-violet-300 text-violet-900" :
+                                                                    block.task.urgent ? "bg-red-100 border-red-200 text-red-900" :
+                                                                        block.task.impact ? "bg-amber-100 border-amber-200 text-amber-900" :
+                                                                            "bg-blue-100 border-blue-200 text-blue-900"
                                                             )}
                                                             style={{
                                                                 left: Math.max(0, left),

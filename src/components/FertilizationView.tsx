@@ -1284,6 +1284,14 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                             cards={filteredCards.filter(c => c.columnId === column.id).sort((a, b) => {
                                 const sortOrder = columnSortOrder[column.id];
                                 if (!sortOrder || sortOrder === 'none') return 0;
+                                if (column.id === 'facts') {
+                                    const tagPriority: Record<string, number> = { K: 0, A: 1, P: 2, N: 3 };
+                                    const aRank = a.factTag && tagPriority[a.factTag] !== undefined ? tagPriority[a.factTag] : 99;
+                                    const bRank = b.factTag && tagPriority[b.factTag] !== undefined ? tagPriority[b.factTag] : 99;
+                                    if (aRank !== bRank) {
+                                        return sortOrder === 'desc' ? bRank - aRank : aRank - bRank;
+                                    }
+                                }
                                 const scoreA = calculateCardVoteScore(a, column.id);
                                 const scoreB = calculateCardVoteScore(b, column.id);
                                 return sortOrder === 'desc' ? scoreB - scoreA : scoreA - scoreB;

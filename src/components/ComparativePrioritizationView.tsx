@@ -188,9 +188,25 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
         };
       } else {
         // All comparisons done, calculate results
+        // Build a lookup of head-to-head winners from the recorded pairs
+        const headToHeadWins: Record<string, Set<string>> = {};
+        for (const [aId, bId] of prevState.pairs) {
+          if (newComparisons[aId] > newComparisons[bId]) {
+            (headToHeadWins[aId] ||= new Set()).add(bId);
+          } else if (newComparisons[bId] > newComparisons[aId]) {
+            (headToHeadWins[bId] ||= new Set()).add(aId);
+          }
+        }
         const results = Object.entries(newComparisons)
           .map(([taskId, score]) => ({ taskId, score }))
-          .sort((a, b) => b.score - a.score); // Sort descending by score
+          .sort((a, b) => {
+            if (b.score !== a.score) return b.score - a.score;
+            // Tie-breaker: if the two tasks faced each other directly,
+            // the one that won their direct confrontation ranks higher.
+            if (headToHeadWins[a.taskId]?.has(b.taskId)) return -1;
+            if (headToHeadWins[b.taskId]?.has(a.taskId)) return 1;
+            return 0;
+          });
 
         setPrioritizedResults(results);
         return { ...prevState, currentIndex: nextIndex, comparisons: newComparisons };
@@ -477,7 +493,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
 
             {comparisonState.leftTask && comparisonState.rightTask && (
               <div className="mt-6 p-4 rounded-lg bg-gray-50 dark:bg-gray-700">
-                <h3 className="text-lg font-semibold mb-4 text-center">Which is more important?</h3>
+                <h3 className="text-lg font-semibold mb-4 text-center">Which one should be done first?</h3>
                 <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-600 mb-4">
                   <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div>
                 </div>
