@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.27.1 (2026-06-15)
+
+### Bug Fixes
+
+- address reported bugs and style issues across boards (57b6429)
+
+---
+
 ## v0.27.0 (2026-06-14)
 
 ### Features
@@ -155,18 +163,5 @@
 ### Bug Fixes
 
 - **DBs:** fix databases connectors for sqllite & postgres (dbc6051)
-
----
-
-## v0.19.0 (2026-04-22)
-
-### Features
-
-- **circles:** add user assignments to roles (824fa4e)
-
-### Bug Fixes
-
-- **common:** browser-only mode and canvas events in plan view (983b556)
-- **projectedHours:** adapt expectation-normalized projection for vacation deductions and work day capping (c420393)
 
 ---
