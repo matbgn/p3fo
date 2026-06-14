@@ -49,16 +49,16 @@ export type Task = {
   impact?: boolean;
   majorIncident?: boolean;
   sprintTarget?: boolean;
-  difficulty?: 0.5 | 1 | 2 | 3 | 5 | 8; // Added difficulty property
+  difficulty?: 0.5 | 1 | 2 | 3 | 5 | 8;
   timer?: { startTime: number; endTime: number }[];
   category?: Category;
   terminationDate?: number;
   comment?: string;
   durationInMinutes?: number;
-  priority?: number; // New field for explicit prioritization
-  userId?: string; // User assigned to this task
-  updatedAt?: number; // Last modification timestamp for card aging
-  linkedVoteIds?: string[]; // IDs of VoteEntity linked to this task
+  priority?: number;
+  userId?: string;
+  updatedAt?: number;
+  linkedVoteIds?: string[];
 };
 
 
@@ -290,8 +290,8 @@ async function createTask(title: string, parentId: string | null, userId?: strin
     terminationDate: undefined,
     comment: undefined,
     durationInMinutes: undefined,
-    priority: 0, // Initialize new tasks with priority 0
-    userId: userId, // Assign user if provided
+    priority: 0,
+    userId: userId,
   };
 
   try {
@@ -976,7 +976,7 @@ export function useTasks() {
         ...task,
         id: newId,
         parentId: newParentId,
-        children: [], // Will be populated later
+        children: [],
         title: `${task.title} (Copy)`,
         createdAt: Date.now(),
         priority: newBasePriority, // Use pre-calculated value (O(1) lookup)

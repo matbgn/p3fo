@@ -33,6 +33,7 @@ import { TaskStatusSelect } from "./TaskStatusSelect";
 import { TimeSheet } from "./TimeSheet";
 import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
 import { LinkedVotePicker } from "@/components/voting/LinkedVotePicker";
+import { SubtaskProgress } from "@/components/SubtaskProgress";
 
 interface TaskEditModalProps {
     task: Task;
@@ -202,8 +203,14 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
                             />
                         </div>
 
+
                         <div className="flex flex-col gap-2 pt-4 border-t">
-                            <Label className="text-base font-semibold">Task Hierarchy</Label>
+                            <div className="flex items-center justify-between">
+                                <Label className="text-base font-semibold">Task Hierarchy</Label>
+                                {activeTask.children && activeTask.children.length > 0 && (
+                                    <SubtaskProgress task={activeTask} tasks={tasks} />
+                                )}
+                            </div>
                             <div className="flex flex-col gap-2 p-4 bg-muted/30 rounded-md">
                                 {/* Parent */}
                                 {activeTask.parentId ? (
@@ -234,15 +241,24 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
                                     <div className="flex flex-col gap-1 pl-8 border-l-2 border-muted">
                                         {activeTask.children.map((childId) => {
                                             const child = tasks.find((t) => t.id === childId);
+                                            const isDone = child && (child.triageStatus === "Done" || child.triageStatus === "Dropped");
                                             return (
                                                 <div
                                                     key={childId}
-                                                    className="text-sm cursor-pointer hover:bg-accent/50 p-1 rounded transition-colors text-blue-600 hover:underline"
+                                                    className="flex items-center gap-2 text-sm cursor-pointer hover:bg-accent/50 p-1 rounded transition-colors"
                                                     onClick={() => {
                                                         if (child) setActiveTask(child);
                                                     }}
                                                 >
-                                                    {child?.title || "Unknown Child"}
+                                                    <input
+                                                        type="checkbox"
+                                                        className="h-3.5 w-3.5 accent-orange-500 shrink-0"
+                                                        checked={!!isDone}
+                                                        readOnly
+                                                    />
+                                                    <span className={isDone ? "line-through text-muted-foreground text-blue-600" : "text-blue-600 hover:underline"}>
+                                                        {child?.title || "Unknown Child"}
+                                                    </span>
                                                 </div>
                                             );
                                         })}

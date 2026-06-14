@@ -23,6 +23,11 @@ import {
     HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
+import {
     Select,
     SelectContent,
     SelectItem,
@@ -39,7 +44,8 @@ import {
     ThumbsUp,
     Plus,
     ChevronDown,
-    BarChart3
+    BarChart3,
+    UsersRound
 } from 'lucide-react';
 import { MJ_SCALE } from './constants';
 import { UserWithTrigram } from '@/context/UsersContext';
@@ -49,44 +55,38 @@ export interface CardViewProps {
     isModerator: boolean;
     currentUserId: string;
     users: UserSettingsEntity[];
-    userSettings: { username: string; logo: string }; // Current user settings
+    userSettings: { username: string; logo: string };
 
-    // Board State
     hiddenEdition: boolean;
     votingMode: VotingMode;
     votingPhase: VotingPhase;
     maxPoints?: number;
     userPointsUsed?: number;
-    mjLabels?: Record<number, string>; // Custom Majority Judgment grade labels
+    mjLabels?: Record<number, string>;
 
-    // Optional tag editing (e.g. fact tags on fertilization cards)
     onUpdateFactTag?: (tag: string) => void;
     factTagOptions?: { value: string; label: string; letter: string; className?: string }[];
     isEditing: boolean;
     onEditStart: () => void;
     onEditEnd: () => void;
 
-    // Linking State
     linkingCardId: string | null;
-    isLinkedToLinkingCard: boolean; // Is this card linked to the active linking card?
-    isDirectlyLinked: boolean; // Is this card directly linked (for styling)
+    isLinkedToLinkingCard: boolean;
+    isDirectlyLinked: boolean;
 
-    // Actions
     onUpdateContent: (content: string) => void;
     onUpdateAuthor: (authorId: string | null) => void;
     onDelete: () => void;
-    onPromote?: () => void; // Optional as not all cards might be promotable or feature enabled
+    onPromote?: () => void;
     onVote: (value: number) => void;
     onToggleLink: () => void;
+    onOfflineVotesChange?: (cardId: string, newValue: Record<string, number>) => void;
+    showOfflineVotesPanel?: boolean;
 
-    // Drag & Drop
     onDragStart: (e: React.DragEvent) => void;
     isDraggable: boolean;
 
-    // Visuals
     tags?: { label: string; color?: string; icon?: React.ReactNode; className?: string }[];
-
-    // For vote-intensity background (budget / thumbs-up only)
     columnMaxScore?: number;
 }
 
@@ -113,6 +113,8 @@ export const CardView: React.FC<CardViewProps> = ({
     onPromote,
     onVote,
     onToggleLink,
+    onOfflineVotesChange,
+    showOfflineVotesPanel = false,
     onDragStart,
     isDraggable,
     tags = [],
@@ -123,11 +125,25 @@ export const CardView: React.FC<CardViewProps> = ({
 }) => {
     // Local state for editing content ensures smooth typing
     const [editContent, setEditContent] = useState(card.content);
+    const [offlineVotesOpen, setOfflineVotesOpen] = useState(false);
+    const [localOfflineVotes, setLocalOfflineVotes] = useState<Record<string, number>>(card.offlineVotes || {});
 
-    // Sync edit content when card content changes or editing starts
     useEffect(() => {
         setEditContent(card.content);
     }, [card.content, isEditing]);
+
+    useEffect(() => {
+        setLocalOfflineVotes(card.offlineVotes || {});
+    }, [card.offlineVotes]);
+
+    const nextOfflineVoterId = useMemo(() => {
+        const existing = Object.keys(card.offlineVotes || {});
+        let idx = 1;
+        while (existing.includes(`offline_${idx}`)) idx++;
+        return `offline_${idx}`;
+    }, [card.offlineVotes]);
+
+    const offlineVoterCount = Object.keys(card.offlineVotes || {}).length;
 
     const isHiddenFromUser = hiddenEdition && !card.isRevealed && (card.authorId === null || card.authorId !== currentUserId);
     const isLinkingSource = linkingCardId === card.id;
@@ -148,6 +164,8 @@ export const CardView: React.FC<CardViewProps> = ({
         const midIndex = Math.ceil(values.length / 2) - 1;
         return values[Math.max(0, midIndex)];
     };
+
+    const mergedVotes = useMemo(() => ({ ...card.votes, ...card.offlineVotes }), [card.votes, card.offlineVotes]);
 
     const renderMJDistribution = (votes: Record<string, number>) => {
         const counts: Record<number, number> = {};
@@ -319,11 +337,14 @@ export const CardView: React.FC<CardViewProps> = ({
     const voteIntensity = useMemo(() => {
         if (votingPhase === 'IDLE') return 0;
         if (votingMode !== 'POINTS' && votingMode !== 'THUMBS_UP') return 0;
-        const score = Object.values(card.votes || {}).reduce((a, b) => a + b, 0);
+        const offlineScore = votingMode === 'THUMBS_UP'
+            ? Object.values(card.offlineVotes || {}).filter(v => v === 1).length
+            : Object.values(card.offlineVotes || {}).reduce((a, b) => a + b, 0);
+        const score = Object.values(card.votes || {}).reduce((a, b) => a + b, 0) + offlineScore;
         if (score <= 0) return 0;
         const max = Math.max(1, columnMaxScore ?? 1);
         return Math.min(score / max, 1);
-    }, [card.votes, votingPhase, votingMode, columnMaxScore]);
+    }, [card.votes, card.offlineVotes, votingPhase, votingMode, columnMaxScore]);
 
     const voteBadgeFill = voteIntensity > 0 ? (
         <div
@@ -496,6 +517,197 @@ export const CardView: React.FC<CardViewProps> = ({
                 </div>
             )}
 
+            {/* Offline Votes */}
+            {showOfflineVotesPanel && isModerator && !isHiddenFromUser && (
+                <div className="mt-1">
+                    <Popover open={offlineVotesOpen} onOpenChange={setOfflineVotesOpen}>
+                        <PopoverTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-6 px-2 text-xs gap-1">
+                                <UsersRound className="h-3 w-3" />
+                                <span className="text-yellow-600 font-bold">{offlineVoterCount}</span>
+                                Offline
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80 p-3" align="start">
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <h5 className="text-sm font-medium">Offline Voters</h5>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-6 px-2 text-xs gap-1"
+                                        onClick={() => {
+                                            const newId = nextOfflineVoterId;
+                                            const defaultValue = votingMode === 'THUMBS_UP' ? 1
+                                                : votingMode === 'THUMBS_UD_NEUTRAL' ? 1
+                                                : votingMode === 'POINTS' ? 1
+                                                : 4;
+                                            const updated = { ...localOfflineVotes, [newId]: defaultValue };
+                                            setLocalOfflineVotes(updated);
+                                            onOfflineVotesChange?.(card.id, updated);
+                                        }}
+                                    >
+                                        <Plus className="h-3 w-3" />
+                                        Add Voter
+                                    </Button>
+                                </div>
+                                {Object.keys(localOfflineVotes).length === 0 && (
+                                    <p className="text-xs text-muted-foreground italic">No offline voters added yet.</p>
+                                )}
+                                {Object.entries(localOfflineVotes).map(([voterId, value]) => (
+                                    <div key={voterId} className="flex items-center gap-2">
+                                        <span className="text-xs text-muted-foreground w-20 truncate">{voterId.replace('offline_', 'Voter ')}</span>
+                                        {votingMode === 'THUMBS_UP' && (
+                                            <Button
+                                                variant={value === 1 ? 'default' : 'outline'}
+                                                size="sm"
+                                                className="h-6 px-2 text-xs"
+                                                onClick={() => {
+                                                    const updated = { ...localOfflineVotes };
+                                                    if (value === 1) delete updated[voterId];
+                                                    else updated[voterId] = 1;
+                                                    setLocalOfflineVotes(updated);
+                                                    onOfflineVotesChange?.(card.id, updated);
+                                                }}
+                                            >
+                                                <ThumbsUp className="h-3 w-3" />
+                                            </Button>
+                                        )}
+                                        {votingMode === 'THUMBS_UD_NEUTRAL' && (
+                                            <div className="flex gap-1">
+                                                <Button
+                                                    variant={value === -1 ? 'default' : 'outline'}
+                                                    size="sm"
+                                                    className={`h-6 px-2 text-xs ${value === -1 ? 'bg-red-500 hover:bg-red-600 text-white border-red-500' : 'text-red-500 border-red-200'}`}
+                                                    onClick={() => {
+                                                        const updated = { ...localOfflineVotes, [voterId]: -1 };
+                                                        setLocalOfflineVotes(updated);
+                                                        onOfflineVotesChange?.(card.id, updated);
+                                                    }}
+                                                >
+                                                    -1
+                                                </Button>
+                                                <Button
+                                                    variant={value === 0 ? 'default' : 'outline'}
+                                                    size="sm"
+                                                    className={`h-6 px-2 text-xs ${value === 0 ? 'bg-gray-500 hover:bg-gray-600 text-white border-gray-500' : 'border-gray-200'}`}
+                                                    onClick={() => {
+                                                        const updated = { ...localOfflineVotes, [voterId]: 0 };
+                                                        setLocalOfflineVotes(updated);
+                                                        onOfflineVotesChange?.(card.id, updated);
+                                                    }}
+                                                >
+                                                    0
+                                                </Button>
+                                                <Button
+                                                    variant={value === 1 ? 'default' : 'outline'}
+                                                    size="sm"
+                                                    className={`h-6 px-2 text-xs ${value === 1 ? 'bg-green-600 hover:bg-green-700 text-white border-green-600' : 'text-green-600 border-green-200'}`}
+                                                    onClick={() => {
+                                                        const updated = { ...localOfflineVotes, [voterId]: 1 };
+                                                        setLocalOfflineVotes(updated);
+                                                        onOfflineVotesChange?.(card.id, updated);
+                                                    }}
+                                                >
+                                                    +1
+                                                </Button>
+                                            </div>
+                                        )}
+                                        {votingMode === 'POINTS' && (
+                                            <div className="flex items-center gap-1">
+                                                <Button
+                                                    variant="outline"
+                                                    size="icon"
+                                                    className="h-6 w-6"
+                                                    onClick={() => {
+                                                        const newVal = Math.max(0, value - 1);
+                                                        const updated = { ...localOfflineVotes, [voterId]: newVal };
+                                                        setLocalOfflineVotes(updated);
+                                                        onOfflineVotesChange?.(card.id, updated);
+                                                    }}
+                                                    disabled={value <= 0}
+                                                >
+                                                    <Minus className="h-3 w-3" />
+                                                </Button>
+                                                <span className="text-sm font-bold w-6 text-center">{value}</span>
+                                                <Button
+                                                    variant="outline"
+                                                    size="icon"
+                                                    className="h-6 w-6"
+                                                    onClick={() => {
+                                                        const newVal = value + 1;
+                                                        const updated = { ...localOfflineVotes, [voterId]: newVal };
+                                                        setLocalOfflineVotes(updated);
+                                                        onOfflineVotesChange?.(card.id, updated);
+                                                    }}
+                                                >
+                                                    <Plus className="h-3 w-3" />
+                                                </Button>
+                                            </div>
+                                        )}
+                                        {votingMode === 'MAJORITY_JUDGMENT' && (
+                                            <div className="flex flex-wrap gap-1">
+                                                {MJ_SCALE.map(grade => (
+                                                    <Button
+                                                        key={grade.value}
+                                                        variant={value === grade.value ? 'default' : 'outline'}
+                                                        size="sm"
+                                                        className={`h-6 px-1.5 text-[10px] ${value === grade.value ? grade.color : ''}`}
+                                                        onClick={() => {
+                                                            const updated = { ...localOfflineVotes, [voterId]: grade.value };
+                                                            setLocalOfflineVotes(updated);
+                                                            onOfflineVotesChange?.(card.id, updated);
+                                                        }}
+                                                        title={getMJLabel(grade.value)}
+                                                    >
+                                                        {grade.value}
+                                                    </Button>
+                                                ))}
+                                            </div>
+                                        )}
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6 text-destructive hover:text-destructive ml-auto"
+                                            onClick={() => {
+                                                const updated = { ...localOfflineVotes };
+                                                delete updated[voterId];
+                                                setLocalOfflineVotes(updated);
+                                                onOfflineVotesChange?.(card.id, updated);
+                                            }}
+                                        >
+                                            <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                    </div>
+                                ))}
+                                {Object.keys(localOfflineVotes).length > 0 && (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="w-full text-xs text-destructive hover:text-destructive"
+                                        onClick={() => {
+                                            setLocalOfflineVotes({});
+                                            onOfflineVotesChange?.(card.id, {});
+                                        }}
+                                    >
+                                        <Trash2 className="h-3 w-3 mr-1" />
+                                        Clear All Offline Voters
+                                    </Button>
+                                )}
+                            </div>
+                        </PopoverContent>
+                    </Popover>
+                </div>
+            )}
+            {showOfflineVotesPanel && !isModerator && !isHiddenFromUser && offlineVoterCount > 0 && (
+                <div className="mt-1 flex items-center gap-1">
+                    <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 font-medium">
+                        <UsersRound className="h-3 w-3" />
+                        {offlineVoterCount} offline
+                    </span>
+                </div>
+            )}
+
             {/* Voting UI */}
             {!isHiddenFromUser && votingPhase !== 'IDLE' && (
                 <div className="mt-2 flex flex-col gap-2 border-t pt-2">
@@ -505,16 +717,23 @@ export const CardView: React.FC<CardViewProps> = ({
                                 <HoverCard>
                                     <HoverCardTrigger asChild>
                                         {(() => {
-                                            const voteCount = Object.values(card.votes).filter(v => v === 1).length;
-                                            const hasVotes = voteCount > 0;
+                                            const onlineVotes = Object.values(card.votes).filter(v => v === 1).length;
+                                            const offlineThumbsUp = Object.values(card.offlineVotes || {}).filter(v => v === 1).length;
+                                            const totalVotes = onlineVotes + offlineThumbsUp;
+                                            const hasVotes = totalVotes > 0;
                                             return (
                                                 <div className={`w-full relative flex items-center justify-start gap-2 p-1.5 rounded-md text-sm font-medium cursor-help overflow-hidden ${hasVotes ? 'bg-gray-400 border border-gray-400 text-white' : 'bg-muted/50 border text-primary'}`}>
                                                     {voteBadgeFill}
                                                     <ThumbsUp className="h-4 w-4 relative z-10" />
                                                     <span className="relative z-10">
-                                                        {voteCount}
+                                                        {totalVotes}
                                                     </span>
                                                     <span className={`text-xs relative z-10 ${hasVotes ? 'text-white/80' : 'text-muted-foreground'}`}>votes</span>
+                                                    {offlineThumbsUp > 0 && (
+                                                        <span className="text-xs relative z-10 text-yellow-300 ml-auto">
+                                                            ({offlineThumbsUp} offline)
+                                                        </span>
+                                                    )}
                                                 </div>
                                             );
                                         })()}
@@ -536,6 +755,13 @@ export const CardView: React.FC<CardViewProps> = ({
                                                         />
                                                     ) : null;
                                                 })}
+                                            {Object.entries(card.offlineVotes || {})
+                                                .filter(([, v]) => v === 1)
+                                                .map(([voterId]) => (
+                                                    <div key={voterId} className="h-6 w-6 rounded-full bg-yellow-400 flex items-center justify-center text-[8px] font-bold text-yellow-900" title={`${voterId.replace('offline_', 'Voter ')} (offline)`}>
+                                                        {voterId.replace('offline_', '')}
+                                                    </div>
+                                                ))}
                                         </div>
                                     </HoverCardContent>
                                 </HoverCard>
@@ -559,8 +785,8 @@ export const CardView: React.FC<CardViewProps> = ({
                                 <HoverCard>
                                     <HoverCardTrigger asChild>
                                         {(() => {
-                                            const netScore = Object.values(card.votes).reduce((a, b) => a + b, 0);
-                                            const voteCount = Object.keys(card.votes).length;
+                                            const netScore = Object.values(mergedVotes).reduce((a, b) => a + b, 0);
+                                            const voteCount = Object.keys(mergedVotes).length;
                                             const hasVotes = voteCount > 0;
                                             const max = Math.max(1, columnMaxScore ?? 1);
                                             const intensity = Math.min(Math.abs(netScore) / max, 1);
@@ -586,23 +812,23 @@ export const CardView: React.FC<CardViewProps> = ({
                                         })()}
                                     </HoverCardTrigger>
                                     <HoverCardContent className="w-80">
-                                        {renderUDNeutralDistribution(card.votes)}
+                                        {renderUDNeutralDistribution(mergedVotes)}
                                     </HoverCardContent>
                                 </HoverCard>
                             ) : (
                                 <>
                                     <div className="flex justify-between gap-1">
                                         <Button
-                                            variant={card.votes[currentUserId] === 1 ? 'default' : 'outline'}
+                                            variant={card.votes[currentUserId] === -1 ? 'default' : 'outline'}
                                             size="sm"
-                                            className={`flex-1 h-8 ${card.votes[currentUserId] === 1
-                                                ? 'bg-green-600 hover:bg-green-700 text-white border-green-600'
-                                                : 'text-green-600 border-green-200 hover:bg-green-50 dark:hover:bg-green-950/30'
+                                            className={`flex-1 h-8 ${card.votes[currentUserId] === -1
+                                                ? 'bg-red-500 hover:bg-red-600 text-white border-red-500'
+                                                : 'text-red-500 border-red-200 hover:bg-red-50 dark:hover:bg-red-950/30'
                                                 }`}
-                                            onClick={(e) => { e.stopPropagation(); handleVote(1); }}
+                                            onClick={(e) => { e.stopPropagation(); handleVote(-1); }}
                                             disabled={votingPhase !== 'VOTING'}
                                         >
-                                            +1
+                                            -1
                                         </Button>
                                         <Button
                                             variant={card.votes[currentUserId] === 0 ? 'default' : 'outline'}
@@ -617,16 +843,16 @@ export const CardView: React.FC<CardViewProps> = ({
                                             0
                                         </Button>
                                         <Button
-                                            variant={card.votes[currentUserId] === -1 ? 'default' : 'outline'}
+                                            variant={card.votes[currentUserId] === 1 ? 'default' : 'outline'}
                                             size="sm"
-                                            className={`flex-1 h-8 ${card.votes[currentUserId] === -1
-                                                ? 'bg-red-500 hover:bg-red-600 text-white border-red-500'
-                                                : 'text-red-500 border-red-200 hover:bg-red-50 dark:hover:bg-red-950/30'
+                                            className={`flex-1 h-8 ${card.votes[currentUserId] === 1
+                                                ? 'bg-green-600 hover:bg-green-700 text-white border-green-600'
+                                                : 'text-green-600 border-green-200 hover:bg-green-50 dark:hover:bg-green-950/30'
                                                 }`}
-                                            onClick={(e) => { e.stopPropagation(); handleVote(-1); }}
+                                            onClick={(e) => { e.stopPropagation(); handleVote(1); }}
                                             disabled={votingPhase !== 'VOTING'}
                                         >
-                                            -1
+                                            +1
                                         </Button>
                                     </div>
                                     {isModerator && (
@@ -634,16 +860,16 @@ export const CardView: React.FC<CardViewProps> = ({
                                             <HoverCardTrigger asChild>
                                                 <div className="pt-2 cursor-help text-center">
                                                     {(() => {
-                                                        const median = getMJMedian(card.votes);
-                                                        if (median === null) return <span className="text-xs text-muted-foreground">No votes</span>;
-                                                        const label = median > 0 ? '+1' : (median < 0 ? '-1' : '0');
-                                                        const color = median > 0 ? 'text-green-600' : (median < 0 ? 'text-red-600' : 'text-black');
-                                                        return <span className={`text-xs font-bold ${color}`}>Median: {label} <span className="text-muted-foreground font-normal">({Object.keys(card.votes).length} votes)</span></span>
-                                                    })()}
+                                                         const median = getMJMedian(mergedVotes);
+                                                         if (median === null) return <span className="text-xs text-muted-foreground">No votes</span>;
+                                                         const label = median > 0 ? '+1' : (median < 0 ? '-1' : '0');
+                                                         const color = median > 0 ? 'text-green-600' : (median < 0 ? 'text-red-600' : 'text-black');
+                                                         return <span className={`text-xs font-bold ${color}`}>Median: {label} <span className="text-muted-foreground font-normal">({Object.keys(mergedVotes).length} votes)</span></span>
+                                                     })()}
                                                 </div>
                                             </HoverCardTrigger>
                                             <HoverCardContent className="w-80">
-                                                {renderUDNeutralDistribution(card.votes)}
+                                                {renderUDNeutralDistribution(mergedVotes)}
                                             </HoverCardContent>
                                         </HoverCard>
                                     )}
@@ -657,7 +883,7 @@ export const CardView: React.FC<CardViewProps> = ({
                                 <HoverCard>
                                     <HoverCardTrigger asChild>
                                         {(() => {
-                                            const totalPoints = Object.values(card.votes).reduce((a, b) => a + b, 0);
+                                             const totalPoints = Object.values(mergedVotes).reduce((a, b) => a + b, 0);
                                             const hasPoints = totalPoints > 0;
                                             return (
                                                 <div className={`w-full relative flex items-center justify-start gap-2 p-1.5 rounded-md text-sm font-medium cursor-help overflow-hidden ${hasPoints ? 'bg-gray-400 border border-gray-400 text-white' : 'bg-muted/50 border text-primary'}`}>
@@ -672,7 +898,7 @@ export const CardView: React.FC<CardViewProps> = ({
                                         })()}
                                     </HoverCardTrigger>
                                     <HoverCardContent className="w-80">
-                                        {renderPointsDistribution(card.votes)}
+                                        {renderPointsDistribution(mergedVotes)}
                                     </HoverCardContent>
                                 </HoverCard>
                             ) : (
@@ -702,12 +928,12 @@ export const CardView: React.FC<CardViewProps> = ({
                                                 return grade ? grade.color : 'bg-muted';
                                             })()}
                                             ${(() => {
-                                                const median = getMJMedian(card.votes);
+                                                const median = getMJMedian(mergedVotes);
                                                 return [1, 2].includes(median || 0) ? 'text-black' : 'text-white';
                                             })()}
                                         `}>
                                             {(() => {
-                                                const median = getMJMedian(card.votes);
+                                                const median = getMJMedian(mergedVotes);
                                                 const grade = getMJGrade(median || 0);
                                                 return grade ? (
                                                     <>
@@ -716,7 +942,7 @@ export const CardView: React.FC<CardViewProps> = ({
                                                     </>
                                                 ) : 'No Votes';
                                             })()}
-                                            <span className="opacity-80 text-xs ml-1">({Object.keys(card.votes).length})</span>
+                                            <span className="opacity-80 text-xs ml-1">({Object.keys(mergedVotes).length})</span>
                                         </div>
                                     ) : (
                                         <DropdownMenu>
@@ -760,7 +986,7 @@ export const CardView: React.FC<CardViewProps> = ({
                             </HoverCardTrigger>
                             {(votingPhase === 'REVEALED' || isModerator) && (
                                 <HoverCardContent className="w-80">
-                                    {renderMJDistribution(card.votes)}
+                                    {renderMJDistribution(mergedVotes)}
                                 </HoverCardContent>
                             )}
                         </HoverCard>

@@ -52,6 +52,7 @@ type VotingMode = 'THUMBS_UP' | 'THUMBS_UD_NEUTRAL' | 'POINTS' | 'MAJORITY_JUDGM
 type VotingPhase = 'IDLE' | 'VOTING' | 'REVEALED';
 
 import { MJ_SCALE, VOTING_MODES_LABELS } from './planView/constants';
+import { BoardOptions, BoardTypeConfig } from './planView/BoardOptions';
 
 // Default columns
 const DEFAULT_COLUMNS: FertilizationColumn[] = [
@@ -165,7 +166,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
         if (!boardState || !isModerator) return;
         if (!confirm(`Are you sure you want to reset all votes in the "${boardState.columns.find(c => c.id === columnId)?.title}" column? This will clear every vote in this column but keep all cards.`)) return;
         const newCards = boardState.cards.map(c =>
-            c.columnId === columnId ? { ...c, votes: {} } : c
+            c.columnId === columnId ? { ...c, votes: {}, offlineVotes: {} } : c
         );
         const newColumns = boardState.columns.map(col =>
             col.id === columnId ? { ...col, votingPhase: 'IDLE' as VotingPhase } : col
@@ -259,7 +260,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
         // Apply minimum likes filter
         if (filterState.minLikes > 0) {
             cards = cards.filter(card => {
-                const positiveVotes = Object.values(card.votes || {}).filter(v => v > 0).length;
+                const positiveVotes = Object.values(card.votes || {}).filter(v => v > 0).length + Object.values(card.offlineVotes || {}).filter(v => v > 0).length;
                 return positiveVotes >= filterState.minLikes;
             });
         }
@@ -307,6 +308,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
             yFertilizationState.set('showAllLinks', state.showAllLinks);
             if (state.maxPointsPerUser !== undefined) yFertilizationState.set('maxPointsPerUser', state.maxPointsPerUser);
             if (state.mjLabels !== undefined) yFertilizationState.set('mjLabels', state.mjLabels);
+            if (state.showOfflineVotesPanel !== undefined) yFertilizationState.set('showOfflineVotesPanel', state.showOfflineVotesPanel);
 
             // Sync Columns
             state.columns.forEach(col => {
@@ -351,6 +353,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
 
             const maxPointsPerUser = yFertilizationState.get('maxPointsPerUser') as number | undefined;
             const mjLabels = yFertilizationState.get('mjLabels') as Record<number, string> | undefined;
+            const showOfflineVotesPanel = yFertilizationState.get('showOfflineVotesPanel') as boolean | undefined;
 
             const columns = Array.from(yFertilizationColumns.values()) as FertilizationColumn[];
             const sortedColumns = DEFAULT_COLUMNS.map(defCol =>
@@ -371,6 +374,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                     showAllLinks,
                     maxPointsPerUser,
                     mjLabels,
+                    showOfflineVotesPanel,
                     columns: sortedColumns,
                     cards: cards
                 };
@@ -407,6 +411,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                         votingPhase: 'IDLE',
                         areCursorsVisible: true,
                         showAllLinks: false,
+                        showOfflineVotesPanel: false,
                     };
                     await persistence.updateFertilizationBoardState(savedState);
                 }
@@ -426,6 +431,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                         const showAllLinks = yFertilizationState.get('showAllLinks') as boolean ?? false;
                         const maxPointsPerUser = yFertilizationState.get('maxPointsPerUser') as number | undefined;
                         const mjLabels = yFertilizationState.get('mjLabels') as Record<number, string> | undefined;
+                        const showOfflineVotesPanel = yFertilizationState.get('showOfflineVotesPanel') as boolean | undefined;
                         const columns = Array.from(yFertilizationColumns.values()) as FertilizationColumn[];
                         const sortedColumns = DEFAULT_COLUMNS.map(defCol =>
                             columns.find(c => c.id === defCol.id) || defCol
@@ -443,6 +449,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                             showAllLinks,
                             maxPointsPerUser,
                             mjLabels,
+                            showOfflineVotesPanel,
                             columns: sortedColumns,
                             cards: cards
                         };
@@ -509,6 +516,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
             votingPhase: 'IDLE',
             areCursorsVisible: true,
             showAllLinks: false,
+            showOfflineVotesPanel: false,
         };
         await saveBoard(newState);
     };
@@ -516,7 +524,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
     const resetVotes = async () => {
         if (!boardState || !isModerator) return;
         if (!confirm('Are you sure you want to reset all votes? This will clear every vote but keep all cards.')) return;
-        const newCards = boardState.cards.map(c => ({ ...c, votes: {} }));
+        const newCards = boardState.cards.map(c => ({ ...c, votes: {}, offlineVotes: {} }));
         await saveBoard({ ...boardState, cards: newCards, votingPhase: 'IDLE' });
     };
 
@@ -528,6 +536,24 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
     };
 
     const isModerator = boardState?.moderatorId === currentUserId;
+
+    const boardConfig: BoardTypeConfig = {
+        type: 'fertilization',
+        exportData: () => boardState ? { schemaVersion: 3, boardType: 'fertilization', ...boardState } : { schemaVersion: 3, boardType: 'fertilization' },
+        importData: async (data: Record<string, unknown>) => {
+            const boardData = data as unknown as FertilizationBoardEntity;
+            const cards = (boardData.cards || []).map((c: FertilizationCard & { offlineVotes?: number | Record<string, number> }) => ({
+                ...c,
+                offlineVotes: typeof c.offlineVotes === 'number'
+                    ? c.offlineVotes > 0 ? { offline_1: c.offlineVotes } : {}
+                    : (c.offlineVotes || {}),
+            }));
+            await saveBoard({ ...boardData, cards } as FertilizationBoardEntity);
+            if (isCollaborationEnabled()) {
+                syncBoardToYjs({ ...boardData, cards } as FertilizationBoardEntity);
+            }
+        },
+    };
 
     const toggleLock = async (columnId: string) => {
         if (!boardState || !isModerator) return;
@@ -550,6 +576,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
             content: content,
             authorId: anonymous ? null : currentUserId,
             votes: {},
+            offlineVotes: {},
             isRevealed: !boardState.hiddenEdition,
             factTag: activeColumnId === 'facts' ? (tag || 'A') : undefined,
         };
@@ -683,13 +710,15 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
         const mode = columnId ? getColumnVotingMode(columnId) : boardState.votingMode;
         const votes = card.votes || {};
         const values = Object.values(votes);
-        if (values.length === 0) return 0;
+        const offlineValues = Object.values(card.offlineVotes || {});
+        const allValues = [...values, ...offlineValues];
+        if (allValues.length === 0) return 0;
         switch (mode) {
-            case 'THUMBS_UP': return values.filter(v => v > 0).length;
-            case 'THUMBS_UD_NEUTRAL': return values.reduce((acc, v) => acc + v, 0);
-            case 'POINTS': return values.reduce((acc, v) => acc + v, 0);
+            case 'THUMBS_UP': return allValues.filter(v => v > 0).length;
+            case 'THUMBS_UD_NEUTRAL': return allValues.reduce((acc, v) => acc + v, 0);
+            case 'POINTS': return allValues.reduce((acc, v) => acc + v, 0);
             case 'MAJORITY_JUDGMENT': {
-                const sorted = [...values].sort((a, b) => a - b);
+                const sorted = [...allValues].sort((a, b) => a - b);
                 const midIndex = Math.ceil(sorted.length / 2) - 1;
                 return sorted[Math.max(0, midIndex)];
             }
@@ -823,6 +852,14 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
             }
             return c;
         });
+        await saveBoard({ ...boardState, cards: newCards });
+    };
+
+    const updateOfflineVotes = async (cardId: string, newValue: Record<string, number>) => {
+        if (!boardState || !isModerator) return;
+        const newCards = boardState.cards.map(c =>
+            c.id === cardId ? { ...c, offlineVotes: newValue } : c
+        );
         await saveBoard({ ...boardState, cards: newCards });
     };
 
@@ -1144,6 +1181,13 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                             </Button>
                         )}
 
+                        <BoardOptions
+                            showOfflineVotesPanel={boardState.showOfflineVotesPanel ?? false}
+                            onToggleOfflineVotesPanel={(show) => saveBoard({ ...boardState, showOfflineVotesPanel: show })}
+                            boardConfig={boardConfig}
+                            isModerator={!!isModerator}
+                        />
+
                         {!isModerator && boardState.isSessionActive && (
                             <Button variant="outline" size="sm" onClick={becomeModerator}>Become Moderator</Button>
                         )}
@@ -1240,6 +1284,14 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                             cards={filteredCards.filter(c => c.columnId === column.id).sort((a, b) => {
                                 const sortOrder = columnSortOrder[column.id];
                                 if (!sortOrder || sortOrder === 'none') return 0;
+                                if (column.id === 'facts') {
+                                    const tagPriority: Record<string, number> = { K: 0, A: 1, P: 2, N: 3 };
+                                    const aRank = a.factTag && tagPriority[a.factTag] !== undefined ? tagPriority[a.factTag] : 99;
+                                    const bRank = b.factTag && tagPriority[b.factTag] !== undefined ? tagPriority[b.factTag] : 99;
+                                    if (aRank !== bRank) {
+                                        return sortOrder === 'desc' ? bRank - aRank : aRank - bRank;
+                                    }
+                                }
                                 const scoreA = calculateCardVoteScore(a, column.id);
                                 const scoreB = calculateCardVoteScore(b, column.id);
                                 return sortOrder === 'desc' ? scoreB - scoreA : scoreA - scoreB;
@@ -1360,6 +1412,8 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                                             setLinkingCardId(linkingCardId === card.id ? null : card.id);
                                         }
                                     }}
+                                    onOfflineVotesChange={updateOfflineVotes}
+                                    showOfflineVotesPanel={boardState.showOfflineVotesPanel ?? false}
                                     onDragStart={(e) => handleDragStart(e, card.id)}
                                     isDraggable={!column.isLocked && !linkingCardId}
                                     columnMaxScore={colMaxScore}
