@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.27.0 (2026-06-14)
+
+### Features
+
+- **boards:** add offline voters and per-board JSON import/export (3a20377)
+
+---
+
 ## v0.26.0 (2026-06-13)
 
 ### Features
@@ -160,13 +168,5 @@
 
 - **common:** browser-only mode and canvas events in plan view (983b556)
 - **projectedHours:** adapt expectation-normalized projection for vacation deductions and work day capping (c420393)
-
----
-
-## v0.18.0 (2026-04-18)
-
-### Features
-
-- **common:** implement card aging with visual feedback (877483e)
 
 ---
