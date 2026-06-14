@@ -46,6 +46,7 @@ import { TaskEditModal } from "./TaskEditModal";
 import { useCardAging } from "@/hooks/useCardAging";
 import { AgingDecorations } from "@/components/AgingOverlays";
 import { LiveTimeBadge, EditableTitle, DIFFICULTY_OPTIONS, getDifficultyColor, DifficultyBadge } from "./SharedTaskControls";
+import { SubtaskProgress } from "./SubtaskProgress";
 
 interface TaskCardProps {
   task: Task;
@@ -588,6 +589,9 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
           done={task.triageStatus === "Done" || task.triageStatus === "Dropped"}
           onUpdateTitle={(title) => updateTitle(task.id, title)}
         />
+        {task.children && task.children.length > 0 && (
+          <SubtaskProgress task={task} tasks={tasks} />
+        )}
         {/* Comment icon - show in Compact/Full always, Ultra Compact on hover */}
         {isUltraCompact ? (
           <div className={`transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
@@ -633,6 +637,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
             >
               {open ? <ChevronDown className="h-4 w-4 mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
               Subtasks
+              <SubtaskProgress task={task} tasks={tasks} />
             </button>
             <div className="flex flex-wrap gap-1">
               {task.urgent && (

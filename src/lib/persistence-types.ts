@@ -44,16 +44,16 @@ export interface TaskEntity {
   majorIncident: boolean;
   sprintTarget: boolean;
   difficulty: number;
-  timer: { startTime: number; endTime: number }[]; // Match existing app structure
+  timer: { startTime: number; endTime: number }[];
   category: Category | string;
   terminationDate: string | null;
   comment: string | null;
   durationInMinutes: number | null;
   priority: number | null;
   userId: string | null;
-  parentId: string | null; // For hierarchical tasks
-  children?: string[]; // Add children array for hierarchical structure
-  updatedAt?: string | null; // Last modification timestamp for card aging
+  parentId: string | null;
+  children?: string[];
+  updatedAt?: string | null;
   linkedVoteIds?: string[];
 }
 
