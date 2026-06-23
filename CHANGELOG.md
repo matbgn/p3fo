@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.28.1 (2026-06-23)
+
+### Bug Fixes
+
+- **boards:** persist Yjs-synced BlockNote content to DB snapshot (4afff10)
+
+---
+
 ## v0.28.0 (2026-06-23)
 
 ### Features
@@ -157,13 +165,5 @@
 - **common:** all boards clearance bis (535c108)
 - **common:** all boards clearance (d41656b)
 - **import/export:** add dream board and circle migration (d2e5c7a)
-
----
-
-## v0.21.0 (2026-04-27)
-
-### Features
-
-- **circles:** add BlockNote rich text editing with collaborative capa for roles edition (2ffd91b)
 
 ---
