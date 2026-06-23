@@ -56,6 +56,9 @@ interface FrameworkCategoryViewProps {
   frameworkId: string;
   optional?: boolean;
   collapsible?: boolean;
+  // Controlled collapse state for parent-driven expand/collapse-all actions.
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 }
 
 export const FrameworkCategoryView: React.FC<FrameworkCategoryViewProps> = ({
@@ -67,10 +70,21 @@ export const FrameworkCategoryView: React.FC<FrameworkCategoryViewProps> = ({
   frameworkId,
   optional = false,
   collapsible = true,
+  collapsed: controlledCollapsed,
+  onToggleCollapsed,
 }) => {
   const { userSettings } = useUserSettings();
   const [userColor] = React.useState(getRandomColor);
-  const [isCollapsed, setIsCollapsed] = React.useState(false);
+  const [internalCollapsed, setInternalCollapsed] = React.useState(false);
+  const isControlled = controlledCollapsed !== undefined;
+  const isCollapsed = isControlled ? controlledCollapsed : internalCollapsed;
+  const toggleCollapsed = () => {
+    if (isControlled) {
+      onToggleCollapsed?.();
+    } else {
+      setInternalCollapsed(prev => !prev);
+    }
+  };
 
   const collaborativeKey = `framework-${frameworkId}-${categoryId}`;
   const initialBlocks = deserializeBlocks(content);
@@ -119,11 +133,7 @@ export const FrameworkCategoryView: React.FC<FrameworkCategoryViewProps> = ({
   React.useEffect(() => {
     if (!editor) return;
     let didInit = false;
-    const unsubscribe = editor.onChange(() => {
-      if (!didInit) {
-        didInit = true;
-        return;
-      }
+    const persist = () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const json = JSON.stringify(editor.document.map((b: any) => ({
         id: b.id,
@@ -146,6 +156,19 @@ export const FrameworkCategoryView: React.FC<FrameworkCategoryViewProps> = ({
           });
         }
       }
+    };
+    const unsubscribe = editor.onChange(() => {
+      if (!didInit) {
+        didInit = true;
+        // In collaboration mode the first onChange carries the Yjs fragment
+        // content synced from the server. Persist it so the SQL snapshot (and
+        // therefore data export) stays in sync with the live collaborative doc.
+        if (collaborativeKey && isCollaborationEnabled()) {
+          persist();
+        }
+        return;
+      }
+      persist();
     });
     return () => unsubscribe();
   }, [editor, collaborativeKey, onChange]);
@@ -154,7 +177,7 @@ export const FrameworkCategoryView: React.FC<FrameworkCategoryViewProps> = ({
     <div className="border rounded-lg mb-4 bg-white">
       <div
         className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50 select-none"
-        onClick={() => collapsible && setIsCollapsed(!isCollapsed)}
+        onClick={() => collapsible && toggleCollapsed()}
       >
         <div className="flex items-center gap-2 min-w-0">
           <h3 className="text-base font-semibold text-gray-900 uppercase tracking-wide truncate">

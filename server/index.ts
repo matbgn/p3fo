@@ -3,7 +3,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { createDbClient } from './db/index.js';
 import { DbClient } from './db/index.js';
-import { VoteKind, VoteLoop, VoteModerator, VoteResponseEntity } from '../src/lib/persistence-types.js';
+import { VoteKind, VoteLoop, VoteModerator, VoteResponseEntity, PomodoroSession } from '../src/lib/persistence-types.js';
 import QRCode from 'qrcode';
 import { WebSocketServer } from 'ws';
 import { setupWSConnection } from 'y-websocket/bin/utils';
@@ -1120,6 +1120,18 @@ app.post('/api/pomodoro-sessions', async (req: Request, res: Response) => {
     console.error('Error creating pomodoro session:', error);
     const message = error instanceof Error ? error.message : String(error);
     res.status(500).json({ error: 'Failed to create pomodoro session', details: message });
+  }
+});
+
+app.post('/api/pomodoro-sessions/import', express.json({ limit: '10mb' }), async (req: Request, res: Response) => {
+  try {
+    const sessions: PomodoroSession[] = req.body;
+    await db.importPomodoroSessions(sessions);
+    res.status(204).send();
+  } catch (error: unknown) {
+    console.error('Error importing pomodoro sessions:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to import pomodoro sessions', details: message });
   }
 });
 

@@ -2265,6 +2265,42 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     await this.pool.query('DELETE FROM "pomodoroSessions" WHERE "id" = $1', [id]);
   }
 
+  async importPomodoroSessions(sessions: PomodoroSession[]): Promise<void> {
+    const client: PoolClient = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const session of sessions) {
+        await client.query(`
+          INSERT INTO "pomodoroSessions" ("id", "taskId", "userId", "startTime", "endTime", "phase", "duration", "completed")
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          ON CONFLICT ("id") DO UPDATE SET
+            "taskId" = EXCLUDED."taskId",
+            "userId" = EXCLUDED."userId",
+            "startTime" = EXCLUDED."startTime",
+            "endTime" = EXCLUDED."endTime",
+            "phase" = EXCLUDED."phase",
+            "duration" = EXCLUDED."duration",
+            "completed" = EXCLUDED."completed"
+        `, [
+          session.id,
+          session.taskId ?? null,
+          session.userId,
+          session.startTime,
+          session.endTime,
+          session.phase,
+          session.duration,
+          session.completed,
+        ]);
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
   async clearAllPomodoroSessions(): Promise<void> {
     await this.pool.query('DELETE FROM "pomodoroSessions"');
   }

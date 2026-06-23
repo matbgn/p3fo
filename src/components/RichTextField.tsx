@@ -76,6 +76,9 @@ interface EditorModalProps {
   onSave: (json: string) => void;
   onCancel: () => void;
   collaborativeKey?: string; // e.g., "circle-123-purpose"
+  // Persist synced Yjs content into parent state without closing the modal.
+  // Called once when the Yjs fragment content first syncs into the editor.
+  onSync?: (json: string) => void;
 }
 
 const EditorModal: React.FC<EditorModalProps> = ({
@@ -85,6 +88,7 @@ const EditorModal: React.FC<EditorModalProps> = ({
   onSave,
   onCancel,
   collaborativeKey,
+  onSync,
 }) => {
   const { userSettings } = useUserSettings();
   const [userColor] = React.useState(getRandomColor);
@@ -132,6 +136,23 @@ const EditorModal: React.FC<EditorModalProps> = ({
       return () => cancelAnimationFrame(rafId);
     }
   }, [collaborativeKey, editor, initialBlocks]);
+
+  // In collaborative mode, capture the Yjs-synced content into parent state on
+  // the first onChange so it is persisted when the parent dialog is saved, even
+  // if the user never types in the modal. Without this, content that exists only
+  // in the Yjs fragment never reaches the DB snapshot (and therefore exports).
+  React.useEffect(() => {
+    if (!editor) return;
+    if (!collaborativeKey || !isCollaborationEnabled() || !onSync) return;
+    let didInit = false;
+    const unsubscribe = editor.onChange(() => {
+      if (didInit) return;
+      didInit = true;
+      const json = serializeBlocks(editor.document);
+      onSync(json);
+    });
+    return () => unsubscribe();
+  }, [editor, collaborativeKey, onSync]);
 
   const handleSave = () => {
     const json = serializeBlocks(editor.document);
@@ -255,6 +276,7 @@ export const RichTextField: React.FC<RichTextFieldProps> = ({
               onSave={handleSave}
               onCancel={handleCancel}
               collaborativeKey={collaborativeKey}
+              onSync={onChange}
             />
           )}
         </DialogContent>

@@ -255,6 +255,7 @@ export interface PersistenceAdapter {
   // Pomodoro sessions
   listPomodoroSessions(userId?: string, since?: number): Promise<PomodoroSession[]>;
   createPomodoroSession(session: PomodoroSession): Promise<PomodoroSession & { warnings?: string[] }>;
+  importPomodoroSessions(sessions: PomodoroSession[]): Promise<void>;
   deletePomodoroSession(id: string): Promise<void>;
   clearAllPomodoroSessions(): Promise<void>;
   deletePomodoroSessionsByUser(userId: string): Promise<void>;

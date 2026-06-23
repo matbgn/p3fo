@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FrameworkCategoryView } from '@/components/FrameworkCategoryView';
@@ -8,7 +8,7 @@ import { FocusModeProvider } from '@/components/FocusModeProvider';
 import { FocusModeOverlay } from '@/components/FocusModeOverlay';
 import { FocusModeBar } from '@/components/planView/FocusModeBar';
 import { useFocusMode } from '@/hooks/useFocusMode';
-import { Plus, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, ChevronDown, ChevronRight, PlusCircle, MinusCircle } from 'lucide-react';
 
 const INTENTIONAL_CATEGORIES: Omit<FrameworkCategory, 'content' | 'order'>[] = [
   { id: 'mission', label: 'Mission', description: 'What do we concretely do, and for whom? What are our main product or service offerings, our value propositions?' },
@@ -32,6 +32,22 @@ const IntentionalFrameworkViewInner: React.FC<IntentionalFrameworkViewProps> = (
   const { frameworks, createFramework, updateFramework } = useFrameworks('intentional');
   const { isFocusMode } = useFocusMode();
   const [framework, setFramework] = useState<FrameworkEntity | null>(null);
+  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
+
+  const allCategoryIds = useMemo(
+    () => (framework ? framework.categories.map(c => c.id) : []),
+    [framework],
+  );
+  const toggleCategory = useCallback((id: string) => {
+    setCollapsedCats(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+  const expandAll = () => setCollapsedCats(new Set());
+  const collapseAll = () => setCollapsedCats(new Set(allCategoryIds));
 
   useEffect(() => {
     if (frameworks.length > 0) {
@@ -98,10 +114,28 @@ const IntentionalFrameworkViewInner: React.FC<IntentionalFrameworkViewProps> = (
           <CardHeader className="flex flex-col space-y-4 pb-2 shrink-0">
             <div className="flex flex-row items-center justify-between">
               <CardTitle>Intentional Framework</CardTitle>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={expandAll}>
+                  <PlusCircle className="w-4 h-4 mr-1" /> Expand All
+                </Button>
+                <Button variant="ghost" size="sm" onClick={collapseAll}>
+                  <MinusCircle className="w-4 h-4 mr-1" /> Collapse All
+                </Button>
+              </div>
             </div>
           </CardHeader>
         )}
         <CardContent className="flex-1 min-h-0 overflow-auto px-6 py-4">
+          {hideHeader && (
+            <div className="flex items-center gap-2 mb-2">
+              <Button variant="ghost" size="sm" onClick={expandAll}>
+                <PlusCircle className="w-4 h-4 mr-1" /> Expand All
+              </Button>
+              <Button variant="ghost" size="sm" onClick={collapseAll}>
+                <MinusCircle className="w-4 h-4 mr-1" /> Collapse All
+              </Button>
+            </div>
+          )}
           {framework.categories
             .sort((a, b) => a.order - b.order)
             .map(category => (
@@ -114,6 +148,8 @@ const IntentionalFrameworkViewInner: React.FC<IntentionalFrameworkViewProps> = (
                 onChange={(content) => handleCategoryChange(category.id, content)}
                 frameworkId={framework.id}
                 optional={category.optional}
+                collapsed={collapsedCats.has(category.id)}
+                onToggleCollapsed={() => toggleCategory(category.id)}
               />
             ))}
         </CardContent>
