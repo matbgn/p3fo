@@ -2530,6 +2530,41 @@ class SqliteClient implements DbClient {
     this.db.prepare('DELETE FROM "pomodoroSessions" WHERE "id" = ?').run(id);
   }
 
+  async importPomodoroSessions(sessions: PomodoroSession[]): Promise<void> {
+    const insertStmt = this.db.prepare(`
+      INSERT INTO "pomodoroSessions"("id", "taskId", "userId", "startTime", "endTime", "phase", "duration", "completed")
+      VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT("id") DO UPDATE SET
+        "taskId" = excluded."taskId",
+        "userId" = excluded."userId",
+        "startTime" = excluded."startTime",
+        "endTime" = excluded."endTime",
+        "phase" = excluded."phase",
+        "duration" = excluded."duration",
+        "completed" = excluded."completed"
+    `);
+
+    this.db.exec('BEGIN');
+    try {
+      for (const session of sessions) {
+        insertStmt.run(
+          session.id,
+          session.taskId ?? null,
+          session.userId,
+          session.startTime,
+          session.endTime,
+          session.phase,
+          session.duration,
+          session.completed ? 1 : 0,
+        );
+      }
+      this.db.exec('COMMIT');
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
+    }
+  }
+
   async clearAllPomodoroSessions(): Promise<void> {
     this.db.exec('DELETE FROM "pomodoroSessions"');
   }

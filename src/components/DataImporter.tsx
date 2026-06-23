@@ -365,6 +365,11 @@ const DataImporter: React.FC = () => {
                 await adapter.importVoteModerators(importedData.voteModerators);
               }
 
+              // Import Pomodoro/Focus Sessions (bulk)
+              if (importedData.pomodoroSessions && Array.isArray(importedData.pomodoroSessions)) {
+                await adapter.importPomodoroSessions(importedData.pomodoroSessions);
+              }
+
               // RESTORE ACTIVE USER IDENTITY
               if (importedData.activeUserId) {
                 console.log('Restoring active user ID from import:', importedData.activeUserId);

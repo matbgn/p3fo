@@ -70,6 +70,9 @@ const DataExporter: React.FC = () => {
       // Fetch ALL votes from persistence
       const allVotes = await adapter.listVotes();
 
+      // Fetch ALL pomodoro/focus sessions
+      const allPomodoroSessions = await adapter.listPomodoroSessions();
+
       // Fetch vote responses, loops, and moderators for each vote
       const allVoteResponses: VoteResponseEntity[] = [];
       const allVoteLoops: VoteLoop[] = [];
@@ -99,6 +102,7 @@ const DataExporter: React.FC = () => {
         voteResponses: allVoteResponses,
         voteLoops: allVoteLoops,
         voteModerators: allVoteModerators,
+        pomodoroSessions: allPomodoroSessions,
       };
 
       const data = JSON.stringify(exportData, null, 2);

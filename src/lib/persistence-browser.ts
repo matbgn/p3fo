@@ -1255,11 +1255,27 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
   }
 
+  async importPomodoroSessions(imported: PomodoroSession[]): Promise<void> {
+    if (typeof window === 'undefined') {
+      throw new Error('Cannot import pomodoro sessions in non-browser environment');
+    }
+    try {
+      const existing = await this.listPomodoroSessions();
+      const byId = new Map<string, PomodoroSession>();
+      for (const s of existing) byId.set(s.id, s);
+      for (const s of imported) byId.set(s.id, s);
+      const merged = Array.from(byId.values());
+      localStorage.setItem(POMODORO_SESSIONS_STORAGE_KEY, JSON.stringify(merged));
+    } catch (error) {
+      console.error('Error importing pomodoro sessions in localStorage:', error);
+      throw error;
+    }
+  }
+
   async deletePomodoroSession(id: string): Promise<void> {
     if (typeof window === 'undefined') {
       return;
     }
-
     try {
       const sessions = await this.listPomodoroSessions();
       const filtered = sessions.filter((s: PomodoroSession) => s.id !== id);

@@ -535,6 +535,13 @@ export class HttpApiPersistence implements PersistenceAdapter {
     });
   }
 
+  async importPomodoroSessions(sessions: PomodoroSession[]): Promise<void> {
+    await this.makeRequest('/api/pomodoro-sessions/import', {
+      method: 'POST',
+      body: JSON.stringify(sessions),
+    });
+  }
+
   async deletePomodoroSession(id: string): Promise<void> {
     await this.makeRequest(`/api/pomodoro-sessions/${id}`, {
       method: 'DELETE',
