@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.28.0 (2026-06-23)
+
+### Features
+
+- **traveler:** add Lisbon and Porto airport locations (a9fd84b)
+
+### Bug Fixes
+
+- **focus sessions:** add pomodoro/focus sessions import/export (0aefb8e)
+- **voting tool:** add vote responses/moderators import endpoints and toast feedback (819b58a)
+- **focus sessions:** support configurable week start day in pomodoro heatmap (b657b89)
+
+---
+
 ## v0.27.1 (2026-06-15)
 
 ### Bug Fixes
@@ -151,17 +165,5 @@
 ### Features
 
 - **circles:** add BlockNote rich text editing with collaborative capa for roles edition (2ffd91b)
-
----
-
-## v0.20.0 (2026-04-26)
-
-### Features
-
-- **plan:** add roles table with user assignments view (c6bbb49)
-
-### Bug Fixes
-
-- **DBs:** fix databases connectors for sqllite & postgres (dbc6051)
 
 ---
