@@ -25,7 +25,7 @@ import { Trash2 } from "lucide-react";
 import { getPersistenceAdapter } from "@/lib/persistence-factory";
 import { eventBus } from "@/lib/events";
 
-const PomodoroStatsTab: React.FC<{ userId: string }> = ({ userId }) => {
+const PomodoroStatsTab: React.FC<{ userId: string; weekStartDay: 0 | 1 }> = ({ userId, weekStartDay }) => {
   const { sessions, stats, isLoading, reload } = usePomodoroStats(userId);
 
   const handleReset = async () => {
@@ -72,7 +72,7 @@ const PomodoroStatsTab: React.FC<{ userId: string }> = ({ userId }) => {
             </AlertDialogContent>
           </AlertDialog>
         </div>
-        <PomodoroHeatmap sessions={sessions} />
+        <PomodoroHeatmap sessions={sessions} weekStartDay={weekStartDay} />
       </div>
     </div>
   );
@@ -207,7 +207,7 @@ const MetricsPage: React.FC = () => {
             ) : activeTab === "individual-qol" ? (
               selectedUserId && selectedUserId !== "unassigned" ? <QoLSurvey userId={selectedUserId} /> : <div>Please select a user to view survey</div>
             ) : activeTab === "pomodoro" ? (
-              selectedUserId && selectedUserId !== "unassigned" ? <PomodoroStatsTab userId={selectedUserId} /> : <div>Please select a user to view focus session stats</div>
+              selectedUserId && selectedUserId !== "unassigned" ? <PomodoroStatsTab userId={selectedUserId} weekStartDay={userSettings.weekStartDay ?? 1} /> : <div>Please select a user to view focus session stats</div>
             ) : (
               <div className="flex items-center justify-center h-full">
                 <p className="text-muted-foreground">Graphics content for {activeTab} will appear here</p>

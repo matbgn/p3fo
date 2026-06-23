@@ -5,6 +5,7 @@ import { PomodoroSession } from '@/lib/pomodoro-types';
 interface PomodoroHeatmapProps {
   sessions: PomodoroSession[];
   weeks?: number;
+  weekStartDay?: 0 | 1;
 }
 
 const COLORS = ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'];
@@ -12,10 +13,16 @@ const CELL_SIZE = 13;
 const CELL_GAP = 3;
 const LABEL_WIDTH = 40;
 const MONTH_HEIGHT = 20;
-const DAY_LABELS = ['', 'Mon', '', 'Wed', '', 'Fri', ''];
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-const PomodoroHeatmap: React.FC<PomodoroHeatmapProps> = ({ sessions, weeks = 39 }) => {
+const PomodoroHeatmap: React.FC<PomodoroHeatmapProps> = ({ sessions, weeks = 39, weekStartDay = 1 }) => {
+  const dayLabels = useMemo(() => {
+    const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const ordered = weekStartDay === 1
+      ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+      : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return ordered.map((name, i) => (i % 2 === 1 ? name : ''));
+  }, [weekStartDay]);
   const svgRef = useRef<SVGSVGElement>(null);
 
   const dailyCounts = useMemo(() => {
@@ -47,7 +54,7 @@ const PomodoroHeatmap: React.FC<PomodoroHeatmapProps> = ({ sessions, weeks = 39 
       const key = d3.timeFormat('%Y-%m-%d')(d);
       const count = dailyCounts.get(key) || 0;
       const colIndex = Math.floor((d.getTime() - startDate.getTime()) / 86400000 / 7);
-      const dayOfWeek = (d.getDay() + 6) % 7;
+      const dayOfWeek = (d.getDay() - weekStartDay + 7) % 7;
       return {
         date: d,
         key,
@@ -76,7 +83,7 @@ const PomodoroHeatmap: React.FC<PomodoroHeatmapProps> = ({ sessions, weeks = 39 
     const h = MONTH_HEIGHT + 7 * (CELL_SIZE + CELL_GAP) + 10;
 
     return { cells: cellsData, months: monthData, width: w, height: h };
-  }, [dailyCounts, weeks]);
+  }, [dailyCounts, weeks, weekStartDay]);
 
   useEffect(() => {
     if (!svgRef.current) return;
@@ -95,7 +102,7 @@ const PomodoroHeatmap: React.FC<PomodoroHeatmapProps> = ({ sessions, weeks = 39 
         .text(m.label);
     });
 
-    DAY_LABELS.forEach((label, i) => {
+    dayLabels.forEach((label, i) => {
       if (label) {
         g.append('text')
           .attr('x', LABEL_WIDTH - 4)
@@ -143,7 +150,7 @@ const PomodoroHeatmap: React.FC<PomodoroHeatmapProps> = ({ sessions, weeks = 39 
       .on('mouseleave', () => {
         tooltip.style('opacity', 0);
       });
-  }, [cells, months]);
+  }, [cells, months, dayLabels]);
 
   return (
     <div className="overflow-x-auto">
