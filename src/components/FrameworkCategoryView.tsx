@@ -119,11 +119,7 @@ export const FrameworkCategoryView: React.FC<FrameworkCategoryViewProps> = ({
   React.useEffect(() => {
     if (!editor) return;
     let didInit = false;
-    const unsubscribe = editor.onChange(() => {
-      if (!didInit) {
-        didInit = true;
-        return;
-      }
+    const persist = () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const json = JSON.stringify(editor.document.map((b: any) => ({
         id: b.id,
@@ -146,6 +142,19 @@ export const FrameworkCategoryView: React.FC<FrameworkCategoryViewProps> = ({
           });
         }
       }
+    };
+    const unsubscribe = editor.onChange(() => {
+      if (!didInit) {
+        didInit = true;
+        // In collaboration mode the first onChange carries the Yjs fragment
+        // content synced from the server. Persist it so the SQL snapshot (and
+        // therefore data export) stays in sync with the live collaborative doc.
+        if (collaborativeKey && isCollaborationEnabled()) {
+          persist();
+        }
+        return;
+      }
+      persist();
     });
     return () => unsubscribe();
   }, [editor, collaborativeKey, onChange]);
