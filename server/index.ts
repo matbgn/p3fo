@@ -3,7 +3,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { createDbClient } from './db/index.js';
 import { DbClient } from './db/index.js';
-import { VoteKind, VoteLoop } from '../src/lib/persistence-types.js';
+import { VoteKind, VoteLoop, VoteModerator, VoteResponseEntity } from '../src/lib/persistence-types.js';
 import QRCode from 'qrcode';
 import { WebSocketServer } from 'ws';
 import { setupWSConnection } from 'y-websocket/bin/utils';
@@ -873,6 +873,30 @@ app.post('/api/vote-loops/import', async (req: Request, res: Response) => {
     console.error('Error importing vote loops:', error);
     const message = error instanceof Error ? error.message : String(error);
     res.status(500).json({ error: 'Failed to import vote loops', details: message });
+  }
+});
+
+app.post('/api/vote-responses/import', express.json({ limit: '10mb' }), async (req: Request, res: Response) => {
+  try {
+    const items: VoteResponseEntity[] = req.body;
+    await db.importVoteResponses(items);
+    res.status(204).send();
+  } catch (error: unknown) {
+    console.error('Error importing vote responses:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to import vote responses', details: message });
+  }
+});
+
+app.post('/api/vote-moderators/import', express.json({ limit: '10mb' }), async (req: Request, res: Response) => {
+  try {
+    const items: VoteModerator[] = req.body;
+    await db.importVoteModerators(items);
+    res.status(204).send();
+  } catch (error: unknown) {
+    console.error('Error importing vote moderators:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to import vote moderators', details: message });
   }
 });
 

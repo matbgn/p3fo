@@ -3,11 +3,37 @@ import { useTasks } from '@/hooks/useTasks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useReminderStore } from '@/hooks/useReminders';
+import { useToast } from '@/hooks/use-toast';
 import { getPersistenceAdapter } from '@/lib/persistence-factory';
 import { QolSurveyResponseEntity, MonthlyBalanceData } from '@/lib/persistence-types';
 import { yUserSettings, yFertilizationState, yFertilizationCards, yFertilizationColumns, yDreamState, yDreamCards, yDreamColumns, yCircles, yFrameworks, yAppSettings, isCollaborationEnabled, doc } from '@/lib/collaboration';
 
 const CURRENT_SCHEMA_VERSION = 3;
+
+function extractImportErrorMessage(error: unknown): string {
+  if (error instanceof SyntaxError) {
+    return `Invalid JSON file: ${error.message}`;
+  }
+  if (error instanceof Error) {
+    const httpMatch = error.message.match(/status: (\d+)/);
+    if (httpMatch) {
+      const status = httpMatch[1];
+      const hintMap: Record<string, string> = {
+        '400': 'Bad request — the server rejected the data shape.',
+        '401': 'Unauthorized — please re-authenticate.',
+        '403': 'Forbidden — your account cannot perform this import.',
+        '404': 'Not found — an API endpoint is missing.',
+        '500': 'Server error while saving — check the server logs.',
+      };
+      return hintMap[status] ? `HTTP ${status}: ${hintMap[status]}` : `HTTP ${status}`;
+    }
+    if (error.message === 'Failed to fetch' || /NetworkError|fetch/i.test(error.message)) {
+      return 'Network error — could not reach the backend server.';
+    }
+    return error.message;
+  }
+  return typeof error === 'string' ? error : 'Unknown error. See the browser console for details.';
+}
 
 interface ImportedUserSettings {
   userId?: string;
@@ -27,6 +53,7 @@ interface ImportedUserSettings {
 
 const DataImporter: React.FC = () => {
   const { importTasks } = useTasks();
+  const { toast } = useToast();
   const [file, setFile] = useState<File | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -45,7 +72,11 @@ const DataImporter: React.FC = () => {
 
             // Schema version check
             if (importedData.schemaVersion !== undefined && importedData.schemaVersion > CURRENT_SCHEMA_VERSION) {
-              alert(`Cannot import data: schema version ${importedData.schemaVersion} is newer than supported version ${CURRENT_SCHEMA_VERSION}. Please update the application.`);
+              toast({
+                variant: 'destructive',
+                title: 'Unsupported schema version',
+                description: `Schema version ${importedData.schemaVersion} is newer than the supported version ${CURRENT_SCHEMA_VERSION}. Please update the application.`,
+              });
               return;
             }
 
@@ -347,12 +378,20 @@ const DataImporter: React.FC = () => {
               }
             }
 
-            alert('Data imported successfully!');
+            toast({
+              title: 'Data imported successfully!',
+              description: 'The page will reload to apply the imported data.',
+            });
             // Trigger a reload or state update if necessary
             window.location.reload();
           } catch (error) {
             console.error("Import error:", error);
-            alert('Error importing data. Please check the file format.');
+            const message = extractImportErrorMessage(error);
+            toast({
+              variant: 'destructive',
+              title: 'Error importing data',
+              description: message,
+            });
           }
         }
       };
