@@ -113,7 +113,32 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
   const [isHovered, setIsHovered] = React.useState(false);
   const hoverTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Track open dropdowns so hover-gated controls stay mounted while a
+  // portaled Select/Popover is open (prevents the card from collapsing
+  // when the pointer moves into the portaled dropdown content).
+  const [isAnyDropdownOpen, setIsAnyDropdownOpen] = React.useState(false);
+  const openDropdownCountRef = React.useRef(0);
+  // True while the pointer is physically over the card element.
+  const pointerOverCardRef = React.useRef(false);
+
+  const handleDropdownOpenChange = React.useCallback((open: boolean) => {
+    if (open) {
+      openDropdownCountRef.current += 1;
+      setIsAnyDropdownOpen(true);
+    } else {
+      openDropdownCountRef.current = Math.max(0, openDropdownCountRef.current - 1);
+      const stillOpen = openDropdownCountRef.current > 0;
+      setIsAnyDropdownOpen(stillOpen);
+      // When the last dropdown closes and the pointer is no longer over the
+      // card, clear hover so the controls collapse again.
+      if (!stillOpen && !pointerOverCardRef.current) {
+        setIsHovered(false);
+      }
+    }
+  }, []);
+
   const handleMouseEnter = React.useCallback(() => {
+    pointerOverCardRef.current = true;
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current);
       hoverTimeoutRef.current = null;
@@ -122,7 +147,11 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
   }, []);
 
   const handleMouseLeave = React.useCallback(() => {
+    pointerOverCardRef.current = false;
     hoverTimeoutRef.current = setTimeout(() => {
+      // Keep controls mounted while a dropdown is open so the user can
+      // interact with portaled content without the card collapsing.
+      if (openDropdownCountRef.current > 0) return;
       setIsHovered(false);
     }, 300);
   }, []);
@@ -162,6 +191,10 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
   const isUltraCompact = cardCompactness === COMPACTNESS_ULTRA;
   const isCompact = cardCompactness === COMPACTNESS_COMPACT;
   const isFull = cardCompactness === COMPACTNESS_FULL;
+
+  // Keep hover-gated controls mounted while any portaled dropdown is open
+  // so the card does not collapse when the pointer moves into the dropdown.
+  const showHoverControls = isHovered || isAnyDropdownOpen;
 
   React.useEffect(() => {
     setCommentText(task.comment || "");
@@ -292,8 +325,8 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
       <div
         className="flex justify-between items-center mb-2"
       >
-         <div className={`flex justify-start gap-1 transition-opacity duration-200 ${isUltraCompact ? (isHovered ? 'opacity-100' : 'opacity-0') : 'opacity-100'}`}>
-           {(isUltraCompact ? isHovered : true) && (
+         <div className={`flex justify-start gap-1 transition-opacity duration-200 ${isUltraCompact ? (showHoverControls ? 'opacity-100' : 'opacity-0') : 'opacity-100'}`}>
+            {(isUltraCompact ? showHoverControls : true) && (
              <>
                <div className="flex gap-1 items-center">
                  <LiveTimeBadge
@@ -310,7 +343,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                {hasSubtasks ? (
                  <DifficultyBadge difficulty={totalDifficulty} />
                ) : (
-                 <Select value={task.difficulty?.toString() || "1"} onValueChange={(v) => updateDifficulty(task.id, parseFloat(v) as 0.5 | 1 | 2 | 3 | 5 | 8)}>
+                  <Select value={task.difficulty?.toString() || "1"} onValueChange={(v) => updateDifficulty(task.id, parseFloat(v) as 0.5 | 1 | 2 | 3 | 5 | 8)} onOpenChange={handleDropdownOpenChange}>
                    <SelectTrigger className="h-6 w-16 p-0">
                      <SelectValue>
                        {task.difficulty ? (
@@ -344,8 +377,8 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
          {/* Timer controls - show in Compact/Full always, Ultra Compact on hover */}
          {!hasSubtasks && (
            isUltraCompact ? (
-             <div className={`flex items-center gap-2 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
-                {isHovered && (
+              <div className={`flex items-center gap-2 transition-opacity duration-200 ${showHoverControls ? 'opacity-100' : 'opacity-0'}`}>
+                 {showHoverControls && (
                   <>
                     <Button
                       size="sm"
@@ -398,8 +431,8 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
          {/* Date picker toggle - show in Compact/Full always, Ultra Compact on hover */}
          {!task.parentId && (
            isUltraCompact ? (
-             <div className={`flex items-center gap-2 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
-               {isHovered && (
+              <div className={`flex items-center gap-2 transition-opacity duration-200 ${showHoverControls ? 'opacity-100' : 'opacity-0'}`}>
+                {showHoverControls && (
                  <Button
                    size="sm"
                    variant="ghost"
@@ -433,16 +466,16 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
       {isDateTimeBlockOpen && !task.parentId && (
         <div className="flex flex-col gap-2 mb-2">
           <div className="flex items-center gap-2">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant={"outline"}
-                  className={cn(
-                    "flex-1 h-7 px-2 py-1 text-xs justify-start text-left font-normal",
-                    !task.terminationDate && "text-muted-foreground"
-                  )}
-                  onClick={(e) => e.stopPropagation()}
-                >
+            <Popover onOpenChange={handleDropdownOpenChange}>
+               <PopoverTrigger asChild>
+                 <Button
+                   variant={"outline"}
+                   className={cn(
+                     "flex-1 h-7 px-2 py-1 text-xs justify-start text-left font-normal",
+                     !task.terminationDate && "text-muted-foreground"
+                   )}
+                   onClick={(e) => e.stopPropagation()}
+                 >
                   <CalendarIcon className="mr-2 h-3 w-3" />
                   {task.terminationDate ? (
                     format(new Date(task.terminationDate), "PPP p")
@@ -504,52 +537,53 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
               className="w-24 h-7 px-2 py-1 text-xs text-center"
               onClick={(e) => e.stopPropagation()}
             />
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 w-6 p-0"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <BellRing className={`h-4 w-4 ${reminderStatus === 'triggered' ? "text-red-500 fill-red-500" :
+            <Popover onOpenChange={handleDropdownOpenChange}>
+               <PopoverTrigger asChild>
+                 <Button
+                   size="sm"
+                   variant="ghost"
+                   className="h-6 w-6 p-0"
+                   onClick={(e) => e.stopPropagation()}
+                 >
+                   <BellRing className={`h-4 w-4 ${reminderStatus === 'triggered' ? "text-red-500 fill-red-500" :
                       reminderStatus === 'scheduled' ? "text-blue-500 fill-blue-500" :
                         "text-gray-400"
                     }`} />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-40 p-0">
-                <Select
-                  value={offsetMinutes.toString()}
-                  onValueChange={(value) => {
-                    const newOffset = parseInt(value);
-                    setOffsetMinutes(newOffset);
-                    if (newOffset === -1) { // "No reminder" selected
-                      dismissReminder(task.id); // Dismiss any existing reminder for this task
-                      // let effect update status
-                    } else if (task.terminationDate) {
-                      // Check if a reminder with the same taskId and originalTriggerDate already exists
-                      const existingReminder = scheduledReminders.find(
-                        r => r.taskId === task.id &&
-                          r.originalTriggerDate === new Date(task.terminationDate || 0).toISOString()
-                      );
+                 <Select
+                   value={offsetMinutes.toString()}
+                   onValueChange={(value) => {
+                     const newOffset = parseInt(value);
+                     setOffsetMinutes(newOffset);
+                     if (newOffset === -1) { // "No reminder" selected
+                       dismissReminder(task.id); // Dismiss any existing reminder for this task
+                       // let effect update status
+                     } else if (task.terminationDate) {
+                       // Check if a reminder with the same taskId and originalTriggerDate already exists
+                       const existingReminder = scheduledReminders.find(
+                         r => r.taskId === task.id &&
+                           r.originalTriggerDate === new Date(task.terminationDate || 0).toISOString()
+                       );
 
-                      if (existingReminder) {
-                        // If it exists, update it instead of creating a new one
-                        updateScheduledReminderTriggerDate(task.id, new Date(task.terminationDate).toISOString(), newOffset);
-                      } else {
-                        addReminder({
-                          title: `Task Reminder: ${task.title}`,
-                          description: `This task is due on ${format(new Date(task.terminationDate), "PPP p")}`,
-                          persistent: true,
-                          triggerDate: new Date(task.terminationDate).toISOString(),
-                          taskId: task.id,
-                          offsetMinutes: newOffset,
-                        });
-                      }
-                    }
-                  }}
-                >
+                       if (existingReminder) {
+                         // If it exists, update it instead of creating a new one
+                         updateScheduledReminderTriggerDate(task.id, new Date(task.terminationDate).toISOString(), newOffset);
+                       } else {
+                         addReminder({
+                           title: `Task Reminder: ${task.title}`,
+                           description: `This task is due on ${format(new Date(task.terminationDate), "PPP p")}`,
+                           persistent: true,
+                           triggerDate: new Date(task.terminationDate).toISOString(),
+                           taskId: task.id,
+                           offsetMinutes: newOffset,
+                         });
+                       }
+                     }
+                   }}
+                   onOpenChange={handleDropdownOpenChange}
+                 >
                   <SelectTrigger className="h-7 w-full text-xs">
                     <SelectValue placeholder="Set Reminder" />
                   </SelectTrigger>
@@ -594,8 +628,8 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
         )}
         {/* Comment icon - show in Compact/Full always, Ultra Compact on hover */}
         {isUltraCompact ? (
-          <div className={`transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
-            {isHovered && (
+           <div className={`transition-opacity duration-200 ${showHoverControls ? 'opacity-100' : 'opacity-0'}`}>
+             {showHoverControls && (
               <Button
                 size="sm"
                 variant="ghost"
@@ -733,12 +767,13 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
         </div>
       )}
       {/* Category Select - show in Full or when hovered (any compactness) */}
-      {canHaveTimer && (isFull || isHovered) && (
+      {canHaveTimer && (isFull || showHoverControls) && (
         <div className="flex flex-col gap-2 w-full">
           <CategorySelect
             value={task.category || "none"}
             onChange={(category) => updateCategory(task.id, category === "none" ? undefined : category)}
             className="w-full"
+            onOpenChange={handleDropdownOpenChange}
           />
         </div>
       )}
@@ -756,8 +791,8 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
             </div>
           )}
           {!task.parentId && (
-            <div className={`flex gap-1 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'} ${isFull ? '' : 'ml-auto'}`}>
-              {isHovered && (
+            <div className={`flex gap-1 transition-opacity duration-200 ${showHoverControls ? 'opacity-100' : 'opacity-0'} ${isFull ? '' : 'ml-auto'}`}>
+              {showHoverControls && (
                 <>
                   <Button
                     size="sm"
@@ -846,8 +881,8 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
             </div>
           )}
           {task.parentId && (
-            <div className={`flex gap-1 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'} ${isFull ? '' : 'ml-auto'}`}>
-              {isHovered && (
+            <div className={`flex gap-1 transition-opacity duration-200 ${showHoverControls ? 'opacity-100' : 'opacity-0'} ${isFull ? '' : 'ml-auto'}`}>
+              {showHoverControls && (
                 <>
                   <Button
                     size="sm"
