@@ -130,6 +130,7 @@ describe('selectNextBatch', () => {
       totalBatches: 50,
       done: false,
       results: null,
+      rankingHistory: [],
     };
     const batch = selectNextBatch(state);
     expect(batch).toBeNull();
@@ -145,6 +146,7 @@ describe('selectNextBatch', () => {
       totalBatches: 0,
       done: false,
       results: null,
+      rankingHistory: [],
     };
     const batch = selectNextBatch(state, 2);
     expect(batch).not.toBeNull();
@@ -168,6 +170,7 @@ describe('isConfident', () => {
       totalBatches: 0,
       done: false,
       results: null,
+      rankingHistory: [],
     };
     expect(isConfident(state)).toBe(true);
   });
@@ -181,6 +184,7 @@ describe('isConfident', () => {
       totalBatches: 0,
       done: false,
       results: null,
+      rankingHistory: [],
     };
     expect(isConfident(state)).toBe(false);
   });
@@ -196,6 +200,7 @@ describe('rankResults', () => {
       totalBatches: 0,
       done: false,
       results: null,
+      rankingHistory: [],
     };
     const results = rankResults(state);
     expect(results.map((r) => r.taskId)).toEqual(['t1', 't2', 't0']);

@@ -10,7 +10,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y build-essential
 
 # Install pnpm directly (corepack was removed in Node 26)
-RUN npm install -g pnpm@11.6.0
+RUN npm install -g pnpm@11.9.0
 
 # Copy package files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
