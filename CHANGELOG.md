@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.29.0 (2026-06-25)
+
+### Features
+
+- **comparative tool:** add Plackett-Luce + InfoGain ranking engine (6067496)
+- **comparative tool:** add diff-based batch task import with similarity matching (fa8fd9b)
+
+### Bug Fixes
+
+- **tasks:** keep card controls mounted while dropdown open (3bebbce)
+
+---
+
 ## v0.28.1 (2026-06-23)
 
 ### Bug Fixes
@@ -154,16 +167,5 @@
 - **common:** revise vote badge color and fill (2382334)
 - **common:** persist vote labels and points on boards (ebf08d0)
 - **common:** deduplicate links and soften line style (21700b2)
-
----
-
-## v0.21.1 (2026-05-22)
-
-### Bug Fixes
-
-- **import:** sync imported tasks, boards, and circles to Yjs for cross-client collaboration (6d406b3)
-- **common:** all boards clearance bis (535c108)
-- **common:** all boards clearance (d41656b)
-- **import/export:** add dream board and circle migration (d2e5c7a)
 
 ---
