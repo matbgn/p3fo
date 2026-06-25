@@ -42,6 +42,7 @@ import { Task, Category, TriageStatus } from "@/hooks/useTasks";
 import { TaskStatusSelect } from "./TaskStatusSelect";
 import { CategorySelect } from "./CategorySelect";
 import { UserSelector } from "./UserSelector";
+import { RichTextField } from "./RichTextField";
 import { cn } from "@/lib/utils";
 import { formatDuration } from "@/lib/format-utils";
 import { format } from "date-fns";
@@ -126,6 +127,9 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
   const [isTimeSheetOpen, setIsTimeSheetOpen] = React.useState(false);
   const [isCommentModalOpen, setIsCommentModalOpen] = React.useState(false);
   const [commentText, setCommentText] = React.useState(task.comment || "");
+  React.useEffect(() => {
+    setCommentText(task.comment || "");
+  }, [task.comment]);
   const [durationValue, setDurationValue] = React.useState(task.durationInMinutes || "");
   const [offsetMinutes, setOffsetMinutes] = React.useState(-1);
   const [timePickerOpen, setTimePickerOpen] = React.useState(false);
@@ -581,7 +585,7 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
 
       {isCommentModalOpen && (
         <Dialog open={isCommentModalOpen} onOpenChange={setIsCommentModalOpen}>
-          <DialogContent className="max-w-md" aria-describedby={undefined}>
+          <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col" aria-describedby={undefined}>
             <DialogHeader>
               <DialogTitle>Edit Comment - {task.title}</DialogTitle>
               <DialogDescription className="sr-only">
@@ -591,12 +595,12 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
                 <label htmlFor="todolist-comment" className="sr-only">Comment</label>
-                <textarea
-                  id="todolist-comment"
+                <RichTextField
                   value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  onChange={(json) => setCommentText(json)}
+                  label="Comment"
                   placeholder="Add a comment..."
+                  className="min-h-[200px]"
                 />
               </div>
             </div>

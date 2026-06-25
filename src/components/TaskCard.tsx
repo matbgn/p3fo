@@ -36,6 +36,7 @@ import { format } from "date-fns";
 import { addReminder } from "@/utils/reminders";
 import { useReminderStore } from "@/hooks/useReminders";
 import { UserSelector } from "./UserSelector";
+import { RichTextField } from "./RichTextField";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { Calendar } from "@/components/ui/calendar";
 import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
@@ -165,6 +166,9 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
   const [isTimeSheetOpen, setIsTimeSheetOpen] = React.useState(false);
   const [isCommentModalOpen, setIsCommentModalOpen] = React.useState(false);
   const [commentText, setCommentText] = React.useState(task.comment || "");
+  React.useEffect(() => {
+    setCommentText(task.comment || "");
+  }, [task.comment]);
   const [durationValue, setDurationValue] = React.useState(task.durationInMinutes || "");
   const [isDatePickerOpen, setIsDatePickerOpen] = React.useState(false);
   const [offsetMinutes, setOffsetMinutes] = React.useState(-1); // Default to -1 (No reminder)
@@ -959,7 +963,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
       {/* Comment Modal */}
       {isCommentModalOpen && (
         <Dialog open={isCommentModalOpen} onOpenChange={setIsCommentModalOpen}>
-          <DialogContent className="max-w-md" aria-describedby={undefined}>
+          <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col" aria-describedby={undefined}>
             <DialogHeader>
               <DialogTitle>Edit Comment - {task.title}</DialogTitle>
               <DialogDescription className="sr-only">
@@ -969,12 +973,12 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
                 <label htmlFor="comment" className="sr-only">Comment</label>
-                <textarea
-                  id="comment"
+                <RichTextField
                   value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  onChange={(json) => setCommentText(json)}
+                  label="Comment"
                   placeholder="Add a comment..."
+                  className="min-h-[200px]"
                 />
               </div>
             </div>
