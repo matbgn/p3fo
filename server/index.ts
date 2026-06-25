@@ -86,11 +86,23 @@ app.get('/api/tasks', async (req: Request, res: Response) => {
           : (rawExcludeStatuses as string).split(','))
       : undefined;
 
+    const rawTriageStatuses = req.query.triage_statuses;
+    const triageStatuses: string[] | undefined = rawTriageStatuses
+      ? (Array.isArray(rawTriageStatuses)
+          ? (rawTriageStatuses as string[])
+          : (rawTriageStatuses as string).split(','))
+      : undefined;
+
+    // include_subtasks defaults to true for backward-compatible REST behavior.
+    const includeSubtasks = req.query.include_subtasks === undefined
+      ? true
+      : String(req.query.include_subtasks) === 'true' || String(req.query.include_subtasks) === '1';
+
     const pagination = (limit !== undefined || offset !== undefined)
       ? { limit, offset }
       : undefined;
 
-    const result = await db.getTasks(userId, pagination, excludeStatuses);
+    const result = await db.getTasks(userId, pagination, excludeStatuses, triageStatuses, includeSubtasks);
     res.json(result);
   } catch (error) {
     console.error('Error fetching tasks:', error);

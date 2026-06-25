@@ -171,6 +171,49 @@
     touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
   }
+
+  /* CodeMirror (multi-cursor editor) base theming */
+  .cm-editor-host .cm-editor {
+    height: 100%;
+    font-size: 0.875rem;
+  }
+  .cm-editor-host .cm-scroller {
+    font-family: inherit;
+  }
+  .cm-editor-host.cm-editor-host {
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.375rem;
+    overflow: hidden;
+  }
+  .cm-editor-host .cm-gutters {
+    background: hsl(var(--muted));
+    color: hsl(var(--muted-foreground));
+    border-right: 1px solid hsl(var(--border));
+  }
+  .cm-editor-host .cm-activeLine {
+    background: hsl(var(--accent) / 0.4);
+  }
+  .cm-editor-host .cm-activeLineGutter {
+    background: hsl(var(--accent) / 0.4);
+  }
+  .cm-editor-host .cm-selectionBackground,
+  .cm-editor-host .cm-content ::selection,
+  .cm-editor-host .cm-selectionlayer .cm-selectionBackground {
+    background: hsl(var(--primary) / 0.2);
+  }
+  .cm-editor-host .cm-cursor {
+    border-left-color: hsl(var(--primary));
+  }
+  .cm-editor-host .cm-placeholder {
+    color: hsl(var(--muted-foreground));
+    font-style: italic;
+  }
+  .cm-editor-host .cm-focused {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: -1px;
+  }
 }
 
 @media print {

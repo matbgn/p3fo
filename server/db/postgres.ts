@@ -712,7 +712,13 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
   }
 
   // Tasks
-  async getTasks(userId?: string, pagination?: { limit?: number; offset?: number }, excludeStatuses?: string[]): Promise<{ data: TaskEntity[]; total: number }> {
+  async getTasks(
+    userId?: string,
+    pagination?: { limit?: number; offset?: number },
+    excludeStatuses?: string[],
+    triageStatuses?: string[],
+    includeSubtasks?: boolean,
+  ): Promise<{ data: TaskEntity[]; total: number }> {
     const conditions: string[] = [];
     const params: (string | number | boolean | null)[] = [];
     let paramIndex = 1;
@@ -726,6 +732,16 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       const placeholders = excludeStatuses.map(() => `$${paramIndex++}`).join(', ');
       conditions.push(`"triageStatus" NOT IN (${placeholders})`);
       params.push(...excludeStatuses);
+    }
+
+    if (triageStatuses && triageStatuses.length > 0) {
+      const placeholders = triageStatuses.map(() => `$${paramIndex++}`).join(', ');
+      conditions.push(`"triageStatus" IN (${placeholders})`);
+      params.push(...triageStatuses);
+    }
+
+    if (includeSubtasks === false) {
+      conditions.push(`"parentId" IS NULL`);
     }
 
     const whereClause = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';

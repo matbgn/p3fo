@@ -9,12 +9,24 @@ import { StoryboardCard } from './StoryboardCard';
 import ComparativePrioritizationView from './ComparativePrioritizationView';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
+import DiffImportDialog, { type DiffImportResult } from './DiffImportDialog';
 import { sortTasks } from '@/utils/taskSorting';
 import { FilterControls, Filters } from "./FilterControls";
 import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
 import { getDefaultFilters, validateFilters, mergeViewFilters } from "@/lib/filter-merge";
 import { COMPACTNESS_ULTRA, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import { Upload, ScrollText } from "lucide-react";
 import { FocusModeProvider } from "./FocusModeProvider";
 import { FocusModeOverlay } from "./FocusModeOverlay";
 import { FocusModeBar } from './planView/FocusModeBar';
@@ -169,6 +181,71 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
     const assignedUserId = storedFilters.selectedUserId && storedFilters.selectedUserId !== 'UNASSIGNED' ? storedFilters.selectedUserId : undefined;
     createTask(v, null, assignedUserId);
     setInput("");
+  };
+
+  // Batch import functionality
+  const { toast } = useToast();
+  const [isBatchImportOpen, setIsBatchImportOpen] = useState(false);
+  const [batchImportText, setBatchImportText] = useState("");
+  const [isBatchImporting, setIsBatchImporting] = useState(false);
+
+  const handleBatchImport = () => {
+    const titles = batchImportText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    if (titles.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'No tasks to import',
+        description: 'Paste one task title per line.',
+      });
+      return;
+    }
+    setIsBatchImporting(true);
+    const assignedUserId = storedFilters.selectedUserId && storedFilters.selectedUserId !== 'UNASSIGNED' ? storedFilters.selectedUserId : undefined;
+    try {
+      titles.forEach((title) => createTask(title, null, assignedUserId));
+      toast({
+        title: 'Batch import complete',
+        description: `Imported ${titles.length} task${titles.length > 1 ? 's' : ''}.`,
+      });
+      setBatchImportText("");
+      setIsBatchImportOpen(false);
+    } catch (error) {
+      console.error("Batch import error:", error);
+      toast({
+        variant: 'destructive',
+        title: 'Error during batch import',
+        description: 'Some tasks may not have been imported.',
+      });
+    } finally {
+      setIsBatchImporting(false);
+    }
+  };
+
+  // Diff import functionality
+  const [isDiffImportOpen, setIsDiffImportOpen] = useState(false);
+
+  const handleDiffApply = (result: DiffImportResult) => {
+    const assignedUserId = storedFilters.selectedUserId && storedFilters.selectedUserId !== 'UNASSIGNED' ? storedFilters.selectedUserId : undefined;
+    try {
+      result.create.forEach((title) => createTask(title, null, assignedUserId));
+      result.update.forEach((u) => updateTitle(u.id, u.title));
+      const total = result.create.length + result.update.length;
+      toast({
+        title: 'Diff import applied',
+        description: `${result.create.length} created, ${result.update.length} updated${total === 0 ? '.' : '.'}`,
+      });
+      setIsDiffImportOpen(false);
+    } catch (error) {
+      console.error("Diff import error:", error);
+      toast({
+        variant: 'destructive',
+        title: 'Error during diff import',
+        description: 'Some changes may not have been applied.',
+      });
+    }
   };
 
   const prioritizedTasks = React.useMemo(() => {
@@ -469,7 +546,62 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
               <Button onClick={addTopTask} disabled={!input.trim()}>
                 Add
               </Button>
+              <Button
+                variant="outline"
+                onClick={() => setIsBatchImportOpen(true)}
+              >
+                <Upload className="h-4 w-4 mr-1" />
+                Batch Import
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setIsDiffImportOpen(true)}
+              >
+                <ScrollText className="h-4 w-4 mr-1" />
+                Diff Import
+              </Button>
             </div>
+
+            <Dialog open={isBatchImportOpen} onOpenChange={setIsBatchImportOpen}>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Batch Import Tasks</DialogTitle>
+                  <DialogDescription>
+                    Paste one task title per line. Each non-empty line will be
+                    created as a separate top-level task.
+                  </DialogDescription>
+                </DialogHeader>
+                <Textarea
+                  placeholder={"Task title one\nTask title two\nTask title three"}
+                  value={batchImportText}
+                  onChange={(e) => setBatchImportText(e.target.value)}
+                  rows={10}
+                  disabled={isBatchImporting}
+                />
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsBatchImportOpen(false)}
+                    disabled={isBatchImporting}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleBatchImport}
+                    disabled={isBatchImporting || !batchImportText.trim()}
+                  >
+                    {isBatchImporting ? "Importing..." : "Import"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <DiffImportDialog
+              open={isDiffImportOpen}
+              onOpenChange={setIsDiffImportOpen}
+              existingTasks={prioritizedTasks}
+              onApply={handleDiffApply}
+            />
 
             <div className="mb-4 flex flex-col gap-2">
               <div className="flex items-center gap-2">

@@ -7,11 +7,13 @@ export const CategorySelect: React.FC<{
   value?: Category | "none";
   onChange: (v: Category | "none" | undefined) => void;
   className?: string;
-}> = ({ value, onChange, className }) => {
+  onOpenChange?: (open: boolean) => void;
+}> = ({ value, onChange, className, onOpenChange }) => {
   return (
     <Select 
       value={value || "none"} 
       onValueChange={(v) => onChange(v as Category | "none")}
+      onOpenChange={onOpenChange}
     >
       <SelectTrigger className={className}>
         <SelectValue placeholder="Category" />

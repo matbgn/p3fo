@@ -1,0 +1,21 @@
+{
+  "name": "p3fo-mcp",
+  "version": "0.1.0",
+  "description": "MCP server wrapping the P3FO REST API for AI assistants",
+  "type": "module",
+  "bin": {
+    "p3fo-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.23.8"
+  }
+}

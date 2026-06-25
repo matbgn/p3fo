@@ -20,7 +20,13 @@ export interface DbClient {
   close?(): Promise<void>;
 
   // Tasks
-  getTasks(userId?: string, pagination?: PaginationOptions, excludeStatuses?: string[]): Promise<PaginatedResponse<TaskEntity>>;
+  getTasks(
+    userId?: string,
+    pagination?: PaginationOptions,
+    excludeStatuses?: string[],
+    triageStatuses?: string[],
+    includeSubtasks?: boolean,
+  ): Promise<PaginatedResponse<TaskEntity>>;
   getTaskById(id: string): Promise<TaskEntity | null>;
   createTask(task: Partial<TaskEntity>): Promise<TaskEntity>;
   updateTask(id: string, data: Partial<TaskEntity>): Promise<TaskEntity | null>;
