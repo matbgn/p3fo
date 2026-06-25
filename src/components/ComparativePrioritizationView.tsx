@@ -1,29 +1,73 @@
+/**
+ * @file ComparativePrioritizationView
+ *
+ * ## Architecture
+ *
+ * This component provides the UI for the Plackett-Luce + Swiss InfoGain
+ * adaptive prioritization engine (see `@/lib/pl-prioritization`). The user
+ * selects tasks, chooses a batch size K (2-5), and the engine adaptively
+ * selects which K tasks to compare per batch based on current score
+ * uncertainty (maximum information gain).
+ *
+ * ## Batch UI flow
+ *
+ * - **K=2 (pairwise)**: Two task buttons side by side. One click picks the
+ *   highest; the other is implicitly the lowest. One click per batch.
+ *
+ * - **K>2 (batch)**: Two-step flow. First, "Pick the highest priority task"
+ *   — all K buttons enabled. Then, "Now pick the lowest priority task" —
+ *   the previously-chosen highest is disabled, remaining K-1 are enabled.
+ *   Two clicks per batch, but each batch yields 2K-3 implicit pairwise wins.
+ *
+ * ## Stop conditions
+ *
+ * The engine stops when confident (all pairs resolved at BT p >= 0.75), or
+ * when the ranking stabilizes, or when no informative batch remains. Results
+ * are then shown and can be applied via `updatePrioritiesBulk`.
+ *
+ * ## Key interactions
+ *
+ * - `startComparison`: initializes the engine and shows the first batch.
+ * - `resetComparison`: interrupts the current flow and clears all state.
+ * - `handleBatchHighest` / `handleBatchLowest`: record the user's choice,
+ *   advance the engine, and show the next batch or finalize results.
+ * - `applyPriorities`: maps the engine's ranking to task priorities and
+ *   persists them, preserving the relative order of non-selected tasks.
+ */
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Task, useTasks } from '@/hooks/useTasks';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, CircleDot, Flame, Crosshair } from 'lucide-react';
+import { AlertTriangle, CircleDot, Flame, Crosshair, Trash2 } from 'lucide-react';
 import { saveFiltersToSessionStorage, loadFiltersFromSessionStorage } from "@/lib/filter-storage";
 import { getDefaultFilters, validateFilters } from "@/lib/filter-merge";
 import { Filters } from "./FilterControls";
+import {
+  initState,
+  selectNextBatch,
+  recordBatch,
+  rankResults,
+  expectedComparisons,
+  confidencePercent,
+  type PrioritizationState,
+  type ComparisonBatch,
+  type PLTask,
+  type RankedTask,
+} from '@/lib/pl-prioritization';
 
 interface ComparativePrioritizationViewProps {
   tasks: Task[];
-  onClose: () => void; // To allow closing or switching back to the main view
-}
-
-interface ComparisonResult {
-  taskId: string;
-  score: number;
+  onClose: () => void;
 }
 
 const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps> = ({
   tasks,
   onClose,
 }) => {
-  const { updatePrioritiesBulk } = useTasks();
+  const { updatePrioritiesBulk, deleteTask } = useTasks();
 
   const [filters, setFilters] = useState<Filters>(getDefaultFilters());
 
@@ -50,20 +94,26 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
   const [filterImpact, setFilterImpact] = useState<boolean | null>(null); // null = all, true = only impact, false = exclude impact
   const [filterIncident, setFilterIncident] = useState<boolean | null>(null); // null = all, true = only incident, false = exclude incident
   const [filterSprintTarget, setFilterSprintTarget] = useState<boolean | null>(null); // null = all, true = only sprint target, false = exclude sprint target
-  const [comparisonState, setComparisonState] = useState<{
-    leftTask: Task | null;
-    rightTask: Task | null;
-    currentIndex: number;
-    comparisons: { [taskId: string]: number };
-    pairs: [string, string][];
-  }>({
-    leftTask: null,
-    rightTask: null,
-    currentIndex: 0,
-    comparisons: {},
-    pairs: [],
-  });
-  const [prioritizedResults, setPrioritizedResults] = useState<ComparisonResult[] | null>(null);
+  const [batchSize, setBatchSize] = useState(2);
+  const [prioritizationState, setPrioritizationState] = useState<PrioritizationState | null>(null);
+  const [currentBatch, setCurrentBatch] = useState<ComparisonBatch | null>(null);
+  const [batchPhase, setBatchPhase] = useState<'highest' | 'lowest'>('highest');
+  const [selectedHighestId, setSelectedHighestId] = useState<string | null>(null);
+  const [prioritizedResults, setPrioritizedResults] = useState<RankedTask[] | null>(null);
+  const [deleteHovered, setDeleteHovered] = useState(false);
+  const deleteHoverTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleDeleteMouseEnter = React.useCallback(() => {
+    deleteHoverTimerRef.current = setTimeout(() => setDeleteHovered(true), 500);
+  }, []);
+
+  const handleDeleteMouseLeave = React.useCallback(() => {
+    if (deleteHoverTimerRef.current) {
+      clearTimeout(deleteHoverTimerRef.current);
+      deleteHoverTimerRef.current = null;
+    }
+    setDeleteHovered(false);
+  }, []);
   const [initialTaskPriorities, setInitialTaskPriorities] = useState<Record<string, number | undefined>>({});
   const topLevelTasks = useMemo(() => tasks.filter(task => !task.parentId), [tasks]);
 
@@ -139,13 +189,10 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
     }
     // Reset prioritization if selection changes
     setPrioritizedResults(null);
-    setComparisonState({
-      leftTask: null,
-      rightTask: null,
-      currentIndex: 0,
-      comparisons: {},
-      pairs: [],
-    });
+    setPrioritizationState(null);
+    setCurrentBatch(null);
+    setBatchPhase('highest');
+    setSelectedHighestId(null);
   };
 
   const startComparison = () => {
@@ -154,64 +201,62 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
       return;
     }
 
-    const newPairs: [string, string][] = [];
-    for (let i = 0; i < selectedTasks.length; i++) {
-      for (let j = i + 1; j < selectedTasks.length; j++) {
-        newPairs.push([selectedTasks[i].id, selectedTasks[j].id]);
-      }
-    }
+    const plTasks: PLTask[] = selectedTasks.map((t) => ({ id: t.id, title: t.title }));
+    const state = initState(plTasks, batchSize);
+    setPrioritizationState(state);
+    setPrioritizedResults(null);
+    setBatchPhase('highest');
+    setSelectedHighestId(null);
 
-    setComparisonState({
-      leftTask: selectedTasks.find(t => t.id === newPairs[0][0]) || null,
-      rightTask: selectedTasks.find(t => t.id === newPairs[0][1]) || null,
-      currentIndex: 0,
-      comparisons: Object.fromEntries(selectedTasks.map(task => [task.id, 0])),
-      pairs: newPairs,
-    });
+    const firstBatch = selectNextBatch(state);
+    setCurrentBatch(firstBatch);
+  };
+
+  const resetComparison = () => {
+    setPrioritizationState(null);
+    setCurrentBatch(null);
+    setBatchPhase('highest');
+    setSelectedHighestId(null);
     setPrioritizedResults(null);
   };
 
-  const handleComparisonChoice = (winnerId: string) => {
-    setComparisonState((prevState) => {
-      const newComparisons = { ...prevState.comparisons };
-      newComparisons[winnerId]++;
-
-      const nextIndex = prevState.currentIndex + 1;
-      if (nextIndex < prevState.pairs.length) {
-        const [leftId, rightId] = prevState.pairs[nextIndex];
-        return {
-          ...prevState,
-          currentIndex: nextIndex,
-          leftTask: selectedTasks.find(t => t.id === leftId) || null,
-          rightTask: selectedTasks.find(t => t.id === rightId) || null,
-          comparisons: newComparisons,
-        };
+  const handleBatchHighest = (highestId: string) => {
+    if (!prioritizationState || !currentBatch) return;
+    const k = currentBatch.k;
+    if (k === 2) {
+      const batchIds = currentBatch.tasks.map((t) => t.id);
+      const lowestId = batchIds.find((id) => id !== highestId);
+      const next = recordBatch(prioritizationState, highestId, undefined, batchIds);
+      setPrioritizationState(next);
+      if (next.done && next.results) {
+        setPrioritizedResults(next.results);
+        setCurrentBatch(null);
       } else {
-        // All comparisons done, calculate results
-        // Build a lookup of head-to-head winners from the recorded pairs
-        const headToHeadWins: Record<string, Set<string>> = {};
-        for (const [aId, bId] of prevState.pairs) {
-          if (newComparisons[aId] > newComparisons[bId]) {
-            (headToHeadWins[aId] ||= new Set()).add(bId);
-          } else if (newComparisons[bId] > newComparisons[aId]) {
-            (headToHeadWins[bId] ||= new Set()).add(aId);
-          }
-        }
-        const results = Object.entries(newComparisons)
-          .map(([taskId, score]) => ({ taskId, score }))
-          .sort((a, b) => {
-            if (b.score !== a.score) return b.score - a.score;
-            // Tie-breaker: if the two tasks faced each other directly,
-            // the one that won their direct confrontation ranks higher.
-            if (headToHeadWins[a.taskId]?.has(b.taskId)) return -1;
-            if (headToHeadWins[b.taskId]?.has(a.taskId)) return 1;
-            return 0;
-          });
-
-        setPrioritizedResults(results);
-        return { ...prevState, currentIndex: nextIndex, comparisons: newComparisons };
+        const batch = selectNextBatch(next);
+        setCurrentBatch(batch);
+        setBatchPhase('highest');
+        setSelectedHighestId(null);
       }
-    });
+    } else {
+      setSelectedHighestId(highestId);
+      setBatchPhase('lowest');
+    }
+  };
+
+  const handleBatchLowest = (lowestId: string) => {
+    if (!prioritizationState || !currentBatch || !selectedHighestId) return;
+    const batchIds = currentBatch.tasks.map((t) => t.id);
+    const next = recordBatch(prioritizationState, selectedHighestId, lowestId, batchIds);
+    setPrioritizationState(next);
+    if (next.done && next.results) {
+      setPrioritizedResults(next.results);
+      setCurrentBatch(null);
+    } else {
+      const batch = selectNextBatch(next);
+      setCurrentBatch(batch);
+      setBatchPhase('highest');
+      setSelectedHighestId(null);
+    }
   };
 
   const applyPriorities = () => {
@@ -267,10 +312,20 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
       });
   };
 
-  const currentPair = comparisonState.pairs[comparisonState.currentIndex];
-  const progress = selectedTasks.length > 1
-    ? ((comparisonState.currentIndex) / comparisonState.pairs.length) * 100
-    : 0;
+  const handleDeleteSelected = () => {
+    if (selectedTasks.length === 0) return;
+    if (!window.confirm(`Delete ${selectedTasks.length} selected task${selectedTasks.length > 1 ? 's' : ''}? This cannot be undone.`)) return;
+    selectedTasks.forEach((task) => deleteTask(task.id));
+    setSelectedTasks([]);
+    setPrioritizationState(null);
+    setCurrentBatch(null);
+    setBatchPhase('highest');
+    setSelectedHighestId(null);
+    setPrioritizedResults(null);
+  };
+
+  const progress = prioritizationState ? confidencePercent(prioritizationState) : 0;
+  const comparisonCount = prioritizationState?.totalBatches ?? 0;
 
   return (
     <Card className="h-full flex flex-col border-0">
@@ -475,48 +530,120 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                   </div>
                 ))}
               </div>
-              <div className="mt-4 flex space-x-2">
-                <Button onClick={startComparison} disabled={selectedTasks.length < 2}>
-                  Start Comparative Prioritization ({selectedTasks.length} tasks selected)
-                </Button>
-                <Button variant="outline" onClick={handleCopyTitlesToClipboard} disabled={selectedTasks.length === 0}>
-                  Copy List to Clipboard
-                </Button>
-                <Button variant="outline" onClick={() => setSelectedTasks([])} disabled={selectedTasks.length === 0}>
-                  Deselect All
-                </Button>
-                <Button variant="outline" onClick={() => setSelectedTasks(filteredTopLevelTasks)} disabled={selectedTasks.length === filteredTopLevelTasks.length}>
-                  Select All
-                </Button>
+              <div className="mt-4 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Items per batch:</span>
+                  <div className="flex gap-1">
+                    {[2, 3, 4, 5].map((k) => (
+                      <Button
+                        key={k}
+                        size="sm"
+                        variant={batchSize === k ? "default" : "outline"}
+                        onClick={() => setBatchSize(k)}
+                        disabled={k > selectedTasks.length}
+                        className="text-xs w-9"
+                      >
+                        {k}
+                      </Button>
+                    ))}
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    Compare 2 at a time (take longer) or more at once (pick best then worst, faster as it uses Plackett-Luce algorithm).
+                  </span>
+                </div>
+                <div className="flex space-x-2">
+                  {currentBatch && !prioritizationState?.done ? (
+                    <Button variant="destructive" onClick={() => {
+                      if (window.confirm('Interrupt and reset the current comparison? All progress will be lost.')) {
+                        resetComparison();
+                      }
+                    }}>
+                      Reset Comparison
+                    </Button>
+                  ) : (
+                    <Button onClick={startComparison} disabled={selectedTasks.length < 2}>
+                      Start Comparative Prioritization ({selectedTasks.length} tasks, ~{expectedComparisons(selectedTasks.length, batchSize)} batches)
+                    </Button>
+                  )}
+                  <Button variant="outline" onClick={handleCopyTitlesToClipboard} disabled={selectedTasks.length === 0}>
+                    Copy List to Clipboard
+                  </Button>
+                  <Button variant="outline" onClick={() => setSelectedTasks([])} disabled={selectedTasks.length === 0}>
+                    Deselect All
+                  </Button>
+                  <Button variant="outline" onClick={() => setSelectedTasks(filteredTopLevelTasks)} disabled={selectedTasks.length === filteredTopLevelTasks.length}>
+                    Select All
+                  </Button>
+                  <div
+                    onMouseEnter={handleDeleteMouseEnter}
+                    onMouseLeave={handleDeleteMouseLeave}
+                    className="inline-block"
+                  >
+                    <Button
+                      variant="outline"
+                      onClick={deleteHovered ? handleDeleteSelected : undefined}
+                      disabled={selectedTasks.length === 0}
+                      className={`text-destructive hover:text-destructive transition-opacity ${deleteHovered ? 'opacity-100' : 'opacity-50 cursor-not-allowed'}`}
+                      title={deleteHovered ? 'Delete selected tasks' : 'Hover for 0.5s to enable deletion'}
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      Delete Selected ({selectedTasks.length})
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {comparisonState.leftTask && comparisonState.rightTask && (
+            {currentBatch && (
               <div className="mt-6 p-4 rounded-lg bg-gray-50 dark:bg-gray-700">
-                <h3 className="text-lg font-semibold mb-4 text-center">Which one should be done first?</h3>
+                <h3 className="text-lg font-semibold mb-4 text-center">
+                  {currentBatch.k === 2
+                    ? "Which one should be done first?"
+                    : batchPhase === 'highest'
+                      ? "Pick the highest priority task:"
+                      : "Now pick the lowest priority task:"}
+                </h3>
                 <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-600 mb-4">
-                  <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div>
+                  <div className="bg-blue-600 h-2.5 rounded-full transition-all" style={{ width: `${progress}%` }}></div>
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 text-center">
-                  Comparison {comparisonState.currentIndex + 1} of {comparisonState.pairs.length}
+                  Batch {comparisonCount + 1} · {progress}% confident
                 </p>
-                <div className="flex justify-around items-center space-x-4">
-                  <Button
-                    variant="outline"
-                    className="flex-1 h-auto py-4 text-lg text-wrap break-words"
-                    onClick={() => handleComparisonChoice(comparisonState.leftTask!.id)}
-                  >
-                    {comparisonState.leftTask.title}
-                  </Button>
-                  <span className="text-xl font-bold">VS</span>
-                  <Button
-                    variant="outline"
-                    className="flex-1 h-auto py-4 text-lg text-wrap break-words"
-                    onClick={() => handleComparisonChoice(comparisonState.rightTask!.id)}
-                  >
-                    {comparisonState.rightTask.title}
-                  </Button>
+                <div className={`flex justify-around items-center gap-4 ${currentBatch.k > 2 ? 'flex-col' : ''}`}>
+                  {currentBatch.tasks.map((task) => {
+                    const isDisabled =
+                      (batchPhase === 'lowest' && task.id === selectedHighestId) ||
+                      (prioritizationState?.done ?? false);
+                    const isHighlighted = batchPhase === 'lowest' && task.id === selectedHighestId;
+                    return (
+                      <Button
+                        key={task.id}
+                        variant={isHighlighted ? "default" : "outline"}
+                        className="flex-1 h-auto py-4 text-lg text-wrap break-words w-full"
+                        disabled={isDisabled}
+                        onClick={() => {
+                          if (currentBatch.k === 2 || batchPhase === 'highest') {
+                            handleBatchHighest(task.id);
+                          } else {
+                            handleBatchLowest(task.id);
+                          }
+                        }}
+                      >
+                        {task.title}
+                      </Button>
+                    );
+                  })}
                 </div>
+                {currentBatch.k === 2 && (
+                  <p className="text-xs text-center text-muted-foreground mt-2">
+                    Click the highest priority task — the other is automatically lowest.
+                  </p>
+                )}
+                {currentBatch.k > 2 && batchPhase === 'lowest' && (
+                  <p className="text-xs text-center text-muted-foreground mt-2">
+                    The highest was already chosen. Now pick the lowest among the remaining.
+                  </p>
+                )}
               </div>
             )}
           </React.Fragment>
