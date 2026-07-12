@@ -1,6 +1,7 @@
 import './telemetry.js';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import crypto from 'node:crypto';
 import { createDbClient } from './db/index.js';
 import { DbClient } from './db/index.js';
 import { VoteKind, VoteLoop, VoteModerator, VoteResponseEntity, PomodoroSession } from '../src/lib/persistence-types.js';
@@ -20,10 +21,41 @@ const DB_SQLITE_FILE = process.env.P3FO_DB_SQLITE_FILE || './p3fo.db';
 // Middleware
 app.use(cors({
   origin: true,
-  allowedHeaders: ['Content-Type', 'traceparent', 'tracestate'],
+  allowedHeaders: ['Content-Type', 'traceparent', 'tracestate', 'X-API-Key', 'Authorization'],
   exposedHeaders: ['traceparent', 'tracestate'],
 }));
 app.use(express.json({ limit: '10mb' }));
+
+// --- MCP API-key auth + /mcp path rewrite ---
+// Routes mounted under /mcp are protected by a shared API key (P3FO_API_KEY)
+// instead of the OIDC cookie auth handled by oauth2-proxy for /api routes.
+// When P3FO_API_KEY is unset the middleware is a no-op (local dev).
+const P3FO_API_KEY = process.env.P3FO_API_KEY;
+const MCP_PREFIX = '/mcp';
+
+app.use((req, res, next) => {
+  if (!req.path.startsWith(MCP_PREFIX + '/')) return next();
+
+  if (P3FO_API_KEY) {
+    const provided =
+      req.get('X-API-Key') ||
+      (req.get('Authorization')?.startsWith('Bearer ')
+        ? req.get('Authorization')!.slice(7)
+        : undefined);
+    const providedBuf = Buffer.from(provided ?? '');
+    const expectedBuf = Buffer.from(P3FO_API_KEY);
+    if (
+      providedBuf.length !== expectedBuf.length ||
+      !crypto.timingSafeEqual(providedBuf, expectedBuf)
+    ) {
+      return res.status(401).json({ error: 'Unauthorized: invalid or missing API key' });
+    }
+  }
+
+  // Strip the /mcp prefix so existing /api routes match.
+  req.url = req.url.replace(MCP_PREFIX, '');
+  next();
+});
 
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
