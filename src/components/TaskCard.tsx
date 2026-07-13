@@ -77,6 +77,7 @@ interface TaskCardProps {
   onToggleOpen?: (id: string, toggleAll?: boolean) => void;
   onFocusOnTask?: (taskId: string) => void;
   disableReparenting?: boolean; // New prop to disable reparenting on drop
+  hoverEnterDelayMs?: number; // Delay (ms) before hover controls appear on enter
 }
 
 export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProps>((
@@ -108,6 +109,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
     updateTerminationDate,
     updateDurationInMinutes,
     disableReparenting,
+    hoverEnterDelayMs,
   },
   ref
 ) => {
@@ -144,12 +146,25 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
       clearTimeout(hoverTimeoutRef.current);
       hoverTimeoutRef.current = null;
     }
-    setIsHovered(true);
-  }, []);
+    if (hoverEnterDelayMs && hoverEnterDelayMs > 0) {
+      hoverTimeoutRef.current = setTimeout(() => {
+        hoverTimeoutRef.current = null;
+        if (!pointerOverCardRef.current) return;
+        setIsHovered(true);
+      }, hoverEnterDelayMs);
+    } else {
+      setIsHovered(true);
+    }
+  }, [hoverEnterDelayMs]);
 
   const handleMouseLeave = React.useCallback(() => {
     pointerOverCardRef.current = false;
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
     hoverTimeoutRef.current = setTimeout(() => {
+      hoverTimeoutRef.current = null;
       // Keep controls mounted while a dropdown is open so the user can
       // interact with portaled content without the card collapsing.
       if (openDropdownCountRef.current > 0) return;

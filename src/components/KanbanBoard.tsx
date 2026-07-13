@@ -141,6 +141,7 @@ const Column: React.FC<{
               updateDurationInMinutes={updateDurationInMinutes}
               updateComment={updateComment}
               isHighlighted={isHighlighted}
+              hoverEnterDelayMs={1100}
             />
           </div>
         ),
@@ -269,6 +270,7 @@ const Column: React.FC<{
                     updateTerminationDate={updateTerminationDate}
                     updateDurationInMinutes={updateDurationInMinutes}
                     updateComment={updateComment}
+                    hoverEnterDelayMs={1100}
                   />
                 ))}
               </LazyCard>
