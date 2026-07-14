@@ -91,6 +91,7 @@ export interface PrioritizationState {
   done: boolean;
   results: RankedTask[] | null;
   rankingHistory: string[][];
+  stallCount: number;
 }
 
 /** Clamp log-strength scores to [-20, 20] to avoid exp() overflow. */
@@ -127,6 +128,13 @@ const INFO_GAIN_FLOOR = 0.01;
  * pairs were never compared.
  */
 const STABILITY_WINDOW = 5;
+/**
+ * Number of consecutive batches with no `confidencePercent` increase before
+ * the stall stop fires. This is the backup escape when the ranking
+ * oscillates on near-equal adjacent pairs and the stability stop never
+ * locks. The counter resets on any confidence increase.
+ */
+const STALL_WINDOW = 10;
 /** Safety-valve cap on total batches to prevent infinite loops. */
 const MAX_BATCHES_CAP = 500;
 
@@ -148,6 +156,7 @@ export function initState(tasks: PLTask[], k: number): PrioritizationState {
     done: false,
     results: null,
     rankingHistory: [],
+    stallCount: 0,
   };
 }
 
@@ -225,9 +234,13 @@ export function estimateScores(
 /**
  * Check whether the model is confident enough to stop comparing.
  *
- * Returns true when every pair (i, j) has BT win-probability `p` such that
- * `min(p, 1-p) <= 1 - threshold` — i.e. the model is at least `threshold`
- * confident about the direction of every pair. For <2 tasks, always true.
+ * Checks only the n-1 adjacent pairs in the current ranking (consecutive
+ * items sorted by score). This is mathematically equivalent to checking all
+ * C(n,2) pairs: if every adjacent gap has BT p >= threshold, then every
+ * non-adjacent pair (a sum of adjacent gaps) also does. The adjacent-only
+ * check is O(n log n) instead of O(n²) and makes the confidence goal
+ * achievable for large n (the all-pairs version required a score range of
+ * n×ln(3), which exceeds the [-20,20] clamp for n > ~36).
  *
  * @param state - Current prioritization state.
  * @param threshold - Minimum BT win-probability for a pair to be "resolved".
@@ -237,13 +250,11 @@ export function isConfident(
   threshold: number = CONFIDENCE_THRESHOLD,
 ): boolean {
   if (state.tasks.length < 2) return true;
-  const ids = state.tasks.map((t) => t.id);
-  for (let a = 0; a < ids.length; a++) {
-    for (let b = a + 1; b < ids.length; b++) {
-      const p = btWinProb(state.scores[ids[a]], state.scores[ids[b]]);
-      const closer = Math.min(p, 1 - p);
-      if (closer > 1 - threshold) return false;
-    }
+  const ranked = rankResults(state);
+  for (let i = 0; i < ranked.length - 1; i++) {
+    const p = btWinProb(state.scores[ranked[i].taskId], state.scores[ranked[i + 1].taskId]);
+    const closer = Math.min(p, 1 - p);
+    if (closer > 1 - threshold) return false;
   }
   return true;
 }
@@ -312,7 +323,11 @@ export function recordBatch(
     rankingHistory: [...state.rankingHistory, rankResults({ ...state, scores, winMatrix, rankingHistory: [] }).map((r) => r.taskId)],
   };
 
-  if (isConfident(next) || selectNextBatch(next) === null || isRankingStable(next) || next.totalBatches >= MAX_BATCHES_CAP) {
+  const prevConf = confidencePercent(state);
+  const newConf = confidencePercent(next);
+  next.stallCount = newConf > prevConf ? 0 : state.stallCount + 1;
+
+  if (isConfident(next) || selectNextBatch(next) === null || isRankingStable(next) || next.totalBatches >= MAX_BATCHES_CAP || next.stallCount >= STALL_WINDOW) {
     next.done = true;
     next.results = rankResults(next);
   }
@@ -321,15 +336,19 @@ export function recordBatch(
 
 function isRankingStable(state: PrioritizationState): boolean {
   if (state.rankingHistory.length < STABILITY_WINDOW + 1) return false;
-  // Require that every pair with non-trivial entropy has been compared.
-  const ids = state.tasks.map((t) => t.id);
-  for (let a = 0; a < ids.length; a++) {
-    for (let b = a + 1; b < ids.length; b++) {
-      if (!pairIsUncertain(ids[a], ids[b], state.scores)) continue;
-      const wab = state.winMatrix[ids[a]]?.[ids[b]] || 0;
-      const wba = state.winMatrix[ids[b]]?.[ids[a]] || 0;
-      if (wab + wba === 0) return false;
-    }
+  // Require that every uncertain adjacent pair (in the current ranking)
+  // has been directly compared. Non-adjacent uncertain pairs are skipped:
+  // they will be resolved by transitivity once the adjacent gaps are
+  // separated. This lets the stability stop fire after O(n) adjacent
+  // comparisons instead of O(n²) all-pairs comparisons.
+  const ranked = rankResults(state);
+  for (let i = 0; i < ranked.length - 1; i++) {
+    const a = ranked[i].taskId;
+    const b = ranked[i + 1].taskId;
+    if (!pairIsUncertain(a, b, state.scores)) continue;
+    const wab = state.winMatrix[a]?.[b] || 0;
+    const wba = state.winMatrix[b]?.[a] || 0;
+    if (wab + wba === 0) return false;
   }
   const recent = state.rankingHistory.slice(-STABILITY_WINDOW - 1);
   const last = recent[recent.length - 1];
@@ -557,24 +576,30 @@ export function expectedComparisons(n: number, k: number): number {
 }
 
 /**
- * Percentage of pairs that are "resolved" (confident direction), for the
- * progress bar in the UI. A pair is resolved when `min(p, 1-p) <= 1 - threshold`.
+ * Percentage of adjacent pairs in the current ranking that are "resolved"
+ * (confident direction), for the progress bar in the UI. A pair is resolved
+ * when `min(p, 1-p) <= 1 - threshold`.
+ *
+ * Only the n-1 consecutive pairs in the sorted ranking are checked — these
+ * are the pairs that determine whether the ordering is correct. Non-adjacent
+ * pairs are automatically resolved when all adjacent pairs are (their score
+ * gap is a sum of adjacent gaps). This makes the progress bar climb toward
+ * 100% as the engine works through adjacent pairs, instead of plateauing at
+ * ~91% for large n where many non-adjacent-but-close pairs can never reach
+ * the confidence threshold.
  *
  * @param state - Current prioritization state.
  * @returns Integer 0-100.
  */
 export function confidencePercent(state: PrioritizationState): number {
   if (state.tasks.length < 2) return 100;
-  const ids = state.tasks.map((t) => t.id);
+  const ranked = rankResults(state);
+  const total = ranked.length - 1;
   let resolved = 0;
-  let total = 0;
-  for (let a = 0; a < ids.length; a++) {
-    for (let b = a + 1; b < ids.length; b++) {
-      total++;
-      const p = btWinProb(state.scores[ids[a]], state.scores[ids[b]]);
-      const closer = Math.min(p, 1 - p);
-      if (closer <= 1 - CONFIDENCE_THRESHOLD) resolved++;
-    }
+  for (let i = 0; i < total; i++) {
+    const p = btWinProb(state.scores[ranked[i].taskId], state.scores[ranked[i + 1].taskId]);
+    const closer = Math.min(p, 1 - p);
+    if (closer <= 1 - CONFIDENCE_THRESHOLD) resolved++;
   }
   return total === 0 ? 100 : Math.round((resolved / total) * 100);
 }

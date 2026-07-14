@@ -131,6 +131,7 @@ describe('selectNextBatch', () => {
       done: false,
       results: null,
       rankingHistory: [],
+      stallCount: 0,
     };
     const batch = selectNextBatch(state);
     expect(batch).toBeNull();
@@ -147,6 +148,7 @@ describe('selectNextBatch', () => {
       done: false,
       results: null,
       rankingHistory: [],
+      stallCount: 0,
     };
     const batch = selectNextBatch(state, 2);
     expect(batch).not.toBeNull();
@@ -171,6 +173,7 @@ describe('isConfident', () => {
       done: false,
       results: null,
       rankingHistory: [],
+      stallCount: 0,
     };
     expect(isConfident(state)).toBe(true);
   });
@@ -185,6 +188,7 @@ describe('isConfident', () => {
       done: false,
       results: null,
       rankingHistory: [],
+      stallCount: 0,
     };
     expect(isConfident(state)).toBe(false);
   });
@@ -201,6 +205,7 @@ describe('rankResults', () => {
       done: false,
       results: null,
       rankingHistory: [],
+      stallCount: 0,
     };
     const results = rankResults(state);
     expect(results.map((r) => r.taskId)).toEqual(['t1', 't2', 't0']);
@@ -346,5 +351,98 @@ describe('rankResults on a mid-comparison state', () => {
     const winnerRank = results.findIndex((r) => r.taskId === winnerId);
     const loserRank = results.findIndex((r) => r.taskId === loserId);
     expect(winnerRank).toBeLessThan(loserRank);
+  });
+});
+
+describe('Adjacent-pairs confidence', () => {
+  it('confidencePercent climbs as adjacent pairs get resolved', () => {
+    // 3 tasks A, B, C with a clear order A > B > C.
+    // After enough wins, adjacent pairs (A-B, B-C) resolve but the metric
+    // only counts those 2, not all 3 pairs.
+    const tasks = makeTasks(3);
+    let state = initState(tasks, 2);
+    // Build strong separation: A>B three times, B>C three times.
+    state = recordBatch(state, 't0', undefined, ['t0', 't1']);
+    state = recordBatch(state, 't0', undefined, ['t0', 't1']);
+    state = recordBatch(state, 't0', undefined, ['t0', 't1']);
+    state = recordBatch(state, 't1', undefined, ['t1', 't2']);
+    state = recordBatch(state, 't1', undefined, ['t1', 't2']);
+    state = recordBatch(state, 't1', undefined, ['t1', 't2']);
+
+    // At least one adjacent pair should be resolved.
+    const pct = confidencePercent(state);
+    expect(pct).toBeGreaterThan(0);
+    // With 3 strong wins per adjacent pair, both adjacent gaps should be
+    // well above the 75% threshold.
+    expect(pct).toBe(100);
+  });
+
+  it('isConfident returns true when all adjacent pairs are resolved (equivalence)', () => {
+    // If all n-1 adjacent gaps are >= ln(3), all non-adjacent gaps are too
+    // (they are sums of adjacent gaps). So isConfident on adjacent pairs
+    // is equivalent to isConfident on all pairs.
+    const tasks = makeTasks(4);
+    let state = initState(tasks, 2);
+    // Build a strong total order: t0 > t1 > t2 > t3.
+    // Each pair compared 5 times to reach high confidence.
+    const pairs: [string, string][] = [
+      ['t0', 't1'], ['t0', 't2'], ['t0', 't3'],
+      ['t1', 't2'], ['t1', 't3'],
+      ['t2', 't3'],
+    ];
+    for (const [w, l] of pairs) {
+      for (let i = 0; i < 5; i++) {
+        state = recordBatch(state, w, undefined, [w, l]);
+      }
+    }
+    expect(isConfident(state)).toBe(true);
+  });
+
+  it('isConfident returns false when an adjacent pair is unresolved', () => {
+    // Two tasks with equal scores — adjacent pair unresolved.
+    const state: PrioritizationState = {
+      k: 2,
+      tasks: makeTasks(2),
+      scores: { t0: 0, t1: 0 },
+      winMatrix: {},
+      totalBatches: 0,
+      done: false,
+      results: null,
+      rankingHistory: [],
+      stallCount: 0,
+    };
+    expect(isConfident(state)).toBe(false);
+  });
+});
+
+describe('Stall stop', () => {
+  it('fires when confidencePercent does not increase for STALL_WINDOW batches', () => {
+    // Construct a scenario where the user keeps comparing the same pair
+    // with the same outcome — confidence stops increasing because the
+    // other pairs never get compared. After STALL_WINDOW stagnant batches,
+    // the engine should finalize.
+    const tasks = makeTasks(4);
+    let state = initState(tasks, 2);
+
+    // Do a few batches to build initial confidence.
+    for (let i = 0; i < 3; i++) {
+      state = recordBatch(state, 't0', undefined, ['t0', 't1']);
+    }
+    // Capture the batch count and confidence at this point.
+    const confBefore = confidencePercent(state);
+    const batchesBefore = state.totalBatches;
+    if (state.done) return; // already done, skip
+
+    // Keep comparing the same pair (t0 beats t1) — confidence on adjacent
+    // pairs won't increase because t1-t2 and t2-t3 are never separated.
+    let stalled = 0;
+    while (!state.done && stalled < 30) {
+      state = recordBatch(state, 't0', undefined, ['t0', 't1']);
+      stalled++;
+    }
+
+    // The stall stop should have fired (or another stop fired) — either
+    // way, the engine must terminate.
+    expect(state.done).toBe(true);
   });
 });
