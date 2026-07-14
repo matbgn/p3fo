@@ -106,6 +106,39 @@ export const tasksToEntities = (tasks: readonly Task[]): TaskEntity[] => {
 };
 
 /**
+ * Recomputes the `children` arrays on a set of tasks from their `parentId`
+ * relationships. This is the authoritative way to rebuild hierarchy — the
+ * `parentId` column is the source of truth, while `children` is a derived
+ * field that can become stale when tasks are created or reparented via
+ * external paths (e.g., MCP API, REST API, another Yjs client).
+ *
+ * Used by the Yjs observer and any other code path that receives Task[]
+ * from a source that may have stale children arrays.
+ *
+ * Performance: O(n) time, O(n) space
+ *
+ * @param tasks - Array of Task objects with potentially stale children arrays
+ * @returns New array of Task objects with children recomputed from parentId
+ */
+export const recomputeChildrenFromParentId = (tasks: Task[]): Task[] => {
+    const taskMap: { [id: string]: Task } = {};
+
+    // First pass: reset children to empty, map by id
+    tasks.forEach(task => {
+        taskMap[task.id] = { ...task, children: [] };
+    });
+
+    // Second pass: populate children from parentId
+    tasks.forEach(task => {
+        if (task.parentId && taskMap[task.parentId]) {
+            taskMap[task.parentId].children!.push(task.id);
+        }
+    });
+
+    return Object.values(taskMap);
+};
+
+/**
  * Converts a partial Task update to a partial TaskEntity for database updates.
  * Only converts provided fields, reducing unnecessary property access.
  * 

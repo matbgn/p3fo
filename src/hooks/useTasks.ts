@@ -4,7 +4,7 @@ import { eventBus } from "@/lib/events";
 import { usePersistence } from "@/hooks/usePersistence";
 import { yTasks, yUserSettings, doc, initializeCollaboration, isCollaborationEnabled } from "@/lib/collaboration";
 import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
-import { taskToEntity, tasksToEntities, convertEntitiesToTasks } from "@/lib/task-conversions";
+import { taskToEntity, tasksToEntities, convertEntitiesToTasks, recomputeChildrenFromParentId } from "@/lib/task-conversions";
 import { useReminderStore } from "./useReminders";
 import { BrowserJsonPersistence } from "@/lib/persistence-browser";
 import { getSelectedMode } from "@/lib/persistence-factory";
@@ -119,11 +119,16 @@ if (isCollaborationEnabled()) {
     if (isFiltered) {
       return;
     }
-    const newTasks = (Array.from(yTasks.values()) as Task[]).map(t => ({
+    const rawTasks = (Array.from(yTasks.values()) as Task[]).map(t => ({
       ...t,
       triageStatus: t.triageStatus || "Backlog",
       children: t.children || [],
     }));
+
+    // Recompute children from parentId — the authoritative source of truth.
+    // The `children` array stored in Yjs can become stale when tasks are
+    // created or reparented via external paths (REST API, MCP, another client).
+    const newTasks = recomputeChildrenFromParentId(rawTasks);
 
     // Always update, even if empty (e.g., all tasks deleted)
     // This ensures deletions to empty state trigger UI updates
@@ -275,6 +280,9 @@ loadTasks();
 
 
 async function createTask(title: string, parentId: string | null, userId?: string) {
+  // Look up parent for metadata inheritance
+  const parentTask = parentId ? tasks.find(t => t.id === parentId) : null;
+
   const t: Task = {
     id: crypto.randomUUID(),
     title: title.trim(),
@@ -282,16 +290,19 @@ async function createTask(title: string, parentId: string | null, userId?: strin
     parentId,
     children: [],
     triageStatus: "Backlog",
-    urgent: false,
-    impact: false,
-    difficulty: 1,
+    // Inherit work-context metadata from parent, with caller override for userId
+    urgent: parentTask?.urgent ?? false,
+    impact: parentTask?.impact ?? false,
+    majorIncident: parentTask?.majorIncident ?? false,
+    sprintTarget: parentTask?.sprintTarget ?? false,
+    difficulty: parentTask?.difficulty ?? 1,
     timer: [],
-    category: undefined,
+    category: parentTask?.category ?? undefined,
     terminationDate: undefined,
     comment: undefined,
     durationInMinutes: undefined,
-    priority: 0,
-    userId: userId,
+    priority: parentTask?.priority ?? 0,
+    userId: userId ?? parentTask?.userId ?? undefined,
   };
 
   try {
@@ -309,6 +320,8 @@ async function createTask(title: string, parentId: string | null, userId?: strin
     syncTaskToYjs(t.id, t);
 
     if (parentId) {
+      let timerTransferred = false;
+
       tasks = tasks.map(currentTask => {
         if (currentTask.id === parentId) {
           const updatedParent = {
@@ -318,6 +331,7 @@ async function createTask(title: string, parentId: string | null, userId?: strin
           if (updatedParent.timer && updatedParent.timer.length > 0) {
             t.timer = updatedParent.timer;
             updatedParent.timer = [];
+            timerTransferred = true;
             syncTaskToYjs(t.id, t);
           }
           syncTaskToYjs(updatedParent.id, updatedParent);
@@ -326,6 +340,26 @@ async function createTask(title: string, parentId: string | null, userId?: strin
         return currentTask;
       });
 
+      // Replace the child task in the array with a fresh object reference
+      // so React.memo detects the prop change and re-renders the timer pill.
+      if (timerTransferred) {
+        tasks = tasks.map(currentTask =>
+          currentTask.id === t.id ? { ...t } : currentTask
+        );
+      }
+
+      // Persist timer transfer to DB (both child and parent)
+      if (timerTransferred) {
+        try {
+          const childEntity = taskToEntity(t);
+          await adapter.updateTask(t.id, childEntity);
+          const parentEntity = taskToEntity(tasks.find(tsk => tsk.id === parentId)!);
+          await adapter.updateTask(parentId, parentEntity);
+        } catch (error) {
+          console.error('Error persisting timer transfer:', error);
+        }
+      }
+
       // Check parent task completion since a new subtask was added
       checkParentTaskCompletion(parentId);
     }
@@ -333,12 +367,18 @@ async function createTask(title: string, parentId: string | null, userId?: strin
 
     // Optimistic update
     eventBus.publish("tasksChanged");
+    // Notify timer pill components that a timer moved (parent → child)
+    if (parentId && tasks.some(tsk => tsk.id === parentId && (!tsk.timer || tsk.timer.length === 0))) {
+      eventBus.publish("timerToggled", t.id);
+    }
 
   } catch (error) {
     console.error('Error creating task:', error);
     // Fallback to old method
     tasks = [...tasks, t];
     if (parentId) {
+      let timerTransferred = false;
+
       tasks = tasks.map(currentTask => {
         if (currentTask.id === parentId) {
           const updatedParent = {
@@ -348,14 +388,43 @@ async function createTask(title: string, parentId: string | null, userId?: strin
           if (updatedParent.timer && updatedParent.timer.length > 0) {
             t.timer = updatedParent.timer;
             updatedParent.timer = [];
+            timerTransferred = true;
+            syncTaskToYjs(t.id, t);
           }
+          syncTaskToYjs(updatedParent.id, updatedParent);
           return updatedParent;
         }
         return currentTask;
       });
+
+      // Replace the child task in the array with a fresh object reference
+      // so React.memo detects the prop change and re-renders the timer pill.
+      if (timerTransferred) {
+        tasks = tasks.map(currentTask =>
+          currentTask.id === t.id ? { ...t } : currentTask
+        );
+      }
+
+      // Persist timer transfer to DB even in fallback path
+      if (timerTransferred) {
+        try {
+          const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+          const fallbackAdapter = await persistence;
+          const childEntity = taskToEntity(t);
+          await fallbackAdapter.updateTask(t.id, childEntity);
+          const parentEntity = taskToEntity(tasks.find(tsk => tsk.id === parentId)!);
+          await fallbackAdapter.updateTask(parentId, parentEntity);
+        } catch (persistError) {
+          console.error('Error persisting timer transfer in fallback:', persistError);
+        }
+      }
+
       checkParentTaskCompletion(parentId);
     }
     eventBus.publish("tasksChanged");
+    if (parentId && tasks.some(tsk => tsk.id === parentId && (!tsk.timer || tsk.timer.length === 0))) {
+      eventBus.publish("timerToggled", t.id);
+    }
   }
 
   return t.id;
@@ -1457,6 +1526,8 @@ export function useTasks() {
     }, []),
     // Reload all tasks (no filter)
     reloadTasks: React.useCallback(async () => {
+      // Reset the filtered flag so loadTasks() doesn't bail out early
+      isFiltered = false;
       // Delegate to module-level function which handles state updates and event publishing
       await loadTasks();
     }, []),
