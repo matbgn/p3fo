@@ -143,3 +143,18 @@ describe('createTask - timer transfer persistence', () => {
     expect(funcBody).toMatch(/adapter\.updateTask\(parentId/)
   })
 })
+
+describe('deleteTask - parent children sync', () => {
+  it('should sync updated parent to Yjs after child deletion', async () => {
+    const source = fs.readFileSync(USE_TASKS_PATH, 'utf-8')
+    const lines = source.split('\n')
+
+    const funcStart = lines.findIndex(l => l.includes('const deleteTask = React.useCallback'))
+    expect(funcStart).toBeGreaterThanOrEqual(0)
+
+    const funcBody = lines.slice(funcStart, funcStart + 40).join('\n')
+
+    // Must call syncTaskToYjs for the parent after updating its children
+    expect(funcBody).toMatch(/syncTaskToYjs.*updatedParent/)
+  })
+})

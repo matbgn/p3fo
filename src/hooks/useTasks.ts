@@ -319,8 +319,9 @@ async function createTask(title: string, parentId: string | null, userId?: strin
     
     syncTaskToYjs(t.id, t);
 
+    let timerTransferred = false;
+
     if (parentId) {
-      let timerTransferred = false;
 
       tasks = tasks.map(currentTask => {
         if (currentTask.id === parentId) {
@@ -368,7 +369,7 @@ async function createTask(title: string, parentId: string | null, userId?: strin
     // Optimistic update
     eventBus.publish("tasksChanged");
     // Notify timer pill components that a timer moved (parent → child)
-    if (parentId && tasks.some(tsk => tsk.id === parentId && (!tsk.timer || tsk.timer.length === 0))) {
+    if (timerTransferred) {
       eventBus.publish("timerToggled", t.id);
     }
 
@@ -376,8 +377,8 @@ async function createTask(title: string, parentId: string | null, userId?: strin
     console.error('Error creating task:', error);
     // Fallback to old method
     tasks = [...tasks, t];
+    let timerTransferred = false;
     if (parentId) {
-      let timerTransferred = false;
 
       tasks = tasks.map(currentTask => {
         if (currentTask.id === parentId) {
@@ -422,7 +423,7 @@ async function createTask(title: string, parentId: string | null, userId?: strin
       checkParentTaskCompletion(parentId);
     }
     eventBus.publish("tasksChanged");
-    if (parentId && tasks.some(tsk => tsk.id === parentId && (!tsk.timer || tsk.timer.length === 0))) {
+    if (timerTransferred) {
       eventBus.publish("timerToggled", t.id);
     }
   }
@@ -985,7 +986,9 @@ export function useTasks() {
     if (taskToDelete.parentId) {
       tasks = tasks.map(t => {
         if (t.id === taskToDelete.parentId) {
-          return { ...t, children: (t.children || []).filter(id => id !== taskId) };
+          const updatedParent = { ...t, children: (t.children || []).filter(id => id !== taskId) };
+          syncTaskToYjs(updatedParent.id, updatedParent);
+          return updatedParent;
         }
         return t;
       });
