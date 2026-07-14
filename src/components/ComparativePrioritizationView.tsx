@@ -42,6 +42,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, CircleDot, Flame, Crosshair, Trash2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { saveFiltersToSessionStorage, loadFiltersFromSessionStorage } from "@/lib/filter-storage";
 import { getDefaultFilters, validateFilters } from "@/lib/filter-merge";
 import { Filters } from "./FilterControls";
@@ -100,6 +101,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
   const [batchPhase, setBatchPhase] = useState<'highest' | 'lowest'>('highest');
   const [selectedHighestId, setSelectedHighestId] = useState<string | null>(null);
   const [prioritizedResults, setPrioritizedResults] = useState<RankedTask[] | null>(null);
+  const [finalizePreview, setFinalizePreview] = useState<RankedTask[] | null>(null);
   const [deleteHovered, setDeleteHovered] = useState(false);
   const deleteHoverTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -218,6 +220,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
     setBatchPhase('highest');
     setSelectedHighestId(null);
     setPrioritizedResults(null);
+    setFinalizePreview(null);
   };
 
   const handleBatchHighest = (highestId: string) => {
@@ -257,6 +260,25 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
       setBatchPhase('highest');
       setSelectedHighestId(null);
     }
+  };
+
+  const handleRevertHighest = () => {
+    setSelectedHighestId(null);
+    setBatchPhase('highest');
+  };
+
+  const handleFinalizeNow = () => {
+    if (!prioritizationState || prioritizationState.totalBatches < 1) return;
+    setFinalizePreview(rankResults(prioritizationState));
+  };
+
+  const handleConfirmFinalize = () => {
+    if (!finalizePreview) return;
+    setPrioritizedResults(finalizePreview);
+    setFinalizePreview(null);
+    setCurrentBatch(null);
+    setBatchPhase('highest');
+    setSelectedHighestId(null);
   };
 
   const applyPriorities = () => {
@@ -336,13 +358,13 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
         {prioritizedResults ? (
           <div>
             <h3 className="text-lg font-semibold mb-2">Prioritization Results:</h3>
-            <ul className="list-decimal pl-5 space-y-1">
+            <ul className="list-none pl-0 space-y-1">
               {prioritizedResults.map((result, index) => {
                 const task = tasks.find(t => t.id === result.taskId);
                 return (
                   <li key={task?.id} className="flex justify-between items-center py-1">
                     <span>{task?.title}</span>
-                    <span className="font-medium text-blue-600">Score: {result.score}</span>
+                    <span className="font-medium text-blue-600">#{index + 1}</span>
                   </li>
                 );
               })}
@@ -553,13 +575,23 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                 </div>
                 <div className="flex space-x-2">
                   {currentBatch && !prioritizationState?.done ? (
-                    <Button variant="destructive" onClick={() => {
-                      if (window.confirm('Interrupt and reset the current comparison? All progress will be lost.')) {
-                        resetComparison();
-                      }
-                    }}>
-                      Reset Comparison
-                    </Button>
+                    <>
+                      <Button
+                        variant="secondary"
+                        onClick={handleFinalizeNow}
+                        disabled={!prioritizationState || prioritizationState.totalBatches < 1}
+                        title={!prioritizationState || prioritizationState.totalBatches < 1 ? 'Compare at least one batch first.' : 'Apply the current partial ranking now.'}
+                      >
+                        Finalize now
+                      </Button>
+                      <Button variant="destructive" onClick={() => {
+                        if (window.confirm('Interrupt and reset the current comparison? All progress will be lost.')) {
+                          resetComparison();
+                        }
+                      }}>
+                        Reset Comparison
+                      </Button>
+                    </>
                   ) : (
                     <Button onClick={startComparison} disabled={selectedTasks.length < 2}>
                       Start Comparative Prioritization ({selectedTasks.length} tasks, ~{expectedComparisons(selectedTasks.length, batchSize)} batches)
@@ -611,10 +643,9 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                 </p>
                 <div className={`flex justify-around items-center gap-4 ${currentBatch.k > 2 ? 'flex-col' : ''}`}>
                   {currentBatch.tasks.map((task) => {
-                    const isDisabled =
-                      (batchPhase === 'lowest' && task.id === selectedHighestId) ||
-                      (prioritizationState?.done ?? false);
-                    const isHighlighted = batchPhase === 'lowest' && task.id === selectedHighestId;
+                    const isHighestSelected = batchPhase === 'lowest' && task.id === selectedHighestId;
+                    const isDisabled = prioritizationState?.done ?? false;
+                    const isHighlighted = isHighestSelected;
                     return (
                       <Button
                         key={task.id}
@@ -624,6 +655,8 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                         onClick={() => {
                           if (currentBatch.k === 2 || batchPhase === 'highest') {
                             handleBatchHighest(task.id);
+                          } else if (isHighestSelected) {
+                            handleRevertHighest();
                           } else {
                             handleBatchLowest(task.id);
                           }
@@ -641,13 +674,44 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                 )}
                 {currentBatch.k > 2 && batchPhase === 'lowest' && (
                   <p className="text-xs text-center text-muted-foreground mt-2">
-                    The highest was already chosen. Now pick the lowest among the remaining.
+                    Pick the lowest among the remaining — or click the highlighted highest again to undo and re-pick.
                   </p>
                 )}
               </div>
             )}
           </React.Fragment>
         )}
+        <Dialog open={finalizePreview !== null} onOpenChange={(open) => { if (!open) setFinalizePreview(null); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Finalize with current order?</DialogTitle>
+              <DialogDescription>
+                {prioritizationState
+                  ? `This is the ranking computed so far from ${prioritizationState.totalBatches} batch${prioritizationState.totalBatches === 1 ? '' : 'es'}. You can apply it now or keep comparing to refine.`
+                  : 'This is the ranking computed so far.'}
+              </DialogDescription>
+            </DialogHeader>
+            <ul className="list-none pl-0 space-y-1 max-h-[50vh] overflow-y-auto">
+              {finalizePreview?.map((result, index) => {
+                const task = tasks.find(t => t.id === result.taskId);
+                return (
+                  <li key={task?.id} className="flex justify-between items-center py-1">
+                    <span>{task?.title}</span>
+                    <span className="font-medium text-blue-600">#{index + 1}</span>
+                  </li>
+                );
+              })}
+            </ul>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setFinalizePreview(null)}>
+                Keep comparing
+              </Button>
+              <Button onClick={handleConfirmFinalize}>
+                Apply this order
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );

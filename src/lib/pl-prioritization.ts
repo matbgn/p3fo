@@ -325,8 +325,7 @@ function isRankingStable(state: PrioritizationState): boolean {
   const ids = state.tasks.map((t) => t.id);
   for (let a = 0; a < ids.length; a++) {
     for (let b = a + 1; b < ids.length; b++) {
-      const h = batchEntropy([ids[a], ids[b]], state.scores);
-      if (h < INFO_GAIN_FLOOR) continue;
+      if (!pairIsUncertain(ids[a], ids[b], state.scores)) continue;
       const wab = state.winMatrix[ids[a]]?.[ids[b]] || 0;
       const wba = state.winMatrix[ids[b]]?.[ids[a]] || 0;
       if (wab + wba === 0) return false;
@@ -411,6 +410,23 @@ function batchEntropy(taskIds: string[], scores: Record<string, number>): number
 }
 
 /**
+ * Whether a pair still carries enough uncertainty to warrant a comparison.
+ *
+ * A pair is "uncertain" when its batch entropy is at or above the info-gain
+ * floor — i.e. the model could still learn something from querying it. This
+ * is the single criterion shared by the exploration branch of
+ * `selectNextBatch`, the coverage check in `isRankingStable`, and the
+ * exploitation floor stop, so all three agree on what "needs comparing".
+ *
+ * @param a - First task ID.
+ * @param b - Second task ID.
+ * @param scores - Current BT log-strength scores.
+ */
+function pairIsUncertain(a: string, b: string, scores: Record<string, number>): boolean {
+  return batchEntropy([a, b], scores) >= INFO_GAIN_FLOOR;
+}
+
+/**
  * Select the next batch of K tasks to show the user.
  *
  * Two phases:
@@ -444,13 +460,17 @@ export function selectNextBatch(
     return (state.winMatrix[a]?.[b] || 0) + (state.winMatrix[b]?.[a] || 0);
   }
 
-  // Phase 1 — Exploration: ensure every pair is compared at least once.
-  // Pick the unqueried pair with the closest current scores (Swiss-style),
-  // so we resolve the most uncertain unqueried pairs first.
+  // Phase 1 — Exploration: ensure every uncertain pair is compared at
+  // least once. Pick the unqueried pair with the closest current scores
+  // (Swiss-style), so we resolve the most uncertain unqueried pairs first.
+  // Pairs already confidently resolved via transitive wins (entropy below
+  // the floor) are skipped — this lets the engine converge without forcing
+  // all C(n,2) direct comparisons.
   const unqueriedPairs: [string, string][] = [];
   for (let a = 0; a < ids.length; a++) {
     for (let b = a + 1; b < ids.length; b++) {
-      if (pairCompared(ids[a], ids[b]) === 0) {
+      if (pairCompared(ids[a], ids[b]) === 0
+          && pairIsUncertain(ids[a], ids[b], state.scores)) {
         unqueriedPairs.push([ids[a], ids[b]]);
       }
     }

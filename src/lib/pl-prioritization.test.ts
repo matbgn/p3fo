@@ -282,3 +282,69 @@ describe('CONFIDENCE_THRESHOLD', () => {
     expect(CONFIDENCE_THRESHOLD).toBe(0.75);
   });
 });
+
+describe('Early convergence (exploration skips confident unqueried pairs)', () => {
+  it('finalizes without directly comparing a transitively-resolved pair', () => {
+    // Three tasks A, B, C. Record several A>B and B>C wins so that A is
+    // clearly above C by transitivity, but never directly compare A vs C.
+    // With the exploration fix, the A-C pair (unqueried but below the
+    // entropy floor) is skipped and the engine finalizes.
+    const tasks = makeTasks(3); // t0=A, t1=B, t2=C
+    let state = initState(tasks, 2);
+
+    // Record A>B twice and B>C twice to build strong transitive separation.
+    state = recordBatch(state, 't0', undefined, ['t0', 't1']);
+    state = recordBatch(state, 't0', undefined, ['t0', 't1']);
+    state = recordBatch(state, 't1', undefined, ['t1', 't2']);
+    state = recordBatch(state, 't1', undefined, ['t1', 't2']);
+
+    // A-C was never directly compared.
+    const acCompared =
+      (state.winMatrix['t0']?.['t2'] || 0) + (state.winMatrix['t2']?.['t0'] || 0);
+    expect(acCompared).toBe(0);
+
+    // The engine should be done: A-C is below the entropy floor, so no
+    // uncertain unqueried pair remains and the floor stop fires.
+    expect(state.done).toBe(true);
+    expect(state.results).not.toBeNull();
+    const resultIds = state.results!.map((r) => r.taskId);
+    expect(resultIds).toEqual(['t0', 't1', 't2']);
+  });
+
+  it('cold start lists all pairs as uncertain (exploration covers full graph)', () => {
+    // Regression guard: at cold start all scores are 0, so every pair has
+    // batch entropy = ln(2) ≈ 0.693 >= INFO_GAIN_FLOOR. Exploration must
+    // still offer a batch (not finalize prematurely).
+    for (const n of [2, 3, 4, 5]) {
+      const state = initState(makeTasks(n), 2);
+      const batch = selectNextBatch(state);
+      expect(batch).not.toBeNull();
+      expect(batch!.tasks.length).toBe(Math.min(2, n));
+    }
+  });
+});
+
+describe('rankResults on a mid-comparison state', () => {
+  it('returns a usable ranking before the engine is done (early-exit contract)', () => {
+    // The early-exit button calls rankResults on the live state, which is
+    // not necessarily done. Lock the contract that it works on any state.
+    const tasks = makeTasks(4);
+    let state = initState(tasks, 2);
+    // Record a single batch, do NOT let the engine finish.
+    const batch = selectNextBatch(state)!;
+    const batchIds = batch.tasks.map((t) => t.id);
+    state = recordBatch(state, batchIds[0], undefined, batchIds);
+    expect(state.done).toBe(false); // not finalized yet
+
+    // rankResults must still return a complete, deterministic ranking.
+    const results = rankResults(state);
+    expect(results.length).toBe(4);
+    expect(results.map((r) => r.taskId).sort()).toEqual(['t0', 't1', 't2', 't3']);
+    // The winner of the recorded batch must rank above the loser.
+    const winnerId = batchIds[0];
+    const loserId = batchIds[1];
+    const winnerRank = results.findIndex((r) => r.taskId === winnerId);
+    const loserRank = results.findIndex((r) => r.taskId === loserId);
+    expect(winnerRank).toBeLessThan(loserRank);
+  });
+});
