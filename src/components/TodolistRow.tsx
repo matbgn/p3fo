@@ -36,7 +36,6 @@ import {
   FileText,
   CalendarIcon,
   MoreHorizontal,
-  Plus,
 } from "lucide-react";
 import { Task, Category, TriageStatus } from "@/hooks/useTasks";
 import { TaskStatusSelect } from "./TaskStatusSelect";
@@ -53,6 +52,7 @@ import { useSettingsContext } from "@/context/SettingsContext";
 import { Calendar } from "@/components/ui/calendar";
 import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
 import { TaskEditModal } from "./TaskEditModal";
+import { QuickAddTask } from "./QuickAddTask";
 import { TimeSheet } from "./TimeSheet";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -123,6 +123,7 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
 }) => {
   const { task, depth, hasChildren, isExpanded } = row;
   const [isHovered, setIsHovered] = React.useState(false);
+  const [subtaskDropdownOpen, setSubtaskDropdownOpen] = React.useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
   const [isTimeSheetOpen, setIsTimeSheetOpen] = React.useState(false);
   const [isCommentModalOpen, setIsCommentModalOpen] = React.useState(false);
@@ -166,15 +167,6 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
       setOffsetMinutes(-1);
     }
   }, [task.id, task.terminationDate, scheduledReminders]);
-
-  const [subtaskInputValue, setSubtaskInputValue] = React.useState("");
-
-  const handleAddSubtask = async () => {
-    const value = subtaskInputValue.trim();
-    if (!value) return;
-    await createTask(value, task.id);
-    setSubtaskInputValue("");
-  };
 
   const handleDoubleClick = (e: React.MouseEvent) => {
     if (e.defaultPrevented) return;
@@ -317,6 +309,9 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
                     <div className="flex items-center">
                       <div className={`w-2.5 h-2.5 rounded-full ${getDifficultyColor(d)} mr-1.5`} />
                       <span>{d}</span>
+                      {d === 8 && (
+                        <span className="text-xs text-muted-foreground ml-2">~1 day, consider splitting</span>
+                      )}
                     </div>
                   </SelectItem>
                 ))}
@@ -531,31 +526,18 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
       </div>
 
       {/* Quick-add subtask on hover */}
-      {isHovered && (
+      {(isHovered || subtaskDropdownOpen) && (
         <div
-          className={cn(
-            "flex items-center gap-2 px-2 py-1 border-b border-border bg-accent/10",
-          )}
+          className="px-2 py-1 border-b border-border bg-accent/10"
           style={{ paddingLeft: `${(depth + 1) * 20 + 8}px` }}
+          onClick={(e) => e.stopPropagation()}
         >
-          <Plus className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <Input
+          <QuickAddTask
             placeholder="Enter a new subtask"
-            value={subtaskInputValue}
-            onChange={(e) => setSubtaskInputValue(e.target.value)}
-            onKeyDown={(e) => {
-              e.stopPropagation();
-              if (e.key === "Enter") handleAddSubtask();
-              if (e.key === "Escape") setSubtaskInputValue("");
-            }}
-            className="h-6 text-xs border-none shadow-none focus-visible:ring-0 px-0"
-            onClick={(e) => e.stopPropagation()}
+            parentId={task.id}
+            showPlusIcon
+            onDropdownOpenChange={setSubtaskDropdownOpen}
           />
-          {subtaskInputValue.trim() && (
-            <Button size="sm" variant="ghost" className="h-5 px-2 text-xs" onClick={(e) => { e.stopPropagation(); handleAddSubtask(); }}>
-              Add
-            </Button>
-          )}
         </div>
       )}
 

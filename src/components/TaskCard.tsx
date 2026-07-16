@@ -379,14 +379,17 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                      </SelectValue>
                    </SelectTrigger>
                    <SelectContent>
-                     {DIFFICULTY_OPTIONS.map((difficulty) => (
-                       <SelectItem key={difficulty} value={difficulty.toString()}>
-                         <div className="flex items-center">
-                           <div className={`w-3 h-3 rounded-full ${getDifficultyColor(difficulty)} mr-2`} />
-                           <span>{difficulty}</span>
-                         </div>
-                       </SelectItem>
-                     ))}
+                      {DIFFICULTY_OPTIONS.map((difficulty) => (
+                        <SelectItem key={difficulty} value={difficulty.toString()}>
+                          <div className="flex items-center">
+                            <div className={`w-3 h-3 rounded-full ${getDifficultyColor(difficulty)} mr-2`} />
+                            <span>{difficulty}</span>
+                            {difficulty === 8 && (
+                              <span className="text-xs text-muted-foreground ml-2">~1 day, consider splitting</span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
                    </SelectContent>
                  </Select>
                )}

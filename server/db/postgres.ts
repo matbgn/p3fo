@@ -44,6 +44,7 @@ interface TaskDbRow {
   priority: number | null;
   userId: string | null;
   linkedVoteIds: string[] | null;
+  blockedSince: string | null;
 }
 
 interface UserSettingsDbRow {
@@ -217,6 +218,7 @@ class PostgresClient implements DbClient {
         "priority" INTEGER,
         "userId" TEXT,
         "linkedVoteIds" JSONB,
+        "blockedSince" TIMESTAMP WITH TIME ZONE,
         CONSTRAINT "fk_tasks_parent" FOREIGN KEY ("parentId") REFERENCES "tasks" ("id") ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE
       )
     `);
@@ -674,6 +676,9 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     // Tasks linkedVoteIds column
     await addColumn('tasks', 'linkedVoteIds', 'JSONB');
 
+    // Tasks blockedSince column (EF prosthetic: tracks when task entered Blocked status)
+    await addColumn('tasks', 'blockedSince', 'TIMESTAMP WITH TIME ZONE');
+
     // VoteLoops proposalId column (per-proposal loops)
     await addColumn('voteLoops', 'proposalId', 'TEXT NOT NULL DEFAULT \'\'');
     await addColumn('voteLoops', 'gatingValue', 'INTEGER');
@@ -797,12 +802,13 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       parentId: input.parentId || null,
       children: input.children || [],
       linkedVoteIds: input.linkedVoteIds || undefined,
+      blockedSince: input.blockedSince || null,
     };
 
     await this.pool.query(`
       INSERT INTO "tasks" ("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget",
-                         "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId", "linkedVoteIds")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+                         "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId", "linkedVoteIds", "blockedSince")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
     `, [
       newTask.id,
       newTask.parentId,
@@ -823,6 +829,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       newTask.priority,
       newTask.userId,
       newTask.linkedVoteIds || null,
+      newTask.blockedSince,
     ]);
 
     return newTask;
@@ -854,6 +861,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       updatedTask.priority,
       updatedTask.userId,
       updatedTask.linkedVoteIds ? JSON.stringify(updatedTask.linkedVoteIds) : null,
+      updatedTask.blockedSince,
       id
     ];
 
@@ -862,8 +870,8 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       SET "parentId" = $1, "title" = $2, "updatedAt" = $3, "triageStatus" = $4, "urgent" = $5,
           "impact" = $6, "majorIncident" = $7, "sprintTarget" = $8, "difficulty" = $9, "timer" = $10,
           "category" = $11, "terminationDate" = $12, "comment" = $13,
-          "durationInMinutes" = $14, "priority" = $15, "userId" = $16, "linkedVoteIds" = $17
-      WHERE "id" = $18
+          "durationInMinutes" = $14, "priority" = $15, "userId" = $16, "linkedVoteIds" = $17, "blockedSince" = $18
+      WHERE "id" = $19
     `, params);
 
     return updatedTask;
@@ -929,8 +937,8 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       for (const task of tasks) {
         await client.query(`
           INSERT INTO "tasks" ("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget",
-                             "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId")
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                             "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId", "blockedSince")
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
           ON CONFLICT ("id") DO UPDATE SET
             "parentId" = EXCLUDED."parentId",
             "title" = EXCLUDED."title",
@@ -947,7 +955,8 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
             "comment" = EXCLUDED."comment",
             "durationInMinutes" = EXCLUDED."durationInMinutes",
             "priority" = EXCLUDED."priority",
-            "userId" = EXCLUDED."userId"
+            "userId" = EXCLUDED."userId",
+            "blockedSince" = EXCLUDED."blockedSince"
         `, [
           task.id,
           task.parentId,
@@ -967,6 +976,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
           task.durationInMinutes,
           task.priority,
           task.userId,
+          task.blockedSince ?? null,
         ]);
       }
 

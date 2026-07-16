@@ -27,6 +27,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover";
+import { HoverOrClickCard } from "@/components/ui/hover-or-click-card";
 import {
     Select,
     SelectContent,
@@ -714,31 +715,10 @@ export const CardView: React.FC<CardViewProps> = ({
                     {votingMode === 'THUMBS_UP' && (
                         <>
                             {votingPhase === 'REVEALED' ? (
-                                <HoverCard>
-                                    <HoverCardTrigger asChild>
-                                        {(() => {
-                                            const onlineVotes = Object.values(card.votes).filter(v => v === 1).length;
-                                            const offlineThumbsUp = Object.values(card.offlineVotes || {}).filter(v => v === 1).length;
-                                            const totalVotes = onlineVotes + offlineThumbsUp;
-                                            const hasVotes = totalVotes > 0;
-                                            return (
-                                                <div className={`w-full relative flex items-center justify-start gap-2 p-1.5 rounded-md text-sm font-medium cursor-help overflow-hidden ${hasVotes ? 'bg-gray-400 border border-gray-400 text-white' : 'bg-muted/50 border text-primary'}`}>
-                                                    {voteBadgeFill}
-                                                    <ThumbsUp className="h-4 w-4 relative z-10" />
-                                                    <span className="relative z-10">
-                                                        {totalVotes}
-                                                    </span>
-                                                    <span className={`text-xs relative z-10 ${hasVotes ? 'text-white/80' : 'text-muted-foreground'}`}>votes</span>
-                                                    {offlineThumbsUp > 0 && (
-                                                        <span className="text-xs relative z-10 text-yellow-300 ml-auto">
-                                                            ({offlineThumbsUp} offline)
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            );
-                                        })()}
-                                    </HoverCardTrigger>
-                                    <HoverCardContent className="w-auto p-2">
+                                <HoverOrClickCard
+                                    align="start"
+                                    contentClassName="w-auto p-2"
+                                    content={
                                         <div className="flex flex-wrap gap-1">
                                             {Object.entries(card.votes)
                                                 .filter(([, v]) => v === 1)
@@ -763,8 +743,30 @@ export const CardView: React.FC<CardViewProps> = ({
                                                     </div>
                                                 ))}
                                         </div>
-                                    </HoverCardContent>
-                                </HoverCard>
+                                    }
+                                >
+                                    {(() => {
+                                        const onlineVotes = Object.values(card.votes).filter(v => v === 1).length;
+                                        const offlineThumbsUp = Object.values(card.offlineVotes || {}).filter(v => v === 1).length;
+                                        const totalVotes = onlineVotes + offlineThumbsUp;
+                                        const hasVotes = totalVotes > 0;
+                                        return (
+                                            <div className={`w-full relative flex items-center justify-start gap-2 p-1.5 rounded-md text-sm font-medium cursor-help overflow-hidden ${hasVotes ? 'bg-gray-400 border border-gray-400 text-white' : 'bg-muted/50 border text-primary'}`}>
+                                                {voteBadgeFill}
+                                                <ThumbsUp className="h-4 w-4 relative z-10" />
+                                                <span className="relative z-10">
+                                                    {totalVotes}
+                                                </span>
+                                                <span className={`text-xs relative z-10 ${hasVotes ? 'text-white/80' : 'text-muted-foreground'}`}>votes</span>
+                                                {offlineThumbsUp > 0 && (
+                                                    <span className="text-xs relative z-10 text-yellow-300 ml-auto">
+                                                        ({offlineThumbsUp} offline)
+                                                    </span>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
+                                </HoverOrClickCard>
                             ) : (
                                 <Button
                                     variant={card.votes[currentUserId] === 1 ? 'default' : 'outline'}
@@ -782,39 +784,38 @@ export const CardView: React.FC<CardViewProps> = ({
                     {votingMode === 'THUMBS_UD_NEUTRAL' && (
                         <>
                             {votingPhase === 'REVEALED' ? (
-                                <HoverCard>
-                                    <HoverCardTrigger asChild>
-                                        {(() => {
-                                            const netScore = Object.values(mergedVotes).reduce((a, b) => a + b, 0);
-                                            const voteCount = Object.keys(mergedVotes).length;
-                                            const hasVotes = voteCount > 0;
-                                            const max = Math.max(1, columnMaxScore ?? 1);
-                                            const intensity = Math.min(Math.abs(netScore) / max, 1);
-                                            const isPositive = netScore >= 0;
-                                            const widthPct = Math.round(intensity * 100) / 2;
-                                            return (
-                                                <div className={`w-full relative flex items-center justify-start gap-2 p-1.5 rounded-md text-sm font-medium cursor-help overflow-hidden ${hasVotes ? 'bg-gray-400 border border-gray-400 text-white' : 'bg-muted/50 border text-primary'}`}>
-                                                    {intensity > 0 && (
-                                                        <div
-                                                            className={`absolute inset-y-0 ${isPositive ? 'left-1/2 bg-green-600 rounded-r-md' : 'right-1/2 bg-red-600 rounded-l-md'} transition-all`}
-                                                            style={{ width: `${widthPct}%` }}
-                                                        />
-                                                    )}
-                                                    <span className="relative z-10 inline-flex items-center justify-center rounded-bl-sm border-l-2 border-b-2 border-current h-4 min-w-[1.25rem] px-0.5 text-[10px] font-bold">+/-</span>
-                                                    <span className="relative z-10">
-                                                        {hasVotes ? `${netScore > 0 ? '+' : ''}${netScore}` : `${voteCount} votes`}
-                                                    </span>
-                                                    {hasVotes && (
-                                                        <span className={`text-xs relative z-10 ${hasVotes ? 'text-white/80' : 'text-muted-foreground'}`}>pts</span>
-                                                    )}
-                                                </div>
-                                            );
-                                        })()}
-                                    </HoverCardTrigger>
-                                    <HoverCardContent className="w-80">
-                                        {renderUDNeutralDistribution(mergedVotes)}
-                                    </HoverCardContent>
-                                </HoverCard>
+                                <HoverOrClickCard
+                                    align="start"
+                                    contentClassName="w-80"
+                                    content={renderUDNeutralDistribution(mergedVotes)}
+                                >
+                                    {(() => {
+                                        const netScore = Object.values(mergedVotes).reduce((a, b) => a + b, 0);
+                                        const voteCount = Object.keys(mergedVotes).length;
+                                        const hasVotes = voteCount > 0;
+                                        const max = Math.max(1, columnMaxScore ?? 1);
+                                        const intensity = Math.min(Math.abs(netScore) / max, 1);
+                                        const isPositive = netScore >= 0;
+                                        const widthPct = Math.round(intensity * 100) / 2;
+                                        return (
+                                            <div className={`w-full relative flex items-center justify-start gap-2 p-1.5 rounded-md text-sm font-medium cursor-help overflow-hidden ${hasVotes ? 'bg-gray-400 border border-gray-400 text-white' : 'bg-muted/50 border text-primary'}`}>
+                                                {intensity > 0 && (
+                                                    <div
+                                                        className={`absolute inset-y-0 ${isPositive ? 'left-1/2 bg-green-600 rounded-r-md' : 'right-1/2 bg-red-600 rounded-l-md'} transition-all`}
+                                                        style={{ width: `${widthPct}%` }}
+                                                    />
+                                                )}
+                                                <span className="relative z-10 inline-flex items-center justify-center rounded-bl-sm border-l-2 border-b-2 border-current h-4 min-w-[1.25rem] px-0.5 text-[10px] font-bold">+/-</span>
+                                                <span className="relative z-10">
+                                                    {hasVotes ? `${netScore > 0 ? '+' : ''}${netScore}` : `${voteCount} votes`}
+                                                </span>
+                                                {hasVotes && (
+                                                    <span className={`text-xs relative z-10 ${hasVotes ? 'text-white/80' : 'text-muted-foreground'}`}>pts</span>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
+                                </HoverOrClickCard>
                             ) : (
                                 <>
                                     <div className="flex justify-between gap-1">
@@ -856,22 +857,21 @@ export const CardView: React.FC<CardViewProps> = ({
                                         </Button>
                                     </div>
                                     {isModerator && (
-                                        <HoverCard>
-                                            <HoverCardTrigger asChild>
-                                                <div className="pt-2 cursor-help text-center">
-                                                    {(() => {
-                                                         const median = getMJMedian(mergedVotes);
-                                                         if (median === null) return <span className="text-xs text-muted-foreground">No votes</span>;
-                                                         const label = median > 0 ? '+1' : (median < 0 ? '-1' : '0');
-                                                         const color = median > 0 ? 'text-green-600' : (median < 0 ? 'text-red-600' : 'text-black');
-                                                         return <span className={`text-xs font-bold ${color}`}>Median: {label} <span className="text-muted-foreground font-normal">({Object.keys(mergedVotes).length} votes)</span></span>
-                                                     })()}
-                                                </div>
-                                            </HoverCardTrigger>
-                                            <HoverCardContent className="w-80">
-                                                {renderUDNeutralDistribution(mergedVotes)}
-                                            </HoverCardContent>
-                                        </HoverCard>
+                                        <HoverOrClickCard
+                                            align="start"
+                                            contentClassName="w-80"
+                                            content={renderUDNeutralDistribution(mergedVotes)}
+                                        >
+                                            <div className="pt-2 cursor-help text-center">
+                                                {(() => {
+                                                     const median = getMJMedian(mergedVotes);
+                                                     if (median === null) return <span className="text-xs text-muted-foreground">No votes</span>;
+                                                     const label = median > 0 ? '+1' : (median < 0 ? '-1' : '0');
+                                                     const color = median > 0 ? 'text-green-600' : (median < 0 ? 'text-red-600' : 'text-black');
+                                                     return <span className={`text-xs font-bold ${color}`}>Median: {label} <span className="text-muted-foreground font-normal">({Object.keys(mergedVotes).length} votes)</span></span>
+                                                 })()}
+                                            </div>
+                                        </HoverOrClickCard>
                                     )}
                                 </>
                             )}
@@ -880,27 +880,26 @@ export const CardView: React.FC<CardViewProps> = ({
                     {votingMode === 'POINTS' && (
                         <>
                                 {votingPhase === 'REVEALED' ? (
-                                <HoverCard>
-                                    <HoverCardTrigger asChild>
-                                        {(() => {
-                                             const totalPoints = Object.values(mergedVotes).reduce((a, b) => a + b, 0);
-                                            const hasPoints = totalPoints > 0;
-                                            return (
-                                                <div className={`w-full relative flex items-center justify-start gap-2 p-1.5 rounded-md text-sm font-medium cursor-help overflow-hidden ${hasPoints ? 'bg-gray-400 border border-gray-400 text-white' : 'bg-muted/50 border text-primary'}`}>
-                                                    {voteBadgeFill}
-                                                    <BarChart3 className="h-4 w-4 relative z-10" />
-                                                    <span className="relative z-10">
-                                                        {totalPoints}
-                                                    </span>
-                                                    <span className={`text-xs relative z-10 ${hasPoints ? 'text-white/80' : 'text-muted-foreground'}`}>pts</span>
-                                                </div>
-                                            );
-                                        })()}
-                                    </HoverCardTrigger>
-                                    <HoverCardContent className="w-80">
-                                        {renderPointsDistribution(mergedVotes)}
-                                    </HoverCardContent>
-                                </HoverCard>
+                                <HoverOrClickCard
+                                    align="start"
+                                    contentClassName="w-80"
+                                    content={renderPointsDistribution(mergedVotes)}
+                                >
+                                    {(() => {
+                                         const totalPoints = Object.values(mergedVotes).reduce((a, b) => a + b, 0);
+                                        const hasPoints = totalPoints > 0;
+                                        return (
+                                            <div className={`w-full relative flex items-center justify-start gap-2 p-1.5 rounded-md text-sm font-medium cursor-help overflow-hidden ${hasPoints ? 'bg-gray-400 border border-gray-400 text-white' : 'bg-muted/50 border text-primary'}`}>
+                                                {voteBadgeFill}
+                                                <BarChart3 className="h-4 w-4 relative z-10" />
+                                                <span className="relative z-10">
+                                                    {totalPoints}
+                                                </span>
+                                                <span className={`text-xs relative z-10 ${hasPoints ? 'text-white/80' : 'text-muted-foreground'}`}>pts</span>
+                                            </div>
+                                        );
+                                    })()}
+                                </HoverOrClickCard>
                             ) : (
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-1">
@@ -916,80 +915,78 @@ export const CardView: React.FC<CardViewProps> = ({
                         </>
                     )}
                     {votingMode === 'MAJORITY_JUDGMENT' && (
-                        <HoverCard open={votingPhase === 'REVEALED' ? undefined : false}>
-                            <HoverCardTrigger asChild>
-                                <div className="w-full">
-                                    {(votingPhase === 'REVEALED') ? (
-                                        <div className={`
-                                            flex items-center justify-center gap-2 p-1.5 rounded-md text-sm font-medium border
-                                            ${(() => {
-                                                const median = getMJMedian(card.votes);
-                                                const grade = getMJGrade(median || 0);
-                                                return grade ? grade.color : 'bg-muted';
-                                            })()}
-                                            ${(() => {
-                                                const median = getMJMedian(mergedVotes);
-                                                return [1, 2].includes(median || 0) ? 'text-black' : 'text-white';
-                                            })()}
-                                        `}>
-                                            {(() => {
-                                                const median = getMJMedian(mergedVotes);
-                                                const grade = getMJGrade(median || 0);
-                                                return grade ? (
-                                                    <>
+                        <HoverOrClickCard
+                            align="center"
+                            contentClassName="w-80"
+                            open={votingPhase === 'REVEALED' ? undefined : false}
+                            content={(votingPhase === 'REVEALED' || isModerator) ? renderMJDistribution(mergedVotes) : null}
+                        >
+                            <div className="w-full">
+                                {(votingPhase === 'REVEALED') ? (
+                                    <div className={`
+                                        flex items-center justify-center gap-2 p-1.5 rounded-md text-sm font-medium border
+                                        ${(() => {
+                                            const median = getMJMedian(card.votes);
+                                            const grade = getMJGrade(median || 0);
+                                            return grade ? grade.color : 'bg-muted';
+                                        })()}
+                                        ${(() => {
+                                            const median = getMJMedian(mergedVotes);
+                                            return [1, 2].includes(median || 0) ? 'text-black' : 'text-white';
+                                        })()}
+                                    `}>
+                                        {(() => {
+                                            const median = getMJMedian(mergedVotes);
+                                            const grade = getMJGrade(median || 0);
+                                            return grade ? (
+                                                <>
+                                                    {grade.icon}
+                                                    {grade.label}
+                                                </>
+                                            ) : 'No Votes';
+                                        })()}
+                                        <span className="opacity-80 text-xs ml-1">({Object.keys(mergedVotes).length})</span>
+                                    </div>
+                                ) : (
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="outline" size="sm" className="w-full justify-between" disabled={votingPhase !== 'VOTING'}>
+                                                <div className="flex items-center gap-2">
+                                                    {card.votes[currentUserId] !== undefined ? (
+                                                        <>
+                                                            {getMJGrade(card.votes[currentUserId]).icon}
+                                                            {getMJGrade(card.votes[currentUserId]).label}
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-muted-foreground">Evaluate...</span>
+                                                    )}
+                                                </div>
+                                                <ChevronDown className="h-4 w-4 opacity-50" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="w-[200px]">
+                                            <DropdownMenuLabel>Select Grade</DropdownMenuLabel>
+                                            <DropdownMenuSeparator />
+                                            {MJ_SCALE.map(grade => (
+                                                <DropdownMenuItem
+                                                    key={grade.value}
+                                                    onClick={(e) => { e.stopPropagation(); handleVote(grade.value); }}
+                                                    className="flex items-center gap-2 cursor-pointer"
+                                                >
+                                                    <span className={`flex items-center justify-center w-5 h-5 rounded ${grade.color} text-[10px]`}>
                                                         {grade.icon}
-                                                        {grade.label}
-                                                    </>
-                                                ) : 'No Votes';
-                                            })()}
-                                            <span className="opacity-80 text-xs ml-1">({Object.keys(mergedVotes).length})</span>
-                                        </div>
-                                    ) : (
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="outline" size="sm" className="w-full justify-between" disabled={votingPhase !== 'VOTING'}>
-                                                    <div className="flex items-center gap-2">
-                                                        {card.votes[currentUserId] !== undefined ? (
-                                                            <>
-                                                                {getMJGrade(card.votes[currentUserId]).icon}
-                                                                {getMJGrade(card.votes[currentUserId]).label}
-                                                            </>
-                                                        ) : (
-                                                            <span className="text-muted-foreground">Evaluate...</span>
-                                                        )}
-                                                    </div>
-                                                    <ChevronDown className="h-4 w-4 opacity-50" />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end" className="w-[200px]">
-                                                <DropdownMenuLabel>Select Grade</DropdownMenuLabel>
-                                                <DropdownMenuSeparator />
-                                                {MJ_SCALE.map(grade => (
-                                                    <DropdownMenuItem
-                                                        key={grade.value}
-                                                        onClick={(e) => { e.stopPropagation(); handleVote(grade.value); }}
-                                                        className="flex items-center gap-2 cursor-pointer"
-                                                    >
-                                                        <span className={`flex items-center justify-center w-5 h-5 rounded ${grade.color} text-[10px]`}>
-                                                            {grade.icon}
-                                                        </span>
-                                                        <span>{getMJLabel(grade.value)}</span>
-                                                        {card.votes[currentUserId] === grade.value && (
-                                                            <ThumbsUp className="h-3 w-3 ml-auto" />
-                                                        )}
-                                                    </DropdownMenuItem>
-                                                ))}
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    )}
-                                </div>
-                            </HoverCardTrigger>
-                            {(votingPhase === 'REVEALED' || isModerator) && (
-                                <HoverCardContent className="w-80">
-                                    {renderMJDistribution(mergedVotes)}
-                                </HoverCardContent>
-                            )}
-                        </HoverCard>
+                                                    </span>
+                                                    <span>{getMJLabel(grade.value)}</span>
+                                                    {card.votes[currentUserId] === grade.value && (
+                                                        <ThumbsUp className="h-3 w-3 ml-auto" />
+                                                    )}
+                                                </DropdownMenuItem>
+                                            ))}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                )}
+                            </div>
+                        </HoverOrClickCard>
                     )}
                 </div>
             )}

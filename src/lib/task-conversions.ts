@@ -43,6 +43,7 @@ export const convertEntitiesToTasks = (entities: TaskEntity[]): Task[] => {
             userId: entity.userId || undefined,
             updatedAt: entity.updatedAt ? new Date(entity.updatedAt).getTime() : undefined,
             linkedVoteIds: entity.linkedVoteIds || undefined,
+            blockedSince: entity.blockedSince ? new Date(entity.blockedSince).getTime() : undefined,
         };
         taskMap[task.id] = task;
     });
@@ -85,6 +86,7 @@ export const taskToEntity = (task: Task): TaskEntity => ({
     children: task.children || [],
     updatedAt: task.updatedAt ? new Date(task.updatedAt).toISOString() : null,
     linkedVoteIds: task.linkedVoteIds || undefined,
+    blockedSince: task.blockedSince ? new Date(task.blockedSince).toISOString() : null,
 });
 
 /**
@@ -179,6 +181,11 @@ export const taskPatchToEntity = (
             : null;
     }
     if (patch.linkedVoteIds !== undefined) entity.linkedVoteIds = patch.linkedVoteIds;
+    if (patch.blockedSince !== undefined) {
+        entity.blockedSince = patch.blockedSince
+            ? new Date(patch.blockedSince).toISOString()
+            : null;
+    }
 
     return entity;
 };

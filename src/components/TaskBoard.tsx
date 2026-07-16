@@ -70,21 +70,17 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: (task
   // Focus restoration
   const [focusTargetId, setFocusTargetId] = React.useState<string | null>(null);
 
-  const handleToggleTimer = (id: string) => {
-    toggleTimer(id, currentUserId);
+  const handleToggleTimer = async (id: string) => {
+    await toggleTimer(id, currentUserId);
     setFocusTargetId(id);
 
     // If starting the timer (currently not running), highlight and activate the task
     const task = map[id];
-    // Check if currently running (prior to toggle effect taking place in UI, but logic is async)
-    // Actually toggleTimer is optimistic or fast? 
-    // We check current state. If not running, we are starting.
     const isRunning = task?.timer?.some(t => t.endTime === 0);
 
     if (task && !isRunning) {
       setHighlightedTaskId(id);
 
-      // Also update path to ensure it's selected/expanded
       const newPath: string[] = [];
       let current: Task | undefined = task;
       while (current) {

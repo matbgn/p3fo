@@ -8,6 +8,7 @@ import { DEFAULT_TRAVELER_CONFIG, TravelerConfig } from '@/lib/traveler-types';
 import { normalizePreferredDays } from '@/utils/scheduler-utils';
 import { yAppSettings, isCollaborationEnabled, doc } from '@/lib/collaboration';
 import { eventBus } from '@/lib/events';
+import { setWipLimit } from '@/lib/wip-limit';
 
 /**
  * Combined settings interface that merges global and user-specific settings
@@ -33,9 +34,11 @@ export interface CombinedSettings {
     region: string;
     trigram?: string;
     disabledModules: import('@/lib/persistence-types').ModuleId[];
+    wipLimitPerUser: number;
     pomodoroConfig: PomodoroConfig;
     focusModeConfig: FocusModeConfig;
     travelerConfig: TravelerConfig;
+    nonActionPeriodHours: number;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -72,9 +75,11 @@ const defaultCombinedSettings: CombinedSettings = {
     region: 'BE',
     trigram: undefined,
     disabledModules: [],
+    wipLimitPerUser: 5,
     pomodoroConfig: DEFAULT_POMODORO_CONFIG,
     focusModeConfig: DEFAULT_FOCUS_MODE_CONFIG,
     travelerConfig: DEFAULT_TRAVELER_CONFIG,
+    nonActionPeriodHours: 3,
 };
 
 interface SettingsContextType {
@@ -95,6 +100,11 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     const lastUpdateTimestampRef = useRef<Record<string, number>>({});
     const pendingValuesRef = useRef<Record<string, unknown>>({});
     const hasMigratedRef = useRef(false);
+
+    // Sync WIP limit to the cached value used by useTasks.updateStatus
+    useEffect(() => {
+        setWipLimit(settings.wipLimitPerUser);
+    }, [settings.wipLimitPerUser]);
 
     // Centralized load once
     const loadSettings = useCallback(async () => {
@@ -121,9 +131,11 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 preferredWorkingDays: { '1': 1, '2': 1, '3': 1, '4': 1, '5': 1 },
                 trigram: undefined,
                 disabledModules: (appSettings.disabledModules as import('@/lib/persistence-types').ModuleId[]) || [],
+                wipLimitPerUser: (appSettings.wipLimitPerUser as number | undefined) ?? 5,
                 pomodoroConfig: appSettings.pomodoroConfig ?? DEFAULT_POMODORO_CONFIG,
                 focusModeConfig: appSettings.focusModeConfig ?? DEFAULT_FOCUS_MODE_CONFIG,
                 travelerConfig: appSettings.travelerConfig ?? DEFAULT_TRAVELER_CONFIG,
+                nonActionPeriodHours: (userSettings?.nonActionPeriodHours as number | undefined) ?? 3,
             };
 
             if (userSettings) {
@@ -279,9 +291,11 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 country: appSettings.country || 'CH',
                 region: appSettings.region || 'BE',
                 disabledModules: (appSettings.disabledModules as import('@/lib/persistence-types').ModuleId[]) || [],
+                wipLimitPerUser: (appSettings.wipLimitPerUser as number | undefined) ?? 5,
                 pomodoroConfig: appSettings.pomodoroConfig ?? DEFAULT_POMODORO_CONFIG,
                 focusModeConfig: appSettings.focusModeConfig ?? DEFAULT_FOCUS_MODE_CONFIG,
                 travelerConfig: appSettings.travelerConfig ?? DEFAULT_TRAVELER_CONFIG,
+                nonActionPeriodHours: 3,
             };
 
             // Migration: move autoStartBreak/autoStartWork from pomodoroConfig to focusModeConfig

@@ -1141,6 +1141,63 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
   return (
     <div className="h-full w-full">
         <BoardLayout>
+          {/* Dialogs */}
+          <Dialog open={promoteDialogOpen} onOpenChange={setPromoteDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Promote to Kanban</DialogTitle>
+                <DialogDescription>
+                  This will create a new task in the Kanban board with the content of this card.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex justify-end space-x-2">
+                <Button variant="outline" onClick={() => setPromoteDialogOpen(false)}>Cancel</Button>
+                <Button onClick={promoteToBacklog}>Promote</Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Points Config Dialog */}
+          <Dialog open={pointsConfigColumnId !== null} onOpenChange={(open) => !open && setPointsConfigColumnId(null)}>
+            <DialogContent className="sm:max-w-sm">
+              <DialogHeader><DialogTitle>Configure Points Budget</DialogTitle></DialogHeader>
+              <div className="flex items-center gap-4 py-4">
+                <Label className="text-right">Max Points:</Label>
+                <Input type="number" value={pointsConfigValue} onChange={(e) => setPointsConfigValue(Math.max(1, parseInt(e.target.value) || 0))} className="col-span-3" />
+              </div>
+              <Button onClick={confirmColumnPointsConfig}>Start Points Voting</Button>
+            </DialogContent>
+          </Dialog>
+
+          {/* MJ Labels Config Dialog */}
+          <Dialog open={mjConfigColumnId !== null} onOpenChange={(open) => !open && setMjConfigColumnId(null)}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader><DialogTitle>Configure Majority Judgment Labels</DialogTitle></DialogHeader>
+              <div className="space-y-3 py-2">
+                {MJ_SCALE.map(grade => (
+                  <div key={grade.value} className="flex items-center gap-3">
+                    <span className={`flex items-center justify-center w-6 h-6 rounded ${grade.color} text-[10px]`}>{grade.icon}</span>
+                    <Input
+                      value={mjLabelInputs[grade.value] ?? grade.label}
+                      onChange={(e) => setMjLabelInputs(prev => ({ ...prev, [grade.value]: e.target.value }))}
+                      className="flex-1"
+                      placeholder={`Label for grade ${grade.value}`}
+                    />
+                  </div>
+                ))}
+              </div>
+              <Button onClick={async () => {
+                if (!boardState || !mjConfigColumnId) return;
+                const newColumns = boardState.columns.map(col =>
+                  col.id === mjConfigColumnId ? { ...col, mjLabels: { ...mjLabelInputs }, votingPhase: 'VOTING' as VotingPhase } : col
+                );
+                await saveBoard({ ...boardState, columns: newColumns });
+                setMjConfigColumnId(null);
+                setMjLabelInputs({});
+              }}>Save & Start MJ Voting</Button>
+            </DialogContent>
+          </Dialog>
+
           <BoardHeader
             title="Dream Board"
             focusModeRightExtra={focusModeHeaderContent}

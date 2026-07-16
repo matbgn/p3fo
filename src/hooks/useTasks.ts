@@ -8,6 +8,7 @@ import { taskToEntity, tasksToEntities, convertEntitiesToTasks, recomputeChildre
 import { useReminderStore } from "./useReminders";
 import { BrowserJsonPersistence } from "@/lib/persistence-browser";
 import { getSelectedMode } from "@/lib/persistence-factory";
+import { confirmDialog } from "@/lib/confirm-modal";
 if (typeof crypto.randomUUID !== 'function') {
   crypto.randomUUID = function () {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
@@ -59,6 +60,7 @@ export type Task = {
   userId?: string;
   updatedAt?: number;
   linkedVoteIds?: string[];
+  blockedSince?: number;
 };
 
 
@@ -526,10 +528,36 @@ function getMinBacklogPriority(): number {
   return priorities.length > 0 ? Math.min(...priorities) - 1 : -1;
 };
 
-async function updateStatus(taskId: string, status: TriageStatus) {
+export type UpdateStatusResult = { success: boolean; reason?: string };
+
+export type ToggleTimerResult =
+  | { success: true; needsConfirm?: false }
+  | { success: false; needsConfirm: true; reason: string }
+  | { success: false; needsConfirm: false; reason: string };
+
+async function updateStatus(taskId: string, status: TriageStatus): Promise<UpdateStatusResult> {
   const taskMap = byId(tasks);
   const task = taskMap[taskId];
-  if (!task) return;
+  if (!task) return { success: false, reason: 'Task not found' };
+
+  if (status === 'WIP' && task.triageStatus !== 'WIP') {
+    try {
+      const { getWipLimit } = await import('@/lib/wip-limit');
+      const limit = getWipLimit();
+      if (limit > 0) {
+        const wipCount = tasks.filter(t =>
+          t.triageStatus === 'WIP' &&
+          t.id !== taskId &&
+          (t.userId ?? undefined) === (task.userId ?? undefined)
+        ).length;
+        if (wipCount >= limit) {
+          return { success: false, reason: `WIP limit reached (${limit} per user). Finish or move a task out of WIP first.` };
+        }
+      }
+    } catch {
+      // If wip-limit module not available, skip the check
+    }
+  }
 
   const tasksToUpdate = new Set<string>([taskId]);
 
@@ -562,10 +590,13 @@ async function updateStatus(taskId: string, status: TriageStatus) {
         updatedAt: Date.now()
       };
 
-      // Automatically degrade priority when task is moved to Blocked status
+      // Track when task entered Blocked status; clear when leaving
       if (status === "Blocked") {
+        updatedTask.blockedSince = t.blockedSince ?? Date.now();
         const minBacklogPriority = getMinBacklogPriority();
         updatedTask.priority = minBacklogPriority;
+      } else {
+        updatedTask.blockedSince = undefined;
       }
 
       syncTaskToYjs(updatedTask.id, updatedTask);
@@ -609,6 +640,8 @@ async function updateStatus(taskId: string, status: TriageStatus) {
     checkParentTaskCompletion(taskId);
     isUpdatingDueToChildCompletion = false;
   }
+
+  return { success: true };
 };
 
 const toggleDone = (taskId: string) => {
@@ -1223,9 +1256,60 @@ export function useTasks() {
     return task.difficulty || 0;
   };
 
-  const toggleTimer = React.useCallback(async (taskId: string, currentUserId?: string) => {
+  const toggleTimer = React.useCallback(async (taskId: string, currentUserId?: string, options?: { force?: boolean }): Promise<ToggleTimerResult> => {
     const task = tasks.find(t => t.id === taskId);
-    if (!task) return;
+    if (!task) return { success: false, needsConfirm: false, reason: 'Task not found' };
+
+    const isStarting = !task.timer?.some(e => e.endTime === 0);
+    const isTaskBelongingToCurrentUser = currentUserId
+      ? (task.userId === currentUserId || (!task.userId && currentUserId === 'UNASSIGNED'))
+      : true;
+
+    // WIP limit check when starting a timer on a non-WIP task
+    if (isStarting && task.triageStatus !== 'WIP') {
+      try {
+        const { getWipLimit } = await import('@/lib/wip-limit');
+        const limit = getWipLimit();
+        if (limit > 0 && isTaskBelongingToCurrentUser) {
+          const wipCount = tasks.filter(t =>
+            t.triageStatus === 'WIP' &&
+            t.id !== taskId &&
+            (t.userId ?? undefined) === (task.userId ?? undefined)
+          ).length;
+          if (wipCount >= limit) {
+            const reason = `WIP limit reached (${limit} per user). Finish or move a task out of WIP first.`;
+            toast.error(reason);
+            return { success: false, needsConfirm: false, reason };
+          }
+        }
+      } catch {
+        // If wip-limit module not available, skip the check
+      }
+    }
+
+    // Task-switching friction: when starting a timer and another task is already WIP
+    // with a running timer for the same user, require confirmation.
+    if (isStarting && isTaskBelongingToCurrentUser && !options?.force) {
+      const otherRunningWip = tasks.find(t =>
+        t.id !== taskId &&
+        t.triageStatus === 'WIP' &&
+        t.timer?.some(e => e.endTime === 0) &&
+        (currentUserId
+          ? (t.userId === currentUserId || (!t.userId && currentUserId === 'UNASSIGNED'))
+          : true)
+      );
+      if (otherRunningWip) {
+        const confirmed = await confirmDialog({
+          title: 'Switch to a new task?',
+          description: `You're currently working on "${otherRunningWip.title}". Switching will stop its timer and start the new one.`,
+          confirmLabel: 'Switch task',
+          cancelLabel: 'Keep current task',
+        });
+        if (!confirmed) {
+          return { success: false, needsConfirm: false, reason: 'Task switch cancelled' };
+        }
+      }
+    }
 
     // Collect tasks that need to be persisted (other running timers that need to be stopped)
     const tasksToPersist: Task[] = [];
@@ -1238,9 +1322,6 @@ export function useTasks() {
     // The task belongs to the current user if:
     // - task.userId matches currentUserId, OR
     // - task has no userId AND currentUserId is 'UNASSIGNED' (special case for unassigned tasks filter)
-    const isTaskBelongingToCurrentUser = currentUserId
-      ? (task.userId === currentUserId || (!task.userId && currentUserId === 'UNASSIGNED'))
-      : true; // Backward compatibility: if no currentUserId, assume user's own task
 
     // First, stop any other running timers ONLY for the current user
     // This prevents stopping timers for other users' tasks
@@ -1323,6 +1404,7 @@ export function useTasks() {
     if (updatedTask) {
       toast.success(isRunning ? `Timer started today for "${updatedTask.title}"` : `Timer stopped for "${updatedTask.title}"`);
     }
+    return { success: true };
   }, []);
 
   const updateTimeEntry = React.useCallback(async (taskId: string, entryIndex: number, newEntry: { startTime: number; endTime: number }) => {

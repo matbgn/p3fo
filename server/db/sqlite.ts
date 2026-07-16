@@ -43,6 +43,7 @@ interface TaskDbRow {
   priority: number | null;
   userId: string | null;
   linkedVoteIds: string | null;
+  blockedSince: string | null;
 }
 
 interface UserSettingsDbRow {
@@ -85,6 +86,7 @@ interface AppSettingsDbRow {
   pomodoroConfig: string | null;
   focusModeConfig: string | null;
   travelerConfig: string | null;
+  wipLimitPerUser: number | null;
 }
 
 interface CircleDbRow {
@@ -667,6 +669,7 @@ class SqliteClient implements DbClient {
     addColumn('userSettings', 'pomodoroConfig', 'TEXT');
     addColumn('userSettings', 'focusModeConfig', 'TEXT');
     addColumn('userSettings', 'travelerConfig', 'TEXT');
+    addColumn('userSettings', 'nonActionPeriodHours', 'REAL DEFAULT 3');
 
     // AppSettings columns
     runMigration('appSettings', 'split_time', 'splitTime');
@@ -686,12 +689,16 @@ class SqliteClient implements DbClient {
     addColumn('appSettings', 'pomodoroConfig', 'TEXT');
     addColumn('appSettings', 'focusModeConfig', 'TEXT');
     addColumn('appSettings', 'travelerConfig', 'TEXT');
+    addColumn('appSettings', 'wipLimitPerUser', 'INTEGER DEFAULT 5');
 
     // QolSurvey columns
     runMigration('qolSurvey', 'user_id', 'userId');
 
     // Tasks linkedVoteIds column
     addColumn('tasks', 'linkedVoteIds', 'TEXT');
+
+    // Tasks blockedSince column (EF prosthetic: tracks when task entered Blocked status)
+    addColumn('tasks', 'blockedSince', 'TEXT');
 
     // VoteLoops proposalId column (per-proposal loops)
     addColumn('voteLoops', 'proposalId', 'TEXT NOT NULL DEFAULT \'\'');
@@ -768,6 +775,7 @@ class SqliteClient implements DbClient {
       timer: row.timer ? JSON.parse(row.timer) : { startTime: null, elapsedTime: 0, isRunning: false },
       updatedAt: row.updatedAt ?? undefined,
       linkedVoteIds: row.linkedVoteIds ? JSON.parse(row.linkedVoteIds) : undefined,
+      blockedSince: row.blockedSince ?? undefined,
     }));
 
     return { data, total };
@@ -787,6 +795,7 @@ class SqliteClient implements DbClient {
       timer: row.timer ? JSON.parse(row.timer) : { startTime: null, elapsedTime: 0, isRunning: false },
       updatedAt: row.updatedAt ?? undefined,
       linkedVoteIds: row.linkedVoteIds ? JSON.parse(row.linkedVoteIds) : undefined,
+      blockedSince: row.blockedSince ?? undefined,
     };
   }
 
@@ -812,6 +821,7 @@ class SqliteClient implements DbClient {
       parentId: input.parentId || null,
       children: input.children || [],
       linkedVoteIds: input.linkedVoteIds || undefined,
+      blockedSince: input.blockedSince || null,
     };
 
     const params = {
@@ -834,11 +844,12 @@ class SqliteClient implements DbClient {
       priority: newTask.priority,
       userId: newTask.userId,
       linkedVoteIds: newTask.linkedVoteIds ? JSON.stringify(newTask.linkedVoteIds) : null,
+      blockedSince: newTask.blockedSince,
     };
 
     this.db.prepare(`
-      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget", "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId", "linkedVoteIds")
-      VALUES(@id, @parentId, @title, @createdAt, @updatedAt, @triageStatus, @urgent, @impact, @majorIncident, @sprintTarget, @difficulty, @timer, @category, @terminationDate, @comment, @durationInMinutes, @priority, @userId, @linkedVoteIds)
+      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget", "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId", "linkedVoteIds", "blockedSince")
+      VALUES(@id, @parentId, @title, @createdAt, @updatedAt, @triageStatus, @urgent, @impact, @majorIncident, @sprintTarget, @difficulty, @timer, @category, @terminationDate, @comment, @durationInMinutes, @priority, @userId, @linkedVoteIds, @blockedSince)
     `).run(params);
 
     return newTask;
@@ -871,6 +882,7 @@ class SqliteClient implements DbClient {
       priority: updated.priority,
       userId: updated.userId,
       linkedVoteIds: updated.linkedVoteIds ? JSON.stringify(updated.linkedVoteIds) : null,
+      blockedSince: updated.blockedSince,
     };
 
     this.db.prepare(`
@@ -891,7 +903,8 @@ class SqliteClient implements DbClient {
         "durationInMinutes" = @durationInMinutes,
         "priority" = @priority,
         "userId" = @userId,
-        "linkedVoteIds" = @linkedVoteIds
+        "linkedVoteIds" = @linkedVoteIds,
+        "blockedSince" = @blockedSince
       WHERE "id" = @id
         `).run(params);
 
@@ -958,8 +971,8 @@ class SqliteClient implements DbClient {
     }
 
     const insertStmt = this.db.prepare(`
-      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget", "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId")
-      VALUES(@id, @parentId, @title, @createdAt, @updatedAt, @triageStatus, @urgent, @impact, @majorIncident, @sprintTarget, @difficulty, @timer, @category, @terminationDate, @comment, @durationInMinutes, @priority, @userId)
+      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget", "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId", "blockedSince")
+      VALUES(@id, @parentId, @title, @createdAt, @updatedAt, @triageStatus, @urgent, @impact, @majorIncident, @sprintTarget, @difficulty, @timer, @category, @terminationDate, @comment, @durationInMinutes, @priority, @userId, @blockedSince)
       ON CONFLICT("id") DO UPDATE SET
       "parentId" = excluded."parentId",
         "title" = excluded."title",
@@ -976,7 +989,8 @@ class SqliteClient implements DbClient {
         "comment" = excluded."comment",
         "durationInMinutes" = excluded."durationInMinutes",
         "priority" = excluded."priority",
-        "userId" = excluded."userId"
+        "userId" = excluded."userId",
+        "blockedSince" = excluded."blockedSince"
           `);
 
     const checkFk = this.db.prepare('PRAGMA foreign_key_check');
@@ -1004,6 +1018,7 @@ class SqliteClient implements DbClient {
           durationInMinutes: task.durationInMinutes,
           priority: task.priority,
           userId: task.userId,
+          blockedSince: task.blockedSince ?? null,
         });
       }
 
@@ -1187,6 +1202,7 @@ class SqliteClient implements DbClient {
       pomodoroConfig: row.pomodoroConfig ? JSON.parse(row.pomodoroConfig) : DEFAULT_APP_SETTINGS.pomodoroConfig,
       focusModeConfig: row.focusModeConfig ? JSON.parse(row.focusModeConfig) : DEFAULT_APP_SETTINGS.focusModeConfig,
       travelerConfig: row.travelerConfig ? JSON.parse(row.travelerConfig) : DEFAULT_APP_SETTINGS.travelerConfig,
+      wipLimitPerUser: row.wipLimitPerUser ?? 5,
     };
   }
 
@@ -1201,11 +1217,12 @@ class SqliteClient implements DbClient {
       pomodoroConfig: JSON.stringify(updated.pomodoroConfig ?? DEFAULT_APP_SETTINGS.pomodoroConfig),
       focusModeConfig: JSON.stringify(updated.focusModeConfig ?? DEFAULT_APP_SETTINGS.focusModeConfig),
       travelerConfig: JSON.stringify(updated.travelerConfig ?? DEFAULT_APP_SETTINGS.travelerConfig),
+      wipLimitPerUser: updated.wipLimitPerUser ?? 5,
     };
 
     this.db.prepare(`
-      INSERT INTO "appSettings"("id", "splitTime", "userWorkloadPercentage", "weeksComputation", "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal", "hoursToBeDoneByDay", "vacationLimitMultiplier", "hourlyBalanceLimitUpper", "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region", "disabledModules", "pomodoroConfig", "focusModeConfig", "travelerConfig")
-      VALUES(@id, @splitTime, @userWorkloadPercentage, @weeksComputation, @highImpactTaskGoal, @failureRateGoal, @qliGoal, @newCapabilitiesGoal, @hoursToBeDoneByDay, @vacationLimitMultiplier, @hourlyBalanceLimitUpper, @hourlyBalanceLimitLower, @cardAgingBaseDays, @timezone, @country, @region, @disabledModules, @pomodoroConfig, @focusModeConfig, @travelerConfig)
+      INSERT INTO "appSettings"("id", "splitTime", "userWorkloadPercentage", "weeksComputation", "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal", "hoursToBeDoneByDay", "vacationLimitMultiplier", "hourlyBalanceLimitUpper", "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region", "disabledModules", "pomodoroConfig", "focusModeConfig", "travelerConfig", "wipLimitPerUser")
+      VALUES(@id, @splitTime, @userWorkloadPercentage, @weeksComputation, @highImpactTaskGoal, @failureRateGoal, @qliGoal, @newCapabilitiesGoal, @hoursToBeDoneByDay, @vacationLimitMultiplier, @hourlyBalanceLimitUpper, @hourlyBalanceLimitLower, @cardAgingBaseDays, @timezone, @country, @region, @disabledModules, @pomodoroConfig, @focusModeConfig, @travelerConfig, @wipLimitPerUser)
       ON CONFLICT("id") DO UPDATE SET
         "splitTime" = excluded."splitTime",
         "userWorkloadPercentage" = excluded."userWorkloadPercentage",
@@ -1225,7 +1242,8 @@ class SqliteClient implements DbClient {
         "disabledModules" = excluded."disabledModules",
         "pomodoroConfig" = excluded."pomodoroConfig",
         "focusModeConfig" = excluded."focusModeConfig",
-        "travelerConfig" = excluded."travelerConfig"
+        "travelerConfig" = excluded."travelerConfig",
+        "wipLimitPerUser" = excluded."wipLimitPerUser"
     `).run(params);
 
     return updated;
