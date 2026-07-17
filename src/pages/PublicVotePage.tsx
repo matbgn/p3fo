@@ -2,7 +2,7 @@ import * as React from "react";
 import { useParams } from "react-router-dom";
 import { VoteEntity, VoteResponseEntity, VoteProposal, VoteLoop } from "@/lib/persistence-types";
 import { VOTING_MODES_LABELS, MJ_SCALE } from "@/components/planView/constants";
-import { tallyThumbsUp as tallyThumbsUpShared, tallyUDNeutral as tallyUDNeutralShared, tallyPoints as tallyPointsShared, tallyMajorityJudgment as tallyMJShared, tallyConsentLoop as tallyConsentLoopShared } from "@/lib/vote-tally";
+import { tallyThumbsUp as tallyThumbsUpShared, tallyUDNeutral as tallyUDNeutralShared, tallyPoints as tallyPointsShared, tallyMajorityJudgment as tallyMJShared, tallyConsentLoop as tallyConsentLoopShared, getBestConsentRound } from "@/lib/vote-tally";
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import QRCodeBlock from "@/components/voting/QRCodeBlock";
 import { LoopRoundProposalTooltip } from "@/components/voting/LoopRoundProposalTooltip";
+import { LoopRoundDiffDialog } from "@/components/voting/LoopRoundDiffDialog";
 import { ProposalContentDisplay } from "@/components/voting/ProposalContentDisplay";
 import { yVoteProposals, yVoteLoops, yVoteResponses, isCollaborationEnabled, initializeCollaboration } from "@/lib/collaboration";
 import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
@@ -31,6 +32,8 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronUp,
+  ArrowDownWideNarrow,
+  ArrowUpDown,
   X,
 } from "lucide-react";
 
@@ -203,6 +206,12 @@ const PublicVotePage: React.FC = () => {
   const [pointsBudget, setPointsBudget] = React.useState<Record<string, number>>({});
   const [audienceProposalText, setAudienceProposalText] = React.useState("");
   const [showPrevRounds, setShowPrevRounds] = React.useState(false);
+
+  const [diffOpen, setDiffOpen] = React.useState(false);
+  const [diffProposalId, setDiffProposalId] = React.useState<string>("");
+
+  const [resultsSortMetric, setResultsSortMetric] = React.useState<"original" | "median" | "average">("original");
+  const [resultsSortDir, setResultsSortDir] = React.useState<"asc" | "desc">("desc");
 
   const [loops, setLoops] = React.useState<VoteLoop[]>([]);
 
@@ -491,6 +500,32 @@ const PublicVotePage: React.FC = () => {
     (v) => v <= objectionThreshold
   );
 
+  const sortedFinalProposals = React.useMemo((): VoteProposal[] => {
+    if (!vote || mode === "CONSENT_LOOP") return [];
+    const active = vote.proposals.filter((p) => p.active);
+    if (resultsSortMetric === "original" || active.length <= 1) return active;
+    const metricFor = (p: VoteProposal): number => {
+      if (mode === "THUMBS_UP") return tallyThumbsUpShared(responses, p.id).count;
+      if (mode === "THUMBS_UD_NEUTRAL") {
+        const t = tallyUDNeutralShared(responses, p.id);
+        return t.up - t.down;
+      }
+      if (mode === "POINTS") return tallyPointsShared(responses, p.id).total;
+      if (mode === "MAJORITY_JUDGMENT") {
+        const t = tallyMJShared(responses, p.id);
+        if (resultsSortMetric === "average") {
+          const total = MJ_SCALE.reduce((sum, g) => sum + (t.distribution[g.value] || 0) * g.value, 0);
+          const count = MJ_SCALE.reduce((sum, g) => sum + (t.distribution[g.value] || 0), 0);
+          return count > 0 ? total / count : 0;
+        }
+        return t.median;
+      }
+      return 0;
+    };
+    const sorted = [...active].sort((a, b) => metricFor(a) - metricFor(b));
+    return resultsSortDir === "desc" ? sorted.reverse() : sorted;
+  }, [vote, mode, responses, resultsSortMetric, resultsSortDir]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -527,6 +562,8 @@ const PublicVotePage: React.FC = () => {
 
   const tallyMJResult = (proposalId: string) =>
     tallyMJShared(responses, proposalId);
+
+  const canSortResults = mode !== "CONSENT_LOOP" && activeProposals.length > 1;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -630,7 +667,7 @@ const PublicVotePage: React.FC = () => {
           </div>
         )}
 
-        {mode !== "CONSENT_LOOP" && (
+        {mode !== "CONSENT_LOOP" && !isClosed && (
           <>
           <div className="space-y-4 mb-6">
             {activeProposals.map((proposal) => (
@@ -837,7 +874,7 @@ const PublicVotePage: React.FC = () => {
                   </div>
                 )}
 
-                {showResults && (
+                {showResults && !isClosed && (
                   <div className="mt-4 pt-3 border-t">
                      <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
                        {ts.labels.results}
@@ -951,7 +988,7 @@ const PublicVotePage: React.FC = () => {
           </>
         )}
 
-        {mode === "CONSENT_LOOP" && (() => {
+        {mode === "CONSENT_LOOP" && !isClosed && (() => {
           const allTally = tallyConsentLoopShared(loops, responses, activeProposals.map((p) => p.id));
 
           return (
@@ -1084,9 +1121,37 @@ const PublicVotePage: React.FC = () => {
                           return (
                             <div key={proposal.id} className="mb-4 last:mb-0">
                               {activeProposals.length > 1 && (
-                                <h5 className="text-xs font-medium text-gray-500 mb-1">
-                                  {proposal.description || `Proposal ${activeProposals.indexOf(proposal) + 1}`}
-                                </h5>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h5 className="text-xs font-medium text-gray-500">
+                                    {proposal.description || `Proposal ${activeProposals.indexOf(proposal) + 1}`}
+                                  </h5>
+                                  {[...loops].filter((l) => l.proposalId === proposal.id && l.closedAt).length >= 2 && (
+                                    <button
+                                      onClick={() => {
+                                        setDiffProposalId(proposal.id);
+                                        setDiffOpen(true);
+                                      }}
+                                      className="text-xs text-blue-500 hover:underline flex items-center gap-1"
+                                    >
+                                      <ChevronDown className="w-3 h-3 rotate-[-90deg]" />
+                                      {ts.labels.roundComparison}
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                              {activeProposals.length <= 1 && [...loops].filter((l) => l.proposalId === proposal.id && l.closedAt).length >= 2 && (
+                                <div className="flex items-center gap-2 mb-2">
+                                  <button
+                                    onClick={() => {
+                                      setDiffProposalId(proposal.id);
+                                      setDiffOpen(true);
+                                    }}
+                                    className="text-xs text-blue-500 hover:underline flex items-center gap-1"
+                                  >
+                                    <ChevronDown className="w-3 h-3 rotate-[-90deg]" />
+                                    {ts.labels.roundComparison}
+                                  </button>
+                                </div>
                               )}
                               <div className="overflow-x-auto">
                                 <table className="w-full text-sm border-collapse">
@@ -1288,10 +1353,39 @@ const PublicVotePage: React.FC = () => {
             </h3>
             {mode !== "CONSENT_LOOP" && (
               <div className="space-y-3">
-                {activeProposals.map((proposal) => (
+                {canSortResults && (
+                  <div className="flex items-center gap-2 flex-wrap pb-3 border-b">
+                    <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                      <ArrowUpDown className="w-3.5 h-3.5" />
+                      <span>{ts.labels.sortResults}:</span>
+                    </div>
+                    <select
+                      value={resultsSortMetric}
+                      onChange={(e) => setResultsSortMetric(e.target.value as typeof resultsSortMetric)}
+                      className="text-xs border rounded px-2 py-1 bg-white"
+                    >
+                      <option value="original">{ts.labels.sortByOriginal}</option>
+                      {(mode === "MAJORITY_JUDGMENT") && (
+                        <option value="median">{ts.labels.sortByMedian}</option>
+                      )}
+                      <option value="average">{ts.labels.sortByAverage}</option>
+                    </select>
+                    {resultsSortMetric !== "original" && (
+                      <button
+                        onClick={() => setResultsSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+                        className="text-xs border rounded px-2 py-1 bg-white hover:bg-gray-50 flex items-center gap-1"
+                        title={resultsSortDir === "asc" ? ts.labels.sortAscending : ts.labels.sortDescending}
+                      >
+                        <ArrowDownWideNarrow className={`w-3.5 h-3.5 transition-transform ${resultsSortDir === "asc" ? "rotate-180" : ""}`} />
+                        {resultsSortDir === "asc" ? ts.labels.sortAscending : ts.labels.sortDescending}
+                      </button>
+                    )}
+                  </div>
+                )}
+                {sortedFinalProposals.map((proposal) => (
                   <div key={proposal.id} className="border rounded-lg p-3">
                     <h4 className="text-sm font-medium text-gray-900 mb-2">
-                      Proposal {proposal.position + 1}
+                      {proposal.description?.trim() || `Proposal ${proposal.position + 1}`}
                     </h4>
                     {proposal.content && <ProposalContentDisplay content={proposal.content} className="mb-2" />}
                     {mode === "THUMBS_UP" && (() => {
@@ -1389,6 +1483,144 @@ const PublicVotePage: React.FC = () => {
                 ))}
               </div>
             )}
+            {mode === "CONSENT_LOOP" && (() => {
+              const allTally = tallyConsentLoopShared(loops, responses, activeProposals.map((p) => p.id));
+              const anyAdopted = allTally.proposals.some((p) => {
+                const best = getBestConsentRound(p);
+                return best?.adopted;
+              });
+              return (
+                <div className="space-y-3">
+                  <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
+                    {ts.messages.consentLoopFinalOutcome}
+                  </h4>
+                  {!anyAdopted && (
+                    <p className="text-sm text-gray-500 italic">
+                      {ts.messages.consentLoopNoAdoptedRound}
+                    </p>
+                  )}
+                  {activeProposals.map((proposal) => {
+                    const proposalTally = allTally.proposals.find((p) => p.proposalId === proposal.id);
+                    if (!proposalTally) return null;
+                    const best = getBestConsentRound(proposalTally);
+                    if (!best) return null;
+                    const outcomeLoopId = vote.outcome?.winningLoopId;
+                    const selectedRound = outcomeLoopId
+                      ? proposalTally.perRound.find((r) => r.loopId === outcomeLoopId) ?? best
+                      : best;
+                    const isManualOverride = !!outcomeLoopId && outcomeLoopId !== best.loopId;
+                    const medianGrade = MJ_SCALE.find((g) => g.value === selectedRound.median);
+                    const totalVotes = MJ_SCALE.reduce(
+                      (sum, g) => sum + (selectedRound.distribution[g.value] || 0),
+                      0
+                    );
+                    const bestLoop = loopById.get(selectedRound.loopId);
+                    const proposalContent = bestLoop?.proposalContent || proposal.content;
+                    const segments = MJ_SCALE
+                      .map((g) => ({
+                        ...g,
+                        count: selectedRound.distribution[g.value] || 0,
+                        percentage: totalVotes > 0 ? ((selectedRound.distribution[g.value] || 0) / totalVotes) * 100 : 0,
+                      }))
+                      .filter((d) => d.count > 0);
+                    return (
+                      <div
+                        key={proposal.id}
+                        className={`border rounded-lg p-3 ${
+                          selectedRound.adopted ? "border-green-500 bg-green-50" : "bg-white"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-medium text-gray-900">
+                              {proposal.description?.trim() || `Proposal ${proposal.position + 1}`}
+                            </h4>
+                            {loops.filter((l) => l.proposalId === proposal.id && l.closedAt).length >= 2 && (
+                              <button
+                                onClick={() => {
+                                  setDiffProposalId(proposal.id);
+                                  setDiffOpen(true);
+                                }}
+                                className="text-xs text-blue-500 hover:underline flex items-center gap-1"
+                              >
+                                <ChevronDown className="w-3 h-3 rotate-[-90deg]" />
+                                {ts.labels.roundComparison}
+                              </button>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-500">
+                              {ts.labels.round} {selectedRound.roundNumber}
+                              {isManualOverride && (
+                                <span className="ml-1 text-blue-500">({ts.messages.consentLoopBestRound}: {ts.labels.round} {best.roundNumber})</span>
+                              )}
+                            </span>
+                            {selectedRound.adopted ? (
+                              <span className="inline-block px-2 py-0.5 rounded text-xs text-white bg-green-600">
+                                {ts.messages.consentLoopAdopted.split("\u2014")[0].trim()}
+                              </span>
+                            ) : (
+                              <span className="inline-block px-2 py-0.5 rounded text-xs text-white bg-gray-400">
+                                {ts.messages.consentLoopBlocked.split("\u2014")[0].trim()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {proposalContent && (
+                          <div className="mb-2 p-2 bg-gray-50 rounded border">
+                            <ProposalContentDisplay content={proposalContent} />
+                          </div>
+                        )}
+                        {totalVotes > 0 ? (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-600">{ts.labels.medianColon}</span>
+                              {medianGrade && (
+                                <span className={`px-2 py-0.5 rounded text-xs text-white ${medianGrade.color}`}>
+                                  {medianGrade.icon} {medianGrade.label}
+                                </span>
+                              )}
+                              <span className="text-xs text-gray-500">
+                                ({totalVotes} {totalVotes !== 1 ? ts.labels.voters : ts.labels.voter})
+                              </span>
+                            </div>
+                            <div className="relative w-full h-6 flex rounded overflow-hidden bg-gray-100">
+                              {segments.map((item, index) => {
+                                const isMedian = item.value === selectedRound.median;
+                                const isFirst = index === 0;
+                                const isLast = index === segments.length - 1;
+                                return (
+                                  <div
+                                    key={item.value}
+                                    className={`h-full flex items-center justify-center relative ${item.color} ${
+                                      isFirst ? "rounded-l" : ""
+                                    } ${isLast ? "rounded-r" : ""} ${
+                                      isMedian ? "ring-2 ring-white z-20 shadow-md scale-y-125 mx-0.5 rounded-sm origin-center" : ""
+                                    }`}
+                                    style={{ width: `${item.percentage}%` }}
+                                    title={`${item.label}: ${item.count} votes (${item.percentage.toFixed(1)}%)`}
+                                  >
+                                    {item.percentage >= 10 && (
+                                      <span className={`text-[10px] font-bold ${
+                                        [1, 2].includes(item.value) ? "text-black" : "text-white"
+                                      } drop-shadow-md`}>
+                                        {item.percentage.toFixed(1)}%
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-400 italic">{ts.messages.noVotesYet}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
             {!isAnonymous && responses.length > 0 && (
               <div className="mt-4 pt-3 border-t">
                 <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
@@ -1424,6 +1656,19 @@ const PublicVotePage: React.FC = () => {
           {ts.messages.poweredBy}
         </p>
       </div>
+
+      {mode === "CONSENT_LOOP" && (
+        <LoopRoundDiffDialog
+          open={diffOpen}
+          onOpenChange={setDiffOpen}
+          loops={loops}
+          proposalId={diffProposalId}
+          proposalLabel={
+            activeProposals.find((p) => p.id === diffProposalId)?.description?.trim()
+            || (diffProposalId ? `Proposal ${(activeProposals.find((p) => p.id === diffProposalId)?.position ?? 0) + 1}` : undefined)
+          }
+        />
+      )}
     </div>
   );
 };

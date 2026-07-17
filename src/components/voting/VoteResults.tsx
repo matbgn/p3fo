@@ -3,7 +3,7 @@ import { VoteEntity, VoteLoop } from "@/lib/persistence-types";
 import { VOTING_MODES_LABELS, MJ_SCALE } from "@/components/planView/constants";
 import { useVoteResults } from "@/hooks/useVotes";
 import { useVoteLoops } from "@/hooks/useVoteLoops";
-import { tallyThumbsUp, tallyUDNeutral, tallyPoints, tallyMajorityJudgment, tallyConsentLoop } from "@/lib/vote-tally";
+import { tallyThumbsUp, tallyUDNeutral, tallyPoints, tallyMajorityJudgment, tallyConsentLoop, getBestConsentRound } from "@/lib/vote-tally";
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { Badge } from "@/components/ui/badge";
 import { BarChart3, Users, MessageSquare, Trophy } from "lucide-react";
@@ -41,6 +41,8 @@ const ConsentLoopResults: React.FC<{ vote: VoteEntity }> = ({ vote }) => {
     return <p className="text-sm text-gray-400 italic">{t.messages.noRoundsYet}</p>;
   }
 
+  const isVoteClosed = vote.config.phase === "CLOSED" || vote.config.phase === "FINALIZED";
+
   return (
     <div className="space-y-4">
       {activeProposals.map((proposal, idx) => {
@@ -50,19 +52,30 @@ const ConsentLoopResults: React.FC<{ vote: VoteEntity }> = ({ vote }) => {
         const openLoop = loops.find((l) => l.proposalId === proposal.id && !l.closedAt);
         const closedRounds = proposalTally.perRound.filter((r) => r.closed);
         const lastClosedRound = closedRounds.length > 0 ? closedRounds[closedRounds.length - 1] : null;
+        const autoBest = isVoteClosed ? getBestConsentRound(proposalTally) : null;
+        const outcomeLoopId = vote.outcome?.winningLoopId;
+        const bestRound = isVoteClosed
+          ? (outcomeLoopId ? proposalTally.perRound.find((r) => r.loopId === outcomeLoopId) ?? autoBest : autoBest)
+          : null;
 
-        const displayRound = openLoop
-          ? (proposalTally.current ?? lastClosedRound ?? proposalTally.perRound[proposalTally.perRound.length - 1])
-          : (lastClosedRound ?? proposalTally.perRound[proposalTally.perRound.length - 1]);
+        const displayRound = isVoteClosed
+          ? (bestRound ?? lastClosedRound ?? proposalTally.perRound[proposalTally.perRound.length - 1])
+          : openLoop
+            ? (proposalTally.current ?? lastClosedRound ?? proposalTally.perRound[proposalTally.perRound.length - 1])
+            : (lastClosedRound ?? proposalTally.perRound[proposalTally.perRound.length - 1]);
 
         if (!displayRound) return null;
 
-        const isAdopted = lastClosedRound?.adopted ?? false;
-        const isOpen = !!openLoop;
-        const roundNumber = openLoop
-          ? proposalTally.perRound.find((r) => r.loopId === openLoop.id)?.roundNumber
-            ?? proposalTally.perRound.length
-          : lastClosedRound?.roundNumber ?? proposalTally.perRound.length;
+        const isAdopted = isVoteClosed
+          ? (bestRound?.adopted ?? false)
+          : (lastClosedRound?.adopted ?? false);
+        const isOpen = !isVoteClosed && !!openLoop;
+        const roundNumber = isVoteClosed
+          ? bestRound?.roundNumber ?? lastClosedRound?.roundNumber ?? proposalTally.perRound.length
+          : openLoop
+            ? proposalTally.perRound.find((r) => r.loopId === openLoop.id)?.roundNumber
+              ?? proposalTally.perRound.length
+            : lastClosedRound?.roundNumber ?? proposalTally.perRound.length;
         const totalVotes = MJ_SCALE.reduce(
           (sum, grade) => sum + (displayRound.distribution[grade.value] || 0),
           0
@@ -79,7 +92,9 @@ const ConsentLoopResults: React.FC<{ vote: VoteEntity }> = ({ vote }) => {
           }))
           .filter((d) => d.count > 0);
 
-        const lastLoop = openLoop || (lastClosedRound ? loops.find((l) => l.id === lastClosedRound.loopId) : undefined);
+        const lastLoop = openLoop
+          || (bestRound ? loops.find((l) => l.id === bestRound.loopId) : undefined)
+          || (lastClosedRound ? loops.find((l) => l.id === lastClosedRound.loopId) : undefined);
         const proposalContent = lastLoop?.proposalContent || proposal.content;
 
         return (

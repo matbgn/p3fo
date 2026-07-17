@@ -342,6 +342,7 @@ export interface VoteEntity {
   config: VoteConfig;
   outcome?: {
     winningProposalId: string | null;
+    winningLoopId?: string | null;
     summary: string;
     finalizedAt: string;
     finalizedByUserId: string;

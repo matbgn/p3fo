@@ -91,17 +91,30 @@ export const useVoteLoops = (voteId: string) => {
 
     if (isCollaborationEnabled()) {
       yVoteLoops.observe(yjsHandler);
+      const eventHandler = () => {
+        if (!mounted) return;
+        loadLoops();
+      };
+      eventBus.subscribe("voteLoopsChanged", eventHandler);
       return () => {
         mounted = false;
         yVoteLoops.unobserve(yjsHandler);
+        eventBus.unsubscribe("voteLoopsChanged", eventHandler);
       };
     }
 
     const interval = setInterval(initialFetch, 5000);
+    const eventHandler = () => {
+      if (!mounted) return;
+      loadLoops();
+    };
+    eventBus.subscribe("voteLoopsChanged", eventHandler);
     return () => {
       mounted = false;
       clearInterval(interval);
+      eventBus.unsubscribe("voteLoopsChanged", eventHandler);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voteId]);
 
   const openRound = async (
@@ -124,6 +137,7 @@ export const useVoteLoops = (voteId: string) => {
       });
       setLoops((prev) => [...prev, loop]);
       syncLoopToYjs(loop);
+      eventBus.publish("voteLoopsChanged");
       return loop;
     } catch (error) {
       console.error("Error opening round:", error);
@@ -138,6 +152,7 @@ export const useVoteLoops = (voteId: string) => {
       if (updated) {
         setLoops((prev) => prev.map((l) => (l.id === loopId ? updated : l)));
         syncLoopToYjs(updated);
+        eventBus.publish("voteLoopsChanged");
       }
       return updated;
     } catch (error) {
@@ -158,6 +173,7 @@ export const useVoteLoops = (voteId: string) => {
       if (updated) {
         setLoops((prev) => prev.map((l) => (l.id === loopId ? updated : l)));
         syncLoopToYjs(updated);
+        eventBus.publish("voteLoopsChanged");
       }
       return updated;
     } catch (error) {

@@ -2,7 +2,7 @@ import * as React from "react";
 import { useParams } from "react-router-dom";
 import { useModeratorToken } from "@/hooks/useVoteModerators";
 import { useVoteLoops } from "@/hooks/useVoteLoops";
-import { useVoteResults } from "@/hooks/useVotes";
+import { useVoteResults, syncVoteToYjs } from "@/hooks/useVotes";
 import { VoteEntity } from "@/lib/persistence-types";
 import { getPersistenceAdapter } from "@/lib/persistence-factory";
 import { VOTING_MODES_LABELS, MJ_SCALE } from "@/components/planView/constants";
@@ -62,6 +62,8 @@ const LoopPanel: React.FC<{
         p.id === proposalId ? { ...p, content } : p
       );
       await adapter.updateVote(vote.id, { proposals: updatedProposals });
+      const updatedVote = { ...sourceVote, proposals: updatedProposals };
+      syncVoteToYjs(vote.id, updatedVote);
       setSavedDrafts((prev) => ({ ...prev, [proposalId]: content }));
       setDraftChanges((prev) => {
         const next = { ...prev };
@@ -115,6 +117,8 @@ const LoopPanel: React.FC<{
         p.id === loop.proposalId ? { ...p, content: updated.proposalContent || p.content } : p
       );
       await adapter.updateVote(vote.id, { proposals: updatedProposals });
+      const updatedVote = { ...vote, proposals: updatedProposals };
+      syncVoteToYjs(vote.id, updatedVote);
     }
   };
 

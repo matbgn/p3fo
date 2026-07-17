@@ -107,7 +107,7 @@ export const ProposalEditor = React.forwardRef<ProposalEditorHandle, ProposalEdi
               </div>
             )}
             <span className="text-sm font-medium text-gray-700">
-              Proposal {index + 1}
+              {proposal.description?.trim() || `Proposal ${index + 1}`}
             </span>
             {!readOnly && proposals.length > 1 && (
               <button

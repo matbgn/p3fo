@@ -2,7 +2,7 @@ import * as React from "react";
 import { eventBus } from "@/lib/events";
 import { VoteEntity, VoteResponseEntity, VoteKind } from "@/lib/persistence-types";
 import { getPersistenceAdapter } from "@/lib/persistence-factory";
-import { yVoteProposals, yVoteResponses, initializeCollaboration, isCollaborationEnabled, doc } from "@/lib/collaboration";
+import { yVoteProposals, yVoteResponses, yVoteLoops, initializeCollaboration, isCollaborationEnabled, doc } from "@/lib/collaboration";
 import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
 
 let votes: VoteEntity[] = [];
@@ -23,7 +23,7 @@ const parseYjsResponseValue = (v: unknown): VoteResponseEntity | null => {
   return JSON.parse(JSON.stringify(v)) as VoteResponseEntity;
 };
 
-const syncVoteToYjs = (id: string, vote: VoteEntity) => {
+export const syncVoteToYjs = (id: string, vote: VoteEntity) => {
   if (isCollaborationEnabled()) {
     yVoteProposals.set(id, vote);
   }
@@ -64,6 +64,31 @@ const syncResponseToYjs = (response: VoteResponseEntity) => {
   if (isCollaborationEnabled()) {
     yVoteResponses.set(response.id, response);
   }
+};
+
+const clearVoteChildrenFromYjs = (voteId: string) => {
+  if (!isCollaborationEnabled()) return;
+  doc.transact(() => {
+    const responseKeysToDelete: string[] = [];
+    yVoteResponses.forEach((v, k) => {
+      const parsed = parseYjsResponseValue(v);
+      if (parsed && parsed.voteId === voteId) responseKeysToDelete.push(k as string);
+    });
+    responseKeysToDelete.forEach(k => yVoteResponses.delete(k));
+
+    const loopKeysToDelete: string[] = [];
+    yVoteLoops.forEach((v, k) => {
+      const raw = v as { toJSON?: () => unknown } | null;
+      let parsed: { voteId?: string } | null = null;
+      if (raw && typeof raw === "object" && "toJSON" in raw) {
+        parsed = (raw as { toJSON: () => { voteId?: string } }).toJSON();
+      } else if (raw) {
+        try { parsed = JSON.parse(JSON.stringify(raw)) as { voteId?: string }; } catch { /* ignore */ }
+      }
+      if (parsed && parsed.voteId === voteId) loopKeysToDelete.push(k as string);
+    });
+    loopKeysToDelete.forEach(k => yVoteLoops.delete(k));
+  });
 };
 
 if (isCollaborationEnabled()) {
@@ -180,7 +205,10 @@ const resetVote = async (id: string): Promise<VoteEntity | null> => {
     if (updated) {
       votes = votes.map(v => v.id === id ? updated : v);
       syncVoteToYjs(id, updated);
+      clearVoteChildrenFromYjs(id);
       eventBus.publish("votesChanged");
+      eventBus.publish("voteLoopsChanged");
+      eventBus.publish("voteResponsesChanged");
     }
     return updated;
   } catch (error) {
@@ -298,17 +326,30 @@ export const useVoteResults = (voteId: string) => {
 
     if (isCollaborationEnabled()) {
       yVoteResponses.observe(yjsHandler);
+      const eventHandler = () => {
+        if (!mounted) return;
+        fetchResults();
+      };
+      eventBus.subscribe("voteResponsesChanged", eventHandler);
       return () => {
         mounted = false;
         yVoteResponses.unobserve(yjsHandler);
+        eventBus.unsubscribe("voteResponsesChanged", eventHandler);
       };
     }
 
     const interval = setInterval(initialFetch, 5000);
+    const eventHandler = () => {
+      if (!mounted) return;
+      fetchResults();
+    };
+    eventBus.subscribe("voteResponsesChanged", eventHandler);
     return () => {
       mounted = false;
       clearInterval(interval);
+      eventBus.unsubscribe("voteResponsesChanged", eventHandler);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voteId]);
 
   return { responses, isLoading, refetch: fetchResults };

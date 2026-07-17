@@ -102,6 +102,12 @@ type VotingStrings = {
     status: string;
     points: string;
     medianColon: string;
+    sortResults: string;
+    sortByOriginal: string;
+    sortByMedian: string;
+    sortByAverage: string;
+    sortAscending: string;
+    sortDescending: string;
   };
   messages: {
     loading: string;
@@ -141,6 +147,11 @@ type VotingStrings = {
     consentLoopWithdrawn: string;
     consentLoopBlocked: string;
     tieNoDecision: string;
+    consentLoopFinalOutcome: string;
+    consentLoopNoAdoptedRound: string;
+    consentLoopBestRound: string;
+    selectWinningRound: string;
+    roundAuto: string;
     allocatePointsBudget: string;
     resetConfirm: string;
     resetWarning: string;
@@ -311,6 +322,12 @@ const en: VotingStrings = {
     status: "Status",
     points: "points",
     medianColon: "Median:",
+    sortResults: "Sort results",
+    sortByOriginal: "Original order",
+    sortByMedian: "Majority Mention (median)",
+    sortByAverage: "Average",
+    sortAscending: "Ascending",
+    sortDescending: "Descending",
   },
   messages: {
     loading: "Loading...",
@@ -350,6 +367,11 @@ const en: VotingStrings = {
     consentLoopWithdrawn: "Withdrawn — the proposer pulled the proposal",
     consentLoopBlocked: "Blocked — objection(s) could not be integrated",
     tieNoDecision: "Tie — no decision reached",
+    consentLoopFinalOutcome: "Consent Loop Outcome",
+    consentLoopNoAdoptedRound: "No round was adopted — objections remained throughout.",
+    consentLoopBestRound: "Best adopted round",
+    selectWinningRound: "Select the round to use as the final result",
+    roundAuto: "Auto (best adopted round)",
     allocatePointsBudget: "Allocate points across proposals, then submit all at once.",
     resetConfirm: "Reset this vote? All responses and loop rounds will be permanently deleted.",
     resetWarning: "This will delete all votes and rounds, and revert the vote to Draft. This cannot be undone.",
@@ -520,6 +542,12 @@ const fr: VotingStrings = {
     status: "Statut",
     points: "points",
     medianColon: "M\u00e9diane\u00a0:",
+    sortResults: "Trier les r\u00e9sultats",
+    sortByOriginal: "Ordre original",
+    sortByMedian: "Mention majoritaire (m\u00e9diane)",
+    sortByAverage: "Moyenne",
+    sortAscending: "Croissant",
+    sortDescending: "D\u00e9croissant",
   },
   messages: {
     loading: "Chargement...",
@@ -559,6 +587,11 @@ const fr: VotingStrings = {
     consentLoopWithdrawn: "Retir\u00e9 \u2014 le proposeur a retir\u00e9 la proposition",
     consentLoopBlocked: "Bloqu\u00e9 \u2014 des objections n'ont pas pu \u00eatre int\u00e9gr\u00e9es",
     tieNoDecision: "\u00c9galit\u00e9 \u2014 aucune d\u00e9cision atteinte",
+    consentLoopFinalOutcome: "R\u00e9sultat du Consent Loop",
+    consentLoopNoAdoptedRound: "Aucun tour adopt\u00e9 \u2014 des objections sont rest\u00e9es jusqu'au bout.",
+    consentLoopBestRound: "Meilleur tour adopt\u00e9",
+    selectWinningRound: "S\u00e9lectionnez le tour \u00e0 utiliser comme r\u00e9sultat final",
+    roundAuto: "Auto (meilleur tour adopt\u00e9)",
     allocatePointsBudget: "R\u00e9partissez les points entre les propositions, puis soumettez-les tous en une fois.",
     resetConfirm: "R\u00e9initialiser ce vote\u00a0? Toutes les r\u00e9ponses et les tours seront d\u00e9finitivement supprim\u00e9s.",
     resetWarning: "Cela supprimera tous les votes et les tours, et r\u00e9tablira le vote en Brouillon. Cette action est irr\u00e9versible.",
