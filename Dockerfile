@@ -1,8 +1,11 @@
 # Stage 1: Build the application
 FROM node:26-slim AS build
 
+# VITE_* vars are inlined at build time — they must be ARGs, not runtime ENVs.
 ARG VITE_BASE_URL=/
+ARG VITE_OTEL_ENABLED=true
 ENV VITE_BASE_URL=$VITE_BASE_URL
+ENV VITE_OTEL_ENABLED=$VITE_OTEL_ENABLED
 
 WORKDIR /app
 

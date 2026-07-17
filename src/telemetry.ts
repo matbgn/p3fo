@@ -1,64 +1,66 @@
 // src/telemetry.ts
-// Initialize OpenTelemetry for the browser
-// Must be imported BEFORE React is rendered
+// Public API for OpenTelemetry instrumentation.
+//
+// IMPORTANT: This module must stay LIGHTWEIGHT — it is imported synchronously
+// by main.tsx, App.tsx, TaskBoard.tsx, and (transitively) collaboration.ts
+// before React's first paint. The heavy @opentelemetry/* SDK is loaded
+// lazily ONLY when VITE_OTEL_ENABLED === 'true', and even then deferred until
+// after first paint via requestIdleCallback.
+//
+// When telemetry is disabled (the production default), every export here is a
+// zero-cost no-op so the critical render path is unaffected.
 
-import { WebTracerProvider, BatchSpanProcessor } from '@opentelemetry/sdk-trace-web';
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
-import { ZoneContextManager } from '@opentelemetry/context-zone';
-import { registerInstrumentations } from '@opentelemetry/instrumentation';
-import { getWebAutoInstrumentations } from '@opentelemetry/auto-instrumentations-web';
-import { Resource, resourceFromAttributes } from '@opentelemetry/resources';
-import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
 import type { Tracer } from '@opentelemetry/api';
 
-const exporter = new OTLPTraceExporter({
-  url: '/v1/traces',
-});
+/** Whether the OTel SDK should be loaded at all. */
+export const isOtelEnabled: boolean =
+  import.meta.env.VITE_OTEL_ENABLED === 'true';
 
-declare const __APP_VERSION__: string;
+// ── No-op stubs (used when disabled, or before the real SDK loads) ──────────
 
-const provider = new WebTracerProvider({
-  spanProcessors: [new BatchSpanProcessor(exporter)],
-  resource: resourceFromAttributes({
-    [SemanticResourceAttributes.SERVICE_NAME]: 'p3fo-frontend',
-    [SemanticResourceAttributes.SERVICE_VERSION]: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0',
-  }),
-});
+interface NoopSpan {
+  end: (_timestamp?: unknown) => void;
+  setStatus: (_status: unknown) => void;
+  recordException: (_exception: unknown) => void;
+  addEvent: (_name: string, _attributes?: unknown) => void;
+  setAttributes: (_attrs: unknown) => void;
+}
 
-provider.register({
-  contextManager: new ZoneContextManager(),
-});
+const noopSpan: NoopSpan = {
+  end: () => {},
+  setStatus: () => {},
+  recordException: () => {},
+  addEvent: () => {},
+  setAttributes: () => {},
+};
 
-registerInstrumentations({
-  instrumentations: getWebAutoInstrumentations({
-    '@opentelemetry/instrumentation-document-load': {
-      enabled: false,
-    },
-    '@opentelemetry/instrumentation-fetch': {
-      propagateTraceHeaderCorsUrls: [
-        /^http:\/\/localhost:\d+\/api/,
-      ],
-    },
-    '@opentelemetry/instrumentation-xml-http-request': {
-      propagateTraceHeaderCorsUrls: [
-        /^http:\/\/localhost:\d+\/api/,
-      ],
-    },
-    '@opentelemetry/instrumentation-user-interaction': {
-      enabled: false,
-    },
-  }),
-});
+const noopTracer: Tracer = {
+  startSpan: () => noopSpan as never,
+} as unknown as Tracer;
 
-console.log('[Telemetry] OpenTelemetry WebTracerProvider initialized');
+// ── Live exports ────────────────────────────────────────────────────────────
+// `export let` gives us live ES-module bindings so consumers (yjs-telemetry.ts)
+// pick up the real tracer once the SDK finishes loading.
 
-/** ── React Render Instrumentation ─────────────────────────────────── */
+export let tracer: Tracer = noopTracer;
+export let provider: unknown = null;
 
-const tracerName = 'p3fo-frontend-react-renderer';
-const tracer: Tracer = provider.getTracer(tracerName);
+// The real profiler callback, swapped in once the SDK loads.
+let realProfilerCallback:
+  | ((
+      id: string,
+      phase: 'mount' | 'update',
+      actualDuration: number,
+      baseDuration: number,
+      startTime: number,
+      commitTime: number,
+    ) => void)
+  | null = null;
 
-/** Hook a React Profiler callback so each component render becomes a span.
- *  Usage: <Profiler id="MyComponent" onRender={otelProfilerCallback}>
+/**
+ * React Profiler callback — no-op when telemetry is disabled or before the
+ * SDK has finished loading. Usage:
+ *   <Profiler id="MyComponent" onRender={otelProfilerCallback}>
  */
 export function otelProfilerCallback(
   id: string,
@@ -67,57 +69,32 @@ export function otelProfilerCallback(
   baseDuration: number,
   startTime: number,
   commitTime: number,
-) {
+): void {
   if (actualDuration < 16) return; // skip renders faster than 1 frame at 60fps
-
-  // React Profiler startTime / commitTime are DOMHighResTimeStamps
-  // (ms since navigation start). Convert to real wall-clock timestamps.
-  const timeOrigin = typeof performance !== 'undefined' ? (performance.timeOrigin || Date.now() - performance.now()) : Date.now();
-  const wallStartMs = timeOrigin + startTime;
-  const wallEndMs = timeOrigin + commitTime;
-
-  const span = tracer.startSpan(`react.render: ${id}`, {
-    attributes: {
-      'react.phase': phase,
-      'react.actual_duration_ms': actualDuration,
-      'react.base_duration_ms': baseDuration,
-      'react.start_time': startTime,
-      'react.commit_time': commitTime,
-      'react.render_overhead_ms': Math.max(0, baseDuration - actualDuration),
-    },
-    startTime: new Date(wallStartMs),
-  });
-  span.end(new Date(wallEndMs));
+  if (realProfilerCallback) {
+    realProfilerCallback(id, phase, actualDuration, baseDuration, startTime, commitTime);
+  }
 }
 
-export { tracer, provider };
+// ── Lazy SDK initialisation ─────────────────────────────────────────────────
 
-/** ── LongTask Observer ────────────────────────────────────────────── */
+if (isOtelEnabled && typeof window !== 'undefined') {
+  const loadOtel = () => {
+    import('./otel-init')
+      .then((mod) => {
+        tracer = mod.tracer;
+        provider = mod.provider;
+        realProfilerCallback = mod.otelProfilerCallback;
+      })
+      .catch((err) => {
+        console.warn('[Telemetry] Failed to load OpenTelemetry SDK:', err);
+      });
+  };
 
-if (typeof window !== 'undefined' && 'PerformanceObserver' in window) {
-  try {
-    const ltOrigin = typeof performance !== 'undefined' ? (performance.timeOrigin || Date.now() - performance.now()) : Date.now();
-    const observer = new PerformanceObserver((list) => {
-      for (const entry of list.getEntries()) {
-        const wallMs = ltOrigin + entry.startTime;
-        tracer.startSpan('browser.long_task', {
-          attributes: {
-            'longtask.duration': entry.duration,
-            'longtask.start_time': entry.startTime,
-          },
-          startTime: new Date(wallMs),
-        }).end(new Date(wallMs + entry.duration));
-      }
-    });
-    // Fallback to first-available entryType
-    const entryTypes = ['longtask'] as const;
-    const supported = PerformanceObserver.supportedEntryTypes ?? [];
-    const type = entryTypes.find((t) => supported.includes(t));
-    if (type) {
-      observer.observe({ entryTypes: [type], buffered: true });
-      console.log('[Telemetry] LongTask observer attached');
-    }
-  } catch (e) {
-    console.warn('[Telemetry] Failed to attach LongTask observer:', e);
+  // Defer until the browser is idle so first paint is never blocked.
+  if ('requestIdleCallback' in window) {
+    (window as unknown as { requestIdleCallback: (cb: () => void) => void }).requestIdleCallback(loadOtel);
+  } else {
+    setTimeout(loadOtel, 2000);
   }
 }

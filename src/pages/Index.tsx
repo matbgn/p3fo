@@ -1,8 +1,8 @@
 import React, { Suspense, useEffect, useState, useCallback } from "react";
-import TaskBoard from "@/components/TaskBoard";
-import KanbanBoard from "@/components/KanbanBoard";
+const TaskBoard = React.lazy(() => import("@/components/TaskBoard"));
+const KanbanBoard = React.lazy(() => import("@/components/KanbanBoard"));
 import { ViewSwitcher } from "@/components/ViewSwitcher";
-import { Timetable } from "@/components/Timetable";
+const Timetable = React.lazy(() => import("@/components/Timetable").then(m => ({ default: m.Timetable })));
 const ProgramTopView = React.lazy(() => import("@/components/ProgramTopView"));
 import SettingsPage from "./SettingsPage";
 const MetricsPage = React.lazy(() => import("./MetricsPage"));
@@ -141,9 +141,9 @@ const Index: React.FC = () => {
 
   // Memoize each view element so switching tabs doesn't reconcile them.
   // Each element is re-created only when its own dependencies change, not when `view` changes.
-  const focusView = React.useMemo(() => <TaskBoard focusedTaskId={focusedTaskId} onFocusOnTask={handleFocusOnTask} />, [focusedTaskId, handleFocusOnTask]);
-  const kanbanView = React.useMemo(() => <KanbanBoard onFocusOnTask={handleFocusOnTask} highlightedTaskId={focusedTaskId} />, [handleFocusOnTask, focusedTaskId]);
-  const timetableView = React.useMemo(() => <Timetable onJumpToTask={handleFocusOnTask} />, [handleFocusOnTask]);
+  const focusView = React.useMemo(() => <LazyWrapper><TaskBoard focusedTaskId={focusedTaskId} onFocusOnTask={handleFocusOnTask} /></LazyWrapper>, [focusedTaskId, handleFocusOnTask]);
+  const kanbanView = React.useMemo(() => <LazyWrapper><KanbanBoard onFocusOnTask={handleFocusOnTask} highlightedTaskId={focusedTaskId} /></LazyWrapper>, [handleFocusOnTask, focusedTaskId]);
+  const timetableView = React.useMemo(() => <LazyWrapper><Timetable onJumpToTask={handleFocusOnTask} /></LazyWrapper>, [handleFocusOnTask]);
   const programView = React.useMemo(() => <LazyWrapper><ProgramTopView onFocusOnTask={handleFocusOnTask} /></LazyWrapper>, [handleFocusOnTask]);
   const planView = React.useMemo(() => <LazyWrapper><PlanView onFocusOnTask={handleFocusOnTask} /></LazyWrapper>, [handleFocusOnTask]);
   const celebrationView = React.useMemo(() => <LazyWrapper><CelebrationView onFocusOnTask={handleFocusOnTask} /></LazyWrapper>, [handleFocusOnTask]);
