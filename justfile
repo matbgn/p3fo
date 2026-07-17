@@ -43,6 +43,8 @@ tests:
 check:
   @echo "Running TypeScript type check..."
   npx tsc -b --noEmit
+  @echo "Running mcp-server TypeScript type check..."
+  pnpm exec tsc -p mcp-server/tsconfig.json --noEmit
   @echo "Running ESLint..."
   npx eslint --max-warnings 0
   just check-node-versions
@@ -217,6 +219,8 @@ build:
   @echo "Building {{PROJECT_NAME}} frontend and backend..."
   pnpm build
   pnpm exec tsc --project tsconfig.server.json
+  @echo "Building mcp-server..."
+  pnpm -C mcp-server build
 
 install:
   @echo "Installing dependencies..."
