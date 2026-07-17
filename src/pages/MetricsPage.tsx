@@ -29,6 +29,8 @@ import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 import { getPersistenceAdapter } from "@/lib/persistence-factory";
 import { eventBus } from "@/lib/events";
+import { FocusModeProvider } from "@/components/FocusModeProvider";
+import { FocusModeOverlay } from "@/components/FocusModeOverlay";
 
 const PomodoroStatsTab: React.FC<{ userId: string; weekStartDay: 0 | 1 }> = ({ userId, weekStartDay }) => {
   const { sessions, stats, isLoading, reload } = usePomodoroStats(userId);
@@ -108,7 +110,7 @@ const PomodoroStatsTab: React.FC<{ userId: string; weekStartDay: 0 | 1 }> = ({ u
   );
 };
 
-const MetricsPage: React.FC<{ activeView?: string }> = ({ activeView }) => {
+const MetricsPageInner: React.FC<{ activeView?: string }> = ({ activeView }) => {
   const [activeTab, setActiveTab] = React.useState("forecast");
   const { userId: currentUserId } = useCurrentUser();
   const { users, loading: usersLoading } = useUsersContext();
@@ -183,7 +185,7 @@ const MetricsPage: React.FC<{ activeView?: string }> = ({ activeView }) => {
       </section>
 
       {/* Bottom pane for graphics in subtab separated view */}
-      <section className="flex-1 border rounded-lg p-6">
+      <section className="flex-1 border rounded-lg p-4 sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold">Individual Metrics</h2>
           <Select value={selectedUserId} onValueChange={handleUserChange}>
@@ -257,6 +259,16 @@ const MetricsPage: React.FC<{ activeView?: string }> = ({ activeView }) => {
         </div>
       </section>
     </div>
+  );
+};
+
+const MetricsPage: React.FC<{ activeView?: string }> = ({ activeView }) => {
+  return (
+    <FocusModeProvider viewId="metrics">
+      <FocusModeOverlay>
+        <MetricsPageInner activeView={activeView} />
+      </FocusModeOverlay>
+    </FocusModeProvider>
   );
 };
 

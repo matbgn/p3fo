@@ -177,7 +177,7 @@ const Index: React.FC = () => {
         </div>
       </header>
 
-      <main className={`flex flex-col px-12 py-8 transition-all duration-300 ${isGlobalFocusMode ? 'px-0 py-0 h-screen' : 'h-[calc(100vh-4rem)] min-h-0'}`}>
+      <main className={`flex flex-col px-4 sm:px-8 md:px-12 py-4 sm:py-8 transition-all duration-300 ${isGlobalFocusMode ? 'px-0 py-0 h-screen' : 'h-[calc(100vh-4rem)] min-h-0'}`}>
         {!isGlobalFocusMode && (
           <div className="mb-3 space-y-2">
             <NextTaskSpotlight onFocusOnTask={handleFocusOnTask} onNavigateToFocusSessions={handleNavigateToFocusSessions} />
