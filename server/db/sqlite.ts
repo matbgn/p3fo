@@ -882,7 +882,7 @@ class SqliteClient implements DbClient {
       priority: updated.priority,
       userId: updated.userId,
       linkedVoteIds: updated.linkedVoteIds ? JSON.stringify(updated.linkedVoteIds) : null,
-      blockedSince: updated.blockedSince,
+      blockedSince: updated.blockedSince ?? null,
     };
 
     this.db.prepare(`

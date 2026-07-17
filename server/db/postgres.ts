@@ -64,6 +64,7 @@ interface UserSettingsDbRow {
   pomodoroConfig: Record<string, unknown> | null;
   focusModeConfig: Record<string, unknown> | null;
   travelerConfig: Record<string, unknown> | null;
+  nonActionPeriodHours: number | null;
 }
 
 interface CircleDbRow {
@@ -172,6 +173,7 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
     destination: '',
     enabled: true,
   },
+  wipLimitPerUser: 5,
 };
 export async function createPostgresClient(connectionString?: string): Promise<DbClient> {
   // Use connection string from parameter or environment variable
@@ -650,6 +652,7 @@ class PostgresClient implements DbClient {
     await addColumn('userSettings', 'pomodoroConfig', 'JSONB');
     await addColumn('userSettings', 'focusModeConfig', 'JSONB');
     await addColumn('userSettings', 'travelerConfig', 'JSONB');
+    await addColumn('userSettings', 'nonActionPeriodHours', 'REAL DEFAULT 3');
 
     // AppSettings columns
     await runMigration('appSettings', 'split_time', 'splitTime');
@@ -669,6 +672,7 @@ class PostgresClient implements DbClient {
 await addColumn('appSettings', 'pomodoroConfig', 'JSONB');
 await addColumn('appSettings', 'focusModeConfig', 'JSONB');
 await addColumn('appSettings', 'travelerConfig', 'JSONB');
+    await addColumn('appSettings', 'wipLimitPerUser', 'INTEGER DEFAULT 5');
 
     // QolSurvey columns
     await runMigration('qolSurvey', 'user_id', 'userId');
@@ -861,7 +865,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       updatedTask.priority,
       updatedTask.userId,
       updatedTask.linkedVoteIds ? JSON.stringify(updatedTask.linkedVoteIds) : null,
-      updatedTask.blockedSince,
+      updatedTask.blockedSince ?? null,
       id
     ];
 
@@ -1003,8 +1007,8 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     const updated = { ...current, ...data, userId };
 
     await this.pool.query(`
-      INSERT INTO "userSettings" ("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness", "weekStartDay", "defaultPlanView", "preferredWorkingDays", "trigram", "pomodoroConfig", "focusModeConfig", "travelerConfig")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      INSERT INTO "userSettings" ("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness", "weekStartDay", "defaultPlanView", "preferredWorkingDays", "trigram", "pomodoroConfig", "focusModeConfig", "travelerConfig", "nonActionPeriodHours")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       ON CONFLICT ("userId") DO UPDATE SET
         "username" = EXCLUDED."username",
         "logo" = EXCLUDED."logo",
@@ -1020,7 +1024,8 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
         "trigram" = EXCLUDED."trigram",
         "pomodoroConfig" = EXCLUDED."pomodoroConfig",
         "focusModeConfig" = EXCLUDED."focusModeConfig",
-        "travelerConfig" = EXCLUDED."travelerConfig"
+        "travelerConfig" = EXCLUDED."travelerConfig",
+        "nonActionPeriodHours" = EXCLUDED."nonActionPeriodHours"
     `, [
       updated.userId,
       updated.username,
@@ -1038,6 +1043,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       updated.pomodoroConfig ? JSON.stringify(updated.pomodoroConfig) : null,
       updated.focusModeConfig ? JSON.stringify(updated.focusModeConfig) : null,
       updated.travelerConfig ? JSON.stringify(updated.travelerConfig) : null,
+      updated.nonActionPeriodHours ?? null,
     ]);
 
     return updated;
@@ -1087,6 +1093,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
         pomodoroConfig: typeof row.pomodoroConfig === 'string' ? JSON.parse(row.pomodoroConfig) : (row.pomodoroConfig ?? DEFAULT_APP_SETTINGS.pomodoroConfig),
         focusModeConfig: typeof row.focusModeConfig === 'string' ? JSON.parse(row.focusModeConfig) : (row.focusModeConfig ?? DEFAULT_APP_SETTINGS.focusModeConfig),
         travelerConfig: typeof row.travelerConfig === 'string' ? JSON.parse(row.travelerConfig) : (row.travelerConfig ?? DEFAULT_APP_SETTINGS.travelerConfig),
+        wipLimitPerUser: row.wipLimitPerUser ?? DEFAULT_APP_SETTINGS.wipLimitPerUser,
       };
     }
     return DEFAULT_APP_SETTINGS;
@@ -1100,8 +1107,8 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       INSERT INTO "appSettings" ("id", "splitTime", "userWorkloadPercentage", "weeksComputation", 
                                 "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal",
                                 "hoursToBeDoneByDay", "vacationLimitMultiplier", "hourlyBalanceLimitUpper",
-                                "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region", "disabledModules", "pomodoroConfig", "focusModeConfig", "travelerConfig")
-      VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+                                "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region", "disabledModules", "pomodoroConfig", "focusModeConfig", "travelerConfig", "wipLimitPerUser")
+      VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
       ON CONFLICT ("id") DO UPDATE SET
         "splitTime" = EXCLUDED."splitTime",
         "userWorkloadPercentage" = EXCLUDED."userWorkloadPercentage",
@@ -1121,7 +1128,8 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
         "disabledModules" = EXCLUDED."disabledModules",
         "pomodoroConfig" = EXCLUDED."pomodoroConfig",
         "focusModeConfig" = EXCLUDED."focusModeConfig",
-        "travelerConfig" = EXCLUDED."travelerConfig"
+        "travelerConfig" = EXCLUDED."travelerConfig",
+        "wipLimitPerUser" = EXCLUDED."wipLimitPerUser"
     `, [
       updated.splitTime,
       updated.userWorkloadPercentage,
@@ -1142,6 +1150,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       JSON.stringify(updated.pomodoroConfig ?? DEFAULT_APP_SETTINGS.pomodoroConfig),
       JSON.stringify(updated.focusModeConfig ?? DEFAULT_APP_SETTINGS.focusModeConfig),
       JSON.stringify(updated.travelerConfig ?? DEFAULT_APP_SETTINGS.travelerConfig),
+      updated.wipLimitPerUser ?? DEFAULT_APP_SETTINGS.wipLimitPerUser,
     ]);
 
     return updated;
@@ -2188,6 +2197,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       pomodoroConfig: row.pomodoroConfig ? (typeof row.pomodoroConfig === 'string' ? JSON.parse(row.pomodoroConfig) : row.pomodoroConfig) : undefined,
       focusModeConfig: row.focusModeConfig ? (typeof row.focusModeConfig === 'string' ? JSON.parse(row.focusModeConfig) : row.focusModeConfig) : undefined,
       travelerConfig: row.travelerConfig ? (typeof row.travelerConfig === 'string' ? JSON.parse(row.travelerConfig) : row.travelerConfig) : undefined,
+      nonActionPeriodHours: row.nonActionPeriodHours ?? undefined,
     };
   }
 
