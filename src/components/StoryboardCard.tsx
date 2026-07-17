@@ -4,6 +4,7 @@ import { Task, Category, TriageStatus } from '@/hooks/useTasks';
 import { cn } from '@/lib/utils';
 import { useViewDisplay } from '@/hooks/useView';
 import { COMPACTNESS_ULTRA, COMPACTNESS_COMPACT } from '@/context/ViewContextDefinition';
+import { HOVER_ENTER_DELAY_MS } from '@/lib/hover-constants';
 import { AlertTriangle, CircleDot, Clock, Flame, Crosshair } from 'lucide-react';
 
 interface StoryboardCardProps {
@@ -92,7 +93,7 @@ export const StoryboardCard: React.FC<StoryboardCardProps> = React.memo(({
       if (!isDraggingRef.current) {
         setIsHovered(true);
       }
-    }, 1100);
+    }, HOVER_ENTER_DELAY_MS);
   }, []);
 
   const handleMouseLeave = useCallback(() => {

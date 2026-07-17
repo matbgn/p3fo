@@ -16,6 +16,7 @@ import { sortTasks } from "@/utils/taskSorting";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { useViewNavigation, useViewDisplay } from "@/hooks/useView";
 import { COMPACTNESS_ULTRA, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
+import { HOVER_ENTER_DELAY_MS } from "@/lib/hover-constants";
 import { ChevronDown, ChevronRight, Archive } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -143,7 +144,7 @@ const Column: React.FC<{
               updateDurationInMinutes={updateDurationInMinutes}
               updateComment={updateComment}
               isHighlighted={isHighlighted}
-              hoverEnterDelayMs={1100}
+              hoverEnterDelayMs={HOVER_ENTER_DELAY_MS}
             />
           </div>
         ),
@@ -272,7 +273,7 @@ const Column: React.FC<{
                     updateTerminationDate={updateTerminationDate}
                     updateDurationInMinutes={updateDurationInMinutes}
                     updateComment={updateComment}
-                    hoverEnterDelayMs={1100}
+                    hoverEnterDelayMs={HOVER_ENTER_DELAY_MS}
                   />
                 ))}
               </LazyCard>
