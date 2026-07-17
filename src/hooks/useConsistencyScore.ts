@@ -116,7 +116,10 @@ function getTasksFromAllSources(): Task[] {
   return recomputeChildrenFromParentId(Array.from(taskMap.values()));
 }
 
-export function useConsistencyScore(userId: string): {
+export function useConsistencyScore(
+  userId: string,
+  opts?: { sessions?: PomodoroSession[] },
+): {
   data: ConsistencyScoreData | null;
   isLoading: boolean;
 } {
@@ -136,6 +139,13 @@ export function useConsistencyScore(userId: string): {
     [preferredDaysSource],
   );
 
+  // When sessions are supplied by the caller, skip the duplicate pomodoro fetch
+  // and pomodoro subscription (the caller owns that lifecycle). The caller is
+  // expected to pass a stable reference (e.g. from a hook's state) so the
+  // derived score recomputes when the data actually changes.
+  const providedSessions = opts?.sessions;
+  const hasProvidedSessions = providedSessions !== undefined;
+
   useEffect(() => {
     if (!userId) {
       setSessions([]);
@@ -143,13 +153,56 @@ export function useConsistencyScore(userId: string): {
       setIsLoading(false);
       return;
     }
+
+    // If sessions are provided, adopt them directly (no fetch needed); we still
+    // need to fetch tasks. The pomodoro subscription is skipped in this mode
+    // because the caller (which owns the session lifecycle) will re-render with
+    // fresh sessions and this effect re-runs via the [userId, providedSessions]
+    // dependency.
+    if (hasProvidedSessions) {
+      let mounted = true;
+      const load = async () => {
+        try {
+          setSessions(Array.isArray(providedSessions) ? providedSessions : []);
+          const adapter = await getPersistenceAdapter();
+          const taskEntities = await adapter.listTasks(userId);
+          if (!mounted) return;
+
+          let tasks = convertEntitiesToTasks(taskEntities);
+          const yjsTasks = getTasksFromAllSources();
+          if (yjsTasks.length > tasks.length) tasks = yjsTasks;
+
+          const merged = new Map<string, Task>();
+          for (const t of tasks) merged.set(t.id, t);
+          for (const t of yjsTasks) merged.set(t.id, t);
+
+          setAllTasks(recomputeChildrenFromParentId(Array.from(merged.values())));
+        } catch {
+          if (mounted) {
+            const yjsTasks = getTasksFromAllSources();
+            setAllTasks(yjsTasks);
+          }
+        } finally {
+          if (mounted) setIsLoading(false);
+        }
+      };
+      load();
+      return () => {
+        mounted = false;
+      };
+    }
+
     let mounted = true;
     const load = async () => {
       try {
         const adapter = await getPersistenceAdapter();
+
+        // Bound the pomodoro fetch to the score window (365 days) to avoid
+        // pulling the user's entire history when we only look back a year.
+        const since = startOfDay(Date.now()) - (365 - 1) * MS_PER_DAY;
         const [sessionResult, taskEntities] = await Promise.all([
-          adapter.listPomodoroSessions(userId),
-          adapter.listTasks(),
+          adapter.listPomodoroSessions(userId, since),
+          adapter.listTasks(userId),
         ]);
         if (!mounted) return;
 
@@ -185,7 +238,7 @@ export function useConsistencyScore(userId: string): {
       eventBus.unsubscribe('pomodoroSessionCompleted', onCompleted);
       eventBus.unsubscribe('tasksChanged', onCompleted);
     };
-  }, [userId]);
+  }, [userId, hasProvidedSessions, providedSessions]);
 
   const data = useMemo<ConsistencyScoreData | null>(() => {
     if (isLoading) return null;

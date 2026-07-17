@@ -34,7 +34,7 @@ import { FocusModeOverlay } from "@/components/FocusModeOverlay";
 
 const PomodoroStatsTab: React.FC<{ userId: string; weekStartDay: 0 | 1 }> = ({ userId, weekStartDay }) => {
   const { sessions, stats, isLoading, reload } = usePomodoroStats(userId);
-  const { data: consistencyData, isLoading: consistencyLoading } = useConsistencyScore(userId);
+  const { data: consistencyData, isLoading: consistencyLoading } = useConsistencyScore(userId, { sessions });
   const { tasks } = useAllTasks();
   const [legendVisible, setLegendVisible] = React.useState<Set<LegendKey>>(ALL_LEGEND_KEYS);
 
