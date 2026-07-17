@@ -2,7 +2,10 @@
  * P3FO MCP Server — HTTP client wrapping the P3FO REST API.
  *
  * Reads the base URL from P3FO_API_URL (defaults to http://localhost:5172).
- * Optional P3FO_API_TOKEN is sent as Authorization: Bearer <token> if present.
+ * For remote deployments behind oauth2-proxy, point P3FO_API_URL at the
+ * `/mcp` path prefix (e.g. https://p3fo.example.com/mcp) and set P3FO_API_KEY.
+ * P3FO_API_KEY is sent as X-API-Key header; P3FO_API_TOKEN (optional) is
+ * sent as Authorization: Bearer for backward compatibility.
  */
 
 export class P3foApiError extends Error {
@@ -37,6 +40,8 @@ export class P3foClient {
     };
     const tok = token ?? process.env.P3FO_API_TOKEN;
     if (tok) this.headers.Authorization = `Bearer ${tok}`;
+    const key = process.env.P3FO_API_KEY;
+    if (key) this.headers['X-API-Key'] = key;
   }
 
   async health(): Promise<{ ok: boolean; mode: string; timestamp: string }> {
@@ -381,7 +386,15 @@ export class P3foClient {
       method,
       headers: this.headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      redirect: 'manual',
     });
+
+    if (res.status >= 300 && res.status < 400) {
+      throw new P3foApiError(
+        res.status,
+        `Redirected to ${res.headers.get('location') ?? '?'} — likely an auth failure (check P3FO_API_URL / P3FO_API_KEY)`,
+      );
+    }
 
     if (res.status === 204) return undefined as T;
 

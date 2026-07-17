@@ -21,6 +21,11 @@ import { TodolistView } from "./TodolistView";
 import { byId } from "@/lib/utils";
 import { useViewDisplay } from "@/hooks/useView";
 import { COMPACTNESS_ULTRA, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
+import { HOVER_ENTER_DELAY_MS } from "@/lib/hover-constants";
+import { FocusModeProvider } from "./FocusModeProvider";
+import { FocusModeOverlay } from "./FocusModeOverlay";
+import { FocusModeBar } from "./planView/FocusModeBar";
+import { useFocusMode } from "@/hooks/useFocusMode";
 
 type FocusBoardView = "flow" | "todolist";
 
@@ -50,7 +55,8 @@ type Column = {
   activeId?: string;
 };
 
-const TaskBoard: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: (taskId: string) => void }> = ({ focusedTaskId, onFocusOnTask }) => {
+const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: (taskId: string) => void }> = ({ focusedTaskId, onFocusOnTask }) => {
+  const { isFocusMode } = useFocusMode();
   const [focusView, setFocusView] = React.useState<FocusBoardView>(loadViewPreference);
 
   const handleFocusViewChange = React.useCallback((view: string) => {
@@ -70,21 +76,17 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: (task
   // Focus restoration
   const [focusTargetId, setFocusTargetId] = React.useState<string | null>(null);
 
-  const handleToggleTimer = (id: string) => {
-    toggleTimer(id, currentUserId);
+  const handleToggleTimer = async (id: string) => {
+    await toggleTimer(id, currentUserId);
     setFocusTargetId(id);
 
     // If starting the timer (currently not running), highlight and activate the task
     const task = map[id];
-    // Check if currently running (prior to toggle effect taking place in UI, but logic is async)
-    // Actually toggleTimer is optimistic or fast? 
-    // We check current state. If not running, we are starting.
     const isRunning = task?.timer?.some(t => t.endTime === 0);
 
     if (task && !isRunning) {
       setHighlightedTaskId(id);
 
-      // Also update path to ensure it's selected/expanded
       const newPath: string[] = [];
       let current: Task | undefined = task;
       while (current) {
@@ -430,9 +432,47 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: (task
     };
   }, [recomputeLines]);
 
+  const hasActiveFilters =
+    !!storedFilters.searchText?.trim() ||
+    !!storedFilters.selectedUserId ||
+    (storedFilters.difficulty?.length || 0) > 0 ||
+    (storedFilters.category?.length || 0) > 0 ||
+    (storedFilters.status?.length || 0) > 0 ||
+    storedFilters.showUrgent ||
+    storedFilters.showImpact ||
+    storedFilters.showMajorIncident ||
+    storedFilters.showSprintTarget;
+
+  const viewToggle = (
+    <ToggleGroup type="single" value={focusView} onValueChange={handleFocusViewChange} aria-label="Focus Board View">
+      <ToggleGroupItem value="flow" aria-label="Flow View">
+        Flow
+      </ToggleGroupItem>
+      <ToggleGroupItem value="todolist" aria-label="Todolist View">
+        Todolist
+      </ToggleGroupItem>
+    </ToggleGroup>
+  );
+
   return (
     <React.Profiler id="TaskBoard" onRender={otelProfilerCallback}>
+    <FocusModeOverlay>
     <div className="w-full h-full flex flex-col">
+      {isFocusMode && (
+        <FocusModeBar
+          title={focusView === 'flow' ? 'Flow View' : 'Todolist View'}
+          rightContent={viewToggle}
+          hasActiveFilters={hasActiveFilters}
+          filterDropdownContent={
+            <FilterControls
+              filters={storedFilters}
+              setFilters={setStoredFilters}
+              defaultFilters={defaultTaskBoardFilters}
+            />
+          }
+        />
+      )}
+      {!isFocusMode && (
       <div className="mb-4 flex flex-col gap-2 shrink-0">
         <div className="flex items-center gap-2">
           <Button
@@ -457,14 +497,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: (task
             </div>
           )}
           <div className="ml-auto">
-            <ToggleGroup type="single" value={focusView} onValueChange={handleFocusViewChange} aria-label="Focus Board View">
-              <ToggleGroupItem value="flow" aria-label="Flow View">
-                Flow
-              </ToggleGroupItem>
-              <ToggleGroupItem value="todolist" aria-label="Todolist View">
-                Todolist
-              </ToggleGroupItem>
-            </ToggleGroup>
+            {viewToggle}
           </div>
         </div>
 
@@ -478,6 +511,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: (task
           </div>
         )}
       </div>
+      )}
 
       {focusView === "todolist" && (
         <TodolistView
@@ -777,6 +811,7 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: (task
                             updateComment={updateComment}
                             updateTerminationDate={updateTerminationDate}
                             updateDurationInMinutes={updateDurationInMinutes}
+                            hoverEnterDelayMs={HOVER_ENTER_DELAY_MS}
                           />
                         </LazyCard>
                       ))
@@ -790,7 +825,16 @@ const TaskBoard: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: (task
       </div>
       )}
     </div >
+    </FocusModeOverlay>
     </React.Profiler>
+  );
+};
+
+const TaskBoard: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: (taskId: string) => void }> = ({ focusedTaskId, onFocusOnTask }) => {
+  return (
+    <FocusModeProvider viewId="focus">
+      <TaskBoardInner focusedTaskId={focusedTaskId} onFocusOnTask={onFocusOnTask} />
+    </FocusModeProvider>
   );
 };
 

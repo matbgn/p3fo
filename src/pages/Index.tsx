@@ -1,8 +1,8 @@
 import React, { Suspense, useEffect, useState, useCallback } from "react";
-import TaskBoard from "@/components/TaskBoard";
-import KanbanBoard from "@/components/KanbanBoard";
+const TaskBoard = React.lazy(() => import("@/components/TaskBoard"));
+const KanbanBoard = React.lazy(() => import("@/components/KanbanBoard"));
 import { ViewSwitcher } from "@/components/ViewSwitcher";
-import { Timetable } from "@/components/Timetable";
+const Timetable = React.lazy(() => import("@/components/Timetable").then(m => ({ default: m.Timetable })));
 const ProgramTopView = React.lazy(() => import("@/components/ProgramTopView"));
 import SettingsPage from "./SettingsPage";
 const MetricsPage = React.lazy(() => import("./MetricsPage"));
@@ -22,6 +22,8 @@ import { UserSection } from "@/components/UserSection";
 import { QuickTimer } from "@/components/QuickTimer";
 import { UmbrellaNavigation } from "@/components/UmbrellaNavigation";
 import { GlobalFocusModeToggle } from "@/components/GlobalFocusModeToggle";
+import { NextTaskSpotlight } from "@/components/NextTaskSpotlight";
+import { ConfirmModalHost } from "@/components/ConfirmModalHost";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 const LazyWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -50,6 +52,11 @@ const activeStyle: React.CSSProperties = {
 
 const Index: React.FC = () => {
   const { view, setView, focusedTaskId, handleFocusOnTask, disabledModules } = useViewNavigation();
+
+  const handleNavigateToFocusSessions = useCallback(() => {
+    sessionStorage.setItem('p3fo_metrics_tab', 'pomodoro');
+    setView('metrics');
+  }, [setView]);
   const { userSettings } = useUserSettingsContext();
 
   // Track which views have been mounted (lazy-mount on first visit, keep-alive after)
@@ -134,14 +141,14 @@ const Index: React.FC = () => {
 
   // Memoize each view element so switching tabs doesn't reconcile them.
   // Each element is re-created only when its own dependencies change, not when `view` changes.
-  const focusView = React.useMemo(() => <TaskBoard focusedTaskId={focusedTaskId} onFocusOnTask={handleFocusOnTask} />, [focusedTaskId, handleFocusOnTask]);
-  const kanbanView = React.useMemo(() => <KanbanBoard onFocusOnTask={handleFocusOnTask} highlightedTaskId={focusedTaskId} />, [handleFocusOnTask, focusedTaskId]);
-  const timetableView = React.useMemo(() => <Timetable onJumpToTask={handleFocusOnTask} />, [handleFocusOnTask]);
+  const focusView = React.useMemo(() => <LazyWrapper><TaskBoard focusedTaskId={focusedTaskId} onFocusOnTask={handleFocusOnTask} /></LazyWrapper>, [focusedTaskId, handleFocusOnTask]);
+  const kanbanView = React.useMemo(() => <LazyWrapper><KanbanBoard onFocusOnTask={handleFocusOnTask} highlightedTaskId={focusedTaskId} /></LazyWrapper>, [handleFocusOnTask, focusedTaskId]);
+  const timetableView = React.useMemo(() => <LazyWrapper><Timetable onJumpToTask={handleFocusOnTask} /></LazyWrapper>, [handleFocusOnTask]);
   const programView = React.useMemo(() => <LazyWrapper><ProgramTopView onFocusOnTask={handleFocusOnTask} /></LazyWrapper>, [handleFocusOnTask]);
   const planView = React.useMemo(() => <LazyWrapper><PlanView onFocusOnTask={handleFocusOnTask} /></LazyWrapper>, [handleFocusOnTask]);
   const celebrationView = React.useMemo(() => <LazyWrapper><CelebrationView onFocusOnTask={handleFocusOnTask} /></LazyWrapper>, [handleFocusOnTask]);
   const dreamView = React.useMemo(() => <LazyWrapper><DreamTopView onFocusOnTask={handleFocusOnTask} /></LazyWrapper>, [handleFocusOnTask]);
-  const metricsView = React.useMemo(() => <LazyWrapper><MetricsPage /></LazyWrapper>, []);
+  const metricsView = React.useMemo(() => <LazyWrapper><MetricsPage activeView={view} /></LazyWrapper>, [view]);
   const votingView = React.useMemo(() => <LazyWrapper><VotingPage /></LazyWrapper>, []);
   const settingsView = React.useMemo(() => <SettingsPage />, []);
 
@@ -170,7 +177,12 @@ const Index: React.FC = () => {
         </div>
       </header>
 
-      <main className={`flex flex-col px-12 py-8 transition-all duration-300 ${isGlobalFocusMode ? 'px-0 py-0 h-screen' : 'h-[calc(100vh-4rem)] min-h-0'}`}>
+      <main className={`flex flex-col px-4 sm:px-8 md:px-12 py-4 sm:py-8 transition-all duration-300 ${isGlobalFocusMode ? 'px-0 py-0 h-screen' : 'h-[calc(100vh-4rem)] min-h-0'}`}>
+        {!isGlobalFocusMode && (
+          <div className="mb-3 space-y-2">
+            <NextTaskSpotlight onFocusOnTask={handleFocusOnTask} onNavigateToFocusSessions={handleNavigateToFocusSessions} />
+          </div>
+        )}
         {/* Keep-alive: mount on first visit, hide with content-visibility:hidden, skip reconciliation via useMemo */}
         {/* content-visibility:hidden tells the browser to skip layout+paint entirely for hidden views */}
         {/* Disabled modules are completely excluded from rendering */}
@@ -227,6 +239,7 @@ const Index: React.FC = () => {
       </main>
 
       <UmbrellaNavigation open={umbrellaOpen} onClose={() => setUmbrellaOpen(false)} />
+      <ConfirmModalHost />
     </div>
   );
 };

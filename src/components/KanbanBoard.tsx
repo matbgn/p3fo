@@ -3,9 +3,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useTasks, Task, TriageStatus, Category } from "@/hooks/useTasks";
 import { TaskCard } from "./TaskCard";
+import { QuickAddTask } from "./QuickAddTask";
 import { byId } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
 import { eventBus } from "@/lib/events";
+import { toast } from "sonner";
 import { FilterControls, Filters } from "./FilterControls";
 import { aStarTextSearch } from "@/lib/a-star-search";
 import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
@@ -15,6 +16,7 @@ import { sortTasks } from "@/utils/taskSorting";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { useViewNavigation, useViewDisplay } from "@/hooks/useView";
 import { COMPACTNESS_ULTRA, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
+import { HOVER_ENTER_DELAY_MS } from "@/lib/hover-constants";
 import { ChevronDown, ChevronRight, Archive } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -84,7 +86,8 @@ const Column: React.FC<{
   highlightedTaskId?: string | null;
   highlightedCardRef?: React.RefObject<HTMLDivElement | null>;
   onArchive?: (title: TriageStatus) => void;
-}> = React.memo(({ title, cards, tasks, isOver, onChangeStatus, onUpdateCategory, onUpdateUser, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onToggleSprintTarget, onToggleDone, onUpdateDifficulty, onUpdateTitle, onDelete, duplicateTaskStructure, openParents, onToggleParent, onReparent, onFocusOnTask, updateTerminationDate, updateDurationInMinutes, updateComment, onToggleTimer, highlightedTaskId, highlightedCardRef, onArchive }) => {
+  wipLimit?: number;
+}> = React.memo(({ title, cards, tasks, isOver, onChangeStatus, onUpdateCategory, onUpdateUser, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onToggleSprintTarget, onToggleDone, onUpdateDifficulty, onUpdateTitle, onDelete, duplicateTaskStructure, openParents, onToggleParent, onReparent, onFocusOnTask, updateTerminationDate, updateDurationInMinutes, updateComment, onToggleTimer, highlightedTaskId, highlightedCardRef, onArchive, wipLimit = 5 }) => {
   // Calculate total difficulty points for this column
   // Only count leaf tasks (tasks with no children) to avoid double-counting
   // Parent tasks and intermediate parents should not be counted
@@ -141,6 +144,7 @@ const Column: React.FC<{
               updateDurationInMinutes={updateDurationInMinutes}
               updateComment={updateComment}
               isHighlighted={isHighlighted}
+              hoverEnterDelayMs={HOVER_ENTER_DELAY_MS}
             />
           </div>
         ),
@@ -194,7 +198,7 @@ const Column: React.FC<{
   return (
     <Card className={`w-80 shrink-0 overflow-hidden flex flex-col transition-colors ${droppableIsOver || isOver ? 'ring-2 ring-primary/50' : ''}`}>
       <div className="px-3 py-2 border-b text-sm font-medium flex items-center justify-between shrink-0">
-        <span>{title === "WIP" ? "Work in Progress [MAX 5/p]" : title}</span>
+        <span>{title === "WIP" ? `Work in Progress [MAX ${wipLimit}/p]` : title}</span>
         <div className="flex items-center gap-2">
           {totalDifficulty > 0 && (
             <Badge variant="secondary" className="ml-2">
@@ -269,6 +273,7 @@ const Column: React.FC<{
                     updateTerminationDate={updateTerminationDate}
                     updateDurationInMinutes={updateDurationInMinutes}
                     updateComment={updateComment}
+                    hoverEnterDelayMs={HOVER_ENTER_DELAY_MS}
                   />
                 ))}
               </LazyCard>
@@ -277,32 +282,6 @@ const Column: React.FC<{
         )}
       </div>
     </Card>
-  );
-});
-
-// Isolated quick-add input to prevent full board re-renders on every keystroke
-const QuickAddInput: React.FC<{ onAdd: (title: string, userId?: string) => void; selectedUserId?: string }> = React.memo(({ onAdd, selectedUserId }) => {
-  const [input, setInput] = React.useState("");
-  const addTopTask = () => {
-    const v = input.trim();
-    if (!v) return;
-    const assignedUserId = selectedUserId && selectedUserId !== 'UNASSIGNED' ? selectedUserId : undefined;
-    onAdd(v, assignedUserId);
-    setInput("");
-  };
-  return (
-    <div className="mb-4 flex gap-2">
-      <Input
-        placeholder="Quick add top task..."
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && addTopTask()}
-        className="max-w-md"
-      />
-      <Button onClick={addTopTask} disabled={!input.trim()}>
-        Add
-      </Button>
-    </div>
   );
 });
 
@@ -340,7 +319,7 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
     setActiveTaskId(String(event.active.id));
   }, []);
 
-  const handleDragEnd = React.useCallback((event: DragEndEvent) => {
+  const handleDragEnd = React.useCallback(async (event: DragEndEvent) => {
     setActiveTaskId(null);
     const { active, over } = event;
     if (!over) return;
@@ -350,13 +329,19 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
 
     const columnMatch = STATUSES.find(s => `column-${s}` === overId);
     if (columnMatch) {
-      updateStatus(taskId, columnMatch);
+      const result = await updateStatus(taskId, columnMatch);
+      if (!result.success && result.reason) {
+        toast.error(result.reason);
+      }
     }
   }, [updateStatus]);
 
   // Stable callback references for Column props (prevents Column/TaskCard re-renders)
-  const handleChangeStatus = React.useCallback((id: string, status: TriageStatus) => {
-    updateStatus(id, status);
+  const handleChangeStatus = React.useCallback(async (id: string, status: TriageStatus) => {
+    const result = await updateStatus(id, status);
+    if (!result.success && result.reason) {
+      toast.error(result.reason);
+    }
   }, [updateStatus]);
 
   const handleUpdateCategory = React.useCallback((id: string, category: Category) => {
@@ -637,11 +622,6 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
     return acc;
   }, [topTasks, map]); // Removed tasks as dependency as topTasks and map are derived from it
 
-  // Quick add handler (used by extracted QuickAddInput component)
-  const handleQuickAdd = React.useCallback((title: string, userId?: string) => {
-    createTask(title, null, userId);
-  }, [createTask]);
-
   // Archive handlers
   const handleArchiveClick = (columnTitle: TriageStatus) => {
     setArchiveColumnTitle(columnTitle);
@@ -690,7 +670,11 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
         {!isFocusMode && (
           <>
             <div className="mb-4 flex items-center justify-between">
-              <QuickAddInput onAdd={handleQuickAdd} selectedUserId={storedFilters.selectedUserId} />
+              <QuickAddTask
+                userId={storedFilters.selectedUserId && storedFilters.selectedUserId !== 'UNASSIGNED' ? storedFilters.selectedUserId : undefined}
+                onCreatedFromTemplate={onFocusOnTask}
+                className="mb-4 max-w-md"
+              />
             </div>
 
             <div className="mb-4 flex flex-col gap-2">
@@ -800,6 +784,7 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
                   highlightedTaskId={localHighlightedTaskId}
                   highlightedCardRef={highlightedCardRef}
                   onArchive={handleArchiveClick}
+                  wipLimit={settings.wipLimitPerUser}
                 />
               ))}
             </div>

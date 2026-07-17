@@ -18,6 +18,9 @@ const VOTE_RESPONSES_STORAGE_KEY = 'p3fo_vote_responses_v1';
 const VOTE_LOOPS_STORAGE_KEY = 'p3fo_vote_loops_v1';
 const VOTE_MODERATORS_STORAGE_KEY = 'p3fo_vote_moderators_v1';
 const POMODORO_SESSIONS_STORAGE_KEY = 'p3fo_pomodoro_sessions_v1';
+const NOTIFIED_KEYS_STORAGE_KEY = 'p3fo_notified_keys_v1';
+
+export { NOTIFIED_KEYS_STORAGE_KEY };
 
 // Default values
 const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
@@ -665,6 +668,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       localStorage.removeItem(CIRCLES_STORAGE_KEY);
       localStorage.removeItem(FRAMEWORKS_STORAGE_KEY);
       localStorage.removeItem(POMODORO_SESSIONS_STORAGE_KEY);
+      localStorage.removeItem(NOTIFIED_KEYS_STORAGE_KEY);
       sessionStorage.removeItem(FILTERS_STORAGE_KEY);
 
       // Clear dynamic keys (users and QoL surveys)

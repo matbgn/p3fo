@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useSearchParams } from "react-router-dom";
 import { Vote, Plus, BarChart3, Clock, Trash2, ExternalLink, Eye, Trophy, Edit, ToggleLeft, Shield, Share2, RotateCcw, GitCompare, Save } from "lucide-react";
-import { useVotes, useVoteResults } from "@/hooks/useVotes";
+import { useVotes, useVoteResults, syncVoteToYjs } from "@/hooks/useVotes";
 import { useVoteLoops } from "@/hooks/useVoteLoops";
 import { getPersistenceAdapter } from "@/lib/persistence-factory";
 import { eventBus } from "@/lib/events";
@@ -164,6 +164,8 @@ const ConsentLoopPanel: React.FC<{
         p.id === proposalId ? { ...p, content } : p
       );
       await adapter.updateVote(vote.id, { proposals: updatedProposals });
+      const updatedVote = { ...sourceVote, proposals: updatedProposals };
+      syncVoteToYjs(vote.id, updatedVote);
       eventBus.publish("votesChanged");
       setSavedDrafts((prev) => ({ ...prev, [proposalId]: content }));
       setDraftChanges((prev) => {
@@ -360,7 +362,7 @@ const VoteDetailPanel: React.FC<{
   onDelete: (id: string) => void;
   onReset: (id: string) => void;
   onOpenPublic: (slug: string) => void;
-  onPhaseChange: (id: string, phase: VoteEntity["config"]["phase"]) => void;
+  onPhaseChange: (id: string, phase: VoteEntity["config"]["phase"]) => Promise<void>;
 }> = ({ vote, onBack, onEdit, onFinalize, onDelete, onReset, onOpenPublic, onPhaseChange }) => {
   const t = getVotingStrings();
   const [showFinalizeDialog, setShowFinalizeDialog] = React.useState(false);
@@ -374,7 +376,7 @@ const VoteDetailPanel: React.FC<{
   const canReset = !isFinalized && !canOpen;
   const isConsentLoop = vote.config.mode === "CONSENT_LOOP";
 
-  const { loops, openRound, closeRound, updateRoundContent } = useVoteLoops(vote.id);
+  const { loops, openRound, closeRound, updateRoundContent, loadLoops } = useVoteLoops(vote.id);
 
   const handleOpenRound = async (proposalId: string) => {
     const adapter = await getPersistenceAdapter();
@@ -394,6 +396,8 @@ const VoteDetailPanel: React.FC<{
         p.id === loop.proposalId ? { ...p, content: updated.proposalContent || p.content } : p
       );
       await adapter.updateVote(vote.id, { proposals: updatedProposals });
+      const updatedVote = { ...vote, proposals: updatedProposals };
+      syncVoteToYjs(vote.id, updatedVote);
       eventBus.publish("votesChanged");
     }
   };
@@ -450,8 +454,10 @@ const VoteDetailPanel: React.FC<{
         {canOpen && (
           <Button
             size="sm"
-            onClick={() => onPhaseChange(vote.id, "OPEN")}
-            className="bg-green-600 hover:bg-green-700"
+          onClick={() => {
+            void onPhaseChange(vote.id, "OPEN").then(() => loadLoops());
+          }}
+          className="bg-green-600 hover:bg-green-700"
           >
             <ToggleLeft className="w-4 h-4 mr-1" />
             {t.buttons.openVote}
@@ -690,6 +696,7 @@ const VotingPage: React.FC = () => {
             });
           }
         }
+        eventBus.publish("voteLoopsChanged");
       } catch (error) {
         console.error("Error auto-opening first round:", error);
       }

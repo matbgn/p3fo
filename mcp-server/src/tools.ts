@@ -44,6 +44,7 @@ const taskSchema = z.object({
   children: z.array(z.string()).optional(),
   updatedAt: z.string().nullable().optional(),
   linkedVoteIds: z.array(z.string()).optional(),
+  blockedSince: z.string().nullable().optional(),
 }).passthrough();
 
 const reminderSchema = z.object({

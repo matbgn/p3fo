@@ -1,10 +1,20 @@
-import React from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
+import React, { useMemo, useState, useCallback } from 'react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { PomodoroStatsData } from '@/hooks/usePomodoroStats';
+import type { DayEntry } from '@/hooks/useConsistencyScore';
+import type { PomodoroSession } from '@/lib/pomodoro-types';
+import type { Task } from '@/hooks/useTasks';
+import { ConsistencyLegend, ALL_LEGEND_KEYS, type LegendKey } from '@/components/ConsistencyLegend';
 
 interface PomodoroStatsProps {
   stats: PomodoroStatsData;
   userId: string;
+  consistencyDays?: DayEntry[];
+  sessions?: PomodoroSession[];
+  tasks?: Task[];
+  visible?: Set<LegendKey>;
+  onToggleLegend?: (key: LegendKey) => void;
+  weekStartDay?: 0 | 1;
 }
 
 const StatCard: React.FC<{ label: string; count: number; minutes: number; avg: number }> = ({
@@ -27,20 +37,104 @@ const StatCard: React.FC<{ label: string; count: number; minutes: number; avg: n
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const HOUR_LABELS = Array.from({ length: 24 }, (_, i) => i);
 
-const PomodoroStats: React.FC<PomodoroStatsProps> = ({ stats, userId: _userId }) => {
-  const hourlyData = HOUR_LABELS.map((hour) => ({
-    hour,
-    label: `${hour.toString().padStart(2, '0')}:00`,
-    count: stats.hourly.get(hour) || 0,
-  }));
+const COLOR_GREEN = '#40c463';
+const COLOR_BLUE = '#3b82f6';
+const COLOR_GOLD = '#fbbf24';
 
-  const weeklyData = DAY_NAMES.map((name, i) => ({
-    name,
-    count: stats.weekly.get(i) || 0,
-  }));
+const PomodoroStats: React.FC<PomodoroStatsProps> = ({ stats, userId, consistencyDays, sessions, tasks, visible: visibleProp, onToggleLegend, weekStartDay = 1 }) => {
+  const [internalVisible, setInternalVisible] = useState<Set<LegendKey>>(ALL_LEGEND_KEYS);
+  const visible = visibleProp ?? internalVisible;
 
-  const maxHourly = Math.max(...hourlyData.map((d) => d.count), 1);
-  const maxWeekly = Math.max(...weeklyData.map((d) => d.count), 1);
+  const toggleLegend = useCallback((key: LegendKey) => {
+    if (onToggleLegend) {
+      onToggleLegend(key);
+    } else {
+      setInternalVisible(prev => {
+        const next = new Set(prev);
+        if (next.has(key)) {
+          if (next.size > 1) next.delete(key);
+        } else {
+          next.add(key);
+        }
+        return next;
+      });
+    }
+  }, [onToggleLegend]);
+
+  const hourlyData = useMemo(() => {
+    const data = HOUR_LABELS.map((hour) => ({
+      hour,
+      label: `${hour.toString().padStart(2, '0')}:00`,
+      green: 0,
+      blue: 0,
+      gold: 0,
+    }));
+
+    if (sessions) {
+      const taskMap = new Map<string, Task>();
+      if (tasks) for (const t of tasks) taskMap.set(t.id, t);
+
+      for (const s of sessions) {
+        if (s.phase !== 'work' || !s.completed || s.kind === 'traveler') continue;
+        const hour = new Date(s.startTime).getHours();
+        const linkedTask = s.taskId ? taskMap.get(s.taskId) : undefined;
+        if (linkedTask?.impact) {
+          data[hour].gold += 1;
+        } else {
+          data[hour].green += 1;
+        }
+      }
+    } else {
+      for (let h = 0; h < 24; h++) {
+        data[h].green = stats.hourly.get(h) || 0;
+      }
+    }
+
+    if (tasks) {
+      for (const t of tasks) {
+        if (t.userId !== userId) continue;
+        if (!t.timer) continue;
+        for (const entry of t.timer) {
+          if (entry.endTime > 0) {
+            const hour = new Date(entry.startTime).getHours();
+            if (t.impact) {
+              data[hour].gold += 1;
+            } else {
+              data[hour].blue += 1;
+            }
+          }
+        }
+      }
+    }
+
+    return data;
+  }, [sessions, tasks, stats.hourly, userId]);
+
+  const weeklyData = useMemo(() => {
+    const data = DAY_NAMES.map((name) => ({
+      name,
+      green: 0,
+      blue: 0,
+      gold: 0,
+    }));
+
+    if (consistencyDays) {
+      for (const day of consistencyDays) {
+        const dow = day.date.getDay();
+        if (day.kind === 'green') data[dow].green += day.pomodoroCount;
+        else if (day.kind === 'blue') data[dow].blue += day.taskStartedCount;
+        else if (day.kind === 'gold') data[dow].gold += (day.pomodoroCount > 0 ? day.pomodoroCount : day.taskStartedCount);
+      }
+    } else {
+      for (let i = 0; i < 7; i++) {
+        data[i].green = stats.weekly.get(i) || 0;
+      }
+    }
+    const ordered = weekStartDay === 1
+      ? [data[1], data[2], data[3], data[4], data[5], data[6], data[0]]
+      : data;
+    return ordered;
+  }, [consistencyDays, stats.weekly, weekStartDay]);
 
   return (
     <div className="space-y-6">
@@ -50,6 +144,8 @@ const PomodoroStats: React.FC<PomodoroStatsProps> = ({ stats, userId: _userId })
         <StatCard label="This Month" count={stats.month} minutes={stats.monthMinutes} avg={stats.monthAverage} />
         <StatCard label="All Time" count={stats.total} minutes={stats.totalMinutes} avg={0} />
       </div>
+
+      <ConsistencyLegend visible={visible} onToggle={toggleLegend} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="rounded-lg border bg-card text-card-foreground p-4">
@@ -64,18 +160,10 @@ const PomodoroStats: React.FC<PomodoroStatsProps> = ({ stats, userId: _userId })
                 fontSize={10}
               />
               <YAxis fontSize={10} allowDecimals={false} />
-              <Tooltip
-                formatter={(value: number) => [value, 'Focus Sessions']}
-                labelFormatter={(label: number) => `${label}:00`}
-              />
-              <Bar dataKey="count" radius={[2, 2, 0, 0]}>
-                {hourlyData.map((entry, index) => (
-                  <Cell
-                    key={index}
-                    fill={entry.count > 0 ? `hsl(142, 71%, ${45 - (entry.count / maxHourly) * 20}%)` : '#ebedf0'}
-                  />
-                ))}
-              </Bar>
+              <Tooltip />
+              {visible.has('gold') && <Bar dataKey="gold" stackId="a" fill={COLOR_GOLD} radius={[0, 0, 0, 0]} name="Impact work" />}
+              {visible.has('green') && <Bar dataKey="green" stackId="a" fill={COLOR_GREEN} radius={[0, 0, 0, 0]} name="Focus work" />}
+              {visible.has('blue') && <Bar dataKey="blue" stackId="a" fill={COLOR_BLUE} radius={[2, 2, 0, 0]} name="Started tasks" />}
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -87,15 +175,10 @@ const PomodoroStats: React.FC<PomodoroStatsProps> = ({ stats, userId: _userId })
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="name" fontSize={10} />
               <YAxis fontSize={10} allowDecimals={false} />
-              <Tooltip formatter={(value: number) => [value, 'Focus Sessions']} />
-              <Bar dataKey="count" radius={[2, 2, 0, 0]}>
-                {weeklyData.map((entry, index) => (
-                  <Cell
-                    key={index}
-                    fill={entry.count > 0 ? `hsl(142, 71%, ${45 - (entry.count / maxWeekly) * 20}%)` : '#ebedf0'}
-                  />
-                ))}
-              </Bar>
+              <Tooltip />
+              {visible.has('gold') && <Bar dataKey="gold" stackId="a" fill={COLOR_GOLD} radius={[0, 0, 0, 0]} name="Impact work" />}
+              {visible.has('green') && <Bar dataKey="green" stackId="a" fill={COLOR_GREEN} radius={[0, 0, 0, 0]} name="Focus work" />}
+              {visible.has('blue') && <Bar dataKey="blue" stackId="a" fill={COLOR_BLUE} radius={[2, 2, 0, 0]} name="Started tasks" />}
             </BarChart>
           </ResponsiveContainer>
         </div>

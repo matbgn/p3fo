@@ -49,6 +49,30 @@ export default defineConfig(({ mode }) => {
           // Avoid manual chunk splitting for React-based packages to prevent circular
           // module dependencies in the production build. Rollup/Vite will still
           // automatically code-split lazy-loaded dynamic imports.
+          manualChunks(id: string) {
+            if (!id.includes('node_modules')) return undefined;
+            // Keep React + react-dom + react-router together to avoid circular deps
+            if (id.includes('node_modules/react-router') || id.includes('node_modules/react-dom') || id.includes('node_modules/scheduler')) {
+              return 'react-vendor';
+            }
+            // Yjs CRDT engine — large, stable, rarely changes → cacheable
+            if (id.includes('node_modules/yjs') || id.includes('node_modules/y-protocols') || id.includes('node_modules/y-websocket') || id.includes('node_modules/lib0')) {
+              return 'yjs-vendor';
+            }
+            // D3 + recharts charting libs — heavy, only used by metrics/circles
+            if (id.includes('node_modules/d3') || id.includes('node_modules/recharts') || id.includes('node_modules/victory') || id.includes('node_modules/d3-array') || id.includes('node_modules/d3-scale')) {
+              return 'charts-vendor';
+            }
+            // Calendar libs — heavy, only used by timetable view
+            if (id.includes('node_modules/react-big-calendar') || id.includes('node_modules/moment') || id.includes('node_modules/date-fns')) {
+              return 'calendar-vendor';
+            }
+            // OpenTelemetry SDK — only loaded when VITE_OTEL_ENABLED=true
+            if (id.includes('node_modules/@opentelemetry')) {
+              return 'otel-vendor';
+            }
+            return undefined;
+          },
         },
       },
     },

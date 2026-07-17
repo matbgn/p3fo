@@ -27,7 +27,7 @@ dev-otel:
   @echo "--- Starting P3FO Development Environment with local OpenTelemetry ---"
   @echo "[1/2] Starting development server..."
   docker compose -f docker-compose.hyperdx.yml up -d
-  OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318/v1/traces pnpm run dev:all
+  VITE_OTEL_ENABLED=true OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318/v1/traces pnpm run dev:all
 
 # --- Browser-Only Development Task ---
 # Reproduce the deployed browser-only mode locally for debugging
@@ -43,6 +43,8 @@ tests:
 check:
   @echo "Running TypeScript type check..."
   npx tsc -b --noEmit
+  @echo "Running mcp-server TypeScript type check..."
+  pnpm exec tsc -p mcp-server/tsconfig.json --noEmit
   @echo "Running ESLint..."
   npx eslint --max-warnings 0
   just check-node-versions
@@ -94,8 +96,11 @@ docker-build version="$(git-sv cv)":
   LAST_P3FO_VERSION="$(docker images --format '{{{{.Tag}}' '{{DOCKER_IMAGE_NAME}}' | sort -V | tail -n 1)"
   echo "Last p3fo version: $LAST_P3FO_VERSION"
 
-  # Build with version tag
-  docker build -t "{{DOCKER_IMAGE_NAME}}":"{{version}}" .
+  # Build with version tag.
+  # VITE_OTEL_ENABLED=true keeps OTel instrumentation in the production bundle
+  # (lazy-loaded after first paint) so traces are available in prod without
+  # blocking the initial render.
+  docker build --build-arg VITE_OTEL_ENABLED=true -t "{{DOCKER_IMAGE_NAME}}":"{{version}}" .
 
   P3FO_CHANGED="$(docker images --format '{{{{.ID}}' p3fo)"
   echo "New p3fo hash: $P3FO_CHANGED"
@@ -215,8 +220,10 @@ clean:
 
 build:
   @echo "Building {{PROJECT_NAME}} frontend and backend..."
-  pnpm build
+  VITE_OTEL_ENABLED=true pnpm build
   pnpm exec tsc --project tsconfig.server.json
+  @echo "Building mcp-server..."
+  pnpm -C mcp-server build
 
 install:
   @echo "Installing dependencies..."

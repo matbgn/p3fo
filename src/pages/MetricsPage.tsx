@@ -9,6 +9,11 @@ import VacationsBalance from "@/components/VacationsBalance";
 import QoLSurvey from "@/components/QoLSurvey";
 import PomodoroStats from "@/components/PomodoroStats";
 import PomodoroHeatmap from "@/components/PomodoroHeatmap";
+import ConsistencyHeatmap from "@/components/ConsistencyHeatmap";
+import { ScoreCurve } from "@/components/ScoreCurve";
+import { useConsistencyScore } from "@/hooks/useConsistencyScore";
+import { ALL_LEGEND_KEYS, type LegendKey } from "@/components/ConsistencyLegend";
+import { useAllTasks } from "@/hooks/useAllTasks";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { usePomodoroStats } from "@/hooks/usePomodoroStats";
 
@@ -24,9 +29,26 @@ import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 import { getPersistenceAdapter } from "@/lib/persistence-factory";
 import { eventBus } from "@/lib/events";
+import { FocusModeProvider } from "@/components/FocusModeProvider";
+import { FocusModeOverlay } from "@/components/FocusModeOverlay";
 
 const PomodoroStatsTab: React.FC<{ userId: string; weekStartDay: 0 | 1 }> = ({ userId, weekStartDay }) => {
   const { sessions, stats, isLoading, reload } = usePomodoroStats(userId);
+  const { data: consistencyData, isLoading: consistencyLoading } = useConsistencyScore(userId, { sessions });
+  const { tasks } = useAllTasks();
+  const [legendVisible, setLegendVisible] = React.useState<Set<LegendKey>>(ALL_LEGEND_KEYS);
+
+  const toggleLegend = React.useCallback((key: LegendKey) => {
+    setLegendVisible(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        if (next.size > 1) next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }, []);
 
   const handleReset = async () => {
     try {
@@ -45,10 +67,16 @@ const PomodoroStatsTab: React.FC<{ userId: string; weekStartDay: 0 | 1 }> = ({ u
 
   return (
     <div className="space-y-6">
-      <PomodoroStats stats={stats} userId={userId} />
+      <PomodoroStats stats={stats} userId={userId} consistencyDays={consistencyData?.days} sessions={sessions} tasks={tasks} visible={legendVisible} onToggleLegend={toggleLegend} weekStartDay={weekStartDay} />
+      {consistencyData && !consistencyLoading && (
+        <div className="rounded-lg border bg-card text-card-foreground p-4">
+          <h3 className="text-sm font-medium mb-3">Consistency Score</h3>
+          <ScoreCurve data={consistencyData} />
+        </div>
+      )}
       <div className="rounded-lg border bg-card text-card-foreground p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-medium">Focus Session Activity</h3>
+          <h3 className="text-sm font-medium">Consistency Activity</h3>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
@@ -72,17 +100,31 @@ const PomodoroStatsTab: React.FC<{ userId: string; weekStartDay: 0 | 1 }> = ({ u
             </AlertDialogContent>
           </AlertDialog>
         </div>
-        <PomodoroHeatmap sessions={sessions} weekStartDay={weekStartDay} />
+        {consistencyData && !consistencyLoading ? (
+          <ConsistencyHeatmap days={consistencyData.days} weekStartDay={weekStartDay} visible={legendVisible} onToggleLegend={toggleLegend} />
+        ) : (
+          <PomodoroHeatmap sessions={sessions} weekStartDay={weekStartDay} />
+        )}
       </div>
     </div>
   );
 };
 
-const MetricsPage: React.FC = () => {
+const MetricsPageInner: React.FC<{ activeView?: string }> = ({ activeView }) => {
   const [activeTab, setActiveTab] = React.useState("forecast");
   const { userId: currentUserId } = useCurrentUser();
   const { users, loading: usersLoading } = useUsersContext();
   const { userSettings } = useUserSettings();
+
+  React.useEffect(() => {
+    if (activeView === 'metrics') {
+      const pending = sessionStorage.getItem('p3fo_metrics_tab');
+      if (pending) {
+        sessionStorage.removeItem('p3fo_metrics_tab');
+        setActiveTab(pending);
+      }
+    }
+  }, [activeView]);
 
   const [selectedUserId, setSelectedUserId] = React.useState<string>("");
   const [initializing, setInitializing] = React.useState(true);
@@ -143,7 +185,7 @@ const MetricsPage: React.FC = () => {
       </section>
 
       {/* Bottom pane for graphics in subtab separated view */}
-      <section className="flex-1 border rounded-lg p-6">
+      <section className="flex-1 border rounded-lg p-4 sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold">Individual Metrics</h2>
           <Select value={selectedUserId} onValueChange={handleUserChange}>
@@ -217,6 +259,16 @@ const MetricsPage: React.FC = () => {
         </div>
       </section>
     </div>
+  );
+};
+
+const MetricsPage: React.FC<{ activeView?: string }> = ({ activeView }) => {
+  return (
+    <FocusModeProvider viewId="metrics">
+      <FocusModeOverlay>
+        <MetricsPageInner activeView={activeView} />
+      </FocusModeOverlay>
+    </FocusModeProvider>
   );
 };
 

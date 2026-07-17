@@ -73,6 +73,17 @@ export const QuickTimer: React.FC<{
     updateSettings({ travelerConfig: { ...current, ...patch } }, 'user');
   }, [settings.travelerConfig, updateSettings]);
   const [durationLoading, setDurationLoading] = useState(false);
+  const [spotlightVisible, setSpotlightVisible] = useState(false);
+
+  React.useEffect(() => {
+    const onVisibilityChange = (visible: unknown) => {
+      setSpotlightVisible(Boolean(visible));
+    };
+    eventBus.subscribe('spotlightVisibilityChange', onVisibilityChange);
+    return () => {
+      eventBus.unsubscribe('spotlightVisibilityChange', onVisibilityChange);
+    };
+  }, []);
 
   // Derived flags used both by the sync effect below and by the JSX
   const pomodoroActive = pomodoro.pomodoroEnabled && pomodoro.state.phase !== 'idle';
@@ -700,6 +711,15 @@ export const QuickTimer: React.FC<{
         <div className="text-xs sm:text-sm text-muted-foreground italic flex items-center h-full">
           No active timer
         </div>
+      )}
+      {!spotlightVisible && (
+        <button
+          onClick={() => eventBus.publish('spotlightReopen')}
+          className="text-[11px] text-muted-foreground/70 hover:text-primary transition-colors shrink-0 ml-1 leading-tight text-left"
+          title="Reopen the What's Next spotlight"
+        >
+          What's<br />next?
+        </button>
       )}
     </div>
   );

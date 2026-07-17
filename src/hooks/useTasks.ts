@@ -4,10 +4,11 @@ import { eventBus } from "@/lib/events";
 import { usePersistence } from "@/hooks/usePersistence";
 import { yTasks, yUserSettings, doc, initializeCollaboration, isCollaborationEnabled } from "@/lib/collaboration";
 import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
-import { taskToEntity, tasksToEntities, convertEntitiesToTasks } from "@/lib/task-conversions";
+import { taskToEntity, tasksToEntities, convertEntitiesToTasks, recomputeChildrenFromParentId } from "@/lib/task-conversions";
 import { useReminderStore } from "./useReminders";
 import { BrowserJsonPersistence } from "@/lib/persistence-browser";
 import { getSelectedMode } from "@/lib/persistence-factory";
+import { confirmDialog } from "@/lib/confirm-modal";
 if (typeof crypto.randomUUID !== 'function') {
   crypto.randomUUID = function () {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
@@ -59,6 +60,7 @@ export type Task = {
   userId?: string;
   updatedAt?: number;
   linkedVoteIds?: string[];
+  blockedSince?: number;
 };
 
 
@@ -119,11 +121,16 @@ if (isCollaborationEnabled()) {
     if (isFiltered) {
       return;
     }
-    const newTasks = (Array.from(yTasks.values()) as Task[]).map(t => ({
+    const rawTasks = (Array.from(yTasks.values()) as Task[]).map(t => ({
       ...t,
       triageStatus: t.triageStatus || "Backlog",
       children: t.children || [],
     }));
+
+    // Recompute children from parentId — the authoritative source of truth.
+    // The `children` array stored in Yjs can become stale when tasks are
+    // created or reparented via external paths (REST API, MCP, another client).
+    const newTasks = recomputeChildrenFromParentId(rawTasks);
 
     // Always update, even if empty (e.g., all tasks deleted)
     // This ensures deletions to empty state trigger UI updates
@@ -275,6 +282,9 @@ loadTasks();
 
 
 async function createTask(title: string, parentId: string | null, userId?: string) {
+  // Look up parent for metadata inheritance
+  const parentTask = parentId ? tasks.find(t => t.id === parentId) : null;
+
   const t: Task = {
     id: crypto.randomUUID(),
     title: title.trim(),
@@ -282,16 +292,19 @@ async function createTask(title: string, parentId: string | null, userId?: strin
     parentId,
     children: [],
     triageStatus: "Backlog",
-    urgent: false,
-    impact: false,
-    difficulty: 1,
+    // Inherit work-context metadata from parent, with caller override for userId
+    urgent: parentTask?.urgent ?? false,
+    impact: parentTask?.impact ?? false,
+    majorIncident: parentTask?.majorIncident ?? false,
+    sprintTarget: parentTask?.sprintTarget ?? false,
+    difficulty: parentTask?.difficulty ?? 1,
     timer: [],
-    category: undefined,
+    category: parentTask?.category ?? undefined,
     terminationDate: undefined,
     comment: undefined,
     durationInMinutes: undefined,
-    priority: 0,
-    userId: userId,
+    priority: parentTask?.priority ?? 0,
+    userId: userId ?? parentTask?.userId ?? undefined,
   };
 
   try {
@@ -308,7 +321,10 @@ async function createTask(title: string, parentId: string | null, userId?: strin
     
     syncTaskToYjs(t.id, t);
 
+    let timerTransferred = false;
+
     if (parentId) {
+
       tasks = tasks.map(currentTask => {
         if (currentTask.id === parentId) {
           const updatedParent = {
@@ -318,6 +334,7 @@ async function createTask(title: string, parentId: string | null, userId?: strin
           if (updatedParent.timer && updatedParent.timer.length > 0) {
             t.timer = updatedParent.timer;
             updatedParent.timer = [];
+            timerTransferred = true;
             syncTaskToYjs(t.id, t);
           }
           syncTaskToYjs(updatedParent.id, updatedParent);
@@ -326,6 +343,26 @@ async function createTask(title: string, parentId: string | null, userId?: strin
         return currentTask;
       });
 
+      // Replace the child task in the array with a fresh object reference
+      // so React.memo detects the prop change and re-renders the timer pill.
+      if (timerTransferred) {
+        tasks = tasks.map(currentTask =>
+          currentTask.id === t.id ? { ...t } : currentTask
+        );
+      }
+
+      // Persist timer transfer to DB (both child and parent)
+      if (timerTransferred) {
+        try {
+          const childEntity = taskToEntity(t);
+          await adapter.updateTask(t.id, childEntity);
+          const parentEntity = taskToEntity(tasks.find(tsk => tsk.id === parentId)!);
+          await adapter.updateTask(parentId, parentEntity);
+        } catch (error) {
+          console.error('Error persisting timer transfer:', error);
+        }
+      }
+
       // Check parent task completion since a new subtask was added
       checkParentTaskCompletion(parentId);
     }
@@ -333,12 +370,18 @@ async function createTask(title: string, parentId: string | null, userId?: strin
 
     // Optimistic update
     eventBus.publish("tasksChanged");
+    // Notify timer pill components that a timer moved (parent → child)
+    if (timerTransferred) {
+      eventBus.publish("timerToggled", t.id);
+    }
 
   } catch (error) {
     console.error('Error creating task:', error);
     // Fallback to old method
     tasks = [...tasks, t];
+    let timerTransferred = false;
     if (parentId) {
+
       tasks = tasks.map(currentTask => {
         if (currentTask.id === parentId) {
           const updatedParent = {
@@ -348,14 +391,43 @@ async function createTask(title: string, parentId: string | null, userId?: strin
           if (updatedParent.timer && updatedParent.timer.length > 0) {
             t.timer = updatedParent.timer;
             updatedParent.timer = [];
+            timerTransferred = true;
+            syncTaskToYjs(t.id, t);
           }
+          syncTaskToYjs(updatedParent.id, updatedParent);
           return updatedParent;
         }
         return currentTask;
       });
+
+      // Replace the child task in the array with a fresh object reference
+      // so React.memo detects the prop change and re-renders the timer pill.
+      if (timerTransferred) {
+        tasks = tasks.map(currentTask =>
+          currentTask.id === t.id ? { ...t } : currentTask
+        );
+      }
+
+      // Persist timer transfer to DB even in fallback path
+      if (timerTransferred) {
+        try {
+          const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+          const fallbackAdapter = await persistence;
+          const childEntity = taskToEntity(t);
+          await fallbackAdapter.updateTask(t.id, childEntity);
+          const parentEntity = taskToEntity(tasks.find(tsk => tsk.id === parentId)!);
+          await fallbackAdapter.updateTask(parentId, parentEntity);
+        } catch (persistError) {
+          console.error('Error persisting timer transfer in fallback:', persistError);
+        }
+      }
+
       checkParentTaskCompletion(parentId);
     }
     eventBus.publish("tasksChanged");
+    if (timerTransferred) {
+      eventBus.publish("timerToggled", t.id);
+    }
   }
 
   return t.id;
@@ -456,10 +528,36 @@ function getMinBacklogPriority(): number {
   return priorities.length > 0 ? Math.min(...priorities) - 1 : -1;
 };
 
-async function updateStatus(taskId: string, status: TriageStatus) {
+export type UpdateStatusResult = { success: boolean; reason?: string };
+
+export type ToggleTimerResult =
+  | { success: true; needsConfirm?: false }
+  | { success: false; needsConfirm: true; reason: string }
+  | { success: false; needsConfirm: false; reason: string };
+
+async function updateStatus(taskId: string, status: TriageStatus): Promise<UpdateStatusResult> {
   const taskMap = byId(tasks);
   const task = taskMap[taskId];
-  if (!task) return;
+  if (!task) return { success: false, reason: 'Task not found' };
+
+  if (status === 'WIP' && task.triageStatus !== 'WIP') {
+    try {
+      const { getWipLimit } = await import('@/lib/wip-limit');
+      const limit = getWipLimit();
+      if (limit > 0) {
+        const wipCount = tasks.filter(t =>
+          t.triageStatus === 'WIP' &&
+          t.id !== taskId &&
+          (t.userId ?? undefined) === (task.userId ?? undefined)
+        ).length;
+        if (wipCount >= limit) {
+          return { success: false, reason: `WIP limit reached (${limit} per user). Finish or move a task out of WIP first.` };
+        }
+      }
+    } catch {
+      // If wip-limit module not available, skip the check
+    }
+  }
 
   const tasksToUpdate = new Set<string>([taskId]);
 
@@ -492,10 +590,13 @@ async function updateStatus(taskId: string, status: TriageStatus) {
         updatedAt: Date.now()
       };
 
-      // Automatically degrade priority when task is moved to Blocked status
+      // Track when task entered Blocked status; clear when leaving
       if (status === "Blocked") {
+        updatedTask.blockedSince = t.blockedSince ?? Date.now();
         const minBacklogPriority = getMinBacklogPriority();
         updatedTask.priority = minBacklogPriority;
+      } else {
+        updatedTask.blockedSince = undefined;
       }
 
       syncTaskToYjs(updatedTask.id, updatedTask);
@@ -539,6 +640,8 @@ async function updateStatus(taskId: string, status: TriageStatus) {
     checkParentTaskCompletion(taskId);
     isUpdatingDueToChildCompletion = false;
   }
+
+  return { success: true };
 };
 
 const toggleDone = (taskId: string) => {
@@ -916,7 +1019,9 @@ export function useTasks() {
     if (taskToDelete.parentId) {
       tasks = tasks.map(t => {
         if (t.id === taskToDelete.parentId) {
-          return { ...t, children: (t.children || []).filter(id => id !== taskId) };
+          const updatedParent = { ...t, children: (t.children || []).filter(id => id !== taskId) };
+          syncTaskToYjs(updatedParent.id, updatedParent);
+          return updatedParent;
         }
         return t;
       });
@@ -1151,9 +1256,60 @@ export function useTasks() {
     return task.difficulty || 0;
   };
 
-  const toggleTimer = React.useCallback(async (taskId: string, currentUserId?: string) => {
+  const toggleTimer = React.useCallback(async (taskId: string, currentUserId?: string, options?: { force?: boolean }): Promise<ToggleTimerResult> => {
     const task = tasks.find(t => t.id === taskId);
-    if (!task) return;
+    if (!task) return { success: false, needsConfirm: false, reason: 'Task not found' };
+
+    const isStarting = !task.timer?.some(e => e.endTime === 0);
+    const isTaskBelongingToCurrentUser = currentUserId
+      ? (task.userId === currentUserId || (!task.userId && currentUserId === 'UNASSIGNED'))
+      : true;
+
+    // WIP limit check when starting a timer on a non-WIP task
+    if (isStarting && task.triageStatus !== 'WIP') {
+      try {
+        const { getWipLimit } = await import('@/lib/wip-limit');
+        const limit = getWipLimit();
+        if (limit > 0 && isTaskBelongingToCurrentUser) {
+          const wipCount = tasks.filter(t =>
+            t.triageStatus === 'WIP' &&
+            t.id !== taskId &&
+            (t.userId ?? undefined) === (task.userId ?? undefined)
+          ).length;
+          if (wipCount >= limit) {
+            const reason = `WIP limit reached (${limit} per user). Finish or move a task out of WIP first.`;
+            toast.error(reason);
+            return { success: false, needsConfirm: false, reason };
+          }
+        }
+      } catch {
+        // If wip-limit module not available, skip the check
+      }
+    }
+
+    // Task-switching friction: when starting a timer and another task is already WIP
+    // with a running timer for the same user, require confirmation.
+    if (isStarting && isTaskBelongingToCurrentUser && !options?.force) {
+      const otherRunningWip = tasks.find(t =>
+        t.id !== taskId &&
+        t.triageStatus === 'WIP' &&
+        t.timer?.some(e => e.endTime === 0) &&
+        (currentUserId
+          ? (t.userId === currentUserId || (!t.userId && currentUserId === 'UNASSIGNED'))
+          : true)
+      );
+      if (otherRunningWip) {
+        const confirmed = await confirmDialog({
+          title: 'Switch to a new task?',
+          description: `You're currently working on "${otherRunningWip.title}". Switching will stop its timer and start the new one.`,
+          confirmLabel: 'Switch task',
+          cancelLabel: 'Keep current task',
+        });
+        if (!confirmed) {
+          return { success: false, needsConfirm: false, reason: 'Task switch cancelled' };
+        }
+      }
+    }
 
     // Collect tasks that need to be persisted (other running timers that need to be stopped)
     const tasksToPersist: Task[] = [];
@@ -1166,9 +1322,6 @@ export function useTasks() {
     // The task belongs to the current user if:
     // - task.userId matches currentUserId, OR
     // - task has no userId AND currentUserId is 'UNASSIGNED' (special case for unassigned tasks filter)
-    const isTaskBelongingToCurrentUser = currentUserId
-      ? (task.userId === currentUserId || (!task.userId && currentUserId === 'UNASSIGNED'))
-      : true; // Backward compatibility: if no currentUserId, assume user's own task
 
     // First, stop any other running timers ONLY for the current user
     // This prevents stopping timers for other users' tasks
@@ -1251,6 +1404,7 @@ export function useTasks() {
     if (updatedTask) {
       toast.success(isRunning ? `Timer started today for "${updatedTask.title}"` : `Timer stopped for "${updatedTask.title}"`);
     }
+    return { success: true };
   }, []);
 
   const updateTimeEntry = React.useCallback(async (taskId: string, entryIndex: number, newEntry: { startTime: number; endTime: number }) => {
@@ -1457,6 +1611,8 @@ export function useTasks() {
     }, []),
     // Reload all tasks (no filter)
     reloadTasks: React.useCallback(async () => {
+      // Reset the filtered flag so loadTasks() doesn't bail out early
+      isFiltered = false;
       // Delegate to module-level function which handles state updates and event publishing
       await loadTasks();
     }, []),

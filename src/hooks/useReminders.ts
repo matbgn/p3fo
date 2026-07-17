@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { ReminderEntity } from "@/lib/persistence-types";
 import { getPersistenceAdapter } from "@/lib/persistence-factory";
+import { NOTIFIED_KEYS_STORAGE_KEY } from "@/lib/persistence-browser";
 
 export type ReminderState = 'scheduled' | 'triggered' | 'read' | 'dismissed';
 
@@ -42,6 +43,23 @@ const isValidTransition = (fromState: ReminderState, toState: ReminderState): bo
   return VALID_TRANSITIONS[fromState].includes(toState);
 };
 
+function loadNotifiedKeys(): Set<string> {
+  try {
+    const stored = localStorage.getItem(NOTIFIED_KEYS_STORAGE_KEY);
+    return new Set(stored ? JSON.parse(stored) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function persistNotifiedKeys(keys: Set<string>): void {
+  try {
+    localStorage.setItem(NOTIFIED_KEYS_STORAGE_KEY, JSON.stringify([...keys]));
+  } catch {
+    // ignore storage errors
+  }
+}
+
 type ReminderStore = {
   reminders: Reminder[];
   addReminder: (reminder: Omit<Reminder, "id" | "read" | "state">) => void;
@@ -57,12 +75,34 @@ type ReminderStore = {
   setScheduledReminders: (reminders: Reminder[]) => void;
   deleteRemindersByTaskId: (taskId: string) => void;
   cleanupDuplicateReminders: () => void;
+  notifiedKeys: Set<string>; // Persistent registry of already-notified condition keys (aging/blocked)
+  isNotified: (key: string) => boolean;
+  markNotified: (key: string) => void;
+  clearNotifiedKeys: () => void;
+  currentUserId: string | null;
+  setUserId: (userId: string | null) => void;
 };
 
 export const useReminderStore = create<ReminderStore>((set, get) => ({
   reminders: [],
   scheduledReminders: [],
   unreadCount: 0,
+  notifiedKeys: typeof window !== 'undefined' ? loadNotifiedKeys() : new Set<string>(),
+  isNotified: (key) => get().notifiedKeys.has(key),
+  markNotified: (key) => {
+    const current = get().notifiedKeys;
+    if (current.has(key)) return;
+    const updated = new Set(current);
+    updated.add(key);
+    persistNotifiedKeys(updated);
+    set({ notifiedKeys: updated });
+  },
+  clearNotifiedKeys: () => {
+    persistNotifiedKeys(new Set());
+    set({ notifiedKeys: new Set() });
+  },
+  currentUserId: null,
+  setUserId: (userId) => set({ currentUserId: userId }),
   addReminder: (newReminder) => {
     // Check if a reminder with the same taskId and originalTriggerDate already exists
     const existingReminder = get().scheduledReminders.find(
@@ -209,12 +249,17 @@ export const useReminderStore = create<ReminderStore>((set, get) => ({
         unreadCount: updatedReminders.filter((r) => !r.read).length,
       };
     }),
-  clearAllReminders: () =>
+  clearAllReminders: () => {
     set(() => ({
       reminders: [],
       scheduledReminders: [],
       unreadCount: 0,
-    })),
+    }));
+    // Clear persisted reminders too so they don't reappear on reload.
+    // notifiedKeys is intentionally preserved so condition-based triggers
+    // (aging/blocked) don't re-fire for conditions the user already saw.
+    getPersistenceAdapter().then(adapter => adapter.clearAllReminders()).catch(() => {});
+  },
   checkAndTriggerReminders: () => {
     const now = new Date();
     set((state) => {
@@ -356,6 +401,20 @@ export const useReminderStore = create<ReminderStore>((set, get) => ({
 }));
 
 export const useReminders = () => useReminderStore();
+
+// Auto-persist: save all reminders to storage whenever they change
+let persistenceTimer: ReturnType<typeof setTimeout> | null = null;
+useReminderStore.subscribe((state, prevState) => {
+  if (state.reminders === prevState.reminders && state.scheduledReminders === prevState.scheduledReminders) return;
+  const userId = state.currentUserId;
+  if (!userId) return;
+  // Debounce to avoid hammering storage on rapid updates
+  if (persistenceTimer) clearTimeout(persistenceTimer);
+  persistenceTimer = setTimeout(() => {
+    const all = [...state.reminders, ...state.scheduledReminders];
+    saveAllRemindersToPersistence(all, userId);
+  }, 500);
+});
 
 // Helper function to convert Reminder to ReminderEntity for persistence
 const reminderToEntity = (reminder: Reminder, userId: string): ReminderEntity => ({

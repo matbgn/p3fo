@@ -25,9 +25,11 @@ const mockSettings: CombinedSettings = {
     timezone: 'Europe/Zurich',
     cardAgingBaseDays: 30,
     disabledModules: [],
+    wipLimitPerUser: 5,
     pomodoroConfig: DEFAULT_POMODORO_CONFIG,
     focusModeConfig: DEFAULT_FOCUS_MODE_CONFIG,
     travelerConfig: DEFAULT_TRAVELER_CONFIG,
+    nonActionPeriodHours: 3,
 };
 
 const makeTaskWithTimer = (startTime: number, endTime: number, userId?: string): Task => ({

@@ -25,11 +25,13 @@ import { Filters } from "@/components/FilterControls";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { DateRange } from "react-day-picker";
 import { MultiSelect } from "@/components/ui/multi-select";
+import { FocusModeProvider } from "@/components/FocusModeProvider";
+import { FocusModeOverlay } from "@/components/FocusModeOverlay";
 
 type TimetableView = "categorical" | "chronological";
 type TimeChunk = "all" | "am" | "pm";
 
-export const Timetable: React.FC<{
+const TimetableInner: React.FC<{
   onJumpToTask?: (taskId: string) => void;
 }> = ({ onJumpToTask }) => {
   const navigate = useNavigate();
@@ -938,11 +940,23 @@ export const Timetable: React.FC<{
             onUpdateTaskCategory={updateCategory}
             onUpdateUser={updateUser}
             onDelete={deleteTimeEntry}
-            onJumpToTask={onJumpToTask}
-            onToggleTimer={toggleTimer}
-          />
-        )}
-      </div>
+          onJumpToTask={onJumpToTask}
+          onToggleTimer={toggleTimer}
+        />
+      )}
     </div>
+    </div>
+  );
+};
+
+export const Timetable: React.FC<{
+  onJumpToTask?: (taskId: string) => void;
+}> = ({ onJumpToTask }) => {
+  return (
+    <FocusModeProvider viewId="timetable">
+      <FocusModeOverlay>
+        <TimetableInner onJumpToTask={onJumpToTask} />
+      </FocusModeOverlay>
+    </FocusModeProvider>
   );
 };

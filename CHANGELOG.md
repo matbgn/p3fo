@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.31.0 (2026-07-17)
+
+### Features
+
+- **common:** add executive-function tooling (9867a45)
+- **comparative tool:** add early finalize and convergence (e08281a)
+- **auth:** add shared API key for MCP access behind oauth2-proxy (8caaa2a)
+
+### Bug Fixes
+
+- **common:** add focus mode to timetable and metrics pages (283828d)
+- **focus board:** add focus mode UI to task board (7554cfe)
+- **data storage:** add wip limit and non-action period settings (87f7b50)
+- **tasks:** correct timer transfer and parent sync (8f6d434)
+- **tasks:** inherit parent metadata in subtasks (c9bc394)
+- **boards:** align kanban hover delay with storyboard (2b38d72)
+
+---
+
 ## v0.30.0 (2026-06-25)
 
 ### Features
@@ -136,17 +155,5 @@
 - **calendar view:** fix scrolling down on mobile (610c8f9)
 - **focus view:** ensure all children are deployed on expand all (3a0b4f2)
 - **task cards:** ensure dropdowns are still accessible on ultra compact mode (b67b542)
-
----
-
-## v0.23.0 (2026-05-26)
-
-### Features
-
-- **common:** add focus mode to program view and align dual-view rendering (09ba014)
-
-### Bug Fixes
-
-- **kanban board:** correct dnd for touch devices (dda864f)
 
 ---

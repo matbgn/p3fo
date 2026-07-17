@@ -20,8 +20,9 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { QuickAddTask } from './QuickAddTask';
 import { StoryboardCard } from './StoryboardCard';
 import { AlertTriangle, CircleDot, Flame, GripHorizontal, ChevronDown, ChevronRight } from 'lucide-react';
 import { FilterControls, Filters } from './FilterControls';
@@ -42,8 +43,6 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) 
   const defaultPlanView = settings.defaultPlanView || 'week';
 
   const [view, setView] = React.useState<View>(defaultPlanView);
-
-  const [quickAddInput, setQuickAddInput] = React.useState('');
 
   // Click-to-create task state
   const [newTaskDialogOpen, setNewTaskDialogOpen] = React.useState(false);
@@ -552,35 +551,11 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) 
                   />
                 ))}
             </div>
-            <div className="flex gap-2">
-              <Input
-                placeholder="Quick add task..."
-                value={quickAddInput}
-                onChange={(e) => setQuickAddInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const title = quickAddInput.trim();
-                    if (title) {
-                      createTask(title, null, currentUserId);
-                      setQuickAddInput('');
-                    }
-                  }
-                }}
-                className="max-w-md"
-              />
-              <Button
-                onClick={() => {
-                  const title = quickAddInput.trim();
-                  if (title) {
-                    createTask(title, null, currentUserId);
-                    setQuickAddInput('');
-                  }
-                }}
-                disabled={!quickAddInput.trim()}
-              >
-                Add
-              </Button>
-            </div>
+            <QuickAddTask
+              placeholder="Quick add task..."
+              userId={currentUserId}
+              className="max-w-md"
+            />
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 <Button

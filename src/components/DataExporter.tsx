@@ -5,6 +5,7 @@ import { useReminderStore } from '@/hooks/useReminders';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { getPersistenceAdapter } from '@/lib/persistence-factory';
 import { convertEntitiesToTasks } from '@/lib/task-conversions';
+import { getAllTemplates } from '@/lib/task-templates';
 import { VoteResponseEntity, VoteLoop, VoteModerator } from '@/lib/persistence-types';
 
 const DataExporter: React.FC = () => {
@@ -50,6 +51,7 @@ const DataExporter: React.FC = () => {
         splitTime: appSettings.splitTime?.toString(),
         cardAgingBaseDays: appSettings.cardAgingBaseDays?.toString(),
         disabledModules: appSettings.disabledModules,
+        wipLimitPerUser: appSettings.wipLimitPerUser,
       };
 
       // Fetch Fertilization Board state
@@ -86,8 +88,11 @@ const DataExporter: React.FC = () => {
         allVoteModerators.push(...moderators);
       }
 
+      // Fetch task templates (workspace + user scopes, localStorage-backed)
+      const taskTemplates = getAllTemplates();
+
       const exportData = {
-        schemaVersion: 3,
+        schemaVersion: 4,
         tasks: allTasks,
         scheduledReminders: allReminders,
         qolSurveyResponses: allQolSurveyResponses,
@@ -103,6 +108,7 @@ const DataExporter: React.FC = () => {
         voteLoops: allVoteLoops,
         voteModerators: allVoteModerators,
         pomodoroSessions: allPomodoroSessions,
+        taskTemplates,
       };
 
       const data = JSON.stringify(exportData, null, 2);

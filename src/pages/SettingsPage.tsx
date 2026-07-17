@@ -21,6 +21,7 @@ import type { ModuleId } from '@/lib/persistence-types';
 import PomodoroSettings from '@/components/PomodoroSettings';
 import TravelerSettings from '@/components/TravelerSettings';
 import FocusModeSettings from '@/components/FocusModeSettings';
+import { TemplateManager } from '@/components/TemplateManager';
 
 const ALL_MODULES: { id: ModuleId; label: string; description: string; isTopLevel: boolean }[] = [
   { id: 'celebration', label: 'Celebration', description: 'Fertilization Board for achievements and celebrations', isTopLevel: true },
@@ -281,6 +282,14 @@ const SettingsPage: React.FC = () => {
             <div className="pt-6 border-t">
               <FocusModeSettings />
             </div>
+
+            <div className="pt-6 border-t">
+              <h2 className="text-xl font-semibold mb-2">My Personal Templates</h2>
+              <p className="text-muted-foreground mb-4">
+                Your personal templates, complementing the workspace templates. Available only to you.
+              </p>
+              <TemplateManager scope="user" />
+            </div>
           </TabsContent>
 
           <TabsContent value="workspace" className="space-y-8 mt-0">
@@ -524,7 +533,49 @@ const SettingsPage: React.FC = () => {
                     Days before cards show aging effects. Set to 0 to disable. (default: 30). Use decimals like 0.005 for testing (~7 min).
                   </p>
                 </div>
+
+                <div>
+                  <Label className="block text-sm font-medium mb-1">
+                    WIP Limit Per User
+                  </Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={settings.wipLimitPerUser}
+                    onChange={(e) => handleSettingChange('wipLimitPerUser', parseInt(e.target.value) || 0, 'global')}
+                    className="w-24 mt-2"
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Maximum tasks in WIP per user. Set to 0 to disable. (default: 5). Hard block — tasks cannot enter WIP when at capacity.
+                  </p>
+                </div>
+
+                <div>
+                  <Label className="block text-sm font-medium mb-1">
+                    Non-Action Period (hours)
+                  </Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={settings.nonActionPeriodHours}
+                    onChange={(e) => handleSettingChange('nonActionPeriodHours', parseFloat(e.target.value) || 0, 'user')}
+                    className="w-24 mt-2"
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Hours of inactivity before the mood selector appears. Set to 0 to disable. (default: 3).
+                  </p>
+                </div>
               </div>
+            </div>
+
+            <div className="pt-6 border-t">
+              <h2 className="text-xl font-semibold mb-2">Task Templates</h2>
+              <p className="text-muted-foreground mb-4">
+                Templates scaffold common workflows as a parent task with predefined children. Any team member can create workspace templates.
+              </p>
+              <TemplateManager scope="workspace" />
             </div>
 
             <div className="pt-6 border-t">

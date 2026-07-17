@@ -37,6 +37,33 @@ export interface ConsentLoopTally {
   proposals: ProposalLoopTally[];
 }
 
+export type ProposalRoundTally = ProposalLoopTally["perRound"][number];
+
+/**
+ * Returns the best round to display for a consent-loop proposal once the
+ * process is closed.
+ *
+ * Preference order:
+ *  1. The adopted closed round with the highest majority mention (median).
+ *     If several rounds are adopted, the one where the group converged the
+ *     best is the meaningful "final" outcome.
+ *  2. If no round was adopted, the last closed round (so the user still sees
+ *     where the process ended, marked as not adopted).
+ *  3. null if there are no closed rounds.
+ */
+export function getBestConsentRound(
+  tally: ProposalLoopTally
+): ProposalRoundTally | null {
+  const closed = tally.perRound.filter((r) => r.closed);
+  if (closed.length === 0) return null;
+
+  const adopted = closed.filter((r) => r.adopted);
+  if (adopted.length > 0) {
+    return adopted.reduce((best, r) => (r.median > best.median ? r : best));
+  }
+  return closed[closed.length - 1];
+}
+
 export function tallyThumbsUp(
   responses: VoteResponseEntity[],
   proposalId: string
@@ -111,12 +138,13 @@ export function tallyConsentLoop(
       );
       const mj = computeMJFromValues(loopResponses.map((r) => r.value));
       const bottomGrades = (mj.distribution[0] || 0) + (mj.distribution[-1] || 0);
+      const hasVotes = loopResponses.length > 0;
       return {
         roundNumber: loop.roundNumber,
         loopId: loop.id,
         median: mj.median,
         distribution: mj.distribution,
-        adopted: bottomGrades === 0,
+        adopted: hasVotes && bottomGrades === 0,
         closed: !!loop.closedAt,
       };
     });

@@ -8,6 +8,43 @@ A comprehensive productivity and team-management tool built with React, TypeScri
 
 ---
 
+## 🧠 Built for Executive Function
+
+P3Fo isn't just another task manager. It's designed as an **executive-function prosthetic** — a reliable bridge between *knowing* what matters and actually *doing* it.
+
+If you've ever known exactly what you should work on but couldn't start, lost the thread between intention and execution, or found that traditional productivity tools feel useful for a week and then get abandoned — P3Fo was built with you in mind.
+
+People with ADHD traits, burnout, depression, anxiety, perfectionism, or simply overloaded executive functions don't need more willpower. They need **systems that make the right action happen by default**, so those abilities are needed as little as possible. P3Fo addresses this across eight dimensions:
+
+### The Eight Dimensions
+
+| # | Dimension | What P3Fo does |
+|---|-----------|----------------|
+| **1** | **Decision reduction** — "What should I do next?" in one click, not ten | The prioritization engine ranks your tasks, the storyboard shows them in execution order, and the first card *is* your next action. A proactive prompt on first load surfaces it — no decision paralysis. |
+| **2** | **Decomposition that feels natural** — vague projects become concrete actions | Tasks are sized with a Fibonacci difficulty scale capped at 8 hours. Anything bigger implicitly needs splitting. The hierarchy, Flow sub-view, and auto-completion cascade make decomposition the path of least resistance — not a chore. |
+| **3** | **Protection against task switching** — make switching slightly painful | An enforced WIP limit (default 5/person) prevents context-switching overload. Starting a new task while another is in progress prompts "continue or explicitly abandon?" — friction where it matters, configurable for teams that don't need it. |
+| **4** | **Completion rituals** — because most people have a closing problem, not a starting problem | Task templates scaffold common workflows as a parent task with pre-defined children (tests pass, docs updated, stakeholders informed...). The auto-completion cascade ensures the parent can't close until every step is done. The template *is* the ritual. |
+| **5** | **Consistency over intensity** — track showing up, not just output | A contribution-style heatmap with three levels: **blue** (you started a task, even without a focus technique), **green** (you used Pomodoro or Traveler technique), **gold** (you worked on something impactful). An exponential moving average score — inspired by habit trackers algorithm means a few missed days gently lower your score instead of snapping a streak to zero. *Showing up at any level keeps your momentum.* |
+| **6** | **Communication triggers** — because communication failures sink careers, not productivity failures | Cards age visually (dust, cobwebs) when left idle. When a card crosses an aging threshold, the notification center proactively asks: *"This card is aging — act on it, ask for support, or drop it?"* Blocked tasks trigger escalation prompts. The tool watches your back when you forget. |
+| **7** | **Mood-aware task selection** — ACT translated into tooling | After a period of inaction, P3Fo asks how you feel with a simple traffic light: **green** (ready for anything), **orange** (show me something a bit easier), **red** (give me the smallest possible task). The system adapts which storyboard task it recommends based on your current capacity — always showing *a* task, never blocking action. *You don't have to feel ready to start.* |
+| **8** | **Recovery after failure** — because real consistency isn't a straight line | Executive-function challenges are non-linear: good days, terrible days, good days again. P3Fo normalizes return. After inactivity, you're greeted with *"Good to see you. Here's today's next action."* — no streak-shaming, no guilt. The EMA score gently decayed while you were away and starts climbing again the moment you do *something*. Recovery matters more than streaks. |
+
+### The philosophy
+
+> Discipline is not forcing yourself to do hard things.
+> Discipline is building a life where the right action happens by default.
+
+P3Fo combines four frameworks into one tool:
+
+- **ACT (Acceptance & Commitment Therapy)** — separate mood from action; never wait to feel ready
+- **Getting Things Done** — force concrete next physical actions, not vague projects
+- **Kanban** — visible work, work-in-progress limits
+- **ADHD coaching** — external reminders, friction reduction, artificial accountability
+
+The result is not a planner. It's an **executive-function prosthetic** — strengthening the bridge between knowing and doing.
+
+---
+
 ## 🎁 Donation
 
 Your donations are welcomed following this link / button: 

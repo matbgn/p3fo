@@ -43,6 +43,7 @@ export const convertEntitiesToTasks = (entities: TaskEntity[]): Task[] => {
             userId: entity.userId || undefined,
             updatedAt: entity.updatedAt ? new Date(entity.updatedAt).getTime() : undefined,
             linkedVoteIds: entity.linkedVoteIds || undefined,
+            blockedSince: entity.blockedSince ? new Date(entity.blockedSince).getTime() : undefined,
         };
         taskMap[task.id] = task;
     });
@@ -85,6 +86,7 @@ export const taskToEntity = (task: Task): TaskEntity => ({
     children: task.children || [],
     updatedAt: task.updatedAt ? new Date(task.updatedAt).toISOString() : null,
     linkedVoteIds: task.linkedVoteIds || undefined,
+    blockedSince: task.blockedSince ? new Date(task.blockedSince).toISOString() : null,
 });
 
 /**
@@ -103,6 +105,39 @@ export const tasksToEntities = (tasks: readonly Task[]): TaskEntity[] => {
         entities[i] = taskToEntity(tasks[i]);
     }
     return entities;
+};
+
+/**
+ * Recomputes the `children` arrays on a set of tasks from their `parentId`
+ * relationships. This is the authoritative way to rebuild hierarchy — the
+ * `parentId` column is the source of truth, while `children` is a derived
+ * field that can become stale when tasks are created or reparented via
+ * external paths (e.g., MCP API, REST API, another Yjs client).
+ *
+ * Used by the Yjs observer and any other code path that receives Task[]
+ * from a source that may have stale children arrays.
+ *
+ * Performance: O(n) time, O(n) space
+ *
+ * @param tasks - Array of Task objects with potentially stale children arrays
+ * @returns New array of Task objects with children recomputed from parentId
+ */
+export const recomputeChildrenFromParentId = (tasks: Task[]): Task[] => {
+    const taskMap: { [id: string]: Task } = {};
+
+    // First pass: reset children to empty, map by id
+    tasks.forEach(task => {
+        taskMap[task.id] = { ...task, children: [] };
+    });
+
+    // Second pass: populate children from parentId
+    tasks.forEach(task => {
+        if (task.parentId && taskMap[task.parentId]) {
+            taskMap[task.parentId].children!.push(task.id);
+        }
+    });
+
+    return Object.values(taskMap);
 };
 
 /**
@@ -146,6 +181,11 @@ export const taskPatchToEntity = (
             : null;
     }
     if (patch.linkedVoteIds !== undefined) entity.linkedVoteIds = patch.linkedVoteIds;
+    if (patch.blockedSince !== undefined) {
+        entity.blockedSince = patch.blockedSince
+            ? new Date(patch.blockedSince).toISOString()
+            : null;
+    }
 
     return entity;
 };

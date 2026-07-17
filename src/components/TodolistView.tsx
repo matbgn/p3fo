@@ -1,13 +1,11 @@
 import React, { useState, useMemo } from "react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
 import { Task, TriageStatus, Category } from "@/hooks/useTasks";
 import { Filters } from "./FilterControls";
 import { aStarTextSearch } from "@/lib/a-star-search";
 import { sortTasks } from "@/utils/taskSorting";
 import { TodolistRow, TodolistRowData } from "./TodolistRow";
 import { LazyRow } from "./LazyRow";
+import { QuickAddTask } from "./QuickAddTask";
 
 interface TodolistViewProps {
   tasks: Task[];
@@ -66,8 +64,6 @@ const TodolistView: React.FC<TodolistViewProps> = ({
   expandedParents,
   onToggleExpand,
 }) => {
-  const [quickAddValue, setQuickAddValue] = useState("");
-
   const map = useMemo(() => {
     const m = new Map<string, Task>();
     tasks.forEach(t => m.set(t.id, t));
@@ -153,14 +149,6 @@ const TodolistView: React.FC<TodolistViewProps> = ({
     return rows;
   }, [filteredTopTasks, expandedParents, map, displayFilters.status]);
 
-  const handleQuickAdd = async () => {
-    const value = quickAddValue.trim();
-    if (!value) return;
-    const assignedUserId = storedFilters.selectedUserId && storedFilters.selectedUserId !== 'UNASSIGNED' ? storedFilters.selectedUserId : undefined;
-    await createTask(value, null, assignedUserId);
-    setQuickAddValue("");
-  };
-
   if (loadingFilters) {
     return <div className="text-xs text-muted-foreground px-4 py-8">Loading filters...</div>;
   }
@@ -168,22 +156,12 @@ const TodolistView: React.FC<TodolistViewProps> = ({
   return (
     <div className="flex flex-col h-full">
       {/* Quick add row at top */}
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border bg-accent/5 shrink-0 min-w-[1000px]">
-        <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
-        <Input
+      <div className="px-3 py-1.5 border-b border-border bg-accent/5 shrink-0 min-w-[1000px]">
+        <QuickAddTask
           placeholder="Enter a title for a new top-level task"
-          value={quickAddValue}
-          onChange={(e) => setQuickAddValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") handleQuickAdd();
-          }}
-          className="h-7 text-sm border-none shadow-none focus-visible:ring-0 px-0"
+          showPlusIcon
+          userId={storedFilters.selectedUserId && storedFilters.selectedUserId !== 'UNASSIGNED' ? storedFilters.selectedUserId : undefined}
         />
-        {quickAddValue.trim() && (
-          <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={handleQuickAdd}>
-            Add
-          </Button>
-        )}
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto">

@@ -6,6 +6,23 @@ import { yUserSettings, isCollaborationEnabled } from '@/lib/collaboration';
 import { MonthlyBalanceData, UserSettingsEntity } from '@/lib/persistence-types';
 import { UserContext } from './UserContextDefinition';
 
+/** Map a persisted UserSettingsEntity (from UserContext) into the UI shape.
+ *  Avoids re-fetching the same record the UserProvider already loaded. */
+const entityToUserSettings = (settings: UserSettingsEntity): UserSettings => ({
+    username: settings.username,
+    logo: settings.logo,
+    hasCompletedOnboarding: settings.hasCompletedOnboarding,
+    monthlyBalances: settings.monthlyBalances || {},
+    cardCompactness: settings.cardCompactness ?? 0,
+    workload: settings.workload,
+    splitTime: settings.splitTime,
+    timezone: settings.timezone,
+    weekStartDay: settings.weekStartDay,
+    defaultPlanView: settings.defaultPlanView,
+    preferredWorkingDays: settings.preferredWorkingDays as number[] | undefined,
+    trigram: settings.trigram,
+});
+
 export interface UserSettings {
     username: string;
     logo: string; // base64 encoded image or URL
@@ -87,24 +104,34 @@ interface UserSettingsContextType {
 const UserSettingsContext = createContext<UserSettingsContextType | undefined>(undefined);
 
 export const UserSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { userId } = useContext(UserContext)!; // We know it exists because of provider hierarchy
+    const { userId, userSettings: persistedUserSettings, loading: userLoading } = useContext(UserContext)!; // We know it exists because of provider hierarchy
     const [userSettings, setUserSettings] = useState<UserSettings>(defaultUserSettings);
     const [loading, setLoading] = useState(true);
     const pendingUpdatesRef = useRef<Set<string>>(new Set());
     const lastUpdateTimestampRef = useRef<Record<string, number>>({});
 
-    // Load settings when userId is available
+    // Load settings when userId/settings are available.
+    // Reuse the record UserContext already fetched to avoid a duplicate round-trip
+    // on the critical first-paint path; only fall back to a fresh fetch if missing.
     useEffect(() => {
-        const initializeSettings = async () => {
-            if (!userId) return;
+        if (userLoading) return; // wait for UserContext to finish its fetch
+        if (!userId) return;
 
-            const settings = await loadUserSettings(userId);
+        if (persistedUserSettings) {
+            setUserSettings(entityToUserSettings(persistedUserSettings));
+            setLoading(false);
+            return;
+        }
+
+        // Only fetch if UserContext has no record (e.g. newly created user)
+        let cancelled = false;
+        loadUserSettings(userId).then(settings => {
+            if (cancelled) return;
             setUserSettings(settings);
             setLoading(false);
-        };
-
-        initializeSettings();
-    }, [userId]);
+        });
+        return () => { cancelled = true; };
+    }, [userId, persistedUserSettings, userLoading]);
 
     // Listen for external settings changes and reload
     useEffect(() => {

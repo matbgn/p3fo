@@ -7,6 +7,7 @@ import {
   computeMJFromValues,
   getMJMedianFromRecord,
   tallyConsentLoop,
+  getBestConsentRound,
   calculateCardVoteScore,
 } from './vote-tally'
 import type { VoteResponseEntity, VoteLoop } from './persistence-types'
@@ -262,6 +263,12 @@ describe('tallyConsentLoop', () => {
     expect(result.proposals[0].perRound[0].adopted).toBe(false)
   })
 
+  it('sets adopted=false when no votes were cast', () => {
+    const loop = makeLoop({ id: 'l1', proposalId: 'p1', roundNumber: 1, closedAt: '2026-01-02T00:00:00Z' })
+    const result = tallyConsentLoop([loop], [], ['p1'])
+    expect(result.proposals[0].perRound[0].adopted).toBe(false)
+  })
+
   it('handles 3-round lifecycle for single proposal', () => {
     const loops = [
       makeLoop({ id: 'round1', proposalId: 'p1', roundNumber: 1, closedAt: '2026-01-02T00:00:00Z' }),
@@ -320,6 +327,57 @@ describe('tallyConsentLoop', () => {
     expect(result.proposals[0].current!.median).toBe(4)
     expect(result.proposals[1].proposalId).toBe('p2')
     expect(result.proposals[1].current!.median).toBe(1)
+  })
+})
+
+describe('getBestConsentRound', () => {
+  it('returns null when there are no closed rounds', () => {
+    const loops = [makeLoop({ id: 'l1', proposalId: 'p1', roundNumber: 1 })]
+    const result = tallyConsentLoop(loops, [], ['p1'])
+    expect(getBestConsentRound(result.proposals[0])).toBeNull()
+  })
+
+  it('returns the adopted round with the highest median', () => {
+    const loops = [
+      makeLoop({ id: 'l1', proposalId: 'p1', roundNumber: 1, closedAt: '2026-01-02T00:00:00Z' }),
+      makeLoop({ id: 'l2', proposalId: 'p1', roundNumber: 2, closedAt: '2026-01-03T00:00:00Z' }),
+      makeLoop({ id: 'l3', proposalId: 'p1', roundNumber: 3, closedAt: '2026-01-04T00:00:00Z' }),
+    ]
+    const responses = [
+      // round 1: blocked (reject)
+      makeResponse({ proposalId: 'p1', loopId: 'l1', value: 3 }),
+      makeResponse({ id: 'r2', proposalId: 'p1', loopId: 'l1', value: -1, voterToken: 't2' }),
+      // round 2: adopted, median 2
+      makeResponse({ id: 'r3', proposalId: 'p1', loopId: 'l2', value: 2 }),
+      makeResponse({ id: 'r4', proposalId: 'p1', loopId: 'l2', value: 3, voterToken: 't4' }),
+      // round 3: adopted, median 4 (better)
+      makeResponse({ id: 'r5', proposalId: 'p1', loopId: 'l3', value: 4 }),
+      makeResponse({ id: 'r6', proposalId: 'p1', loopId: 'l3', value: 4, voterToken: 't6' }),
+    ]
+    const result = tallyConsentLoop(loops, responses, ['p1'])
+    const best = getBestConsentRound(result.proposals[0])
+    expect(best).not.toBeNull()
+    expect(best!.roundNumber).toBe(3)
+    expect(best!.median).toBe(4)
+    expect(best!.adopted).toBe(true)
+  })
+
+  it('returns the last closed round when none are adopted', () => {
+    const loops = [
+      makeLoop({ id: 'l1', proposalId: 'p1', roundNumber: 1, closedAt: '2026-01-02T00:00:00Z' }),
+      makeLoop({ id: 'l2', proposalId: 'p1', roundNumber: 2, closedAt: '2026-01-03T00:00:00Z' }),
+    ]
+    const responses = [
+      makeResponse({ proposalId: 'p1', loopId: 'l1', value: 3 }),
+      makeResponse({ id: 'r2', proposalId: 'p1', loopId: 'l1', value: -1, voterToken: 't2' }),
+      makeResponse({ id: 'r3', proposalId: 'p1', loopId: 'l2', value: 2 }),
+      makeResponse({ id: 'r4', proposalId: 'p1', loopId: 'l2', value: 0, voterToken: 't4' }),
+    ]
+    const result = tallyConsentLoop(loops, responses, ['p1'])
+    const best = getBestConsentRound(result.proposals[0])
+    expect(best).not.toBeNull()
+    expect(best!.roundNumber).toBe(2)
+    expect(best!.adopted).toBe(false)
   })
 })
 

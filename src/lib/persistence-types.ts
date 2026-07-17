@@ -55,6 +55,7 @@ export interface TaskEntity {
   children?: string[];
   updatedAt?: string | null;
   linkedVoteIds?: string[];
+  blockedSince?: string | null;
 }
 
 export interface MonthlyBalanceData {
@@ -105,6 +106,7 @@ export interface AppSettingsEntity {
   region?: string;
   cardAgingBaseDays?: number;
   disabledModules?: ModuleId[];
+  wipLimitPerUser?: number;
   pomodoroConfig?: PomodoroConfig;
   focusModeConfig?: FocusModeConfig;
   travelerConfig?: TravelerConfig;
@@ -127,6 +129,7 @@ export interface UserSettingsEntity {
   pomodoroConfig?: PomodoroConfig;
   focusModeConfig?: FocusModeConfig;
   travelerConfig?: TravelerConfig;
+  nonActionPeriodHours?: number;
 }
 
 export interface QolSurveyResponseEntity {
@@ -339,6 +342,7 @@ export interface VoteEntity {
   config: VoteConfig;
   outcome?: {
     winningProposalId: string | null;
+    winningLoopId?: string | null;
     summary: string;
     finalizedAt: string;
     finalizedByUserId: string;

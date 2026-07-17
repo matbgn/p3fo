@@ -6,9 +6,10 @@ import { useReminderStore } from '@/hooks/useReminders';
 import { useToast } from '@/hooks/use-toast';
 import { getPersistenceAdapter } from '@/lib/persistence-factory';
 import { QolSurveyResponseEntity, MonthlyBalanceData } from '@/lib/persistence-types';
+import { saveTemplates, type TaskTemplate } from '@/lib/task-templates';
 import { yUserSettings, yFertilizationState, yFertilizationCards, yFertilizationColumns, yDreamState, yDreamCards, yDreamColumns, yCircles, yFrameworks, yAppSettings, isCollaborationEnabled, doc } from '@/lib/collaboration';
 
-const CURRENT_SCHEMA_VERSION = 3;
+const CURRENT_SCHEMA_VERSION = 4;
 
 function extractImportErrorMessage(error: unknown): string {
   if (error instanceof SyntaxError) {
@@ -49,6 +50,7 @@ interface ImportedUserSettings {
   defaultPlanView?: 'week' | 'month';
   preferredWorkingDays?: number[];
   trigram?: string;
+  nonActionPeriodHours?: number;
 }
 
 const DataImporter: React.FC = () => {
@@ -118,6 +120,7 @@ const DataImporter: React.FC = () => {
                     defaultPlanView: settings.defaultPlanView,
                     preferredWorkingDays: settings.preferredWorkingDays,
                     trigram: settings.trigram,
+                    nonActionPeriodHours: settings.nonActionPeriodHours,
                   };
 
                   console.log('Importing user settings for:', userId, normalizedSettings);
@@ -144,6 +147,7 @@ const DataImporter: React.FC = () => {
                       defaultPlanView: normalizedSettings.defaultPlanView,
                       preferredWorkingDays: normalizedSettings.preferredWorkingDays,
                       trigram: normalizedSettings.trigram,
+                      nonActionPeriodHours: normalizedSettings.nonActionPeriodHours,
                     });
                   }
                 };
@@ -186,6 +190,7 @@ const DataImporter: React.FC = () => {
                   splitTime: importedData.settings.splitTime ? Number(importedData.settings.splitTime) : undefined,
                   cardAgingBaseDays: importedData.settings.cardAgingBaseDays ? Number(importedData.settings.cardAgingBaseDays) : undefined,
                   disabledModules: importedData.settings.disabledModules || undefined,
+                  wipLimitPerUser: importedData.settings.wipLimitPerUser !== undefined ? Number(importedData.settings.wipLimitPerUser) : undefined,
                 };
                 await adapter.updateAppSettings(appSettings);
                 // Sync to Yjs for cross-client synchronization
@@ -368,6 +373,16 @@ const DataImporter: React.FC = () => {
               // Import Pomodoro/Focus Sessions (bulk)
               if (importedData.pomodoroSessions && Array.isArray(importedData.pomodoroSessions)) {
                 await adapter.importPomodoroSessions(importedData.pomodoroSessions);
+              }
+
+              // Import Task Templates (localStorage-backed, scope-aware)
+              if (Array.isArray(importedData.taskTemplates)) {
+                const workspaceTemplates = (importedData.taskTemplates as TaskTemplate[])
+                  .filter(t => t && t.id && (!t.scope || t.scope === 'workspace'));
+                const userTemplates = (importedData.taskTemplates as TaskTemplate[])
+                  .filter(t => t && t.id && t.scope === 'user');
+                if (workspaceTemplates.length > 0) saveTemplates('workspace', workspaceTemplates);
+                if (userTemplates.length > 0) saveTemplates('user', userTemplates);
               }
 
               // RESTORE ACTIVE USER IDENTITY

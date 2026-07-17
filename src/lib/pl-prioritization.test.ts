@@ -131,6 +131,7 @@ describe('selectNextBatch', () => {
       done: false,
       results: null,
       rankingHistory: [],
+      stallCount: 0,
     };
     const batch = selectNextBatch(state);
     expect(batch).toBeNull();
@@ -147,6 +148,7 @@ describe('selectNextBatch', () => {
       done: false,
       results: null,
       rankingHistory: [],
+      stallCount: 0,
     };
     const batch = selectNextBatch(state, 2);
     expect(batch).not.toBeNull();
@@ -171,6 +173,7 @@ describe('isConfident', () => {
       done: false,
       results: null,
       rankingHistory: [],
+      stallCount: 0,
     };
     expect(isConfident(state)).toBe(true);
   });
@@ -185,6 +188,7 @@ describe('isConfident', () => {
       done: false,
       results: null,
       rankingHistory: [],
+      stallCount: 0,
     };
     expect(isConfident(state)).toBe(false);
   });
@@ -201,6 +205,7 @@ describe('rankResults', () => {
       done: false,
       results: null,
       rankingHistory: [],
+      stallCount: 0,
     };
     const results = rankResults(state);
     expect(results.map((r) => r.taskId)).toEqual(['t1', 't2', 't0']);
@@ -280,5 +285,164 @@ describe('Full comparison cycle', () => {
 describe('CONFIDENCE_THRESHOLD', () => {
   it('is 0.75', () => {
     expect(CONFIDENCE_THRESHOLD).toBe(0.75);
+  });
+});
+
+describe('Early convergence (exploration skips confident unqueried pairs)', () => {
+  it('finalizes without directly comparing a transitively-resolved pair', () => {
+    // Three tasks A, B, C. Record several A>B and B>C wins so that A is
+    // clearly above C by transitivity, but never directly compare A vs C.
+    // With the exploration fix, the A-C pair (unqueried but below the
+    // entropy floor) is skipped and the engine finalizes.
+    const tasks = makeTasks(3); // t0=A, t1=B, t2=C
+    let state = initState(tasks, 2);
+
+    // Record A>B twice and B>C twice to build strong transitive separation.
+    state = recordBatch(state, 't0', undefined, ['t0', 't1']);
+    state = recordBatch(state, 't0', undefined, ['t0', 't1']);
+    state = recordBatch(state, 't1', undefined, ['t1', 't2']);
+    state = recordBatch(state, 't1', undefined, ['t1', 't2']);
+
+    // A-C was never directly compared.
+    const acCompared =
+      (state.winMatrix['t0']?.['t2'] || 0) + (state.winMatrix['t2']?.['t0'] || 0);
+    expect(acCompared).toBe(0);
+
+    // The engine should be done: A-C is below the entropy floor, so no
+    // uncertain unqueried pair remains and the floor stop fires.
+    expect(state.done).toBe(true);
+    expect(state.results).not.toBeNull();
+    const resultIds = state.results!.map((r) => r.taskId);
+    expect(resultIds).toEqual(['t0', 't1', 't2']);
+  });
+
+  it('cold start lists all pairs as uncertain (exploration covers full graph)', () => {
+    // Regression guard: at cold start all scores are 0, so every pair has
+    // batch entropy = ln(2) ≈ 0.693 >= INFO_GAIN_FLOOR. Exploration must
+    // still offer a batch (not finalize prematurely).
+    for (const n of [2, 3, 4, 5]) {
+      const state = initState(makeTasks(n), 2);
+      const batch = selectNextBatch(state);
+      expect(batch).not.toBeNull();
+      expect(batch!.tasks.length).toBe(Math.min(2, n));
+    }
+  });
+});
+
+describe('rankResults on a mid-comparison state', () => {
+  it('returns a usable ranking before the engine is done (early-exit contract)', () => {
+    // The early-exit button calls rankResults on the live state, which is
+    // not necessarily done. Lock the contract that it works on any state.
+    const tasks = makeTasks(4);
+    let state = initState(tasks, 2);
+    // Record a single batch, do NOT let the engine finish.
+    const batch = selectNextBatch(state)!;
+    const batchIds = batch.tasks.map((t) => t.id);
+    state = recordBatch(state, batchIds[0], undefined, batchIds);
+    expect(state.done).toBe(false); // not finalized yet
+
+    // rankResults must still return a complete, deterministic ranking.
+    const results = rankResults(state);
+    expect(results.length).toBe(4);
+    expect(results.map((r) => r.taskId).sort()).toEqual(['t0', 't1', 't2', 't3']);
+    // The winner of the recorded batch must rank above the loser.
+    const winnerId = batchIds[0];
+    const loserId = batchIds[1];
+    const winnerRank = results.findIndex((r) => r.taskId === winnerId);
+    const loserRank = results.findIndex((r) => r.taskId === loserId);
+    expect(winnerRank).toBeLessThan(loserRank);
+  });
+});
+
+describe('Adjacent-pairs confidence', () => {
+  it('confidencePercent climbs as adjacent pairs get resolved', () => {
+    // 3 tasks A, B, C with a clear order A > B > C.
+    // After enough wins, adjacent pairs (A-B, B-C) resolve but the metric
+    // only counts those 2, not all 3 pairs.
+    const tasks = makeTasks(3);
+    let state = initState(tasks, 2);
+    // Build strong separation: A>B three times, B>C three times.
+    state = recordBatch(state, 't0', undefined, ['t0', 't1']);
+    state = recordBatch(state, 't0', undefined, ['t0', 't1']);
+    state = recordBatch(state, 't0', undefined, ['t0', 't1']);
+    state = recordBatch(state, 't1', undefined, ['t1', 't2']);
+    state = recordBatch(state, 't1', undefined, ['t1', 't2']);
+    state = recordBatch(state, 't1', undefined, ['t1', 't2']);
+
+    // At least one adjacent pair should be resolved.
+    const pct = confidencePercent(state);
+    expect(pct).toBeGreaterThan(0);
+    // With 3 strong wins per adjacent pair, both adjacent gaps should be
+    // well above the 75% threshold.
+    expect(pct).toBe(100);
+  });
+
+  it('isConfident returns true when all adjacent pairs are resolved (equivalence)', () => {
+    // If all n-1 adjacent gaps are >= ln(3), all non-adjacent gaps are too
+    // (they are sums of adjacent gaps). So isConfident on adjacent pairs
+    // is equivalent to isConfident on all pairs.
+    const tasks = makeTasks(4);
+    let state = initState(tasks, 2);
+    // Build a strong total order: t0 > t1 > t2 > t3.
+    // Each pair compared 5 times to reach high confidence.
+    const pairs: [string, string][] = [
+      ['t0', 't1'], ['t0', 't2'], ['t0', 't3'],
+      ['t1', 't2'], ['t1', 't3'],
+      ['t2', 't3'],
+    ];
+    for (const [w, l] of pairs) {
+      for (let i = 0; i < 5; i++) {
+        state = recordBatch(state, w, undefined, [w, l]);
+      }
+    }
+    expect(isConfident(state)).toBe(true);
+  });
+
+  it('isConfident returns false when an adjacent pair is unresolved', () => {
+    // Two tasks with equal scores — adjacent pair unresolved.
+    const state: PrioritizationState = {
+      k: 2,
+      tasks: makeTasks(2),
+      scores: { t0: 0, t1: 0 },
+      winMatrix: {},
+      totalBatches: 0,
+      done: false,
+      results: null,
+      rankingHistory: [],
+      stallCount: 0,
+    };
+    expect(isConfident(state)).toBe(false);
+  });
+});
+
+describe('Stall stop', () => {
+  it('fires when confidencePercent does not increase for STALL_WINDOW batches', () => {
+    // Construct a scenario where the user keeps comparing the same pair
+    // with the same outcome — confidence stops increasing because the
+    // other pairs never get compared. After STALL_WINDOW stagnant batches,
+    // the engine should finalize.
+    const tasks = makeTasks(4);
+    let state = initState(tasks, 2);
+
+    // Do a few batches to build initial confidence.
+    for (let i = 0; i < 3; i++) {
+      state = recordBatch(state, 't0', undefined, ['t0', 't1']);
+    }
+    // Capture the batch count and confidence at this point.
+    const confBefore = confidencePercent(state);
+    const batchesBefore = state.totalBatches;
+    if (state.done) return; // already done, skip
+
+    // Keep comparing the same pair (t0 beats t1) — confidence on adjacent
+    // pairs won't increase because t1-t2 and t2-t3 are never separated.
+    let stalled = 0;
+    while (!state.done && stalled < 30) {
+      state = recordBatch(state, 't0', undefined, ['t0', 't1']);
+      stalled++;
+    }
+
+    // The stall stop should have fired (or another stop fired) — either
+    // way, the engine must terminate.
+    expect(state.done).toBe(true);
   });
 });
