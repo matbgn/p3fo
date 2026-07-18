@@ -51,36 +51,60 @@ const formatTime = (ms: number): string => {
 };
 
 function getLayoutSize(w: number, h: number): LayoutSize {
-  if (w < 140 || h < 120) return 'minimal';
+  // Buckets aligned to PiP presets:
+  //   Tiny (200×100)   → minimal
+  //   Small (240×140)  → compact
+  //   Medium (260×240) → normal
+  //   Normal (320×400) → normal
+  if (w < 220 || h < 140) return 'minimal';
   if (w < 260 || h < 240) return 'compact';
-  if (w < 420 || h < 340) return 'normal';
+  if (w < 440 || h < 480) return 'normal';
   return 'spacious';
 }
 
 function useLayoutSize(containerRef: React.RefObject<HTMLDivElement | null>): LayoutSize {
   const [size, setSize] = useState<LayoutSize>('normal');
+  // Cache the last computed layout bucket to skip React state updates when
+  // the bucket hasn't changed. ResizeObserver fires many times during a drag;
+  // only threshold crossings should trigger a re-render.
+  const sizeRef = useRef<LayoutSize>('normal');
 
   useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    setSize(getLayoutSize(el.offsetWidth, el.offsetHeight));
+    const next = getLayoutSize(el.offsetWidth, el.offsetHeight);
+    sizeRef.current = next;
+    setSize(next);
   }, [containerRef]);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const borderBox = entry.borderBoxSize?.[0];
-        const w = borderBox ? borderBox.inlineSize : entry.contentRect.width;
-        const h = borderBox ? borderBox.blockSize : entry.contentRect.height;
-        setSize(getLayoutSize(w, h));
+    let rafId: number | null = null;
+
+    const compute = () => {
+      rafId = null;
+      const next = getLayoutSize(el.offsetWidth, el.offsetHeight);
+      if (next !== sizeRef.current) {
+        sizeRef.current = next;
+        setSize(next);
+      }
+    };
+
+    const observer = new ResizeObserver(() => {
+      // Coalesce: only one computation per animation frame, regardless of how
+      // many resize entries the observer delivers.
+      if (rafId === null) {
+        rafId = requestAnimationFrame(compute);
       }
     });
 
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      observer.disconnect();
+    };
   }, [containerRef]);
 
   return size;
@@ -153,8 +177,46 @@ export const PomodoroPiPContent: React.FC<PomodoroPiPContentProps> = ({
       );
     }
 
+    if (isCompact) {
+      return (
+        <div ref={containerRef} className={`flex flex-col items-center justify-center h-full w-full p-2 ${transition.bg} transition-all duration-300`}>
+          <Bell className={`h-6 w-6 ${transition.color} mb-1 animate-bounce`} />
+          <h1 className={`text-base font-bold ${transition.color} mb-0.5`}>
+            {transition.title}
+          </h1>
+          <p className={`text-[11px] ${transition.color} opacity-80 mb-2`}>
+            {transition.subtitle}
+          </p>
+          <div className="flex items-center gap-1 mb-2">
+            {Array.from({ length: cyclesBeforeLongBreak }, (_, i) => (
+              <div key={i} className={`w-1.5 h-1.5 rounded-full ${i <= displayCycleIndex ? 'bg-white' : 'bg-white/30'}`} />
+            ))}
+          </div>
+          <div className="flex gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              className={`${transition.color} border-white/40 bg-white/20 hover:bg-white/30 h-7 px-2 text-xs`}
+              onClick={onDismissTransition}
+            >
+              Dismiss
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className={`${transition.color} border-white/60 bg-white/40 hover:bg-white/50 h-7 px-2 text-xs`}
+              onClick={() => { onDismissTransition(); onResume(); }}
+            >
+              <Play className="mr-1 h-3 w-3" />
+              {phaseTransition === 'short-break' ? 'Break' : phaseTransition === 'long-break' ? 'Long break' : 'Work'}
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <div ref={containerRef} className={`flex flex-col items-center justify-center h-full w-full ${isCompact ? 'p-2' : isSpacious ? 'p-8' : 'p-4'} ${transition.bg} transition-all duration-300`}>
+      <div ref={containerRef} className={`flex flex-col items-center justify-center h-full w-full ${isSpacious ? 'p-8' : 'p-4'} ${transition.bg} transition-all duration-300`}>
         <Bell className={`h-10 w-10 ${transition.color} mb-3 animate-bounce`} />
         <h1 className={`text-2xl font-bold ${transition.color} mb-1`}>
           {transition.title}

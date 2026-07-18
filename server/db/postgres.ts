@@ -159,6 +159,7 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
   },
   focusModeConfig: {
     enablePiP: true,
+    autoOpenPiPOnStart: true,
     pipWidth: 320,
     pipHeight: 400,
     wakeLock: true,

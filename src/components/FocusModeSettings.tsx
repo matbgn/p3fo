@@ -5,8 +5,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { FocusModeConfig, DEFAULT_FOCUS_MODE_CONFIG } from '@/lib/pomodoro-types';
 
 const PIP_SIZES = [
-  { value: 'tiny', label: 'Tiny (120×100)', width: 120, height: 100 },
-  { value: 'small', label: 'Small (240×220)', width: 240, height: 220 },
+  { value: 'tiny', label: 'Tiny (200×100)', width: 200, height: 100 },
+  { value: 'small', label: 'Small (240×140)', width: 240, height: 140 },
+  { value: 'medium', label: 'Medium (260×240)', width: 260, height: 240 },
   { value: 'normal', label: 'Normal (320×400)', width: 320, height: 400 },
 ] as const;
 
@@ -72,6 +73,21 @@ const FocusModeSettings: React.FC = () => {
             onCheckedChange={(checked) => updateFocus({ enablePiP: checked })}
           />
         </div>
+
+        {focusConfig.enablePiP && (
+          <div className="flex items-center justify-between pl-4 border-l-2 border-muted">
+            <div>
+              <Label className="text-sm font-medium">Auto-open PiP on Start</Label>
+              <p className="text-sm text-muted-foreground">
+                Automatically open the PiP window when a Pomodoro session begins.
+              </p>
+            </div>
+            <Switch
+              checked={focusConfig.autoOpenPiPOnStart}
+              onCheckedChange={(checked) => updateFocus({ autoOpenPiPOnStart: checked })}
+            />
+          </div>
+        )}
 
         {focusConfig.enablePiP && (
           <div>

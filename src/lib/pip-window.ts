@@ -85,7 +85,7 @@ class PiPWindowService {
 
   /**
    * Open the PiP window at the configured or default size.
-   * Pass width/height to override the default (240×220).
+   * Pass width/height to override the default (320×400).
    */
   async open(width?: number, height?: number): Promise<Window | null> {
     if (!this.isSupported) {
