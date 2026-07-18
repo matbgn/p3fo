@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useConsistencyScore } from '@/hooks/useConsistencyScore';
 import { useUserSettings } from '@/hooks/useUserSettings';
+import { computeConsistencyTrend, getTrendDisplay } from '@/utils/consistencyTrend';
 
 interface ConsistencySparklineProps {
   height?: number;
@@ -17,6 +18,9 @@ export const ConsistencySparkline: React.FC<ConsistencySparklineProps> = ({ heig
 
   if (isLoading || !data || sparklineData.length < 2) return null;
 
+  const trend = computeConsistencyTrend(data.scoreHistory.slice(-30));
+  const { arrow: trendArrow, colorClass: trendColor } = getTrendDisplay(trend);
+
   const max = 100;
   const min = 0;
   const width = 80;
@@ -27,18 +31,6 @@ export const ConsistencySparkline: React.FC<ConsistencySparklineProps> = ({ heig
       return `${x},${y}`;
     })
     .join(' ');
-
-  const trend = (() => {
-    if (sparklineData.length < 2) return 'stable';
-    const recent = sparklineData.slice(-3).reduce((a, b) => a + b, 0) / 3;
-    const older = sparklineData.slice(-10, -3).reduce((a, b) => a + b, 0) / Math.max(1, 7);
-    if (recent > older + 1) return 'up';
-    if (recent < older - 1) return 'down';
-    return 'stable';
-  })();
-
-  const trendArrow = trend === 'up' ? '\u2191' : trend === 'down' ? '\u2193' : '\u2192';
-  const trendColor = trend === 'up' ? 'text-green-500' : trend === 'down' ? 'text-red-500' : 'text-muted-foreground';
 
   return (
     <div className="flex flex-col items-start gap-0.5">

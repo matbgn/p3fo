@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import type { ConsistencyScoreData } from '@/hooks/useConsistencyScore';
+import { computeConsistencyTrend, getTrendDisplay } from '@/utils/consistencyTrend';
 
 interface ScoreCurveProps {
   data: ConsistencyScoreData;
@@ -19,14 +20,7 @@ export const ScoreCurve: React.FC<ScoreCurveProps> = ({ data, height = 120 }) =>
     }));
   }, [data.scoreHistory]);
 
-  const trend = useMemo(() => {
-    if (chartData.length < 8) return 'stable';
-    const recent = chartData[chartData.length - 1].score;
-    const weekAgo = chartData[chartData.length - 8].score;
-    if (recent > weekAgo + 0.5) return 'up';
-    if (recent < weekAgo - 0.5) return 'down';
-    return 'stable';
-  }, [chartData]);
+  const trend = useMemo(() => computeConsistencyTrend(data.scoreHistory), [data.scoreHistory]);
 
   useEffect(() => {
     // Keep the view scrolled to the end (most recent data) on first render
@@ -35,8 +29,7 @@ export const ScoreCurve: React.FC<ScoreCurveProps> = ({ data, height = 120 }) =>
     }
   }, []);
 
-  const trendArrow = trend === 'up' ? '\u2191' : trend === 'down' ? '\u2193' : '\u2192';
-  const trendColor = trend === 'up' ? 'text-green-500' : trend === 'down' ? 'text-red-500' : 'text-muted-foreground';
+  const { arrow: trendArrow, colorClass: trendColor } = getTrendDisplay(trend);
 
   const chartWidth = Math.max(chartData.length * DAY_WIDTH, 100);
 
