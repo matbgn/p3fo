@@ -12,33 +12,39 @@ describe('computeConsistencyTrend', () => {
     expect(computeConsistencyTrend(history([50]))).toBe('stable');
   });
 
-  it('returns stable when there is no older window to compare against', () => {
-    expect(computeConsistencyTrend(history([50, 51, 52]))).toBe('stable');
-  });
-
-  it('returns up when recent average exceeds older average by more than the threshold', () => {
-    const entries = history([50, 50, 50, 50, 50, 50, 50, 50, 52, 54]);
+  it('shows up when today recovers above the prior 7-day average', () => {
+    const entries = history([20, 20, 20, 20, 20, 20, 20, 30]);
     expect(computeConsistencyTrend(entries)).toBe('up');
   });
 
-  it('returns down when recent average is below older average by more than the threshold', () => {
-    const entries = history([54, 54, 54, 54, 54, 54, 54, 54, 52, 50]);
+  it('shows down when today falls below the prior 7-day average', () => {
+    const entries = history([80, 80, 80, 80, 80, 80, 80, 60]);
     expect(computeConsistencyTrend(entries)).toBe('down');
   });
 
-  it('returns stable when the difference is within the dead band', () => {
-    const entries = history([50, 50, 50, 50, 50, 50, 50, 50, 50.5, 50.8]);
+  it('returns stable when today is within the dead band of the prior average', () => {
+    const entries = history([50, 50, 50, 50, 50, 50, 50, 50.5]);
     expect(computeConsistencyTrend(entries)).toBe('stable');
   });
 
-  it('clamps the recent window when history is short but has an older segment', () => {
-    const entries = history([50, 50, 50, 55, 55]);
+  it('clamps the reference window when fewer than 7 prior entries exist', () => {
+    const entries = history([20, 30]);
     expect(computeConsistencyTrend(entries)).toBe('up');
   });
 
-  it('uses at most OLDER_WINDOW (7) entries for the older average', () => {
-    const entries = history([50, 50, 50, 50, 50, 50, 50, 50, 60, 60, 60]);
+  it('uses only the 7 entries immediately before today as the reference', () => {
+    const entries = history([20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 30]);
     expect(computeConsistencyTrend(entries)).toBe('up');
+  });
+
+  it('does not let an old spike mask an active recovery', () => {
+    const entries = history([50, 80, 10, 10, 10, 10, 10, 10, 30]);
+    expect(computeConsistencyTrend(entries)).toBe('up');
+  });
+
+  it('shows down when today is still below a low prior average', () => {
+    const entries = history([20, 20, 20, 20, 20, 20, 20, 15]);
+    expect(computeConsistencyTrend(entries)).toBe('down');
   });
 });
 

@@ -18,7 +18,7 @@ export const ConsistencySparkline: React.FC<ConsistencySparklineProps> = ({ heig
 
   if (isLoading || !data || sparklineData.length < 2) return null;
 
-  const trend = computeConsistencyTrend(data.scoreHistory.slice(-30));
+  const trend = computeConsistencyTrend(data.scoreHistory);
   const { arrow: trendArrow, colorClass: trendColor } = getTrendDisplay(trend);
 
   const max = 100;
