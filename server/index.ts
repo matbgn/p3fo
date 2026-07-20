@@ -188,12 +188,39 @@ app.patch('/api/tasks/:id', async (req: Request, res: Response) => {
   }
 });
 
+// POST-based alias for task updates, so MCP clients behind HTTP/1.1 proxies
+// that don't forward PATCH (e.g. Caddy routing HTTP/1.1 to a uvicorn backend)
+// can still update tasks via POST.
+app.post('/api/tasks/:id/update', async (req: Request, res: Response) => {
+  try {
+    const task = await db.updateTask(req.params.id, req.body);
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    res.json(task);
+  } catch (error) {
+    console.error('API: Error updating task (POST alias):', error);
+    res.status(500).json({ error: 'Failed to update task', details: (error as Error).message });
+  }
+});
+
 app.delete('/api/tasks/:id', async (req: Request, res: Response) => {
   try {
     await db.deleteTask(req.params.id);
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting task:', error);
+    res.status(500).json({ error: 'Failed to delete task', details: (error as Error).message });
+  }
+});
+
+// POST-based alias for task deletion (same rationale as the update alias).
+app.post('/api/tasks/:id/delete', async (req: Request, res: Response) => {
+  try {
+    await db.deleteTask(req.params.id);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting task (POST alias):', error);
     res.status(500).json({ error: 'Failed to delete task', details: (error as Error).message });
   }
 });
