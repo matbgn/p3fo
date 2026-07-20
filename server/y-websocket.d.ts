@@ -1,6 +1,7 @@
 declare module 'y-websocket/bin/utils' {
   import { WebSocket } from 'ws';
   import { IncomingMessage } from 'http';
+  import * as Y from 'yjs';
 
   export function setupWSConnection(
     ws: WebSocket,
@@ -9,4 +10,6 @@ declare module 'y-websocket/bin/utils' {
       docName?: string;
     }
   ): void;
+
+  export function getYDoc(docname: string, gc?: boolean): Y.Doc;
 }

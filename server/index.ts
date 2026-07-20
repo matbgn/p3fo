@@ -7,7 +7,33 @@ import { DbClient } from './db/index.js';
 import { VoteKind, VoteLoop, VoteModerator, VoteResponseEntity, PomodoroSession } from '../src/lib/persistence-types.js';
 import QRCode from 'qrcode';
 import { WebSocketServer } from 'ws';
-import { setupWSConnection } from 'y-websocket/bin/utils';
+import { setupWSConnection, getYDoc } from 'y-websocket/bin/utils';
+import * as Y from 'yjs';
+
+const YJS_ROOM = 'p3fo-room';
+
+// Push a task update into the Yjs doc so connected clients receive it
+// in real-time via WebSocket, without needing to reload the browser.
+function broadcastTaskToYjs(task: unknown) {
+  try {
+    const doc = getYDoc(YJS_ROOM) as Y.Doc;
+    const yTasks = doc.getMap('tasks');
+    yTasks.set((task as Record<string, unknown>).id as string, task);
+  } catch {
+    // Yjs doc may not exist yet (no connected clients) — safe to skip
+  }
+}
+
+// Notify connected clients that a task was deleted.
+function broadcastTaskDeletionToYjs(taskId: string) {
+  try {
+    const doc = getYDoc(YJS_ROOM) as Y.Doc;
+    const yTasks = doc.getMap('tasks');
+    yTasks.delete(taskId);
+  } catch {
+    // Yjs doc may not exist yet — safe to skip
+  }
+}
 
 // Initialize Express app
 const app = express();
@@ -145,6 +171,7 @@ app.get('/api/tasks', async (req: Request, res: Response) => {
 app.post('/api/tasks', async (req: Request, res: Response) => {
   try {
     const task = await db.createTask(req.body);
+    broadcastTaskToYjs(task as unknown);
     res.status(201).json(task);
   } catch (error) {
     console.error('Error creating task:', error);
@@ -181,6 +208,7 @@ app.patch('/api/tasks/:id', async (req: Request, res: Response) => {
     }
 
     console.log('API: Task updated successfully:', task);
+    broadcastTaskToYjs(task as unknown);
     res.json(task);
   } catch (error) {
     console.error('API: Error updating task:', error);
@@ -197,6 +225,7 @@ app.post('/api/tasks/:id/update', async (req: Request, res: Response) => {
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
+    broadcastTaskToYjs(task as unknown);
     res.json(task);
   } catch (error) {
     console.error('API: Error updating task (POST alias):', error);
@@ -207,6 +236,7 @@ app.post('/api/tasks/:id/update', async (req: Request, res: Response) => {
 app.delete('/api/tasks/:id', async (req: Request, res: Response) => {
   try {
     await db.deleteTask(req.params.id);
+    broadcastTaskDeletionToYjs(req.params.id);
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting task:', error);
@@ -218,6 +248,7 @@ app.delete('/api/tasks/:id', async (req: Request, res: Response) => {
 app.post('/api/tasks/:id/delete', async (req: Request, res: Response) => {
   try {
     await db.deleteTask(req.params.id);
+    broadcastTaskDeletionToYjs(req.params.id);
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting task (POST alias):', error);
