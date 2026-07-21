@@ -32,6 +32,7 @@ const ALL_MODULES: { id: ModuleId; label: string; description: string; isTopLeve
   { id: 'plan', label: 'Plan', description: 'Circles and Roles organizational views', isTopLevel: true },
   { id: 'plan.circles', label: 'Circles', description: 'Organizational circles sub-view within Plan', isTopLevel: false },
   { id: 'plan.roles', label: 'Roles', description: 'Roles sub-view within Plan', isTopLevel: false },
+  { id: 'plan.salary', label: 'Salary System', description: 'Transparent salary calculator sub-view within Plan', isTopLevel: false },
   { id: 'program', label: 'Program', description: 'Calendar and Resources scheduling views', isTopLevel: true },
   { id: 'program.calendar', label: 'Calendar', description: 'Calendar sub-view within Program', isTopLevel: false },
   { id: 'program.resources', label: 'Resources', description: 'Resources sub-view within Program', isTopLevel: false },

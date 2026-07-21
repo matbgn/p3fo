@@ -23,6 +23,9 @@ export const yDreamState = instrumentYMap(doc.getMap('dreamState'), 'dreamState'
 export const yDreamCards = instrumentYMap(doc.getMap('dreamCards'), 'dreamCards');
 export const yDreamColumns = instrumentYMap(doc.getMap('dreamColumns'), 'dreamColumns');
 
+// Export shared salary board map (transparent salary system)
+export const ySalaryState = instrumentYMap(doc.getMap('salaryState'), 'salaryState');
+
 // Export shared circles map for real-time sync
 export const yCircles = instrumentYMap(doc.getMap('circles'), 'circles');
 

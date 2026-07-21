@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   Target,
   Vote,
+  Wallet,
 } from 'lucide-react';
 
 interface UmbrellaNavigationProps {
@@ -86,6 +87,7 @@ const SECTIONS: Section[] = [
       { id: 'resources', label: 'Resources', icon: <Users className="w-3 h-3" />, view: 'program', subView: 'resources' },
       { id: 'circles', label: 'Circles', icon: <Users className="w-3 h-3" />, view: 'plan', subView: 'circles' },
       { id: 'roles', label: 'Roles', icon: <ShieldCheck className="w-3 h-3" />, view: 'plan', subView: 'roles' },
+      { id: 'salary', label: 'Salary System', icon: <Wallet className="w-3 h-3" />, view: 'plan', subView: 'salary' },
     ],
   },
   {

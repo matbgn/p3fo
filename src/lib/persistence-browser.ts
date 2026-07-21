@@ -1,4 +1,4 @@
-import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from './persistence-types';
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, SalaryBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from './persistence-types';
 import { DEFAULT_POMODORO_CONFIG, DEFAULT_FOCUS_MODE_CONFIG } from './pomodoro-types';
 import { DEFAULT_TRAVELER_CONFIG } from './traveler-types';
 
@@ -10,6 +10,7 @@ const QOL_SURVEY_STORAGE_KEY = 'qolSurveyResponse';
 const FILTERS_STORAGE_KEY = 'taskFilters';
 const FERTILIZATION_BOARD_STORAGE_KEY = 'fertilizationBoard';
 const DREAM_BOARD_STORAGE_KEY = 'dreamBoard';
+const SALARY_BOARD_STORAGE_KEY = 'salaryBoard';
 const CIRCLES_STORAGE_KEY = 'p3fo_circles_v1';
 const REMINDERS_STORAGE_KEY = 'p3fo_reminders_v1';
 const FRAMEWORKS_STORAGE_KEY = 'p3fo_frameworks_v1';
@@ -518,6 +519,33 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
   }
 
+  async getSalaryBoardState(): Promise<SalaryBoardEntity | null> {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    try {
+      const stored = localStorage.getItem(SALARY_BOARD_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : null;
+    } catch (error) {
+      console.error('Error reading salary board state from localStorage:', error);
+      return null;
+    }
+  }
+
+  async updateSalaryBoardState(state: SalaryBoardEntity): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      localStorage.setItem(SALARY_BOARD_STORAGE_KEY, JSON.stringify(state));
+    } catch (error) {
+      console.error('Error updating salary board state in localStorage:', error);
+      throw error;
+    }
+  }
+
   // Reminders
   async listReminders(userId?: string): Promise<ReminderEntity[]> {
     if (typeof window === 'undefined') {
@@ -664,6 +692,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       localStorage.removeItem(APP_SETTINGS_STORAGE_KEY);
       localStorage.removeItem(FERTILIZATION_BOARD_STORAGE_KEY);
       localStorage.removeItem(DREAM_BOARD_STORAGE_KEY);
+      localStorage.removeItem(SALARY_BOARD_STORAGE_KEY);
       localStorage.removeItem(REMINDERS_STORAGE_KEY);
       localStorage.removeItem(CIRCLES_STORAGE_KEY);
       localStorage.removeItem(FRAMEWORKS_STORAGE_KEY);

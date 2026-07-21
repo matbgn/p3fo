@@ -308,6 +308,11 @@ const DataImporter: React.FC = () => {
                 }
               }
 
+              // Import Salary Board
+              if (importedData.salaryBoard) {
+                await adapter.updateSalaryBoardState(importedData.salaryBoard);
+              }
+
               // Import QoL Survey Responses
               const qolData = importedData.qolSurveyResponses || importedData.qolSurvey || importedData.qol_survey;
               if (qolData) {

@@ -525,6 +525,29 @@ app.put('/api/dream-board', async (req: Request, res: Response) => {
   }
 });
 
+// Salary Board routes
+app.get('/api/salary-board', async (req: Request, res: Response) => {
+  try {
+    const state = await db.getSalaryBoardState();
+    res.json(state);
+  } catch (error: unknown) {
+    console.error('Error fetching salary board state:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to fetch salary board state', details: message });
+  }
+});
+
+app.put('/api/salary-board', async (req: Request, res: Response) => {
+  try {
+    await db.updateSalaryBoardState(req.body);
+    res.json({ success: true });
+  } catch (error: unknown) {
+    console.error('Error updating salary board state:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to update salary board state', details: message });
+  }
+});
+
 // Circles routes (EasyCIRCLE)
 app.get('/api/circles', async (req: Request, res: Response) => {
   try {

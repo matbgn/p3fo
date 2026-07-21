@@ -60,6 +60,9 @@ const DataExporter: React.FC = () => {
       // Fetch Dream Board state
       const dreamBoardState = await adapter.getDreamBoardState();
 
+      // Fetch Salary Board state
+      const salaryBoardState = await adapter.getSalaryBoardState();
+
       // Fetch ALL reminders
       const allReminders = await adapter.listReminders();
 
@@ -96,8 +99,9 @@ const DataExporter: React.FC = () => {
         tasks: allTasks,
         scheduledReminders: allReminders,
         qolSurveyResponses: allQolSurveyResponses,
-        fertilizationBoard: fertilizationBoardState,
-        dreamBoard: dreamBoardState,
+fertilizationBoard: fertilizationBoardState,
+dreamBoard: dreamBoardState,
+salaryBoard: salaryBoardState,
         circles: allCircles,
         frameworks: allFrameworks,
         settings: settingsToExport,
