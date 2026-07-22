@@ -212,6 +212,21 @@
       "vacations": "Ferien",
       "individualQol": "Individuelle LQI",
       "focusSessions": "Fokus-Sitzungen"
+    },
+    "card": {
+      "highImpactTitle": "High-Impact-Aufgaben erreicht / VZÄ / Woche",
+      "highImpactDescription": "Ziel: {{goal}} in {{weeks}} Wochen",
+      "failureRateTitle": "Fehlerrate / VZÄ (Incidents on Delivery)",
+      "failureRateDescription": "Ziel ≤{{goal}}% in {{weeks}} Wochen",
+      "newCapabilitiesTitle": "Zeit für High-Impact-Arbeit / VZÄ",
+      "newCapabilitiesDescription": "Ziel: {{goal}}% in {{weeks}} Wochen",
+      "qliTitle": "Team-Lebensqualitätsindex",
+      "qliLoading": "Wird geladen...",
+      "qliCalculating": "LQI-Score wird berechnet",
+      "qliError": "Fehler",
+      "qliNoData": "Keine Daten",
+      "qliNoDataDescription": "Keine LQI-Daten verfügbar",
+      "qliDescription": "Ziel: {{goal}}%"
     }
   },
   "status": {

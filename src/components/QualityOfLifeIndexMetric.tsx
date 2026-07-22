@@ -1,9 +1,11 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQLI } from "@/hooks/useQLI";
 import { useSettingsContext } from "@/context/SettingsContext";
 
 const QualityOfLifeIndexMetric: React.FC = () => {
+  const { t } = useTranslation();
   const { data, loading, error } = useQLI();
   const { settings } = useSettingsContext();
 
@@ -24,16 +26,17 @@ const QualityOfLifeIndexMetric: React.FC = () => {
     return "bg-red-100 border-l-4 border-red-500";
   };
 
+  const qliTitle = t('metrics.card.qliTitle');
   if (loading) {
     return (
       <Card className="h-42 bg-card">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium">Team Quality of Life Index</CardTitle>
+          <CardTitle className="text-sm font-medium">{qliTitle}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">Loading...</div>
+          <div className="text-2xl font-bold">{t('metrics.card.qliLoading')}</div>
           <CardDescription className="text-xs mt-1">
-            Calculating QLI score
+            {t('metrics.card.qliCalculating')}
           </CardDescription>
         </CardContent>
       </Card>
@@ -44,10 +47,10 @@ const QualityOfLifeIndexMetric: React.FC = () => {
     return (
       <Card className="h-42 bg-card">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium">Team Quality of Life Index</CardTitle>
+          <CardTitle className="text-sm font-medium">{qliTitle}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-red-500">Error</div>
+          <div className="text-2xl font-bold text-red-500">{t('metrics.card.qliError')}</div>
           <CardDescription className="text-xs mt-1">
             {error}
           </CardDescription>
@@ -60,12 +63,12 @@ const QualityOfLifeIndexMetric: React.FC = () => {
     return (
       <Card className="h-42 bg-card">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium">Team Quality of Life Index</CardTitle>
+          <CardTitle className="text-sm font-medium">{qliTitle}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">No data</div>
+          <div className="text-2xl font-bold">{t('metrics.card.qliNoData')}</div>
           <CardDescription className="text-xs mt-1">
-            No QLI data available
+            {t('metrics.card.qliNoDataDescription')}
           </CardDescription>
         </CardContent>
       </Card>
@@ -75,12 +78,12 @@ const QualityOfLifeIndexMetric: React.FC = () => {
   return (
     <Card className={`h-42 ${getCardClass()}`}>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">Team Quality of Life Index</CardTitle>
+        <CardTitle className="text-sm font-medium">{qliTitle}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">{data.score}%</div>
         <CardDescription className="text-xs mt-1">
-          Goal: {goal}%
+          {t('metrics.card.qliDescription', { goal })}
         </CardDescription>
       </CardContent>
     </Card>

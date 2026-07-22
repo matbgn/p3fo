@@ -212,6 +212,21 @@
       "vacations": "Vacances",
       "individualQol": "QdV individuelle",
       "focusSessions": "Sessions de focus"
+    },
+    "card": {
+      "highImpactTitle": "Tâches à fort impact réalisées / ETP / semaine",
+      "highImpactDescription": "Objectif : {{goal}} en {{weeks}} semaines",
+      "failureRateTitle": "Taux d'échec / ETP (Incidents à la livraison)",
+      "failureRateDescription": "Objectif ≤{{goal}}% en {{weeks}} semaines",
+      "newCapabilitiesTitle": "Temps consacré au travail à fort impact / ETP",
+      "newCapabilitiesDescription": "Objectif : {{goal}}% en {{weeks}} semaines",
+      "qliTitle": "Indice de qualité de vie de l'équipe",
+      "qliLoading": "Chargement...",
+      "qliCalculating": "Calcul du score LQI",
+      "qliError": "Erreur",
+      "qliNoData": "Aucune donnée",
+      "qliNoDataDescription": "Aucune donnée LQI disponible",
+      "qliDescription": "Objectif : {{goal}}%"
     }
   },
   "status": {

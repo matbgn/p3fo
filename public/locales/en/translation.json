@@ -212,6 +212,21 @@
       "vacations": "Vacations",
       "individualQol": "Individual QoL",
       "focusSessions": "Focus Sessions"
+    },
+    "card": {
+      "highImpactTitle": "High Impact Task Achievement / EFT / week",
+      "highImpactDescription": "Goal: {{goal}} in {{weeks}} weeks",
+      "failureRateTitle": "Failure Rate / EFT (Incidents on Delivery)",
+      "failureRateDescription": "Goal ≤{{goal}}% in {{weeks}} weeks",
+      "newCapabilitiesTitle": "Time spent on High Impact work / EFT",
+      "newCapabilitiesDescription": "Goal: {{goal}}% in {{weeks}} weeks",
+      "qliTitle": "Team Quality of Life Index",
+      "qliLoading": "Loading...",
+      "qliCalculating": "Calculating QLI score",
+      "qliError": "Error",
+      "qliNoData": "No data",
+      "qliNoDataDescription": "No QLI data available",
+      "qliDescription": "Goal: {{goal}}%"
     }
   },
   "status": {
