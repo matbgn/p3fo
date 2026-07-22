@@ -121,11 +121,14 @@ export const computeSalary = (
 
   // Salaire brut à 100%: ROUND((base + steps) × seniority × age, 0) — gross monthly at 100%
   const gross100 = Math.round(startingPoint * seniorityFactor * ageFactor);
+  // Unrounded compounded value — used only for the display hourly rate (Option D)
+  const unroundedGross100 = startingPoint * seniorityFactor * ageFactor;
   // Salaire annuel à 100% = brut100 × 12 — annual gross at 100%
   const gross100Annual = gross100 * 12;
-  // Taux horaire = brut100 ÷ (21 × 8 × 5) — hourly rate at 100%
-  // Note: ROUND(x, 2) then × 5 (not roundToNickel)
-  const gross100Hourly = Math.round((gross100 / 21 / 8 / 5) * 100) / 100 * 5;
+  // Taux horaire = unrounded brut100 ÷ (heures par semaine × semaines par mois)
+  // This recovers the input hourly wage for a zero-dimension person, while
+  // scaling proportionally with dimensions/seniority/age for others.
+  const gross100Hourly = Math.round((unroundedGross100 / (safeConfig.hoursPerWeek * safeConfig.weeksPerMonth)) * 100) / 100;
 
   const workloadFraction = Math.max(0, employee.workload) / 100;
   // Salaire mensuel avec 13e = ROUND(brut100 × taux) — gross monthly WITH 13th at workload
