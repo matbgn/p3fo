@@ -1124,7 +1124,6 @@
     "settings": "Settings"
   },
   "program": {
-    "calendarTitle": "Program Calendar",
     "inProgressNoDate": "In Progress (No Termination Date)",
     "quickAddTask": "Quick add task...",
     "filtersAndControls": "Filters & Controls",

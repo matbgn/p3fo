@@ -1124,7 +1124,6 @@
     "settings": "Paramètres"
   },
   "program": {
-    "calendarTitle": "Calendrier du Programme",
     "inProgressNoDate": "En cours (sans date de fin)",
     "quickAddTask": "Ajout rapide de tâche...",
     "filtersAndControls": "Filtres & Contrôles",
@@ -1459,7 +1458,7 @@
   "programTop": {
     "calendar": "Calendrier",
     "resources": "Ressources",
-    "programCalendar": "Calendrier du programme",
+    "programCalendar": "Vue Calendrier",
     "resourcesWorkload": "Charge des ressources",
     "teamMembers": "Membres de l'équipe",
     "today": "Aujourd'hui",

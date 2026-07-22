@@ -382,10 +382,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) 
   return (
     <ResizablePanelGroup direction="vertical" className="min-h-[850px]">
       <ResizablePanel>
-        <Card className="h-full min-h-0 flex flex-col">
-          <CardHeader>
-            <CardTitle>{t('program.calendarTitle')}</CardTitle>
-          </CardHeader>
+        <Card className="h-full min-h-0 flex flex-col pt-6">
           <CardContent
             className="h-full overflow-y-auto flex-grow relative"
             onDragOver={handleCalendarDragOver}
