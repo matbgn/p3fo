@@ -1505,5 +1505,44 @@
       "2hours": "2 hours",
       "1day": "1 day"
     }
+  },
+  "spotlight": {
+    "greeting": {
+      "welcomeBack": "Good to see you. Here's today's next action.",
+      "workingOn": "Currently working on",
+      "nextTask": "Next task to work on"
+    },
+    "welcomeBackBanner": "Good to see you.",
+    "moodQuestion": "How are you feeling right now?",
+    "moodHelper": "This helps me propose the best fitting next task for you.",
+    "mood": {
+      "ready": "Ready",
+      "steady": "Steady",
+      "struggling": "Struggling"
+    },
+    "moodReason": {
+      "green": "Ready for anything",
+      "orange": "Something a bit easier",
+      "red": "Smallest possible step"
+    },
+    "alternative": "Alternative: ",
+    "alternativeChecked": "✓ Alternative: ",
+    "viewConsistencyDetails": "View consistency details",
+    "jumpToTask": "Jump to task",
+    "startWorking": "Start working",
+    "consistency": "Consistency",
+    "consistencyScore": "Consistency score",
+    "score": "Score",
+    "heatmap": {
+      "hidden": "{{label}} (hidden)",
+      "focusSession": "focus session",
+      "focusSessions": "focus sessions",
+      "tasksStartedNoFocus": "{{count}} task started (no focus technique)",
+      "tasksStartedNoFocus_plural": "{{count}} tasks started (no focus technique)",
+      "impactDay": "Impact day",
+      "noActivity": "no activity",
+      "dayOff": "day off",
+      "on": "on {{date}}"
+    }
   }
 }

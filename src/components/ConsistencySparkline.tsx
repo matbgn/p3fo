@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useConsistencyScore } from '@/hooks/useConsistencyScore';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { computeConsistencyTrend, getTrendDisplay } from '@/utils/consistencyTrend';
@@ -8,6 +9,7 @@ interface ConsistencySparklineProps {
 }
 
 export const ConsistencySparkline: React.FC<ConsistencySparklineProps> = ({ height = 28 }) => {
+  const { t } = useTranslation();
   const { userId } = useUserSettings();
   const { data, isLoading } = useConsistencyScore(userId);
 
@@ -34,7 +36,7 @@ export const ConsistencySparkline: React.FC<ConsistencySparklineProps> = ({ heig
 
   return (
     <div className="flex flex-col items-start gap-0.5">
-      <span className="text-[10px] text-muted-foreground">Consistency</span>
+      <span className="text-[10px] text-muted-foreground">{t('spotlight.consistency')}</span>
       <div className="flex items-center gap-2">
         <svg width={width} height={height} className="shrink-0">
           <polyline

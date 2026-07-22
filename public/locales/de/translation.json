@@ -1505,5 +1505,44 @@
       "2hours": "2 Stunden",
       "1day": "1 Tag"
     }
+  },
+  "spotlight": {
+    "greeting": {
+      "welcomeBack": "Schön, dass Sie da sind. Hier ist die nächste Aktion für heute.",
+      "workingOn": "Aktuell in Bearbeitung",
+      "nextTask": "Nächste zu bearbeitende Aufgabe"
+    },
+    "welcomeBackBanner": "Schön, dass Sie da sind.",
+    "moodQuestion": "Wie fühlen Sie sich gerade?",
+    "moodHelper": "Das hilft mir, die am besten passende nächste Aufgabe vorzuschlagen.",
+    "mood": {
+      "ready": "Bereit",
+      "steady": "Stetig",
+      "struggling": "Schwierig"
+    },
+    "moodReason": {
+      "green": "Für alles bereit",
+      "orange": "Etwas Einfacheres",
+      "red": "Kleinstmöglicher Schritt"
+    },
+    "alternative": "Alternative: ",
+    "alternativeChecked": "✓ Alternative: ",
+    "viewConsistencyDetails": "Konsistenz-Details anzeigen",
+    "jumpToTask": "Zur Aufgabe springen",
+    "startWorking": "Loslegen",
+    "consistency": "Konsistenz",
+    "consistencyScore": "Konsistenzwert",
+    "score": "Wert",
+    "heatmap": {
+      "hidden": "{{label}} (ausgeblendet)",
+      "focusSession": "Fokus-Sitzung",
+      "focusSessions": "Fokus-Sitzungen",
+      "tasksStartedNoFocus": "{{count}} Aufgabe gestartet (ohne Fokus-Technik)",
+      "tasksStartedNoFocus_plural": "{{count}} Aufgaben gestartet (ohne Fokus-Technik)",
+      "impactDay": "Impact-Tag",
+      "noActivity": "keine Aktivität",
+      "dayOff": "Freier Tag",
+      "on": "am {{date}}"
+    }
   }
 }

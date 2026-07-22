@@ -1505,5 +1505,44 @@
       "2hours": "2 heures",
       "1day": "1 jour"
     }
+  },
+  "spotlight": {
+    "greeting": {
+      "welcomeBack": "Content de vous revoir. Voici la prochaine action du jour.",
+      "workingOn": "En cours",
+      "nextTask": "Prochaine tâche à traiter"
+    },
+    "welcomeBackBanner": "Content de vous revoir.",
+    "moodQuestion": "Comment vous sentez-vous en ce moment ?",
+    "moodHelper": "Cela m'aide à vous proposer la tâche la plus adaptée.",
+    "mood": {
+      "ready": "Prêt",
+      "steady": "Stable",
+      "struggling": "En difficulté"
+    },
+    "moodReason": {
+      "green": "Prêt pour tout",
+      "orange": "Quelque chose de plus simple",
+      "red": "La plus petite étape possible"
+    },
+    "alternative": "Alternative : ",
+    "alternativeChecked": "✓ Alternative : ",
+    "viewConsistencyDetails": "Voir les détails de la régularité",
+    "jumpToTask": "Aller à la tâche",
+    "startWorking": "Commencer",
+    "consistency": "Régularité",
+    "consistencyScore": "Score de régularité",
+    "score": "Score",
+    "heatmap": {
+      "hidden": "{{label}} (masqué)",
+      "focusSession": "session de focus",
+      "focusSessions": "sessions de focus",
+      "tasksStartedNoFocus": "{{count}} tâche démarrée (sans technique de focus)",
+      "tasksStartedNoFocus_plural": "{{count}} tâches démarrées (sans technique de focus)",
+      "impactDay": "Jour à fort impact",
+      "noActivity": "aucune activité",
+      "dayOff": "jour de repos",
+      "on": "le {{date}}"
+    }
   }
 }

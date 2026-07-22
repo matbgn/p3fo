@@ -1,17 +1,19 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 export type LegendKey = 'gold' | 'green' | 'blue';
 
 export interface LegendItem {
   key: LegendKey;
   label: string;
+  labelKey: string;
   color: string;
 }
 
 const ITEMS: LegendItem[] = [
-  { key: 'gold', label: 'Impact work', color: '#fbbf24' },
-  { key: 'green', label: 'Focus work', color: '#40c463' },
-  { key: 'blue', label: 'Started tasks', color: '#3b82f6' },
+  { key: 'gold', label: 'Impact work', labelKey: 'pomodoroUi.impactWork', color: '#fbbf24' },
+  { key: 'green', label: 'Focus work', labelKey: 'pomodoroUi.focusWork', color: '#40c463' },
+  { key: 'blue', label: 'Started tasks', labelKey: 'pomodoroUi.startedTasks', color: '#3b82f6' },
 ];
 
 interface ConsistencyLegendProps {
@@ -21,6 +23,7 @@ interface ConsistencyLegendProps {
 }
 
 export const ConsistencyLegend: React.FC<ConsistencyLegendProps> = ({ visible, onToggle, className }) => {
+  const { t } = useTranslation();
   return (
     <div className={`flex items-center gap-4 text-xs text-muted-foreground ${className ?? ''}`}>
       {ITEMS.map((item) => {
@@ -36,7 +39,7 @@ export const ConsistencyLegend: React.FC<ConsistencyLegendProps> = ({ visible, o
               className="w-2.5 h-2.5 rounded-full"
               style={{ background: isVisible ? item.color : 'hsl(var(--muted-foreground))' }}
             />
-            <span>{item.label}</span>
+            <span>{t(item.labelKey)}</span>
           </button>
         );
       })}

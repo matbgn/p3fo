@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useMemo, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import * as d3 from 'd3';
 import type { DayEntry } from '@/hooks/useConsistencyScore';
 import { ConsistencyLegend, ALL_LEGEND_KEYS, type LegendKey } from '@/components/ConsistencyLegend';
@@ -55,6 +56,7 @@ function getCellColor(day: DayEntry | undefined, isDark: boolean, maxBlue: numbe
 }
 
 const ConsistencyHeatmap: React.FC<ConsistencyHeatmapProps> = ({ days, weeks = 39, weekStartDay = 1, visible: visibleProp, onToggleLegend }) => {
+  const { t } = useTranslation();
   const dayLabels = useMemo(() => {
     const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const ordered = weekStartDay === 1
@@ -195,18 +197,18 @@ const ConsistencyHeatmap: React.FC<ConsistencyHeatmapProps> = ({ days, weeks = 3
           return;
         }
         if (d.isHidden) {
-          const labelMap: Record<string, string> = { gold: 'Impact work', green: 'Focus work', blue: 'Started tasks' };
-          const label = labelMap[d.day.kind] ?? d.day.kind;
-          tooltip.style('opacity', 1).html(`<span style="color: hsl(var(--muted-foreground))">${label} (hidden) · ${dateStr}</span>`);
+          const labelKeyMap: Record<string, string> = { gold: 'pomodoroUi.impactWork', green: 'pomodoroUi.focusWork', blue: 'pomodoroUi.startedTasks' };
+          const label = t(labelKeyMap[d.day.kind] ?? '') || d.day.kind;
+          tooltip.style('opacity', 1).html(`<span style="color: hsl(var(--muted-foreground))">${t('spotlight.heatmap.hidden', { label })} · ${dateStr}</span>`);
           return;
         }
         const parts: string[] = [];
-        if (d.day.pomodoroCount > 0) parts.push(`<strong>${d.day.pomodoroCount}</strong> focus session${d.day.pomodoroCount !== 1 ? 's' : ''}`);
-        if (d.day.kind === 'blue') parts.push(`${d.day.taskStartedCount} task${d.day.taskStartedCount !== 1 ? 's' : ''} started (no focus technique)`);
-        if (d.day.kind === 'gold') parts.push('Impact day');
-        if (d.day.kind === 'empty' && d.day.isWorkingDay) parts.push('no activity');
-        if (!d.day.isWorkingDay) parts.push('day off');
-        tooltip.style('opacity', 1).html(`${parts.join(' · ')} on ${dateStr}`);
+        if (d.day.pomodoroCount > 0) parts.push(`<strong>${d.day.pomodoroCount}</strong> ${t(d.day.pomodoroCount !== 1 ? 'spotlight.heatmap.focusSessions' : 'spotlight.heatmap.focusSession')}`);
+        if (d.day.kind === 'blue') parts.push(t(d.day.taskStartedCount !== 1 ? 'spotlight.heatmap.tasksStartedNoFocus_plural' : 'spotlight.heatmap.tasksStartedNoFocus', { count: d.day.taskStartedCount }));
+        if (d.day.kind === 'gold') parts.push(t('spotlight.heatmap.impactDay'));
+        if (d.day.kind === 'empty' && d.day.isWorkingDay) parts.push(t('spotlight.heatmap.noActivity'));
+        if (!d.day.isWorkingDay) parts.push(t('spotlight.heatmap.dayOff'));
+        tooltip.style('opacity', 1).html(`${parts.join(' · ')} ${t('spotlight.heatmap.on', { date: dateStr })}`);
       })
       .on('mousemove', (event) => {
         tooltip
@@ -217,7 +219,7 @@ const ConsistencyHeatmap: React.FC<ConsistencyHeatmapProps> = ({ days, weeks = 3
         tooltip.style('opacity', 0);
       });
 
-  }, [cells, months, dayLabels]);
+  }, [cells, months, dayLabels, t]);
 
   return (
     <div className="flex gap-4">

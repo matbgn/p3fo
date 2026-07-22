@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Play, X, ArrowRight, Clock } from 'lucide-react';
@@ -23,6 +24,7 @@ interface NextTaskSpotlightProps {
 }
 
 export const NextTaskSpotlight: React.FC<NextTaskSpotlightProps> = ({ onFocusOnTask, onNavigateToFocusSessions }) => {
+  const { t } = useTranslation();
   const { nextAction } = useNextAction();
   const { tasks } = useAllTasks();
   const { toggleTimer } = useTasks();
@@ -105,10 +107,10 @@ export const NextTaskSpotlight: React.FC<NextTaskSpotlightProps> = ({ onFocusOnT
     : moodAdaptation?.task ?? nextAction?.task ?? null;
   const effectiveReason = moodAdaptation
     ? (selectedMood === 'green'
-      ? 'Ready for anything'
+      ? t('spotlight.moodReason.green')
       : selectedMood === 'orange'
-        ? 'Something a bit easier'
-        : 'Smallest possible step')
+        ? t('spotlight.moodReason.orange')
+        : t('spotlight.moodReason.red'))
     : nextAction?.reason ?? '';
 
   const handleStart = useCallback(async () => {
@@ -133,10 +135,10 @@ export const NextTaskSpotlight: React.FC<NextTaskSpotlightProps> = ({ onFocusOnT
   const hasRunningTimer = effectiveTask?.timer?.some(e => e.endTime === 0) ?? false;
 
   const greeting = showWelcomeBack
-    ? "Good to see you. Here's today's next action."
+    ? t('spotlight.greeting.welcomeBack')
     : hasRunningTimer
-      ? 'Currently working on'
-      : 'Next task to work on';
+      ? t('spotlight.greeting.workingOn')
+      : t('spotlight.greeting.nextTask');
 
   const moodButton = (mood: MoodLevel, label: string, color: string, borderColor: string, hoverBg: string) => (
     <button
@@ -160,7 +162,7 @@ export const NextTaskSpotlight: React.FC<NextTaskSpotlightProps> = ({ onFocusOnT
       <CardContent className="p-4">
         {showWelcomeBack && (
           <div className="mb-2 text-sm font-medium text-primary">
-            Good to see you.
+            {t('spotlight.welcomeBackBanner')}
           </div>
         )}
         <div className="flex items-center gap-3">
@@ -169,16 +171,16 @@ export const NextTaskSpotlight: React.FC<NextTaskSpotlightProps> = ({ onFocusOnT
               <>
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-xs font-medium text-primary uppercase tracking-wide">
-                    How are you feeling right now?
+                    {t('spotlight.moodQuestion')}
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground mb-2">
-                  This helps me propose the best fitting next task for you.
+                  {t('spotlight.moodHelper')}
                 </p>
                 <div className="flex items-center gap-2">
-                  {moodButton('green', 'Ready', 'bg-green-500', 'border-green-500/30', 'hover:bg-green-500/10')}
-                  {moodButton('orange', 'Steady', 'bg-orange-500', 'border-orange-500/30', 'hover:bg-orange-500/10')}
-                  {moodButton('red', 'Struggling', 'bg-red-500', 'border-red-500/30', 'hover:bg-red-500/10')}
+                  {moodButton('green', t('spotlight.mood.ready'), 'bg-green-500', 'border-green-500/30', 'hover:bg-green-500/10')}
+                  {moodButton('orange', t('spotlight.mood.steady'), 'bg-orange-500', 'border-orange-500/30', 'hover:bg-orange-500/10')}
+                  {moodButton('red', t('spotlight.mood.struggling'), 'bg-red-500', 'border-red-500/30', 'hover:bg-red-500/10')}
                 </div>
                 {previewAdaptation && (
                   <div className="flex items-center gap-2 mt-2 opacity-40">
@@ -218,14 +220,14 @@ export const NextTaskSpotlight: React.FC<NextTaskSpotlightProps> = ({ onFocusOnT
                       useAlt ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground',
                     )}
                   >
-                    {useAlt ? '✓ Alternative: ' : 'Alternative: '}
+                    {useAlt ? t('spotlight.alternativeChecked') : t('spotlight.alternative')}
                     {moodAdaptation.alternatives[0].title}
                   </button>
                 )}
                 <div className="flex items-center gap-1.5 mt-2">
-                  {moodButton('green', 'Ready', 'bg-green-500', 'border-green-500/30', 'hover:bg-green-500/10')}
-                  {moodButton('orange', 'Steady', 'bg-orange-500', 'border-orange-500/30', 'hover:bg-orange-500/10')}
-                  {moodButton('red', 'Struggling', 'bg-red-500', 'border-red-500/30', 'hover:bg-red-500/10')}
+                  {moodButton('green', t('spotlight.mood.ready'), 'bg-green-500', 'border-green-500/30', 'hover:bg-green-500/10')}
+                  {moodButton('orange', t('spotlight.mood.steady'), 'bg-orange-500', 'border-orange-500/30', 'hover:bg-orange-500/10')}
+                  {moodButton('red', t('spotlight.mood.struggling'), 'bg-red-500', 'border-red-500/30', 'hover:bg-red-500/10')}
                 </div>
               </>
             )}
@@ -235,7 +237,7 @@ export const NextTaskSpotlight: React.FC<NextTaskSpotlightProps> = ({ onFocusOnT
               <button
                 onClick={onNavigateToFocusSessions}
                 className="shrink-0 hidden sm:block cursor-pointer hover:opacity-80 transition-opacity"
-                title="View consistency details"
+                title={t('spotlight.viewConsistencyDetails')}
               >
                 <ConsistencySparkline />
               </button>
@@ -244,12 +246,12 @@ export const NextTaskSpotlight: React.FC<NextTaskSpotlightProps> = ({ onFocusOnT
                   {hasRunningTimer ? (
                     <>
                       <ArrowRight className="h-3.5 w-3.5" />
-                      Jump to task
+                      {t('spotlight.jumpToTask')}
                     </>
                   ) : (
                     <>
                       <Play className="h-3.5 w-3.5" />
-                      Start working
+                      {t('spotlight.startWorking')}
                     </>
                   )}
                 </Button>
