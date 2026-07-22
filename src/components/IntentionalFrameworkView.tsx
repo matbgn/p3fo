@@ -150,20 +150,27 @@ const IntentionalFrameworkViewInner: React.FC<IntentionalFrameworkViewProps> = (
           )}
           {framework.categories
             .sort((a, b) => a.order - b.order)
-            .map(category => (
-              <FrameworkCategoryView
-                key={category.id}
-                categoryId={category.id}
-                label={category.label}
-                description={category.description}
-                content={category.content}
-                onChange={(content) => handleCategoryChange(category.id, content)}
-                frameworkId={framework.id}
-                optional={category.optional}
-                collapsed={collapsedCats.has(category.id)}
-                onToggleCollapsed={() => toggleCategory(category.id)}
-              />
-            ))}
+            .map(category => {
+              const knownId = INTENTIONAL_CATEGORY_IDS.find(c => c.id === category.id);
+              const labelKey = `framework.intentional.category.${category.id}.label`;
+              const descKey = `framework.intentional.category.${category.id}.description`;
+              const trLabel = t(labelKey);
+              const trDesc = t(descKey);
+              return (
+                <FrameworkCategoryView
+                  key={category.id}
+                  categoryId={category.id}
+                  label={knownId && trLabel !== labelKey ? trLabel : category.label}
+                  description={knownId && trDesc !== descKey ? trDesc : category.description}
+                  content={category.content}
+                  onChange={(content) => handleCategoryChange(category.id, content)}
+                  frameworkId={framework.id}
+                  optional={category.optional}
+                  collapsed={collapsedCats.has(category.id)}
+                  onToggleCollapsed={() => toggleCategory(category.id)}
+                />
+              );
+            })}
         </CardContent>
       </Card>
     </div>
