@@ -72,6 +72,7 @@ import {
   Copy,
   Columns2,
   Maximize2,
+  RotateCcw,
   TrendingUp,
   PieChart,
   UserPlus,
@@ -944,6 +945,7 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
         <TabsList>
           <TabsTrigger value="budget"><PieChart className="w-4 h-4 mr-1" />Budget</TabsTrigger>
           <TabsTrigger value="simulator"><Calculator className="w-4 h-4 mr-1" />Simulateur individuel</TabsTrigger>
+          <TabsTrigger value="team"><Users className="w-4 h-4 mr-1" />Simulateur d'équipe</TabsTrigger>
         </TabsList>
 
         <TabsContent value="budget">
@@ -952,6 +954,10 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
 
         <TabsContent value="simulator">
           <SimulatorPanel board={board} />
+        </TabsContent>
+
+        <TabsContent value="team">
+          <TeamSimulatorPanel board={board} />
         </TabsContent>
       </Tabs>
 
@@ -1452,6 +1458,189 @@ const SimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) => {
             </TableBody>
           </Table>
         </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+// ---------- Team simulator panel ----------
+const TeamSimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) => {
+  // Local mutable copies — not persisted, just for what-if simulation
+  const [simConfig, setSimConfig] = useState<SalaryConfig>({ ...board.config });
+  const [simDimensions, setSimDimensions] = useState<SalaryDimension[]>(
+    board.dimensions.map(d => ({ ...d, levelDescriptions: [...(d.levelDescriptions ?? [])] }))
+  );
+
+  // Reset when board changes externally
+  useEffect(() => {
+    setSimConfig({ ...board.config });
+    setSimDimensions(board.dimensions.map(d => ({ ...d, levelDescriptions: [...(d.levelDescriptions ?? [])] })));
+  }, [board.config, board.dimensions]);
+
+  const simBoard = useMemo<SalaryBoardEntity>(() => ({
+    ...board,
+    config: simConfig,
+    dimensions: simDimensions,
+  }), [board, simConfig, simDimensions]);
+
+  const totals = useMemo(() => aggregateSalaries(simBoard), [simBoard]);
+  const currency = simConfig.currency;
+
+  const updateConfig = <K extends keyof SalaryConfig>(key: K, value: SalaryConfig[K]) =>
+    setSimConfig(prev => ({ ...prev, [key]: value }));
+
+  const updateDimension = (id: string, patch: Partial<SalaryDimension>) =>
+    setSimDimensions(prev => prev.map(d => (d.id === id ? { ...d, ...patch } : d)));
+
+  // Compute budget for each scenario with the simulated config
+  const budgetResults = useMemo(() => {
+    if (!board.budget) return [];
+    return board.budget.scenarios.map(s => ({
+      scenario: s,
+      computation: computeBudget(simBoard, s),
+    }));
+  }, [board.budget, simBoard]);
+
+  const resetToBoard = () => {
+    setSimConfig({ ...board.config });
+    setSimDimensions(board.dimensions.map(d => ({ ...d, levelDescriptions: [...(d.levelDescriptions ?? [])] })));
+  };
+
+  return (
+    <Card className="border">
+      <CardHeader className="pb-2 flex flex-row items-center justify-between">
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Users className="w-4 h-4" /> Simulateur d'équipe
+        </CardTitle>
+        <Button variant="outline" size="sm" onClick={resetToBoard}>
+          <RotateCcw className="w-4 h-4 mr-1" /> Réinitialiser
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-xs text-muted-foreground italic">
+          Modifiez les paramètres ci-dessous pour simuler l'impact sur la masse salariale et le budget.
+          Ces modifications sont temporaires et ne sont pas sauvegardées.
+        </p>
+
+        {/* Global parameters */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs">Salaire horaire de référence</Label>
+            <Input
+              type="number"
+              step="0.01"
+              value={simConfig.indexHourlyWage}
+              onChange={e => updateConfig('indexHourlyWage', parseFloat(e.target.value) || 0)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Heures par semaine</Label>
+            <Input
+              type="number"
+              value={simConfig.hoursPerWeek}
+              onChange={e => updateConfig('hoursPerWeek', parseFloat(e.target.value) || 0)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Augmentation ancienneté / an</Label>
+            <Input
+              type="number"
+              step="0.001"
+              value={simConfig.seniorityIncrease}
+              onChange={e => updateConfig('seniorityIncrease', parseFloat(e.target.value) || 0)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Augmentation par tranche d'âge</Label>
+            <Input
+              type="number"
+              step="0.001"
+              value={simConfig.ageIncrease}
+              onChange={e => updateConfig('ageIncrease', parseFloat(e.target.value) || 0)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Taux de charges sociales</Label>
+            <Input
+              type="number"
+              step="0.0001"
+              value={simConfig.socialChargesRate}
+              onChange={e => updateConfig('socialChargesRate', parseFloat(e.target.value) || 0)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Facteur de coût</Label>
+            <Input
+              type="number"
+              step="0.01"
+              value={simConfig.expenseFactor ?? 1}
+              onChange={e => updateConfig('expenseFactor', parseFloat(e.target.value) || 1)}
+            />
+          </div>
+        </div>
+
+        {/* Dimension step values */}
+        <div className="space-y-2">
+          <Label className="text-xs font-medium">Valeur par niveau (déterminants)</Label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {simDimensions.map(dim => (
+              <div key={dim.id} className="flex items-center gap-2">
+                <span className="text-sm w-40 truncate" style={{ color: dim.color }}>{dim.name}</span>
+                <Input
+                  type="number"
+                  step="1"
+                  value={dim.stepValue}
+                  onChange={e => updateDimension(dim.id, { stepValue: parseFloat(e.target.value) || 0 })}
+                  className="w-28 text-right"
+                />
+                <span className="text-xs text-muted-foreground">CHF/niveau</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Results: salary mass */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 pt-2 border-t">
+          <MetricCard label="Effectifs" value={String(totals.headcount)} />
+          <MetricCard label="ETP" value={totals.fte.toFixed(2)} />
+          <MetricCard label="Salaire brut mensuel" value={formatCurrency(totals.totalGrossMonthly, currency)} />
+          <MetricCard label="Salaire brut annuel" value={formatCurrency(totals.totalGrossAnnual, currency)} />
+          <MetricCard label="Net ~" value={formatCurrency(totals.totalNetMonthlyWith13, currency)} />
+          <MetricCard label="Coût employeur / an" value={formatCurrency(totals.totalEmployerCostAnnual, currency)} />
+        </div>
+
+        {/* Results: budget impact per scenario */}
+        {budgetResults.length > 0 && (
+          <div className="pt-2 border-t">
+            <Label className="text-xs font-medium mb-2 block">Impact sur les scénarios budget</Label>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Scénario</TableHead>
+                  <TableHead className="text-right">Revenus</TableHead>
+                  <TableHead className="text-right">Salaires bruts</TableHead>
+                  <TableHead className="text-right">Frais</TableHead>
+                  <TableHead className="text-right">Coût total</TableHead>
+                  <TableHead className="text-right">Solde</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {budgetResults.map(({ scenario, computation }) => (
+                  <TableRow key={scenario.id}>
+                    <TableCell className="font-medium">{scenario.name}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(computation.revenues, currency)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(totals.totalGrossAnnual, currency)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(computation.charges + computation.reserve, currency)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(computation.totalCost, currency)}</TableCell>
+                    <TableCell className={`text-right font-semibold ${computation.isBalanced ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(computation.balance, currency)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
