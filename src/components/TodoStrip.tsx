@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -40,6 +41,7 @@ const Ticket: React.FC<{
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
 }> = ({ todo, onToggle, onDelete }) => {
+  const { t } = useTranslation();
   return (
     <Card
       className="relative shrink-0 w-64 sm:w-72 bg-white text-gray-900 dark:bg-white dark:text-gray-900 border border-gray-200 shadow-sm overflow-hidden"
@@ -51,7 +53,7 @@ const Ticket: React.FC<{
     >
       <div className="px-4 py-3 border-b border-dashed border-gray-300 flex items-center justify-between">
         <span className="text-xs tracking-widest uppercase text-gray-500">
-          Task
+          {t("todoStrip.task")}
         </span>
         <span className="text-[10px] text-gray-400">
           {new Date(todo.createdAt).toLocaleDateString()}
@@ -74,7 +76,7 @@ const Ticket: React.FC<{
           onClick={() => onToggle(todo.id)}
         >
           <Check className="h-4 w-4 mr-1" />
-          {todo.done ? "Undo" : "Done"}
+          {todo.done ? t("todoStrip.undo") : t("todoStrip.done")}
         </Button>
         <Button
           size="sm"
@@ -95,6 +97,7 @@ const Ticket: React.FC<{
 };
 
 const TodoStrip: React.FC = () => {
+  const { t } = useTranslation();
   const { todos, setTodos } = useLocalTodos();
   const [value, setValue] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement | null>(null);
@@ -102,25 +105,25 @@ const TodoStrip: React.FC = () => {
   const addTodo = () => {
     const text = value.trim();
     if (!text) return;
-    const t: Todo = {
+    const newTodo: Todo = {
       id: crypto.randomUUID(),
       text,
       done: false,
       createdAt: Date.now(),
     };
-    setTodos((prev) => [t, ...prev]);
+    setTodos((prev) => [newTodo, ...prev]);
     setValue("");
     inputRef.current?.focus();
   };
 
   const toggleTodo = (id: string) => {
     setTodos((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)),
+      prev.map((it) => (it.id === id ? { ...it, done: !it.done } : it)),
     );
   };
 
   const deleteTodo = (id: string) => {
-    setTodos((prev) => prev.filter((t) => t.id !== id));
+    setTodos((prev) => prev.filter((it) => it.id !== id));
   };
 
   return (
@@ -128,14 +131,14 @@ const TodoStrip: React.FC = () => {
       <div className="flex flex-col sm:flex-row gap-2 sm:items-center mb-4">
         <div className="flex items-center gap-2">
           <ScrollText className="h-5 w-5 text-gray-500" />
-          <h2 className="text-lg font-semibold">Your Receipt Todos</h2>
+          <h2 className="text-lg font-semibold">{t("todoStrip.title")}</h2>
         </div>
       </div>
 
       <div className="flex gap-2">
         <Input
           ref={inputRef}
-          placeholder="Add a new task..."
+          placeholder={t("todoStrip.addPlaceholder")}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => {
@@ -145,7 +148,7 @@ const TodoStrip: React.FC = () => {
         />
         <Button onClick={addTodo} disabled={!value.trim()}>
           <Plus className="h-4 w-4 mr-1" />
-          Add
+          {t("todoStrip.add")}
         </Button>
       </div>
 
@@ -153,7 +156,7 @@ const TodoStrip: React.FC = () => {
         <div className="flex gap-4 pb-4 min-h-[180px]">
           {todos.length === 0 ? (
             <div className="text-sm text-gray-500 flex items-center">
-              No tasks yet — add one to print it on your “receipt”.
+              {t("todoStrip.emptyHint")}
             </div>
           ) : (
             todos.map((t) => (

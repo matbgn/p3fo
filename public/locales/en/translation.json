@@ -1341,5 +1341,67 @@
       "iod": "IoD",
       "sprint": "Sprint"
     }
+  },
+  "todoStrip": {
+    "title": "Your Receipt Todos",
+    "addPlaceholder": "Add a new task...",
+    "add": "Add",
+    "done": "Done",
+    "undo": "Undo",
+    "task": "Task",
+    "emptyHint": "No tasks yet — add one to print it on your \u201creceipt\u201d."
+  },
+  "circles": {
+    "viewTitle": "Circles View",
+    "hideTreePanel": "Hide tree panel",
+    "showTreePanel": "Show tree panel",
+    "add": "Add",
+    "edit": "Edit",
+    "move": "Move",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "save": "Save",
+    "noCircles": "No circles yet. Create your first organization!",
+    "createOrganization": "Create Organization",
+    "organizationTree": "Organization Tree",
+    "noDetails": "No details defined. Click Edit to add.",
+    "assignedUsers": "Assigned Users",
+    "purpose": "Purpose",
+    "missions": "Missions",
+    "authorityScope": "Authority Scope",
+    "roleAssignments": "Role Assignments",
+    "addUserAssignment": "Add User Assignment",
+    "selectUser": "Select user...",
+    "selectParent": "Select parent...",
+    "noParentRoot": "No Parent (Root)",
+    "newParent": "New Parent",
+    "name": "Name",
+    "type": "Type",
+    "color": "Color",
+    "addNode": "Add Node",
+    "editNode": "Edit Node",
+    "addNodeDesc": "Add a new circle or role.",
+    "editNodeDesc": "Edit the selected circle or role.",
+    "moveNode": "Move \u201c{{name}}\u201d",
+    "moveNodeDesc": "Move the selected node to a new parent.",
+    "deleteConfirmTitle": "Are you sure?",
+    "deleteConfirmDesc": "This will permanently delete \u201c{{name}}\u201d and all its child circles/roles. This action cannot be undone.",
+    "nodeType": {
+      "organization": "Organization",
+      "circle": "Circle",
+      "group": "Group",
+      "role": "Role"
+    },
+    "involvement": {
+      "P": "PILOT / DRI (P)",
+      "CP": "COPILOT (CP)",
+      "PA": "PARTICIPANT (PA)",
+      "F": "FOCUS (F)",
+      "A": "APPRENTICE (A)",
+      "R": "RESOURCE (R)"
+    },
+    "purposePlaceholder": "What service or general functionality does the role-circle provide to the organization, other role-circles or external stakeholders?",
+    "missionsPlaceholder": "What specific services or tasks does the role-circle provide to the organization, to other role-circles or to external stakeholders?",
+    "authorityScopePlaceholder": "What are the elements over which the role-circle has exclusive authority and for which it alone can decide?"
   }
 }

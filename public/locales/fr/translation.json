@@ -1341,5 +1341,67 @@
       "iod": "IoD",
       "sprint": "Sprint"
     }
+  },
+  "todoStrip": {
+    "title": "Vos tâches de ticket",
+    "addPlaceholder": "Ajouter une nouvelle tâche...",
+    "add": "Ajouter",
+    "done": "Terminé",
+    "undo": "Annuler",
+    "task": "Tâche",
+    "emptyHint": "Aucune tâche pour l'instant — ajoutez-en une pour l'imprimer sur votre « ticket »."
+  },
+  "circles": {
+    "viewTitle": "Vue des cercles",
+    "hideTreePanel": "Masquer le panneau arborescent",
+    "showTreePanel": "Afficher le panneau arborescent",
+    "add": "Ajouter",
+    "edit": "Modifier",
+    "move": "Déplacer",
+    "delete": "Supprimer",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "noCircles": "Aucun cercle pour l'instant. Créez votre première organisation !",
+    "createOrganization": "Créer une organisation",
+    "organizationTree": "Arborescence de l'organisation",
+    "noDetails": "Aucun détail défini. Cliquez sur Modifier pour en ajouter.",
+    "assignedUsers": "Utilisateurs assignés",
+    "purpose": "Finalité",
+    "missions": "Missions",
+    "authorityScope": "Périmètre d'autorité",
+    "roleAssignments": "Affectations de rôle",
+    "addUserAssignment": "Ajouter une affectation utilisateur",
+    "selectUser": "Sélectionner un utilisateur...",
+    "selectParent": "Sélectionner un parent...",
+    "noParentRoot": "Aucun parent (racine)",
+    "newParent": "Nouveau parent",
+    "name": "Nom",
+    "type": "Type",
+    "color": "Couleur",
+    "addNode": "Ajouter un nœud",
+    "editNode": "Modifier le nœud",
+    "addNodeDesc": "Ajouter un nouveau cercle ou rôle.",
+    "editNodeDesc": "Modifier le cercle ou rôle sélectionné.",
+    "moveNode": "Déplacer « {{name}} »",
+    "moveNodeDesc": "Déplacer le nœud sélectionné vers un nouveau parent.",
+    "deleteConfirmTitle": "Êtes-vous sûr ?",
+    "deleteConfirmDesc": "Cela supprimera définitivement « {{name}} » et tous les cercles/rôles enfants. Cette action est irréversible.",
+    "nodeType": {
+      "organization": "Organisation",
+      "circle": "Cercle",
+      "group": "Groupe",
+      "role": "Rôle"
+    },
+    "involvement": {
+      "P": "PILOTE / DRI (P)",
+      "CP": "COPILOTE (CP)",
+      "PA": "PARTICIPANT (PA)",
+      "F": "FOCUS (F)",
+      "A": "APPRENTI (A)",
+      "R": "RESSOURCE (R)"
+    },
+    "purposePlaceholder": "Quel service ou quelle fonctionnalité générale le rôle-cercle fournit-il à l'organisation, aux autres rôles-cercles ou aux parties prenantes externes ?",
+    "missionsPlaceholder": "Quels services ou tâches spécifiques le rôle-cercle fournit-il à l'organisation, aux autres rôles-cercles ou aux parties prenantes externes ?",
+    "authorityScopePlaceholder": "Quels sont les éléments sur lesquels le rôle-cercle a une autorité exclusive et pour lesquels il peut décider seul ?"
   }
 }

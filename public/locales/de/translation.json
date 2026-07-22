@@ -1341,5 +1341,67 @@
       "iod": "IoD",
       "sprint": "Sprint"
     }
+  },
+  "todoStrip": {
+    "title": "Ihre Quittungs-Aufgaben",
+    "addPlaceholder": "Neue Aufgabe hinzufügen...",
+    "add": "Hinzufügen",
+    "done": "Erledigt",
+    "undo": "Rückgängig",
+    "task": "Aufgabe",
+    "emptyHint": "Noch keine Aufgaben — fügen Sie eine hinzu, um sie auf Ihrer \u201eQuittung\u201c zu drucken."
+  },
+  "circles": {
+    "viewTitle": "Kreisansicht",
+    "hideTreePanel": "Baumansicht ausblenden",
+    "showTreePanel": "Baumansicht anzeigen",
+    "add": "Hinzufügen",
+    "edit": "Bearbeiten",
+    "move": "Verschieben",
+    "delete": "Löschen",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "noCircles": "Noch keine Kreise. Erstellen Sie Ihre erste Organisation!",
+    "createOrganization": "Organisation erstellen",
+    "organizationTree": "Organisationsbaum",
+    "noDetails": "Keine Details definiert. Klicken Sie auf Bearbeiten, um welche hinzuzufügen.",
+    "assignedUsers": "Zugewiesene Benutzer",
+    "purpose": "Zweck",
+    "missions": "Missionen",
+    "authorityScope": "Befugnisbereich",
+    "roleAssignments": "Rollenzuweisungen",
+    "addUserAssignment": "Benutzerzuweisung hinzufügen",
+    "selectUser": "Benutzer auswählen...",
+    "selectParent": "Übergeordnetes Element auswählen...",
+    "noParentRoot": "Kein übergeordnetes Element (Root)",
+    "newParent": "Neues übergeordnetes Element",
+    "name": "Name",
+    "type": "Typ",
+    "color": "Farbe",
+    "addNode": "Knoten hinzufügen",
+    "editNode": "Knoten bearbeiten",
+    "addNodeDesc": "Einen neuen Kreis oder eine Rolle hinzufügen.",
+    "editNodeDesc": "Den ausgewählten Kreis oder die Rolle bearbeiten.",
+    "moveNode": "\u201e{{name}}\u201c verschieben",
+    "moveNodeDesc": "Den ausgewählten Knoten zu einem neuen übergeordneten Element verschieben.",
+    "deleteConfirmTitle": "Sind Sie sicher?",
+    "deleteConfirmDesc": "Dadurch wird \u201e{{name}}\u201c und alle untergeordneten Kreise/Rollen dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.",
+    "nodeType": {
+      "organization": "Organisation",
+      "circle": "Kreis",
+      "group": "Gruppe",
+      "role": "Rolle"
+    },
+    "involvement": {
+      "P": "PILOT / DRI (P)",
+      "CP": "COPILOT (CP)",
+      "PA": "TEILNEHMER (PA)",
+      "F": "FOCUS (F)",
+      "A": "AUSZUBILDENDER (A)",
+      "R": "RESSOURCE (R)"
+    },
+    "purposePlaceholder": "Welchen Dienst oder welche allgemeine Funktionalität bietet der Rollen-Kreis der Organisation, anderen Rollen-Kreisen oder externen Stakeholdern?",
+    "missionsPlaceholder": "Welche spezifischen Dienste oder Aufgaben bietet der Rollen-Kreis der Organisation, anderen Rollen-Kreisen oder externen Stakeholdern?",
+    "authorityScopePlaceholder": "Über welche Elemente hat der Rollen-Kreis exklusive Befugnis und über welche kann er allein entscheiden?"
   }
 }
