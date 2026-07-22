@@ -315,7 +315,16 @@
     "archiveDialogDescription": "Alle Aufgaben aus der Spalte {{column}} archivieren.",
     "archiveCountDescription": "Dies wird {{n}} Aufgaben archivieren.",
     "archiveOldOnly": "Nur Karten archivieren, die älter als {{n}} Wochen sind",
-    "archive": "Archivieren"
+    "archive": "Archivieren",
+    "column": {
+      "Backlog": "Backlog",
+      "Ready": "Bereit",
+      "WIP": "In Arbeit",
+      "Blocked": "Blockiert",
+      "Done": "Erledigt",
+      "Dropped": "Verworfen",
+      "Archived": "Archiviert"
+    }
   },
   "filters": {
     "searchPlaceholder": "Aufgaben suchen...",

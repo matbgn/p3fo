@@ -315,7 +315,16 @@
     "archiveDialogDescription": "Archive all tasks from the {{column}} column.",
     "archiveCountDescription": "This will archive {{n}} tasks.",
     "archiveOldOnly": "Only archive cards older than {{n}} weeks",
-    "archive": "Archive"
+    "archive": "Archive",
+    "column": {
+      "Backlog": "Backlog",
+      "Ready": "Ready",
+      "WIP": "WIP",
+      "Blocked": "Blocked",
+      "Done": "Done",
+      "Dropped": "Dropped",
+      "Archived": "Archived"
+    }
   },
   "filters": {
     "searchPlaceholder": "Search tasks...",

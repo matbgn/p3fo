@@ -315,7 +315,16 @@
     "archiveDialogDescription": "Archiver toutes les tâches de la colonne {{column}}.",
     "archiveCountDescription": "Cela archivera {{n}} tâches.",
     "archiveOldOnly": "Archiver uniquement les cartes de plus de {{n}} semaines",
-    "archive": "Archiver"
+    "archive": "Archiver",
+    "column": {
+      "Backlog": "Backlog",
+      "Ready": "Prêt",
+      "WIP": "En cours",
+      "Blocked": "Bloqué",
+      "Done": "Réalisé",
+      "Dropped": "Abandonné",
+      "Archived": "Archivé"
+    }
   },
   "filters": {
     "searchPlaceholder": "Rechercher des tâches...",

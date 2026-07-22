@@ -200,7 +200,7 @@ const Column: React.FC<{
   return (
     <Card className={`w-80 shrink-0 overflow-hidden flex flex-col transition-colors ${droppableIsOver || isOver ? 'ring-2 ring-primary/50' : ''}`}>
       <div className="px-3 py-2 border-b text-sm font-medium flex items-center justify-between shrink-0">
-        <span>{title === "WIP" ? t('kanban.wipHeader', { n: wipLimit }) : title}</span>
+        <span>{title === "WIP" ? t('kanban.wipHeader', { n: wipLimit }) : t(`kanban.column.${title}`)}</span>
         <div className="flex items-center gap-2">
           {totalDifficulty > 0 && (
             <Badge variant="secondary" className="ml-2">
@@ -213,7 +213,7 @@ const Column: React.FC<{
               size="sm"
               className="h-6 px-2 text-xs"
               onClick={() => onArchive(title)}
-              title={t('kanban.archiveAllTitle', { n: cards.length, title })}
+              title={t('kanban.archiveAllTitle', { n: cards.length, title: t(`kanban.column.${title}`) })}
             >
               <Archive className="h-3 w-3 mr-1" />
               {t('kanban.archiveCount', { n: cards.length })}
@@ -813,7 +813,7 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
             <DialogHeader>
               <DialogTitle>{t('kanban.archiveDialogTitle')}</DialogTitle>
               <DialogDescription>
-                {t('kanban.archiveDialogDescription', { column: archiveColumnTitle ?? '' })}
+                {t('kanban.archiveDialogDescription', { column: archiveColumnTitle ? t(`kanban.column.${archiveColumnTitle}`) : '' })}
                 {grouped[archiveColumnTitle || "Done"]?.length > 0 && (
                   <span className="block mt-2">
                     {t('kanban.archiveCountDescription', { n: grouped[archiveColumnTitle || "Done"].length })}
