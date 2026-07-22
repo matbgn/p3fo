@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { FertilizationBoardEntity, FertilizationCard, FertilizationColumn, FactTag } from '@/lib/persistence-types';
 import { usePersistence } from '@/hooks/usePersistence';
@@ -51,7 +52,7 @@ import { useBoardTimer } from '@/hooks/useBoardTimer';
 type VotingMode = 'THUMBS_UP' | 'THUMBS_UD_NEUTRAL' | 'POINTS' | 'MAJORITY_JUDGMENT';
 type VotingPhase = 'IDLE' | 'VOTING' | 'REVEALED';
 
-import { MJ_SCALE, VOTING_MODES_LABELS } from './planView/constants';
+import { MJ_SCALE, votingModeLabel, mjGradeLabel } from './planView/constants';
 import { BoardOptions, BoardTypeConfig } from './planView/BoardOptions';
 
 // Default columns
@@ -69,6 +70,7 @@ interface FertilizationViewProps {
 }
 
 export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, onPromoteToKanban }) => {
+    const { t } = useTranslation();
     const persistence = usePersistence();
     const { userId: currentUserId, userSettings } = useUserSettings();
     const { createTask } = useTasks();
@@ -873,7 +875,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
     // Helper to render MJ Distribution
     const renderMJDistribution = (votes: Record<string, number>) => {
         const totalVotes = Object.keys(votes).length;
-        if (totalVotes === 0) return <div className="text-sm text-muted-foreground p-2">No votes cast yet.</div>;
+        if (totalVotes === 0) return <div className="text-sm text-muted-foreground p-2">{t('fertilization.noVotesCastYet')}</div>;
 
         const medianValue = getMJMedian(votes);
 
@@ -895,7 +897,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                     {MJ_SCALE.map(grade => (
                         <div key={grade.value} className="flex items-center gap-1">
                             <div className={`w-3 h-3 rounded ${grade.color}`}></div>
-                            <span>{grade.label}</span>
+                            <span>{mjGradeLabel(t, grade.value)}</span>
                         </div>
                     ))}
                 </div>
@@ -1012,14 +1014,14 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
         await saveBoard({ ...boardState, cards: newCards });
     };
 
-    if (loading) return <div>Loading...</div>;
+    if (loading) return <div>{t('common.loading')}</div>;
 
     if (!boardState?.isSessionActive) {
         return (
             <div className="flex flex-col items-center justify-center h-full space-y-4">
-                <h2 className="text-2xl font-bold">Fertilization Board</h2>
-                <p className="text-muted-foreground">No moderator active. Start a session to become the moderator.</p>
-                <Button onClick={startSession}>Start Session</Button>
+                <h2 className="text-2xl font-bold">{t('fertilization.title')}</h2>
+                <p className="text-muted-foreground">{t('fertilization.noModerator')}</p>
+                <Button onClick={startSession}>{t('fertilization.startSession')}</Button>
             </div>
         );
     }
@@ -1032,14 +1034,14 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
             <Dialog open={promoteDialogOpen} onOpenChange={setPromoteDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Promote to Kanban</DialogTitle>
+                        <DialogTitle>{t('fertilization.promote.title')}</DialogTitle>
                         <DialogDescription>
-                            This will create a new task in the Kanban board with the content of this card.
+                            {t('fertilization.promote.description')}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="flex justify-end space-x-2">
-                        <Button variant="outline" onClick={() => setPromoteDialogOpen(false)}>Cancel</Button>
-                        <Button onClick={promoteToBacklog}>Promote</Button>
+                        <Button variant="outline" onClick={() => setPromoteDialogOpen(false)}>{t('common.cancel')}</Button>
+                        <Button onClick={promoteToBacklog}>{t('fertilization.promote.confirm')}</Button>
                     </div>
                 </DialogContent>
             </Dialog>
@@ -1047,28 +1049,28 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
             {/* Points Config Dialog */}
             <Dialog open={pointsConfigColumnId !== null} onOpenChange={(open) => !open && setPointsConfigColumnId(null)}>
                 <DialogContent className="sm:max-w-sm">
-                    <DialogHeader><DialogTitle>Configure Points Budget</DialogTitle></DialogHeader>
+                    <DialogHeader><DialogTitle>{t('fertilization.pointsConfig.title')}</DialogTitle></DialogHeader>
                     <div className="flex items-center gap-4 py-4">
-                        <Label className="text-right">Max Points:</Label>
+                        <Label className="text-right">{t('fertilization.pointsConfig.maxPoints')}</Label>
                         <Input type="number" value={pointsConfigValue} onChange={(e) => setPointsConfigValue(Math.max(1, parseInt(e.target.value) || 0))} className="col-span-3" />
                     </div>
-                    <Button onClick={confirmColumnPointsConfig}>Start Points Voting</Button>
+                    <Button onClick={confirmColumnPointsConfig}>{t('fertilization.pointsConfig.start')}</Button>
                 </DialogContent>
             </Dialog>
 
             {/* MJ Labels Config Dialog */}
             <Dialog open={mjConfigColumnId !== null} onOpenChange={(open) => !open && setMjConfigColumnId(null)}>
                 <DialogContent className="sm:max-w-md">
-                    <DialogHeader><DialogTitle>Configure Majority Judgment Labels</DialogTitle></DialogHeader>
+                    <DialogHeader><DialogTitle>{t('fertilization.mjConfig.title')}</DialogTitle></DialogHeader>
                     <div className="space-y-3 py-2">
                         {MJ_SCALE.map(grade => (
                             <div key={grade.value} className="flex items-center gap-3">
                                 <span className={`flex items-center justify-center w-6 h-6 rounded ${grade.color} text-[10px]`}>{grade.icon}</span>
                                 <Input
-                                    value={mjLabelInputs[grade.value] ?? grade.label}
+                                    value={mjLabelInputs[grade.value] ?? mjGradeLabel(t, grade.value)}
                                     onChange={(e) => setMjLabelInputs(prev => ({ ...prev, [grade.value]: e.target.value }))}
                                     className="flex-1"
-                                    placeholder={`Label for grade ${grade.value}`}
+                                    placeholder={t('fertilization.mjConfig.labelPlaceholder', { n: grade.value })}
                                 />
                             </div>
                         ))}
@@ -1081,16 +1083,16 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                         await saveBoard({ ...boardState, columns: newColumns });
                         setMjConfigColumnId(null);
                         setMjLabelInputs({});
-                    }}>Save & Start MJ Voting</Button>
+                    }}>{t('fertilization.mjConfig.saveAndStart')}</Button>
                 </DialogContent>
             </Dialog>
 
             <BoardHeader
-                title="Fertilization Board"
+                title={t('fertilization.title')}
                 titleContent={
                     boardState?.votingMode === 'POINTS' && boardState.votingPhase === 'VOTING' && (
                         <div className="text-sm font-normal px-3 py-1 bg-primary/10 rounded-full border border-primary/20 text-primary">
-                            Budget: <span className="font-bold">{calculateUserUsedPoints(currentUserId)}</span> / {boardState.maxPointsPerUser || 10} pts
+                            {t('fertilization.budget')}: <span className="font-bold">{calculateUserUsedPoints(currentUserId)}</span> / {boardState.maxPointsPerUser || 10} {t('fertilization.pts')}
                         </div>
                     )
                 }
@@ -1108,23 +1110,23 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                             <>
                                 {boardState.timer?.isRunning ? (
                                     <Button variant="outline" size="sm" onClick={stopTimer}>
-                                        <Square className="mr-2 h-4 w-4" /> Stop Timer
+                                        <Square className="mr-2 h-4 w-4" /> {t('fertilization.timer.stop')}
                                     </Button>
                                 ) : (
                                     <Dialog open={isTimerDialogOpen} onOpenChange={setIsTimerDialogOpen}>
                                         <DialogTrigger asChild>
                                             <Button variant="outline" size="sm">
-                                                <Clock className="mr-2 h-4 w-4" /> Set Timer
+                                                <Clock className="mr-2 h-4 w-4" /> {t('fertilization.timer.set')}
                                             </Button>
                                         </DialogTrigger>
                                         <DialogContent className="sm:max-w-md">
                                             <DialogHeader>
-                                                <DialogTitle>Start/Stop Timer</DialogTitle>
-                                                <DialogDescription>Adjust minutes and seconds.</DialogDescription>
+                                                <DialogTitle>{t('fertilization.timer.dialogTitle')}</DialogTitle>
+                                                <DialogDescription>{t('fertilization.timer.dialogDescription')}</DialogDescription>
                                             </DialogHeader>
                                             <div className="flex justify-center gap-4 py-4">
                                                 <div className="flex flex-col items-center">
-                                                    <span className="text-sm text-muted-foreground mb-2">Minutes</span>
+                                                    <span className="text-sm text-muted-foreground mb-2">{t('fertilization.timer.minutes')}</span>
                                                     <div className="flex items-center gap-2">
                                                         <Input type="number" min={0} max={60} value={timerMinutes} onChange={(e) => setTimerMinutes(Math.min(60, Math.max(0, parseInt(e.target.value) || 0)))} className="w-16 text-center" />
                                                         <div className="flex flex-col">
@@ -1134,7 +1136,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                                                     </div>
                                                 </div>
                                                 <div className="flex flex-col items-center">
-                                                    <span className="text-sm text-muted-foreground mb-2">Seconds</span>
+                                                    <span className="text-sm text-muted-foreground mb-2">{t('fertilization.timer.seconds')}</span>
                                                     <div className="flex items-center gap-2">
                                                         <Input type="number" min={0} max={59} value={timerSeconds} onChange={(e) => setTimerSeconds(Math.min(59, Math.max(0, parseInt(e.target.value) || 0)))} className="w-16 text-center" />
                                                         <div className="flex flex-col">
@@ -1144,29 +1146,29 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                                                     </div>
                                                 </div>
                                             </div>
-                                            <Button onClick={startTimerWithDuration} className="w-full">Start</Button>
+                                            <Button onClick={startTimerWithDuration} className="w-full">{t('fertilization.timer.start')}</Button>
                                         </DialogContent>
                                     </Dialog>
                                 )}
                                 <Button variant="outline" size="sm" onClick={toggleHiddenEdition}>
                                     {boardState.hiddenEdition ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
-                                    {boardState.hiddenEdition ? 'Hidden Mode' : 'Visible Mode'}
+                                    {boardState.hiddenEdition ? t('fertilization.hiddenMode') : t('fertilization.visibleMode')}
                                 </Button>
                                 <Button variant="destructive" size="sm" onClick={restartSession}>
-                                    <RotateCcw className="mr-2 h-4 w-4" /> Restart Session
+                                    <RotateCcw className="mr-2 h-4 w-4" /> {t('fertilization.restartSession')}
                                 </Button>
                                 <Button variant="outline" size="sm" onClick={() => saveBoard({ ...boardState, areCursorsVisible: !boardState.areCursorsVisible })}>
                                     {boardState.areCursorsVisible ? <MousePointer2 className="mr-2 h-4 w-4" /> : <MousePointerClick className="mr-2 h-4 w-4 text-muted-foreground" />}
-                                    {boardState.areCursorsVisible ? 'Hide Cursors' : 'Show Cursors'}
+                                    {boardState.areCursorsVisible ? t('fertilization.hideCursors') : t('fertilization.showCursors')}
                                 </Button>
                             </>
                         )}
                         {!isModerator && boardState.isSessionActive && (
                             <div className="flex items-center gap-2 border-l pl-4 ml-2">
                                 <div className="px-3 py-1 bg-muted rounded-full text-xs font-semibold">
-                                    {boardState.votingPhase === 'VOTING' && <span className="text-green-600 flex items-center gap-1"><Play className="h-3 w-3" /> Voting Open</span>}
-                                    {boardState.votingPhase === 'IDLE' && <span className="text-muted-foreground">Voting Closed</span>}
-                                    {boardState.votingPhase === 'REVEALED' && <span className="text-blue-600 flex items-center gap-1"><Eye className="h-3 w-3" /> Results Revealed</span>}
+                                    {boardState.votingPhase === 'VOTING' && <span className="text-green-600 flex items-center gap-1"><Play className="h-3 w-3" /> {t('fertilization.votingOpen')}</span>}
+                                    {boardState.votingPhase === 'IDLE' && <span className="text-muted-foreground">{t('fertilization.votingClosed')}</span>}
+                                    {boardState.votingPhase === 'REVEALED' && <span className="text-blue-600 flex items-center gap-1"><Eye className="h-3 w-3" /> {t('fertilization.resultsRevealed')}</span>}
                                 </div>
                             </div>
                         )}
@@ -1177,7 +1179,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                                 saveBoard(newState);
                             }}>
                                 {boardState.showAllLinks ? <Unlink className="mr-2 h-4 w-4" /> : <Link className="mr-2 h-4 w-4" />}
-                                {boardState.showAllLinks ? 'Hide Links' : 'Show Links'}
+                                {boardState.showAllLinks ? t('fertilization.hideLinks') : t('fertilization.showLinks')}
                             </Button>
                         )}
 
@@ -1189,7 +1191,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                         />
 
                         {!isModerator && boardState.isSessionActive && (
-                            <Button variant="outline" size="sm" onClick={becomeModerator}>Become Moderator</Button>
+                            <Button variant="outline" size="sm" onClick={becomeModerator}>{t('fertilization.becomeModerator')}</Button>
                         )}
                     </>
                 }
@@ -1198,18 +1200,18 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                         {
                             isModerator && (
                                 <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium mr-1">Default Voting:</span>
+                                    <span className="text-sm font-medium mr-1">{t('fertilization.defaultVoting')}:</span>
                                     <Select value={boardState.votingMode} onValueChange={(val: VotingMode) => saveBoard({ ...boardState!, votingMode: val, votingPhase: 'IDLE' })} disabled={boardState.votingPhase !== 'IDLE'}>
-                                        <SelectTrigger className="w-[180px] h-8"><SelectValue placeholder="Mode" /></SelectTrigger>
+                                        <SelectTrigger className="w-[180px] h-8"><SelectValue placeholder={t('fertilization.mode')} /></SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="THUMBS_UP">Thumbs Up</SelectItem>
-                                            <SelectItem value="THUMBS_UD_NEUTRAL">Up / Down / Neutral</SelectItem>
-                                            <SelectItem value="POINTS">Points Budget</SelectItem>
-                                            <SelectItem value="MAJORITY_JUDGMENT">Majority Judgment</SelectItem>
+                                            <SelectItem value="THUMBS_UP">{votingModeLabel(t, 'THUMBS_UP')}</SelectItem>
+                                            <SelectItem value="THUMBS_UD_NEUTRAL">{votingModeLabel(t, 'THUMBS_UD_NEUTRAL')}</SelectItem>
+                                            <SelectItem value="POINTS">{votingModeLabel(t, 'POINTS')}</SelectItem>
+                                            <SelectItem value="MAJORITY_JUDGMENT">{votingModeLabel(t, 'MAJORITY_JUDGMENT')}</SelectItem>
                                         </SelectContent>
                                     </Select>
-                                    <Button size="sm" variant="outline" onClick={() => saveBoard({ ...boardState!, votingPhase: 'REVEALED' })}><Eye className="h-3 w-3 mr-1" /> Reveal All</Button>
-                                    <Button size="sm" variant="outline" className="text-destructive border-destructive/50 hover:bg-destructive/10" onClick={resetVotes}><Trash2 className="h-3 w-3 mr-1" /> Reset All Votes</Button>
+                                    <Button size="sm" variant="outline" onClick={() => saveBoard({ ...boardState!, votingPhase: 'REVEALED' })}><Eye className="h-3 w-3 mr-1" /> {t('fertilization.revealAll')}</Button>
+                                    <Button size="sm" variant="outline" className="text-destructive border-destructive/50 hover:bg-destructive/10" onClick={resetVotes}><Trash2 className="h-3 w-3 mr-1" /> {t('fertilization.resetAllVotes')}</Button>
                                 </div>
                             )
                         }
@@ -1224,7 +1226,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                         <div className="flex items-center gap-2">
                             <Link className="h-4 w-4 text-blue-600" />
                             <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                                Linking mode: Click on other cards to link/unlink them
+                                {t('fertilization.linkingMode')}
                             </span>
                         </div>
                         <Button
@@ -1233,7 +1235,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                             onClick={() => setLinkingCardId(null)}
                             className="border-blue-300 text-blue-700 hover:bg-blue-200 dark:border-blue-600 dark:text-blue-300"
                         >
-                            <X className="h-4 w-4 mr-1" /> Cancel
+                            <X className="h-4 w-4 mr-1" /> {t('common.cancel')}
                         </Button>
                     </div>
                 )
@@ -1327,41 +1329,41 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                             }}
                             votingToolbar={isModerator ? (
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="text-xs font-medium whitespace-nowrap">{VOTING_MODES_LABELS[colMode]}</span>
+                                    <span className="text-xs font-medium whitespace-nowrap">{votingModeLabel(t, colMode)}</span>
                                     {colMode === 'POINTS' && colPhase === 'VOTING' && (
                                         <span className="text-xs text-primary whitespace-nowrap">
-                                            Budget: {colPointsUsed}/{colMaxPoints || 10} pts
+                                            {t('fertilization.budget')}: {colPointsUsed}/{colMaxPoints || 10} {t('fertilization.pts')}
                                         </span>
                                     )}
                                     {colPhase === 'IDLE' && (
-                                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => startColumnVoting(column.id)}><Play className="h-3 w-3 mr-1" /> Vote</Button>
+                                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => startColumnVoting(column.id)}><Play className="h-3 w-3 mr-1" /> {t('fertilization.vote')}</Button>
                                     )}
                                     {colPhase === 'VOTING' && (
-                                        <Button size="sm" variant="secondary" className="h-6 px-2 text-xs" onClick={() => setColumnVotingPhase(column.id, 'IDLE')}><Square className="h-3 w-3 mr-1" /> Stop</Button>
+                                        <Button size="sm" variant="secondary" className="h-6 px-2 text-xs" onClick={() => setColumnVotingPhase(column.id, 'IDLE')}><Square className="h-3 w-3 mr-1" /> {t('fertilization.stop')}</Button>
                                     )}
                                     {colPhase !== 'REVEALED' && (
-                                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => setColumnVotingPhase(column.id, 'REVEALED')}><Eye className="h-3 w-3 mr-1" /> Reveal</Button>
+                                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => setColumnVotingPhase(column.id, 'REVEALED')}><Eye className="h-3 w-3 mr-1" /> {t('fertilization.reveal')}</Button>
                                     )}
                                     {colPhase === 'REVEALED' && (
-                                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => setColumnVotingPhase(column.id, 'IDLE')}><RotateCcw className="h-3 w-3 mr-1" /> Revote</Button>
+                                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => setColumnVotingPhase(column.id, 'IDLE')}><RotateCcw className="h-3 w-3 mr-1" /> {t('fertilization.revote')}</Button>
                                     )}
-                                    <Button size="sm" variant="outline" className="h-6 px-2 text-xs text-destructive border-destructive/50 hover:bg-destructive/10" onClick={() => resetColumnVotes(column.id)}><Trash2 className="h-3 w-3 mr-1" /> Reset</Button>
+                                    <Button size="sm" variant="outline" className="h-6 px-2 text-xs text-destructive border-destructive/50 hover:bg-destructive/10" onClick={() => resetColumnVotes(column.id)}><Trash2 className="h-3 w-3 mr-1" /> {t('fertilization.reset')}</Button>
                                     <Select value={colMode} onValueChange={(val: VotingMode) => setColumnVotingMode(column.id, val)} disabled={colPhase !== 'IDLE'}>
-                                        <SelectTrigger className="w-[100px] h-6 text-xs px-1"><SelectValue placeholder="Mode" /></SelectTrigger>
+                                        <SelectTrigger className="w-[100px] h-6 text-xs px-1"><SelectValue placeholder={t('fertilization.mode')} /></SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="THUMBS_UP">Thumbs Up</SelectItem>
-                                            <SelectItem value="THUMBS_UD_NEUTRAL">Up/Down</SelectItem>
-                                            <SelectItem value="POINTS">Points</SelectItem>
-                                            <SelectItem value="MAJORITY_JUDGMENT">MJ</SelectItem>
+                                            <SelectItem value="THUMBS_UP">{votingModeLabel(t, 'THUMBS_UP')}</SelectItem>
+                                            <SelectItem value="THUMBS_UD_NEUTRAL">{t('fertilization.upDown')}</SelectItem>
+                                            <SelectItem value="POINTS">{t('fertilization.points')}</SelectItem>
+                                            <SelectItem value="MAJORITY_JUDGMENT">{t('fertilization.mj')}</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
                             ) : (
                                 <div className="flex items-center gap-1">
-                                    <span className="text-xs text-muted-foreground">{VOTING_MODES_LABELS[colMode]}</span>
-                                    {colPhase === 'VOTING' && <span className="text-[10px] text-green-600 flex items-center gap-0.5"><Play className="h-2.5 w-2.5" />Open</span>}
-                                    {colPhase === 'REVEALED' && <span className="text-[10px] text-blue-600 flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" />Revealed</span>}
-                                    {colPhase === 'IDLE' && <span className="text-[10px] text-muted-foreground">Closed</span>}
+                                    <span className="text-xs text-muted-foreground">{votingModeLabel(t, colMode)}</span>
+                                    {colPhase === 'VOTING' && <span className="text-[10px] text-green-600 flex items-center gap-0.5"><Play className="h-2.5 w-2.5" />{t('fertilization.open')}</span>}
+                                    {colPhase === 'REVEALED' && <span className="text-[10px] text-blue-600 flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" />{t('fertilization.revealed')}</span>}
+                                    {colPhase === 'IDLE' && <span className="text-[10px] text-muted-foreground">{t('fertilization.closed')}</span>}
                                 </div>
                             )}
                             renderCard={(card) => {

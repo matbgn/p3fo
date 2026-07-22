@@ -117,32 +117,74 @@
       "clearAllConfirm": "Êtes-vous sûr de vouloir supprimer TOUTES les données de l'application ? Cette action est irréversible et supprimera toutes les tâches, paramètres, utilisateur·rices et tableaux."
     },
     "module": {
-      "celebration": { "label": "Célébration", "description": "Tableau de fertilisation pour les réalisations et célébrations" },
+      "celebration": {
+        "label": "Célébration",
+        "description": "Tableau de fertilisation pour les réalisations et célébrations"
+      },
       "dream": {
         "label": "Rêve",
         "description": "Tableau de rêve, storyboard et vues de priorisation",
-        "dream": { "label": "Tableau de rêve", "description": "Sous-vue Tableau de rêve dans Rêve" },
-        "storyboard": { "label": "Storyboard", "description": "Sous-vue Storyboard dans Rêve" },
-        "prioritization": { "label": "Priorisation", "description": "Sous-vue Priorisation dans Rêve" }
+        "dream": {
+          "label": "Tableau de rêve",
+          "description": "Sous-vue Tableau de rêve dans Rêve"
+        },
+        "storyboard": {
+          "label": "Storyboard",
+          "description": "Sous-vue Storyboard dans Rêve"
+        },
+        "prioritization": {
+          "label": "Priorisation",
+          "description": "Sous-vue Priorisation dans Rêve"
+        }
       },
       "plan": {
         "label": "Plan",
         "description": "Vues organisationnelles Cercles et Rôles",
-        "circles": { "label": "Cercles", "description": "Sous-vue Cercles organisationnels dans Plan" },
-        "roles": { "label": "Rôles", "description": "Sous-vue Rôles dans Plan" },
-        "salary": { "label": "Système de salaires", "description": "Calculateur de salaires transparent sous-vue dans Plan" }
+        "circles": {
+          "label": "Cercles",
+          "description": "Sous-vue Cercles organisationnels dans Plan"
+        },
+        "roles": {
+          "label": "Rôles",
+          "description": "Sous-vue Rôles dans Plan"
+        },
+        "salary": {
+          "label": "Système de salaires",
+          "description": "Calculateur de salaires transparent sous-vue dans Plan"
+        }
       },
       "program": {
         "label": "Programme",
         "description": "Vues de planification Calendrier et Ressources",
-        "calendar": { "label": "Calendrier", "description": "Sous-vue Calendrier dans Programme" },
-        "resources": { "label": "Ressources", "description": "Sous-vue Ressources dans Programme" }
+        "calendar": {
+          "label": "Calendrier",
+          "description": "Sous-vue Calendrier dans Programme"
+        },
+        "resources": {
+          "label": "Ressources",
+          "description": "Sous-vue Ressources dans Programme"
+        }
       },
-      "kanban": { "label": "Projet", "description": "Tableau Kanban pour la gestion de projet" },
-      "focus": { "label": "Focus", "description": "Mode focus pour le travail concentré sur les tâches" },
-      "timetable": { "label": "Calendrier horaire", "description": "Vue basée sur le temps pour la planification horaire" },
-      "metrics": { "label": "Métriques", "description": "Métriques de performance et tableaux de bord" },
-      "voting": { "label": "Vote", "description": "Lancez des sondages et des décisions formelles avec votre audience" }
+      "kanban": {
+        "label": "Projet",
+        "description": "Tableau Kanban pour la gestion de projet"
+      },
+      "focus": {
+        "label": "Focus",
+        "description": "Mode focus pour le travail concentré sur les tâches"
+      },
+      "timetable": {
+        "label": "Calendrier horaire",
+        "description": "Vue basée sur le temps pour la planification horaire"
+      },
+      "metrics": {
+        "label": "Métriques",
+        "description": "Métriques de performance et tableaux de bord"
+      },
+      "voting": {
+        "label": "Vote",
+        "description": "Lancez des sondages et des décisions formelles avec votre audience"
+      }
     }
   },
   "metrics": {
@@ -154,8 +196,12 @@
     "selectUserQol": "Veuillez sélectionner un·e utilisateur·rice pour voir le sondage",
     "selectUserFocus": "Veuillez sélectionner un·e utilisateur·rice pour voir les statistiques de session de focus",
     "graphicsPlaceholder": "Le contenu graphique pour {{tab}} apparaîtra ici",
-    "consistencyScore": { "title": "Score de cohérence" },
-    "consistencyActivity": { "title": "Activité de cohérence" },
+    "consistencyScore": {
+      "title": "Score de cohérence"
+    },
+    "consistencyActivity": {
+      "title": "Activité de cohérence"
+    },
     "resetStatsButton": "Réinitialiser les statistiques",
     "resetStatsTitle": "Réinitialiser les statistiques de session de focus ?",
     "resetStatsDescription": "Cela supprimera définitivement tout votre historique de sessions de focus, y compris la carte thermique et les statistiques. Cette action est irréversible.",
@@ -472,15 +518,30 @@
       "dialogDescription": "Variables de calcul du salaire. Adaptez-les au client."
     },
     "dimension": {
-      "defaultName": "Nouveau déterminant",
-      "name": "Nom",
-      "maxLevel": "Palier max",
-      "stepValue": "Step (CHF/niveau)",
-      "affectsSalary": "Impacte le salaire",
-      "color": "Couleur",
-      "delete": "Supprimer le déterminant",
-      "levelDescriptions": "Descriptions des niveaux ({{n}})",
-      "add": "Ajouter un déterminant"
+      "expertise": {
+        "name": "Expertise",
+        "levelDescription": {
+          "0": "Aucune expertise dans la fonction principale. Apprenti ou changement de carrière radical.",
+          "1": "Connaissances de base, débutant. Capable de travailler sous supervision.",
+          "2": "Maîtrise du rôle principal, autonome. Bonne capacité à acquérir le savoir-faire de l'équipe.",
+          "3": "Personne de référence (expert) dans un ou plusieurs domaines. Source d'information pour les collègues.",
+          "4": "Pionnier-ère qui mène des recherches, élabore des preuves de concept et apporte de nouvelles connaissances.",
+          "5": "Niveau Maîtrise de l'ensemble de l'architecture. Expertise exceptionnelle reconnue dans l'organisation.",
+          "6": "Crée de nouveaux modèles d'organisation et d'outils largement utilisés par les équipes internes ou externes à l'entreprise. Référence reconnue dans le domaine."
+        }
+      },
+      "impact": {
+        "name": "Impact",
+        "levelDescription": {
+          "0": "Mobilise davantage de ressources que de résultats. En formation, besoin de soutien.",
+          "1": "Impact limité, principalement individuel.",
+          "2": "Impact occasionnel sur les collègues ou d'autres sous-systèmes.",
+          "3": "Pilier de l'équipe, impact sur l'ensemble du cercle.",
+          "4": "Impact étendu à d'autres domaines de l'organisation. Influenceur transversal.",
+          "5": "Impact indéniable sur l'ensemble de l'entreprise à court terme.",
+          "6": "Impact à long terme et portée étendue. Représente l'organisation à l'extérieur."
+        }
+      }
     },
     "dimensions": {
       "dialogTitle": "Déterminants du salaire",
@@ -610,32 +671,6 @@
       "intermediateName": "Intermédiaire",
       "maxName": "Max (revenus max − charges min)"
     },
-    "dimension": {
-      "expertise": {
-        "name": "Expertise",
-        "levelDescription": {
-          "0": "Aucune expertise dans la fonction principale. Apprenti ou changement de carrière radical.",
-          "1": "Connaissances de base, débutant. Capable de travailler sous supervision.",
-          "2": "Maîtrise du rôle principal, autonome. Bonne capacité à acquérir le savoir-faire de l'équipe.",
-          "3": "Personne de référence (expert) dans un ou plusieurs domaines. Source d'information pour les collègues.",
-          "4": "Pionnier-ère qui mène des recherches, élabore des preuves de concept et apporte de nouvelles connaissances.",
-          "5": "Niveau Maîtrise de l'ensemble de l'architecture. Expertise exceptionnelle reconnue dans l'organisation.",
-          "6": "Crée de nouveaux modèles d'organisation et d'outils largement utilisés par les équipes internes ou externes à l'entreprise. Référence reconnue dans le domaine."
-        }
-      },
-      "impact": {
-        "name": "Impact",
-        "levelDescription": {
-          "0": "Mobilise davantage de ressources que de résultats. En formation, besoin de soutien.",
-          "1": "Impact limité, principalement individuel.",
-          "2": "Impact occasionnel sur les collègues ou d'autres sous-systèmes.",
-          "3": "Pilier de l'équipe, impact sur l'ensemble du cercle.",
-          "4": "Impact étendu à d'autres domaines de l'organisation. Influenceur transversal.",
-          "5": "Impact indéniable sur l'ensemble de l'entreprise à court terme.",
-          "6": "Impact à long terme et portée étendue. Représente l'organisation à l'extérieur."
-        }
-      }
-    },
     "simulator": {
       "title": "Simulateur individuel",
       "workload": "Taux d'activité (%)",
@@ -737,5 +772,88 @@
       "majorityJudgment": "Jugement Majoritaire",
       "consentLoop": "Boucle de consentement"
     }
+  },
+  "fertilization": {
+    "title": "Tableau de fertilisation",
+    "noModerator": "Aucun modérateur actif. Démarrez une session pour devenir modérateur.",
+    "startSession": "Démarrer la session",
+    "becomeModerator": "Devenir modérateur",
+    "hiddenMode": "Mode masqué",
+    "visibleMode": "Mode visible",
+    "restartSession": "Relancer la session",
+    "hideCursors": "Masquer les curseurs",
+    "showCursors": "Afficher les curseurs",
+    "hideLinks": "Masquer les liens",
+    "showLinks": "Afficher les liens",
+    "votingOpen": "Vote ouvert",
+    "votingClosed": "Vote clôturé",
+    "resultsRevealed": "Résultats révélés",
+    "defaultVoting": "Vote par défaut",
+    "mode": "Mode",
+    "revealAll": "Tout révéler",
+    "resetAllVotes": "Réinitialiser tous les votes",
+    "linkingMode": "Mode liaison : cliquez sur d'autres cartes pour les lier/délier",
+    "noVotesCastYet": "Aucun vote pour le moment.",
+    "budget": "Budget",
+    "pts": "pts",
+    "vote": "Voter",
+    "stop": "Arrêter",
+    "reveal": "Révéler",
+    "revote": "Revoter",
+    "reset": "Réinitialiser",
+    "open": "Ouvert",
+    "revealed": "Révélé",
+    "closed": "Clôturé",
+    "upDown": "Haut/Bas",
+    "points": "Points",
+    "mj": "JM",
+    "promote": {
+      "title": "Promouvoir vers le Kanban",
+      "description": "Ceci créera une nouvelle tâche dans le tableau Kanban avec le contenu de cette carte.",
+      "confirm": "Promouvoir"
+    },
+    "pointsConfig": {
+      "title": "Configurer le budget de points",
+      "maxPoints": "Points max :",
+      "start": "Démarrer le vote par points"
+    },
+    "mjConfig": {
+      "title": "Configurer les étiquettes du Jugement Majoritaire",
+      "labelPlaceholder": "Étiquette pour le grade {{n}}",
+      "saveAndStart": "Enregistrer & démarrer le vote JM"
+    },
+    "timer": {
+      "stop": "Arrêter le minuteur",
+      "set": "Définir le minuteur",
+      "dialogTitle": "Démarrer/Arrêter le minuteur",
+      "dialogDescription": "Ajustez les minutes et les secondes.",
+      "minutes": "Minutes",
+      "seconds": "Secondes",
+      "start": "Démarrer"
+    }
+  },
+  "boardOptions": {
+    "options": "Options",
+    "title": "Options du tableau",
+    "offlineVotes": "Votes hors ligne",
+    "on": "Activé",
+    "off": "Désactivé",
+    "exporting": "Exportation...",
+    "exportJson": "Exporter en JSON",
+    "importBoard": "Importer le tableau",
+    "importTitle": "Importer le tableau",
+    "importDescription": "Importez un tableau depuis un fichier JSON. Ceci remplacera les données actuelles du tableau.",
+    "warningTitle": "Attention : ceci détruira le tableau actuel",
+    "warningBody": "Importer un tableau remplacera complètement le tableau {{type}} actuel — toutes les cartes, colonnes, votes et paramètres seront perdus. Cette action est irréversible.",
+    "warningBackup": "Envisagez d'exporter d'abord le tableau actuel comme sauvegarde.",
+    "understand": "Je comprends, continuer",
+    "selected": "Sélectionné",
+    "importing": "Importation...",
+    "importReplace": "Importer & remplacer le tableau",
+    "fertilization": "Fertilisation",
+    "dream": "Rêve",
+    "exportFailed": "Échec de l'export du tableau : {{error}}",
+    "importSuccess": "Tableau importé avec succès !",
+    "importFailed": "Erreur lors de l'import du tableau : {{error}}"
   }
 }

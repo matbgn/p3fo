@@ -117,32 +117,74 @@
       "clearAllConfirm": "Sind Sie sicher, dass Sie ALLE Anwendungsdaten löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden und entfernt alle Aufgaben, Einstellungen, Benutzer und Boards."
     },
     "module": {
-      "celebration": { "label": "Feier", "description": "Düngungs-Board für Errungenschaften und Feiern" },
+      "celebration": {
+        "label": "Feier",
+        "description": "Düngungs-Board für Errungenschaften und Feiern"
+      },
       "dream": {
         "label": "Traum",
         "description": "Traum-Board, Storyboard und Priorisierungsansichten",
-        "dream": { "label": "Traum-Board", "description": "Traum-Board-Unteransicht innerhalb von Traum" },
-        "storyboard": { "label": "Storyboard", "description": "Storyboard-Unteransicht innerhalb von Traum" },
-        "prioritization": { "label": "Priorisierung", "description": "Priorisierungs-Unteransicht innerhalb von Traum" }
+        "dream": {
+          "label": "Traum-Board",
+          "description": "Traum-Board-Unteransicht innerhalb von Traum"
+        },
+        "storyboard": {
+          "label": "Storyboard",
+          "description": "Storyboard-Unteransicht innerhalb von Traum"
+        },
+        "prioritization": {
+          "label": "Priorisierung",
+          "description": "Priorisierungs-Unteransicht innerhalb von Traum"
+        }
       },
       "plan": {
         "label": "Plan",
         "description": "Organisatorische Kreis- und Rollen-Ansichten",
-        "circles": { "label": "Kreise", "description": "Organisatorische Kreise-Unteransicht innerhalb von Plan" },
-        "roles": { "label": "Rollen", "description": "Rollen-Unteransicht innerhalb von Plan" },
-        "salary": { "label": "Lohnsystem", "description": "Transparenter Lohnrechner-Unteransicht innerhalb von Plan" }
+        "circles": {
+          "label": "Kreise",
+          "description": "Organisatorische Kreise-Unteransicht innerhalb von Plan"
+        },
+        "roles": {
+          "label": "Rollen",
+          "description": "Rollen-Unteransicht innerhalb von Plan"
+        },
+        "salary": {
+          "label": "Lohnsystem",
+          "description": "Transparenter Lohnrechner-Unteransicht innerhalb von Plan"
+        }
       },
       "program": {
         "label": "Programm",
         "description": "Kalender- und Ressourcen-Planungsansichten",
-        "calendar": { "label": "Kalender", "description": "Kalender-Unteransicht innerhalb von Programm" },
-        "resources": { "label": "Ressourcen", "description": "Ressourcen-Unteransicht innerhalb von Programm" }
+        "calendar": {
+          "label": "Kalender",
+          "description": "Kalender-Unteransicht innerhalb von Programm"
+        },
+        "resources": {
+          "label": "Ressourcen",
+          "description": "Ressourcen-Unteransicht innerhalb von Programm"
+        }
       },
-      "kanban": { "label": "Projekt", "description": "Kanban-Board für Projektmanagement" },
-      "focus": { "label": "Fokus", "description": "Fokusmodus für konzentriertes Aufgabenarbeiten" },
-      "timetable": { "label": "Stundenplan", "description": "Zeitbasierte Ansicht für Stundenplanung" },
-      "metrics": { "label": "Kennzahlen", "description": "Leistungskennzahlen und Dashboards" },
-      "voting": { "label": "Abstimmung", "description": "Führen Sie Umfragen und formelle Entscheidungen mit Ihrem Publikum durch" }
+      "kanban": {
+        "label": "Projekt",
+        "description": "Kanban-Board für Projektmanagement"
+      },
+      "focus": {
+        "label": "Fokus",
+        "description": "Fokusmodus für konzentriertes Aufgabenarbeiten"
+      },
+      "timetable": {
+        "label": "Stundenplan",
+        "description": "Zeitbasierte Ansicht für Stundenplanung"
+      },
+      "metrics": {
+        "label": "Kennzahlen",
+        "description": "Leistungskennzahlen und Dashboards"
+      },
+      "voting": {
+        "label": "Abstimmung",
+        "description": "Führen Sie Umfragen und formelle Entscheidungen mit Ihrem Publikum durch"
+      }
     }
   },
   "metrics": {
@@ -154,8 +196,12 @@
     "selectUserQol": "Bitte wählen Sie einen Benutzer aus, um die Umfrage anzuzeigen",
     "selectUserFocus": "Bitte wählen Sie einen Benutzer aus, um die Fokus-Sitzungsstatistiken anzuzeigen",
     "graphicsPlaceholder": "Grafikinhalte für {{tab}} werden hier erscheinen",
-    "consistencyScore": { "title": "Konsistenz-Score" },
-    "consistencyActivity": { "title": "Konsistenz-Aktivität" },
+    "consistencyScore": {
+      "title": "Konsistenz-Score"
+    },
+    "consistencyActivity": {
+      "title": "Konsistenz-Aktivität"
+    },
     "resetStatsButton": "Statistiken zurücksetzen",
     "resetStatsTitle": "Fokus-Sitzungsstatistiken zurücksetzen?",
     "resetStatsDescription": "Dadurch wird Ihr gesamter Fokus-Sitzungsverlauf dauerhaft gelöscht, einschliesslich Heatmap und Statistiken. Diese Aktion kann nicht rückgängig gemacht werden.",
@@ -472,15 +518,30 @@
       "dialogDescription": "Lohnberechnungsvariablen. Passen Sie diese an den Kunden an."
     },
     "dimension": {
-      "defaultName": "Neuer Determinant",
-      "name": "Name",
-      "maxLevel": "Max. Stufe",
-      "stepValue": "Schritt (CHF/Stufe)",
-      "affectsSalary": "Beeinflusst Lohn",
-      "color": "Farbe",
-      "delete": "Determinant löschen",
-      "levelDescriptions": "Stufenbeschreibungen ({{n}})",
-      "add": "Determinant hinzufügen"
+      "expertise": {
+        "name": "Expertise",
+        "levelDescription": {
+          "0": "Keine Expertise in der Hauptfunktion. Lehrling oder radikaler Karrierewechsel.",
+          "1": "Grundkenntnisse, Anfänger. Fähig, unter Aufsicht zu arbeiten.",
+          "2": "Beherrschung der Hauptrolle, autonom. Gute Fähigkeit, Know-how des Teams zu erwerben.",
+          "3": "Referenzperson (Expert/in) in einem oder mehreren Bereichen. Informationsquelle für Kollegen.",
+          "4": "Pionier/in, der/die Forschung leitet, Proof of Concepts entwickelt und neues Wissen einbringt.",
+          "5": "Beherrschung der gesamten Architektur. Aussergewöhnliche, anerkannte Expertise in der Organisation.",
+          "6": "Schafft neue Organisationsmodelle und -werkzeuge, die weitgehend von Teams inner- oder ausserhalb des Unternehmens verwendet werden. Anerkannte Referenz im Bereich."
+        }
+      },
+      "impact": {
+        "name": "Impact",
+        "levelDescription": {
+          "0": "Mobilisiert mehr Ressourcen als Ergebnisse. In Ausbildung, benötigt Unterstützung.",
+          "1": "Begrenzter Impact, hauptsächlich individuell.",
+          "2": "Gelegentlicher Impact auf Kollegen oder andere Subsysteme.",
+          "3": "Säule des Teams, Impact auf den gesamten Kreis.",
+          "4": "Impact auf andere Bereiche der Organisation erweitert. Quer-einflussreiche/r.",
+          "5": "Unleugbarer Impact auf das gesamte Unternehmen kurzfristig.",
+          "6": "Langfristiger Impact und erweiterte Reichweite. Vertritt die Organisation nach aussen."
+        }
+      }
     },
     "dimensions": {
       "dialogTitle": "Lohn-Determinanten",
@@ -610,32 +671,6 @@
       "intermediateName": "Intermediate",
       "maxName": "Max (max Einnahmen − min Kosten)"
     },
-    "dimension": {
-      "expertise": {
-        "name": "Expertise",
-        "levelDescription": {
-          "0": "Keine Expertise in der Hauptfunktion. Lehrling oder radikaler Karrierewechsel.",
-          "1": "Grundkenntnisse, Anfänger. Fähig, unter Aufsicht zu arbeiten.",
-          "2": "Beherrschung der Hauptrolle, autonom. Gute Fähigkeit, Know-how des Teams zu erwerben.",
-          "3": "Referenzperson (Expert/in) in einem oder mehreren Bereichen. Informationsquelle für Kollegen.",
-          "4": "Pionier/in, der/die Forschung leitet, Proof of Concepts entwickelt und neues Wissen einbringt.",
-          "5": "Beherrschung der gesamten Architektur. Aussergewöhnliche, anerkannte Expertise in der Organisation.",
-          "6": "Schafft neue Organisationsmodelle und -werkzeuge, die weitgehend von Teams inner- oder ausserhalb des Unternehmens verwendet werden. Anerkannte Referenz im Bereich."
-        }
-      },
-      "impact": {
-        "name": "Impact",
-        "levelDescription": {
-          "0": "Mobilisiert mehr Ressourcen als Ergebnisse. In Ausbildung, benötigt Unterstützung.",
-          "1": "Begrenzter Impact, hauptsächlich individuell.",
-          "2": "Gelegentlicher Impact auf Kollegen oder andere Subsysteme.",
-          "3": "Säule des Teams, Impact auf den gesamten Kreis.",
-          "4": "Impact auf andere Bereiche der Organisation erweitert. Quer-einflussreiche/r.",
-          "5": "Unleugbarer Impact auf das gesamte Unternehmen kurzfristig.",
-          "6": "Langfristiger Impact und erweiterte Reichweite. Vertritt die Organisation nach aussen."
-        }
-      }
-    },
     "simulator": {
       "title": "Einzel-Simulator",
       "workload": "Pensum (%)",
@@ -737,5 +772,88 @@
       "majorityJudgment": "Major Judgment",
       "consentLoop": "Zustimmungs-Schleife"
     }
+  },
+  "fertilization": {
+    "title": "Düngungstafel",
+    "noModerator": "Kein aktiver Moderator. Starten Sie eine Sitzung, um Moderator zu werden.",
+    "startSession": "Sitzung starten",
+    "becomeModerator": "Moderator werden",
+    "hiddenMode": "Versteckter Modus",
+    "visibleMode": "Sichtbarer Modus",
+    "restartSession": "Sitzung neu starten",
+    "hideCursors": "Cursor ausblenden",
+    "showCursors": "Cursor anzeigen",
+    "hideLinks": "Verbindungen ausblenden",
+    "showLinks": "Verbindungen anzeigen",
+    "votingOpen": "Abstimmung offen",
+    "votingClosed": "Abstimmung geschlossen",
+    "resultsRevealed": "Ergebnisse enthüllt",
+    "defaultVoting": "Standard-Abstimmung",
+    "mode": "Modus",
+    "revealAll": "Alle enthüllen",
+    "resetAllVotes": "Alle Stimmen zurücksetzen",
+    "linkingMode": "Verbindungsmodus: Klicken Sie auf andere Karten, um sie zu verknüpfen/trennen",
+    "noVotesCastYet": "Noch keine Stimmen abgegeben.",
+    "budget": "Budget",
+    "pts": "Pkt",
+    "vote": "Abstimmen",
+    "stop": "Stopp",
+    "reveal": "Enthüllen",
+    "revote": "Neu abstimmen",
+    "reset": "Zurücksetzen",
+    "open": "Offen",
+    "revealed": "Enthüllt",
+    "closed": "Geschlossen",
+    "upDown": "Auf/Ab",
+    "points": "Punkte",
+    "mj": "MJ",
+    "promote": {
+      "title": "Zum Kanban befördern",
+      "description": "Dies erstellt eine neue Aufgabe im Kanban-Board mit dem Inhalt dieser Karte.",
+      "confirm": "Befördern"
+    },
+    "pointsConfig": {
+      "title": "Punktebudget konfigurieren",
+      "maxPoints": "Max. Punkte:",
+      "start": "Punkte-Abstimmung starten"
+    },
+    "mjConfig": {
+      "title": "Mehrheitsurteil-Etiketten konfigurieren",
+      "labelPlaceholder": "Etikett für Grad {{n}}",
+      "saveAndStart": "Speichern & MJ-Abstimmung starten"
+    },
+    "timer": {
+      "stop": "Timer stoppen",
+      "set": "Timer einstellen",
+      "dialogTitle": "Timer starten/stoppen",
+      "dialogDescription": "Minuten und Sekunden anpassen.",
+      "minutes": "Minuten",
+      "seconds": "Sekunden",
+      "start": "Starten"
+    }
+  },
+  "boardOptions": {
+    "options": "Optionen",
+    "title": "Tafel-Optionen",
+    "offlineVotes": "Offline-Stimmen",
+    "on": "An",
+    "off": "Aus",
+    "exporting": "Exportiere...",
+    "exportJson": "Als JSON exportieren",
+    "importBoard": "Tafel importieren",
+    "importTitle": "Tafel importieren",
+    "importDescription": "Importieren Sie eine Tafel aus einer JSON-Datei. Dies ersetzt die aktuellen Tafeldaten.",
+    "warningTitle": "Warnung: Dies wird die aktuelle Tafel zerstören",
+    "warningBody": "Das Importieren einer Tafel wird die aktuelle {{type}}-Tafel vollständig ersetzen — alle Karten, Spalten, Stimmen und Einstellungen gehen verloren. Diese Aktion kann nicht rückgängig gemacht werden.",
+    "warningBackup": "Erwägen Sie, die aktuelle Tafel zuerst als Backup zu exportieren.",
+    "understand": "Ich verstehe, fortfahren",
+    "selected": "Ausgewählt",
+    "importing": "Importiere...",
+    "importReplace": "Tafel importieren & ersetzen",
+    "fertilization": "Düngung",
+    "dream": "Traum",
+    "exportFailed": "Tafelexport fehlgeschlagen: {{error}}",
+    "importSuccess": "Tafel erfolgreich importiert!",
+    "importFailed": "Fehler beim Importieren der Tafel: {{error}}"
   }
 }

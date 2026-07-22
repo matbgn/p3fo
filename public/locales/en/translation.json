@@ -117,32 +117,74 @@
       "clearAllConfirm": "Are you sure you want to delete ALL application data? This action cannot be undone and will remove all tasks, settings, users, and boards."
     },
     "module": {
-      "celebration": { "label": "Celebration", "description": "Fertilization Board for achievements and celebrations" },
+      "celebration": {
+        "label": "Celebration",
+        "description": "Fertilization Board for achievements and celebrations"
+      },
       "dream": {
         "label": "Dream",
         "description": "Dream Board, Storyboard, and Prioritization views",
-        "dream": { "label": "Dream Board", "description": "Dream Board sub-view within Dream" },
-        "storyboard": { "label": "Storyboard", "description": "Storyboard sub-view within Dream" },
-        "prioritization": { "label": "Prioritization", "description": "Prioritization sub-view within Dream" }
+        "dream": {
+          "label": "Dream Board",
+          "description": "Dream Board sub-view within Dream"
+        },
+        "storyboard": {
+          "label": "Storyboard",
+          "description": "Storyboard sub-view within Dream"
+        },
+        "prioritization": {
+          "label": "Prioritization",
+          "description": "Prioritization sub-view within Dream"
+        }
       },
       "plan": {
         "label": "Plan",
         "description": "Circles and Roles organizational views",
-        "circles": { "label": "Circles", "description": "Organizational circles sub-view within Plan" },
-        "roles": { "label": "Roles", "description": "Roles sub-view within Plan" },
-        "salary": { "label": "Salary System", "description": "Transparent salary calculator sub-view within Plan" }
+        "circles": {
+          "label": "Circles",
+          "description": "Organizational circles sub-view within Plan"
+        },
+        "roles": {
+          "label": "Roles",
+          "description": "Roles sub-view within Plan"
+        },
+        "salary": {
+          "label": "Salary System",
+          "description": "Transparent salary calculator sub-view within Plan"
+        }
       },
       "program": {
         "label": "Program",
         "description": "Calendar and Resources scheduling views",
-        "calendar": { "label": "Calendar", "description": "Calendar sub-view within Program" },
-        "resources": { "label": "Resources", "description": "Resources sub-view within Program" }
+        "calendar": {
+          "label": "Calendar",
+          "description": "Calendar sub-view within Program"
+        },
+        "resources": {
+          "label": "Resources",
+          "description": "Resources sub-view within Program"
+        }
       },
-      "kanban": { "label": "Project", "description": "Kanban board for project management" },
-      "focus": { "label": "Focus", "description": "Focus mode for concentrated task work" },
-      "timetable": { "label": "Timetable", "description": "Time-based view for hourly planning" },
-      "metrics": { "label": "Metrics", "description": "Performance metrics and dashboards" },
-      "voting": { "label": "Voting", "description": "Run polls and formal decisions with your audience" }
+      "kanban": {
+        "label": "Project",
+        "description": "Kanban board for project management"
+      },
+      "focus": {
+        "label": "Focus",
+        "description": "Focus mode for concentrated task work"
+      },
+      "timetable": {
+        "label": "Timetable",
+        "description": "Time-based view for hourly planning"
+      },
+      "metrics": {
+        "label": "Metrics",
+        "description": "Performance metrics and dashboards"
+      },
+      "voting": {
+        "label": "Voting",
+        "description": "Run polls and formal decisions with your audience"
+      }
     }
   },
   "metrics": {
@@ -154,8 +196,12 @@
     "selectUserQol": "Please select a user to view survey",
     "selectUserFocus": "Please select a user to view focus session stats",
     "graphicsPlaceholder": "Graphics content for {{tab}} will appear here",
-    "consistencyScore": { "title": "Consistency Score" },
-    "consistencyActivity": { "title": "Consistency Activity" },
+    "consistencyScore": {
+      "title": "Consistency Score"
+    },
+    "consistencyActivity": {
+      "title": "Consistency Activity"
+    },
     "resetStatsButton": "Reset Stats",
     "resetStatsTitle": "Reset Focus Session Stats?",
     "resetStatsDescription": "This will permanently delete all your focus session history, including the heatmap and statistics. This action cannot be undone.",
@@ -472,15 +518,30 @@
       "dialogDescription": "Salary calculation variables. Adapt them to the client."
     },
     "dimension": {
-      "defaultName": "New determinant",
-      "name": "Name",
-      "maxLevel": "Max level",
-      "stepValue": "Step (CHF/level)",
-      "affectsSalary": "Affects salary",
-      "color": "Color",
-      "delete": "Delete determinant",
-      "levelDescriptions": "Level descriptions ({{n}})",
-      "add": "Add a determinant"
+      "expertise": {
+        "name": "Expertise",
+        "levelDescription": {
+          "0": "No expertise in the main function. Apprentice or radical career change.",
+          "1": "Basic knowledge, beginner. Able to work under supervision.",
+          "2": "Mastery of the main role, autonomous. Good ability to acquire team know-how.",
+          "3": "Reference person (expert) in one or more domains. Source of information for colleagues.",
+          "4": "Pioneer leading research, developing proof of concepts and bringing new knowledge.",
+          "5": "Mastery of the entire architecture. Exceptional expertise recognized in the organization.",
+          "6": "Creates new organization models and tools widely used by teams inside or outside the company. Recognized reference in the field."
+        }
+      },
+      "impact": {
+        "name": "Impact",
+        "levelDescription": {
+          "0": "Mobilizes more resources than results. In training, needs support.",
+          "1": "Limited impact, mainly individual.",
+          "2": "Occasional impact on colleagues or other subsystems.",
+          "3": "Team pillar, impact across the entire circle.",
+          "4": "Impact extended to other areas of the organization. Transversal influencer.",
+          "5": "Undeniable impact on the entire company in the short term.",
+          "6": "Long-term impact and extended reach. Represents the organization externally."
+        }
+      }
     },
     "dimensions": {
       "dialogTitle": "Salary determinants",
@@ -610,32 +671,6 @@
       "intermediateName": "Intermediate",
       "maxName": "Max (max revenues − min charges)"
     },
-    "dimension": {
-      "expertise": {
-        "name": "Expertise",
-        "levelDescription": {
-          "0": "No expertise in the main function. Apprentice or radical career change.",
-          "1": "Basic knowledge, beginner. Able to work under supervision.",
-          "2": "Mastery of the main role, autonomous. Good ability to acquire team know-how.",
-          "3": "Reference person (expert) in one or more domains. Source of information for colleagues.",
-          "4": "Pioneer leading research, developing proof of concepts and bringing new knowledge.",
-          "5": "Mastery of the entire architecture. Exceptional expertise recognized in the organization.",
-          "6": "Creates new organization models and tools widely used by teams inside or outside the company. Recognized reference in the field."
-        }
-      },
-      "impact": {
-        "name": "Impact",
-        "levelDescription": {
-          "0": "Mobilizes more resources than results. In training, needs support.",
-          "1": "Limited impact, mainly individual.",
-          "2": "Occasional impact on colleagues or other subsystems.",
-          "3": "Team pillar, impact across the entire circle.",
-          "4": "Impact extended to other areas of the organization. Transversal influencer.",
-          "5": "Undeniable impact on the entire company in the short term.",
-          "6": "Long-term impact and extended reach. Represents the organization externally."
-        }
-      }
-    },
     "simulator": {
       "title": "Individual simulator",
       "workload": "Workload (%)",
@@ -737,5 +772,88 @@
       "majorityJudgment": "Majority Judgment",
       "consentLoop": "Consent Loop"
     }
+  },
+  "fertilization": {
+    "title": "Fertilization Board",
+    "noModerator": "No moderator active. Start a session to become the moderator.",
+    "startSession": "Start Session",
+    "becomeModerator": "Become Moderator",
+    "hiddenMode": "Hidden Mode",
+    "visibleMode": "Visible Mode",
+    "restartSession": "Restart Session",
+    "hideCursors": "Hide Cursors",
+    "showCursors": "Show Cursors",
+    "hideLinks": "Hide Links",
+    "showLinks": "Show Links",
+    "votingOpen": "Voting Open",
+    "votingClosed": "Voting Closed",
+    "resultsRevealed": "Results Revealed",
+    "defaultVoting": "Default Voting",
+    "mode": "Mode",
+    "revealAll": "Reveal All",
+    "resetAllVotes": "Reset All Votes",
+    "linkingMode": "Linking mode: Click on other cards to link/unlink them",
+    "noVotesCastYet": "No votes cast yet.",
+    "budget": "Budget",
+    "pts": "pts",
+    "vote": "Vote",
+    "stop": "Stop",
+    "reveal": "Reveal",
+    "revote": "Revote",
+    "reset": "Reset",
+    "open": "Open",
+    "revealed": "Revealed",
+    "closed": "Closed",
+    "upDown": "Up/Down",
+    "points": "Points",
+    "mj": "MJ",
+    "promote": {
+      "title": "Promote to Kanban",
+      "description": "This will create a new task in the Kanban board with the content of this card.",
+      "confirm": "Promote"
+    },
+    "pointsConfig": {
+      "title": "Configure Points Budget",
+      "maxPoints": "Max Points:",
+      "start": "Start Points Voting"
+    },
+    "mjConfig": {
+      "title": "Configure Majority Judgment Labels",
+      "labelPlaceholder": "Label for grade {{n}}",
+      "saveAndStart": "Save & Start MJ Voting"
+    },
+    "timer": {
+      "stop": "Stop Timer",
+      "set": "Set Timer",
+      "dialogTitle": "Start/Stop Timer",
+      "dialogDescription": "Adjust minutes and seconds.",
+      "minutes": "Minutes",
+      "seconds": "Seconds",
+      "start": "Start"
+    }
+  },
+  "boardOptions": {
+    "options": "Options",
+    "title": "Board Options",
+    "offlineVotes": "Offline Votes",
+    "on": "On",
+    "off": "Off",
+    "exporting": "Exporting...",
+    "exportJson": "Export as JSON",
+    "importBoard": "Import Board",
+    "importTitle": "Import Board",
+    "importDescription": "Import a board from a JSON file. This will replace the current board data.",
+    "warningTitle": "Warning: This will destroy the current board",
+    "warningBody": "Importing a board will completely replace the current {{type}} board — all cards, columns, votes, and settings will be lost. This action cannot be undone.",
+    "warningBackup": "Consider exporting the current board first as a backup.",
+    "understand": "I understand, proceed",
+    "selected": "Selected",
+    "importing": "Importing...",
+    "importReplace": "Import & Replace Board",
+    "fertilization": "Fertilization",
+    "dream": "Dream",
+    "exportFailed": "Failed to export board: {{error}}",
+    "importSuccess": "Board imported successfully!",
+    "importFailed": "Error importing board: {{error}}"
   }
 }
