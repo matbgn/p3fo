@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from './ui/button';
 import {
   ListChecks,
@@ -42,7 +43,7 @@ interface ViewSwitcherProps {
 
 interface ViewOption {
   id: ViewId;
-  label: string;
+  labelKey: string;
   icon: React.ReactNode;
   isUtility?: boolean;
 }
@@ -83,16 +84,16 @@ const COLOR_CLASSES: Record<ColorCategory, { active: string; inactive: string }>
 
 // All navigation views — main colored pills first, then utility (always icon-only)
 const allViews: ViewOption[] = [
-  { id: 'celebration', label: 'Celebration', icon: <PartyPopper className="w-4 h-4" /> },
-  { id: 'dream', label: 'Dream', icon: <Sparkles className="w-4 h-4" /> },
-  { id: 'plan', label: 'Plan', icon: <CircleDot className="w-4 h-4" /> },
-  { id: 'program', label: 'Program', icon: <Calendar className="w-4 h-4" /> },
-  { id: 'kanban', label: 'Project', icon: <LayoutDashboard className="w-4 h-4" /> },
-  { id: 'focus', label: 'Focus', icon: <ListChecks className="w-4 h-4" /> },
-  { id: 'timetable', label: 'Timetable', icon: <Clock className="w-4 h-4" />, isUtility: true },
-  { id: 'metrics', label: 'Metrics', icon: <BarChart3 className="w-4 h-4" />, isUtility: true},
-  { id: 'voting', label: 'Voting', icon: <Vote className="w-4 h-4" />, isUtility: true },
-  { id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" />, isUtility: true },
+  { id: 'celebration', labelKey: 'nav.celebration', icon: <PartyPopper className="w-4 h-4" /> },
+  { id: 'dream', labelKey: 'nav.dream', icon: <Sparkles className="w-4 h-4" /> },
+  { id: 'plan', labelKey: 'nav.plan', icon: <CircleDot className="w-4 h-4" /> },
+  { id: 'program', labelKey: 'nav.program', icon: <Calendar className="w-4 h-4" /> },
+  { id: 'kanban', labelKey: 'nav.project', icon: <LayoutDashboard className="w-4 h-4" /> },
+  { id: 'focus', labelKey: 'nav.focus', icon: <ListChecks className="w-4 h-4" /> },
+  { id: 'timetable', labelKey: 'nav.timetable', icon: <Clock className="w-4 h-4" />, isUtility: true },
+  { id: 'metrics', labelKey: 'nav.metrics', icon: <BarChart3 className="w-4 h-4" />, isUtility: true},
+  { id: 'voting', labelKey: 'nav.voting', icon: <Vote className="w-4 h-4" />, isUtility: true },
+  { id: 'settings', labelKey: 'nav.settings', icon: <Settings className="w-4 h-4" />, isUtility: true },
 ];
 
 type DisplayMode = 'full' | 'compact' | 'overflow';
@@ -105,6 +106,7 @@ const UTILITY_ITEMS_WIDTH = 100;  // approximate width for notification bell + u
 const GAP = 16;                   // flex gap
 
 export function ViewSwitcher({ value, onChange, disabledModules = [], utilityItems, rightItems }: ViewSwitcherProps) {
+  const { t } = useTranslation();
   const cursors = useCursors();
   const containerRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
@@ -211,7 +213,7 @@ export function ViewSwitcher({ value, onChange, disabledModules = [], utilityIte
         onClick={() => onChange(view.id)}
       >
         {view.icon}
-        {!isCompact && view.label}
+        {!isCompact && t(view.labelKey)}
         {!isCompact && userCounts[view.id] > 0 && (
           <Badge
             variant="secondary"
@@ -239,7 +241,7 @@ export function ViewSwitcher({ value, onChange, disabledModules = [], utilityIte
         <Tooltip key={view.id}>
           <TooltipTrigger asChild>{button}</TooltipTrigger>
           <TooltipContent side="bottom" className="text-xs">
-            {view.label}
+            {t(view.labelKey)}
           </TooltipContent>
         </Tooltip>
       );
@@ -275,7 +277,7 @@ export function ViewSwitcher({ value, onChange, disabledModules = [], utilityIte
         }}
       >
         {view.icon}
-        <span>{view.label}</span>
+        <span>{t(view.labelKey)}</span>
         {userCounts[view.id] > 0 && (
           <Badge
             variant="secondary"
@@ -307,7 +309,7 @@ export function ViewSwitcher({ value, onChange, disabledModules = [], utilityIte
       <div ref={logoRef} className="flex items-center shrink-0">
         <img
           src={`${import.meta.env.BASE_URL}P3Fo_Logo.png`}
-          alt="P3Fo Logo"
+          alt="P3Fo"
           className="h-10 w-auto"
         />
       </div>

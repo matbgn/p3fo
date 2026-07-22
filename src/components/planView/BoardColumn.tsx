@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Lock, Unlock, Plus, HatGlasses, ChevronDown, ChevronUp } from 'lucide-react';
@@ -83,15 +84,16 @@ export function BoardColumn<T extends { id: string }>({
     tagValue,
     onTagChange,
 }: BoardColumnProps<T>) {
+    const { t } = useTranslation();
     const [newCardContent, setNewCardContent] = useState('');
     const [isAnonymousMode, setIsAnonymousMode] = useState(false);
 
     // Initial sort button title
     const sortTitle = sortOrder === 'desc'
-        ? 'Sorted by votes (high to low)'
+        ? t('board.sortedHighToLow')
         : sortOrder === 'asc'
-            ? 'Sorted by votes (low to high)'
-            : 'Sort by votes';
+            ? t('board.sortedLowToHigh')
+            : t('board.sortByVotes');
 
     return (
         <div
@@ -198,7 +200,7 @@ export function BoardColumn<T extends { id: string }>({
                                                 setIsAnonymousMode(false);
                                             }
                                         }}
-                                        placeholder="Type..."
+                                        placeholder={t('board.typePlaceholder')}
                                         className="flex-1"
                                     />
                                     {tagOptions && onTagChange && (
@@ -209,7 +211,7 @@ export function BoardColumn<T extends { id: string }>({
                                                     return selected ? (
                                                         <span className={selected.className}>{selected.letter}</span>
                                                     ) : (
-                                                        <span className="text-muted-foreground">Tag</span>
+                                                         <span className="text-muted-foreground">{t('board.tag')}</span>
                                                     );
                                                 })()}
                                             </SelectTrigger>
@@ -232,13 +234,13 @@ export function BoardColumn<T extends { id: string }>({
                                             setNewCardContent('');
                                         }}
                                     >
-                                        Add {isAnonymousMode ? ' (Anonymously)' : ''}
+                                        {isAnonymousMode ? t('board.addAnonymously') : t('common.add')}
                                     </Button>
                                     <Button size="sm" variant="ghost" onClick={() => {
                                         onSetActiveColumnId(null);
                                         setNewCardContent('');
                                         setIsAnonymousMode(false);
-                                    }}>Cancel</Button>
+                                    }}>{t('common.cancel')}</Button>
                                 </div>
                             </div>
                         ) : (
@@ -250,9 +252,9 @@ export function BoardColumn<T extends { id: string }>({
                                         onSetActiveColumnId(column.id);
                                         setIsAnonymousMode(false);
                                     }}
-                                    title="Add card with your name"
+                                    title={t('board.addCardWithName')}
                                 >
-                                    <Plus className="h-4 w-4" /> Add Card
+                                    <Plus className="h-4 w-4" /> {t('board.addCard')}
                                 </Button>
                                 <Button
                                     variant="ghost"
@@ -261,7 +263,7 @@ export function BoardColumn<T extends { id: string }>({
                                         onSetActiveColumnId(column.id);
                                         setIsAnonymousMode(true);
                                     }}
-                                    title="Add anonymous card"
+                                    title={t('board.addAnonymousCard')}
                                 >
                                     <Plus className="h-3 w-3" />
                                     <HatGlasses className="h-4 w-4" />
@@ -274,7 +276,7 @@ export function BoardColumn<T extends { id: string }>({
                 {/* Render Cards */}
                 {cards.length === 0 && activeColumnId !== column.id && (
                     <div className="text-center text-sm text-muted-foreground py-4">
-                        No cards in this column yet.
+                        {t('board.noCards')}
                     </div>
                 )}
 

@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import * as d3 from 'd3';
 import { PomodoroSession } from '@/lib/pomodoro-types';
 
@@ -16,6 +17,7 @@ const MONTH_HEIGHT = 20;
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const PomodoroHeatmap: React.FC<PomodoroHeatmapProps> = ({ sessions, weeks = 39, weekStartDay = 1 }) => {
+  const { t } = useTranslation();
   const dayLabels = useMemo(() => {
     const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const ordered = weekStartDay === 1
@@ -140,7 +142,7 @@ const PomodoroHeatmap: React.FC<PomodoroHeatmapProps> = ({ sessions, weeks = 39,
         const dateStr = d3.timeFormat('%a %b %d, %Y')(d.date);
         tooltip
           .style('opacity', 1)
-          .html(`<strong>${d.count}</strong> session${d.count !== 1 ? 's' : ''} on ${dateStr}`);
+          .html(`<strong>${d.count}</strong> ${d.count !== 1 ? t('pomodoroUi.sessionsPlural') : t('pomodoroUi.sessions')} ${dateStr}`);
       })
       .on('mousemove', (event) => {
         tooltip
@@ -150,7 +152,7 @@ const PomodoroHeatmap: React.FC<PomodoroHeatmapProps> = ({ sessions, weeks = 39,
       .on('mouseleave', () => {
         tooltip.style('opacity', 0);
       });
-  }, [cells, months, dayLabels]);
+  }, [cells, months, dayLabels, t]);
 
   return (
     <div className="overflow-x-auto">

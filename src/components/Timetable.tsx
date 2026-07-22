@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useTranslation } from 'react-i18next';
 import { useTasks, Category, TriageStatus } from "@/hooks/useTasks";
 import { useAllTasks } from "@/hooks/useAllTasks";
 import { CATEGORIES } from "@/data/categories";
@@ -34,6 +35,7 @@ type TimeChunk = "all" | "am" | "pm";
 const TimetableInner: React.FC<{
   onJumpToTask?: (taskId: string) => void;
 }> = ({ onJumpToTask }) => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { tasks: allTasks, loading: tasksLoading } = useAllTasks();
   const { updateTimeEntry, deleteTimeEntry, updateCategory, updateUser, toggleTimer } = useTasks();
@@ -46,15 +48,15 @@ const TimetableInner: React.FC<{
   const [timeChunk, setTimeChunk] = useState<TimeChunk>("all");
 
   const PREDEFINED_RANGES = React.useMemo(() => [
-    { label: "Today", value: "today" },
-    { label: "Yesterday", value: "yesterday" },
-    { label: "This Week", value: "thisWeek" },
-    { label: "Last Week", value: "lastWeek" },
-    { label: "This Month", value: "thisMonth" },
-    { label: "Last Month", value: "lastMonth" },
-    { label: "Year to Date", value: "ytd" },
-    { label: `Since ${weeksComputation} weeks`, value: "sinceXWeeks" },
-  ], [weeksComputation]);
+    { label: t('timetable.today'), value: "today" },
+    { label: t('timetable.yesterday'), value: "yesterday" },
+    { label: t('timetable.thisWeek'), value: "thisWeek" },
+    { label: t('timetable.lastWeek'), value: "lastWeek" },
+    { label: t('timetable.thisMonth'), value: "thisMonth" },
+    { label: t('timetable.lastMonth'), value: "lastMonth" },
+    { label: t('timetable.yearToDate'), value: "ytd" },
+    { label: t('timetable.sinceXWeeks', { n: weeksComputation }), value: "sinceXWeeks" },
+  ], [weeksComputation, t]);
 
   // Create a map of task IDs to task objects for easy lookup
   const taskMap = React.useMemo(() => {
@@ -648,19 +650,19 @@ const TimetableInner: React.FC<{
 
 
   if (initializing || tasksLoading) {
-    return <LoadingSpinner label="Loading timetable..." className="h-full" />;
+    return <LoadingSpinner label={t('timetable.loading')} className="h-full" />;
   }
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Timetable</h1>
-        <ToggleGroup type="single" value={view} onValueChange={(value) => setView(value as TimetableView)} aria-label="Timetable View">
-          <ToggleGroupItem value="categorical" aria-label="Categorical View">
-            Categorical
+        <h1 className="text-2xl font-bold">{t('timetable.title')}</h1>
+        <ToggleGroup type="single" value={view} onValueChange={(value) => setView(value as TimetableView)} aria-label={t('timetable.timetableViewAria')}>
+          <ToggleGroupItem value="categorical" aria-label={t('timetable.categoricalAria')}>
+            {t('timetable.categorical')}
           </ToggleGroupItem>
-          <ToggleGroupItem value="chronological" aria-label="Chronological View">
-            Chronological
+          <ToggleGroupItem value="chronological" aria-label={t('timetable.chronologicalAria')}>
+            {t('timetable.chronological')}
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
@@ -668,7 +670,7 @@ const TimetableInner: React.FC<{
       {/* Filters */}
       <div className="flex flex-wrap gap-4 items-end">
         <div className="flex flex-col space-y-2">
-          <label className="text-sm font-medium">Time period</label>
+          <label className="text-sm font-medium">{t('timetable.timePeriod')}</label>
           <DateRangePicker
             date={{ from: dateRange.start, to: dateRange.end }}
             setDate={(range) => handleDateRangeChange(range)}
@@ -683,23 +685,23 @@ const TimetableInner: React.FC<{
 
         {isSingleDayRange() && (
           <div className="flex flex-col space-y-2">
-            <label className="text-sm font-medium">Time Chunk</label>
-            <ToggleGroup type="single" value={timeChunk} onValueChange={(value) => setTimeChunk(value as TimeChunk)} aria-label="Time Chunk">
-              <ToggleGroupItem value="all" aria-label="All Day">
-                All
+            <label className="text-sm font-medium">{t('timetable.timeChunk')}</label>
+            <ToggleGroup type="single" value={timeChunk} onValueChange={(value) => setTimeChunk(value as TimeChunk)} aria-label={t('timetable.timeChunk')}>
+              <ToggleGroupItem value="all" aria-label={t('timetable.allDay')}>
+                {t('timetable.allDay')}
               </ToggleGroupItem>
-              <ToggleGroupItem value="am" aria-label="AM (before {settings.splitTime})">
-                AM
+              <ToggleGroupItem value="am" aria-label={t('timetable.amAria', { time: settings.splitTime })}>
+                {t('timetable.am')}
               </ToggleGroupItem>
-              <ToggleGroupItem value="pm" aria-label="PM (after {settings.splitTime})">
-                PM
+              <ToggleGroupItem value="pm" aria-label={t('timetable.pmAria', { time: settings.splitTime })}>
+                {t('timetable.pm')}
               </ToggleGroupItem>
             </ToggleGroup>
           </div>
         )}
 
         <div className="flex flex-col space-y-2">
-          <label className="text-sm font-medium">Predefined Ranges</label>
+          <label className="text-sm font-medium">{t('timetable.predefinedRanges')}</label>
           <div className="flex flex-wrap gap-2">
             {PREDEFINED_RANGES.map((range) => (
               <Button
@@ -715,67 +717,67 @@ const TimetableInner: React.FC<{
         </div>
 
         <div className="flex flex-col space-y-2">
-          <label className="text-sm font-medium">Status</label>
+          <label className="text-sm font-medium">{t('timetable.status')}</label>
           <MultiSelect
             options={[
-              { value: "Backlog", label: "Backlog" },
-              { value: "Ready", label: "Ready" },
-              { value: "WIP", label: "WIP" },
-              { value: "Blocked", label: "Blocked" },
-              { value: "Done", label: "Done" },
-              { value: "Dropped", label: "Dropped" }
+              { value: "Backlog", label: t('status.backlog') },
+              { value: "Ready", label: t('status.ready') },
+              { value: "WIP", label: t('status.wip') },
+              { value: "Blocked", label: t('status.blocked') },
+              { value: "Done", label: t('status.done') },
+              { value: "Dropped", label: t('status.dropped') }
             ]}
             selected={selectedStatuses}
             onChange={(selected) => setSelectedStatuses(selected as TriageStatus[])}
-            placeholder="Select status..."
+            placeholder={t('timetable.statusPlaceholder')}
             className="w-40"
           />
         </div>
 
         <div className="flex flex-col space-y-2">
-          <label className="text-sm font-medium">Categories</label>
+          <label className="text-sm font-medium">{t('timetable.categories')}</label>
           <MultiSelect
             options={[
-              { value: "Uncategorized", label: "Uncategorized" },
+              { value: "Uncategorized", label: t('timetable.uncategorized') },
               ...CATEGORIES.map(c => ({ value: c, label: c }))
             ]}
             selected={selectedCategories}
             onChange={(selected) => setSelectedCategories(selected as Category[])}
-            placeholder="Select category..."
+            placeholder={t('timetable.categoryPlaceholder')}
             className="w-48"
           />
         </div>
 
         <div className="flex flex-col space-y-2">
-          <label className="text-sm font-medium">Criticity</label>
+          <label className="text-sm font-medium">{t('timetable.criticity')}</label>
           <div className="flex flex-wrap gap-2">
             <Checkbox
               id="show-urgent"
               checked={showUrgent}
               onCheckedChange={(checked) => setShowUrgent(!!checked)}
             />
-            <label htmlFor="show-urgent" className="text-sm font-medium">Urgent</label>
+            <label htmlFor="show-urgent" className="text-sm font-medium">{t('timetable.urgent')}</label>
 
             <Checkbox
               id="show-impact"
               checked={showImpact}
               onCheckedChange={(checked) => setShowImpact(!!checked)}
             />
-            <label htmlFor="show-impact" className="text-sm font-medium">High Impact</label>
+            <label htmlFor="show-impact" className="text-sm font-medium">{t('timetable.highImpact')}</label>
 
             <Checkbox
               id="show-major-incident"
               checked={showMajorIncident}
               onCheckedChange={(checked) => setShowMajorIncident(!!checked)}
             />
-            <label htmlFor="show-major-incident" className="text-sm font-medium">Incident on Delivery</label>
+            <label htmlFor="show-major-incident" className="text-sm font-medium">{t('timetable.incidentOnDelivery')}</label>
 
             <Checkbox
               id="show-sprint-target"
               checked={showSprintTarget}
               onCheckedChange={(checked) => setShowSprintTarget(!!checked)}
             />
-            <label htmlFor="show-sprint-target" className="text-sm font-medium">Sprint Target</label>
+            <label htmlFor="show-sprint-target" className="text-sm font-medium">{t('timetable.sprintTarget')}</label>
           </div>
         </div>
 
@@ -796,18 +798,18 @@ const TimetableInner: React.FC<{
             // No need to clear from session storage for Timetable
           }}
         >
-          Clear All Filters
+          {t('filters.clearAll')}
         </Button>
       </div>
 
       {/* Summary by category */}
       <div className="mt-4">
-        <h2 className="text-lg font-semibold mb-2">Time Summary by Category</h2>
+        <h2 className="text-lg font-semibold mb-2">{t('timetable.timeSummaryByCategory')}</h2>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Category</TableHead>
-              <TableHead>Total Time</TableHead>
+              <TableHead>{t('timetable.category')}</TableHead>
+              <TableHead>{t('timetable.totalTime')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -818,7 +820,7 @@ const TimetableInner: React.FC<{
               </TableRow>
             ))}
             <TableRow>
-              <TableCell className="font-bold">Total</TableCell>
+              <TableCell className="font-bold">{t('timetable.total')}</TableCell>
               <TableCell className="font-bold">{formatDuration(totalTime)}</TableCell>
             </TableRow>
           </TableBody>
@@ -827,7 +829,7 @@ const TimetableInner: React.FC<{
 
       {/* Detailed timetable */}
       <div className="mt-6" ref={tableRef}>
-        <h2 className="text-lg font-semibold mb-2">Detailed Timetable</h2>
+        <h2 className="text-lg font-semibold mb-2">{t('timetable.detailedTimetable')}</h2>
         {view === 'categorical' && (
           <div className="relative">
             {/* SVG overlay for overlap lines */}
@@ -849,7 +851,7 @@ const TimetableInner: React.FC<{
               })}
             </svg>
             {timerEntries.length === 0 ? (
-              <p>No timer data matches the selected filters.</p>
+              <p>{t('timetable.noTimerData')}</p>
             ) : (
               <div className="overflow-x-auto" ref={tableContainerRef} style={{ maxHeight: '60vh', overflowY: 'auto' }}>
                 <Table style={{ tableLayout: 'fixed', minWidth: '980px' }}>
@@ -863,12 +865,12 @@ const TimetableInner: React.FC<{
                   </colgroup>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Task</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>User</TableHead>
-                      <TableHead>Start Time</TableHead>
-                      <TableHead>End Time</TableHead>
-                      <TableHead>Duration</TableHead>
+                      <TableHead>{t('timetable.task')}</TableHead>
+                      <TableHead>{t('timetable.category')}</TableHead>
+                      <TableHead>{t('timetable.user')}</TableHead>
+                      <TableHead>{t('timetable.startTime')}</TableHead>
+                      <TableHead>{t('timetable.endTime')}</TableHead>
+                      <TableHead>{t('timetable.duration')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -878,7 +880,7 @@ const TimetableInner: React.FC<{
                           <TableRow key={`gh-${row.topParentId}`} className="bg-muted">
                             <TableCell colSpan={5} className="overflow-hidden">
                               <div className="flex items-center gap-2 min-w-0">
-                                <span className="font-bold truncate shrink-0" title={row.topParentTask?.title || "Unknown Task"}>{row.topParentTask?.title || "Unknown Task"} (Grand Total)</span>
+                                <span className="font-bold truncate shrink-0" title={row.topParentTask?.title || t('timetable.unknownTask')}>{row.topParentTask?.title || t('timetable.unknownTask')} ({t('timetable.grandTotal')})</span>
                                 <TaskTag
                                   impact={row.topParentTask?.impact}
                                   urgent={row.topParentTask?.urgent}

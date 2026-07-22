@@ -36,6 +36,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Task, useTasks } from '@/hooks/useTasks';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -68,6 +69,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
   tasks,
   onClose,
 }) => {
+  const { t } = useTranslation();
   const { updatePrioritiesBulk, deleteTask } = useTasks();
 
   const [filters, setFilters] = useState<Filters>(getDefaultFilters());
@@ -199,7 +201,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
 
   const startComparison = () => {
     if (selectedTasks.length < 2) {
-      alert('Please select at least two tasks to compare.');
+      alert(t('prioritization.alertSelectTwo'));
       return;
     }
 
@@ -326,17 +328,17 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
     const titles = filteredTopLevelTasks.map(task => task.title).join('\n');
     navigator.clipboard.writeText(titles)
       .then(() => {
-        alert('Task titles copied to clipboard!');
+        alert(t('prioritization.copySuccess'));
       })
       .catch(err => {
         console.error('Failed to copy text: ', err);
-        alert('Failed to copy task titles to clipboard.');
+        alert(t('prioritization.copyFailed'));
       });
   };
 
   const handleDeleteSelected = () => {
     if (selectedTasks.length === 0) return;
-    if (!window.confirm(`Delete ${selectedTasks.length} selected task${selectedTasks.length > 1 ? 's' : ''}? This cannot be undone.`)) return;
+    if (!window.confirm(t('prioritization.deleteConfirm', { count: selectedTasks.length, s: selectedTasks.length > 1 ? 's' : '' }))) return;
     selectedTasks.forEach((task) => deleteTask(task.id));
     setSelectedTasks([]);
     setPrioritizationState(null);
@@ -352,12 +354,12 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
   return (
     <Card className="h-full flex flex-col border-0">
       <CardHeader>
-        <CardTitle>Comparative Prioritization</CardTitle>
+        <CardTitle>{t('prioritization.title')}</CardTitle>
       </CardHeader>
       <CardContent className="flex-grow overflow-auto p-4">
         {prioritizedResults ? (
           <div>
-            <h3 className="text-lg font-semibold mb-2">Prioritization Results:</h3>
+            <h3 className="text-lg font-semibold mb-2">{t('prioritization.results')}</h3>
             <ul className="list-none pl-0 space-y-1">
               {prioritizedResults.map((result, index) => {
                 const task = tasks.find(t => t.id === result.taskId);
@@ -371,24 +373,24 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
             </ul>
             <div className="mt-6 flex justify-end space-x-2">
               <Button variant="outline" onClick={onClose}>
-                Cancel
+                {t('prioritization.cancel')}
               </Button>
               <Button onClick={applyPriorities}>
-                Apply New Priorities
+                {t('prioritization.applyNewPriorities')}
               </Button>
             </div>
           </div>
         ) : (
           <React.Fragment>
             <div className="mb-4">
-              <h3 className="text-lg font-semibold mb-2">Select Tasks for Comparison:</h3>
+              <h3 className="text-lg font-semibold mb-2">{t('prioritization.selectTasks')}</h3>
 
               {/* Filtering Controls */}
               <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
-                <h4 className="text-sm font-medium mb-2">Filter by Criticity:</h4>
+                <h4 className="text-sm font-medium mb-2">{t('prioritization.filterByCriticity')}</h4>
                 <div className="flex flex-wrap gap-4">
                   <div className="flex items-center space-x-2">
-                    <label className="text-sm">Urgent:</label>
+                    <label className="text-sm">{t('prioritization.urgent')}</label>
                     <div className="flex space-x-2">
                       <Button
                         size="sm"
@@ -396,7 +398,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                         onClick={() => setFilterUrgent(null)}
                         className="text-xs"
                       >
-                        All
+                        {t('prioritization.all')}
                       </Button>
                       <Button
                         size="sm"
@@ -404,7 +406,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                         onClick={() => setFilterUrgent(true)}
                         className="text-xs"
                       >
-                        Yes
+                        {t('prioritization.yes')}
                       </Button>
                       <Button
                         size="sm"
@@ -412,13 +414,13 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                         onClick={() => setFilterUrgent(false)}
                         className="text-xs"
                       >
-                        No
+                        {t('prioritization.no')}
                       </Button>
                     </div>
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    <label className="text-sm">High Impact:</label>
+                    <label className="text-sm">{t('prioritization.highImpact')}</label>
                     <div className="flex space-x-2">
                       <Button
                         size="sm"
@@ -426,7 +428,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                         onClick={() => setFilterImpact(null)}
                         className="text-xs"
                       >
-                        All
+                        {t('prioritization.all')}
                       </Button>
                       <Button
                         size="sm"
@@ -434,7 +436,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                         onClick={() => setFilterImpact(true)}
                         className="text-xs"
                       >
-                        Yes
+                        {t('prioritization.yes')}
                       </Button>
                       <Button
                         size="sm"
@@ -442,13 +444,13 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                         onClick={() => setFilterImpact(false)}
                         className="text-xs"
                       >
-                        No
+                        {t('prioritization.no')}
                       </Button>
                     </div>
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    <label className="text-sm">Incident:</label>
+                    <label className="text-sm">{t('prioritization.incident')}</label>
                     <div className="flex space-x-2">
                       <Button
                         size="sm"
@@ -456,7 +458,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                         onClick={() => setFilterIncident(null)}
                         className="text-xs"
                       >
-                        All
+                        {t('prioritization.all')}
                       </Button>
                       <Button
                         size="sm"
@@ -464,7 +466,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                         onClick={() => setFilterIncident(true)}
                         className="text-xs"
                       >
-                        Yes
+                        {t('prioritization.yes')}
                       </Button>
                       <Button
                         size="sm"
@@ -472,13 +474,13 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                         onClick={() => setFilterIncident(false)}
                         className="text-xs"
                       >
-                        No
+                        {t('prioritization.no')}
                       </Button>
                     </div>
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    <label className="text-sm">Sprint Target:</label>
+                    <label className="text-sm">{t('prioritization.sprintTarget')}</label>
                     <div className="flex space-x-2">
                       <Button
                         size="sm"
@@ -486,7 +488,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                         onClick={() => setFilterSprintTarget(null)}
                         className="text-xs"
                       >
-                        All
+                        {t('prioritization.all')}
                       </Button>
                       <Button
                         size="sm"
@@ -494,7 +496,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                         onClick={() => setFilterSprintTarget(true)}
                         className="text-xs"
                       >
-                        Yes
+                        {t('prioritization.yes')}
                       </Button>
                       <Button
                         size="sm"
@@ -502,7 +504,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                         onClick={() => setFilterSprintTarget(false)}
                         className="text-xs"
                       >
-                        No
+                        {t('prioritization.no')}
                       </Button>
                     </div>
                   </div>
@@ -527,25 +529,25 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                       {task.urgent && (
                         <Badge variant="destructive" className="text-xs py-0.5 px-1.5">
                           <AlertTriangle className="h-2.5 w-2.5 mr-1" />
-                          Urgent
+                          {t('prioritization.badgeUrgent')}
                         </Badge>
                       )}
                       {task.impact && (
                         <Badge variant="secondary" className="text-xs py-0.5 px-1.5 bg-yellow-500 hover:bg-yellow-600 text-yellow-900">
                           <CircleDot className="h-2.5 w-2.5 mr-1" />
-                          High Impact
+                          {t('prioritization.badgeHighImpact')}
                         </Badge>
                       )}
                       {task.majorIncident && (
                         <Badge variant="destructive" className="text-xs py-0.5 px-1.5 bg-red-700 hover:bg-red-800 text-white">
                           <Flame className="h-2.5 w-2.5 mr-1" />
-                          Incident
+                          {t('prioritization.badgeIncident')}
                         </Badge>
                       )}
                       {task.sprintTarget && (
                         <Badge variant="secondary" className="text-xs py-0.5 px-1.5 bg-violet-500 hover:bg-violet-600 text-white">
                           <Crosshair className="h-2.5 w-2.5 mr-1" />
-                          Sprint Target
+                          {t('prioritization.badgeSprintTarget')}
                         </Badge>
                       )}
                     </div>
@@ -554,7 +556,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
               </div>
               <div className="mt-4 flex flex-col gap-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">Items per batch:</span>
+                  <span className="text-sm font-medium">{t('prioritization.itemsPerBatch')}</span>
                   <div className="flex gap-1">
                     {[2, 3, 4, 5].map((k) => (
                       <Button
@@ -570,7 +572,7 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                     ))}
                   </div>
                   <span className="text-xs text-muted-foreground">
-                    Compare 2 at a time (take longer) or more at once (pick best then worst, faster as it uses Plackett-Luce algorithm).
+                    {t('prioritization.batchSizeHelp')}
                   </span>
                 </div>
                 <div className="flex space-x-2">
@@ -580,31 +582,31 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                         variant="secondary"
                         onClick={handleFinalizeNow}
                         disabled={!prioritizationState || prioritizationState.totalBatches < 1}
-                        title={!prioritizationState || prioritizationState.totalBatches < 1 ? 'Compare at least one batch first.' : 'Apply the current partial ranking now.'}
+                        title={!prioritizationState || prioritizationState.totalBatches < 1 ? t('prioritization.finalizeTooltipDisabled') : t('prioritization.finalizeTooltipEnabled')}
                       >
-                        Finalize now
+                        {t('prioritization.finalizeNow')}
                       </Button>
                       <Button variant="destructive" onClick={() => {
-                        if (window.confirm('Interrupt and reset the current comparison? All progress will be lost.')) {
+                        if (window.confirm(t('prioritization.resetConfirm'))) {
                           resetComparison();
                         }
                       }}>
-                        Reset Comparison
+                        {t('prioritization.resetComparison')}
                       </Button>
                     </>
                   ) : (
                     <Button onClick={startComparison} disabled={selectedTasks.length < 2}>
-                      Start Comparative Prioritization ({selectedTasks.length} tasks, ~{expectedComparisons(selectedTasks.length, batchSize)} batches)
+                      {t('prioritization.startComparison', { count: selectedTasks.length, batches: expectedComparisons(selectedTasks.length, batchSize) })}
                     </Button>
                   )}
                   <Button variant="outline" onClick={handleCopyTitlesToClipboard} disabled={selectedTasks.length === 0}>
-                    Copy List to Clipboard
+                    {t('prioritization.copyList')}
                   </Button>
                   <Button variant="outline" onClick={() => setSelectedTasks([])} disabled={selectedTasks.length === 0}>
-                    Deselect All
+                    {t('prioritization.deselectAll')}
                   </Button>
                   <Button variant="outline" onClick={() => setSelectedTasks(filteredTopLevelTasks)} disabled={selectedTasks.length === filteredTopLevelTasks.length}>
-                    Select All
+                    {t('prioritization.selectAll')}
                   </Button>
                   <div
                     onMouseEnter={handleDeleteMouseEnter}
@@ -616,10 +618,10 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                       onClick={deleteHovered ? handleDeleteSelected : undefined}
                       disabled={selectedTasks.length === 0}
                       className={`text-destructive hover:text-destructive transition-opacity ${deleteHovered ? 'opacity-100' : 'opacity-50 cursor-not-allowed'}`}
-                      title={deleteHovered ? 'Delete selected tasks' : 'Hover for 0.5s to enable deletion'}
+                      title={deleteHovered ? t('prioritization.deleteTooltipEnabled') : t('prioritization.deleteTooltipDisabled')}
                     >
                       <Trash2 className="h-4 w-4 mr-1" />
-                      Delete Selected ({selectedTasks.length})
+                      {t('prioritization.deleteSelected', { count: selectedTasks.length })}
                     </Button>
                   </div>
                 </div>
@@ -630,16 +632,16 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
               <div className="mt-6 p-4 rounded-lg bg-gray-50 dark:bg-gray-700">
                 <h3 className="text-lg font-semibold mb-4 text-center">
                   {currentBatch.k === 2
-                    ? "Which one should be done first?"
+                    ? t('prioritization.whichOneFirst')
                     : batchPhase === 'highest'
-                      ? "Pick the highest priority task:"
-                      : "Now pick the lowest priority task:"}
+                      ? t('prioritization.pickHighest')
+                      : t('prioritization.pickLowest')}
                 </h3>
                 <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-600 mb-4">
                   <div className="bg-blue-600 h-2.5 rounded-full transition-all" style={{ width: `${progress}%` }}></div>
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 text-center">
-                  Batch {comparisonCount + 1} · {progress}% confident
+                  {t('prioritization.batchProgress', { n: comparisonCount + 1, percent: progress })}
                 </p>
                 <div className={`flex justify-around items-center gap-4 ${currentBatch.k > 2 ? 'flex-col' : ''}`}>
                   {currentBatch.tasks.map((task) => {
@@ -669,12 +671,12 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                 </div>
                 {currentBatch.k === 2 && (
                   <p className="text-xs text-center text-muted-foreground mt-2">
-                    Click the highest priority task — the other is automatically lowest.
+                    {t('prioritization.pairwiseHint')}
                   </p>
                 )}
                 {currentBatch.k > 2 && batchPhase === 'lowest' && (
                   <p className="text-xs text-center text-muted-foreground mt-2">
-                    Pick the lowest among the remaining — or click the highlighted highest again to undo and re-pick.
+                    {t('prioritization.batchLowestHint')}
                   </p>
                 )}
               </div>
@@ -684,11 +686,11 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
         <Dialog open={finalizePreview !== null} onOpenChange={(open) => { if (!open) setFinalizePreview(null); }}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Finalize with current order?</DialogTitle>
+              <DialogTitle>{t('prioritization.finalizeDialogTitle')}</DialogTitle>
               <DialogDescription>
                 {prioritizationState
-                  ? `This is the ranking computed so far from ${prioritizationState.totalBatches} batch${prioritizationState.totalBatches === 1 ? '' : 'es'}. You can apply it now or keep comparing to refine.`
-                  : 'This is the ranking computed so far.'}
+                  ? t('prioritization.finalizeDialogDesc', { n: prioritizationState.totalBatches, es: prioritizationState.totalBatches === 1 ? '' : 'es' })
+                  : t('prioritization.finalizeDialogDescSimple')}
               </DialogDescription>
             </DialogHeader>
             <ul className="list-none pl-0 space-y-1 max-h-[50vh] overflow-y-auto">
@@ -704,10 +706,10 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
             </ul>
             <DialogFooter>
               <Button variant="outline" onClick={() => setFinalizePreview(null)}>
-                Keep comparing
+                {t('prioritization.keepComparing')}
               </Button>
               <Button onClick={handleConfirmFinalize}>
-                Apply this order
+                {t('prioritization.applyOrder')}
               </Button>
             </DialogFooter>
           </DialogContent>

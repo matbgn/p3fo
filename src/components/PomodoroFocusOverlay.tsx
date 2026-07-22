@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { usePomodoro } from '@/hooks/usePomodoro';
 import { useTraveler } from '@/hooks/useTraveler';
 import { useDocumentPiP } from '@/hooks/useDocumentPiP';
@@ -9,17 +10,17 @@ import { getCityByCode } from '@/lib/traveler-types';
 import { Pause, Play, SkipForward, RotateCcw, PictureInPicture2, PlaneTakeoff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-const pomodoroPhaseConfig: Record<string, { label: string; color: string; ringColor: string; bgColor: string }> = {
-  idle: { label: 'Ready', color: 'text-muted-foreground', ringColor: 'text-muted-foreground', bgColor: '' },
-  work: { label: 'Focus Time', color: 'text-red-500', ringColor: 'text-red-500', bgColor: 'bg-red-500/5' },
-  'short-break': { label: 'Break', color: 'text-green-500', ringColor: 'text-green-500', bgColor: 'bg-green-500/5' },
-  'long-break': { label: 'Long Break', color: 'text-blue-500', ringColor: 'text-blue-500', bgColor: 'bg-blue-500/5' },
+const pomodoroPhaseConfig: Record<string, { labelKey: string; color: string; ringColor: string; bgColor: string }> = {
+  idle: { labelKey: 'pomodoroUi.ready', color: 'text-muted-foreground', ringColor: 'text-muted-foreground', bgColor: '' },
+  work: { labelKey: 'pomodoroUi.focusTime', color: 'text-red-500', ringColor: 'text-red-500', bgColor: 'bg-red-500/5' },
+  'short-break': { labelKey: 'pomodoroUi.break', color: 'text-green-500', ringColor: 'text-green-500', bgColor: 'bg-green-500/5' },
+  'long-break': { labelKey: 'pomodoroUi.longBreak', color: 'text-blue-500', ringColor: 'text-blue-500', bgColor: 'bg-blue-500/5' },
 };
 
-const travelerPhaseConfig: Record<string, { label: string; color: string; ringColor: string; bgColor: string }> = {
-  idle: { label: 'Ready', color: 'text-muted-foreground', ringColor: 'text-muted-foreground', bgColor: '' },
-  work: { label: 'Flight', color: 'text-red-500', ringColor: 'text-red-500', bgColor: 'bg-red-500/5' },
-  break: { label: 'Break', color: 'text-green-500', ringColor: 'text-green-500', bgColor: 'bg-green-500/5' },
+const travelerPhaseConfig: Record<string, { labelKey: string; color: string; ringColor: string; bgColor: string }> = {
+  idle: { labelKey: 'pomodoroUi.ready', color: 'text-muted-foreground', ringColor: 'text-muted-foreground', bgColor: '' },
+  work: { labelKey: 'pomodoroUi.flight', color: 'text-red-500', ringColor: 'text-red-500', bgColor: 'bg-red-500/5' },
+  break: { labelKey: 'pomodoroUi.break', color: 'text-green-500', ringColor: 'text-green-500', bgColor: 'bg-green-500/5' },
 };
 
 const formatTime = (ms: number): string => {
@@ -30,6 +31,7 @@ const formatTime = (ms: number): string => {
 };
 
 export const PomodoroFocusOverlay: React.FC = () => {
+  const { t } = useTranslation();
   const pomodoro = usePomodoro();
   const traveler = useTraveler();
   const { settings } = useSettingsContext();
@@ -103,7 +105,7 @@ export const PomodoroFocusOverlay: React.FC = () => {
               {formatTime(traveler.remaining)}
             </span>
             <span className={`text-lg font-medium ${config.color} mt-1`}>
-              {config.label}
+              {t(config.labelKey)}
             </span>
           </div>
         </div>
@@ -118,27 +120,27 @@ export const PomodoroFocusOverlay: React.FC = () => {
         <div className="flex items-center gap-3">
           {traveler.isRunning && !traveler.isPaused ? (
             <Button variant="outline" size="lg" onClick={traveler.pause} className="gap-2">
-              <Pause className="h-5 w-5" /> Pause
+              <Pause className="h-5 w-5" /> {t('pomodoroUi.pause')}
             </Button>
           ) : traveler.isPaused ? (
             <Button variant="outline" size="lg" onClick={traveler.resume} className="gap-2">
-              <Play className="h-5 w-5" /> Resume
+              <Play className="h-5 w-5" /> {t('pomodoroUi.resume')}
             </Button>
           ) : null}
           <Button variant="outline" size="lg" onClick={() => { traveler.skip(); }} className="gap-2">
-            <SkipForward className="h-5 w-5" /> Skip
+            <SkipForward className="h-5 w-5" /> {t('pomodoroUi.skip')}
           </Button>
           <Button variant="outline" size="lg" onClick={traveler.reset} className="gap-2">
-            <RotateCcw className="h-5 w-5" /> End
+            <RotateCcw className="h-5 w-5" /> {t('pomodoroUi.end')}
           </Button>
           {pipSupported && focusConfig.enablePiP && (
             isPiPActive ? (
               <Button variant="outline" size="lg" onClick={handleClosePiP} className="gap-2">
-                <PictureInPicture2 className="h-5 w-5" /> Close PiP
+                <PictureInPicture2 className="h-5 w-5" /> {t('pomodoroUi.closePip')}
               </Button>
             ) : (
               <Button variant="outline" size="lg" onClick={handleOpenPiP} className="gap-2">
-                <PictureInPicture2 className="h-5 w-5" /> PiP
+                <PictureInPicture2 className="h-5 w-5" /> {t('pomodoroUi.pip')}
               </Button>
             )
           )}
@@ -170,7 +172,7 @@ export const PomodoroFocusOverlay: React.FC = () => {
             {formatTime(pomodoro.remaining)}
           </span>
           <span className={`text-lg font-medium ${config.color} mt-1`}>
-            {config.label}
+            {t(config.labelKey)}
           </span>
         </div>
       </div>
@@ -191,27 +193,27 @@ export const PomodoroFocusOverlay: React.FC = () => {
       <div className="flex items-center gap-3">
         {pomodoro.isRunning && !pomodoro.isPaused ? (
           <Button variant="outline" size="lg" onClick={pomodoro.pause} className="gap-2">
-            <Pause className="h-5 w-5" /> Pause
+            <Pause className="h-5 w-5" /> {t('pomodoroUi.pause')}
           </Button>
         ) : pomodoro.isPaused ? (
           <Button variant="outline" size="lg" onClick={pomodoro.resume} className="gap-2">
-            <Play className="h-5 w-5" /> Resume
+            <Play className="h-5 w-5" /> {t('pomodoroUi.resume')}
           </Button>
         ) : null}
         <Button variant="outline" size="lg" onClick={() => { pomodoro.skip(); }} className="gap-2">
-          <SkipForward className="h-5 w-5" /> Skip
+          <SkipForward className="h-5 w-5" /> {t('pomodoroUi.skip')}
         </Button>
         <Button variant="outline" size="lg" onClick={pomodoro.reset} className="gap-2">
-          <RotateCcw className="h-5 w-5" /> End
+          <RotateCcw className="h-5 w-5" /> {t('pomodoroUi.end')}
         </Button>
         {pipSupported && focusConfig.enablePiP && (
           isPiPActive ? (
             <Button variant="outline" size="lg" onClick={handleClosePiP} className="gap-2">
-              <PictureInPicture2 className="h-5 w-5" /> Close PiP
+              <PictureInPicture2 className="h-5 w-5" /> {t('pomodoroUi.closePip')}
             </Button>
           ) : (
             <Button variant="outline" size="lg" onClick={handleOpenPiP} className="gap-2">
-              <PictureInPicture2 className="h-5 w-5" /> PiP
+              <PictureInPicture2 className="h-5 w-5" /> {t('pomodoroUi.pip')}
             </Button>
           )
         )}

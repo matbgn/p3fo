@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     DreamCard,
     FertilizationCard,
@@ -124,6 +125,7 @@ export const CardView: React.FC<CardViewProps> = ({
     onUpdateFactTag,
     factTagOptions
 }) => {
+    const { t } = useTranslation();
     // Local state for editing content ensures smooth typing
     const [editContent, setEditContent] = useState(card.content);
     const [offlineVotesOpen, setOfflineVotesOpen] = useState(false);
@@ -212,7 +214,7 @@ export const CardView: React.FC<CardViewProps> = ({
                         })}
                     </div>
                 ) : (
-                    <div className="text-center text-xs text-muted-foreground py-2 italic">No votes cast yet</div>
+                    <div className="text-center text-xs text-muted-foreground py-2 italic">{t('board.noVotesCastYet')}</div>
                 )}
             </div>
         );
@@ -267,7 +269,7 @@ export const CardView: React.FC<CardViewProps> = ({
                         })}
                     </div>
                 ) : (
-                    <div className="text-center text-xs text-muted-foreground py-2 italic">No votes cast yet</div>
+                    <div className="text-center text-xs text-muted-foreground py-2 italic">{t('board.noVotesCastYet')}</div>
                 )}
             </div>
         );
@@ -285,7 +287,7 @@ export const CardView: React.FC<CardViewProps> = ({
                     <div className="flex items-center gap-2">
                         <BarChart3 className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm font-bold">{total} pts</span>
-                        <span className="text-xs text-muted-foreground">({totalVoters} voters)</span>
+                        <span className="text-xs text-muted-foreground">({totalVoters} {t('board.voters')})</span>
                     </div>
                 </div>
                 {entries.length > 0 ? (
@@ -312,7 +314,7 @@ export const CardView: React.FC<CardViewProps> = ({
                                         <div
                                             className="h-full bg-primary rounded-full transition-all"
                                             style={{ width: `${percent}%` }}
-                                            title={`${user?.username || 'Unknown'}: ${value} pts`}
+                                            title={`${user?.username || t('board.unknown')}: ${value} ${t('board.pts')}`}
                                         />
                                     </div>
                                     <span className="text-[10px] font-bold w-5 text-right">{value}</span>
@@ -321,7 +323,7 @@ export const CardView: React.FC<CardViewProps> = ({
                         })}
                     </div>
                 ) : (
-                    <div className="text-center text-xs text-muted-foreground py-2 italic">No votes cast yet</div>
+                    <div className="text-center text-xs text-muted-foreground py-2 italic">{t('board.noVotesCastYet')}</div>
                 )}
             </div>
         );
@@ -395,7 +397,7 @@ export const CardView: React.FC<CardViewProps> = ({
                             }
                         }}
                     >
-                        {isHiddenFromUser ? 'Hidden content' : card.content}
+                        {isHiddenFromUser ? t('board.hiddenContent') : card.content}
                     </div>
                 )}
 
@@ -405,26 +407,26 @@ export const CardView: React.FC<CardViewProps> = ({
                         <DropdownMenuTrigger className="focus:outline-none">
                             {card.authorId ? (
                                 <UserAvatar
-                                    username={users.find(u => u.userId === card.authorId)?.username || 'Unknown'}
+                                     username={users.find(u => u.userId === card.authorId)?.username || t('board.unknown')}
                                     logo={users.find(u => u.userId === card.authorId)?.logo}
                                     size="sm"
                                     className="h-5 w-5 mr-1 hover:ring-2 hover:ring-ring transition-all"
                                     trigram={users.find(u => u.userId === card.authorId)?.trigram}
                                 />
                             ) : (
-                                <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-muted-foreground mr-1 hover:bg-muted/80 transition-colors" title="Anonymous">
+                                 <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-muted-foreground mr-1 hover:bg-muted/80 transition-colors" title={t('board.anonymous')}>
                                     <HatGlasses className="h-3 w-3" />
                                 </div>
                             )}
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start">
-                            <DropdownMenuLabel>Msg author</DropdownMenuLabel>
+                            <DropdownMenuLabel>{t('board.msgAuthor')}</DropdownMenuLabel>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onUpdateAuthor(null); }}>
                                 <div className="h-4 w-4 rounded-full bg-muted flex items-center justify-center mr-2">
                                     <Minus className="h-3 w-3" />
                                 </div>
-                                Unassigned
+                                {t('common.unassigned')}
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onUpdateAuthor(currentUserId); }}>
                                 <UserAvatar
@@ -434,7 +436,7 @@ export const CardView: React.FC<CardViewProps> = ({
                                     className="h-4 w-4 mr-2"
                                     trigram={users.find(u => u.userId === currentUserId)?.trigram}
                                 />
-                                Myself ({userSettings.username})
+                                {t('board.myself', { name: userSettings.username })}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             {users.filter(u => u.userId !== currentUserId).map(user => (
@@ -459,12 +461,12 @@ export const CardView: React.FC<CardViewProps> = ({
                                 size="icon"
                                 className={`h-4 w-4 ${hasLinkedCards || isLinkingSource || isLinkedToLinkingCard ? 'text-blue-500' : 'text-muted-foreground'} hover:text-blue-600`}
                                 onClick={(e) => { e.stopPropagation(); onToggleLink(); }}
-                                title={isLinkingSource ? 'Cancel linking' : 'Link cards'}
+                                title={isLinkingSource ? t('board.cancelLinking') : t('board.linkCards')}
                             >
                                 {isLinkingSource ? <Unlink className="h-3 w-3" /> : <LinkIcon className="h-3 w-3" />}
                             </Button>
                             {onPromote && !card.promotedTaskId && (
-                                <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-green-600" onClick={(e) => { e.stopPropagation(); onPromote(); }} title="Promote to backlog">
+                                 <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-green-600" onClick={(e) => { e.stopPropagation(); onPromote(); }} title={t('board.promoteToBacklog')}>
                                     <ArrowUpRight className="h-3 w-3" />
                                 </Button>
                             )}
@@ -502,7 +504,7 @@ export const CardView: React.FC<CardViewProps> = ({
                                             <span className="text-[10px] font-medium">{opt.label}</span>
                                         </>
                                     ) : (
-                                        <span className="text-muted-foreground">Tag</span>
+                                         <span className="text-muted-foreground">{t('board.tag')}</span>
                                     );
                                 })()}
                             </SelectTrigger>
@@ -526,13 +528,13 @@ export const CardView: React.FC<CardViewProps> = ({
                             <Button variant="outline" size="sm" className="h-6 px-2 text-xs gap-1">
                                 <UsersRound className="h-3 w-3" />
                                 <span className="text-yellow-600 font-bold">{offlineVoterCount}</span>
-                                Offline
+                                {t('board.offline')}
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-80 p-3" align="start">
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
-                                    <h5 className="text-sm font-medium">Offline Voters</h5>
+                                    <h5 className="text-sm font-medium">{t('board.offlineVoters')}</h5>
                                     <Button
                                         variant="outline"
                                         size="sm"
@@ -549,15 +551,15 @@ export const CardView: React.FC<CardViewProps> = ({
                                         }}
                                     >
                                         <Plus className="h-3 w-3" />
-                                        Add Voter
+                                        {t('board.addVoter')}
                                     </Button>
                                 </div>
                                 {Object.keys(localOfflineVotes).length === 0 && (
-                                    <p className="text-xs text-muted-foreground italic">No offline voters added yet.</p>
+                                    <p className="text-xs text-muted-foreground italic">{t('board.noOfflineVoters')}</p>
                                 )}
                                 {Object.entries(localOfflineVotes).map(([voterId, value]) => (
                                     <div key={voterId} className="flex items-center gap-2">
-                                        <span className="text-xs text-muted-foreground w-20 truncate">{voterId.replace('offline_', 'Voter ')}</span>
+                                         <span className="text-xs text-muted-foreground w-20 truncate">{voterId.replace('offline_', t('board.voter') + ' ')}</span>
                                         {votingMode === 'THUMBS_UP' && (
                                             <Button
                                                 variant={value === 1 ? 'default' : 'outline'}
@@ -692,7 +694,7 @@ export const CardView: React.FC<CardViewProps> = ({
                                         }}
                                     >
                                         <Trash2 className="h-3 w-3 mr-1" />
-                                        Clear All Offline Voters
+                                        {t('board.clearAllOfflineVoters')}
                                     </Button>
                                 )}
                             </div>
@@ -704,7 +706,7 @@ export const CardView: React.FC<CardViewProps> = ({
                 <div className="mt-1 flex items-center gap-1">
                     <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 font-medium">
                         <UsersRound className="h-3 w-3" />
-                        {offlineVoterCount} offline
+                        {t('board.offlineCount', { count: offlineVoterCount })}
                     </span>
                 </div>
             )}
@@ -757,10 +759,10 @@ export const CardView: React.FC<CardViewProps> = ({
                                                 <span className="relative z-10">
                                                     {totalVotes}
                                                 </span>
-                                                <span className={`text-xs relative z-10 ${hasVotes ? 'text-white/80' : 'text-muted-foreground'}`}>votes</span>
-                                                {offlineThumbsUp > 0 && (
-                                                    <span className="text-xs relative z-10 text-yellow-300 ml-auto">
-                                                        ({offlineThumbsUp} offline)
+                                                 <span className={`text-xs relative z-10 ${hasVotes ? 'text-white/80' : 'text-muted-foreground'}`}>{t('board.votes')}</span>
+                                                 {offlineThumbsUp > 0 && (
+                                                     <span className="text-xs relative z-10 text-yellow-300 ml-auto">
+                                                         {t('board.offlineThumbsUp', { count: offlineThumbsUp })}
                                                     </span>
                                                 )}
                                             </div>
@@ -807,10 +809,10 @@ export const CardView: React.FC<CardViewProps> = ({
                                                 )}
                                                 <span className="relative z-10 inline-flex items-center justify-center rounded-bl-sm border-l-2 border-b-2 border-current h-4 min-w-[1.25rem] px-0.5 text-[10px] font-bold">+/-</span>
                                                 <span className="relative z-10">
-                                                    {hasVotes ? `${netScore > 0 ? '+' : ''}${netScore}` : `${voteCount} votes`}
+                                                 {hasVotes ? `${netScore > 0 ? '+' : ''}${netScore}` : `${voteCount} ${t('board.votes')}`}
                                                 </span>
                                                 {hasVotes && (
-                                                    <span className={`text-xs relative z-10 ${hasVotes ? 'text-white/80' : 'text-muted-foreground'}`}>pts</span>
+                                                    <span className={`text-xs relative z-10 ${hasVotes ? 'text-white/80' : 'text-muted-foreground'}`}>{t('board.pts')}</span>
                                                 )}
                                             </div>
                                         );
@@ -865,10 +867,10 @@ export const CardView: React.FC<CardViewProps> = ({
                                             <div className="pt-2 cursor-help text-center">
                                                 {(() => {
                                                      const median = getMJMedian(mergedVotes);
-                                                     if (median === null) return <span className="text-xs text-muted-foreground">No votes</span>;
+                                                     if (median === null) return <span className="text-xs text-muted-foreground">{t('board.noVotesCast')}</span>;
                                                      const label = median > 0 ? '+1' : (median < 0 ? '-1' : '0');
                                                      const color = median > 0 ? 'text-green-600' : (median < 0 ? 'text-red-600' : 'text-black');
-                                                     return <span className={`text-xs font-bold ${color}`}>Median: {label} <span className="text-muted-foreground font-normal">({Object.keys(mergedVotes).length} votes)</span></span>
+                                                     return <span className={`text-xs font-bold ${color}`}>{t('board.medianLabel', { label })} <span className="text-muted-foreground font-normal">{t('board.votesCount', { count: Object.keys(mergedVotes).length })}</span></span>
                                                  })()}
                                             </div>
                                         </HoverOrClickCard>
@@ -895,7 +897,7 @@ export const CardView: React.FC<CardViewProps> = ({
                                                 <span className="relative z-10">
                                                     {totalPoints}
                                                 </span>
-                                                <span className={`text-xs relative z-10 ${hasPoints ? 'text-white/80' : 'text-muted-foreground'}`}>pts</span>
+                                                <span className={`text-xs relative z-10 ${hasPoints ? 'text-white/80' : 'text-muted-foreground'}`}>{t('board.pts')}</span>
                                             </div>
                                         );
                                     })()}
@@ -908,7 +910,7 @@ export const CardView: React.FC<CardViewProps> = ({
                                         <Button variant="outline" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleVote(1); }} disabled={votingPhase !== 'VOTING'}><Plus className="h-3 w-3" /></Button>
                                     </div>
                                     <div className="text-xs text-muted-foreground">
-                                        Unspent: {(maxPoints || 10) - (userPointsUsed || 0)} pts
+                                        {t('board.unspent', { remaining: (maxPoints || 10) - (userPointsUsed || 0) })}
                                     </div>
                                 </div>
                             )}
@@ -943,7 +945,7 @@ export const CardView: React.FC<CardViewProps> = ({
                                                     {grade.icon}
                                                     {grade.label}
                                                 </>
-                                            ) : 'No Votes';
+                                            ) : t('board.noVotesYet');
                                         })()}
                                         <span className="opacity-80 text-xs ml-1">({Object.keys(mergedVotes).length})</span>
                                     </div>
@@ -958,14 +960,14 @@ export const CardView: React.FC<CardViewProps> = ({
                                                             {getMJGrade(card.votes[currentUserId]).label}
                                                         </>
                                                     ) : (
-                                                        <span className="text-muted-foreground">Evaluate...</span>
+                                                         <span className="text-muted-foreground">{t('board.evaluate')}</span>
                                                     )}
                                                 </div>
                                                 <ChevronDown className="h-4 w-4 opacity-50" />
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end" className="w-[200px]">
-                                            <DropdownMenuLabel>Select Grade</DropdownMenuLabel>
+                                            <DropdownMenuLabel>{t('board.selectGrade')}</DropdownMenuLabel>
                                             <DropdownMenuSeparator />
                                             {MJ_SCALE.map(grade => (
                                                 <DropdownMenuItem
