@@ -227,6 +227,91 @@
       "qliNoData": "Aucune donnée",
       "qliNoDataDescription": "Aucune donnée LQI disponible",
       "qliDescription": "Objectif : {{goal}}%"
+    },
+    "forecast": {
+      "user": "Utilisateur·rice",
+      "year": "Année",
+      "month": "Mois",
+      "workingDays": "Jours ouvrés",
+      "selectUser": "Sélectionner un·e utilisateur·rice",
+      "hoursDone": "Heures effectuées par mois",
+      "hoursDue": "Heures dues par mois",
+      "hoursProjected": "Heures projetées par mois",
+      "deltaProjected": "Différence d'heures projetée avec dues",
+      "workload": "Charge de travail",
+      "lastMonthBalance": "Solde horaire du mois dernier",
+      "newBalance": "Nouveau solde horaire (projection)",
+      "hoursUnit": "Heures"
+    },
+    "hourlyBalance": {
+      "addPastRecord": "+ Ajouter un enregistrement passé",
+      "loadPrevious": "Charger les mois précédents",
+      "editedBy": "Modifié par {{user}}",
+      "unknown": "Inconnu·e",
+      "doubleClickToEdit": "Double-cliquez pour modifier",
+      "column": {
+        "month": "Mois",
+        "workload": "Charge %",
+        "hourlyBalance": "Solde horaire",
+        "hoursDone": "Heures effectuées"
+      },
+      "chart": {
+        "hoursDelta": "Différence d'heures par mois",
+        "cumulativeBalance": "Solde horaire cumulé",
+        "limit": "Limite"
+      }
+    },
+    "vacations": {
+      "addFutureRecord": "+ Ajouter un enregistrement futur",
+      "loadPrevious": "Charger les mois précédents",
+      "doubleClickToEdit": "Double-cliquez pour modifier",
+      "column": {
+        "month": "Mois",
+        "workload": "Charge %",
+        "due": "Dûes [h]",
+        "taken": "Prises [h]",
+        "balance": "Solde [h]"
+      },
+      "chart": {
+        "limit": "Limite",
+        "balance": "Solde de vacances",
+        "projected": "Vacances projetées"
+      }
+    },
+    "qolSurvey": {
+      "title": "Sondage sur l'efficacité de la qualité de vie",
+      "description": "Évaluez votre satisfaction concernant les éléments ci-dessous",
+      "loading": "Chargement du sondage...",
+      "column": {
+        "question": "Question"
+      },
+      "question": {
+        "documentation": "Documentation & accès à l'information",
+        "deepWork": "Travail en profondeur / temps de concentration",
+        "automation": "Processus d'automatisation",
+        "changeConfidence": "Confiance dans le changement (Impact & Efficacité)",
+        "incidentResponses": "Réponses aux incidents",
+        "localTools": "Expérience des outils locaux",
+        "planning": "Processus de planification",
+        "crossTeam": "Dépendances entre équipes",
+        "easeOfDelivery": "Facilité de livraison (difficulté à mettre en œuvre le changement)",
+        "maintainability": "Maintenabilité des livrables"
+      },
+      "level": {
+        "noAnswer": "Sans réponse",
+        "veryDissatisfied": "Très insatisfait·e",
+        "dissatisfied": "Insatisfait·e",
+        "neutral": "Neutre",
+        "satisfied": "Satisfait·e",
+        "verySatisfied": "Très satisfait·e"
+      },
+      "submit": "Soumettre les réponses",
+      "clear": "Effacer le sondage",
+      "clearConfirm": "Êtes-vous sûr·e de vouloir effacer vos réponses au sondage ?",
+      "saved": "Réponses au sondage enregistrées !",
+      "saveError": "Erreur : Impossible d'enregistrer les réponses au sondage.",
+      "cleared": "Réponses au sondage effacées !",
+      "clearError": "Erreur : Impossible d'effacer les réponses au sondage."
     }
   },
   "status": {

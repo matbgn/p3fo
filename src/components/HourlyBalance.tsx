@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import TimetableChart from "./TimetableChart";
 import TimetableRawTable from "./TimetableRawTable";
 import { getHistoricalHourlyBalances, DataPoint } from "@/utils/projectedHours";
@@ -15,6 +16,7 @@ interface HourlyBalanceProps {
 }
 
 const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
+    const { t } = useTranslation();
     const { tasks } = useAllTasks();
     const { settings } = useSettingsContext();
     const { users, updateUser } = useUsersContext();
@@ -60,10 +62,10 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
 
     const displayUserName =
         userId === "unassigned"
-            ? "Unassigned"
+            ? t("common.unassigned")
             : selectedUser
                 ? selectedUser.username
-                : userSettings.username || "Select User";
+                : userSettings.username || t("metrics.forecast.selectUser");
 
     // Auto-persist previous month if missing (Lazy Persistence)
     useEffect(() => {
@@ -225,12 +227,12 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
                                 size="sm"
                                 onClick={handleAddPastRecord}
                             >
-                                + Add a past record
+                                {t("metrics.hourlyBalance.addPastRecord")}
                             </Button>
                         )}
                         {hasMoreHistory && (
                             <Button variant="outline" size="sm" onClick={() => setMonthsBack(prev => prev + 6)}>
-                                Load Previous Months
+                                {t("metrics.hourlyBalance.loadPrevious")}
                             </Button>
                         )}
                     </div>

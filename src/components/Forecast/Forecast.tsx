@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAllTasks } from "@/hooks/useAllTasks";
@@ -15,6 +16,7 @@ interface ForecastProps {
 }
 
 const Forecast: React.FC<ForecastProps> = ({ userId }) => {
+    const { t } = useTranslation();
     const { tasks } = useAllTasks();
     const { settings } = useSettingsContext();
     const { userSettings } = useUserSettings();
@@ -45,10 +47,10 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
             ? tasks.filter(task => task.userId === userId || (selectedUser && task.userId === selectedUser.username))
             : tasks;
     const displayUserName = userId === "unassigned"
-        ? "Unassigned"
+        ? t("common.unassigned")
         : selectedUser
             ? selectedUser.username
-            : (userSettings.username || "Select User");
+            : (userSettings.username || t("metrics.forecast.selectUser"));
 
     // Normalize preferred days from the selected user
     // User might have number[] or Record<string/number, number>
@@ -111,7 +113,7 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
             <Card className="h-28">
                 <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-                    <CardTitle className="text-sm font-medium">User</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t("metrics.forecast.user")}</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold truncate" title={displayUserName}>
@@ -122,7 +124,7 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
 
             <Card className="h-28">
                 <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Year</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t("metrics.forecast.year")}</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <Select value={year.toString()} onValueChange={handleYearChange}>
@@ -140,7 +142,7 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
 
             <Card className="h-28">
                 <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Month</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t("metrics.forecast.month")}</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <Select value={month.toString()} onValueChange={handleMonthChange}>
@@ -160,7 +162,7 @@ const Forecast: React.FC<ForecastProps> = ({ userId }) => {
 
             <Card className="h-28">
                 <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Working Days</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t("metrics.forecast.workingDays")}</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{workingDays}</div>

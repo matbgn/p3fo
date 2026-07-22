@@ -1,5 +1,6 @@
 
 import React from "react";
+import { useTranslation } from "react-i18next";
 import {
   Card,
   CardContent,
@@ -46,6 +47,7 @@ const CustomTooltip: React.FC<TooltipProps<number, string>> = ({ active, payload
 };
 
 const TimetableChart: React.FC<TimetableChartProps> = ({ data, limitUpper, limitLower }) => {
+  const { t } = useTranslation();
   const chartData = data.map(d => ({
     ...d,
     upperLimit: d.workload * limitUpper,
@@ -76,7 +78,7 @@ const TimetableChart: React.FC<TimetableChartProps> = ({ data, limitUpper, limit
               <Area
                 type="linear"
                 dataKey="hourlyBalance"
-                name="Hours Delta per each Month"
+                name={t("metrics.hourlyBalance.chart.hoursDelta")}
                 stroke="#2563eb"
                 strokeWidth={2}
                 fill="url(#deltaFill)"
@@ -84,13 +86,13 @@ const TimetableChart: React.FC<TimetableChartProps> = ({ data, limitUpper, limit
               <Area
                 type="linear"
                 dataKey="cumulativeBalance"
-                name="Cummulative Hourly Balance"
+                name={t("metrics.hourlyBalance.chart.cumulativeBalance")}
                 stroke="#059669"
                 strokeWidth={2}
                 fill="url(#cumFill)"
               />
-              <Line type="step" dataKey="upperLimit" stroke="red" strokeDasharray="3 3" dot={false} name="Limit" />
-              <Line type="step" dataKey="lowerLimit" stroke="red" strokeDasharray="3 3" dot={false} legendType="none" name="Limit" />
+              <Line type="step" dataKey="upperLimit" stroke="red" strokeDasharray="3 3" dot={false} name={t("metrics.hourlyBalance.chart.limit")} />
+              <Line type="step" dataKey="lowerLimit" stroke="red" strokeDasharray="3 3" dot={false} legendType="none" name={t("metrics.hourlyBalance.chart.limit")} />
             </ComposedChart>
           </ResponsiveContainer>
         </CardContent>

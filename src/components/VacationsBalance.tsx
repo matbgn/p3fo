@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useSettingsContext } from "@/context/SettingsContext";
 import { useUsersContext } from "@/context/UsersContext";
@@ -15,6 +16,7 @@ interface VacationsBalanceProps {
 }
 
 const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
+    const { t } = useTranslation();
     const { settings } = useSettingsContext();
     const { users, updateUser } = useUsersContext();
     const { userSettings } = useUserSettings();
@@ -42,10 +44,10 @@ const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
 
     const displayUserName =
         userId === "unassigned"
-            ? "Unassigned"
+            ? t("common.unassigned")
             : selectedUser
                 ? selectedUser.username
-                : userSettings.username || "Select User";
+                : userSettings.username || t("metrics.forecast.selectUser");
 
     const handleUpdate = async (descId: string, field: 'workload' | 'vacationsHourlyTaken' | 'vacationsHourlyBalance', value: number) => {
         if (!userId || userId === "unassigned") return;
@@ -165,7 +167,7 @@ const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
                     {/* Table: newest month at top, oldest at bottom */}
                     <div className="mb-4 flex flex-col gap-2 justify-center items-center">
                         <Button variant="outline" size="sm" onClick={handleAddFutureRecord}>
-                            + Add a future record
+                            {t("metrics.vacations.addFutureRecord")}
                         </Button>
                     </div>
                     <div className="flex-1 overflow-auto">
@@ -178,7 +180,7 @@ const VacationsBalance: React.FC<VacationsBalanceProps> = ({ userId }) => {
                     <div className="mt-4 flex flex-col gap-2 justify-center items-center">
                         {hasMoreHistory && (
                             <Button variant="outline" size="sm" onClick={() => setMonthsBack(prev => prev + 6)}>
-                                Load Previous Months
+                                {t("metrics.vacations.loadPrevious")}
                             </Button>
                         )}
                     </div>

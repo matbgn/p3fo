@@ -227,6 +227,91 @@
       "qliNoData": "No data",
       "qliNoDataDescription": "No QLI data available",
       "qliDescription": "Goal: {{goal}}%"
+    },
+    "forecast": {
+      "user": "User",
+      "year": "Year",
+      "month": "Month",
+      "workingDays": "Working Days",
+      "selectUser": "Select User",
+      "hoursDone": "Hours per month done",
+      "hoursDue": "Hours per month due",
+      "hoursProjected": "Hours per month projected",
+      "deltaProjected": "Delta hours projected with due",
+      "workload": "Workload",
+      "lastMonthBalance": "Last month hourly balance",
+      "newBalance": "New hourly balance (projection)",
+      "hoursUnit": "Hours"
+    },
+    "hourlyBalance": {
+      "addPastRecord": "+ Add a past record",
+      "loadPrevious": "Load Previous Months",
+      "editedBy": "Edited by {{user}}",
+      "unknown": "Unknown",
+      "doubleClickToEdit": "Double click to edit",
+      "column": {
+        "month": "Month",
+        "workload": "Workload %",
+        "hourlyBalance": "Hourly Balance",
+        "hoursDone": "Hours Done"
+      },
+      "chart": {
+        "hoursDelta": "Hours Delta per each Month",
+        "cumulativeBalance": "Cumulative Hourly Balance",
+        "limit": "Limit"
+      }
+    },
+    "vacations": {
+      "addFutureRecord": "+ Add a future record",
+      "loadPrevious": "Load Previous Months",
+      "doubleClickToEdit": "Double click to edit",
+      "column": {
+        "month": "Month",
+        "workload": "Workload %",
+        "due": "Due [h]",
+        "taken": "Taken [h]",
+        "balance": "Balance [h]"
+      },
+      "chart": {
+        "limit": "Limit",
+        "balance": "Vacations Balance",
+        "projected": "Vacations Projected"
+      }
+    },
+    "qolSurvey": {
+      "title": "Quality of Life Effectiveness Survey",
+      "description": "Rate your satisfaction with the items below",
+      "loading": "Loading survey...",
+      "column": {
+        "question": "Question"
+      },
+      "question": {
+        "documentation": "Documentation & access to information",
+        "deepWork": "Deep work/focus time",
+        "automation": "Automation processes",
+        "changeConfidence": "Change confidence (Impact & Effectiveness)",
+        "incidentResponses": "Incident responses",
+        "localTools": "Local tools experience",
+        "planning": "Planning processes",
+        "crossTeam": "Cross-team dependencies",
+        "easeOfDelivery": "Ease of Delivery (difficulty to implement change)",
+        "maintainability": "Maintainability of delivered assets"
+      },
+      "level": {
+        "noAnswer": "No answer",
+        "veryDissatisfied": "Very dissatisfied",
+        "dissatisfied": "Dissatisfied",
+        "neutral": "Neutral",
+        "satisfied": "Satisfied",
+        "verySatisfied": "Very satisfied"
+      },
+      "submit": "Submit Responses",
+      "clear": "Clear Survey",
+      "clearConfirm": "Are you sure you want to clear your survey responses?",
+      "saved": "Survey responses saved!",
+      "saveError": "Error: Could not save survey responses.",
+      "cleared": "Survey responses cleared!",
+      "clearError": "Error: Could not clear survey responses."
     }
   },
   "status": {

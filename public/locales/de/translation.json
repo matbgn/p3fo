@@ -227,6 +227,91 @@
       "qliNoData": "Keine Daten",
       "qliNoDataDescription": "Keine LQI-Daten verfügbar",
       "qliDescription": "Ziel: {{goal}}%"
+    },
+    "forecast": {
+      "user": "Benutzer",
+      "year": "Jahr",
+      "month": "Monat",
+      "workingDays": "Arbeitstage",
+      "selectUser": "Benutzer auswählen",
+      "hoursDone": "Stunden pro Monat erledigt",
+      "hoursDue": "Stunden pro Monat geschuldet",
+      "hoursProjected": "Stunden pro Monat prognostiziert",
+      "deltaProjected": "Stundendifferenz prognostiziert vs. geschuldet",
+      "workload": "Arbeitsbelastung",
+      "lastMonthBalance": "Stundensaldo des letzten Monats",
+      "newBalance": "Neuer Stundensaldo (Prognose)",
+      "hoursUnit": "Stunden"
+    },
+    "hourlyBalance": {
+      "addPastRecord": "+ Vergangenen Eintrag hinzufügen",
+      "loadPrevious": "Vergangene Monate laden",
+      "editedBy": "Bearbeitet von {{user}}",
+      "unknown": "Unbekannt",
+      "doubleClickToEdit": "Zum Bearbeiten doppeltklicken",
+      "column": {
+        "month": "Monat",
+        "workload": "Belastung %",
+        "hourlyBalance": "Stundensaldo",
+        "hoursDone": "Stunden erledigt"
+      },
+      "chart": {
+        "hoursDelta": "Stundendifferenz pro Monat",
+        "cumulativeBalance": "Kumulativer Stundensaldo",
+        "limit": "Grenze"
+      }
+    },
+    "vacations": {
+      "addFutureRecord": "+ Zukünftigen Eintrag hinzufügen",
+      "loadPrevious": "Vergangene Monate laden",
+      "doubleClickToEdit": "Zum Bearbeiten doppeltklicken",
+      "column": {
+        "month": "Monat",
+        "workload": "Belastung %",
+        "due": "Geschuldet [h]",
+        "taken": "Genommen [h]",
+        "balance": "Saldo [h]"
+      },
+      "chart": {
+        "limit": "Grenze",
+        "balance": "Ferien-Saldo",
+        "projected": "Ferien prognostiziert"
+      }
+    },
+    "qolSurvey": {
+      "title": "Umfrage zur Wirksamkeit der Lebensqualität",
+      "description": "Bewerten Sie Ihre Zufriedenheit mit den untenstehenden Punkten",
+      "loading": "Umfrage wird geladen...",
+      "column": {
+        "question": "Frage"
+      },
+      "question": {
+        "documentation": "Dokumentation & Zugang zu Informationen",
+        "deepWork": "Tiefenarbeit / Fokuszeit",
+        "automation": "Automatisierungsprozesse",
+        "changeConfidence": "Veränderungszuversicht (Wirkung & Effektivität)",
+        "incidentResponses": "Vorfallreaktionen",
+        "localTools": "Erfahrung mit lokalen Werkzeugen",
+        "planning": "Planungsprozesse",
+        "crossTeam": "Teamübergreifende Abhängigkeiten",
+        "easeOfDelivery": "Lieferfreundlichkeit (Schwierigkeit, Änderungen umzusetzen)",
+        "maintainability": "Wartbarkeit der gelieferten Assets"
+      },
+      "level": {
+        "noAnswer": "Keine Antwort",
+        "veryDissatisfied": "Sehr unzufrieden",
+        "dissatisfied": "Unzufrieden",
+        "neutral": "Neutral",
+        "satisfied": "Zufrieden",
+        "verySatisfied": "Sehr zufrieden"
+      },
+      "submit": "Antworten absenden",
+      "clear": "Umfrage löschen",
+      "clearConfirm": "Sind Sie sicher, dass Sie Ihre Umfrageantworten löschen möchten?",
+      "saved": "Umfrageantworten gespeichert!",
+      "saveError": "Fehler: Umfrageantworten konnten nicht gespeichert werden.",
+      "cleared": "Umfrageantworten gelöscht!",
+      "clearError": "Fehler: Umfrageantworten konnten nicht gelöscht werden."
     }
   },
   "status": {
