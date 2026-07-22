@@ -1,3 +1,4 @@
+import i18n from '@/i18n';
 import type {
   SalaryBoardEntity,
   SalaryBudgetScenario,
@@ -252,7 +253,9 @@ export const aggregateSalaries = (
 export const formatCurrency = (value: number, currency = 'CHF'): string => {
   // Match golden standard: 2 decimals always (e.g. "CHF 4 836.00", "CHF 3 750.45")
   const safe = Number.isFinite(value) ? value : 0;
-  return `${currency} ${safe.toLocaleString('fr-CH', {
+  const lng = (i18n.resolvedLanguage ?? i18n.language ?? 'en').substring(0, 2);
+  const locale = lng === 'fr' ? 'fr-CH' : lng === 'de' ? 'de-CH' : 'en-CH';
+  return `${currency} ${safe.toLocaleString(locale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -398,9 +401,10 @@ export const buildProjection = (
 };
 
 // Golden-standard defaults for the transparent salary system
-
 // Used as a starting point when no board exists.
-export const DEFAULT_SALARY_CONFIG: SalaryConfig = {
+// Translatable strings are resolved via i18n at creation time.
+
+export const DEFAULT_SALARY_CONFIG = (): SalaryConfig => ({
   indexHourlyWage: 24.59,
   hoursPerWeek: 40,
   weeksPerMonth: 4.33333333333333,
@@ -414,13 +418,13 @@ export const DEFAULT_SALARY_CONFIG: SalaryConfig = {
   daysPerWeek: 5,
   roundingStep: 5,
   currency: 'CHF',
-  label: 'Système de salaires transparents',
-};
+  label: i18n.t('salary.defaults.systemLabel'),
+});
 
-export const DEFAULT_SALARY_BUDGET_SCENARIOS: SalaryBudgetScenario[] = [
+export const DEFAULT_SALARY_BUDGET_SCENARIOS = (): SalaryBudgetScenario[] => [
   {
     id: 'min',
-    name: 'Min (revenus min − charges max)',
+    name: i18n.t('salary.scenario.minName'),
     revenues: 2_111_600,
     charges: 1_063_000,
     reserve: 100_000,
@@ -428,7 +432,7 @@ export const DEFAULT_SALARY_BUDGET_SCENARIOS: SalaryBudgetScenario[] = [
   },
   {
     id: 'intermediate',
-    name: 'Intermédiaire',
+    name: i18n.t('salary.scenario.intermediateName'),
     revenues: 2_709_000,
     charges: 950_000,
     reserve: 100_000,
@@ -436,7 +440,7 @@ export const DEFAULT_SALARY_BUDGET_SCENARIOS: SalaryBudgetScenario[] = [
   },
   {
     id: 'max',
-    name: 'Max (revenus max − charges min)',
+    name: i18n.t('salary.scenario.maxName'),
     revenues: 3_315_400,
     charges: 841_500,
     reserve: 100_000,
@@ -444,46 +448,46 @@ export const DEFAULT_SALARY_BUDGET_SCENARIOS: SalaryBudgetScenario[] = [
   },
 ];
 
-export const DEFAULT_SALARY_DIMENSIONS: SalaryDimension[] = [
+export const DEFAULT_SALARY_DIMENSIONS = (): SalaryDimension[] => [
   {
     id: 'expertise',
-    name: 'Expertise',
+    name: i18n.t('salary.dimension.expertise.name'),
     stepValue: 390,
     maxLevel: 6,
     color: '#729FCF',
     affectsSalary: true,
     levelDescriptions: [
-      "Aucune expertise dans la fonction principale. Apprenti ou changement de carrière radical.",
-      "Connaissances de base, débutant. Capable de travailler sous supervision.",
-      "Maîtrise du rôle principal, autonome. Bonne capacité à acquérir le savoir-faire de l'équipe.",
-      "Personne de référence (expert) dans un ou plusieurs domaines. Source d'information pour les collègues.",
-      "Pionnier-ère qui mène des recherches, élabore des preuves de concept et apporte de nouvelles connaissances.",
-      "Niveau Maîtrise de l'ensemble de l'architecture. Expertise exceptionnelle reconnue dans l'organisation.",
-      "Crée de nouveaux modèles d'organisation et d'outils largement utilisés par les équipes internes ou externes à l'entreprise. Référence reconnue dans le domaine.",
+      i18n.t('salary.dimension.expertise.levelDescription.0'),
+      i18n.t('salary.dimension.expertise.levelDescription.1'),
+      i18n.t('salary.dimension.expertise.levelDescription.2'),
+      i18n.t('salary.dimension.expertise.levelDescription.3'),
+      i18n.t('salary.dimension.expertise.levelDescription.4'),
+      i18n.t('salary.dimension.expertise.levelDescription.5'),
+      i18n.t('salary.dimension.expertise.levelDescription.6'),
     ],
   },
   {
     id: 'impact',
-    name: 'Impact',
+    name: i18n.t('salary.dimension.impact.name'),
     stepValue: 390,
     maxLevel: 6,
     color: '#FACC15',
     affectsSalary: true,
     levelDescriptions: [
-      "Mobilise davantage de ressources que de résultats. En formation, besoin de soutien.",
-      "Impact limité, principalement individuel.",
-      "Impact occasionnel sur les collègues ou d'autres sous-systèmes.",
-      "Pilier de l'équipe, impact sur l'ensemble du cercle.",
-      "Impact étendu à d'autres domaines de l'organisation. Influenceur transversal.",
-      "Impact indéniable sur l'ensemble de l'entreprise à court terme.",
-      "Impact à long terme et portée étendue. Représente l'organisation à l'extérieur.",
+      i18n.t('salary.dimension.impact.levelDescription.0'),
+      i18n.t('salary.dimension.impact.levelDescription.1'),
+      i18n.t('salary.dimension.impact.levelDescription.2'),
+      i18n.t('salary.dimension.impact.levelDescription.3'),
+      i18n.t('salary.dimension.impact.levelDescription.4'),
+      i18n.t('salary.dimension.impact.levelDescription.5'),
+      i18n.t('salary.dimension.impact.levelDescription.6'),
     ],
   },
 ];
 
 export const createDefaultSalaryBoard = (): SalaryBoardEntity => ({
-  config: { ...DEFAULT_SALARY_CONFIG },
-  dimensions: DEFAULT_SALARY_DIMENSIONS.map(d => ({ ...d, levelDescriptions: [...(d.levelDescriptions ?? [])] })),
+  config: { ...DEFAULT_SALARY_CONFIG() },
+  dimensions: DEFAULT_SALARY_DIMENSIONS().map(d => ({ ...d, levelDescriptions: [...(d.levelDescriptions ?? [])] })),
   employees: [],
   budget: {
     scenarios: [],

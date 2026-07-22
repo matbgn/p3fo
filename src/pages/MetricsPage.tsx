@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from 'react-i18next';
 import HighImpactTaskMetric from "@/components/HighImpactTaskMetric";
 import FailureRateMetric from "@/components/FailureRateMetric";
 import QualityOfLifeIndexMetric from "@/components/QualityOfLifeIndexMetric";
@@ -33,6 +34,7 @@ import { FocusModeProvider } from "@/components/FocusModeProvider";
 import { FocusModeOverlay } from "@/components/FocusModeOverlay";
 
 const PomodoroStatsTab: React.FC<{ userId: string; weekStartDay: 0 | 1 }> = ({ userId, weekStartDay }) => {
+  const { t } = useTranslation();
   const { sessions, stats, isLoading, reload } = usePomodoroStats(userId);
   const { data: consistencyData, isLoading: consistencyLoading } = useConsistencyScore(userId, { sessions });
   const { tasks } = useAllTasks();
@@ -62,7 +64,7 @@ const PomodoroStatsTab: React.FC<{ userId: string; weekStartDay: 0 | 1 }> = ({ u
   };
 
   if (isLoading) {
-    return <LoadingSpinner label="Loading focus session stats..." className="h-full" />;
+    return <LoadingSpinner label={t('metrics.loadingFocusStats')} className="h-full" />;
   }
 
   return (
@@ -70,32 +72,32 @@ const PomodoroStatsTab: React.FC<{ userId: string; weekStartDay: 0 | 1 }> = ({ u
       <PomodoroStats stats={stats} userId={userId} consistencyDays={consistencyData?.days} sessions={sessions} tasks={tasks} visible={legendVisible} onToggleLegend={toggleLegend} weekStartDay={weekStartDay} />
       {consistencyData && !consistencyLoading && (
         <div className="rounded-lg border bg-card text-card-foreground p-4">
-          <h3 className="text-sm font-medium mb-3">Consistency Score</h3>
+          <h3 className="text-sm font-medium mb-3">{t('metrics.consistencyScore.title')}</h3>
           <ScoreCurve data={consistencyData} />
         </div>
       )}
       <div className="rounded-lg border bg-card text-card-foreground p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-medium">Consistency Activity</h3>
+          <h3 className="text-sm font-medium">{t('metrics.consistencyActivity.title')}</h3>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
                 <Trash2 className="h-4 w-4 mr-1" />
-                Reset Stats
+                {t('metrics.resetStatsButton')}
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                  <AlertDialogTitle>Reset Focus Session Stats?</AlertDialogTitle>
+                  <AlertDialogTitle>{t('metrics.resetStatsTitle')}</AlertDialogTitle>
                 <AlertDialogDescription>
-                    This will permanently delete all your focus session history, including the heatmap and statistics. This action cannot be undone.
+                    {t('metrics.resetStatsDescription')}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleReset} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                  Delete All Sessions
-                </AlertDialogAction>
+              <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+              <AlertDialogAction onClick={handleReset} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                {t('metrics.deleteAllSessionsButton')}
+              </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
@@ -111,6 +113,7 @@ const PomodoroStatsTab: React.FC<{ userId: string; weekStartDay: 0 | 1 }> = ({ u
 };
 
 const MetricsPageInner: React.FC<{ activeView?: string }> = ({ activeView }) => {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = React.useState("forecast");
   const { userId: currentUserId } = useCurrentUser();
   const { users, loading: usersLoading } = useUsersContext();
@@ -161,14 +164,14 @@ const MetricsPageInner: React.FC<{ activeView?: string }> = ({ activeView }) => 
   };
 
   if (initializing || usersLoading) {
-    return <LoadingSpinner label="Loading metrics..." className="h-full" />;
+    return <LoadingSpinner label={t('metrics.loading')} className="h-full" />;
   }
 
   return (
     <div className="flex flex-col gap-6 h-full">
       {/* Top pane for collaborative metrics cards */}
       <section className="rounded-lg p-2">
-        <h2 className="text-xl font-semibold mb-4">Collaborative Metrics</h2>
+        <h2 className="text-xl font-semibold mb-4">{t('metrics.collaborativeTitle')}</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* High Impact Task Achievement Frequency Metric */}
           <HighImpactTaskMetric />
@@ -187,13 +190,13 @@ const MetricsPageInner: React.FC<{ activeView?: string }> = ({ activeView }) => 
       {/* Bottom pane for graphics in subtab separated view */}
       <section className="flex-1 border rounded-lg p-4 sm:p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">Individual Metrics</h2>
+          <h2 className="text-xl font-semibold">{t('metrics.individualTitle')}</h2>
           <Select value={selectedUserId} onValueChange={handleUserChange}>
             <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Select user" />
+              <SelectValue placeholder={t('metrics.selectUser')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="unassigned">Unassigned</SelectItem>
+              <SelectItem value="unassigned">{t('common.unassigned')}</SelectItem>
               {users.map((user) => (
                 <SelectItem key={user.userId} value={user.userId}>
                   {user.username}
@@ -209,32 +212,32 @@ const MetricsPageInner: React.FC<{ activeView?: string }> = ({ activeView }) => 
               className={`px-4 py-2 font-medium ${activeTab === "forecast" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
               onClick={() => setActiveTab("forecast")}
             >
-              Forecast
+              {t('metrics.tab.forecast')}
             </button>
             <button
               className={`px-4 py-2 font-medium ${activeTab === "hourly-balance" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
               onClick={() => setActiveTab("hourly-balance")}
             >
-              Hourly Balance
+              {t('metrics.tab.hourlyBalance')}
             </button>
 
             <button
               className={`px-4 py-2 font-medium ${activeTab === "vacations" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
               onClick={() => setActiveTab("vacations")}
             >
-              Vacations
+              {t('metrics.tab.vacations')}
             </button>
             <button
               className={`px-4 py-2 font-medium ${activeTab === "individual-qol" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
               onClick={() => setActiveTab("individual-qol")}
             >
-              Individual QoL
+              {t('metrics.tab.individualQol')}
             </button>
             <button
               className={`px-4 py-2 font-medium ${activeTab === "pomodoro" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
               onClick={() => setActiveTab("pomodoro")}
             >
-              Focus Sessions
+              {t('metrics.tab.focusSessions')}
             </button>
           </div>
 
@@ -247,12 +250,12 @@ const MetricsPageInner: React.FC<{ activeView?: string }> = ({ activeView }) => 
             ) : activeTab === "vacations" ? (
               <VacationsBalance userId={selectedUserId} />
             ) : activeTab === "individual-qol" ? (
-              selectedUserId && selectedUserId !== "unassigned" ? <QoLSurvey userId={selectedUserId} /> : <div>Please select a user to view survey</div>
+              selectedUserId && selectedUserId !== "unassigned" ? <QoLSurvey userId={selectedUserId} /> : <div>{t('metrics.selectUserQol')}</div>
             ) : activeTab === "pomodoro" ? (
-              selectedUserId && selectedUserId !== "unassigned" ? <PomodoroStatsTab userId={selectedUserId} weekStartDay={userSettings.weekStartDay ?? 1} /> : <div>Please select a user to view focus session stats</div>
+              selectedUserId && selectedUserId !== "unassigned" ? <PomodoroStatsTab userId={selectedUserId} weekStartDay={userSettings.weekStartDay ?? 1} /> : <div>{t('metrics.selectUserFocus')}</div>
             ) : (
               <div className="flex items-center justify-center h-full">
-                <p className="text-muted-foreground">Graphics content for {activeTab} will appear here</p>
+                <p className="text-muted-foreground">{t('metrics.graphicsPlaceholder', { tab: activeTab })}</p>
               </div>
             )}
           </div>

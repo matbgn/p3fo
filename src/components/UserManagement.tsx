@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useUsersContext, UserWithTrigram } from '@/context/UsersContext';
 import { useAllTasks } from '@/hooks/useAllTasks';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
 export const UserManagement: React.FC = () => {
+    const { t } = useTranslation();
     const { users, loading: usersLoading, deleteUser, updateUser } = useUsersContext();
     const { tasks } = useAllTasks();
     const [editingTrigram, setEditingTrigram] = useState<string | null>(null);
@@ -43,12 +45,12 @@ export const UserManagement: React.FC = () => {
     }, [users, tasks]);
 
     const handleDeleteUser = async (userId: string, username: string) => {
-        if (window.confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone.`)) {
+        if (window.confirm(t('userManagement.deleteConfirm', { name: username }))) {
             try {
                 await deleteUser(userId);
             } catch (error) {
                 console.error('Failed to delete user:', error);
-                alert('Failed to delete user. Please try again.');
+                alert(t('userManagement.deleteFailed'));
             }
         }
     };
@@ -69,7 +71,7 @@ export const UserManagement: React.FC = () => {
             setEditingTrigram(null);
         } catch (error) {
             console.error('Failed to update trigram:', error);
-            alert('Failed to update trigram. Please try again.');
+            alert(t('userManagement.workloadUpdateFailed'));
         }
     };
 
@@ -87,45 +89,45 @@ export const UserManagement: React.FC = () => {
         try {
             const workload = parseInt(workloadValue, 10);
             if (isNaN(workload) || workload < 0 || workload > 100) {
-                alert('Workload must be a number between 0 and 100');
+                alert(t('userManagement.workloadInvalid'));
                 return;
             }
             await updateUser(userId, { workload });
             setEditingWorkload(null);
         } catch (error) {
             console.error('Failed to update workload:', error);
-            alert('Failed to update workload. Please try again.');
+            alert(t('userManagement.workloadUpdateFailed'));
         }
     };
 
     if (usersLoading) {
-        return <div className="text-center py-4">Loading users...</div>;
+        return <div className="text-center py-4">{t('userManagement.loading')}</div>;
     }
 
     return (
         <div className="space-y-4">
-            <h2 className="text-xl font-semibold">User Management</h2>
+            <h2 className="text-xl font-semibold">{t('userManagement.title')}</h2>
             <p className="text-sm text-muted-foreground">
-                Manage users stored in the application context. You can delete users that have no assigned tasks.
+                {t('userManagement.help')}
             </p>
 
             <div className="border rounded-md">
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>User</TableHead>
-                            <TableHead>Trigram</TableHead>
-                            <TableHead>Workload</TableHead>
-                            <TableHead>User ID</TableHead>
-                            <TableHead className="text-center">Assigned Tasks</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
+                            <TableHead>{t('userManagement.colUser')}</TableHead>
+                            <TableHead>{t('userManagement.colTrigram')}</TableHead>
+                            <TableHead>{t('userManagement.colWorkload')}</TableHead>
+                            <TableHead>{t('userManagement.colUserId')}</TableHead>
+                            <TableHead className="text-center">{t('userManagement.colAssignedTasks')}</TableHead>
+                            <TableHead className="text-right">{t('userManagement.colActions')}</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {users.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                                    No users found.
+                                    {t('userManagement.noUsers')}
                                 </TableCell>
                             </TableRow>
                         ) : (
@@ -170,10 +172,10 @@ export const UserManagement: React.FC = () => {
                                             ) : (
                                                 <div
                                                     className="font-mono bg-muted/50 px-2 py-1 rounded w-fit cursor-pointer hover:bg-muted"
-                                                    onDoubleClick={() => startEditing(user.userId, (user as UserWithTrigram).trigram || '???')}
-                                                    title="Double-click to edit"
+                                                    onDoubleClick={() => startEditing(user.userId, (user as UserWithTrigram).trigram || t('userManagement.noTrigram'))}
+                                                    title={t('userManagement.doubleClickEdit')}
                                                 >
-                                                    {(user as UserWithTrigram).trigram || '???'}
+                                                    {(user as UserWithTrigram).trigram || t('userManagement.noTrigram')}
                                                 </div>
                                             )}
                                         </TableCell>
@@ -205,7 +207,7 @@ export const UserManagement: React.FC = () => {
                                                 <div
                                                     className="bg-muted/50 px-2 py-1 rounded w-fit cursor-pointer hover:bg-muted"
                                                     onDoubleClick={() => startEditingWorkload(user.userId, user.workload)}
-                                                    title="Double-click to edit"
+                                                    title={t('userManagement.doubleClickEdit')}
                                                 >
                                                     {user.workload ?? 60}%
                                                 </div>
@@ -226,13 +228,13 @@ export const UserManagement: React.FC = () => {
                                                     size="icon"
                                                     className="text-destructive hover:text-destructive/90 hover:bg-destructive/10"
                                                     onClick={() => handleDeleteUser(user.userId, user.username)}
-                                                    title="Delete User"
+                                                    title={t('userManagement.deleteUser')}
                                                 >
                                                     <Trash2 className="h-4 w-4" />
                                                 </Button>
                                             ) : (
                                                 <span className="text-xs text-muted-foreground italic px-2">
-                                                    Cannot delete
+                                                    {t('userManagement.cannotDelete')}
                                                 </span>
                                             )}
                                         </TableCell>

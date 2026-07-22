@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useTasks } from '@/hooks/useTasks';
 import { Button } from '@/components/ui/button';
 import { useReminderStore } from '@/hooks/useReminders';
@@ -9,6 +10,7 @@ import { getAllTemplates } from '@/lib/task-templates';
 import { VoteResponseEntity, VoteLoop, VoteModerator } from '@/lib/persistence-types';
 
 const DataExporter: React.FC = () => {
+  const { t } = useTranslation();
   const { allTasks: tasks } = useTasks();
   const { userId } = useUserSettings();
   const [isExporting, setIsExporting] = useState(false);
@@ -142,7 +144,7 @@ salaryBoard: salaryBoardState,
 
   return (
     <Button onClick={handleExport} disabled={isExporting}>
-      {isExporting ? 'Exporting...' : 'Export Data'}
+      {isExporting ? t('data.exporting') : t('data.export')}
     </Button>
   );
 };

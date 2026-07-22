@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { useTranslation } from 'react-i18next';
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
   includeDoneFilter,
   defaultFilters
 }) => {
+  const { t } = useTranslation();
   // Update state and persist to session storage
   const updateAndPersistFilters = (newFilters: Filters) => {
     setFilters(newFilters);
@@ -71,7 +73,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
       <div className="flex items-center space-x-2">
         <Input
           type="text"
-          placeholder="Search tasks..."
+          placeholder={t('filters.searchPlaceholder')}
           value={filters.searchText || ""}
           onChange={(e) => updateAndPersistFilters({ ...filters, searchText: e.target.value })}
           className="w-40"
@@ -89,7 +91,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
           checked={filters.showUrgent}
           onCheckedChange={(checked) => updateAndPersistFilters({ ...filters, showUrgent: !!checked })}
         />
-        <Label htmlFor="show-urgent">Urgent</Label>
+        <Label htmlFor="show-urgent">{t('filters.urgent')}</Label>
       </div>
 
       <div className="flex items-center space-x-2">
@@ -98,7 +100,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
           checked={filters.showImpact}
           onCheckedChange={(checked) => updateAndPersistFilters({ ...filters, showImpact: !!checked })}
         />
-        <Label htmlFor="show-impact">High Impact</Label>
+        <Label htmlFor="show-impact">{t('filters.highImpact')}</Label>
       </div>
 
       <div className="flex items-center space-x-2">
@@ -107,7 +109,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
           checked={filters.showMajorIncident}
           onCheckedChange={(checked) => updateAndPersistFilters({ ...filters, showMajorIncident: !!checked })}
         />
-        <Label htmlFor="show-major-incident">Incident on Delivery</Label>
+        <Label htmlFor="show-major-incident">{t('filters.incidentOnDelivery')}</Label>
       </div>
 
       <div className="flex items-center space-x-2">
@@ -116,24 +118,24 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
           checked={filters.showSprintTarget}
           onCheckedChange={(checked) => updateAndPersistFilters({ ...filters, showSprintTarget: !!checked })}
         />
-        <Label htmlFor="show-sprint-target">Sprint Target</Label>
+        <Label htmlFor="show-sprint-target">{t('filters.sprintTarget')}</Label>
       </div>
 
       <div className="flex items-center space-x-2">
-        <Label>Status:</Label>
+        <Label>{t('filters.status')}</Label>
         <MultiSelect
           options={[
-            { value: "Backlog", label: "Backlog" },
-            { value: "Ready", label: "Ready" },
-            { value: "WIP", label: "WIP" },
-            { value: "Blocked", label: "Blocked" },
-            { value: "Done", label: "Done" },
-            { value: "Dropped", label: "Dropped" },
-            { value: "Archived", label: "Archived" }
+            { value: "Backlog", label: t('status.backlog') },
+            { value: "Ready", label: t('status.ready') },
+            { value: "WIP", label: t('status.wip') },
+            { value: "Blocked", label: t('status.blocked') },
+            { value: "Done", label: t('status.done') },
+            { value: "Dropped", label: t('status.dropped') },
+            { value: "Archived", label: t('status.archived') }
           ]}
           selected={filters.status || []}
           onChange={(selected) => updateAndPersistFilters({ ...filters, status: selected as TriageStatus[] })}
-          placeholder="Select status..."
+          placeholder={t('filters.statusPlaceholder')}
           className="w-40"
         />
       </div>
@@ -144,11 +146,11 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
             checked={!!filters.showDone}
             onCheckedChange={(checked) => updateAndPersistFilters({ ...filters, showDone: !!checked })}
           />
-          <Label htmlFor="show-done">Done</Label>
+          <Label htmlFor="show-done">{t('filters.done')}</Label>
         </div>
       )}
       <div className="flex items-center space-x-2">
-        <Label>Difficulty:</Label>
+        <Label>{t('filters.difficulty')}</Label>
         <MultiSelect
           options={[
             { value: "0.5", label: "0.5" },
@@ -160,20 +162,20 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
           ]}
           selected={filters.difficulty?.map(String) || []}
           onChange={(selected) => updateAndPersistFilters({ ...filters, difficulty: selected?.map(Number) || [] })}
-          placeholder="Select difficulty..."
+          placeholder={t('filters.difficultyPlaceholder')}
           className="w-40"
         />
       </div>
       <div className="flex items-center space-x-2">
-        <Label>Category:</Label>
+        <Label>{t('filters.category')}</Label>
         <MultiSelect
           options={[
-            { value: "Uncategorized", label: "Uncategorized" },
+            { value: "Uncategorized", label: t('filters.uncategorized') },
             ...CATEGORIES.map(c => ({ value: c, label: c }))
           ]}
           selected={filters.category || []}
           onChange={(selected) => updateAndPersistFilters({ ...filters, category: (selected as Category[]) || [] })}
-          placeholder="Select category..."
+          placeholder={t('filters.categoryPlaceholder')}
           className="w-40"
         />
       </div>
@@ -182,7 +184,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
         size="sm"
         onClick={handleClearFilters}
       >
-        Clear All Filters
+        {t('filters.clearAll')}
       </Button>
     </React.Fragment>
   );

@@ -28,6 +28,7 @@ import { DEFAULT_TASKS_INITIALIZED_KEY } from "./hooks/useTasks";
 import { destroyTravelerIdleState } from "@/lib/traveler-idle-state";
 import { useSettingsContext } from "@/context/SettingsContext";
 import { DEFAULT_FOCUS_MODE_CONFIG } from "@/lib/pomodoro-types";
+import "@/i18n";
 
 declare global {
   interface Window {

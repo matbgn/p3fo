@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   SalaryBoardEntity,
   SalaryBudgetScenario,
@@ -109,6 +110,7 @@ const ConfigEditor: React.FC<{
   config: SalaryConfig;
   onChange: (next: SalaryConfig) => void;
 }> = ({ config, onChange }) => {
+  const { t } = useTranslation();
   const update = <K extends keyof SalaryConfig>(key: K, value: SalaryConfig[K]) =>
     onChange({ ...config, [key]: value });
 
@@ -129,7 +131,7 @@ const ConfigEditor: React.FC<{
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       <div className="space-y-1">
-        <Label htmlFor="cfg-hourly">Salaire horaire de référence</Label>
+        <Label htmlFor="cfg-hourly">{t('salary.config.indexHourlyWage')}</Label>
         <Input
           id="cfg-hourly"
           type="number"
@@ -139,7 +141,7 @@ const ConfigEditor: React.FC<{
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="cfg-hours">Heures par semaine</Label>
+        <Label htmlFor="cfg-hours">{t('salary.config.hoursPerWeek')}</Label>
         <Input
           id="cfg-hours"
           type="number"
@@ -148,7 +150,7 @@ const ConfigEditor: React.FC<{
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="cfg-weeks">Semaines par mois</Label>
+        <Label htmlFor="cfg-weeks">{t('salary.config.weeksPerMonth')}</Label>
         <Input
           id="cfg-weeks"
           type="number"
@@ -158,7 +160,7 @@ const ConfigEditor: React.FC<{
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="cfg-seniority">Augmentation ancienneté / an</Label>
+        <Label htmlFor="cfg-seniority">{t('salary.config.seniorityIncrease')}</Label>
         <Input
           id="cfg-seniority"
           type="number"
@@ -166,10 +168,10 @@ const ConfigEditor: React.FC<{
           value={config.seniorityIncrease}
           onChange={e => update('seniorityIncrease', parseFloat(e.target.value) || 0)}
         />
-        <p className="text-xs text-muted-foreground">ex: 0.01 = 1% par an (composé)</p>
+        <p className="text-xs text-muted-foreground">{t('salary.config.seniorityIncreaseHelp')}</p>
       </div>
       <div className="space-y-1">
-        <Label htmlFor="cfg-age">Augmentation par tranche d'âge</Label>
+        <Label htmlFor="cfg-age">{t('salary.config.ageIncrease')}</Label>
         <Input
           id="cfg-age"
           type="number"
@@ -177,20 +179,20 @@ const ConfigEditor: React.FC<{
           value={config.ageIncrease}
           onChange={e => update('ageIncrease', parseFloat(e.target.value) || 0)}
         />
-        <p className="text-xs text-muted-foreground">ex: 0.05 = 5% (composé)</p>
+        <p className="text-xs text-muted-foreground">{t('salary.config.ageIncreaseHelp')}</p>
       </div>
       <div className="space-y-1">
-        <Label htmlFor="cfg-brackets">Tranches d'âge</Label>
+        <Label htmlFor="cfg-brackets">{t('salary.config.ageBrackets')}</Label>
         <Input
           id="cfg-brackets"
           value={bracketsText}
           onChange={e => setBracketsText(e.target.value)}
           onBlur={commitBrackets}
-          placeholder="25, 35, 45, 55, 65"
+          placeholder={t('salary.config.ageBracketsPlaceholder')}
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="cfg-charges">Taux de charges sociales</Label>
+        <Label htmlFor="cfg-charges">{t('salary.config.socialChargesRate')}</Label>
         <Input
           id="cfg-charges"
           type="number"
@@ -198,10 +200,10 @@ const ConfigEditor: React.FC<{
           value={config.socialChargesRate}
           onChange={e => update('socialChargesRate', parseFloat(e.target.value) || 0)}
         />
-        <p className="text-xs text-muted-foreground">ex: 0.1202 = 12.02% (déduit du net)</p>
+        <p className="text-xs text-muted-foreground">{t('salary.config.socialChargesHelp')}</p>
       </div>
       <div className="space-y-1">
-        <Label htmlFor="cfg-expense">Facteur de coût (expense factor)</Label>
+        <Label htmlFor="cfg-expense">{t('salary.config.expenseFactor')}</Label>
         <Input
           id="cfg-expense"
           type="number"
@@ -210,14 +212,14 @@ const ConfigEditor: React.FC<{
           onChange={e => update('expenseFactor', parseFloat(e.target.value) || 1)}
         />
         <p className="text-xs text-muted-foreground">
-          ex: 1.95 qui correspond à 195% des salaires bruts annuels (couvre assurances sociales côté employeur, infrastructures, frais généraux, etc.).
+          {t('salary.config.expenseFactorHelp')}
         </p>
         <p className="text-xs text-muted-foreground italic">
-          En général les frais généraux représentent 180%–220% du salaire brut.
+          {t('salary.config.expenseFactorNote')}
         </p>
       </div>
       <div className="space-y-1">
-        <Label htmlFor="cfg-round">Arrondi au multiple de</Label>
+        <Label htmlFor="cfg-round">{t('salary.config.roundingStep')}</Label>
         <Input
           id="cfg-round"
           type="number"
@@ -226,7 +228,7 @@ const ConfigEditor: React.FC<{
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="cfg-currency">Devise</Label>
+        <Label htmlFor="cfg-currency">{t('salary.config.currency')}</Label>
         <Input
           id="cfg-currency"
           value={config.currency}
@@ -234,7 +236,7 @@ const ConfigEditor: React.FC<{
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="cfg-hours-day">Heures par jour</Label>
+        <Label htmlFor="cfg-hours-day">{t('salary.config.hoursPerDay')}</Label>
         <Input
           id="cfg-hours-day"
           type="number"
@@ -243,7 +245,7 @@ const ConfigEditor: React.FC<{
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="cfg-days-week">Jours par semaine</Label>
+        <Label htmlFor="cfg-days-week">{t('salary.config.daysPerWeek')}</Label>
         <Input
           id="cfg-days-week"
           type="number"
@@ -257,15 +259,15 @@ const ConfigEditor: React.FC<{
           checked={config.include13thSalary}
           onCheckedChange={v => update('include13thSalary', v)}
         />
-        <Label htmlFor="cfg-13th">13ème salaire</Label>
+        <Label htmlFor="cfg-13th">{t('salary.config.include13th')}</Label>
       </div>
       <div className="space-y-1 md:col-span-2 lg:col-span-3">
-        <Label htmlFor="cfg-label">Nom du système</Label>
+        <Label htmlFor="cfg-label">{t('salary.config.systemName')}</Label>
         <Input
           id="cfg-label"
           value={config.label ?? ''}
           onChange={e => update('label', e.target.value)}
-          placeholder="Système de salaires transparents"
+          placeholder={t('salary.config.systemNamePlaceholder')}
         />
       </div>
     </div>
@@ -277,6 +279,7 @@ const DimensionEditor: React.FC<{
   dimensions: SalaryDimension[];
   onChange: (next: SalaryDimension[]) => void;
 }> = ({ dimensions, onChange }) => {
+  const { t } = useTranslation();
   const updateDimension = (id: string, patch: Partial<SalaryDimension>) =>
     onChange(dimensions.map(d => (d.id === id ? { ...d, ...patch } : d)));
 
@@ -286,7 +289,7 @@ const DimensionEditor: React.FC<{
   const addDimension = () => {
     const next: SalaryDimension = {
       id: newId(),
-      name: 'Nouveau déterminant',
+      name: t('salary.dimension.defaultName'),
       stepValue: 0,
       maxLevel: 4,
       affectsSalary: true,
@@ -303,14 +306,14 @@ const DimensionEditor: React.FC<{
           <CardContent className="p-4 space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
               <div className="space-y-1">
-                <Label>Nom</Label>
+                <Label>{t('salary.dimension.name')}</Label>
                 <Input
                   value={dim.name}
                   onChange={e => updateDimension(dim.id, { name: e.target.value })}
                 />
               </div>
               <div className="space-y-1">
-                <Label>Palier max</Label>
+                <Label>{t('salary.dimension.maxLevel')}</Label>
                 <Input
                   type="number"
                   min={0}
@@ -319,7 +322,7 @@ const DimensionEditor: React.FC<{
                 />
               </div>
               <div className="space-y-1">
-                <Label>Step (CHF/niveau)</Label>
+                <Label>{t('salary.dimension.stepValue')}</Label>
                 <Input
                   type="number"
                   step="1"
@@ -334,19 +337,19 @@ const DimensionEditor: React.FC<{
                 checked={dim.affectsSalary !== false}
                 onCheckedChange={v => updateDimension(dim.id, { affectsSalary: v })}
               />
-              <Label htmlFor={`dim-affects-${dim.id}`}>Impacte le salaire</Label>
+              <Label htmlFor={`dim-affects-${dim.id}`}>{t('salary.dimension.affectsSalary')}</Label>
               <Input
                 type="color"
                 value={dim.color ?? '#A78BFA'}
                 onChange={e => updateDimension(dim.id, { color: e.target.value })}
                 className="w-12 h-8 p-1 ml-auto"
-                title="Couleur"
+                title={t('salary.dimension.color')}
               />
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => removeDimension(dim.id)}
-                title="Supprimer le déterminant"
+                title={t('salary.dimension.delete')}
               >
                 <Trash2 className="w-4 h-4" />
               </Button>
@@ -355,7 +358,7 @@ const DimensionEditor: React.FC<{
               <Accordion type="single" collapsible>
                 <AccordionItem value={`desc-${dim.id}`}>
                   <AccordionTrigger className="text-xs">
-                    Descriptions des niveaux ({dim.levelDescriptions.length})
+                    {t('salary.dimension.levelDescriptions', { n: dim.levelDescriptions.length })}
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="space-y-2">
@@ -381,7 +384,7 @@ const DimensionEditor: React.FC<{
         </Card>
       ))}
       <Button variant="outline" size="sm" onClick={addDimension}>
-        <Plus className="w-4 h-4 mr-1" /> Ajouter un déterminant
+        <Plus className="w-4 h-4 mr-1" /> {t('salary.dimension.add')}
       </Button>
     </div>
   );
@@ -395,11 +398,12 @@ const EmployeeDialog: React.FC<{
   dimensions: SalaryDimension[];
   onSave: (emp: SalaryEmployee) => void;
 }> = ({ open, onOpenChange, employee, dimensions, onSave }) => {
-  const [draft, setDraft] = useState<SalaryEmployee>(() => employee ?? emptyEmployee());
+  const { t } = useTranslation();
+  const [draft, setDraft] = useState<SalaryEmployee>(() => employee ?? emptyEmployee(t('salary.employee.defaultAdjustmentLabel')));
 
   useEffect(() => {
-    setDraft(employee ?? emptyEmployee());
-  }, [employee, open]);
+    setDraft(employee ?? emptyEmployee(t('salary.employee.defaultAdjustmentLabel')));
+  }, [employee, open, t]);
 
   const setLevel = (dimId: string, level: number) => {
     const others = draft.levels.filter(l => l.dimensionId !== dimId);
@@ -410,15 +414,15 @@ const EmployeeDialog: React.FC<{
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{employee ? 'Modifier' : 'Ajouter'} un employé·e</DialogTitle>
+          <DialogTitle>{employee ? t('salary.employee.editTitle') : t('salary.employee.addTitle')}</DialogTitle>
           <DialogDescription>
-            Les déterminants déterminent le salaire via la formule transparente.
+            {t('salary.employee.dialogDescription')}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label htmlFor="emp-name">Nom</Label>
+              <Label htmlFor="emp-name">{t('salary.employee.name')}</Label>
               <Input
                 id="emp-name"
                 value={draft.name}
@@ -426,7 +430,7 @@ const EmployeeDialog: React.FC<{
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="emp-workload">Taux d'activité (%)</Label>
+              <Label htmlFor="emp-workload">{t('salary.employee.workload')}</Label>
               <Input
                 id="emp-workload"
                 type="number"
@@ -437,7 +441,7 @@ const EmployeeDialog: React.FC<{
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="emp-age">Âge</Label>
+              <Label htmlFor="emp-age">{t('salary.employee.age')}</Label>
               <Input
                 id="emp-age"
                 type="number"
@@ -446,7 +450,7 @@ const EmployeeDialog: React.FC<{
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="emp-seniority">Ancienneté (années)</Label>
+              <Label htmlFor="emp-seniority">{t('salary.employee.seniority')}</Label>
               <Input
                 id="emp-seniority"
                 type="number"
@@ -460,16 +464,16 @@ const EmployeeDialog: React.FC<{
           {/* Employer adjustments */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Compléments employeur</Label>
+              <Label>{t('salary.employee.employerAdjustments')}</Label>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setDraft({
                   ...draft,
-                  employerAdjustments: [...(draft.employerAdjustments ?? []), { id: newId(), label: 'Complément employeur', amount: 0, frequency: 'monthly' }],
+                  employerAdjustments: [...(draft.employerAdjustments ?? []), { id: newId(), label: t('salary.employee.defaultAdjustmentLabel'), amount: 0, frequency: 'monthly' }],
                 })}
               >
-                <Plus className="w-3 h-3 mr-1" /> Ajouter
+                <Plus className="w-3 h-3 mr-1" /> {t('salary.employee.addAdjustment')}
               </Button>
             </div>
             {(draft.employerAdjustments ?? []).map((adj, i) => (
@@ -481,7 +485,7 @@ const EmployeeDialog: React.FC<{
                     next[i] = { ...adj, label: e.target.value };
                     setDraft({ ...draft, employerAdjustments: next });
                   }}
-                  placeholder="Libellé"
+                  placeholder={t('salary.employee.adjustmentLabelPlaceholder')}
                   className="flex-1"
                 />
                 <Input
@@ -504,9 +508,9 @@ const EmployeeDialog: React.FC<{
                 >
                   <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="monthly">Mensuel</SelectItem>
-                    <SelectItem value="semesterly">Semestriel</SelectItem>
-                    <SelectItem value="annually">Annuel</SelectItem>
+                    <SelectItem value="monthly">{t('salary.frequency.monthly')}</SelectItem>
+                    <SelectItem value="semesterly">{t('salary.frequency.semesterly')}</SelectItem>
+                    <SelectItem value="annually">{t('salary.frequency.annually')}</SelectItem>
                   </SelectContent>
                 </Select>
                 <Button
@@ -524,7 +528,7 @@ const EmployeeDialog: React.FC<{
           </div>
 
           <div className="space-y-1">
-            <Label htmlFor="emp-comment">Commentaire</Label>
+            <Label htmlFor="emp-comment">{t('salary.employee.comment')}</Label>
             <Input
               id="emp-comment"
               value={draft.comment ?? ''}
@@ -532,7 +536,7 @@ const EmployeeDialog: React.FC<{
             />
           </div>
           <div className="space-y-2">
-            <Label>Déterminants</Label>
+            <Label>{t('salary.employee.determinants')}</Label>
             <div className="space-y-2">
               {dimensions.map(dim => {
                 const level = draft.levels.find(l => l.dimensionId === dim.id)?.level ?? 0;
@@ -552,7 +556,7 @@ const EmployeeDialog: React.FC<{
                       <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {Array.from({ length: dim.maxLevel + 1 }, (_, i) => (
-                          <SelectItem key={i} value={String(i)}>Niveau {i}</SelectItem>
+                          <SelectItem key={i} value={String(i)}>{t('salary.employee.levelN', { i })}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -569,10 +573,10 @@ const EmployeeDialog: React.FC<{
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            <X className="w-4 h-4 mr-1" /> Annuler
+            <X className="w-4 h-4 mr-1" /> {t('salary.action.cancel')}
           </Button>
           <Button onClick={() => { onSave(draft); onOpenChange(false); }}>
-            <Save className="w-4 h-4 mr-1" /> Enregistrer
+            <Save className="w-4 h-4 mr-1" /> {t('salary.action.save')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -580,19 +584,20 @@ const EmployeeDialog: React.FC<{
   );
 };
 
-const emptyEmployee = (): SalaryEmployee => ({
+const emptyEmployee = (adjustmentLabel: string): SalaryEmployee => ({
   id: newId(),
   name: '',
   workload: 100,
   age: 25,
   seniority: 0,
   levels: [],
-  employerAdjustments: [{ id: newId(), label: 'Complément employeur', amount: 0, frequency: 'monthly' }],
+  employerAdjustments: [{ id: newId(), label: adjustmentLabel, amount: 0, frequency: 'monthly' }],
   comment: '',
 });
 
 // ---------- Main view ----------
 export const SalaryView: React.FC<SalaryViewProps> = () => {
+  const { t } = useTranslation();
   const persistence = usePersistence();
   const { toast } = useToast();
   const { users } = useUsersContext();
@@ -633,7 +638,7 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
           employees: saved.employees.map(e => {
             const oldAdj = (e as unknown as Record<string, unknown>).manualAdjustment;
             if (oldAdj !== undefined && !e.employerAdjustments) {
-              return { ...e, employerAdjustments: [{ id: newId(), label: 'Complément employeur', amount: oldAdj as number, frequency: 'monthly' }] };
+              return { ...e, employerAdjustments: [{ id: newId(), label: t('salary.employee.defaultAdjustmentLabel'), amount: oldAdj as number, frequency: 'monthly' }] };
             }
             // Ensure all adjustments have a frequency
             if (e.employerAdjustments?.some(a => !a.frequency)) {
@@ -655,7 +660,7 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
       }
     };
     load();
-  }, [persistence]);
+  }, [persistence, t]);
 
   // Track our own writes to ignore Yjs echoes
   const lastWrittenUpdatedAt = React.useRef<string | null>(null);
@@ -740,18 +745,18 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
         age: 25,
         seniority: 0,
         levels: [],
-        employerAdjustments: [{ id: newId(), label: 'Complément employeur', amount: 0, frequency: 'monthly' }],
-        comment: `Lié à l'utilisateur·rice ${u.username}`,
+        employerAdjustments: [{ id: newId(), label: t('salary.employee.defaultAdjustmentLabel'), amount: 0, frequency: 'monthly' }],
+        comment: t('salary.employee.linkedUserComment', { name: u.username }),
       }));
     if (toAdd.length === 0) return;
     save({ ...board, employees: [...board.employees, ...toAdd] });
   };
 
   if (loading) {
-    return <div className="p-6 text-muted-foreground">Chargement…</div>;
+    return <div className="p-6 text-muted-foreground">{t('salary.loading')}</div>;
   }
   if (!board) {
-    return <div className="p-6 text-muted-foreground">Impossible de charger le système de salaires.</div>;
+    return <div className="p-6 text-muted-foreground">{t('salary.loadError')}</div>;
   }
 
   const currency = board.config.currency;
@@ -763,32 +768,32 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
         <div>
           <h2 className="text-xl font-semibold flex items-center gap-2">
             <Coins className="w-5 h-5" />
-            {board.config.label ?? 'Système de salaires transparents'}
+            {board.config.label ?? t('salary.defaults.systemLabel')}
           </h2>
           <p className="text-sm text-muted-foreground">
-            Salaire horaire de référence {formatCurrency(board.config.indexHourlyWage, currency)} ·
-           {' '}{board.config.hoursPerWeek}h/sem ·
+            {t('salary.config.indexHourlyWage')} {formatCurrency(board.config.indexHourlyWage, currency)} ·
+            {' '}{board.config.hoursPerWeek}h/sem ·
             charges {((board.config.socialChargesRate || 0) * 100).toFixed(2)}% ·
-            {board.config.include13thSalary ? ' 13 salaires' : ' 12 salaires'}
+            {board.config.include13thSalary ? ` ${t('salary.config.salaries13')}` : ` ${t('salary.config.salaries12')}`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Dialog open={configOpen} onOpenChange={setConfigOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm">
-                <Settings2 className="w-4 h-4 mr-1" /> Paramètres
+                <Settings2 className="w-4 h-4 mr-1" /> {t('salary.action.settings')}
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Paramètres du système</DialogTitle>
+                <DialogTitle>{t('salary.config.dialogTitle')}</DialogTitle>
                 <DialogDescription>
-                  Variables de calcul du salaire. Adaptez-les au client.
+                  {t('salary.config.dialogDescription')}
                 </DialogDescription>
               </DialogHeader>
               <ConfigEditor config={board.config} onChange={updateConfig} />
               <DialogFooter>
-                <Button onClick={() => setConfigOpen(false)}>Fermer</Button>
+                <Button onClick={() => setConfigOpen(false)}>{t('salary.action.close')}</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -796,32 +801,32 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
           <Dialog open={dimensionsOpen} onOpenChange={setDimensionsOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm">
-                <Layers className="w-4 h-4 mr-1" /> Déterminants
+                <Layers className="w-4 h-4 mr-1" /> {t('salary.action.dimensions')}
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Déterminants du salaire</DialogTitle>
+                <DialogTitle>{t('salary.dimensions.dialogTitle')}</DialogTitle>
                 <DialogDescription>
-                  Ajoutez, renommez ou reconfigurez chaque dimension (expertise, impact, situation, responsabilité, …).
+                  {t('salary.dimensions.dialogDescription')}
                 </DialogDescription>
               </DialogHeader>
               <DimensionEditor dimensions={board.dimensions} onChange={updateDimensions} />
               <DialogFooter>
-                <Button onClick={() => setDimensionsOpen(false)}>Fermer</Button>
+                <Button onClick={() => setDimensionsOpen(false)}>{t('salary.action.close')}</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
 
           <Button size="sm" variant="outline" onClick={seedFromUsers}>
-            <UserPlus className="w-4 h-4 mr-1" /> Lier aux utilisateur·rices
+            <UserPlus className="w-4 h-4 mr-1" /> {t('salary.action.linkUsers')}
           </Button>
           <Button size="sm" variant="outline" onClick={() => setCompactView(v => !v)}>
             {compactView ? <Maximize2 className="w-4 h-4 mr-1" /> : <Columns2 className="w-4 h-4 mr-1" />}
-            {compactView ? 'Toutes colonnes' : 'Vue compacte'}
+            {compactView ? t('salary.action.allColumns') : t('salary.action.compactView')}
           </Button>
           <Button size="sm" onClick={addEmployee}>
-            <Plus className="w-4 h-4 mr-1" /> Employé·e
+            <Plus className="w-4 h-4 mr-1" /> {t('salary.action.addEmployee')}
           </Button>
         </div>
       </div>
@@ -829,13 +834,13 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
       {/* Totals */}
       {totals && (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-          <MetricCard label="Effectifs" value={String(totals.headcount)} />
-          <MetricCard label="ETP" value={totals.fte.toFixed(2)} />
-          <MetricCard label="Brut mensuel" value={formatCurrency(totals.totalGrossMonthly, currency)} />
-          <MetricCard label="Brut annuel" value={formatCurrency(totals.totalGrossAnnual, currency)} />
-          <MetricCard label="Net ~" value={formatCurrency(totals.totalNetMonthlyWith13, currency)} />
+          <MetricCard label={t('salary.metric.headcount')} value={String(totals.headcount)} />
+          <MetricCard label={t('salary.metric.fte')} value={totals.fte.toFixed(2)} />
+          <MetricCard label={t('salary.metric.grossMonthly')} value={formatCurrency(totals.totalGrossMonthly, currency)} />
+          <MetricCard label={t('salary.metric.grossAnnual')} value={formatCurrency(totals.totalGrossAnnual, currency)} />
+          <MetricCard label={t('salary.metric.netApprox')} value={formatCurrency(totals.totalNetMonthlyWith13, currency)} />
           <MetricCard
-            label="Coût employeur / an"
+            label={t('salary.metric.employerCostAnnual')}
             value={formatCurrency(totals.totalEmployerCostAnnual, currency)}
           />
         </div>
@@ -845,31 +850,31 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
       <Card className="border">
         <CardHeader className="pb-2">
           <CardTitle className="text-lg flex items-center gap-2">
-            <Users className="w-4 h-4" /> Employé·es
+            <Users className="w-4 h-4" /> {t('salary.employees.title')}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Nom</TableHead>
-                <TableHead className="text-right">Taux (%)</TableHead>
-                {!compactView && <TableHead className="text-right">Âge</TableHead>}
-                {!compactView && <TableHead className="text-right">Ancienneté</TableHead>}
+                <TableHead>{t('salary.table.name')}</TableHead>
+                <TableHead className="text-right">{t('salary.table.workload')}</TableHead>
+                {!compactView && <TableHead className="text-right">{t('salary.table.age')}</TableHead>}
+                {!compactView && <TableHead className="text-right">{t('salary.table.seniority')}</TableHead>}
                 {board.dimensions.map(d => (
                   <TableHead key={d.id} className="text-center" style={{ color: d.color }}>
                     {d.name}
                   </TableHead>
                 ))}
-                <TableHead className="text-right bg-muted/50">Salaire horaire CHF/h</TableHead>
-                {!compactView && <TableHead className="text-right">Brut mensuel à 100%</TableHead>}
-                {!compactView && <TableHead className="text-right">Brut annuel à 100%</TableHead>}
-                <TableHead className="text-right bg-muted/50">Compléments mensuel</TableHead>
-                {!compactView && <TableHead className="text-right">Brut mensuel</TableHead>}
-                {!compactView && <TableHead className="text-right">Brut mensuel (ac 13e)</TableHead>}
-                <TableHead className="text-right bg-muted/50">Brut mensuel (ac 13e & compl.)</TableHead>
-                {!compactView && <TableHead className="text-right">Brut annuel (incl. compl.)</TableHead>}
-                {!compactView && <TableHead className="text-right">Net ~</TableHead>}
+                <TableHead className="text-right bg-muted/50">{t('salary.table.hourlyRate')}</TableHead>
+                {!compactView && <TableHead className="text-right">{t('salary.table.grossMonthly100')}</TableHead>}
+                {!compactView && <TableHead className="text-right">{t('salary.table.grossAnnual100')}</TableHead>}
+                <TableHead className="text-right bg-muted/50">{t('salary.table.adjustmentsMonthly')}</TableHead>
+                {!compactView && <TableHead className="text-right">{t('salary.table.grossMonthly')}</TableHead>}
+                {!compactView && <TableHead className="text-right">{t('salary.table.grossMonthly13')}</TableHead>}
+                <TableHead className="text-right bg-muted/50">{t('salary.table.grossMonthly13Adj')}</TableHead>
+                {!compactView && <TableHead className="text-right">{t('salary.table.grossAnnualAdj')}</TableHead>}
+                {!compactView && <TableHead className="text-right">{t('salary.table.net')}</TableHead>}
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
@@ -877,14 +882,14 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
               {rows.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={compactView ? 7 + board.dimensions.length : 14 + board.dimensions.length} className="text-center text-muted-foreground italic py-6">
-                    Aucun·e employé·e. Cliquez sur « Employé·e » pour en ajouter un·e.
+                    {t('salary.table.empty')}
                   </TableCell>
                 </TableRow>
               )}
               {rows.map(({ employee, computation }) => (
                 <TableRow key={employee.id} onDoubleClick={() => editEmployee(employee)} className="cursor-pointer">
                   <TableCell className="font-medium">
-                    {employee.name || <span className="italic text-muted-foreground">sans nom</span>}
+                    {employee.name || <span className="italic text-muted-foreground">{t('salary.employee.unnamed')}</span>}
                   </TableCell>
                   <TableCell className="text-right">{employee.workload}</TableCell>
                   {!compactView && <TableCell className="text-right">{employee.age}</TableCell>}
@@ -931,7 +936,7 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
               <TableFooter>
                 <TableRow>
                   <TableCell className="font-semibold" colSpan={compactView ? 2 + board.dimensions.length : 4 + board.dimensions.length}>
-                    Totaux ({totals.fte.toFixed(2)} ETP)
+                    {t('salary.table.totals', { n: totals.fte.toFixed(2) })}
                   </TableCell>
                   <TableCell className="text-right font-semibold bg-muted/30">—</TableCell>
                   {!compactView && <TableCell className="text-right font-semibold">—</TableCell>}
@@ -953,10 +958,10 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
       {/* Budget + Simulator tabs */}
       <Tabs defaultValue="budget" className="w-full">
         <TabsList>
-          <TabsTrigger value="budget"><PieChart className="w-4 h-4 mr-1" />Budget</TabsTrigger>
-          <TabsTrigger value="simulator"><Calculator className="w-4 h-4 mr-1" />Simulateur individuel</TabsTrigger>
-          <TabsTrigger value="team"><Users className="w-4 h-4 mr-1" />Simulateur d'équipe</TabsTrigger>
-          <TabsTrigger value="hourly"><Clock className="w-4 h-4 mr-1" />Taux horaire</TabsTrigger>
+          <TabsTrigger value="budget"><PieChart className="w-4 h-4 mr-1" />{t('salary.tab.budget')}</TabsTrigger>
+          <TabsTrigger value="simulator"><Calculator className="w-4 h-4 mr-1" />{t('salary.tab.simulator')}</TabsTrigger>
+          <TabsTrigger value="team"><Users className="w-4 h-4 mr-1" />{t('salary.tab.teamSimulator')}</TabsTrigger>
+          <TabsTrigger value="hourly"><Clock className="w-4 h-4 mr-1" />{t('salary.tab.hourlyRate')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="budget">
@@ -979,53 +984,23 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
       {/* Formula reference */}
       <Card className="border bg-muted/30">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Légende</CardTitle>
+          <CardTitle className="text-sm">{t('salary.legend.title')}</CardTitle>
         </CardHeader>
         <CardContent className="text-xs text-muted-foreground space-y-1">
-          <p>
-            <strong>Base mensuelle</strong> = salaire horaire de référence × heures par semaine × semaines par mois
-          </p>
-          <p>
-            <strong>+ Déterminants</strong> = somme de (niveau × valeur par niveau) pour chaque dimension qui impacte le salaire
-          </p>
-          <p>
-            <strong>Salaire brut à 100%</strong> = (base + déterminants) × (1 + augmentation ancienneté)^années × (1 + augmentation âge)^tranches d'âge atteintes
-          </p>
-          <p>
-            <strong>Salaire annuel brut à 100%</strong> = salaire brut à 100% × 12
-          </p>
-          <p>
-            <strong>Salaire horaire</strong> = salaire brut à 100% ÷ (21 jours × 8 heures × 5)
-          </p>
-          <p>
-            <strong>Salaire mensuel avec 13ème</strong> = salaire brut à 100% × taux d'activité
-          </p>
-          <p>
-            <strong>Salaire annuel brut</strong> = salaire mensuel avec 13ème × 12
-          </p>
-          <p>
-            <strong>Salaire mensuel</strong> = salaire mensuel avec 13ème ÷ 13 × 12 + compléments mensuels
-          </p>
-          <p>
-            <strong>Net ~</strong> = (salaire mensuel avec 13ème + compléments) × (1 − charges sociales)
-          </p>
-          <p>
-            <strong>Coût employeur</strong> = salaire annuel brut × facteur de coût
-          </p>
-          <p className="pt-2 border-t">
-            <strong>Budget — Solde</strong> = revenus − frais − salaires bruts
-          </p>
-          <p>
-            <strong>Frais</strong> — deux modes exclusifs par scénario :
-          </p>
-          <p className="pl-4">
-            • <strong>Montant manuel</strong> : les frais généraux sont saisis directement
-            (loyer, assurances, matériel, etc.). Frais = frais généraux + réserve.
-          </p>
-          <p className="pl-4">
-            • <strong>Facteur de coût</strong> : frais = (salaire brut annuel × facteur) + réserve.
-            Le facteur par défaut est surchargeable par scénario.
-          </p>
+          <p dangerouslySetInnerHTML={{ __html: t('salary.legend.base') }} />
+          <p dangerouslySetInnerHTML={{ __html: t('salary.legend.determinants') }} />
+          <p dangerouslySetInnerHTML={{ __html: t('salary.legend.gross100') }} />
+          <p dangerouslySetInnerHTML={{ __html: t('salary.legend.grossAnnual100') }} />
+          <p dangerouslySetInnerHTML={{ __html: t('salary.legend.hourly') }} />
+          <p dangerouslySetInnerHTML={{ __html: t('salary.legend.monthlyWith13') }} />
+          <p dangerouslySetInnerHTML={{ __html: t('salary.legend.annualGross') }} />
+          <p dangerouslySetInnerHTML={{ __html: t('salary.legend.monthly') }} />
+          <p dangerouslySetInnerHTML={{ __html: t('salary.legend.net') }} />
+          <p dangerouslySetInnerHTML={{ __html: t('salary.legend.employerCost') }} />
+          <p className="pt-2 border-t" dangerouslySetInnerHTML={{ __html: t('salary.legend.budgetBalance') }} />
+          <p dangerouslySetInnerHTML={{ __html: t('salary.legend.chargesIntro') }} />
+          <p className="pl-4" dangerouslySetInnerHTML={{ __html: t('salary.legend.manualMode') }} />
+          <p className="pl-4" dangerouslySetInnerHTML={{ __html: t('salary.legend.expenseFactorMode') }} />
         </CardContent>
       </Card>
 
@@ -1054,6 +1029,7 @@ const BudgetPanel: React.FC<{
   board: SalaryBoardEntity;
   onChange: (next: SalaryBoardEntity) => void;
 }> = ({ board, onChange }) => {
+  const { t } = useTranslation();
   const budget = board.budget ?? { scenarios: [], activeScenarioId: undefined };
   const activeScenario =
     budget.scenarios.find(s => s.id === budget.activeScenarioId) ?? budget.scenarios[0] ?? null;
@@ -1065,7 +1041,7 @@ const BudgetPanel: React.FC<{
   const addScenario = () => {
     const s: SalaryBudgetScenario = {
       id: newId(),
-      name: 'Nouveau scénario',
+      name: t('salary.budget.defaultScenarioName'),
       revenues: 0,
       charges: 0,
       reserve: 0,
@@ -1086,7 +1062,7 @@ const BudgetPanel: React.FC<{
     const copy: SalaryBudgetScenario = {
       ...original,
       id: newId(),
-      name: `${original.name} (copie)`,
+      name: t('salary.budget.scenarioCopy', { name: original.name }),
     };
     const scenarios = [...budget.scenarios, copy];
     onChange({ ...board, budget: { ...budget, scenarios } });
@@ -1102,16 +1078,16 @@ const BudgetPanel: React.FC<{
     <Card className="border">
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <CardTitle className="text-lg flex items-center gap-2">
-          <PieChart className="w-4 h-4" /> Budget — masse salariale disponible
+          <PieChart className="w-4 h-4" /> {t('salary.budget.title')}
         </CardTitle>
         <Button variant="outline" size="sm" onClick={addScenario}>
-          <Plus className="w-4 h-4 mr-1" /> Scénario
+          <Plus className="w-4 h-4 mr-1" /> {t('salary.budget.addScenario')}
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         {budget.scenarios.length === 0 && (
           <p className="text-sm text-muted-foreground italic">
-            Aucun scénario. Cliquez sur « Scénario » pour ajouter min/intermédiaire/max.
+            {t('salary.budget.empty')}
           </p>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
@@ -1136,7 +1112,7 @@ const BudgetPanel: React.FC<{
                       variant="ghost"
                       size="sm"
                       onClick={e => { e.stopPropagation(); duplicateScenario(s.id); }}
-                      title="Dupliquer le scénario"
+                      title={t('salary.budget.duplicate')}
                     >
                       <Copy className="w-3 h-3" />
                     </Button>
@@ -1148,10 +1124,10 @@ const BudgetPanel: React.FC<{
                       <Trash2 className="w-3 h-3" />
                     </Button>
                   </div>
-                  <BudgetField label="Revenus / an" value={s.revenues} onChange={v => updateScenario(s.id, { revenues: v })} currency={currency} />
+                  <BudgetField label={t('salary.budget.revenues')} value={s.revenues} onChange={v => updateScenario(s.id, { revenues: v })} currency={currency} />
 
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Frais généraux — mode de calcul</Label>
+                    <Label className="text-xs text-muted-foreground">{t('salary.budget.chargesMode')}</Label>
                     <div className="flex gap-2">
                       <Button
                         type="button"
@@ -1159,7 +1135,7 @@ const BudgetPanel: React.FC<{
                         size="sm"
                         onClick={e => { e.stopPropagation(); updateScenario(s.id, { chargesMode: 'manual' }); }}
                       >
-                        Montant manuel
+                        {t('salary.budget.manualMode')}
                       </Button>
                       <Button
                         type="button"
@@ -1167,7 +1143,7 @@ const BudgetPanel: React.FC<{
                         size="sm"
                         onClick={e => { e.stopPropagation(); updateScenario(s.id, { chargesMode: 'expenseFactor' }); }}
                       >
-                        Facteur de coût
+                        {t('salary.budget.expenseFactorMode')}
                       </Button>
                     </div>
                   </div>
@@ -1176,7 +1152,7 @@ const BudgetPanel: React.FC<{
                     <div className="space-y-1">
                       <div className="flex items-center justify-between gap-2">
                         <Label className="text-xs text-muted-foreground flex-1">
-                          Facteur de coût (défaut: {board.config.expenseFactor?.toFixed(2) ?? '1.80'})
+                          {t('salary.budget.expenseFactorLabel', { n: board.config.expenseFactor?.toFixed(2) ?? '1.80' })}
                         </Label>
                         <Input
                           type="number"
@@ -1188,56 +1164,56 @@ const BudgetPanel: React.FC<{
                         />
                       </div>
                       <p className="text-xs text-muted-foreground italic">
-                        En général les frais généraux représentent 180%–220% du salaire brut.
+                        {t('salary.budget.expenseFactorNote')}
                       </p>
                     </div>
                   ) : (
-                    <BudgetField label="Frais généraux / an" value={s.charges} onChange={v => updateScenario(s.id, { charges: v })} currency={currency} />
+                    <BudgetField label={t('salary.budget.charges')} value={s.charges} onChange={v => updateScenario(s.id, { charges: v })} currency={currency} />
                   )}
 
-                  <BudgetField label="Réserve / an" value={s.reserve} onChange={v => updateScenario(s.id, { reserve: v })} currency={currency} />
+                  <BudgetField label={t('salary.budget.reserve')} value={s.reserve} onChange={v => updateScenario(s.id, { reserve: v })} currency={currency} />
                   <div className="pt-2 border-t space-y-1 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Salaires bruts</span>
+                      <span className="text-muted-foreground">{t('salary.budget.grossSalaries')}</span>
                       <span className="font-medium">{formatCurrency(totals?.totalGrossAnnual ?? 0, currency)}</span>
                     </div>
                     {s.chargesMode === 'expenseFactor' ? (
                       <>
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Frais</span>
+                          <span className="text-muted-foreground">{t('salary.budget.charges')}</span>
                           <span className="font-medium">{formatCurrency(sc.charges, currency)}</span>
                         </div>
                         <div className="flex justify-between pl-4 text-xs text-muted-foreground">
-                          <span>dont Frais généraux (× {((s.expenseFactorOverride ?? board.config.expenseFactor ?? 1) - 1).toFixed(2)})</span>
+                          <span>{t('salary.budget.overheadPortion', { n: ((s.expenseFactorOverride ?? board.config.expenseFactor ?? 1) - 1).toFixed(2) })}</span>
                           <span>{formatCurrency(sc.charges - s.reserve, currency)}</span>
                         </div>
                         <div className="flex justify-between pl-4 text-xs text-muted-foreground">
-                          <span>dont réserve</span>
+                          <span>{t('salary.budget.reservePortion')}</span>
                           <span>{formatCurrency(s.reserve, currency)}</span>
                         </div>
                       </>
                     ) : (
                       <>
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Frais</span>
+                          <span className="text-muted-foreground">{t('salary.budget.charges')}</span>
                           <span className="font-medium">{formatCurrency(sc.charges + sc.reserve, currency)}</span>
                         </div>
                         <div className="flex justify-between pl-4 text-xs text-muted-foreground">
-                          <span>dont Frais généraux</span>
+                          <span>{t('salary.budget.overheadPortionShort')}</span>
                           <span>{formatCurrency(sc.charges, currency)}</span>
                         </div>
                         <div className="flex justify-between pl-4 text-xs text-muted-foreground">
-                          <span>dont réserve</span>
+                          <span>{t('salary.budget.reservePortion')}</span>
                           <span>{formatCurrency(s.reserve, currency)}</span>
                         </div>
                       </>
                     )}
                     <div className="flex justify-between border-t pt-1">
-                      <span className="text-muted-foreground">Coût total</span>
+                      <span className="text-muted-foreground">{t('salary.budget.totalCost')}</span>
                       <span className="font-medium">{formatCurrency(sc.totalCost, currency)}</span>
                     </div>
                     <div className={`flex justify-between font-semibold ${sc.isBalanced ? 'text-green-600' : 'text-red-600'}`}>
-                      <span>{sc.isBalanced ? 'Excédent' : 'Déficit'}</span>
+                      <span>{sc.isBalanced ? t('salary.budget.surplus') : t('salary.budget.deficit')}</span>
                       <span>{formatCurrency(Math.abs(sc.balance), currency)}</span>
                     </div>
                   </div>
@@ -1270,10 +1246,11 @@ const BudgetField: React.FC<{
 
 // ---------- Simulator panel (with integrated projection) ----------
 const SimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) => {
+  const { t } = useTranslation();
   const [workload, setWorkload] = useState(100);
   const [age, setAge] = useState(30);
   const [seniority, setSeniority] = useState(0);
-  const [adjustments, setAdjustments] = useState<EmployerAdjustment[]>([{ id: newId(), label: 'Complément employeur', amount: 0, frequency: 'monthly' }]);
+  const [adjustments, setAdjustments] = useState<EmployerAdjustment[]>([{ id: newId(), label: t('salary.employee.defaultAdjustmentLabel'), amount: 0, frequency: 'monthly' }]);
   const [levels, setLevels] = useState<SalaryEmployeeLevel[]>([]);
   const [years, setYears] = useState(20);
 
@@ -1284,13 +1261,13 @@ const SimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) => {
 
   const simulatedEmployee: SalaryEmployee = useMemo(() => ({
     id: 'sim',
-    name: 'Simulation',
+    name: t('salary.defaults.simulationName'),
     workload,
     age,
     seniority,
     levels,
     employerAdjustments: adjustments,
-  }), [workload, age, seniority, levels, adjustments]);
+  }), [t, workload, age, seniority, levels, adjustments]);
 
   const result = useMemo(
     () => simulateSalary(board.config, board.dimensions, { workload, age, seniority, levels, employerAdjustments: adjustments }),
@@ -1308,30 +1285,30 @@ const SimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) => {
     <Card className="border">
       <CardHeader className="pb-2">
         <CardTitle className="text-lg flex items-center gap-2">
-          <Calculator className="w-4 h-4" /> Simulateur individuel
+          <Calculator className="w-4 h-4" /> {t('salary.simulator.title')}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="space-y-1">
-            <Label>Taux d'activité (%)</Label>
+            <Label>{t('salary.simulator.workload')}</Label>
             <Input type="number" min={0} value={workload} onChange={e => setWorkload(parseFloat(e.target.value) || 0)} />
           </div>
           <div className="space-y-1">
-            <Label>Âge</Label>
+            <Label>{t('salary.simulator.age')}</Label>
             <Input type="number" value={age} onChange={e => setAge(parseInt(e.target.value) || 0)} />
           </div>
           <div className="space-y-1">
-            <Label>Ancienneté (années)</Label>
+            <Label>{t('salary.simulator.seniority')}</Label>
             <Input type="number" min={0} value={seniority} onChange={e => setSeniority(parseInt(e.target.value) || 0)} />
           </div>
           <div className="space-y-1">
-            <Label>Horizon projection (années)</Label>
+            <Label>{t('salary.simulator.projectionYears')}</Label>
             <Input type="number" min={1} max={50} value={years} onChange={e => setYears(Math.max(1, Math.min(50, parseInt(e.target.value) || 1)))} />
           </div>
         </div>
         <div className="space-y-2">
-          <Label>Déterminants</Label>
+          <Label>{t('salary.simulator.determinants')}</Label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {board.dimensions.map(dim => {
               const level = levels.find(l => l.dimensionId === dim.id)?.level ?? 0;
@@ -1342,7 +1319,7 @@ const SimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) => {
                     <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {Array.from({ length: dim.maxLevel + 1 }, (_, i) => (
-                        <SelectItem key={i} value={String(i)}>Niveau {i}</SelectItem>
+                        <SelectItem key={i} value={String(i)}>{t('salary.simulator.levelN', { i })}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -1360,13 +1337,13 @@ const SimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) => {
         {/* Employer adjustments */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label>Compléments employeur</Label>
+            <Label>{t('salary.simulator.adjustments')}</Label>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setAdjustments([...adjustments, { id: newId(), label: 'Complément employeur', amount: 0, frequency: 'monthly' }])}
+              onClick={() => setAdjustments([...adjustments, { id: newId(), label: t('salary.employee.defaultAdjustmentLabel'), amount: 0, frequency: 'monthly' }])}
             >
-              <Plus className="w-3 h-3 mr-1" /> Ajouter
+              <Plus className="w-3 h-3 mr-1" /> {t('salary.simulator.addAdjustment')}
             </Button>
           </div>
           {adjustments.map((adj, i) => (
@@ -1378,7 +1355,7 @@ const SimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) => {
                   next[i] = { ...adj, label: e.target.value };
                   setAdjustments(next);
                 }}
-                placeholder="Libellé"
+                placeholder={t('salary.simulator.adjustmentPlaceholder')}
                 className="flex-1"
               />
               <Input
@@ -1401,9 +1378,9 @@ const SimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) => {
               >
                 <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="monthly">Mensuel</SelectItem>
-                  <SelectItem value="semesterly">Semestriel</SelectItem>
-                  <SelectItem value="annually">Annuel</SelectItem>
+                  <SelectItem value="monthly">{t('salary.frequency.monthly')}</SelectItem>
+                  <SelectItem value="semesterly">{t('salary.frequency.semesterly')}</SelectItem>
+                  <SelectItem value="annually">{t('salary.frequency.annually')}</SelectItem>
                 </SelectContent>
               </Select>
               <Button
@@ -1419,35 +1396,35 @@ const SimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) => {
 
         {/* Results */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 pt-2 border-t">
-          <MetricCard label="Salaire horaire CHF/h" value={formatCurrency(result.gross100Hourly, currency)} />
-          <MetricCard label="Brut mensuel à 100%" value={formatCurrency(result.gross100, currency)} />
-          <MetricCard label="Brut annuel à 100%" value={formatCurrency(result.gross100Annual, currency)} />
-          <MetricCard label="Brut mensuel (ac 13e)" value={formatCurrency(result.grossMonthlyWith13, currency)} />
-          <MetricCard label="Brut mensuel (ac 13e & compl.)" value={formatCurrency(result.grossMonthlyWith13AndAdjustments, currency)} />
-          <MetricCard label="Net ~" value={formatCurrency(result.netMonthlyWith13, currency)} />
+          <MetricCard label={t('salary.metric.hourlyRate')} value={formatCurrency(result.gross100Hourly, currency)} />
+          <MetricCard label={t('salary.metric.grossMonthly100')} value={formatCurrency(result.gross100, currency)} />
+          <MetricCard label={t('salary.metric.grossAnnual100')} value={formatCurrency(result.gross100Annual, currency)} />
+          <MetricCard label={t('salary.metric.grossMonthly13')} value={formatCurrency(result.grossMonthlyWith13, currency)} />
+          <MetricCard label={t('salary.metric.grossMonthly13Adj')} value={formatCurrency(result.grossMonthlyWith13AndAdjustments, currency)} />
+          <MetricCard label={t('salary.metric.netApprox')} value={formatCurrency(result.netMonthlyWith13, currency)} />
         </div>
 
         {/* Projection table */}
         <div className="space-y-2 pt-2 border-t">
           <CardTitle className="text-sm flex items-center gap-2">
-            <TrendingUp className="w-4 h-4" /> Projection sur {years} ans
+            <TrendingUp className="w-4 h-4" /> {t('salary.simulator.projectionTitle', { n: years })}
           </CardTitle>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Année</TableHead>
-                <TableHead className="text-right">Âge</TableHead>
-                <TableHead className="text-right">Ancienneté</TableHead>
-                <TableHead className="text-right bg-muted/50">Salaire horaire CHF/h</TableHead>
-                <TableHead className="text-right">Brut mensuel à 100%</TableHead>
-                <TableHead className="text-right">Brut annuel à 100%</TableHead>
-                <TableHead className="text-right bg-muted/50">Brut mensuel</TableHead>
-                <TableHead className="text-right">Brut mensuel (ac 13e)</TableHead>
-                <TableHead className="text-right bg-muted/50">Brut mensuel (ac 13e & compl.)</TableHead>
-                <TableHead className="text-right">Brut annuel (incl. compl.)</TableHead>
-                <TableHead className="text-right">Net ~</TableHead>
-                <TableHead className="text-right">Coût employeur / an</TableHead>
-                <TableHead className="text-right">Tranches âge</TableHead>
+                <TableHead>{t('salary.projection.year')}</TableHead>
+                <TableHead className="text-right">{t('salary.projection.age')}</TableHead>
+                <TableHead className="text-right">{t('salary.projection.seniority')}</TableHead>
+                <TableHead className="text-right bg-muted/50">{t('salary.projection.hourlyRate')}</TableHead>
+                <TableHead className="text-right">{t('salary.projection.grossMonthly100')}</TableHead>
+                <TableHead className="text-right">{t('salary.projection.grossAnnual100')}</TableHead>
+                <TableHead className="text-right bg-muted/50">{t('salary.projection.grossMonthly')}</TableHead>
+                <TableHead className="text-right">{t('salary.projection.grossMonthly13')}</TableHead>
+                <TableHead className="text-right bg-muted/50">{t('salary.projection.grossMonthly13Adj')}</TableHead>
+                <TableHead className="text-right">{t('salary.projection.grossAnnualAdj')}</TableHead>
+                <TableHead className="text-right">{t('salary.projection.net')}</TableHead>
+                <TableHead className="text-right">{t('salary.projection.employerCostAnnual')}</TableHead>
+                <TableHead className="text-right">{t('salary.projection.ageBrackets')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1478,6 +1455,7 @@ const SimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) => {
 
 // ---------- Team simulator panel ----------
 const TeamSimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) => {
+  const { t } = useTranslation();
   // Local mutable copies — not persisted, just for what-if simulation
   const [simConfig, setSimConfig] = useState<SalaryConfig>({ ...board.config });
   const [simDimensions, setSimDimensions] = useState<SalaryDimension[]>(
@@ -1543,7 +1521,7 @@ const TeamSimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) =
     const copy: SalaryEmployee = {
       ...original,
       id: newId(),
-      name: `${original.name} (copie)`,
+      name: `${original.name} (${t('common.duplicate').toLowerCase()})`,
       levels: [...original.levels],
       employerAdjustments: original.employerAdjustments?.map(a => ({ ...a })),
       _simHidden: false,
@@ -1571,22 +1549,21 @@ const TeamSimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) =
     <Card className="border">
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <CardTitle className="text-lg flex items-center gap-2">
-          <Users className="w-4 h-4" /> Simulateur d'équipe
+          <Users className="w-4 h-4" /> {t('salary.teamSimulator.title')}
         </CardTitle>
         <Button variant="outline" size="sm" onClick={resetToBoard}>
-          <RotateCcw className="w-4 h-4 mr-1" /> Réinitialiser
+          <RotateCcw className="w-4 h-4 mr-1" /> {t('salary.teamSimulator.reset')}
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-xs text-muted-foreground italic">
-          Modifiez les paramètres ci-dessous pour simuler l'impact sur la masse salariale et le budget.
-          Ces modifications sont temporaires et ne sont pas sauvegardées.
+          {t('salary.teamSimulator.help')}
         </p>
 
         {/* Global parameters */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="space-y-1">
-            <Label className="text-xs">Salaire horaire de référence</Label>
+            <Label className="text-xs">{t('salary.teamSimulator.indexHourlyWage')}</Label>
             <Input
               type="number"
               step="0.01"
@@ -1595,7 +1572,7 @@ const TeamSimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) =
             />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Heures par semaine</Label>
+            <Label className="text-xs">{t('salary.teamSimulator.hoursPerWeek')}</Label>
             <Input
               type="number"
               value={simConfig.hoursPerWeek}
@@ -1603,7 +1580,7 @@ const TeamSimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) =
             />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Augmentation ancienneté / an</Label>
+            <Label className="text-xs">{t('salary.teamSimulator.seniorityIncrease')}</Label>
             <Input
               type="number"
               step="0.001"
@@ -1612,7 +1589,7 @@ const TeamSimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) =
             />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Augmentation par tranche d'âge</Label>
+            <Label className="text-xs">{t('salary.teamSimulator.ageIncrease')}</Label>
             <Input
               type="number"
               step="0.001"
@@ -1621,7 +1598,7 @@ const TeamSimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) =
             />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Taux de charges sociales</Label>
+            <Label className="text-xs">{t('salary.teamSimulator.socialCharges')}</Label>
             <Input
               type="number"
               step="0.0001"
@@ -1630,7 +1607,7 @@ const TeamSimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) =
             />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Facteur de coût</Label>
+            <Label className="text-xs">{t('salary.teamSimulator.expenseFactor')}</Label>
             <Input
               type="number"
               step="0.01"
@@ -1642,7 +1619,7 @@ const TeamSimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) =
 
         {/* Dimension step values */}
         <div className="space-y-2">
-          <Label className="text-xs font-medium">Valeur par niveau (déterminants)</Label>
+          <Label className="text-xs font-medium">{t('salary.teamSimulator.dimensionSteps')}</Label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {simDimensions.map(dim => (
               <div key={dim.id} className="flex items-center gap-2">
@@ -1654,7 +1631,7 @@ const TeamSimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) =
                   onChange={e => updateDimension(dim.id, { stepValue: parseFloat(e.target.value) || 0 })}
                   className="w-28 text-right"
                 />
-                <span className="text-xs text-muted-foreground">CHF/niveau</span>
+                <span className="text-xs text-muted-foreground">{t('salary.teamSimulator.chfPerLevel')}</span>
               </div>
             ))}
           </div>
@@ -1663,9 +1640,9 @@ const TeamSimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) =
         {/* Employee list with toggle/add/remove */}
         <div className="space-y-2 pt-2 border-t">
           <div className="flex items-center justify-between">
-            <Label className="text-xs font-medium">Personnel simulé</Label>
+            <Label className="text-xs font-medium">{t('salary.teamSimulator.staff')}</Label>
             <Button variant="outline" size="sm" onClick={addSimEmployee}>
-              <Plus className="w-3 h-3 mr-1" /> Ajouter
+              <Plus className="w-3 h-3 mr-1" /> {t('salary.teamSimulator.add')}
             </Button>
           </div>
           <div className="space-y-1">
@@ -1677,24 +1654,24 @@ const TeamSimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) =
                   className={`flex items-center gap-2 px-2 py-1 rounded border ${emp._simHidden ? 'opacity-40' : ''}`}
                 >
                   <span className="text-sm flex-1 truncate font-medium">
-                    {emp.name || <span className="italic text-muted-foreground">sans nom</span>}
+                    {emp.name || <span className="italic text-muted-foreground">{t('salary.employee.unnamed')}</span>}
                   </span>
                   <span className="text-xs text-muted-foreground">{emp.workload}%</span>
                   {!emp._simHidden && (
                     <span className="text-xs text-right w-28">{formatCurrency(comp.grossMonthly, currency)}</span>
                   )}
                   <div className="flex items-center">
-                    <Button variant="ghost" size="sm" onClick={() => editSimEmployee(emp)} className="w-8 h-8 p-0" title="Modifier">
+                    <Button variant="ghost" size="sm" onClick={() => editSimEmployee(emp)} className="w-8 h-8 p-0" title={t('salary.action.edit')}>
                       <Pencil className="w-3 h-3" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => duplicateSimEmployee(emp.id)} className="w-8 h-8 p-0" title="Dupliquer">
+                    <Button variant="ghost" size="sm" onClick={() => duplicateSimEmployee(emp.id)} className="w-8 h-8 p-0" title={t('salary.action.duplicate')}>
                       <Copy className="w-3 h-3" />
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => toggleEmployee(emp.id)}
-                      title={emp._simHidden ? 'Inclure' : 'Exclure de la simulation'}
+                      title={emp._simHidden ? t('salary.action.include') : t('salary.action.exclude')}
                       className="w-8 h-8 p-0"
                     >
                       {emp._simHidden
@@ -1706,34 +1683,34 @@ const TeamSimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) =
               );
             })}
             {simEmployees.length === 0 && (
-              <p className="text-xs text-muted-foreground italic">Aucun·e employé·e dans la simulation.</p>
+              <p className="text-xs text-muted-foreground italic">{t('salary.teamSimulator.empty')}</p>
             )}
           </div>
         </div>
 
         {/* Results: salary mass */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 pt-2 border-t">
-          <MetricCard label="Effectifs" value={String(totals.headcount)} />
-          <MetricCard label="ETP" value={totals.fte.toFixed(2)} />
-          <MetricCard label="Salaire brut mensuel" value={formatCurrency(totals.totalGrossMonthly, currency)} />
-          <MetricCard label="Salaire brut annuel" value={formatCurrency(totals.totalGrossAnnual, currency)} />
-          <MetricCard label="Net ~" value={formatCurrency(totals.totalNetMonthlyWith13, currency)} />
-          <MetricCard label="Coût employeur / an" value={formatCurrency(totals.totalEmployerCostAnnual, currency)} />
+          <MetricCard label={t('salary.metric.headcount')} value={String(totals.headcount)} />
+          <MetricCard label={t('salary.metric.fte')} value={totals.fte.toFixed(2)} />
+          <MetricCard label={t('salary.teamSimulator.grossMonthly')} value={formatCurrency(totals.totalGrossMonthly, currency)} />
+          <MetricCard label={t('salary.teamSimulator.grossAnnual')} value={formatCurrency(totals.totalGrossAnnual, currency)} />
+          <MetricCard label={t('salary.metric.netApprox')} value={formatCurrency(totals.totalNetMonthlyWith13, currency)} />
+          <MetricCard label={t('salary.metric.employerCostAnnual')} value={formatCurrency(totals.totalEmployerCostAnnual, currency)} />
         </div>
 
         {/* Results: budget impact per scenario */}
         {budgetResults.length > 0 && (
           <div className="pt-2 border-t">
-            <Label className="text-xs font-medium mb-2 block">Impact sur les scénarios budget</Label>
+            <Label className="text-xs font-medium mb-2 block">{t('salary.teamSimulator.budgetImpact')}</Label>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Scénario</TableHead>
-                  <TableHead className="text-right">Revenus</TableHead>
-                  <TableHead className="text-right">Salaires bruts</TableHead>
-                  <TableHead className="text-right">Frais</TableHead>
-                  <TableHead className="text-right">Coût total</TableHead>
-                  <TableHead className="text-right">Solde</TableHead>
+                  <TableHead>{t('salary.budget.scenario')}</TableHead>
+                  <TableHead className="text-right">{t('salary.budget.revenues')}</TableHead>
+                  <TableHead className="text-right">{t('salary.budget.grossSalaries')}</TableHead>
+                  <TableHead className="text-right">{t('salary.budget.charges')}</TableHead>
+                  <TableHead className="text-right">{t('salary.budget.totalCost')}</TableHead>
+                  <TableHead className="text-right">{t('salary.budget.balance')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1809,6 +1786,7 @@ const computeHourlyRate = (
 };
 
 const HourlyRatePanel: React.FC<{ board: SalaryBoardEntity; onSave: (next: SalaryBoardEntity) => void }> = ({ board, onSave }) => {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const saved = board.config.hourlyRatePersona;
   // Default persona: all dimensions at max level, 20 years seniority, age 65
@@ -1861,28 +1839,27 @@ const HourlyRatePanel: React.FC<{ board: SalaryBoardEntity; onSave: (next: Salar
         hourlyRatePersona: { seniorityYears, age, reducedRateMultiplier, riskBenefitMultiplier, levels },
       },
     });
-    toast({ title: 'Nouveau taux horaire sauvegardé', description: 'Les paramètres du taux horaire ont été sauvegardés.' });
+    toast({ title: t('salary.hourlyRate.toastTitle'), description: t('salary.hourlyRate.toastDescription') });
   };
 
   return (
     <Card className="border">
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <CardTitle className="text-lg flex items-center gap-2">
-          <Clock className="w-4 h-4" /> Taux horaire
+          <Clock className="w-4 h-4" /> {t('salary.hourlyRate.title')}
         </CardTitle>
         <Button variant="outline" size="sm" onClick={savePersona}>
-          <Save className="w-4 h-4 mr-1" /> Sauvegarder
+          <Save className="w-4 h-4 mr-1" /> {t('salary.hourlyRate.save')}
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-xs text-muted-foreground italic">
-          Simule le taux horaire facturable basé sur un profil type (tous les déterminants au maximum par défaut),
-          avec ancienneté et tranches d'âge projetées.
+          {t('salary.hourlyRate.help')}
         </p>
 
         {/* Persona: all dimensions */}
         <div className="space-y-2">
-          <Label className="text-xs font-medium">Déterminants du profil</Label>
+          <Label className="text-xs font-medium">{t('salary.hourlyRate.determinants')}</Label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {board.dimensions.map(dim => {
               const level = levels.find(l => l.dimensionId === dim.id)?.level ?? 0;
@@ -1893,7 +1870,7 @@ const HourlyRatePanel: React.FC<{ board: SalaryBoardEntity; onSave: (next: Salar
                     <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {Array.from({ length: dim.maxLevel + 1 }, (_, i) => (
-                        <SelectItem key={i} value={String(i)}>Niveau {i}</SelectItem>
+                        <SelectItem key={i} value={String(i)}>{t('salary.hourlyRate.levelN', { i })}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -1911,15 +1888,15 @@ const HourlyRatePanel: React.FC<{ board: SalaryBoardEntity; onSave: (next: Salar
         {/* Seniority & age */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="space-y-1">
-            <Label className="text-xs">Ancienneté projetée (années)</Label>
+            <Label className="text-xs">{t('salary.hourlyRate.seniorityYears')}</Label>
             <Input type="number" min={0} value={seniorityYears} onChange={e => setSeniorityYears(parseInt(e.target.value) || 0)} />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Âge du persona</Label>
+            <Label className="text-xs">{t('salary.hourlyRate.personaAge')}</Label>
             <Input type="number" min={0} value={age} onChange={e => setAge(parseInt(e.target.value) || 0)} />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Risques & bénéfices (défaut: 0.3 = 30%)</Label>
+            <Label className="text-xs">{t('salary.hourlyRate.riskBenefit')}</Label>
             <Input
               type="number"
               step="0.05"
@@ -1931,7 +1908,7 @@ const HourlyRatePanel: React.FC<{ board: SalaryBoardEntity; onSave: (next: Salar
             />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Multipl. tarif réduit (défaut: 0.5 = 50%)</Label>
+            <Label className="text-xs">{t('salary.hourlyRate.reducedRateMultiplier')}</Label>
             <Input
               type="number"
               step="0.05"
@@ -1946,9 +1923,9 @@ const HourlyRatePanel: React.FC<{ board: SalaryBoardEntity; onSave: (next: Salar
 
         {/* Results */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 pt-2 border-t">
-          <MetricCard label="Salaire brut à 100% projeté" value={formatCurrency(result.projectedAnnualGross, currency)} />
-          <MetricCard label="Taux horaire client (incl. R&B)" value={formatCurrency(riskBenefitRate, currency)} />
-          <MetricCard label="Tarif réduit" value={formatCurrency(reducedRate, currency)} />
+          <MetricCard label={t('salary.hourlyRate.projectedGross')} value={formatCurrency(result.projectedAnnualGross, currency)} />
+          <MetricCard label={t('salary.hourlyRate.clientRate')} value={formatCurrency(riskBenefitRate, currency)} />
+          <MetricCard label={t('salary.hourlyRate.reducedRate')} value={formatCurrency(reducedRate, currency)} />
         </div>
       </CardContent>
     </Card>

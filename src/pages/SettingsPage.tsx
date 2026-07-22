@@ -1,5 +1,6 @@
 
 import { version } from '../../package.json';
+import { useTranslation } from 'react-i18next';
 import { useTasks } from '@/hooks/useTasks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,27 +24,31 @@ import TravelerSettings from '@/components/TravelerSettings';
 import FocusModeSettings from '@/components/FocusModeSettings';
 import { TemplateManager } from '@/components/TemplateManager';
 
-const ALL_MODULES: { id: ModuleId; label: string; description: string; isTopLevel: boolean }[] = [
-  { id: 'celebration', label: 'Celebration', description: 'Fertilization Board for achievements and celebrations', isTopLevel: true },
-  { id: 'dream', label: 'Dream', description: 'Dream Board, Storyboard, and Prioritization views', isTopLevel: true },
-  { id: 'dream.dream', label: 'Dream Board', description: 'Dream Board sub-view within Dream', isTopLevel: false },
-  { id: 'dream.storyboard', label: 'Storyboard', description: 'Storyboard sub-view within Dream', isTopLevel: false },
-  { id: 'dream.prioritization', label: 'Prioritization', description: 'Prioritization sub-view within Dream', isTopLevel: false },
-  { id: 'plan', label: 'Plan', description: 'Circles and Roles organizational views', isTopLevel: true },
-  { id: 'plan.circles', label: 'Circles', description: 'Organizational circles sub-view within Plan', isTopLevel: false },
-  { id: 'plan.roles', label: 'Roles', description: 'Roles sub-view within Plan', isTopLevel: false },
-  { id: 'plan.salary', label: 'Salary System', description: 'Transparent salary calculator sub-view within Plan', isTopLevel: false },
-  { id: 'program', label: 'Program', description: 'Calendar and Resources scheduling views', isTopLevel: true },
-  { id: 'program.calendar', label: 'Calendar', description: 'Calendar sub-view within Program', isTopLevel: false },
-  { id: 'program.resources', label: 'Resources', description: 'Resources sub-view within Program', isTopLevel: false },
-  { id: 'kanban', label: 'Project', description: 'Kanban board for project management', isTopLevel: true },
-  { id: 'focus', label: 'Focus', description: 'Focus mode for concentrated task work', isTopLevel: true },
-  { id: 'timetable', label: 'Timetable', description: 'Time-based view for hourly planning', isTopLevel: true },
-  { id: 'metrics', label: 'Metrics', description: 'Performance metrics and dashboards', isTopLevel: true },
-  { id: 'voting', label: 'Voting', description: 'Run polls and formal decisions with your audience', isTopLevel: true },
+const ALL_MODULES: { id: ModuleId; isTopLevel: boolean }[] = [
+  { id: 'celebration', isTopLevel: true },
+  { id: 'dream', isTopLevel: true },
+  { id: 'dream.dream', isTopLevel: false },
+  { id: 'dream.storyboard', isTopLevel: false },
+  { id: 'dream.prioritization', isTopLevel: false },
+  { id: 'plan', isTopLevel: true },
+  { id: 'plan.circles', isTopLevel: false },
+  { id: 'plan.roles', isTopLevel: false },
+  { id: 'plan.salary', isTopLevel: false },
+  { id: 'program', isTopLevel: true },
+  { id: 'program.calendar', isTopLevel: false },
+  { id: 'program.resources', isTopLevel: false },
+  { id: 'kanban', isTopLevel: true },
+  { id: 'focus', isTopLevel: true },
+  { id: 'timetable', isTopLevel: true },
+  { id: 'metrics', isTopLevel: true },
+  { id: 'voting', isTopLevel: true },
 ];
 
+const moduleLabelKey = (id: ModuleId): string => `settings.module.${id}.label`;
+const moduleDescriptionKey = (id: ModuleId): string => `settings.module.${id}.description`;
+
 const SettingsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { clearAllTasks, clearAllUsers } = useTasks();
   const { settings, updateSettings } = useSettingsContext();
   const [timePickerOpen, setTimePickerOpen] = useState(false);
@@ -63,7 +68,7 @@ const SettingsPage: React.FC = () => {
   };
 
   const handleClearData = async () => {
-    if (window.confirm('Are you sure you want to delete ALL application data? This action cannot be undone and will remove all tasks, settings, users, and boards.')) {
+    if (window.confirm(t('settings.dataManagement.clearAllConfirm'))) {
       const adapter = await getPersistenceAdapter();
       await adapter.clearAllData();
       window.location.reload();
@@ -95,7 +100,7 @@ const SettingsPage: React.FC = () => {
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Settings</h1>
+        <h1 className="text-2xl font-bold">{t('settings.title')}</h1>
       </div>
 
       <Tabs defaultValue="user" className="flex-1 flex flex-col">
@@ -104,23 +109,23 @@ const SettingsPage: React.FC = () => {
             value="user"
             className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
           >
-            User Settings
+            {t('settings.tabs.user')}
           </TabsTrigger>
           <TabsTrigger
             value="workspace"
             className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-2"
           >
-            Workspace Settings
+            {t('settings.tabs.workspace')}
           </TabsTrigger>
         </TabsList>
 
         <div className="flex-1 overflow-auto py-6">
           <TabsContent value="user" className="space-y-6 mt-0">
             <div>
-              <h2 className="text-xl font-semibold mb-4">Personal Preferences</h2>
+              <h2 className="text-xl font-semibold mb-4">{t('settings.personalPreferences.title')}</h2>
               <div className="space-y-6 max-w-md">
                 <div>
-                  <Label htmlFor="split-time">Day Split Time</Label>
+                  <Label htmlFor="split-time">{t('settings.personalPreferences.daySplitTime')}</Label>
                   <div className="mt-2">
                     <Button
                       variant="outline"
@@ -128,17 +133,17 @@ const SettingsPage: React.FC = () => {
                       onClick={() => setTimePickerOpen(true)}
                     >
                       <Clock className="mr-2 h-4 w-4" />
-                      {settings.splitTime || "Set time..."}
+                      {settings.splitTime || t('settings.personalPreferences.setTime')}
                     </Button>
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Set the time used to split the day into two halves for the timetable view.
+                    {t('settings.personalPreferences.daySplitTimeHelp')}
                   </p>
                 </div>
 
                 <div>
                   <Label className="block text-sm font-medium mb-1">
-                    User Workload Percentage
+                    {t('settings.personalPreferences.userWorkloadLabel')}
                   </Label>
                   <div className="flex items-center space-x-2 mt-2">
                     <Input
@@ -152,13 +157,13 @@ const SettingsPage: React.FC = () => {
                     <span>%</span>
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Your workload percentage (default: 60%)
+                    {t('settings.personalPreferences.userWorkloadHelp')}
                   </p>
                 </div>
 
                 <div>
                   <Label className="block text-sm font-medium mb-1">
-                    User Trigram
+                    {t('settings.personalPreferences.userTrigramLabel')}
                   </Label>
                   <Input
                     type="text"
@@ -166,16 +171,16 @@ const SettingsPage: React.FC = () => {
                     value={settings.trigram || ''}
                     onChange={(e) => handleSettingChange('trigram', e.target.value.toUpperCase())}
                     className="w-24 mt-2 uppercase"
-                    placeholder="XYZ"
+                    placeholder={t('settings.personalPreferences.trigramPlaceholder')}
                   />
                   <p className="text-sm text-muted-foreground mt-1">
-                    Your 3-letter identifier (e.g., MAB)
+                    {t('settings.personalPreferences.trigramHelp')}
                   </p>
                 </div>
 
                 <div>
                   <Label className="block text-sm font-medium mb-1">
-                    Start of Week
+                    {t('settings.personalPreferences.startOfWeekLabel')}
                   </Label>
                   <RadioGroup
                     value={settings.weekStartDay?.toString() || "1"}
@@ -184,21 +189,21 @@ const SettingsPage: React.FC = () => {
                   >
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="1" id="week-start-monday" />
-                      <Label htmlFor="week-start-monday">Monday</Label>
+                      <Label htmlFor="week-start-monday">{t('common.day.monday')}</Label>
                     </div>
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="0" id="week-start-sunday" />
-                      <Label htmlFor="week-start-sunday">Sunday</Label>
+                      <Label htmlFor="week-start-sunday">{t('common.day.sunday')}</Label>
                     </div>
                   </RadioGroup>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Choose which day the week starts on.
+                    {t('settings.personalPreferences.startOfWeekHelp')}
                   </p>
                 </div>
 
                 <div>
                   <Label className="block text-sm font-medium mb-1">
-                    Default Plan View
+                    {t('settings.personalPreferences.defaultPlanViewLabel')}
                   </Label>
                   <RadioGroup
                     value={settings.defaultPlanView || "week"}
@@ -207,33 +212,33 @@ const SettingsPage: React.FC = () => {
                   >
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="week" id="plan-view-week" />
-                      <Label htmlFor="plan-view-week">Week</Label>
+                      <Label htmlFor="plan-view-week">{t('common.view.week')}</Label>
                     </div>
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="month" id="plan-view-month" />
-                      <Label htmlFor="plan-view-month">Month</Label>
+                      <Label htmlFor="plan-view-month">{t('common.view.month')}</Label>
                     </div>
                   </RadioGroup>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Choose the default view for the Program/Plan page.
+                    {t('settings.personalPreferences.defaultPlanViewHelp')}
                   </p>
                 </div>
 
                 <div>
                   <Label className="block text-sm font-medium mb-1">
-                    Card Compactness
+                    {t('settings.personalPreferences.cardCompactnessLabel')}
                   </Label>
                   <div className="mt-2">
                     <CompactnessSelector />
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Adjust the compactness of task cards.
+                    {t('settings.personalPreferences.cardCompactnessHelp')}
                   </p>
                 </div>
 
                 <div>
                   <Label className="block text-sm font-medium mb-1">
-                    Preferred Working Days
+                    {t('settings.personalPreferences.preferredWorkingDaysLabel')}
                   </Label>
                   <div className="mt-2">
                     <DaySelector
@@ -242,31 +247,31 @@ const SettingsPage: React.FC = () => {
                     />
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Select the days you typically work.
+                    {t('settings.personalPreferences.preferredWorkingDaysHelp')}
                   </p>
                 </div>
               </div>
             </div>
 
             <div className="pt-6 border-t">
-              <h2 className="text-xl font-semibold mb-4">Personal Location Settings</h2>
+              <h2 className="text-xl font-semibold mb-4">{t('settings.personalLocation.title')}</h2>
               <p className="text-sm text-muted-foreground mb-4">
-                Override workspace defaults with your specific location settings.
+                {t('settings.personalLocation.help')}
               </p>
               <div className="space-y-6 max-w-md">
                 <div>
                   <Label className="block text-sm font-medium mb-1">
-                    My Timezone
+                    {t('settings.personalLocation.timezoneLabel')}
                   </Label>
                   <Input
                     type="text"
                     value={settings.timezone}
                     onChange={(e) => handleSettingChange('timezone', e.target.value, 'user')}
                     className="mt-2"
-                    placeholder="Europe/Zurich"
+                    placeholder={t('settings.personalLocation.timezonePlaceholder')}
                   />
                   <p className="text-sm text-muted-foreground mt-1">
-                    Your local timezone (overrides workspace default)
+                    {t('settings.personalLocation.timezoneHelp')}
                   </p>
                 </div>
               </div>
@@ -285,9 +290,9 @@ const SettingsPage: React.FC = () => {
             </div>
 
             <div className="pt-6 border-t">
-              <h2 className="text-xl font-semibold mb-2">My Personal Templates</h2>
+              <h2 className="text-xl font-semibold mb-2">{t('settings.personalTemplates.title')}</h2>
               <p className="text-muted-foreground mb-4">
-                Your personal templates, complementing the workspace templates. Available only to you.
+                {t('settings.personalTemplates.help')}
               </p>
               <TemplateManager scope="user" />
             </div>
@@ -295,16 +300,16 @@ const SettingsPage: React.FC = () => {
 
           <TabsContent value="workspace" className="space-y-8 mt-0">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>Version:</span>
+              <span>{t('settings.workspace.version')}</span>
               <span className="font-mono bg-muted px-2 py-0.5 rounded">v{version}</span>
             </div>
 
             <div>
-              <h2 className="text-xl font-semibold mb-4">Metrics Goals</h2>
+              <h2 className="text-xl font-semibold mb-4">{t('settings.metricsGoals.title')}</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
                 <div>
                   <Label className="block text-sm font-medium mb-1">
-                    Weeks Computation
+                    {t('settings.metricsGoals.weeksComputationLabel')}
                   </Label>
                   <Input
                     type="number"
@@ -314,13 +319,13 @@ const SettingsPage: React.FC = () => {
                     className="w-24 mt-2"
                   />
                   <p className="text-sm text-muted-foreground mt-1">
-                    Number of weeks to compute metrics (default: 4 weeks)
+                    {t('settings.metricsGoals.weeksComputationHelp')}
                   </p>
                 </div>
 
                 <div>
                   <Label className="block text-sm font-medium mb-1">
-                    High Impact Task Goal
+                    {t('settings.metricsGoals.highImpactTaskGoalLabel')}
                   </Label>
                   <Input
                     type="number"
@@ -331,13 +336,13 @@ const SettingsPage: React.FC = () => {
                     className="w-24 mt-2"
                   />
                   <p className="text-sm text-muted-foreground mt-1">
-                    Target high impact tasks per EFT (default: 3.63)
+                    {t('settings.metricsGoals.highImpactTaskGoalHelp')}
                   </p>
                 </div>
 
                 <div>
                   <Label className="block text-sm font-medium mb-1">
-                    Failure Rate Goal (Incident on Delivery)
+                    {t('settings.metricsGoals.failureRateGoalLabel')}
                   </Label>
                   <div className="flex items-center space-x-2 mt-2">
                     <Input
@@ -352,13 +357,13 @@ const SettingsPage: React.FC = () => {
                     <span>%</span>
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Target failure rate percentage (default: 5%)
+                    {t('settings.metricsGoals.failureRateGoalHelp')}
                   </p>
                 </div>
 
                 <div>
                   <Label className="block text-sm font-medium mb-1">
-                    Quality of Life Index Goal
+                    {t('settings.metricsGoals.qliGoalLabel')}
                   </Label>
                   <div className="flex items-center space-x-2 mt-2">
                     <Input
@@ -372,13 +377,13 @@ const SettingsPage: React.FC = () => {
                     <span>%</span>
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Target QLI score (default: 60%)
+                    {t('settings.metricsGoals.qliGoalHelp')}
                   </p>
                 </div>
 
                 <div>
                   <Label className="block text-sm font-medium mb-1">
-                    New Capabilities Goal
+                    {t('settings.metricsGoals.newCapabilitiesGoalLabel')}
                   </Label>
                   <div className="flex items-center space-x-2 mt-2">
                     <Input
@@ -392,18 +397,18 @@ const SettingsPage: React.FC = () => {
                     <span>%</span>
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Target time spent on new capabilities (default: 57.98%)
+                    {t('settings.metricsGoals.newCapabilitiesGoalHelp')}
                   </p>
                 </div>
               </div>
             </div>
 
             <div className="pt-6 border-t">
-              <h2 className="text-xl font-semibold mb-4">Time & Hours</h2>
+              <h2 className="text-xl font-semibold mb-4">{t('settings.timeHours.title')}</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
                 <div>
                   <Label className="block text-sm font-medium mb-1">
-                    Standard Daily Hours
+                    {t('settings.timeHours.standardDailyHoursLabel')}
                   </Label>
                   <Input
                     type="number"
@@ -414,13 +419,13 @@ const SettingsPage: React.FC = () => {
                     className="w-24 mt-2"
                   />
                   <p className="text-sm text-muted-foreground mt-1">
-                    Standard working hours per day (default: 8)
+                    {t('settings.timeHours.standardDailyHoursHelp')}
                   </p>
                 </div>
 
                 <div>
                   <Label className="block text-sm font-medium mb-1">
-                    Vacation Limit Multiplier
+                    {t('settings.timeHours.vacationLimitMultiplierLabel')}
                   </Label>
                   <Input
                     type="number"
@@ -431,13 +436,13 @@ const SettingsPage: React.FC = () => {
                     className="w-24 mt-2"
                   />
                   <p className="text-sm text-muted-foreground mt-1">
-                    Multiplier for max vacation balance (default: 1.5)
+                    {t('settings.timeHours.vacationLimitMultiplierHelp')}
                   </p>
                 </div>
 
                 <div>
                   <Label className="block text-sm font-medium mb-1">
-                    Hourly Balance Upper Limit Multiplier
+                    {t('settings.timeHours.hourlyBalanceUpperLabel')}
                   </Label>
                   <Input
                     type="number"
@@ -448,13 +453,13 @@ const SettingsPage: React.FC = () => {
                     className="w-24 mt-2"
                   />
                   <p className="text-sm text-muted-foreground mt-1">
-                    Multiplier for upper hourly balance limit (default: 0.5)
+                    {t('settings.timeHours.hourlyBalanceUpperHelp')}
                   </p>
                 </div>
 
                 <div>
                   <Label className="block text-sm font-medium mb-1">
-                    Hourly Balance Lower Limit Multiplier
+                    {t('settings.timeHours.hourlyBalanceLowerLabel')}
                   </Label>
                   <Input
                     type="number"
@@ -464,63 +469,63 @@ const SettingsPage: React.FC = () => {
                     className="w-24 mt-2"
                   />
                   <p className="text-sm text-muted-foreground mt-1">
-                    Multiplier for lower hourly balance limit (default: -0.5)
+                    {t('settings.timeHours.hourlyBalanceLowerHelp')}
                   </p>
                 </div>
 
                 <div>
                   <Label className="block text-sm font-medium mb-1">
-                    Timezone
+                    {t('settings.timeHours.timezoneLabel')}
                   </Label>
                   <Input
                     type="text"
                     value={settings.timezone}
                     onChange={(e) => handleSettingChange('timezone', e.target.value, 'global')}
                     className="mt-2"
-                    placeholder="Europe/Zurich"
+                    placeholder={t('settings.timeHours.timezonePlaceholder')}
                   />
                   <p className="text-sm text-muted-foreground mt-1">
-                    IANA Timezone identifier (default: Europe/Zurich)
+                    {t('settings.timeHours.timezoneHelp')}
                   </p>
                 </div>
 
                 <div>
                   <Label className="block text-sm font-medium mb-1">
-                    Country
+                    {t('settings.timeHours.countryLabel')}
                   </Label>
                   <Input
                     type="text"
                     value={settings.country}
                     onChange={(e) => handleSettingChange('country', e.target.value, 'global')}
                     className="w-24 mt-2"
-                    placeholder="CH"
+                    placeholder={t('settings.timeHours.countryPlaceholder')}
                     maxLength={2}
                   />
                   <p className="text-sm text-muted-foreground mt-1">
-                    Country code for holidays (default: CH)
+                    {t('settings.timeHours.countryHelp')}
                   </p>
                 </div>
 
                 <div>
                   <Label className="block text-sm font-medium mb-1">
-                    Region
+                    {t('settings.timeHours.regionLabel')}
                   </Label>
                   <Input
                     type="text"
                     value={settings.region}
                     onChange={(e) => handleSettingChange('region', e.target.value, 'global')}
                     className="w-24 mt-2"
-                    placeholder="BE"
+                    placeholder={t('settings.timeHours.regionPlaceholder')}
                     maxLength={2}
                   />
                   <p className="text-sm text-muted-foreground mt-1">
-                    Region code for holidays (default: BE)
+                    {t('settings.timeHours.regionHelp')}
                   </p>
                 </div>
 
                 <div>
                   <Label className="block text-sm font-medium mb-1">
-                    Card Aging Base Days
+                    {t('settings.timeHours.cardAgingBaseDaysLabel')}
                   </Label>
                   <Input
                     type="number"
@@ -531,13 +536,13 @@ const SettingsPage: React.FC = () => {
                     className="w-24 mt-2"
                   />
                   <p className="text-sm text-muted-foreground mt-1">
-                    Days before cards show aging effects. Set to 0 to disable. (default: 30). Use decimals like 0.005 for testing (~7 min).
+                    {t('settings.timeHours.cardAgingBaseDaysHelp')}
                   </p>
                 </div>
 
                 <div>
                   <Label className="block text-sm font-medium mb-1">
-                    WIP Limit Per User
+                    {t('settings.timeHours.wipLimitPerUserLabel')}
                   </Label>
                   <Input
                     type="number"
@@ -548,13 +553,13 @@ const SettingsPage: React.FC = () => {
                     className="w-24 mt-2"
                   />
                   <p className="text-sm text-muted-foreground mt-1">
-                    Maximum tasks in WIP per user. Set to 0 to disable. (default: 5). Hard block — tasks cannot enter WIP when at capacity.
+                    {t('settings.timeHours.wipLimitPerUserHelp')}
                   </p>
                 </div>
 
                 <div>
                   <Label className="block text-sm font-medium mb-1">
-                    Non-Action Period (hours)
+                    {t('settings.timeHours.nonActionPeriodLabel')}
                   </Label>
                   <Input
                     type="number"
@@ -565,32 +570,32 @@ const SettingsPage: React.FC = () => {
                     className="w-24 mt-2"
                   />
                   <p className="text-sm text-muted-foreground mt-1">
-                    Hours of inactivity before the mood selector appears. Set to 0 to disable. (default: 3).
+                    {t('settings.timeHours.nonActionPeriodHelp')}
                   </p>
                 </div>
               </div>
             </div>
 
             <div className="pt-6 border-t">
-              <h2 className="text-xl font-semibold mb-2">Task Templates</h2>
+              <h2 className="text-xl font-semibold mb-2">{t('settings.workspace.taskTemplatesTitle')}</h2>
               <p className="text-muted-foreground mb-4">
-                Templates scaffold common workflows as a parent task with predefined children. Any team member can create workspace templates.
+                {t('settings.workspace.taskTemplatesHelp')}
               </p>
               <TemplateManager scope="workspace" />
             </div>
 
             <div className="pt-6 border-t">
-              <h2 className="text-xl font-semibold mb-4">Module Management</h2>
+              <h2 className="text-xl font-semibold mb-4">{t('settings.moduleManagement.title')}</h2>
               <p className="text-muted-foreground mb-4">
-                Enable or disable modules to customize your workspace. Disabled modules are hidden from navigation and the umbrella menu.
+                {t('settings.moduleManagement.help')}
               </p>
               <div className="space-y-4 max-w-2xl">
                 {ALL_MODULES.filter(m => m.isTopLevel).map(module => (
                   <div key={module.id}>
                     <div className="flex items-center justify-between">
                       <div>
-                        <Label className="text-sm font-medium">{module.label}</Label>
-                        <p className="text-xs text-muted-foreground">{module.description}</p>
+                        <Label className="text-sm font-medium">{t(moduleLabelKey(module.id))}</Label>
+                        <p className="text-xs text-muted-foreground">{t(moduleDescriptionKey(module.id))}</p>
                       </div>
                       <Switch
                         checked={!settings.disabledModules?.includes(module.id)}
@@ -608,8 +613,8 @@ const SettingsPage: React.FC = () => {
                         {ALL_MODULES.filter(m => !m.isTopLevel && m.id.startsWith(module.id + '.')).map(subModule => (
                           <div key={subModule.id} className="flex items-center justify-between">
                             <div>
-                              <Label className="text-sm font-medium">{subModule.label}</Label>
-                              <p className="text-xs text-muted-foreground">{subModule.description}</p>
+                              <Label className="text-sm font-medium">{t(moduleLabelKey(subModule.id))}</Label>
+                              <p className="text-xs text-muted-foreground">{t(moduleDescriptionKey(subModule.id))}</p>
                             </div>
                             <Switch
                               checked={!settings.disabledModules?.includes(subModule.id)}
@@ -635,15 +640,15 @@ const SettingsPage: React.FC = () => {
             </div>
 
             <div className="pt-6 border-t">
-              <h2 className="text-xl font-semibold mb-4">Data Management</h2>
+              <h2 className="text-xl font-semibold mb-4">{t('settings.dataManagement.title')}</h2>
               <p className="text-muted-foreground mb-4">
-                Export, import, or clear all tasks and timer data from the application.
+                {t('settings.dataManagement.help')}
               </p>
               <div className="flex space-x-2">
                 <DataImporter />
                 <DataExporter />
                 <Button variant="destructive" onClick={handleClearData}>
-                  Clear All Data
+                  {t('settings.dataManagement.clearAllButton')}
                 </Button>
               </div>
             </div>

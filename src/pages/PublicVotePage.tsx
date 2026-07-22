@@ -1,7 +1,8 @@
 import * as React from "react";
+import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 import { VoteEntity, VoteResponseEntity, VoteProposal, VoteLoop } from "@/lib/persistence-types";
-import { VOTING_MODES_LABELS, MJ_SCALE } from "@/components/planView/constants";
+import { MJ_SCALE } from "@/components/planView/constants";
 import { tallyThumbsUp as tallyThumbsUpShared, tallyUDNeutral as tallyUDNeutralShared, tallyPoints as tallyPointsShared, tallyMajorityJudgment as tallyMJShared, tallyConsentLoop as tallyConsentLoopShared, getBestConsentRound } from "@/lib/vote-tally";
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { Button } from "@/components/ui/button";
@@ -184,6 +185,7 @@ function ensureVoterToken(slug: string): string {
 
 const PublicVotePage: React.FC = () => {
   const ts = getVotingStrings();
+  const { t: tt } = useTranslation();
   const { slug } = useParams<{ slug: string }>();
   const [vote, setVote] = React.useState<VoteEntity | null>(null);
   const [responses, setResponses] = React.useState<VoteResponseEntity[]>([]);
@@ -483,6 +485,13 @@ const PublicVotePage: React.FC = () => {
   const isAnonymous = vote?.config.isAnonymous ?? true;
 
   const mode = vote?.config.mode;
+  const mjGradeLabel = React.useCallback(
+    (value: number) => {
+      const key = value === -1 ? "reject" : value === 0 ? "insufficient" : value === 1 ? "passable" : value === 2 ? "acceptable" : value === 3 ? "good" : "excellent";
+      return tt(`voting.mjGrade.${key}`);
+    },
+    [tt],
+  );
   const showObjectionNudge =
     vote?.config.requireObjectionComment &&
     (mode === "THUMBS_UD_NEUTRAL" ||
@@ -581,7 +590,7 @@ const PublicVotePage: React.FC = () => {
               </p>
             )}
             <p className="text-xs text-blue-500 mt-2">
-              Finalized {new Date(vote.outcome.finalizedAt).toLocaleString()}
+              {tt("voting.finalizedPrefix")} {new Date(vote.outcome.finalizedAt).toLocaleString()}
             </p>
           </div>
         )}
@@ -605,7 +614,7 @@ const PublicVotePage: React.FC = () => {
               {ts.kinds[vote.config.kind] || vote.config.kind}
             </Badge>
             <Badge variant="outline">
-              {VOTING_MODES_LABELS[vote.config.mode] || vote.config.mode}
+              {tt(`voting.mode.${vote.config.mode === "THUMBS_UP" ? "thumbsUp" : vote.config.mode === "THUMBS_UD_NEUTRAL" ? "thumbsUdNeutral" : vote.config.mode === "POINTS" ? "points" : vote.config.mode === "MAJORITY_JUDGMENT" ? "majorityJudgment" : "consentLoop"}`)}
             </Badge>
           </div>
 
@@ -620,7 +629,7 @@ const PublicVotePage: React.FC = () => {
             {vote.config.closeAt && (
               <span className="flex items-center gap-1">
                 <Clock className="w-4 h-4" />
-                Closes {new Date(vote.config.closeAt).toLocaleString()}
+                {tt("voting.closesPrefix")} {new Date(vote.config.closeAt).toLocaleString()}
               </span>
             )}
             <span className="flex items-center gap-1">
@@ -676,7 +685,7 @@ const PublicVotePage: React.FC = () => {
                 className="bg-white rounded-lg shadow-sm border p-5"
               >
                 <h3 className="text-lg font-medium text-gray-900 mb-1">
-                  Proposal {proposal.position + 1}
+                  {tt("voting.proposalN", { n: proposal.position + 1 })}
                 </h3>
                 {proposal.description && (
                   <p className="text-sm text-gray-500 mb-3">
@@ -772,7 +781,7 @@ const PublicVotePage: React.FC = () => {
                           }
                         >
                           <ThumbsDown className="w-4 h-4 mr-1" />
-                          No
+                          {tt("voting.no")}
                         </Button>
                         <Button
                           size="sm"
@@ -790,7 +799,7 @@ const PublicVotePage: React.FC = () => {
                           }
                         >
                           <Minus className="w-4 h-4 mr-1" />
-                          Neutral
+                          {tt("voting.neutral")}
                         </Button>
                         <Button
                           size="sm"
@@ -808,7 +817,7 @@ const PublicVotePage: React.FC = () => {
                           }
                         >
                           <ThumbsUp className="w-4 h-4 mr-1" />
-                          Yes
+                          {tt("voting.yes")}
                         </Button>
                       </div>
                     )}
@@ -866,13 +875,13 @@ const PublicVotePage: React.FC = () => {
                                 : `${grade.color} opacity-70 hover:opacity-100`
                             }`}
                           >
-                            {grade.icon} {grade.label}
+                            {grade.icon} {mjGradeLabel(grade.value)}
                           </button>
                         ))}
                       </div>
-                    )}
-                  </div>
-                )}
+                     )}
+                   </div>
+                 )}
 
                 {showResults && !isClosed && (
                   <div className="mt-4 pt-3 border-t">
@@ -955,7 +964,7 @@ const PublicVotePage: React.FC = () => {
                             <span
                               className={`px-2 py-0.5 rounded text-xs text-white ${medianGrade?.color || "bg-gray-500"}`}
                             >
-                              {medianGrade?.icon} {medianGrade?.label}
+                              {medianGrade?.icon} {medianGrade ? mjGradeLabel(medianGrade.value) : ""}
                             </span>
                           </div>
                           <div className="flex h-3 rounded-full overflow-hidden">
@@ -966,7 +975,7 @@ const PublicVotePage: React.FC = () => {
                                 style={{
                                   width: `${((t.distribution[grade.value] || 0) / (responses.length || 1)) * 100}%`,
                                 }}
-                                title={`${grade.label}: ${t.distribution[grade.value] || 0}`}
+                                title={`${mjGradeLabel(grade.value)}: ${t.distribution[grade.value] || 0}`}
                               />
                             ))}
                           </div>
@@ -1015,9 +1024,9 @@ const PublicVotePage: React.FC = () => {
                   <div key={proposal.id} className="bg-white rounded-lg shadow-sm border p-5">
                     <h4 className="text-base font-medium text-gray-900 mb-2">
                       {activeProposals.length > 1 && (
-                        <span className="text-gray-500 font-normal mr-1">Proposal {proposalIndex + 1}:</span>
+                        <span className="text-gray-500 font-normal mr-1">{tt("voting.proposalNColon", { n: proposalIndex + 1 })}</span>
                       )}
-                      {proposal.description || `Proposal ${proposalIndex + 1}`}
+                      {proposal.description || tt("voting.proposalN", { n: proposalIndex + 1 })}
                     </h4>
 
                     {currentOpenLoop && (
@@ -1048,7 +1057,7 @@ const PublicVotePage: React.FC = () => {
                                 : `${grade.color} opacity-70 hover:opacity-100`
                             }`}
                           >
-                            {grade.icon} {grade.label}
+                            {grade.icon} {mjGradeLabel(grade.value)}
                           </button>
                         ))}
                       </div>
@@ -1066,7 +1075,7 @@ const PublicVotePage: React.FC = () => {
                               <div className="flex items-center gap-2">
                                 <span className="text-sm">{ts.labels.medianColon}</span>
                                 <span className={`px-2 py-0.5 rounded text-xs text-white ${medianGrade?.color || "bg-gray-500"}`}>
-                                  {medianGrade?.icon} {medianGrade?.label}
+                              {medianGrade?.icon} {medianGrade ? mjGradeLabel(medianGrade.value) : ""}
                                 </span>
                               </div>
                               <div className="flex h-3 rounded-full overflow-hidden">
@@ -1078,7 +1087,7 @@ const PublicVotePage: React.FC = () => {
                                       key={grade.value}
                                       className={`${grade.color}`}
                                       style={{ width: `${total > 0 ? (count / total) * 100 : 0}%` }}
-                                      title={`${grade.label}: ${count}`}
+                                      title={`${mjGradeLabel(grade.value)}: ${count}`}
                                     />
                                   );
                                 })}
@@ -1106,8 +1115,8 @@ const PublicVotePage: React.FC = () => {
                       ) : (
                         <ChevronDown className="w-4 h-4" />
                       )}
-                      {showPrevRounds ? ts.buttons.hide : ts.buttons.show} previous rounds
-                      {` (${closedLoops.length} closed)`}
+                      {showPrevRounds ? ts.buttons.hide : ts.buttons.show} {tt("voting.previousRounds")}
+                      {tt("voting.nClosed", { n: closedLoops.length })}
                     </button>
 
                     {showPrevRounds && allTally.proposals.some((p) => p.perRound.length > 0) && (
@@ -1123,7 +1132,7 @@ const PublicVotePage: React.FC = () => {
                               {activeProposals.length > 1 && (
                                 <div className="flex items-center gap-2 mb-1">
                                   <h5 className="text-xs font-medium text-gray-500">
-                                    {proposal.description || `Proposal ${activeProposals.indexOf(proposal) + 1}`}
+                                    {proposal.description || tt("voting.proposalN", { n: activeProposals.indexOf(proposal) + 1 })}
                                   </h5>
                                   {[...loops].filter((l) => l.proposalId === proposal.id && l.closedAt).length >= 2 && (
                                     <button
@@ -1173,7 +1182,7 @@ const PublicVotePage: React.FC = () => {
                                         >
                                           <div className="flex items-center justify-center gap-1">
                                             <div className={`w-3 h-3 rounded ${grade.color}`}></div>
-                                            <span className="text-[10px]">{grade.label}</span>
+                                            <span className="text-[10px]">{mjGradeLabel(grade.value)}</span>
                                           </div>
                                         </th>
                                       ))}
@@ -1214,7 +1223,7 @@ const PublicVotePage: React.FC = () => {
                                             <td className="py-2 px-3 border-b text-center">
                                               {medianGrade && (
                                                 <span className={`inline-block px-2 py-0.5 rounded text-xs text-white ${medianGrade.color}`}>
-                                                  {medianGrade.icon} {medianGrade.label}
+                                                  {medianGrade.icon} {medianGrade ? mjGradeLabel(medianGrade.value) : ""}
                                                 </span>
                                               )}
                                             </td>
@@ -1242,7 +1251,7 @@ const PublicVotePage: React.FC = () => {
                                                             : ""
                                                         }`}
                                                         style={{ width: `${item.percentage}%` }}
-                                                        title={`${item.label}: ${item.count} votes (${item.percentage.toFixed(1)}%)`}
+                                                        title={`${mjGradeLabel(item.value)}: ${item.count} votes (${item.percentage.toFixed(1)}%)`}
                                                       >
                                                         {item.percentage >= 10 && (
                                                           <span
@@ -1291,8 +1300,7 @@ const PublicVotePage: React.FC = () => {
               </Button>
             </div>
             <p className="text-xs text-gray-400">
-              {ts.messages.allocatePointsBudget} Total
-              budget: {vote.config.maxPointsPerUser || 10} {ts.labels.points}.
+              {ts.messages.allocatePointsBudget} {tt("voting.totalBudget")} {vote.config.maxPointsPerUser || 10} {ts.labels.points}.
             </p>
           </div>
         )}
@@ -1385,7 +1393,7 @@ const PublicVotePage: React.FC = () => {
                 {sortedFinalProposals.map((proposal) => (
                   <div key={proposal.id} className="border rounded-lg p-3">
                     <h4 className="text-sm font-medium text-gray-900 mb-2">
-                      {proposal.description?.trim() || `Proposal ${proposal.position + 1}`}
+                      {proposal.description?.trim() || tt("voting.proposalN", { n: proposal.position + 1 })}
                     </h4>
                     {proposal.content && <ProposalContentDisplay content={proposal.content} className="mb-2" />}
                     {mode === "THUMBS_UP" && (() => {
@@ -1461,7 +1469,7 @@ const PublicVotePage: React.FC = () => {
                             <span
                               className={`px-2 py-0.5 rounded text-xs text-white ${medianGrade?.color || "bg-gray-500"}`}
                             >
-                              {medianGrade?.icon} {medianGrade?.label}
+                              {medianGrade?.icon} {medianGrade ? mjGradeLabel(medianGrade.value) : ""}
                             </span>
                           </div>
                           <div className="flex h-3 rounded-full overflow-hidden">
@@ -1472,7 +1480,7 @@ const PublicVotePage: React.FC = () => {
                                 style={{
                                   width: `${((t.distribution[grade.value] || 0) / (responses.length || 1)) * 100}%`,
                                 }}
-                                title={`${grade.label}: ${t.distribution[grade.value] || 0}`}
+                                title={`${mjGradeLabel(grade.value)}: ${t.distribution[grade.value] || 0}`}
                               />
                             ))}
                           </div>
@@ -1533,7 +1541,7 @@ const PublicVotePage: React.FC = () => {
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <h4 className="text-sm font-medium text-gray-900">
-                              {proposal.description?.trim() || `Proposal ${proposal.position + 1}`}
+                              {proposal.description?.trim() || tt("voting.proposalN", { n: proposal.position + 1 })}
                             </h4>
                             {loops.filter((l) => l.proposalId === proposal.id && l.closedAt).length >= 2 && (
                               <button
@@ -1577,7 +1585,7 @@ const PublicVotePage: React.FC = () => {
                               <span className="text-xs text-gray-600">{ts.labels.medianColon}</span>
                               {medianGrade && (
                                 <span className={`px-2 py-0.5 rounded text-xs text-white ${medianGrade.color}`}>
-                                  {medianGrade.icon} {medianGrade.label}
+                                  {medianGrade.icon} {medianGrade ? mjGradeLabel(medianGrade.value) : ""}
                                 </span>
                               )}
                               <span className="text-xs text-gray-500">
@@ -1598,7 +1606,7 @@ const PublicVotePage: React.FC = () => {
                                       isMedian ? "ring-2 ring-white z-20 shadow-md scale-y-125 mx-0.5 rounded-sm origin-center" : ""
                                     }`}
                                     style={{ width: `${item.percentage}%` }}
-                                    title={`${item.label}: ${item.count} votes (${item.percentage.toFixed(1)}%)`}
+                                    title={`${mjGradeLabel(item.value)}: ${item.count} votes (${item.percentage.toFixed(1)}%)`}
                                   >
                                     {item.percentage >= 10 && (
                                       <span className={`text-[10px] font-bold ${
@@ -1632,7 +1640,7 @@ const PublicVotePage: React.FC = () => {
                       key={r.id}
                       className="flex items-center gap-2 text-xs text-gray-500"
                     >
-                      <span>{r.userId || "Anonymous"}</span>
+                      <span>{r.userId || tt("voting.anonymous")}</span>
                       {r.comment && (
                         <span className="italic text-gray-400">
                           &mdash; {r.comment}
@@ -1665,7 +1673,7 @@ const PublicVotePage: React.FC = () => {
           proposalId={diffProposalId}
           proposalLabel={
             activeProposals.find((p) => p.id === diffProposalId)?.description?.trim()
-            || (diffProposalId ? `Proposal ${(activeProposals.find((p) => p.id === diffProposalId)?.position ?? 0) + 1}` : undefined)
+            || (diffProposalId ? tt("voting.proposalN", { n: (activeProposals.find((p) => p.id === diffProposalId)?.position ?? 0) + 1 }) : undefined)
           }
         />
       )}

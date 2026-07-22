@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useTasks } from '@/hooks/useTasks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +12,7 @@ import { yUserSettings, yFertilizationState, yFertilizationCards, yFertilization
 
 const CURRENT_SCHEMA_VERSION = 4;
 
-function extractImportErrorMessage(error: unknown): string {
+function extractImportErrorMessage(error: unknown, t: (key: string, options?: Record<string, unknown>) => string): string {
   if (error instanceof SyntaxError) {
     return `Invalid JSON file: ${error.message}`;
   }
@@ -19,21 +20,16 @@ function extractImportErrorMessage(error: unknown): string {
     const httpMatch = error.message.match(/status: (\d+)/);
     if (httpMatch) {
       const status = httpMatch[1];
-      const hintMap: Record<string, string> = {
-        '400': 'Bad request — the server rejected the data shape.',
-        '401': 'Unauthorized — please re-authenticate.',
-        '403': 'Forbidden — your account cannot perform this import.',
-        '404': 'Not found — an API endpoint is missing.',
-        '500': 'Server error while saving — check the server logs.',
-      };
-      return hintMap[status] ? `HTTP ${status}: ${hintMap[status]}` : `HTTP ${status}`;
+      const hintKey = `dataImport.error.${status}` as const;
+      const hint = t(hintKey);
+      return hint !== hintKey ? `HTTP ${status}: ${hint}` : `HTTP ${status}`;
     }
     if (error.message === 'Failed to fetch' || /NetworkError|fetch/i.test(error.message)) {
-      return 'Network error — could not reach the backend server.';
+      return t('dataImport.networkError');
     }
     return error.message;
   }
-  return typeof error === 'string' ? error : 'Unknown error. See the browser console for details.';
+  return typeof error === 'string' ? error : t('dataImport.unknownError');
 }
 
 interface ImportedUserSettings {
@@ -54,6 +50,7 @@ interface ImportedUserSettings {
 }
 
 const DataImporter: React.FC = () => {
+  const { t } = useTranslation();
   const { importTasks } = useTasks();
   const { toast } = useToast();
   const [file, setFile] = useState<File | null>(null);
@@ -76,8 +73,8 @@ const DataImporter: React.FC = () => {
             if (importedData.schemaVersion !== undefined && importedData.schemaVersion > CURRENT_SCHEMA_VERSION) {
               toast({
                 variant: 'destructive',
-                title: 'Unsupported schema version',
-                description: `Schema version ${importedData.schemaVersion} is newer than the supported version ${CURRENT_SCHEMA_VERSION}. Please update the application.`,
+                title: t('dataImport.unsupportedSchemaTitle'),
+                description: t('dataImport.unsupportedSchemaDescription', { v: importedData.schemaVersion, max: CURRENT_SCHEMA_VERSION }),
               });
               return;
             }
@@ -404,17 +401,17 @@ const DataImporter: React.FC = () => {
             }
 
             toast({
-              title: 'Data imported successfully!',
-              description: 'The page will reload to apply the imported data.',
+              title: t('dataImport.successTitle'),
+              description: t('dataImport.successDescription'),
             });
             // Trigger a reload or state update if necessary
             window.location.reload();
           } catch (error) {
             console.error("Import error:", error);
-            const message = extractImportErrorMessage(error);
+            const message = extractImportErrorMessage(error, t);
             toast({
               variant: 'destructive',
-              title: 'Error importing data',
+              title: t('dataImport.errorTitle'),
               description: message,
             });
           }
@@ -428,7 +425,7 @@ const DataImporter: React.FC = () => {
     <div className="flex items-center space-x-2">
       <Input type="file" onChange={handleFileChange} />
       <Button onClick={handleImport} disabled={!file}>
-        Import Data
+        {t('dataImport.button')}
       </Button>
     </div>
   );

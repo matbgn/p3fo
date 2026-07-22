@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import { Vote, Plus, BarChart3, Clock, Trash2, ExternalLink, Eye, Trophy, Edit, ToggleLeft, Shield, Share2, RotateCcw, GitCompare, Save } from "lucide-react";
 import { useVotes, useVoteResults, syncVoteToYjs } from "@/hooks/useVotes";
@@ -8,7 +9,6 @@ import { eventBus } from "@/lib/events";
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { VoteEntity, VoteKind } from "@/lib/persistence-types";
-import { VOTING_MODES_LABELS } from "@/components/planView/constants";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -50,9 +50,10 @@ const VoteCard: React.FC<{
   onOpenPublic: (slug: string) => void;
 }> = ({ vote, onSelect, onDelete, onOpenPublic }) => {
   const t = getVotingStrings();
+  const { t: tt } = useTranslation();
   const phaseLabel = t.phases[vote.config.phase] || vote.config.phase;
   const phaseColor = PHASE_COLORS[vote.config.phase] || "bg-gray-100 text-gray-700";
-  const modeLabel = VOTING_MODES_LABELS[vote.config.mode] || vote.config.mode;
+  const modeLabel = tt(`voting.mode.${vote.config.mode === "THUMBS_UP" ? "thumbsUp" : vote.config.mode === "THUMBS_UD_NEUTRAL" ? "thumbsUdNeutral" : vote.config.mode === "POINTS" ? "points" : vote.config.mode === "MAJORITY_JUDGMENT" ? "majorityJudgment" : "consentLoop"}`);
 
   return (
     <div
@@ -73,7 +74,7 @@ const VoteCard: React.FC<{
               onOpenPublic(vote.slug);
             }}
             className="p-1 text-gray-400 hover:text-blue-500 transition-colors"
-            title="Open public page"
+            title={tt("voting.openPublicPage")}
           >
             <ExternalLink className="w-4 h-4" />
           </button>
@@ -83,7 +84,7 @@ const VoteCard: React.FC<{
               onDelete(vote.id);
             }}
             className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-            title="Delete"
+            title={tt("voting.delete")}
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -137,6 +138,7 @@ const ConsentLoopPanel: React.FC<{
   isModerator?: boolean;
 }> = ({ vote, loops, responses, onOpenRound, onCloseRound, onUpdateRoundContent, isModerator }) => {
   const t = getVotingStrings();
+  const { t: tt } = useTranslation();
   const { responses: voteResponses } = useVoteResults(vote.id);
   const activeProposals = vote.proposals.filter((p) => p.active);
   const isOpen = vote.config.phase === "OPEN";
@@ -224,7 +226,7 @@ const ConsentLoopPanel: React.FC<{
                     : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                 }`}
               >
-                {p.description || `Proposal ${(activeProposals.indexOf(p) + 1)}`}
+                {p.description || tt("voting.proposalN", { n: activeProposals.indexOf(p) + 1 })}
                 {currentOpenLoop && (
                   <span className="ml-1 inline-block w-2 h-2 rounded-full bg-green-400" />
                 )}
@@ -253,7 +255,7 @@ const ConsentLoopPanel: React.FC<{
           <div key={proposal.id} className="space-y-4 border rounded-lg p-4">
             {activeProposals.length > 1 && (
               <h4 className="text-sm font-medium text-gray-800 mb-2">
-                {proposal.description || `Proposal ${(activeProposals.indexOf(proposal) + 1)}`}
+                {proposal.description || tt("voting.proposalN", { n: activeProposals.indexOf(proposal) + 1 })}
               </h4>
             )}
 
@@ -299,13 +301,13 @@ const ConsentLoopPanel: React.FC<{
                     {t.labels.currentRoundProposal} — {t.labels.round} {proposalLoops.length + 1}
                   </Label>
                   <span className={`text-xs font-medium ${hasDraftChange ? "text-amber-600" : "text-blue-500"}`}>
-                    {hasDraftChange ? t.labels.draftUnsaved : "Editable before starting round"}
+                    {hasDraftChange ? t.labels.draftUnsaved : tt("voting.editableBeforeRound")}
                   </span>
                 </div>
                 <BlockNoteProposalEditor
                   value={currentDraft}
                   onChange={(json) => handleDraftChange(proposal.id, json)}
-                  placeholder="Modify the proposal text for the next round..."
+                  placeholder={tt("voting.placeholders.refineNextRound")}
                 />
                 <div className="flex items-center gap-2">
                   <Button
@@ -365,6 +367,7 @@ const VoteDetailPanel: React.FC<{
   onPhaseChange: (id: string, phase: VoteEntity["config"]["phase"]) => Promise<void>;
 }> = ({ vote, onBack, onEdit, onFinalize, onDelete, onReset, onOpenPublic, onPhaseChange }) => {
   const t = getVotingStrings();
+  const { t: tt } = useTranslation();
   const [showFinalizeDialog, setShowFinalizeDialog] = React.useState(false);
   const [showResetDialog, setShowResetDialog] = React.useState(false);
   const [activeDetailTab, setActiveDetailTab] = React.useState<"results" | "rounds" | "moderation">("results");
@@ -406,7 +409,7 @@ const VoteDetailPanel: React.FC<{
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-3 mb-4 pb-4 border-b">
         <Button variant="ghost" size="sm" onClick={onBack}>
-          &larr; Back
+          {tt("voting.back")}
         </Button>
         <div className="flex-1 min-w-0">
           <h2 className="text-lg font-semibold text-gray-900 truncate">{vote.title}</h2>
@@ -417,13 +420,13 @@ const VoteDetailPanel: React.FC<{
             variant="ghost"
             size="sm"
             onClick={() => onOpenPublic(vote.slug)}
-            title="Open public page"
+            title={tt("voting.openPublicPage")}
           >
             <Eye className="w-4 h-4" />
           </Button>
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="sm" title="Share">
+              <Button variant="ghost" size="sm" title={tt("voting.share")}>
                 <Share2 className="w-4 h-4" />
               </Button>
             </PopoverTrigger>
@@ -443,7 +446,7 @@ const VoteDetailPanel: React.FC<{
           </Button>
         )}
         {!isFinalized && (
-            <Button variant="ghost" size="sm" onClick={onEdit} title="Edit">
+            <Button variant="ghost" size="sm" onClick={onEdit} title={tt("voting.edit")}>
               <Edit className="w-4 h-4" />
             </Button>
           )}
@@ -603,6 +606,7 @@ const VoteDetailPanel: React.FC<{
 
 const VotingPage: React.FC = () => {
   const t = getVotingStrings();
+  const { t: tt } = useTranslation();
   const [activeTab, setActiveTab] = React.useState<VotingTab>("consultations");
   const kind: VoteKind = activeTab === "consultations" ? "consultation" : "decision";
   const { votes, isLoading, createVote, updateVote, deleteVote, finalizeVote, resetVote } = useVotes({ kind });
@@ -762,7 +766,7 @@ const VotingPage: React.FC = () => {
           className="bg-red-600 hover:bg-red-700"
         >
           <Plus className="w-4 h-4 mr-2" />
-          New {activeTab === "consultations" ? t.pages.newConsultation : t.pages.newDecision}
+          {tt("voting.newPrefix")} {activeTab === "consultations" ? t.pages.newConsultation : t.pages.newDecision}
         </Button>
       </div>
 

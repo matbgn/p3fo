@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -27,7 +28,7 @@ interface QuickAddTaskProps {
 }
 
 export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
-  placeholder = 'Quick add top task...',
+  placeholder,
   parentId = null,
   userId,
   onAdd,
@@ -39,12 +40,15 @@ export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
   showPlusIcon = false,
   autoFocus = false,
 }) => {
+  const { t } = useTranslation();
   const { createTask, updateTitle } = useTasks();
   const { tasks: allTasks } = useAllTasks();
   const { toast } = useToast();
   const [input, setInput] = useState('');
   const [isApplying, setIsApplying] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  const resolvedPlaceholder = placeholder ?? t('quickadd.placeholder');
 
   const handleDropdownOpenChange = useCallback((open: boolean) => {
     setIsDropdownOpen(open);
@@ -103,8 +107,8 @@ export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
     if (titles.length === 0) {
       toast({
         variant: 'destructive',
-        title: 'No tasks to import',
-        description: 'Paste one task title per line.',
+        title: t('quickadd.noTasksTitle'),
+        description: t('quickadd.noTasksDescription'),
       });
       return;
     }
@@ -112,8 +116,8 @@ export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
     try {
       titles.forEach((title) => createTask(title, parentId, userId));
       toast({
-        title: 'Batch import complete',
-        description: `Imported ${titles.length} task${titles.length > 1 ? 's' : ''}.`,
+        title: t('quickadd.batchCompleteTitle'),
+        description: t('quickadd.batchCompleteDescription', { n: titles.length }),
       });
       setBatchImportText('');
       setIsBatchImportOpen(false);
@@ -121,13 +125,13 @@ export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
       console.error('Batch import error:', error);
       toast({
         variant: 'destructive',
-        title: 'Error during batch import',
-        description: 'Some tasks may not have been imported.',
+        title: t('quickadd.batchErrorTitle'),
+        description: t('quickadd.batchErrorDescription'),
       });
     } finally {
       setIsBatchImporting(false);
     }
-  }, [onBatchImport, batchImportText, toast, createTask, parentId, userId]);
+  }, [onBatchImport, batchImportText, toast, createTask, parentId, userId, t]);
 
   const handleDiffApply = useCallback((result: DiffImportResult) => {
     try {
@@ -135,8 +139,8 @@ export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
       result.update.forEach((u) => updateTitle(u.id, u.title));
       const total = result.create.length + result.update.length;
       toast({
-        title: 'Diff import applied',
-        description: `${result.create.length} created, ${result.update.length} updated.`,
+        title: t('quickadd.diffAppliedTitle'),
+        description: t('quickadd.diffAppliedDescription', { created: result.create.length, updated: result.update.length }),
       });
       setIsDiffImportOpen(false);
       if (total === 0) return;
@@ -144,18 +148,18 @@ export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
       console.error('Diff import error:', error);
       toast({
         variant: 'destructive',
-        title: 'Error during diff import',
-        description: 'Some changes may not have been applied.',
+        title: t('quickadd.diffErrorTitle'),
+        description: t('quickadd.diffErrorDescription'),
       });
     }
-  }, [createTask, updateTitle, parentId, userId, toast]);
+  }, [createTask, updateTitle, parentId, userId, toast, t]);
 
   return (
     <>
       <div className={cn('flex gap-2 items-center', className)}>
         {showPlusIcon && <Plus className="h-4 w-4 text-muted-foreground shrink-0" />}
         <Input
-          placeholder={placeholder}
+          placeholder={resolvedPlaceholder}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -170,7 +174,7 @@ export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
             size="sm"
             className="rounded-none border-0"
           >
-            Add
+            {t('quickadd.add')}
           </Button>
           {hasTemplates && (
             <>
@@ -182,7 +186,7 @@ export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
                     size="sm"
                     disabled={isApplying}
                     className="rounded-none border-0 px-2"
-                    title="Create from template"
+                    title={t('quickadd.fromTemplate')}
                   >
                     <ChevronDown className="h-4 w-4" />
                   </Button>
@@ -190,12 +194,12 @@ export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
                 <DropdownMenuContent align="end">
                   {workspaceTemplates.length > 0 && (
                     <>
-                      <DropdownMenuLabel>Workspace templates</DropdownMenuLabel>
-                      {workspaceTemplates.map(t => (
-                        <DropdownMenuItem key={t.id} onClick={() => handleApplyTemplate(t)}>
-                          <span className="font-medium">{t.name}</span>
+                      <DropdownMenuLabel>{t('quickadd.workspaceTemplates')}</DropdownMenuLabel>
+                      {workspaceTemplates.map(tpl => (
+                        <DropdownMenuItem key={tpl.id} onClick={() => handleApplyTemplate(tpl)}>
+                          <span className="font-medium">{tpl.name}</span>
                           <span className="text-xs text-muted-foreground ml-2">
-                            {t.children.length} steps
+                            {t('quickadd.nSteps', { n: tpl.children.length })}
                           </span>
                         </DropdownMenuItem>
                       ))}
@@ -204,12 +208,12 @@ export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
                   {userTemplates.length > 0 && (
                     <>
                       <DropdownMenuSeparator />
-                      <DropdownMenuLabel>My templates</DropdownMenuLabel>
-                      {userTemplates.map(t => (
-                        <DropdownMenuItem key={t.id} onClick={() => handleApplyTemplate(t)}>
-                          <span className="font-medium">{t.name}</span>
+                      <DropdownMenuLabel>{t('quickadd.myTemplates')}</DropdownMenuLabel>
+                      {userTemplates.map(tpl => (
+                        <DropdownMenuItem key={tpl.id} onClick={() => handleApplyTemplate(tpl)}>
+                          <span className="font-medium">{tpl.name}</span>
                           <span className="text-xs text-muted-foreground ml-2">
-                            {t.children.length} steps
+                            {t('quickadd.nSteps', { n: tpl.children.length })}
                           </span>
                         </DropdownMenuItem>
                       ))}
@@ -226,7 +230,7 @@ export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
                 variant="ghost"
                 size="sm"
                 className="rounded-none border-0 px-2"
-                title="Import tasks"
+                title={t('quickadd.importTasks')}
               >
                 <Upload className="h-4 w-4" />
               </Button>
@@ -234,11 +238,11 @@ export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => onBatchImport ? onBatchImport() : setIsBatchImportOpen(true)}>
                 <Upload className="h-4 w-4 mr-2" />
-                Batch Import
+                {t('quickadd.batchImport')}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onDiffImport ? onDiffImport() : setIsDiffImportOpen(true)}>
                 <ScrollText className="h-4 w-4 mr-2" />
-                Diff Import
+                {t('quickadd.diffImport')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -248,14 +252,13 @@ export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
       <Dialog open={isBatchImportOpen} onOpenChange={setIsBatchImportOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Batch Import Tasks</DialogTitle>
+            <DialogTitle>{t('quickadd.batchDialogTitle')}</DialogTitle>
             <DialogDescription>
-              Paste one task title per line. Each non-empty line will be
-              created as a separate task.
+              {t('quickadd.batchDialogDescription')}
             </DialogDescription>
           </DialogHeader>
           <Textarea
-            placeholder={"Task title one\nTask title two\nTask title three"}
+            placeholder={t('quickadd.batchPlaceholder')}
             value={batchImportText}
             onChange={(e) => setBatchImportText(e.target.value)}
             rows={10}
@@ -267,13 +270,13 @@ export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
               onClick={() => setIsBatchImportOpen(false)}
               disabled={isBatchImporting}
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               onClick={handleBatchImportInternal}
               disabled={isBatchImporting || !batchImportText.trim()}
             >
-              {isBatchImporting ? 'Importing...' : 'Import'}
+              {isBatchImporting ? t('quickadd.importing') : t('quickadd.import')}
             </Button>
           </DialogFooter>
         </DialogContent>

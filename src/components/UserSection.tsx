@@ -1,4 +1,5 @@
 import React, { useState, useRef, useContext } from "react";
+import { useTranslation } from "react-i18next";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import { eventBus } from "@/lib/events";
 import { generateTrigram } from "@/utils/userTrigrams";
 
 export function UserSection() {
+  const { t } = useTranslation();
   const { userSettings, updateUsername, updateLogo, regenerateUsername, updateTrigram } = useUserSettings();
   const { users } = useUsersContext();
   const userContext = useContext(UserContext);
@@ -158,7 +160,7 @@ export function UserSection() {
   // Use persisted or calculated trigram (or temp trigram while editing)
   const currentUser = users.find(u => u.userId === userContext?.userId);
   const displayInitial = isEditing
-    ? (tempTrigram || '???')
+    ? (tempTrigram || t('userSection.noTrigram'))
     : (userSettings.trigram || (currentUser as UserWithTrigram | undefined)?.trigram || generateTrigram(userSettings.username.split(' ')[0], userSettings.username.split(' ').slice(1).join(' ') || ''));
 
   return (
@@ -200,7 +202,7 @@ export function UserSection() {
                     {userSettings.username}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Click to edit your profile
+                    {t('userSection.clickToEdit')}
                   </div>
                 </div>
               ) : isEditing ? (
@@ -209,16 +211,16 @@ export function UserSection() {
                     {userSettings.username}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Trigram: <span className="font-mono font-semibold">{displayInitial}</span>
+                    {t('userSection.trigram')} <span className="font-mono font-semibold">{displayInitial}</span>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-2">
                   <div className="text-sm font-medium">
-                    Switch UUID
+                    {t('userSection.switchUuid')}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Enter another UUID to adopt its workspace
+                    {t('userSection.switchUuidHelp')}
                   </div>
                 </div>
               )}
@@ -236,7 +238,7 @@ export function UserSection() {
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <Upload className="h-4 w-4" />
-                  Upload Logo
+                  {t('userSection.uploadLogo')}
                 </Button>
                 <input
                   ref={fileInputRef}
@@ -258,7 +260,7 @@ export function UserSection() {
                   onClick={handleEditToggle}
                 >
                   <Edit2 className="h-4 w-4" />
-                  Edit Username
+                  {t('userSection.editUsername')}
                 </Button>
                 <Button
                   variant="outline"
@@ -267,7 +269,7 @@ export function UserSection() {
                   onClick={handleRegenerateUsername}
                 >
                   <Shuffle className="h-4 w-4" />
-                  Generate New Name
+                  {t('userSection.generateName')}
                 </Button>
                 <Button
                   variant="outline"
@@ -276,7 +278,7 @@ export function UserSection() {
                   onClick={handleChangeUuidToggle}
                 >
                   <Fingerprint className="h-4 w-4" />
-                  Change UUID
+                  {t('userSection.changeUuid')}
                 </Button>
               </>
             ) : isEditing ? (
@@ -285,22 +287,22 @@ export function UserSection() {
                   <Input
                     value={tempUsername}
                     onChange={(e) => { setTempUsername(e.target.value); setTrigramManuallyEdited(false); }}
-                    placeholder="Enter your name"
+                    placeholder={t('userSection.namePlaceholder')}
                     className="text-sm"
                     autoFocus
                   />
                   <Input
                     value={tempTrigram}
                     onChange={(e) => { setTempTrigram(e.target.value.toUpperCase()); setTrigramManuallyEdited(true); }}
-                    placeholder="TRG"
+                    placeholder={t('userSection.trigramPlaceholder')}
                     className="text-sm w-20 text-center font-mono"
                     maxLength={3}
                   />
                 </div>
                 <div className="text-xs text-muted-foreground">
                   {tempUsername.trim() !== userSettings.username && !trigramManuallyEdited
-                    ? 'Recompute the trigram, or edit it directly, then save'
-                    : 'Press Enter to save or Esc to cancel'}
+                    ? t('userSection.recomputeHelp')
+                    : t('userSection.enterToSave')}
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -310,7 +312,7 @@ export function UserSection() {
                     onClick={handleEditToggle}
                     disabled={!tempUsername.trim()}
                   >
-                    {tempUsername.trim() !== userSettings.username && !trigramManuallyEdited ? 'Recompute Trigram' : 'Save'}
+                    {tempUsername.trim() !== userSettings.username && !trigramManuallyEdited ? t('userSection.recomputeTrigram') : t('common.save')}
                   </Button>
                   <Button
                     variant="outline"
@@ -318,7 +320,7 @@ export function UserSection() {
                     className="flex-1"
                     onClick={handleCancelEdit}
                   >
-                    Cancel
+                    {t('common.cancel')}
                   </Button>
                 </div>
               </div>
@@ -327,7 +329,7 @@ export function UserSection() {
                 <Input
                   value={tempUuid}
                   onChange={(e) => setTempUuid(e.target.value)}
-                  placeholder="Enter new UUID"
+                  placeholder={t('userSection.uuidPlaceholder')}
                   className="text-sm font-mono"
                   autoFocus
                 />
@@ -335,7 +337,7 @@ export function UserSection() {
                   <div className="flex items-start gap-2 rounded-md bg-amber-500/10 border border-amber-500/30 p-2">
                     <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
                     <p className="text-xs text-amber-600 dark:text-amber-400">
-                      You have <strong>{currentUserTaskCount}</strong> task{currentUserTaskCount !== 1 ? 's' : ''}. Switching UUID will <strong>discard</strong> your current workspace in favor of the target UUID.
+                      {t('userSection.switchWarning', { n: currentUserTaskCount })}
                     </p>
                   </div>
                 )}
@@ -347,7 +349,7 @@ export function UserSection() {
                     onClick={handleMigrateUuid}
                     disabled={!tempUuid.trim() || tempUuid === userContext?.userId}
                   >
-                    Switch
+                    {t('userSection.switch')}
                   </Button>
                   <Button
                     variant="outline"
@@ -355,7 +357,7 @@ export function UserSection() {
                     className="flex-1"
                     onClick={handleCancelUuidChange}
                   >
-                    Cancel
+                    {t('common.cancel')}
                   </Button>
                 </div>
               </div>
@@ -370,7 +372,7 @@ export function UserSection() {
                 onClick={() => updateLogo('')}
               >
                 <User className="h-4 w-4" />
-                Remove Logo
+                {t('userSection.removeLogo')}
               </Button>
             )}
           </div>

@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,6 +12,7 @@ interface TemplateManagerProps {
 }
 
 export const TemplateManager: React.FC<TemplateManagerProps> = ({ scope }) => {
+  const { t } = useTranslation();
   const [templates, setTemplates] = useState<TaskTemplate[]>(() => loadTemplates(scope));
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
@@ -38,33 +40,33 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({ scope }) => {
   }, [newName, newParentTitle, templates, scope, persist]);
 
   const handleDelete = useCallback((id: string) => {
-    persist(templates.filter(t => t.id !== id));
+    persist(templates.filter(tpl => tpl.id !== id));
   }, [templates, persist]);
 
   const handleUpdateTemplate = useCallback((id: string, patch: Partial<TaskTemplate>) => {
-    persist(templates.map(t => t.id === id ? { ...t, ...patch } : t));
+    persist(templates.map(tpl => tpl.id === id ? { ...tpl, ...patch } : tpl));
   }, [templates, persist]);
 
   const handleAddChild = useCallback((templateId: string) => {
-    const child: TaskTemplateChild = { title: 'New step' };
-    persist(templates.map(t =>
-      t.id === templateId ? { ...t, children: [...t.children, child] } : t
+    const child: TaskTemplateChild = { title: t('template.defaultStep') };
+    persist(templates.map(tpl =>
+      tpl.id === templateId ? { ...tpl, children: [...tpl.children, child] } : tpl
     ));
-  }, [templates, persist]);
+  }, [templates, persist, t]);
 
   const handleUpdateChild = useCallback((templateId: string, index: number, patch: Partial<TaskTemplateChild>) => {
-    persist(templates.map(t =>
-      t.id === templateId
-        ? { ...t, children: t.children.map((c, i) => i === index ? { ...c, ...patch } : c) }
-        : t
+    persist(templates.map(tpl =>
+      tpl.id === templateId
+        ? { ...tpl, children: tpl.children.map((c, i) => i === index ? { ...c, ...patch } : c) }
+        : tpl
     ));
   }, [templates, persist]);
 
   const handleDeleteChild = useCallback((templateId: string, index: number) => {
-    persist(templates.map(t =>
-      t.id === templateId
-        ? { ...t, children: t.children.filter((_, i) => i !== index) }
-        : t
+    persist(templates.map(tpl =>
+      tpl.id === templateId
+        ? { ...tpl, children: tpl.children.filter((_, i) => i !== index) }
+        : tpl
     ));
   }, [templates, persist]);
 
@@ -72,9 +74,9 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({ scope }) => {
     <div className="space-y-4">
       <div className="flex gap-2 items-end">
         <div className="flex-1">
-          <Label className="text-xs text-muted-foreground">Template name</Label>
+          <Label className="text-xs text-muted-foreground">{t('template.nameLabel')}</Label>
           <Input
-            placeholder="e.g. Deployment checklist"
+            placeholder={t('template.namePlaceholder')}
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAddTemplate()}
@@ -82,9 +84,9 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({ scope }) => {
           />
         </div>
         <div className="flex-1">
-          <Label className="text-xs text-muted-foreground">Parent task title</Label>
+          <Label className="text-xs text-muted-foreground">{t('template.parentTitleLabel')}</Label>
           <Input
-            placeholder="e.g. Release"
+            placeholder={t('template.parentTitlePlaceholder')}
             value={newParentTitle}
             onChange={(e) => setNewParentTitle(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAddTemplate()}
@@ -93,13 +95,13 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({ scope }) => {
         </div>
         <Button size="sm" onClick={handleAddTemplate} disabled={!newName.trim()}>
           <Plus className="h-4 w-4 mr-1" />
-          Add template
+          {t('template.add')}
         </Button>
       </div>
 
       {templates.length === 0 && (
         <p className="text-sm text-muted-foreground">
-          No templates yet. Create one above to scaffold common workflows as a parent task with predefined children.
+          {t('template.empty')}
         </p>
       )}
 
@@ -126,7 +128,7 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({ scope }) => {
                 onChange={(e) => handleUpdateTemplate(tpl.id, { parentTitle: e.target.value })}
                 className="h-7 text-sm border-none shadow-none focus-visible:ring-1 max-w-[200px]"
               />
-              <span className="text-xs text-muted-foreground ml-auto">{tpl.children.length} steps</span>
+              <span className="text-xs text-muted-foreground ml-auto">{t('template.nSteps', { n: tpl.children.length })}</span>
               <Button
                 size="sm"
                 variant="ghost"
@@ -152,7 +154,7 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({ scope }) => {
                       onChange={(e) => handleUpdateChild(tpl.id, i, { difficulty: e.target.value ? Number(e.target.value) as TaskTemplateChild['difficulty'] : undefined })}
                       className="h-7 text-xs border rounded px-1 bg-background"
                     >
-                      <option value="">Difficulty</option>
+                      <option value="">{t('template.difficulty')}</option>
                       <option value="0.5">0.5</option>
                       <option value="1">1</option>
                       <option value="2">2</option>
@@ -177,7 +179,7 @@ export const TemplateManager: React.FC<TemplateManagerProps> = ({ scope }) => {
                   onClick={() => handleAddChild(tpl.id)}
                 >
                   <Plus className="h-3 w-3 mr-1" />
-                  Add step
+                  {t('template.addStep')}
                 </Button>
               </div>
             )}

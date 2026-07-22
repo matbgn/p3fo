@@ -1,10 +1,12 @@
 import { useSettingsContext } from '@/context/SettingsContext';
+import { useTranslation } from 'react-i18next';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { PomodoroConfig, DEFAULT_POMODORO_CONFIG } from '@/lib/pomodoro-types';
 
 const PomodoroSettings: React.FC = () => {
+  const { t } = useTranslation();
   const { settings, updateSettings } = useSettingsContext();
   const config: PomodoroConfig = settings.pomodoroConfig ?? DEFAULT_POMODORO_CONFIG;
 
@@ -19,13 +21,13 @@ const PomodoroSettings: React.FC = () => {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-xl font-semibold mb-4">Pomodoro Timer</h2>
+        <h2 className="text-xl font-semibold mb-4">{t('pomodoro.settings.title')}</h2>
         <div className="space-y-6 max-w-md">
           <div className="flex items-center justify-between">
             <div>
-              <Label className="text-sm font-medium">Enable Pomodoro</Label>
+              <Label className="text-sm font-medium">{t('pomodoro.settings.enable')}</Label>
               <p className="text-sm text-muted-foreground">
-                Activate the Pomodoro timer with work/break cycles.
+                {t('pomodoro.settings.enableHelp')}
               </p>
             </div>
             <Switch
@@ -38,7 +40,7 @@ const PomodoroSettings: React.FC = () => {
             <div className="space-y-5">
               <div>
                 <Label className="block text-sm font-medium mb-2">
-                  Work Duration: {workMinutes} min
+                  {t('pomodoro.settings.workDuration', { n: workMinutes })}
                 </Label>
                 <Slider
                   value={[workMinutes]}
@@ -49,13 +51,13 @@ const PomodoroSettings: React.FC = () => {
                   className="w-full"
                 />
                 <p className="text-sm text-muted-foreground mt-1">
-                  Length of each work period (1–60 min, default: 25 min)
+                  {t('pomodoro.settings.workDurationHelp')}
                 </p>
               </div>
 
               <div>
                 <Label className="block text-sm font-medium mb-2">
-                  Break Duration: {breakMinutes} min
+                  {t('pomodoro.settings.breakDuration', { n: breakMinutes })}
                 </Label>
                 <Slider
                   value={[breakMinutes]}
@@ -66,13 +68,13 @@ const PomodoroSettings: React.FC = () => {
                   className="w-full"
                 />
                 <p className="text-sm text-muted-foreground mt-1">
-                  Short break between work periods (1–15 min, default: 5 min)
+                  {t('pomodoro.settings.breakDurationHelp')}
                 </p>
               </div>
 
               <div>
                 <Label className="block text-sm font-medium mb-2">
-                  Long Break Duration: {longBreakMinutes} min
+                  {t('pomodoro.settings.longBreakDuration', { n: longBreakMinutes })}
                 </Label>
                 <Slider
                   value={[longBreakMinutes]}
@@ -83,13 +85,13 @@ const PomodoroSettings: React.FC = () => {
                   className="w-full"
                 />
                 <p className="text-sm text-muted-foreground mt-1">
-                  Break after completing a full cycle set (5–30 min, default: 15 min)
+                  {t('pomodoro.settings.longBreakHelp')}
                 </p>
               </div>
 
               <div>
                 <Label className="block text-sm font-medium mb-1">
-                  Cycles before Long Break
+                  {t('pomodoro.settings.cyclesBeforeLongBreak')}
                 </Label>
                 <div className="flex items-center space-x-2 mt-2">
                   <Slider
@@ -103,7 +105,7 @@ const PomodoroSettings: React.FC = () => {
                   <span className="text-sm font-mono w-6 text-center">{config.cyclesBeforeLongBreak}</span>
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Number of work periods before a long break (1–10, default: 4)
+                  {t('pomodoro.settings.cyclesHelp')}
                 </p>
               </div>
 

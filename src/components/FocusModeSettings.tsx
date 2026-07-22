@@ -1,14 +1,15 @@
 import { useSettingsContext } from '@/context/SettingsContext';
+import { useTranslation } from 'react-i18next';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FocusModeConfig, DEFAULT_FOCUS_MODE_CONFIG } from '@/lib/pomodoro-types';
 
 const PIP_SIZES = [
-  { value: 'tiny', label: 'Tiny (200×100)', width: 200, height: 100 },
-  { value: 'small', label: 'Small (240×140)', width: 240, height: 140 },
-  { value: 'medium', label: 'Medium (260×240)', width: 260, height: 240 },
-  { value: 'normal', label: 'Normal (320×400)', width: 320, height: 400 },
+  { value: 'tiny', width: 200, height: 100 },
+  { value: 'small', width: 240, height: 140 },
+  { value: 'medium', width: 260, height: 240 },
+  { value: 'normal', width: 320, height: 400 },
 ] as const;
 
 type PipSizeValue = typeof PIP_SIZES[number]['value'];
@@ -24,6 +25,7 @@ function getPipDimensions(value: PipSizeValue): { pipWidth: number; pipHeight: n
 }
 
 const FocusModeSettings: React.FC = () => {
+  const { t } = useTranslation();
   const { settings, updateSettings } = useSettingsContext();
   const focusConfig: FocusModeConfig = settings.focusModeConfig ?? DEFAULT_FOCUS_MODE_CONFIG;
 
@@ -33,13 +35,13 @@ const FocusModeSettings: React.FC = () => {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold mb-4">Focus Mode</h2>
+      <h2 className="text-xl font-semibold mb-4">{t('focusMode.settings.title')}</h2>
       <div className="space-y-6 max-w-md">
         <div className="flex items-center justify-between">
           <div>
-            <Label className="text-sm font-medium">Auto-start Break</Label>
+            <Label className="text-sm font-medium">{t('focusMode.settings.autoStartBreak')}</Label>
             <p className="text-sm text-muted-foreground">
-              Automatically start break after work period ends.
+              {t('focusMode.settings.autoStartBreakHelp')}
             </p>
           </div>
           <Switch
@@ -50,9 +52,9 @@ const FocusModeSettings: React.FC = () => {
 
         <div className="flex items-center justify-between">
           <div>
-            <Label className="text-sm font-medium">Auto-start Work</Label>
+            <Label className="text-sm font-medium">{t('focusMode.settings.autoStartWork')}</Label>
             <p className="text-sm text-muted-foreground">
-              Automatically start next work period after break ends.
+              {t('focusMode.settings.autoStartWorkHelp')}
             </p>
           </div>
           <Switch
@@ -63,9 +65,9 @@ const FocusModeSettings: React.FC = () => {
 
         <div className="flex items-center justify-between">
           <div>
-            <Label className="text-sm font-medium">Enable Picture-in-Picture</Label>
+            <Label className="text-sm font-medium">{t('focusMode.settings.enablePiP')}</Label>
             <p className="text-sm text-muted-foreground">
-              Show an always-on-top timer window during Pomodoro sessions.
+              {t('focusMode.settings.enablePiPHelp')}
             </p>
           </div>
           <Switch
@@ -77,9 +79,9 @@ const FocusModeSettings: React.FC = () => {
         {focusConfig.enablePiP && (
           <div className="flex items-center justify-between pl-4 border-l-2 border-muted">
             <div>
-              <Label className="text-sm font-medium">Auto-open PiP on Start</Label>
+              <Label className="text-sm font-medium">{t('focusMode.settings.autoOpenPiP')}</Label>
               <p className="text-sm text-muted-foreground">
-                Automatically open the PiP window when a Pomodoro session begins.
+                {t('focusMode.settings.autoOpenPiPHelp')}
               </p>
             </div>
             <Switch
@@ -92,7 +94,7 @@ const FocusModeSettings: React.FC = () => {
         {focusConfig.enablePiP && (
           <div>
             <Label className="block text-sm font-medium mb-1">
-              PiP Window Size
+              {t('focusMode.settings.pipSize')}
             </Label>
             <Select
               value={getPipSizeValue(focusConfig)}
@@ -107,22 +109,22 @@ const FocusModeSettings: React.FC = () => {
               <SelectContent>
                 {PIP_SIZES.map((size) => (
                   <SelectItem key={size.value} value={size.value}>
-                    {size.label}
+                    {t(`focusMode.pipSize.${size.value}`)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <p className="text-sm text-muted-foreground mt-1">
-              Size of the always-on-top timer window.
+              {t('focusMode.settings.pipSizeHelp')}
             </p>
           </div>
         )}
 
         <div className="flex items-center justify-between">
           <div>
-            <Label className="text-sm font-medium">Show Focus Overlay</Label>
+            <Label className="text-sm font-medium">{t('focusMode.settings.showFocusOverlay')}</Label>
             <p className="text-sm text-muted-foreground">
-              Display a fullscreen timer overlay in the main window during Pomodoro sessions (instead of using PiP).
+              {t('focusMode.settings.showFocusOverlayHelp')}
             </p>
           </div>
           <Switch
@@ -133,9 +135,9 @@ const FocusModeSettings: React.FC = () => {
 
         <div className="flex items-center justify-between">
           <div>
-            <Label className="text-sm font-medium">Prevent Screen Sleep</Label>
+            <Label className="text-sm font-medium">{t('focusMode.settings.wakeLock')}</Label>
             <p className="text-sm text-muted-foreground">
-              Keep the screen awake during Pomodoro sessions using Wake Lock API.
+              {t('focusMode.settings.wakeLockHelp')}
             </p>
           </div>
           <Switch
@@ -146,9 +148,9 @@ const FocusModeSettings: React.FC = () => {
 
         <div className="flex items-center justify-between">
           <div>
-            <Label className="text-sm font-medium">Sound Notifications</Label>
+            <Label className="text-sm font-medium">{t('focusMode.settings.soundNotifications')}</Label>
             <p className="text-sm text-muted-foreground">
-              Play a chime when a Pomodoro phase transitions.
+              {t('focusMode.settings.soundNotificationsHelp')}
             </p>
           </div>
           <Switch
