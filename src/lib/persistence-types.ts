@@ -526,9 +526,18 @@ export interface SalaryConfig {
 
   /** Expense factor — multiplier applied to annual gross to compute the total
    *  employer cost (social insurances, AVS, 2nd pillar, building maintenance, etc.).
-   *  Golden standard: 1.75 (= +75% on top of gross).
+   *  Golden standard: 1.80 (= +80% on top of gross).
    *  Employer cost = grossAnnual × expenseFactor. */
   expenseFactor: number;
+
+  /** Default persona for the "Taux horaire" tab. */
+  hourlyRatePersona?: {
+    seniorityYears: number;
+    age: number;
+    reducedRateMultiplier: number;
+    riskBenefitMultiplier: number;
+    levels: { dimensionId: string; level: number }[];
+  };
 }
 
 /** Budget target for the salary system. Reproduces the "Bilan prévisionnel"

@@ -405,7 +405,7 @@ export const DEFAULT_SALARY_CONFIG: SalaryConfig = {
   ageIncrease: 0.05,
   ageBrackets: [25, 35, 45, 55, 65],
   socialChargesRate: 0.1202,
-  expenseFactor: 1.75,
+  expenseFactor: 1.80,
   include13thSalary: false,
   hoursPerDay: 8,
   daysPerWeek: 5,

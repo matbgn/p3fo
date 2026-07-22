@@ -9,6 +9,7 @@ import {
   EmployerAdjustment,
 } from '@/lib/persistence-types';
 import { usePersistence } from '@/hooks/usePersistence';
+import { useToast } from '@/hooks/use-toast';
 import { doc, isCollaborationEnabled, ySalaryState } from '@/lib/collaboration';
 import { useUsersContext } from '@/context/UsersContext';
 import { Button } from '@/components/ui/button';
@@ -75,6 +76,7 @@ import {
   RotateCcw,
   Eye,
   EyeOff,
+  Clock,
   TrendingUp,
   PieChart,
   UserPlus,
@@ -592,6 +594,7 @@ const emptyEmployee = (): SalaryEmployee => ({
 // ---------- Main view ----------
 export const SalaryView: React.FC<SalaryViewProps> = () => {
   const persistence = usePersistence();
+  const { toast } = useToast();
   const { users } = useUsersContext();
   const [board, setBoard] = useState<SalaryBoardEntity | null>(null);
   const [loading, setLoading] = useState(true);
@@ -617,7 +620,7 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
             ...saved,
             config: {
               ...saved.config,
-              expenseFactor: typeof oldRate === 'number' ? 1 + oldRate : 1.75,
+              expenseFactor: typeof oldRate === 'number' ? 1 + oldRate : 1.80,
             },
           };
         }
@@ -654,6 +657,9 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
     load();
   }, [persistence]);
 
+  // Track our own writes to ignore Yjs echoes
+  const lastWrittenUpdatedAt = React.useRef<string | null>(null);
+
   // Yjs observer — replicate changes from other clients
   useEffect(() => {
     if (!isCollaborationEnabled()) return;
@@ -662,7 +668,9 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
       const remoteBoard = ySalaryState.get('board') as SalaryBoardEntity | undefined;
       if (remoteBoard) {
         setBoard(prev => {
-          // Avoid loop: only update if the remote state is newer
+          // Ignore our own echo
+          if (lastWrittenUpdatedAt.current && remoteBoard.updatedAt === lastWrittenUpdatedAt.current) return prev;
+          // Only update if the remote state is different
           if (prev?.updatedAt === remoteBoard.updatedAt) return prev;
           return remoteBoard;
         });
@@ -677,6 +685,7 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
 
   const save = useCallback(async (next: SalaryBoardEntity) => {
     const stamped = { ...next, updatedAt: new Date().toISOString() };
+    lastWrittenUpdatedAt.current = stamped.updatedAt;
     setBoard(stamped);
     // Sync to Yjs for cross-client replication
     if (isCollaborationEnabled()) {
@@ -947,6 +956,7 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
           <TabsTrigger value="budget"><PieChart className="w-4 h-4 mr-1" />Budget</TabsTrigger>
           <TabsTrigger value="simulator"><Calculator className="w-4 h-4 mr-1" />Simulateur individuel</TabsTrigger>
           <TabsTrigger value="team"><Users className="w-4 h-4 mr-1" />Simulateur d'équipe</TabsTrigger>
+          <TabsTrigger value="hourly"><Clock className="w-4 h-4 mr-1" />Taux horaire</TabsTrigger>
         </TabsList>
 
         <TabsContent value="budget">
@@ -959,6 +969,10 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
 
         <TabsContent value="team">
           <TeamSimulatorPanel board={board} />
+        </TabsContent>
+
+        <TabsContent value="hourly">
+          <HourlyRatePanel board={board} onSave={save} />
         </TabsContent>
       </Tabs>
 
@@ -1162,12 +1176,12 @@ const BudgetPanel: React.FC<{
                     <div className="space-y-1">
                       <div className="flex items-center justify-between gap-2">
                         <Label className="text-xs text-muted-foreground flex-1">
-                          Facteur de coût (défaut: {board.config.expenseFactor?.toFixed(2) ?? '1.75'})
+                          Facteur de coût (défaut: {board.config.expenseFactor?.toFixed(2) ?? '1.80'})
                         </Label>
                         <Input
                           type="number"
                           step="0.01"
-                          value={s.expenseFactorOverride ?? board.config.expenseFactor ?? 1.75}
+                          value={s.expenseFactorOverride ?? board.config.expenseFactor ?? 1.80}
                           onClick={e => e.stopPropagation()}
                           onChange={e => updateScenario(s.id, { expenseFactorOverride: parseFloat(e.target.value) || 1 })}
                           className="w-32 h-8 text-right"
@@ -1749,6 +1763,195 @@ const TeamSimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) =
         onSave={saveSimEmployee}
       />
     </>
+  );
+};
+
+// ---------- Hourly rate projected panel ----------
+// Reproduces ADT Q13 (Client Hourly Rate) and Q14 (Tarif réduit):
+// Q13 = CEILING.MATH(ROUND((base + maxExp×step + maxImp×step) × (1+seniority)^years × (1+age)^brackets, 0) / weeksPerMonth / hoursPerWeek × expenseFactor, 5)
+// Q14 = CEILING.MATH(Q13 × 0.5, 5)
+
+const computeHourlyRate = (
+  config: SalaryConfig,
+  dimensions: SalaryDimension[],
+  persona: {
+    levels: { dimensionId: string; level: number }[];
+    seniorityYears: number;
+    age: number;
+  },
+): { clientHourlyRate: number; reducedRate: number; projectedAnnualGross: number } => {
+  const base = config.indexHourlyWage * config.hoursPerWeek * config.weeksPerMonth;
+
+  // Sum all salary-affecting dimensions at the persona's chosen levels
+  const dimSteps = dimensions.reduce((sum, dim) => {
+    if (dim.affectsSalary === false) return sum;
+    const level = Math.min(
+      persona.levels.find(l => l.dimensionId === dim.id)?.level ?? 0,
+      dim.maxLevel,
+    );
+    return sum + level * dim.stepValue;
+  }, 0);
+
+  // Compute age brackets from the persona's age
+  const ageBrackets = config.ageBrackets.filter(b => persona.age >= b).length;
+
+  const gross100 = Math.round(
+    (base + dimSteps) *
+    Math.pow(1 + config.seniorityIncrease, persona.seniorityYears) *
+    Math.pow(1 + config.ageIncrease, ageBrackets)
+  );
+
+  const factor = config.expenseFactor ?? 1;
+  const raw = gross100 / config.weeksPerMonth / config.hoursPerWeek * factor;
+  const clientHourlyRate = Math.ceil(raw / 5) * 5;
+
+  return { clientHourlyRate, reducedRate: 0, projectedAnnualGross: gross100 };
+};
+
+const HourlyRatePanel: React.FC<{ board: SalaryBoardEntity; onSave: (next: SalaryBoardEntity) => void }> = ({ board, onSave }) => {
+  const { toast } = useToast();
+  const saved = board.config.hourlyRatePersona;
+  // Default persona: all dimensions at max level, 20 years seniority, age 65
+  const defaultLevels = board.dimensions.map(d => ({ dimensionId: d.id, level: saved?.levels?.find(l => l.dimensionId === d.id)?.level ?? d.maxLevel }));
+  const [levels, setLevels] = useState<{ dimensionId: string; level: number }[]>(defaultLevels);
+  const [seniorityYears, setSeniorityYears] = useState(saved?.seniorityYears ?? 20);
+  const [age, setAge] = useState(saved?.age ?? 65);
+  const [reducedRateMultiplier, setReducedRateMultiplier] = useState(saved?.reducedRateMultiplier ?? 0.5);
+  const [riskBenefitMultiplier, setRiskBenefitMultiplier] = useState(saved?.riskBenefitMultiplier ?? 0.30);
+
+  // Only reset levels when the set of dimension IDs actually changes (not on every board update)
+  const dimIds = board.dimensions.map(d => d.id).join(',');
+  const prevDimIds = React.useRef(dimIds);
+  useEffect(() => {
+    if (prevDimIds.current !== dimIds) {
+      prevDimIds.current = dimIds;
+      setLevels(board.dimensions.map(d => ({ dimensionId: d.id, level: d.maxLevel })));
+    }
+  }, [dimIds, board.dimensions]);
+
+  const setLevel = (dimId: string, level: number) => {
+    setLevels(prev => {
+      const others = prev.filter(l => l.dimensionId !== dimId);
+      return [...others, { dimensionId: dimId, level }];
+    });
+  };
+
+  const result = useMemo(
+    () => computeHourlyRate(board.config, board.dimensions, { levels, seniorityYears, age }),
+    [board.config, board.dimensions, levels, seniorityYears, age]
+  );
+
+  const riskBenefitRate = useMemo(
+    () => Math.ceil((result.clientHourlyRate * (1 + riskBenefitMultiplier)) / 5) * 5,
+    [result.clientHourlyRate, riskBenefitMultiplier]
+  );
+
+  const reducedRate = useMemo(
+    () => Math.ceil((riskBenefitRate * reducedRateMultiplier) / 5) * 5,
+    [riskBenefitRate, reducedRateMultiplier]
+  );
+
+  const currency = board.config.currency;
+
+  const savePersona = () => {
+    onSave({
+      ...board,
+      config: {
+        ...board.config,
+        hourlyRatePersona: { seniorityYears, age, reducedRateMultiplier, riskBenefitMultiplier, levels },
+      },
+    });
+    toast({ title: 'Nouveau taux horaire sauvegardé', description: 'Les paramètres du taux horaire ont été sauvegardés.' });
+  };
+
+  return (
+    <Card className="border">
+      <CardHeader className="pb-2 flex flex-row items-center justify-between">
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Clock className="w-4 h-4" /> Taux horaire
+        </CardTitle>
+        <Button variant="outline" size="sm" onClick={savePersona}>
+          <Save className="w-4 h-4 mr-1" /> Sauvegarder
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-xs text-muted-foreground italic">
+          Simule le taux horaire facturable basé sur un profil type (tous les déterminants au maximum par défaut),
+          avec ancienneté et tranches d'âge projetées.
+        </p>
+
+        {/* Persona: all dimensions */}
+        <div className="space-y-2">
+          <Label className="text-xs font-medium">Déterminants du profil</Label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {board.dimensions.map(dim => {
+              const level = levels.find(l => l.dimensionId === dim.id)?.level ?? 0;
+              return (
+                <div key={dim.id} className="flex items-center gap-2">
+                  <span className="text-sm w-40 truncate" style={{ color: dim.color }}>{dim.name}</span>
+                  <Select value={String(level)} onValueChange={v => setLevel(dim.id, parseInt(v, 10))}>
+                    <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: dim.maxLevel + 1 }, (_, i) => (
+                        <SelectItem key={i} value={String(i)}>Niveau {i}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {dim.levelDescriptions?.[level] && (
+                    <span className="text-xs text-muted-foreground italic flex-1 min-w-0 truncate">
+                      {dim.levelDescriptions[level]}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Seniority & age */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs">Ancienneté projetée (années)</Label>
+            <Input type="number" min={0} value={seniorityYears} onChange={e => setSeniorityYears(parseInt(e.target.value) || 0)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Âge du persona</Label>
+            <Input type="number" min={0} value={age} onChange={e => setAge(parseInt(e.target.value) || 0)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Risques & bénéfices (défaut: 0.3 = 30%)</Label>
+            <Input
+              type="number"
+              step="0.05"
+              min={0}
+              max={1}
+              value={riskBenefitMultiplier}
+              onChange={e => setRiskBenefitMultiplier(parseFloat(e.target.value) || 0)}
+              className="text-right"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Multipl. tarif réduit (défaut: 0.5 = 50%)</Label>
+            <Input
+              type="number"
+              step="0.05"
+              min={0}
+              max={1}
+              value={reducedRateMultiplier}
+              onChange={e => setReducedRateMultiplier(parseFloat(e.target.value) || 0)}
+              className="text-right"
+            />
+          </div>
+        </div>
+
+        {/* Results */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 pt-2 border-t">
+          <MetricCard label="Salaire brut à 100% projeté" value={formatCurrency(result.projectedAnnualGross, currency)} />
+          <MetricCard label="Taux horaire client (incl. R&B)" value={formatCurrency(riskBenefitRate, currency)} />
+          <MetricCard label="Tarif réduit" value={formatCurrency(reducedRate, currency)} />
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 
