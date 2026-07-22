@@ -1403,5 +1403,19 @@
     "purposePlaceholder": "Welchen Dienst oder welche allgemeine Funktionalität bietet der Rollen-Kreis der Organisation, anderen Rollen-Kreisen oder externen Stakeholdern?",
     "missionsPlaceholder": "Welche spezifischen Dienste oder Aufgaben bietet der Rollen-Kreis der Organisation, anderen Rollen-Kreisen oder externen Stakeholdern?",
     "authorityScopePlaceholder": "Über welche Elemente hat der Rollen-Kreis exklusive Befugnis und über welche kann er allein entscheiden?"
+  },
+  "chronological": {
+    "noTimerData": "Keine Timer-Daten passen zu den ausgewählten Filtern.",
+    "task": "Aufgabe",
+    "category": "Kategorie",
+    "user": "Benutzer",
+    "startTime": "Startzeit",
+    "endTime": "Endzeit",
+    "duration": "Dauer"
+  },
+  "programTop": {
+    "calendar": "Kalender",
+    "resources": "Ressourcen",
+    "programCalendar": "Programmkalender"
   }
 }

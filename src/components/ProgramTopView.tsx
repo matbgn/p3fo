@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import ProgramView from './ProgramView';
 import ResourcesScheduler from './ResourcesScheduler';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,14 +22,16 @@ interface ProgramTopViewProps {
 
 type ActiveView = 'calendar' | 'resources';
 
-const ViewToggleButtons: React.FC<{ activeView: ActiveView; setActiveView: (v: ActiveView) => void; enabledSubViews: ActiveView[] }> = React.memo(({ activeView, setActiveView, enabledSubViews }) => (
+const ViewToggleButtons: React.FC<{ activeView: ActiveView; setActiveView: (v: ActiveView) => void; enabledSubViews: ActiveView[] }> = React.memo(({ activeView, setActiveView, enabledSubViews }) => {
+    const { t } = useTranslation();
+    return (
     <div className="flex space-x-2">
         {enabledSubViews.includes('calendar') && (
         <Button
             variant={activeView === 'calendar' ? 'default' : 'outline'}
             onClick={() => setActiveView('calendar')}
         >
-            Calendar
+            {t('programTop.calendar')}
         </Button>
         )}
         {enabledSubViews.includes('resources') && (
@@ -36,13 +39,15 @@ const ViewToggleButtons: React.FC<{ activeView: ActiveView; setActiveView: (v: A
             variant={activeView === 'resources' ? 'default' : 'outline'}
             onClick={() => setActiveView('resources')}
         >
-            Resources
+            {t('programTop.resources')}
         </Button>
         )}
     </div>
-));
+    );
+});
 
 const ProgramTopViewInner: React.FC<ProgramTopViewProps> = ({ onFocusOnTask }) => {
+    const { t } = useTranslation();
     const [activeView, setActiveView] = useState<ActiveView>('calendar');
     const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
     const { pendingSubView, clearPendingSubView, disabledModules } = useViewNavigation();
@@ -94,7 +99,7 @@ const ProgramTopViewInner: React.FC<ProgramTopViewProps> = ({ onFocusOnTask }) =
         return tasks.find(t => t.id === selectedTaskId) || null;
     }, [selectedTaskId, tasks]);
 
-    const viewTitle = activeView === 'calendar' ? 'Program Calendar' : 'Resources';
+    const viewTitle = activeView === 'calendar' ? t('programTop.programCalendar') : t('programTop.resources');
 
     const editTaskHandler = (task: Task) => setSelectedTaskId(task.id);
 

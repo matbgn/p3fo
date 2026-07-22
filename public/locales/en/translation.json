@@ -1403,5 +1403,19 @@
     "purposePlaceholder": "What service or general functionality does the role-circle provide to the organization, other role-circles or external stakeholders?",
     "missionsPlaceholder": "What specific services or tasks does the role-circle provide to the organization, to other role-circles or to external stakeholders?",
     "authorityScopePlaceholder": "What are the elements over which the role-circle has exclusive authority and for which it alone can decide?"
+  },
+  "chronological": {
+    "noTimerData": "No timer data matches the selected filters.",
+    "task": "Task",
+    "category": "Category",
+    "user": "User",
+    "startTime": "Start Time",
+    "endTime": "End Time",
+    "duration": "Duration"
+  },
+  "programTop": {
+    "calendar": "Calendar",
+    "resources": "Resources",
+    "programCalendar": "Program Calendar"
   }
 }

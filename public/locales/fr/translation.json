@@ -1403,5 +1403,19 @@
     "purposePlaceholder": "Quel service ou quelle fonctionnalité générale le rôle-cercle fournit-il à l'organisation, aux autres rôles-cercles ou aux parties prenantes externes ?",
     "missionsPlaceholder": "Quels services ou tâches spécifiques le rôle-cercle fournit-il à l'organisation, aux autres rôles-cercles ou aux parties prenantes externes ?",
     "authorityScopePlaceholder": "Quels sont les éléments sur lesquels le rôle-cercle a une autorité exclusive et pour lesquels il peut décider seul ?"
+  },
+  "chronological": {
+    "noTimerData": "Aucune donnée de minuteur ne correspond aux filtres sélectionnés.",
+    "task": "Tâche",
+    "category": "Catégorie",
+    "user": "Utilisateur",
+    "startTime": "Heure de début",
+    "endTime": "Heure de fin",
+    "duration": "Durée"
+  },
+  "programTop": {
+    "calendar": "Calendrier",
+    "resources": "Ressources",
+    "programCalendar": "Calendrier du programme"
   }
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Table, TableBody, TableHeader, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { EditableTimeEntry } from './EditableTimeEntry';
 import { TaskHierarchy } from './TaskHierarchy';
@@ -42,6 +43,7 @@ export const ChronologicalView: React.FC<ChronologicalViewProps> = ({
   onJumpToTask,
   onToggleTimer,
 }) => {
+  const { t } = useTranslation();
   const { updateTimeEntry, updateCategory } = useTasks();
 
   const [filters, setFilters] = React.useState<Filters>(getDefaultFilters());
@@ -214,7 +216,7 @@ export const ChronologicalView: React.FC<ChronologicalViewProps> = ({
         })}
       </svg>
       {sortedEntries.length === 0 ? (
-        <p>No timer data matches the selected filters.</p>
+        <p>{t('chronological.noTimerData')}</p>
       ) : (
         <div className="overflow-x-auto" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
           <Table style={{ tableLayout: 'fixed', minWidth: '980px' }}>
@@ -228,12 +230,12 @@ export const ChronologicalView: React.FC<ChronologicalViewProps> = ({
           </colgroup>
           <TableHeader>
             <TableRow>
-              <TableHead>Task</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>User</TableHead>
-              <TableHead>Start Time</TableHead>
-              <TableHead>End Time</TableHead>
-              <TableHead>Duration</TableHead>
+              <TableHead>{t('chronological.task')}</TableHead>
+              <TableHead>{t('chronological.category')}</TableHead>
+              <TableHead>{t('chronological.user')}</TableHead>
+              <TableHead>{t('chronological.startTime')}</TableHead>
+              <TableHead>{t('chronological.endTime')}</TableHead>
+              <TableHead>{t('chronological.duration')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
