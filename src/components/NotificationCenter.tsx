@@ -11,17 +11,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useTranslation } from "react-i18next";
 
 const SNOOZE_OPTIONS = [
-  { value: 5, label: "5 minutes" },
-  { value: 15, label: "15 minutes" },
-  { value: 30, label: "30 minutes" },
-  { value: 60, label: "1 hour" },
-  { value: 120, label: "2 hours" },
-  { value: 1440, label: "1 day" },
+  { value: 5, key: "notifications.snoozeDuration.5min" },
+  { value: 15, key: "notifications.snoozeDuration.15min" },
+  { value: 30, key: "notifications.snoozeDuration.30min" },
+  { value: 60, key: "notifications.snoozeDuration.1hour" },
+  { value: 120, key: "notifications.snoozeDuration.2hours" },
+  { value: 1440, key: "notifications.snoozeDuration.1day" },
 ];
 
 function ReminderItem({ reminder }: { reminder: Reminder }) {
+  const { t } = useTranslation();
   const { dismissReminder, markAsRead, snoozeReminder } = useReminderStore();
   const [snoozeDuration, setSnoozeDuration] = React.useState(SNOOZE_OPTIONS[0].value);
 
@@ -58,7 +60,7 @@ function ReminderItem({ reminder }: { reminder: Reminder }) {
       <div className="flex items-center justify-end space-x-2">
         {!reminder.read && (
           <Button variant="ghost" size="sm" onClick={handleMarkAsRead}>
-            Mark as Read
+            {t("notifications.markAsRead")}
           </Button>
         )}
         <Select
@@ -66,19 +68,19 @@ function ReminderItem({ reminder }: { reminder: Reminder }) {
           onValueChange={(value) => setSnoozeDuration(parseInt(value))}
         >
           <SelectTrigger className="h-8 w-[120px] text-xs">
-            <SelectValue placeholder="Snooze" />
+            <SelectValue placeholder={t("notifications.snoozePlaceholder")} />
           </SelectTrigger>
           <SelectContent>
             {SNOOZE_OPTIONS.map((option) => (
               <SelectItem key={option.value} value={option.value.toString()}>
-                {option.label}
+                {t(option.key)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
         <Button variant="ghost" size="sm" onClick={handleSnooze}>
           <BellPlus className="h-4 w-4 mr-1" />
-          Snooze
+          {t("notifications.snooze")}
         </Button>
       </div>
     </div>
@@ -86,6 +88,7 @@ function ReminderItem({ reminder }: { reminder: Reminder }) {
 }
 
 export function NotificationCenter() {
+  const { t } = useTranslation();
   const { reminders, unreadCount, clearAllReminders } = useReminderStore();
 
   return (
@@ -103,17 +106,17 @@ export function NotificationCenter() {
       <PopoverContent className="w-80 p-0">
         <div className="flex flex-col">
           <div className="flex items-center justify-between p-4">
-            <h4 className="text-sm font-semibold">Notifications</h4>
+            <h4 className="text-sm font-semibold">{t("notifications.title")}</h4>
             {reminders.length > 0 && (
               <Button variant="link" className="h-auto p-0 text-xs" onClick={clearAllReminders}>
-                Clear All
+                {t("notifications.clearAll")}
               </Button>
             )}
           </div>
           <div className="max-h-60 overflow-y-auto">
             {reminders.length === 0 ? (
               <div className="p-4 text-sm text-muted-foreground">
-                No new notifications.
+                {t("notifications.empty")}
               </div>
             ) : (
               reminders.map((reminder) => (

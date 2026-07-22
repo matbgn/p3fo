@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { PomodoroPhase } from '@/lib/pomodoro-types';
 import { Pause, Play, SkipForward, RotateCcw, Bell, Pin, Coffee, ChartNoAxesGantt, Apple, PlaneTakeoff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -30,17 +31,17 @@ interface PomodoroPiPContentProps {
 
 type LayoutSize = 'minimal' | 'compact' | 'normal' | 'spacious';
 
-const phaseConfig: Record<string, { label: string; color: string; bg: string; barColor: string }> = {
-  idle: { label: 'Ready', color: 'text-muted-foreground', bg: 'bg-muted', barColor: 'bg-muted-foreground' },
-  work: { label: 'Work', color: 'text-red-500', bg: 'bg-red-500/10', barColor: 'bg-red-500' },
-  'short-break': { label: 'Break', color: 'text-green-500', bg: 'bg-green-500/10', barColor: 'bg-green-500' },
-  'long-break': { label: 'Long Break', color: 'text-blue-500', bg: 'bg-blue-500/10', barColor: 'bg-blue-500' },
+const phaseConfig: Record<string, { labelKey: string; color: string; bg: string; barColor: string }> = {
+  idle: { labelKey: 'pomodoroUi.ready', color: 'text-muted-foreground', bg: 'bg-muted', barColor: 'bg-muted-foreground' },
+  work: { labelKey: 'pomodoroUi.work', color: 'text-red-500', bg: 'bg-red-500/10', barColor: 'bg-red-500' },
+  'short-break': { labelKey: 'pomodoroUi.break', color: 'text-green-500', bg: 'bg-green-500/10', barColor: 'bg-green-500' },
+  'long-break': { labelKey: 'pomodoroUi.longBreak', color: 'text-blue-500', bg: 'bg-blue-500/10', barColor: 'bg-blue-500' },
 };
 
-const transitionLabels: Record<string, { title: string; subtitle: string; bg: string; color: string }> = {
-  'short-break': { title: "Time's up!", subtitle: 'Take a short break', bg: 'bg-green-500', color: 'text-white' },
-  'long-break': { title: "Time's up!", subtitle: 'You earned a long break', bg: 'bg-blue-500', color: 'text-white' },
-  work: { title: "Break's over!", subtitle: 'Time to focus', bg: 'bg-red-500', color: 'text-white' },
+const transitionLabels: Record<string, { titleKey: string; subtitleKey: string; bg: string; color: string }> = {
+  'short-break': { titleKey: 'pomodoroUi.timesUp', subtitleKey: 'pomodoroUi.takeShortBreak', bg: 'bg-green-500', color: 'text-white' },
+  'long-break': { titleKey: 'pomodoroUi.timesUp', subtitleKey: 'pomodoroUi.earnedLongBreak', bg: 'bg-blue-500', color: 'text-white' },
+  work: { titleKey: 'pomodoroUi.breaksOver', subtitleKey: 'pomodoroUi.timeToFocus', bg: 'bg-red-500', color: 'text-white' },
 };
 
 const formatTime = (ms: number): string => {
@@ -51,36 +52,60 @@ const formatTime = (ms: number): string => {
 };
 
 function getLayoutSize(w: number, h: number): LayoutSize {
-  if (w < 140 || h < 120) return 'minimal';
+  // Buckets aligned to PiP presets:
+  //   Tiny (200×100)   → minimal
+  //   Small (240×140)  → compact
+  //   Medium (260×240) → normal
+  //   Normal (320×400) → normal
+  if (w < 220 || h < 140) return 'minimal';
   if (w < 260 || h < 240) return 'compact';
-  if (w < 420 || h < 340) return 'normal';
+  if (w < 440 || h < 480) return 'normal';
   return 'spacious';
 }
 
 function useLayoutSize(containerRef: React.RefObject<HTMLDivElement | null>): LayoutSize {
   const [size, setSize] = useState<LayoutSize>('normal');
+  // Cache the last computed layout bucket to skip React state updates when
+  // the bucket hasn't changed. ResizeObserver fires many times during a drag;
+  // only threshold crossings should trigger a re-render.
+  const sizeRef = useRef<LayoutSize>('normal');
 
   useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    setSize(getLayoutSize(el.offsetWidth, el.offsetHeight));
+    const next = getLayoutSize(el.offsetWidth, el.offsetHeight);
+    sizeRef.current = next;
+    setSize(next);
   }, [containerRef]);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const borderBox = entry.borderBoxSize?.[0];
-        const w = borderBox ? borderBox.inlineSize : entry.contentRect.width;
-        const h = borderBox ? borderBox.blockSize : entry.contentRect.height;
-        setSize(getLayoutSize(w, h));
+    let rafId: number | null = null;
+
+    const compute = () => {
+      rafId = null;
+      const next = getLayoutSize(el.offsetWidth, el.offsetHeight);
+      if (next !== sizeRef.current) {
+        sizeRef.current = next;
+        setSize(next);
+      }
+    };
+
+    const observer = new ResizeObserver(() => {
+      // Coalesce: only one computation per animation frame, regardless of how
+      // many resize entries the observer delivers.
+      if (rafId === null) {
+        rafId = requestAnimationFrame(compute);
       }
     });
 
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      observer.disconnect();
+    };
   }, [containerRef]);
 
   return size;
@@ -107,6 +132,7 @@ export const PomodoroPiPContent: React.FC<PomodoroPiPContentProps> = ({
   activeTechnique = 'pomodoro',
   travelerEnabled,
 }) => {
+  const { t } = useTranslation();
   const transition = phaseTransition ? transitionLabels[phaseTransition] : null;
   const [showPinHint, setShowPinHint] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -128,8 +154,8 @@ export const PomodoroPiPContent: React.FC<PomodoroPiPContentProps> = ({
     if (isMinimal) {
       return (
         <div ref={containerRef} className={`flex flex-col items-center justify-center h-full w-full p-1.5 ${transition.bg} transition-all duration-300`}>
-          <span className={`text-[10px] font-bold ${transition.color}`}>{transition.title}</span>
-          <span className={`text-[8px] ${transition.color} opacity-80 mb-1`}>{transition.subtitle}</span>
+          <span className={`text-[10px] font-bold ${transition.color}`}>{t(transition.titleKey)}</span>
+          <span className={`text-[8px] ${transition.color} opacity-80 mb-1`}>{t(transition.subtitleKey)}</span>
           <div className="flex items-center gap-0.5 mb-1.5">
             {Array.from({ length: cyclesBeforeLongBreak }, (_, i) => (
               <div key={i} className={`w-1 h-1 rounded-full ${i <= displayCycleIndex ? 'bg-white' : 'bg-white/30'}`} />
@@ -140,27 +166,65 @@ export const PomodoroPiPContent: React.FC<PomodoroPiPContentProps> = ({
               className={`${transition.color} text-[9px] px-1 py-0 border border-white/40 bg-white/20 hover:bg-white/30 rounded`}
               onClick={onDismissTransition}
             >
-              Dismiss
+              {t('pomodoroUi.dismiss')}
             </button>
             <button
               className={`${transition.color} text-[9px] px-1 py-0 border border-white/60 bg-white/40 hover:bg-white/50 rounded`}
               onClick={() => { onDismissTransition(); onResume(); }}
             >
-              Start
+              {t('pomodoroUi.start')}
             </button>
           </div>
         </div>
       );
     }
 
+    if (isCompact) {
+      return (
+        <div ref={containerRef} className={`flex flex-col items-center justify-center h-full w-full p-2 ${transition.bg} transition-all duration-300`}>
+          <Bell className={`h-6 w-6 ${transition.color} mb-1 animate-bounce`} />
+          <h1 className={`text-base font-bold ${transition.color} mb-0.5`}>
+            {t(transition.titleKey)}
+          </h1>
+          <p className={`text-[11px] ${transition.color} opacity-80 mb-2`}>
+            {t(transition.subtitleKey)}
+          </p>
+          <div className="flex items-center gap-1 mb-2">
+            {Array.from({ length: cyclesBeforeLongBreak }, (_, i) => (
+              <div key={i} className={`w-1.5 h-1.5 rounded-full ${i <= displayCycleIndex ? 'bg-white' : 'bg-white/30'}`} />
+            ))}
+          </div>
+          <div className="flex gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              className={`${transition.color} border-white/40 bg-white/20 hover:bg-white/30 h-7 px-2 text-xs`}
+              onClick={onDismissTransition}
+            >
+              {t('pomodoroUi.dismiss')}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className={`${transition.color} border-white/60 bg-white/40 hover:bg-white/50 h-7 px-2 text-xs`}
+              onClick={() => { onDismissTransition(); onResume(); }}
+            >
+              <Play className="mr-1 h-3 w-3" />
+              {phaseTransition === 'short-break' ? t('pomodoroUi.break') : phaseTransition === 'long-break' ? t('pomodoroUi.longBreak') : t('pomodoroUi.work')}
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <div ref={containerRef} className={`flex flex-col items-center justify-center h-full w-full ${isCompact ? 'p-2' : isSpacious ? 'p-8' : 'p-4'} ${transition.bg} transition-all duration-300`}>
+      <div ref={containerRef} className={`flex flex-col items-center justify-center h-full w-full ${isSpacious ? 'p-8' : 'p-4'} ${transition.bg} transition-all duration-300`}>
         <Bell className={`h-10 w-10 ${transition.color} mb-3 animate-bounce`} />
         <h1 className={`text-2xl font-bold ${transition.color} mb-1`}>
-          {transition.title}
+          {t(transition.titleKey)}
         </h1>
         <p className={`text-sm ${transition.color} opacity-80 mb-6`}>
-          {transition.subtitle}
+          {t(transition.subtitleKey)}
         </p>
         <div className="flex items-center gap-1.5 mb-4">
           {Array.from({ length: cyclesBeforeLongBreak }, (_, i) => (
@@ -176,7 +240,7 @@ export const PomodoroPiPContent: React.FC<PomodoroPiPContentProps> = ({
             className={`${transition.color} border-white/40 bg-white/20 hover:bg-white/30`}
             onClick={onDismissTransition}
           >
-            Dismiss
+            {t('pomodoroUi.dismiss')}
           </Button>
           <Button
             variant="outline"
@@ -184,7 +248,7 @@ export const PomodoroPiPContent: React.FC<PomodoroPiPContentProps> = ({
             onClick={() => { onDismissTransition(); onResume(); }}
           >
             <Play className="mr-1 h-4 w-4" />
-            {phaseTransition === 'short-break' ? 'Start break' : phaseTransition === 'long-break' ? 'Start long break' : 'Start work'}
+            {phaseTransition === 'short-break' ? t('pomodoroUi.startBreak') : phaseTransition === 'long-break' ? t('pomodoroUi.startLongBreak') : t('pomodoroUi.startWork')}
           </Button>
         </div>
       </div>
@@ -236,36 +300,36 @@ export const PomodoroPiPContent: React.FC<PomodoroPiPContentProps> = ({
           {phase !== 'idle' && (
             <>
               {isRunning && !isPaused ? (
-                <button onClick={onPause} className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted/50" title="Pause">
+                <button onClick={onPause} className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted/50" title={t('pomodoroUi.pause')}>
                   <Pause className="h-2.5 w-2.5" />
                 </button>
               ) : isPaused ? (
-                <button onClick={onResume} className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted/50" title="Resume">
+                <button onClick={onResume} className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted/50" title={t('pomodoroUi.resume')}>
                   <Play className="h-2.5 w-2.5" />
                 </button>
               ) : null}
-              <button onClick={onSkip} className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted/50" title="Skip">
+              <button onClick={onSkip} className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted/50" title={t('pomodoroUi.skip')}>
                 <SkipForward className="h-2.5 w-2.5" />
               </button>
             </>
           )}
           {onReset && (phase !== 'idle' || displayCycleIndex >= 0) && (
-            <button onClick={onReset} className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted/50" title="Reset">
+            <button onClick={onReset} className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted/50" title={t('pomodoroUi.reset')}>
               <RotateCcw className="h-2.5 w-2.5" />
             </button>
           )}
           {phase === 'idle' && (
-            <button onClick={onStartWork} className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted/50" title="Start work">
+            <button onClick={onStartWork} className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted/50" title={t('pomodoroUi.startWork')}>
               <Play className="h-2.5 w-2.5" />
             </button>
           )}
-          <button onClick={() => setShowPinHint(true)} className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted/50" title="Pin">
+          <button onClick={() => setShowPinHint(true)} className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted/50" title={t('pomodoroUi.pin')}>
             <Pin className="h-2.5 w-2.5" />
           </button>
         </div>
         {showPinHint && (
           <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 bg-background/95 border rounded px-1 py-0.5 shadow-lg text-[7px] text-center max-w-[90%]">
-            <span className="font-semibold">Pin:</span> <kbd className="px-0.5 bg-muted rounded">Super</kbd>+<kbd className="px-0.5 bg-muted rounded">RClick</kbd> → Always on Top
+            <span className="font-semibold">{t('pomodoroUi.pinHint')}</span> <kbd className="px-0.5 bg-muted rounded">Super</kbd>+<kbd className="px-0.5 bg-muted rounded">RClick</kbd> → {t('pomodoroUi.alwaysOnTop')}
           </div>
         )}
       </div>
@@ -285,10 +349,10 @@ export const PomodoroPiPContent: React.FC<PomodoroPiPContentProps> = ({
 
   const techniqueOptions = travelerEnabled
     ? [
-        { value: 'pomodoro', label: 'Pomodoro', icon: <Apple className="h-3 w-3" /> },
-        { value: 'traveler', label: 'Traveler', icon: <PlaneTakeoff className="h-3 w-3" /> },
+        { value: 'pomodoro', label: t('quickTimer.pomodoro'), icon: <Apple className="h-3 w-3" /> },
+        { value: 'traveler', label: t('quickTimer.traveler'), icon: <PlaneTakeoff className="h-3 w-3" /> },
       ]
-    : [{ value: 'pomodoro', label: 'Pomodoro', icon: <Apple className="h-3 w-3" /> }];
+    : [{ value: 'pomodoro', label: t('quickTimer.pomodoro'), icon: <Apple className="h-3 w-3" /> }];
 
   return (
     <div ref={containerRef} className={`flex flex-col items-center justify-center h-full w-full ${isCompact ? 'p-1' : isSpacious ? 'p-6' : 'p-3'} ${config.bg} transition-colors duration-500`}>
@@ -298,7 +362,7 @@ export const PomodoroPiPContent: React.FC<PomodoroPiPContentProps> = ({
             value={activeTechnique}
             onValueChange={(v) => onSelectActiveTechnique(v as ActiveTechnique)}
             options={techniqueOptions}
-            placeholder="Technique"
+            placeholder={t('pomodoroUi.technique')}
             className={isSpacious ? 'w-28' : 'w-24'}
             triggerClassName={isSpacious ? 'h-8 text-xs px-2' : 'h-7 text-[10px] px-1.5'}
           />
@@ -371,7 +435,7 @@ export const PomodoroPiPContent: React.FC<PomodoroPiPContentProps> = ({
           <>
             {isRunning && !isPaused ? (
               isCompact ? (
-                <button onClick={onPause} className="h-6 w-6 flex items-center justify-center rounded border border-current/30 hover:bg-muted/50" title="Pause">
+                <button onClick={onPause} className="h-6 w-6 flex items-center justify-center rounded border border-current/30 hover:bg-muted/50" title={t('pomodoroUi.pause')}>
                   <Pause className="h-3 w-3" />
                 </button>
               ) : (
@@ -381,7 +445,7 @@ export const PomodoroPiPContent: React.FC<PomodoroPiPContentProps> = ({
               )
             ) : isPaused ? (
               isCompact ? (
-                <button onClick={onResume} className="h-6 w-6 flex items-center justify-center rounded border border-current/30 hover:bg-muted/50" title="Resume">
+                <button onClick={onResume} className="h-6 w-6 flex items-center justify-center rounded border border-current/30 hover:bg-muted/50" title={t('pomodoroUi.resume')}>
                   <Play className="h-3 w-3" />
                 </button>
               ) : (
@@ -391,11 +455,11 @@ export const PomodoroPiPContent: React.FC<PomodoroPiPContentProps> = ({
               )
             ) : null}
             {isCompact ? (
-              <button onClick={onSkip} className="h-6 w-6 flex items-center justify-center rounded border border-current/30 hover:bg-muted/50" title="Skip">
+              <button onClick={onSkip} className="h-6 w-6 flex items-center justify-center rounded border border-current/30 hover:bg-muted/50" title={t('pomodoroUi.skip')}>
                 <SkipForward className="h-3 w-3" />
               </button>
             ) : (
-              <Button variant="outline" size="sm" onClick={onSkip} className="h-8 w-8 p-0" title="Skip">
+              <Button variant="outline" size="sm" onClick={onSkip} className="h-8 w-8 p-0" title={t('pomodoroUi.skip')}>
                 <SkipForward className="h-4 w-4" />
               </Button>
             )}
@@ -403,40 +467,40 @@ export const PomodoroPiPContent: React.FC<PomodoroPiPContentProps> = ({
         )}
         {onReset && (phase !== 'idle' || displayCycleIndex >= 0) && (
           isCompact ? (
-            <button onClick={onReset} className="h-6 w-6 flex items-center justify-center rounded border border-current/30 hover:bg-muted/50" title="Reset cycle">
+            <button onClick={onReset} className="h-6 w-6 flex items-center justify-center rounded border border-current/30 hover:bg-muted/50" title={t('pomodoroUi.resetCycle')}>
               <RotateCcw className="h-3 w-3" />
             </button>
           ) : (
-            <Button variant="outline" size="sm" onClick={onReset} className="h-8 w-8 p-0" title="Reset cycle">
+            <Button variant="outline" size="sm" onClick={onReset} className="h-8 w-8 p-0" title={t('pomodoroUi.resetCycle')}>
               <RotateCcw className="h-4 w-4" />
             </Button>
           )
         )}
         {phase === 'idle' && (
           isCompact ? (
-            <button onClick={onStartWork} className="h-6 w-6 flex items-center justify-center rounded border border-current/30 hover:bg-muted/50" title="Start work">
+            <button onClick={onStartWork} className="h-6 w-6 flex items-center justify-center rounded border border-current/30 hover:bg-muted/50" title={t('pomodoroUi.startWork')}>
               <Play className="h-3 w-3" />
             </button>
           ) : (
-            <Button variant="outline" size="sm" onClick={onStartWork} className="h-8 w-8 p-0" title="Start work">
+            <Button variant="outline" size="sm" onClick={onStartWork} className="h-8 w-8 p-0" title={t('pomodoroUi.startWork')}>
               <Play className="h-4 w-4" />
             </Button>
           )
         )}
         {isCompact ? (
-          <button onClick={() => setShowPinHint(true)} className="h-6 w-6 flex items-center justify-center rounded border border-current/30 hover:bg-muted/50" title="How to pin on top">
+          <button onClick={() => setShowPinHint(true)} className="h-6 w-6 flex items-center justify-center rounded border border-current/30 hover:bg-muted/50" title={t('pomodoroUi.howToPin')}>
             <Pin className="h-3 w-3" />
           </button>
         ) : (
-          <Button variant="outline" size="sm" onClick={() => setShowPinHint(true)} className="h-8 w-8 p-0" title="How to pin on top">
+          <Button variant="outline" size="sm" onClick={() => setShowPinHint(true)} className="h-8 w-8 p-0" title={t('pomodoroUi.howToPin')}>
             <Pin className="h-4 w-4" />
           </Button>
         )}
       </div>
       {showPinHint && (
         <div className={`absolute bottom-1 left-1/2 -translate-x-1/2 bg-background/95 border rounded-lg shadow-lg max-w-[90%] text-center ${isCompact ? 'px-1.5 py-1 text-[8px]' : 'px-3 py-2 text-xs'}`}>
-          <p className="font-semibold mb-0.5">To pin on top:</p>
-          <p>Press <kbd className="px-1 py-0.5 bg-muted rounded text-[8px]">Super</kbd> + <kbd className="px-1 py-0.5 bg-muted rounded text-[8px]">Right-Click</kbd></p>
+          <p className="font-semibold mb-0.5">{t('pomodoroUi.toPinOnTop')}</p>
+          <p>{t('pomodoroUi.pressSuperRightClick')}</p>
         </div>
       )}
     </div>

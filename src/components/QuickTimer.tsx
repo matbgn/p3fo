@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useTranslation } from 'react-i18next';
 import { Button } from "@/components/ui/button";
 import { Pause, ArrowRight, Play, SkipForward, Apple, RotateCcw, PictureInPicture2, PlaneTakeoff, Loader2, ChevronDown, Train, Coffee, ChartNoAxesGantt, Search, SearchCheck, SearchX } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -24,11 +25,11 @@ const phaseDotColor: Record<PomodoroPhase, string> = {
   'long-break': 'bg-blue-500',
 };
 
-const phaseLabel: Record<PomodoroPhase, string> = {
+const phaseLabelKey: Record<PomodoroPhase, string> = {
   idle: '',
-  work: 'Focus',
-  'short-break': 'Break',
-  'long-break': 'Long Break',
+  work: 'quickTimer.phaseFocus',
+  'short-break': 'quickTimer.phaseShortBreak',
+  'long-break': 'quickTimer.phaseLongBreak',
 };
 
 const formatPomodoroTime = (ms: number): string => {
@@ -54,6 +55,7 @@ type TimerMode = 'pomodoro' | 'traveler';
 export const QuickTimer: React.FC<{
   onJumpToTask?: (taskId: string) => void;
 }> = ({ onJumpToTask }) => {
+  const { t } = useTranslation();
   const { tasks } = useAllTasks();
   const { userId: currentUserId } = useUserSettings();
   const { toggleTimer } = useTasks();
@@ -353,14 +355,14 @@ export const QuickTimer: React.FC<{
       {pomodoroActive || (activeMode === 'pomodoro' && pomodoro.pomodoroEnabled && pomodoro.displayCycleIndex >= 0) ? (
         // Pomodoro active display
         <>
-          <span className="shrink-0" title={phaseLabel[pomodoro.state.phase]}>
+          <span className="shrink-0" title={t(phaseLabelKey[pomodoro.state.phase])}>
             {pomodoro.state.phase === 'work' ? (
               <ChartNoAxesGantt className="h-3 w-3 sm:h-4 sm:w-4 text-red-500" />
             ) : (
               <Coffee className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" />
             )}
           </span>
-          <div className={`w-2 h-2 rounded-full shrink-0 ${phaseDotColor[pomodoro.state.phase]}`} title={phaseLabel[pomodoro.state.phase]} />
+          <div className={`w-2 h-2 rounded-full shrink-0 ${phaseDotColor[pomodoro.state.phase]}`} title={t(phaseLabelKey[pomodoro.state.phase])} />
           {pomodoro.state.phase !== 'idle' ? (
             <div className="text-xs sm:text-sm font-mono shrink-0 font-semibold">
               {formatPomodoroTime(pomodoro.remaining)}
@@ -392,30 +394,30 @@ export const QuickTimer: React.FC<{
             })}
           </div>
           {pomodoro.isRunning && !pomodoro.isPaused ? (
-            <Button size="sm" variant="outline" onClick={pomodoro.pause} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title="Pause">
+            <Button size="sm" variant="outline" onClick={pomodoro.pause} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.pause')}>
               <Pause className="h-3 w-3 sm:h-4 sm:w-4" />
             </Button>
           ) : pomodoro.isPaused ? (
-            <Button size="sm" variant="outline" onClick={pomodoro.resume} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title="Resume">
+            <Button size="sm" variant="outline" onClick={pomodoro.resume} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.resume')}>
               <Play className="h-3 w-3 sm:h-4 sm:w-4" />
             </Button>
           ) : (
             pomodoro.state.phase === 'idle' && pomodoro.displayCycleIndex >= 0 && (
-              <Button size="sm" variant="outline" onClick={() => { pomodoro.startWork(); }} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title="Start work">
+              <Button size="sm" variant="outline" onClick={() => { pomodoro.startWork(); }} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.startWork')}>
                 <Play className="h-3 w-3 sm:h-4 sm:w-4" />
               </Button>
             )
           )}
           {pomodoro.state.phase !== 'idle' && (
-            <Button size="sm" variant="outline" onClick={() => { pomodoro.skip(); }} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title="Skip phase">
+            <Button size="sm" variant="outline" onClick={() => { pomodoro.skip(); }} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.skipPhase')}>
               <SkipForward className="h-3 w-3 sm:h-4 sm:w-4" />
             </Button>
           )}
-          <Button size="sm" variant="outline" onClick={() => { pomodoro.reset(); setTimerMode('pomodoro'); }} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title="Reset">
+          <Button size="sm" variant="outline" onClick={() => { pomodoro.reset(); setTimerMode('pomodoro'); }} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.reset')}>
             <RotateCcw className="h-3 w-3 sm:h-4 sm:w-4" />
           </Button>
           {pipSupported && !showOverlay && (
-            <Button size="sm" variant="outline" onClick={handleQuickPiP} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={isPiPActive ? 'Close PiP' : 'Open in PiP'}>
+            <Button size="sm" variant="outline" onClick={handleQuickPiP} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={isPiPActive ? t('quickTimer.closePip') : t('quickTimer.openPip')}>
               <PictureInPicture2 className="h-3 w-3 sm:h-4 sm:w-4" />
             </Button>
           )}
@@ -423,7 +425,7 @@ export const QuickTimer: React.FC<{
           {anyTimerEnabled && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="outline" className="h-7 w-7 sm:h-8 sm:w-8 p-0" title="Switch technique">
+                <Button size="sm" variant="outline" className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.switchTechnique')}>
                   <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -431,20 +433,20 @@ export const QuickTimer: React.FC<{
                 {pomodoro.pomodoroEnabled && (
                   <DropdownMenuItem onClick={() => setTimerMode('pomodoro')}>
                     <Apple className="mr-2 h-4 w-4" />
-                    Pomodoro
+                    {t('quickTimer.pomodoro')}
                   </DropdownMenuItem>
                 )}
                 {traveler.travelerEnabled && (
                   <DropdownMenuItem onClick={() => { setTimerMode('traveler'); pomodoro.reset(); }}>
                     <PlaneTakeoff className="mr-2 h-4 w-4" />
-                    Traveler
+                    {t('quickTimer.traveler')}
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
           {onJumpToTask && (
-            <Button size="sm" variant="outline" onClick={() => onJumpToTask(runningTask ? runningTask.task.id : '')} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title="Jump to task">
+            <Button size="sm" variant="outline" onClick={() => onJumpToTask(runningTask ? runningTask.task.id : '')} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.jumpToTask')}>
               <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4" />
             </Button>
           )}
@@ -454,7 +456,7 @@ export const QuickTimer: React.FC<{
         <>
           {traveler.state.phase !== 'idle' ? (
             <>
-              <span className="shrink-0" title={traveler.state.phase === 'work' ? 'Flight' : 'Break'}>
+              <span className="shrink-0" title={traveler.state.phase === 'work' ? t('quickTimer.flight') : t('quickTimer.break')}>
                 {traveler.state.phase === 'work' ? (
                   <ChartNoAxesGantt className="h-3 w-3 sm:h-4 sm:w-4 text-red-500" />
                 ) : (
@@ -463,7 +465,7 @@ export const QuickTimer: React.FC<{
               </span>
               <div
                 className={`w-2 h-2 rounded-full shrink-0 ${traveler.state.phase === 'work' ? 'bg-red-500' : 'bg-green-500'}`}
-                title={traveler.state.phase === 'work' ? 'Flight' : 'Break'}
+                title={traveler.state.phase === 'work' ? t('quickTimer.flight') : t('quickTimer.break')}
               />
             </>
           ) : (
@@ -476,11 +478,11 @@ export const QuickTimer: React.FC<{
                 )}
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="flight">
-                  <span className="flex items-center gap-1.5"><PlaneTakeoff className="h-3 w-3" /> Flight</span>
-                </SelectItem>
-                <SelectItem value="train">
-                  <span className="flex items-center gap-1.5"><Train className="h-3 w-3" /> Train</span>
+                 <SelectItem value="flight">
+                   <span className="flex items-center gap-1.5"><PlaneTakeoff className="h-3 w-3" /> {t('quickTimer.flightLabel')}</span>
+                 </SelectItem>
+                 <SelectItem value="train">
+                   <span className="flex items-center gap-1.5"><Train className="h-3 w-3" /> {t('quickTimer.train')}</span>
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -493,13 +495,13 @@ export const QuickTimer: React.FC<{
             <Input
               value={departure}
               onChange={(e) => setDeparture(e.target.value)}
-              placeholder="From"
+              placeholder={t('quickTimer.from')}
               className="w-[100px] h-7 sm:h-8 text-xs px-2"
             />
           ) : (
             <Select value={departure} onValueChange={setDeparture}>
               <SelectTrigger className="w-[64px] h-7 sm:h-8 text-xs px-2">
-                <SelectValue placeholder="From" />
+                <SelectValue placeholder={t('quickTimer.from')} />
               </SelectTrigger>
               <SelectContent>
                 {CITIES.map((city) => (
@@ -518,7 +520,7 @@ export const QuickTimer: React.FC<{
             <Input
               value={destination}
               onChange={(e) => setDestination(e.target.value)}
-              placeholder="To"
+              placeholder={t('quickTimer.to')}
               className="w-[100px] h-7 sm:h-8 text-xs px-2"
             />
           ) : (
@@ -526,7 +528,7 @@ export const QuickTimer: React.FC<{
               <span className="text-xs text-muted-foreground">→</span>
               <Select value={destination} onValueChange={setDestination}>
                 <SelectTrigger className="w-[64px] h-7 sm:h-8 text-xs px-2">
-                  <SelectValue placeholder="To" />
+                  <SelectValue placeholder={t('quickTimer.to')} />
                 </SelectTrigger>
                 <SelectContent>
                   {CITIES
@@ -575,7 +577,7 @@ export const QuickTimer: React.FC<{
               onClick={searchTravelDuration}
               disabled={durationLoading}
               className="h-7 w-7 sm:h-8 sm:w-8 p-0"
-              title="Search travel duration"
+              title={t('quickTimer.searchTravelDuration')}
             >
               {durationLoading ? (
                 <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
@@ -585,7 +587,7 @@ export const QuickTimer: React.FC<{
             </Button>
           )}
           {traveler.state.phase === 'idle' && departure && destination && durationPreview && (
-            <Button size="sm" variant="outline" onClick={handleStartTraveler} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title="Start Traveler timer">
+             <Button size="sm" variant="outline" onClick={handleStartTraveler} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.startTraveler')}>
               <Play className="h-3 w-3 sm:h-4 sm:w-4" />
             </Button>
           )}
@@ -599,15 +601,15 @@ export const QuickTimer: React.FC<{
             </Button>
           ) : null}
           {traveler.state.phase !== 'idle' && (
-            <Button size="sm" variant="outline" onClick={traveler.skip} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title="Skip phase">
+            <Button size="sm" variant="outline" onClick={traveler.skip} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.skipPhase')}>
               <SkipForward className="h-3 w-3 sm:h-4 sm:w-4" />
             </Button>
           )}
-          <Button size="sm" variant="outline" onClick={() => { traveler.reset(); setDeparture(''); setDestination(''); setDurationPreview(null); setTravelMode('flight'); setTimerMode('pomodoro'); }} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title="Reset">
+          <Button size="sm" variant="outline" onClick={() => { traveler.reset(); setDeparture(''); setDestination(''); setDurationPreview(null); setTravelMode('flight'); setTimerMode('pomodoro'); }} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.reset')}>
             <RotateCcw className="h-3 w-3 sm:h-4 sm:w-4" />
           </Button>
           {pipSupported && !showOverlay && (
-            <Button size="sm" variant="outline" onClick={handleQuickPiP} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={isPiPActive ? 'Close PiP' : 'Open in PiP'}>
+            <Button size="sm" variant="outline" onClick={handleQuickPiP} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={isPiPActive ? t('quickTimer.closePip') : t('quickTimer.openPip')}>
               <PictureInPicture2 className="h-3 w-3 sm:h-4 sm:w-4" />
             </Button>
           )}
@@ -615,7 +617,7 @@ export const QuickTimer: React.FC<{
           {anyTimerEnabled && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="outline" className="h-7 w-7 sm:h-8 sm:w-8 p-0" title="Switch technique">
+                <Button size="sm" variant="outline" className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.switchTechnique')}>
                   <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -623,20 +625,20 @@ export const QuickTimer: React.FC<{
                 {pomodoro.pomodoroEnabled && (
                   <DropdownMenuItem onClick={() => { setTimerMode('pomodoro'); traveler.reset(); }}>
                     <Apple className="mr-2 h-4 w-4" />
-                    Pomodoro
+                    {t('quickTimer.pomodoro')}
                   </DropdownMenuItem>
                 )}
                 {traveler.travelerEnabled && (
                   <DropdownMenuItem onClick={() => setTimerMode('traveler')}>
                     <PlaneTakeoff className="mr-2 h-4 w-4" />
-                    Traveler
+                    {t('quickTimer.traveler')}
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
           {onJumpToTask && runningTask && (
-            <Button size="sm" variant="outline" onClick={() => onJumpToTask(runningTask.task.id)} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title="Jump to task">
+            <Button size="sm" variant="outline" onClick={() => onJumpToTask(runningTask.task.id)} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.jumpToTask')}>
               <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4" />
             </Button>
           )}
@@ -653,7 +655,7 @@ export const QuickTimer: React.FC<{
           {anyTimerEnabled && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="outline" className="h-7 w-7 sm:h-8 sm:w-8 p-0" title="Switch technique">
+                <Button size="sm" variant="outline" className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.switchTechnique')}>
                   <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -661,19 +663,19 @@ export const QuickTimer: React.FC<{
                 {pomodoro.pomodoroEnabled && (
                   <DropdownMenuItem onClick={() => { setTimerMode('pomodoro'); pomodoro.startWork(runningTask.task.id); }}>
                     <Apple className="mr-2 h-4 w-4" />
-                    Pomodoro
+                    {t('quickTimer.pomodoro')}
                   </DropdownMenuItem>
                 )}
                 {traveler.travelerEnabled && (
                   <DropdownMenuItem onClick={() => { setTimerMode('traveler'); }}>
                     <PlaneTakeoff className="mr-2 h-4 w-4" />
-                    Traveler
+                    {t('quickTimer.traveler')}
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <Button size="sm" variant="outline" onClick={() => toggleTimer(runningTask.task.id, currentUserId)} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={runningTask.entry.endTime === 0 ? 'Pause task' : 'Resume task'}>
+          <Button size="sm" variant="outline" onClick={() => toggleTimer(runningTask.task.id, currentUserId)} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={runningTask.entry.endTime === 0 ? t('quickTimer.pauseTask') : t('quickTimer.resumeTask')}>
             {runningTask.entry.endTime === 0 ? (
               <Pause className="h-3 w-3 sm:h-4 sm:w-4" />
             ) : (
@@ -681,7 +683,7 @@ export const QuickTimer: React.FC<{
             )}
           </Button>
           {onJumpToTask && (
-            <Button size="sm" variant="outline" onClick={() => onJumpToTask(runningTask.task.id)} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title="Jump to task">
+            <Button size="sm" variant="outline" onClick={() => onJumpToTask(runningTask.task.id)} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.jumpToTask')}>
               <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4" />
             </Button>
           )}
@@ -701,7 +703,7 @@ export const QuickTimer: React.FC<{
             variant="ghost"
             onClick={() => toggleTimer(lastStoppedTask.task.id, currentUserId)}
             className="h-7 w-7 sm:h-8 sm:w-8 p-0 text-muted-foreground/60 hover:text-foreground"
-            title="Resume timer"
+            title={t('quickTimer.resumeTimer')}
           >
             <Play className="h-3 w-3 sm:h-4 sm:w-4" />
           </Button>
@@ -709,16 +711,16 @@ export const QuickTimer: React.FC<{
       ) : (
         // No timer, no task
         <div className="text-xs sm:text-sm text-muted-foreground italic flex items-center h-full">
-          No active timer
+          {t('quickTimer.noActiveTimer')}
         </div>
       )}
       {!spotlightVisible && (
         <button
           onClick={() => eventBus.publish('spotlightReopen')}
           className="text-[11px] text-muted-foreground/70 hover:text-primary transition-colors shrink-0 ml-1 leading-tight text-left"
-          title="Reopen the What's Next spotlight"
+          title={t('quickTimer.reopenSpotlight')}
         >
-          What's<br />next?
+          {t('quickTimer.whatsNext')}
         </button>
       )}
     </div>

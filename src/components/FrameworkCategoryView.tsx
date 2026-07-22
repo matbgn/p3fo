@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useTranslation } from 'react-i18next';
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/mantine/style.css";
@@ -74,6 +75,7 @@ export const FrameworkCategoryView: React.FC<FrameworkCategoryViewProps> = ({
   onToggleCollapsed,
 }) => {
   const { userSettings } = useUserSettings();
+  const { t } = useTranslation();
   const [userColor] = React.useState(getRandomColor);
   const [internalCollapsed, setInternalCollapsed] = React.useState(false);
   const isControlled = controlledCollapsed !== undefined;
@@ -101,11 +103,11 @@ export const FrameworkCategoryView: React.FC<FrameworkCategoryViewProps> = ({
             },
             showCursorLabels: "activity",
           },
-          placeholders: { default: `Write your ${label.toLowerCase()} here...` },
+          placeholders: { default: t('framework.placeholder', { field: label.toLowerCase() }) },
         }
       : {
           initialContent: initialBlocks,
-          placeholders: { default: `Write your ${label.toLowerCase()} here...` },
+          placeholders: { default: t('framework.placeholder', { field: label.toLowerCase() }) },
         }
   );
 
@@ -184,7 +186,7 @@ export const FrameworkCategoryView: React.FC<FrameworkCategoryViewProps> = ({
             {label}
           </h3>
           {optional && (
-            <span className="text-xs text-gray-400 italic shrink-0">(optional)</span>
+            <span className="text-xs text-gray-400 italic shrink-0">({t('framework.categoryOptional')})</span>
           )}
         </div>
         {collapsible && (

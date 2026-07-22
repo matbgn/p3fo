@@ -1,3 +1,5 @@
+import type { TFunction } from 'i18next';
+
 export const MJ_SCALE = [
     { value: -1, label: 'Reject', color: 'bg-red-600', hoverColor: 'hover:bg-red-700', icon: '⛔' },
     { value: 0, label: 'Insufficient', color: 'bg-orange-500', hoverColor: 'hover:bg-orange-600', icon: '👎' },
@@ -14,3 +16,28 @@ export const VOTING_MODES_LABELS = {
     'MAJORITY_JUDGMENT': 'Majority Judgment',
     'CONSENT_LOOP': 'Consent Loop'
 };
+
+const MJ_GRADE_KEYS: Record<number, string> = {
+    [-1]: 'voting.mjGrade.reject',
+    0: 'voting.mjGrade.insufficient',
+    1: 'voting.mjGrade.passable',
+    2: 'voting.mjGrade.acceptable',
+    3: 'voting.mjGrade.good',
+    4: 'voting.mjGrade.excellent',
+};
+
+export function mjGradeLabel(t: TFunction, value: number): string {
+    return t(MJ_GRADE_KEYS[value] ?? '');
+}
+
+const VOTING_MODE_KEYS: Record<string, string> = {
+    'THUMBS_UP': 'voting.mode.thumbsUp',
+    'THUMBS_UD_NEUTRAL': 'voting.mode.thumbsUdNeutral',
+    'POINTS': 'voting.mode.points',
+    'MAJORITY_JUDGMENT': 'voting.mode.majorityJudgment',
+    'CONSENT_LOOP': 'voting.mode.consentLoop',
+};
+
+export function votingModeLabel(t: TFunction, mode: string): string {
+    return t(VOTING_MODE_KEYS[mode] ?? '');
+}

@@ -1,4 +1,4 @@
-import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from './persistence-types';
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, SalaryBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from './persistence-types';
 import { DEFAULT_TASKS_INITIALIZED_KEY } from '@/hooks/useTasks';
 
 export class HttpApiPersistence implements PersistenceAdapter {
@@ -207,6 +207,18 @@ export class HttpApiPersistence implements PersistenceAdapter {
 
   async updateDreamBoardState(state: DreamBoardEntity): Promise<void> {
     await this.makeRequest('/api/dream-board', {
+      method: 'PUT',
+      body: JSON.stringify(state),
+    });
+  }
+
+  // Salary Board
+  async getSalaryBoardState(): Promise<SalaryBoardEntity | null> {
+    return this.makeRequest('/api/salary-board');
+  }
+
+  async updateSalaryBoardState(state: SalaryBoardEntity): Promise<void> {
+    await this.makeRequest('/api/salary-board', {
       method: 'PUT',
       body: JSON.stringify(state),
     });

@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Calendar, momentLocalizer, View, SlotInfo } from 'react-big-calendar';
 import moment from 'moment';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
@@ -36,6 +37,7 @@ interface ProgramViewProps {
 }
 
 const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) => {
+  const { t } = useTranslation();
   const calendarRef = useRef<Calendar>(null);
 
   const { settings } = useSettingsContext();
@@ -380,10 +382,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) 
   return (
     <ResizablePanelGroup direction="vertical" className="min-h-[850px]">
       <ResizablePanel>
-        <Card className="h-full min-h-0 flex flex-col">
-          <CardHeader>
-            <CardTitle>Program Calendar</CardTitle>
-          </CardHeader>
+        <Card className="h-full min-h-0 flex flex-col pt-6">
           <CardContent
             className="h-full overflow-y-auto flex-grow relative"
             onDragOver={handleCalendarDragOver}
@@ -459,7 +458,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) 
                         e.stopPropagation();
                         handleResizeStart(e, event as unknown as CalendarEvent, 'top');
                       }}
-                      title="Drag to change start time"
+                      title={t('program.dragStartTime')}
                     >
                       <GripHorizontal className="w-4 h-2 text-white drop-shadow" />
                     </div>
@@ -485,7 +484,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) 
                         e.stopPropagation();
                         handleResizeStart(e, event as unknown as CalendarEvent, 'bottom');
                       }}
-                      title="Drag to change end time"
+                      title={t('program.dragEndTime')}
                     >
                       <GripHorizontal className="w-4 h-2 text-white drop-shadow" />
                     </div>
@@ -501,7 +500,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) 
         <Card className="h-full">
           <CardHeader>
             <CardTitle className="flex items-center justify-left">
-              <span>In Progress (No Termination Date)</span>
+              <span>{t('program.inProgressNoDate')}</span>
               <Badge variant="secondary" className="ml-2">
                 {tasksWithoutTerminationDate.length}
               </Badge>
@@ -552,7 +551,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) 
                 ))}
             </div>
             <QuickAddTask
-              placeholder="Quick add task..."
+              placeholder={t('program.quickAddTask')}
               userId={currentUserId}
               className="max-w-md"
             />
@@ -567,7 +566,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) 
                   {isFiltersCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                 </Button>
                 <span className="text-sm font-medium text-muted-foreground cursor-pointer select-none" onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}>
-                  Filters & Controls
+                  {t('program.filtersAndControls')}
                 </span>
               </div>
               {!isFiltersCollapsed && (
@@ -588,14 +587,14 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) 
       <Dialog open={newTaskDialogOpen} onOpenChange={setNewTaskDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New Task</DialogTitle>
+            <DialogTitle>{t('program.newTask')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
-            <label className="text-sm font-medium">Title</label>
+            <label className="text-sm font-medium">{t('program.titleLabel')}</label>
             <Input
               value={newTaskTitle}
               onChange={(e) => setNewTaskTitle(e.target.value)}
-              placeholder="Task title..."
+              placeholder={t('program.taskTitlePlaceholder')}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleCreateTask();
                 if (e.key === 'Escape') setNewTaskDialogOpen(false);
@@ -604,13 +603,13 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) 
             />
             {newTaskSlotDate && (
               <p className="text-xs text-muted-foreground">
-                Scheduled for: {newTaskSlotDate.toLocaleString()}
+                {t('program.scheduledFor', { date: newTaskSlotDate.toLocaleString() })}
               </p>
             )}
           </div>
           <DialogFooter className="mt-4">
-            <Button variant="secondary" onClick={() => setNewTaskDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreateTask} disabled={!newTaskTitle.trim()}>Create</Button>
+            <Button variant="secondary" onClick={() => setNewTaskDialogOpen(false)}>{t('common.cancel')}</Button>
+            <Button onClick={handleCreateTask} disabled={!newTaskTitle.trim()}>{t('program.create')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

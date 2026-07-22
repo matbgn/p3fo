@@ -14,6 +14,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AlertTriangle, Trophy, X } from "lucide-react";
 import { VoteEntity, VoteLoop } from "@/lib/persistence-types";
 import { getVotingStrings } from "@/lib/voting-i18n";
+import { useTranslation } from "react-i18next";
 import { useVoteLoops } from "@/hooks/useVoteLoops";
 import { tallyConsentLoop, getBestConsentRound } from "@/lib/vote-tally";
 import { useVoteResults } from "@/hooks/useVotes";
@@ -40,6 +41,7 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
   const [isSaving, setIsSaving] = React.useState(false);
   const [summary, setSummary] = React.useState("");
   const t = getVotingStrings();
+  const { t: tt } = useTranslation();
 
   const isConsentLoop = vote.config.mode === "CONSENT_LOOP";
   const { loops, isLoading: loopsLoading } = useVoteLoops(vote.id);
@@ -67,13 +69,16 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
   const handleFinalize = async () => {
     setIsSaving(true);
     try {
+      const winningProposal = winningProposalId
+        ? activeProposals.find((p) => p.id === winningProposalId)
+        : null;
       const finalSummary =
         summary.trim() ||
         (winningProposalId
-          ? activeProposals.find((p) => p.id === winningProposalId)
-            ? `Proposal ${activeProposals.find((p) => p.id === winningProposalId)!.position + 1} selected as the decision.`
-            : "Proposal selected as the decision."
-          : "Tie — no decision reached.");
+          ? winningProposal
+            ? tt("voting.finalizeSummaryProposal", { n: winningProposal.position + 1 })
+            : tt("voting.finalizeSummaryGeneric")
+          : tt("voting.finalizeSummaryTie"));
 
       await onFinalize({
         winningProposalId,

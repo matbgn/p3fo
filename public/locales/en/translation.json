@@ -1,0 +1,1641 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "cancel": "Cancel",
+    "save": "Save",
+    "close": "Close",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "duplicate": "Duplicate",
+    "reset": "Reset",
+    "confirm": "Confirm",
+    "unassigned": "Unassigned",
+    "unnamed": "unnamed",
+    "day": {
+      "monday": "Monday",
+      "sunday": "Sunday"
+    },
+    "view": {
+      "week": "Week",
+      "month": "Month"
+    }
+  },
+  "notFound": {
+    "title": "404",
+    "subtitle": "Oops! Page not found",
+    "returnHome": "Return to Home"
+  },
+  "settings": {
+    "title": "Settings",
+    "tabs": {
+      "user": "User Settings",
+      "workspace": "Workspace Settings"
+    },
+    "personalPreferences": {
+      "title": "Personal Preferences",
+      "daySplitTime": "Day Split Time",
+      "setTime": "Set time...",
+      "daySplitTimeHelp": "Set the time used to split the day into two halves for the timetable view.",
+      "userWorkloadLabel": "User Workload Percentage",
+      "userWorkloadHelp": "Your workload percentage (default: 60%)",
+      "userTrigramLabel": "User Trigram",
+      "trigramPlaceholder": "XYZ",
+      "trigramHelp": "Your 3-letter identifier (e.g., MAB)",
+      "startOfWeekLabel": "Start of Week",
+      "startOfWeekHelp": "Choose which day the week starts on.",
+      "defaultPlanViewLabel": "Default Plan View",
+      "defaultPlanViewHelp": "Choose the default view for the Program/Plan page.",
+      "cardCompactnessLabel": "Card Compactness",
+      "cardCompactnessHelp": "Adjust the compactness of task cards.",
+      "preferredWorkingDaysLabel": "Preferred Working Days",
+      "preferredWorkingDaysHelp": "Select the days you typically work."
+    },
+    "personalLocation": {
+      "title": "Personal Location Settings",
+      "help": "Override workspace defaults with your specific location settings.",
+      "timezoneLabel": "My Timezone",
+      "timezonePlaceholder": "Europe/Zurich",
+      "timezoneHelp": "Your local timezone (overrides workspace default)"
+    },
+    "personalTemplates": {
+      "title": "My Personal Templates",
+      "help": "Your personal templates, complementing the workspace templates. Available only to you."
+    },
+    "workspace": {
+      "version": "Version:",
+      "taskTemplatesTitle": "Task Templates",
+      "taskTemplatesHelp": "Templates scaffold common workflows as a parent task with predefined children. Any team member can create workspace templates."
+    },
+    "metricsGoals": {
+      "title": "Metrics Goals",
+      "weeksComputationLabel": "Weeks Computation",
+      "weeksComputationHelp": "Number of weeks to compute metrics (default: 4 weeks)",
+      "highImpactTaskGoalLabel": "High Impact Task Goal",
+      "highImpactTaskGoalHelp": "Target high impact tasks per EFT (default: 3.63)",
+      "failureRateGoalLabel": "Failure Rate Goal (Incident on Delivery)",
+      "failureRateGoalHelp": "Target failure rate percentage (default: 5%)",
+      "qliGoalLabel": "Quality of Life Index Goal",
+      "qliGoalHelp": "Target QLI score (default: 60%)",
+      "newCapabilitiesGoalLabel": "New Capabilities Goal",
+      "newCapabilitiesGoalHelp": "Target time spent on new capabilities (default: 57.98%)"
+    },
+    "timeHours": {
+      "title": "Time & Hours",
+      "standardDailyHoursLabel": "Standard Daily Hours",
+      "standardDailyHoursHelp": "Standard working hours per day (default: 8)",
+      "vacationLimitMultiplierLabel": "Vacation Limit Multiplier",
+      "vacationLimitMultiplierHelp": "Multiplier for max vacation balance (default: 1.5)",
+      "hourlyBalanceUpperLabel": "Hourly Balance Upper Limit Multiplier",
+      "hourlyBalanceUpperHelp": "Multiplier for upper hourly balance limit (default: 0.5)",
+      "hourlyBalanceLowerLabel": "Hourly Balance Lower Limit Multiplier",
+      "hourlyBalanceLowerHelp": "Multiplier for lower hourly balance limit (default: -0.5)",
+      "timezoneLabel": "Timezone",
+      "timezonePlaceholder": "Europe/Zurich",
+      "timezoneHelp": "IANA Timezone identifier (default: Europe/Zurich)",
+      "countryLabel": "Country",
+      "countryPlaceholder": "CH",
+      "countryHelp": "Country code for holidays (default: CH)",
+      "regionLabel": "Region",
+      "regionPlaceholder": "BE",
+      "regionHelp": "Region code for holidays (default: BE)",
+      "cardAgingBaseDaysLabel": "Card Aging Base Days",
+      "cardAgingBaseDaysHelp": "Days before cards show aging effects. Set to 0 to disable. (default: 30). Use decimals like 0.005 for testing (~7 min).",
+      "wipLimitPerUserLabel": "WIP Limit Per User",
+      "wipLimitPerUserHelp": "Maximum tasks in WIP per user. Set to 0 to disable. (default: 5). Hard block — tasks cannot enter WIP when at capacity.",
+      "nonActionPeriodLabel": "Non-Action Period (hours)",
+      "nonActionPeriodHelp": "Hours of inactivity before the mood selector appears. Set to 0 to disable. (default: 3)."
+    },
+    "moduleManagement": {
+      "title": "Module Management",
+      "help": "Enable or disable modules to customize your workspace. Disabled modules are hidden from navigation and the umbrella menu."
+    },
+    "dataManagement": {
+      "title": "Data Management",
+      "help": "Export, import, or clear all tasks and timer data from the application.",
+      "clearAllButton": "Clear All Data",
+      "clearAllConfirm": "Are you sure you want to delete ALL application data? This action cannot be undone and will remove all tasks, settings, users, and boards."
+    },
+    "module": {
+      "celebration": {
+        "label": "Celebration",
+        "description": "Fertilization Board for achievements and celebrations"
+      },
+      "dream": {
+        "label": "Dream",
+        "description": "Dream Board, Storyboard, and Prioritization views",
+        "dream": {
+          "label": "Dream Board",
+          "description": "Dream Board sub-view within Dream"
+        },
+        "storyboard": {
+          "label": "Storyboard",
+          "description": "Storyboard sub-view within Dream"
+        },
+        "prioritization": {
+          "label": "Prioritization",
+          "description": "Prioritization sub-view within Dream"
+        }
+      },
+      "plan": {
+        "label": "Plan",
+        "description": "Circles and Roles organizational views",
+        "circles": {
+          "label": "Circles",
+          "description": "Organizational circles sub-view within Plan"
+        },
+        "roles": {
+          "label": "Roles",
+          "description": "Roles sub-view within Plan"
+        },
+        "salary": {
+          "label": "Salary System",
+          "description": "Transparent salary calculator sub-view within Plan"
+        }
+      },
+      "program": {
+        "label": "Program",
+        "description": "Calendar and Resources scheduling views",
+        "calendar": {
+          "label": "Calendar",
+          "description": "Calendar sub-view within Program"
+        },
+        "resources": {
+          "label": "Resources",
+          "description": "Resources sub-view within Program"
+        }
+      },
+      "kanban": {
+        "label": "Project",
+        "description": "Kanban board for project management"
+      },
+      "focus": {
+        "label": "Focus",
+        "description": "Focus mode for concentrated task work"
+      },
+      "timetable": {
+        "label": "Timetable",
+        "description": "Time-based view for hourly planning"
+      },
+      "metrics": {
+        "label": "Metrics",
+        "description": "Performance metrics and dashboards"
+      },
+      "voting": {
+        "label": "Voting",
+        "description": "Run polls and formal decisions with your audience"
+      }
+    }
+  },
+  "metrics": {
+    "loading": "Loading metrics...",
+    "loadingFocusStats": "Loading focus session stats...",
+    "collaborativeTitle": "Collaborative Metrics",
+    "individualTitle": "Individual Metrics",
+    "selectUser": "Select user",
+    "selectUserQol": "Please select a user to view survey",
+    "selectUserFocus": "Please select a user to view focus session stats",
+    "graphicsPlaceholder": "Graphics content for {{tab}} will appear here",
+    "consistencyScore": {
+      "title": "Consistency Score"
+    },
+    "consistencyActivity": {
+      "title": "Consistency Activity"
+    },
+    "resetStatsButton": "Reset Stats",
+    "resetStatsTitle": "Reset Focus Session Stats?",
+    "resetStatsDescription": "This will permanently delete all your focus session history, including the heatmap and statistics. This action cannot be undone.",
+    "deleteAllSessionsButton": "Delete All Sessions",
+    "tab": {
+      "forecast": "Forecast",
+      "hourlyBalance": "Hourly Balance",
+      "vacations": "Vacations",
+      "individualQol": "Individual QoL",
+      "focusSessions": "Focus Sessions"
+    },
+    "card": {
+      "highImpactTitle": "High Impact Task Achievement / EFT / week",
+      "highImpactDescription": "Goal: {{goal}} in {{weeks}} weeks",
+      "failureRateTitle": "Failure Rate / EFT (Incidents on Delivery)",
+      "failureRateDescription": "Goal ≤{{goal}}% in {{weeks}} weeks",
+      "newCapabilitiesTitle": "Time spent on High Impact work / EFT",
+      "newCapabilitiesDescription": "Goal: {{goal}}% in {{weeks}} weeks",
+      "qliTitle": "Team Quality of Life Index",
+      "qliLoading": "Loading...",
+      "qliCalculating": "Calculating QLI score",
+      "qliError": "Error",
+      "qliNoData": "No data",
+      "qliNoDataDescription": "No QLI data available",
+      "qliDescription": "Goal: {{goal}}%"
+    },
+    "forecast": {
+      "user": "User",
+      "year": "Year",
+      "month": "Month",
+      "workingDays": "Working Days",
+      "selectUser": "Select User",
+      "hoursDone": "Hours per month done",
+      "hoursDue": "Hours per month due",
+      "hoursProjected": "Hours per month projected",
+      "deltaProjected": "Delta hours projected with due",
+      "workload": "Workload",
+      "lastMonthBalance": "Last month hourly balance",
+      "newBalance": "New hourly balance (projection)",
+      "hoursUnit": "Hours"
+    },
+    "hourlyBalance": {
+      "addPastRecord": "+ Add a past record",
+      "loadPrevious": "Load Previous Months",
+      "editedBy": "Edited by {{user}}",
+      "unknown": "Unknown",
+      "doubleClickToEdit": "Double click to edit",
+      "column": {
+        "month": "Month",
+        "workload": "Workload %",
+        "hourlyBalance": "Hourly Balance",
+        "hoursDone": "Hours Done"
+      },
+      "chart": {
+        "hoursDelta": "Hours Delta per each Month",
+        "cumulativeBalance": "Cumulative Hourly Balance",
+        "limit": "Limit"
+      }
+    },
+    "vacations": {
+      "addFutureRecord": "+ Add a future record",
+      "loadPrevious": "Load Previous Months",
+      "doubleClickToEdit": "Double click to edit",
+      "column": {
+        "month": "Month",
+        "workload": "Workload %",
+        "due": "Due [h]",
+        "taken": "Taken [h]",
+        "balance": "Balance [h]"
+      },
+      "chart": {
+        "limit": "Limit",
+        "balance": "Vacations Balance",
+        "projected": "Vacations Projected"
+      }
+    },
+    "qolSurvey": {
+      "title": "Quality of Life Effectiveness Survey",
+      "description": "Rate your satisfaction with the items below",
+      "loading": "Loading survey...",
+      "column": {
+        "question": "Question"
+      },
+      "question": {
+        "documentation": "Documentation & access to information",
+        "deepWork": "Deep work/focus time",
+        "automation": "Automation processes",
+        "changeConfidence": "Change confidence (Impact & Effectiveness)",
+        "incidentResponses": "Incident responses",
+        "localTools": "Local tools experience",
+        "planning": "Planning processes",
+        "crossTeam": "Cross-team dependencies",
+        "easeOfDelivery": "Ease of Delivery (difficulty to implement change)",
+        "maintainability": "Maintainability of delivered assets"
+      },
+      "level": {
+        "noAnswer": "No answer",
+        "veryDissatisfied": "Very dissatisfied",
+        "dissatisfied": "Dissatisfied",
+        "neutral": "Neutral",
+        "satisfied": "Satisfied",
+        "verySatisfied": "Very satisfied"
+      },
+      "submit": "Submit Responses",
+      "clear": "Clear Survey",
+      "clearConfirm": "Are you sure you want to clear your survey responses?",
+      "saved": "Survey responses saved!",
+      "saveError": "Error: Could not save survey responses.",
+      "cleared": "Survey responses cleared!",
+      "clearError": "Error: Could not clear survey responses."
+    }
+  },
+  "status": {
+    "backlog": "Backlog",
+    "ready": "Ready",
+    "wip": "WIP",
+    "blocked": "Blocked",
+    "done": "Done",
+    "dropped": "Dropped",
+    "archived": "Archived"
+  },
+  "task": {
+    "titlePlaceholder": "Task Title",
+    "pickDate": "Pick a date",
+    "setTime": "Set time...",
+    "plannedDuration": "Planned duration:",
+    "durationPlaceholder": "min.",
+    "setReminder": "Set Reminder",
+    "reminder": {
+      "none": "No reminder",
+      "onTime": "On time",
+      "15Min": "15 min before",
+      "1Hour": "1 hour before",
+      "2Hours": "2 hours before",
+      "1Day": "1 day before",
+      "1Week": "1 week before"
+    },
+    "subtasks": "Subtasks",
+    "badge": {
+      "urgent": "Urgent",
+      "highImpact": "High Impact",
+      "incidentOnDelivery": "Incident on Delivery",
+      "sprintTarget": "Sprint Target"
+    },
+    "difficulty8Hint": "~1 day, consider splitting",
+    "editCommentTitle": "Edit Comment - {{title}}",
+    "editCommentDescription": "Edit comment for task: {{title}}",
+    "commentLabel": "Comment",
+    "commentFieldLabel": "Comment",
+    "commentPlaceholder": "Add a comment...",
+    "saveComment": "Save Comment",
+    "timeSheetTitle": "Time Sheet - {{title}}",
+    "timeSheetDescription": "View and edit time entries for task: {{title}}",
+    "editDetails": "Edit task details",
+    "descriptionLabel": "Description",
+    "descriptionFieldLabel": "Description",
+    "descriptionPlaceholder": "Add a detailed description...",
+    "hierarchyLabel": "Task Hierarchy",
+    "parentLabel": "Parent:",
+    "unknownParent": "Unknown Parent",
+    "noParent": "No parent task",
+    "current": "(Current)",
+    "unknownChild": "Unknown Child",
+    "noSubtasks": "No subtasks",
+    "statusLabel": "Status",
+    "assignedToLabel": "Assigned To",
+    "categoryLabel": "Category",
+    "difficultyLabel": "Difficulty",
+    "selectDifficulty": "Select difficulty",
+    "terminationDateLabel": "Termination Date",
+    "plannedDurationLabel": "Planned Duration (min)",
+    "urgentLabel": "Urgent",
+    "highImpactLabel": "High Impact",
+    "incidentLabel": "Incident",
+    "sprintTargetLabel": "Sprint Target",
+    "saveAndClose": "Save & Close"
+  },
+  "taskboard": {
+    "flowViewAria": "Flow View",
+    "flow": "Flow",
+    "todolistViewAria": "Todolist View",
+    "todolist": "Todolist",
+    "flowViewTitle": "Flow View",
+    "todolistViewTitle": "Todolist View",
+    "filtersAndControls": "Filters & Controls",
+    "expandAll": "Expand All",
+    "collapseAll": "Collapse All",
+    "results": "Results",
+    "topTasks": "Top tasks",
+    "subtasks": "Subtasks",
+    "print": "Print",
+    "placeholder": {
+      "topTask": "New top task...",
+      "subtask": "New subtask..."
+    },
+    "loadingFilters": "Loading filters...",
+    "noItems": "No items yet."
+  },
+  "kanban": {
+    "wipHeader": "Work in Progress [MAX {{n}}/p]",
+    "archiveAllTitle": "Archive all {{n}} cards in {{title}}",
+    "archiveCount": "Archive ({{n}})",
+    "noTasks": "No tasks",
+    "subtasksOf": "Subtasks of: {{title}}",
+    "filtersAndControls": "Filters & Controls",
+    "boardTitle": "Kanban Board",
+    "loadingFilters": "Loading filters...",
+    "applyingFilters": "Applying filters...",
+    "loadingTasks": "Loading tasks...",
+    "archiveDialogTitle": "Archive Tasks",
+    "archiveDialogDescription": "Archive all tasks from the {{column}} column.",
+    "archiveCountDescription": "This will archive {{n}} tasks.",
+    "archiveOldOnly": "Only archive cards older than {{n}} weeks",
+    "archive": "Archive",
+    "column": {
+      "Backlog": "Backlog",
+      "Ready": "Ready",
+      "WIP": "WIP",
+      "Blocked": "Blocked",
+      "Done": "Done",
+      "Dropped": "Dropped",
+      "Archived": "Archived"
+    }
+  },
+  "filters": {
+    "searchPlaceholder": "Search tasks...",
+    "urgent": "Urgent",
+    "highImpact": "High Impact",
+    "incidentOnDelivery": "Incident on Delivery",
+    "sprintTarget": "Sprint Target",
+    "status": "Status:",
+    "statusPlaceholder": "Select status...",
+    "done": "Done",
+    "difficulty": "Difficulty:",
+    "difficultyPlaceholder": "Select difficulty...",
+    "category": "Category:",
+    "uncategorized": "Uncategorized",
+    "categoryPlaceholder": "Select category...",
+    "clearAll": "Clear All Filters"
+  },
+  "quickadd": {
+    "placeholder": "Quick add top task...",
+    "noTasksTitle": "No tasks to import",
+    "noTasksDescription": "Paste one task title per line.",
+    "batchCompleteTitle": "Batch import complete",
+    "batchCompleteDescription": "Imported {{n}} task(s).",
+    "batchErrorTitle": "Error during batch import",
+    "batchErrorDescription": "Some tasks may not have been imported.",
+    "diffAppliedTitle": "Diff import applied",
+    "diffAppliedDescription": "{{created}} created, {{updated}} updated.",
+    "diffErrorTitle": "Error during diff import",
+    "diffErrorDescription": "Some changes may not have been applied.",
+    "add": "Add",
+    "fromTemplate": "Create from template",
+    "workspaceTemplates": "Workspace templates",
+    "nSteps": "{{n}} steps",
+    "myTemplates": "My templates",
+    "importTasks": "Import tasks",
+    "batchImport": "Batch Import",
+    "diffImport": "Diff Import",
+    "batchDialogTitle": "Batch Import Tasks",
+    "batchDialogDescription": "Paste one task title per line. Each non-empty line will be created as a separate task.",
+    "batchPlaceholder": "Task title one\nTask title two\nTask title three",
+    "importing": "Importing...",
+    "import": "Import"
+  },
+  "userManagement": {
+    "deleteConfirm": "Are you sure you want to delete user \"{{name}}\"? This action cannot be undone.",
+    "deleteFailed": "Failed to delete user. Please try again.",
+    "workloadInvalid": "Workload must be a number between 0 and 100",
+    "workloadUpdateFailed": "Failed to update workload. Please try again.",
+    "loading": "Loading users...",
+    "title": "User Management",
+    "help": "Manage users stored in the application context. You can delete users that have no assigned tasks.",
+    "colUser": "User",
+    "colTrigram": "Trigram",
+    "colWorkload": "Workload",
+    "colUserId": "User ID",
+    "colAssignedTasks": "Assigned Tasks",
+    "colActions": "Actions",
+    "noUsers": "No users found.",
+    "doubleClickEdit": "Double-click to edit",
+    "noTrigram": "???",
+    "deleteUser": "Delete User",
+    "cannotDelete": "Cannot delete"
+  },
+  "template": {
+    "defaultStep": "New step",
+    "nameLabel": "Template name",
+    "namePlaceholder": "e.g. Deployment checklist",
+    "parentTitleLabel": "Parent task title",
+    "parentTitlePlaceholder": "e.g. Release",
+    "add": "Add template",
+    "empty": "No templates yet. Create one above to scaffold common workflows as a parent task with predefined children.",
+    "nSteps": "{{n}} steps",
+    "difficulty": "Difficulty",
+    "addStep": "Add step"
+  },
+  "data": {
+    "exporting": "Exporting...",
+    "export": "Export Data"
+  },
+  "dataImport": {
+    "button": "Import Data",
+    "successTitle": "Data imported successfully!",
+    "successDescription": "The page will reload to apply the imported data.",
+    "errorTitle": "Error importing data",
+    "unsupportedSchemaTitle": "Unsupported schema version",
+    "unsupportedSchemaDescription": "Schema version {{v}} is newer than the supported version {{max}}. Please update the application.",
+    "networkError": "Network error — could not reach the backend server.",
+    "unknownError": "Unknown error. See the browser console for details.",
+    "error": {
+      "400": "Bad request — the server rejected the data shape.",
+      "401": "Unauthorized — please re-authenticate.",
+      "403": "Forbidden — your account cannot perform this import.",
+      "404": "Not found — an API endpoint is missing.",
+      "500": "Server error while saving — check the server logs."
+    }
+  },
+  "pomodoro": {
+    "settings": {
+      "title": "Pomodoro Timer",
+      "enable": "Enable Pomodoro",
+      "enableHelp": "Activate the Pomodoro timer with work/break cycles.",
+      "workDuration": "Work Duration: {{n}} min",
+      "workDurationHelp": "Length of each work period (1–60 min, default: 25 min)",
+      "breakDuration": "Break Duration: {{n}} min",
+      "breakDurationHelp": "Short break between work periods (1–15 min, default: 5 min)",
+      "longBreakDuration": "Long Break Duration: {{n}} min",
+      "longBreakHelp": "Break after completing a full cycle set (5–30 min, default: 15 min)",
+      "cyclesBeforeLongBreak": "Cycles before Long Break",
+      "cyclesHelp": "Number of work periods before a long break (1–10, default: 4)"
+    }
+  },
+  "focusMode": {
+    "pipSize": {
+      "tiny": "Tiny (200×100)",
+      "small": "Small (240×140)",
+      "medium": "Medium (260×240)",
+      "normal": "Normal (320×400)"
+    },
+    "settings": {
+      "title": "Focus Mode",
+      "autoStartBreak": "Auto-start Break",
+      "autoStartBreakHelp": "Automatically start break after work period ends.",
+      "autoStartWork": "Auto-start Work",
+      "autoStartWorkHelp": "Automatically start next work period after break ends.",
+      "enablePiP": "Enable Picture-in-Picture",
+      "enablePiPHelp": "Show an always-on-top timer window during Pomodoro sessions.",
+      "autoOpenPiP": "Auto-open PiP on Start",
+      "autoOpenPiPHelp": "Automatically open the PiP window when a Pomodoro session begins.",
+      "pipSize": "PiP Window Size",
+      "pipSizeHelp": "Size of the always-on-top timer window.",
+      "showFocusOverlay": "Show Focus Overlay",
+      "showFocusOverlayHelp": "Display a fullscreen timer overlay in the main window during Pomodoro sessions (instead of using PiP).",
+      "wakeLock": "Prevent Screen Sleep",
+      "wakeLockHelp": "Keep the screen awake during Pomodoro sessions using Wake Lock API.",
+      "soundNotifications": "Sound Notifications",
+      "soundNotificationsHelp": "Play a chime when a Pomodoro phase transitions."
+    }
+  },
+  "traveler": {
+    "settings": {
+      "title": "Traveler Timer",
+      "enable": "Enable Traveler",
+      "enableHelp": "Work based on flight duration between two cities.",
+      "dataBy": "Flight duration data provided by",
+      "transitous": "Transitous"
+    }
+  },
+  "userSection": {
+    "noTrigram": "???",
+    "clickToEdit": "Click to edit your profile",
+    "trigram": "Trigram:",
+    "switchUuid": "Switch UUID",
+    "switchUuidHelp": "Enter another UUID to adopt its workspace",
+    "uploadLogo": "Upload Logo",
+    "editUsername": "Edit Username",
+    "generateName": "Generate New Name",
+    "changeUuid": "Change UUID",
+    "namePlaceholder": "Enter your name",
+    "trigramPlaceholder": "TRG",
+    "recomputeHelp": "Recompute the trigram, or edit it directly, then save",
+    "enterToSave": "Press Enter to save or Esc to cancel",
+    "recomputeTrigram": "Recompute Trigram",
+    "uuidPlaceholder": "Enter new UUID",
+    "switchWarning": "You have {{n}} task(s). Switching UUID will discard your current workspace in favor of the target UUID.",
+    "switch": "Switch",
+    "removeLogo": "Remove Logo"
+  },
+  "salary": {
+    "loading": "Loading…",
+    "loadError": "Could not load the salary system.",
+    "defaults": {
+      "systemLabel": "Transparent salary system",
+      "simulationName": "Simulation"
+    },
+    "config": {
+      "indexHourlyWage": "Reference hourly wage",
+      "hoursPerWeek": "Hours per week",
+      "weeksPerMonth": "Weeks per month",
+      "seniorityIncrease": "Seniority increase / year",
+      "seniorityIncreaseHelp": "e.g. 0.01 = 1% per year (compounded)",
+      "ageIncrease": "Increase per age bracket",
+      "ageIncreaseHelp": "e.g. 0.05 = 5% (compounded)",
+      "ageBrackets": "Age brackets",
+      "ageBracketsPlaceholder": "25, 35, 45, 55, 65",
+      "socialChargesRate": "Social charges rate",
+      "socialChargesHelp": "e.g. 0.1202 = 12.02% (deducted from net)",
+      "expenseFactor": "Cost factor (expense factor)",
+      "expenseFactorHelp": "e.g. 1.95 corresponds to 195% of annual gross salaries (covers employer-side social insurance, infrastructure, overhead, etc.).",
+      "expenseFactorNote": "Generally, overhead represents 180%–220% of gross salary.",
+      "roundingStep": "Round to multiple of",
+      "currency": "Currency",
+      "hoursPerDay": "Hours per day",
+      "daysPerWeek": "Days per week",
+      "include13th": "13th salary",
+      "salaries13": "13 salaries",
+      "salaries12": "12 salaries",
+      "dialogTitle": "System settings",
+      "dialogDescription": "Salary calculation variables. Adapt them to the client."
+    },
+    "dimension": {
+      "expertise": {
+        "name": "Expertise",
+        "levelDescription": {
+          "0": "No expertise in the main function. Apprentice or radical career change.",
+          "1": "Basic knowledge, beginner. Able to work under supervision.",
+          "2": "Mastery of the main role, autonomous. Good ability to acquire team know-how.",
+          "3": "Reference person (expert) in one or more domains. Source of information for colleagues.",
+          "4": "Pioneer leading research, developing proof of concepts and bringing new knowledge.",
+          "5": "Mastery of the entire architecture. Exceptional expertise recognized in the organization.",
+          "6": "Creates new organization models and tools widely used by teams inside or outside the company. Recognized reference in the field."
+        }
+      },
+      "impact": {
+        "name": "Impact",
+        "levelDescription": {
+          "0": "Mobilizes more resources than results. In training, needs support.",
+          "1": "Limited impact, mainly individual.",
+          "2": "Occasional impact on colleagues or other subsystems.",
+          "3": "Team pillar, impact across the entire circle.",
+          "4": "Impact extended to other areas of the organization. Transversal influencer.",
+          "5": "Undeniable impact on the entire company in the short term.",
+          "6": "Long-term impact and extended reach. Represents the organization externally."
+        }
+      }
+    },
+    "dimensions": {
+      "dialogTitle": "Salary determinants",
+      "dialogDescription": "Add, rename or reconfigure each dimension (expertise, impact, situation, responsibility, …)."
+    },
+    "employee": {
+      "editTitle": "Edit employee",
+      "addTitle": "Add employee",
+      "dialogDescription": "Determinants determine the salary via the transparent formula.",
+      "name": "Name",
+      "workload": "Workload (%)",
+      "age": "Age",
+      "seniority": "Seniority (years)",
+      "employerAdjustments": "Employer complements",
+      "defaultAdjustmentLabel": "Employer complement",
+      "addAdjustment": "Add",
+      "adjustmentLabelPlaceholder": "Label",
+      "comment": "Comment",
+      "determinants": "Determinants",
+      "levelN": "Level {{i}}",
+      "unnamed": "unnamed",
+      "linkedUserComment": "Linked to user {{name}}"
+    },
+    "frequency": {
+      "monthly": "Monthly",
+      "semesterly": "Semesterly",
+      "annually": "Annual"
+    },
+    "action": {
+      "cancel": "Cancel",
+      "save": "Save",
+      "settings": "Settings",
+      "close": "Close",
+      "dimensions": "Determinants",
+      "linkUsers": "Link to users",
+      "allColumns": "All columns",
+      "compactView": "Compact view",
+      "addEmployee": "Employee",
+      "edit": "Edit",
+      "duplicate": "Duplicate",
+      "include": "Include",
+      "exclude": "Exclude from simulation"
+    },
+    "metric": {
+      "headcount": "Headcount",
+      "fte": "FTE",
+      "grossMonthly": "Gross monthly",
+      "grossAnnual": "Gross annual",
+      "netApprox": "Net ~",
+      "employerCostAnnual": "Employer cost / year",
+      "hourlyRate": "Hourly wage CHF/h",
+      "grossMonthly100": "Gross monthly at 100%",
+      "grossAnnual100": "Gross annual at 100%",
+      "grossMonthly13": "Gross monthly (w/ 13th)",
+      "grossMonthly13Adj": "Gross monthly (w/ 13th & compl.)"
+    },
+    "table": {
+      "name": "Name",
+      "workload": "Workload (%)",
+      "age": "Age",
+      "seniority": "Seniority",
+      "hourlyRate": "Hourly wage CHF/h",
+      "grossMonthly100": "Gross monthly at 100%",
+      "grossAnnual100": "Gross annual at 100%",
+      "adjustmentsMonthly": "Monthly complements",
+      "grossMonthly": "Gross monthly",
+      "grossMonthly13": "Gross monthly (w/ 13th)",
+      "grossMonthly13Adj": "Gross monthly (w/ 13th & compl.)",
+      "grossAnnualAdj": "Gross annual (incl. compl.)",
+      "net": "Net ~",
+      "empty": "No employee. Click \"Employee\" to add one.",
+      "totals": "Totals ({{n}} FTE)"
+    },
+    "employees": {
+      "title": "Employees"
+    },
+    "tab": {
+      "budget": "Budget",
+      "simulator": "Individual simulator",
+      "teamSimulator": "Team simulator",
+      "hourlyRate": "Hourly rate"
+    },
+    "legend": {
+      "title": "Legend",
+      "base": "<strong>Monthly base</strong> = reference hourly wage × hours per week × weeks per month",
+      "determinants": "<strong>+ Determinants</strong> = sum of (level × value per level) for each dimension that affects salary",
+      "gross100": "<strong>Gross salary at 100%</strong> = (base + determinants) × (1 + seniority increase)^years × (1 + age increase)^age brackets reached",
+      "grossAnnual100": "<strong>Annual gross salary at 100%</strong> = gross salary at 100% × 12",
+      "hourly": "<strong>Hourly wage</strong> = gross salary at 100% ÷ (21 days × 8 hours × 5)",
+      "monthlyWith13": "<strong>Monthly salary with 13th</strong> = gross salary at 100% × workload",
+      "annualGross": "<strong>Annual gross salary</strong> = monthly salary with 13th × 12",
+      "monthly": "<strong>Monthly salary</strong> = monthly salary with 13th ÷ 13 × 12 + monthly complements",
+      "net": "<strong>Net ~</strong> = (monthly salary with 13th + complements) × (1 − social charges)",
+      "employerCost": "<strong>Employer cost</strong> = annual gross salary × cost factor",
+      "budgetBalance": "<strong>Budget — Balance</strong> = revenues − charges − gross salaries",
+      "chargesIntro": "<strong>Charges</strong> — two exclusive modes per scenario:",
+      "manualMode": "• <strong>Manual amount</strong>: overhead is entered directly (rent, insurance, equipment, etc.). Charges = overhead + reserve.",
+      "expenseFactorMode": "• <strong>Cost factor</strong>: charges = (annual gross salary × factor) + reserve. The default factor can be overridden per scenario."
+    },
+    "budget": {
+      "defaultScenarioName": "New scenario",
+      "scenarioCopy": "{{name}} (copy)",
+      "title": "Budget — available salary mass",
+      "addScenario": "Scenario",
+      "empty": "No scenario. Click \"Scenario\" to add min/intermediate/max.",
+      "duplicate": "Duplicate scenario",
+      "revenues": "Revenues / year",
+      "chargesMode": "Overhead — calculation mode",
+      "manualMode": "Manual amount",
+      "expenseFactorMode": "Cost factor",
+      "expenseFactorLabel": "Cost factor (default: {{n}})",
+      "expenseFactorNote": "Generally, overhead represents 180%–220% of gross salary.",
+      "charges": "Overhead / year",
+      "reserve": "Reserve / year",
+      "grossSalaries": "Gross salaries",
+      "overheadPortion": "of which overhead (× {{n}})",
+      "overheadPortionShort": "of which overhead",
+      "reservePortion": "of which reserve",
+      "totalCost": "Total cost",
+      "surplus": "Surplus",
+      "deficit": "Deficit",
+      "scenario": "Scenario",
+      "balance": "Balance"
+    },
+    "scenario": {
+      "minName": "Min (min revenues − max charges)",
+      "intermediateName": "Intermediate",
+      "maxName": "Max (max revenues − min charges)"
+    },
+    "simulator": {
+      "title": "Individual simulator",
+      "workload": "Workload (%)",
+      "age": "Age",
+      "seniority": "Seniority (years)",
+      "projectionYears": "Projection horizon (years)",
+      "determinants": "Determinants",
+      "levelN": "Level {{i}}",
+      "adjustments": "Employer complements",
+      "addAdjustment": "Add",
+      "adjustmentPlaceholder": "Label",
+      "projectionTitle": "Projection over {{n}} years"
+    },
+    "projection": {
+      "year": "Year",
+      "age": "Age",
+      "seniority": "Seniority",
+      "hourlyRate": "Hourly wage CHF/h",
+      "grossMonthly100": "Gross monthly at 100%",
+      "grossAnnual100": "Gross annual at 100%",
+      "grossMonthly": "Gross monthly",
+      "grossMonthly13": "Gross monthly (w/ 13th)",
+      "grossMonthly13Adj": "Gross monthly (w/ 13th & compl.)",
+      "grossAnnualAdj": "Gross annual (incl. compl.)",
+      "net": "Net ~",
+      "employerCostAnnual": "Employer cost / year",
+      "ageBrackets": "Age brackets"
+    },
+    "teamSimulator": {
+      "title": "Team simulator",
+      "reset": "Reset",
+      "help": "Modify the parameters below to simulate the impact on salary mass and budget. These changes are temporary and not saved.",
+      "indexHourlyWage": "Reference hourly wage",
+      "hoursPerWeek": "Hours per week",
+      "seniorityIncrease": "Seniority increase / year",
+      "ageIncrease": "Increase per age bracket",
+      "socialCharges": "Social charges rate",
+      "expenseFactor": "Cost factor",
+      "dimensionSteps": "Value per level (determinants)",
+      "chfPerLevel": "CHF/level",
+      "staff": "Simulated staff",
+      "add": "Add",
+      "empty": "No employee in the simulation.",
+      "budgetImpact": "Impact on budget scenarios",
+      "grossMonthly": "Gross monthly salary",
+      "grossAnnual": "Gross annual salary"
+    },
+    "hourlyRate": {
+      "toastTitle": "New hourly rate saved",
+      "toastDescription": "The hourly rate parameters have been saved.",
+      "title": "Hourly rate",
+      "save": "Save",
+      "help": "Simulates the billable hourly rate based on a typical profile (all determinants at maximum by default), with seniority and projected age brackets.",
+      "determinants": "Profile determinants",
+      "levelN": "Level {{i}}",
+      "seniorityYears": "Projected seniority (years)",
+      "personaAge": "Persona age",
+      "riskBenefit": "Risks & benefits (default: 0.3 = 30%)",
+      "reducedRateMultiplier": "Reduced rate multiplier (default: 0.5 = 50%)",
+      "projectedGross": "Projected gross salary at 100%",
+      "clientRate": "Client hourly rate (incl. R&B)",
+      "reducedRate": "Reduced rate"
+    }
+  },
+  "voting": {
+    "openPublicPage": "Open public page",
+    "delete": "Delete",
+    "share": "Share",
+    "edit": "Edit",
+    "back": "← Back",
+    "proposalN": "Proposal {{n}}",
+    "proposalNColon": "Proposal {{n}}:",
+    "editableBeforeRound": "Editable before starting round",
+    "clear": "Clear",
+    "createLinkedDescription": "Create a consultation vote linked to \u201c{{title}}\u201d",
+    "createLinkedAutoTitle": "Task \u2013 {{title}} \u2013 vote",
+    "createLinkedDefaultProposal": "<p>Proposal 1</p>",
+    "openModerationView": "Open moderation view",
+    "finalizeSummaryProposal": "Proposal {{n}} selected as the decision.",
+    "finalizeSummaryGeneric": "Proposal selected as the decision.",
+    "finalizeSummaryTie": "Tie — no decision reached.",
+    "placeholders": {
+      "refineNextRound": "Modify the proposal text for the next round..."
+    },
+    "newPrefix": "New",
+    "finalizedPrefix": "Finalized",
+    "closesPrefix": "Closes",
+    "no": "No",
+    "neutral": "Neutral",
+    "yes": "Yes",
+    "previousRounds": "previous rounds",
+    "nClosed": " ({{n}} closed)",
+    "totalBudget": "Total budget:",
+    "anonymous": "Anonymous",
+    "mjGrade": {
+      "reject": "Reject",
+      "insufficient": "Insufficient",
+      "passable": "Passable",
+      "acceptable": "Acceptable",
+      "good": "Good",
+      "excellent": "Excellent"
+    },
+    "mode": {
+      "thumbsUp": "Thumbs Up",
+      "thumbsUdNeutral": "Up / Down / Neutral",
+      "points": "Points Budget",
+      "majorityJudgment": "Majority Judgment",
+      "consentLoop": "Consent Loop"
+    }
+  },
+  "fertilization": {
+    "title": "Fertilization Board",
+    "noModerator": "No moderator active. Start a session to become the moderator.",
+    "startSession": "Start Session",
+    "becomeModerator": "Become Moderator",
+    "hiddenMode": "Hidden Mode",
+    "visibleMode": "Visible Mode",
+    "restartSession": "Restart Session",
+    "hideCursors": "Hide Cursors",
+    "showCursors": "Show Cursors",
+    "hideLinks": "Hide Links",
+    "showLinks": "Show Links",
+    "votingOpen": "Voting Open",
+    "votingClosed": "Voting Closed",
+    "resultsRevealed": "Results Revealed",
+    "defaultVoting": "Default Voting",
+    "mode": "Mode",
+    "revealAll": "Reveal All",
+    "resetAllVotes": "Reset All Votes",
+    "linkingMode": "Linking mode: Click on other cards to link/unlink them",
+    "noVotesCastYet": "No votes cast yet.",
+    "resetColumnVotesConfirm": "Are you sure you want to reset all votes in the \"{{column}}\" column? This will clear every vote in this column but keep all cards.",
+    "budget": "Budget",
+    "pts": "pts",
+    "vote": "Vote",
+    "stop": "Stop",
+    "reveal": "Reveal",
+    "revote": "Revote",
+    "reset": "Reset",
+    "open": "Open",
+    "revealed": "Revealed",
+    "closed": "Closed",
+    "upDown": "Up/Down",
+    "points": "Points",
+    "mj": "MJ",
+    "promote": {
+      "title": "Promote to Kanban",
+      "description": "This will create a new task in the Kanban board with the content of this card.",
+      "confirm": "Promote"
+    },
+    "pointsConfig": {
+      "title": "Configure Points Budget",
+      "maxPoints": "Max Points:",
+      "start": "Start Points Voting"
+    },
+    "mjConfig": {
+      "title": "Configure Majority Judgment Labels",
+      "labelPlaceholder": "Label for grade {{n}}",
+      "saveAndStart": "Save & Start MJ Voting"
+    },
+    "timer": {
+      "stop": "Stop Timer",
+      "set": "Set Timer",
+      "dialogTitle": "Start/Stop Timer",
+      "dialogDescription": "Adjust minutes and seconds.",
+      "minutes": "Minutes",
+      "seconds": "Seconds",
+      "start": "Start"
+    },
+    "column": {
+      "facts": "Facts",
+      "satisfactions": "Satisfactions",
+      "discomfort": "Discomfort",
+      "levers": "Levers",
+      "priorities": "Priorities"
+    },
+    "factTag": {
+      "A": "Achieved",
+      "N": "Non-Achieved",
+      "K": "Key numbers",
+      "P": "Planned"
+    }
+  },
+  "dream": {
+    "title": "Dream Board",
+    "noModerator": "No moderator active. Start a session to become the moderator.",
+    "startSession": "Start Session",
+    "becomeModerator": "Become Moderator",
+    "becomeModeratorConfirm": "Become moderator?",
+    "hiddenMode": "Hidden Mode",
+    "visibleMode": "Visible Mode",
+    "restartSession": "Restart Session",
+    "restartSessionConfirm": "Are you sure you want to restart the session? This will clear all cards.",
+    "hideCursors": "Hide Cursors",
+    "showCursors": "Show Cursors",
+    "hideLinks": "Hide Links",
+    "showLinks": "Show Links",
+    "votingOpen": "Voting Open",
+    "votingClosed": "Voting Closed",
+    "resultsRevealed": "Results Revealed",
+    "defaultVoting": "Default Voting",
+    "votingLabel": "Voting:",
+    "mode": "Mode",
+    "revealAll": "Reveal All",
+    "revealVotes": "Reveal Votes",
+    "resetAllVotes": "Reset All Votes",
+    "resetAllVotesConfirm": "Are you sure you want to reset all votes? This will clear every vote but keep all cards.",
+    "resetColumnVotesConfirm": "Are you sure you want to reset all votes in the \"{{column}}\" column? This will clear every vote in this column but keep all cards.",
+    "linkingMode": "Linking mode: Click on other cards to link/unlink them",
+    "noVotesCastYet": "No votes cast yet.",
+    "medianGrade": "Median Grade:",
+    "votesCount": "({{n}} votes)",
+    "budget": "Budget",
+    "pts": "pts",
+    "vote": "Vote",
+    "stop": "Stop",
+    "reveal": "Reveal",
+    "revote": "Revote",
+    "reset": "Reset",
+    "open": "Open",
+    "revealed": "Revealed",
+    "closed": "Closed",
+    "upDown": "Up/Down",
+    "points": "Points",
+    "mj": "MJ",
+    "expandTimeline": "Expand Timeline",
+    "collapseTimeline": "Collapse Timeline",
+    "timeFrame": {
+      "3mo": "3 months",
+      "6mo": "6 months",
+      "1y": "12 months",
+      "2y": "2 years",
+      "4y": "4 years"
+    },
+    "errorLoadingBoard": "Error loading board",
+    "promote": {
+      "title": "Promote to Kanban",
+      "description": "This will create a new task in the Kanban board with the content of this card.",
+      "confirm": "Promote"
+    },
+    "pointsConfig": {
+      "title": "Configure Points Budget",
+      "maxPoints": "Max Points:",
+      "start": "Start Points Voting"
+    },
+    "mjConfig": {
+      "title": "Configure Majority Judgment Labels",
+      "labelPlaceholder": "Label for grade {{n}}",
+      "saveAndStart": "Save & Start MJ Voting"
+    },
+    "timer": {
+      "stop": "Stop Timer",
+      "set": "Set Timer",
+      "dialogTitle": "Start/Stop Timer",
+      "dialogDescription": "Adjust minutes and seconds.",
+      "minutes": "Minutes",
+      "seconds": "Seconds",
+      "start": "Start"
+    },
+    "column": {
+      "dreams": "Dreams",
+      "strengths": "Strengths",
+      "threats": "Threats",
+      "levers": "Levers",
+      "priorities": "Priorities"
+    }
+  },
+  "boardOptions": {
+    "options": "Options",
+    "title": "Board Options",
+    "offlineVotes": "Offline Votes",
+    "on": "On",
+    "off": "Off",
+    "exporting": "Exporting...",
+    "exportJson": "Export as JSON",
+    "importBoard": "Import Board",
+    "importTitle": "Import Board",
+    "importDescription": "Import a board from a JSON file. This will replace the current board data.",
+    "warningTitle": "Warning: This will destroy the current board",
+    "warningBody": "Importing a board will completely replace the current {{type}} board — all cards, columns, votes, and settings will be lost. This action cannot be undone.",
+    "warningBackup": "Consider exporting the current board first as a backup.",
+    "understand": "I understand, proceed",
+    "selected": "Selected",
+    "importing": "Importing...",
+    "importReplace": "Import & Replace Board",
+    "fertilization": "Fertilization",
+    "dream": "Dream",
+    "exportFailed": "Failed to export board: {{error}}",
+    "importSuccess": "Board imported successfully!",
+    "importFailed": "Error importing board: {{error}}"
+  },
+  "framework": {
+    "intentional": {
+      "title": "Intentional Framework",
+      "createTitle": "Create Intentional Framework",
+      "noFramework": "No intentional framework created yet.",
+      "name": "Intentional Framework",
+      "expandAll": "Expand All",
+      "collapseAll": "Collapse All",
+      "category": {
+        "mission": {
+          "label": "Mission",
+          "description": "What do we concretely do, and for whom? What are our main product or service offerings, our value propositions?"
+        },
+        "purpose": {
+          "label": "Purpose",
+          "description": "Why, for whom, and for what do we do what we do? What effect are we seeking to produce by doing what we do? What is our main motivation for carrying out our mission(s)?"
+        },
+        "values": {
+          "label": "Values & Principles",
+          "description": "What are our values and their principles for practical application? Who or what truly matters to us? What way of acting allows us to translate our values into action?"
+        },
+        "regenerative": {
+          "label": "Regenerative Aims",
+          "description": "What positive contributions do we wish to make to natural and social systems? What results do we want to achieve, and in what timeframe?"
+        },
+        "legal": {
+          "label": "Legal & Economic",
+          "description": "Is a particular legal status important to us, and if so, which one? Is a particular economic model important to us, and if so, which one?"
+        },
+        "ambition": {
+          "label": "Ambition",
+          "description": "What are our concrete and measurable ambitions? What are our qualitative or quantitative ambitions? What results do we want to achieve? In what timeframe?"
+        },
+        "temporality": {
+          "label": "Temporality",
+          "description": "Is a particular timeframe important to us, and if so, which one?"
+        },
+        "vision": {
+          "label": "Vision",
+          "description": "What ideal world do we wish for? Why, for whom, or for what do we wish for this world?"
+        },
+        "socialRoles": {
+          "label": "Social Roles",
+          "description": "What role do we identify with to fulfill our mission(s)? What are our professions to offer our products or services?"
+        },
+        "identity": {
+          "label": "Identity",
+          "description": "Who do we identify as, as members of the organization? Symbolically, what is this identity like?"
+        }
+      }
+    },
+    "collaborative": {
+      "title": "Collaborative Framework",
+      "createTitle": "Create Collaborative Framework",
+      "noFramework": "No collaborative framework created yet.",
+      "name": "Collaborative Framework",
+      "expandAll": "Expand All",
+      "collapseAll": "Collapse All",
+      "category": {
+        "collaborative-values": {
+          "label": "Collaborative Values & Principles",
+          "description": "The values important for efficient and pleasant collaboration and the principles that translate these values into action within the organization."
+        },
+        "expected-behaviors": {
+          "label": "Expected Behaviors",
+          "description": "Behaviors to encourage, indispensable ones, to avoid, or unacceptable for efficient and pleasant collaboration."
+        },
+        "regular-meetings": {
+          "label": "Regular Meetings",
+          "description": "The types of meetings practiced, their frequency and duration."
+        },
+        "entry-process": {
+          "label": "Entry Process",
+          "description": "How a person can join the organization."
+        },
+        "exit-process": {
+          "label": "Exit Process",
+          "description": "How a person can leave the organization."
+        },
+        "conflict-resolution": {
+          "label": "Conflict Resolution Process",
+          "description": "How to constructively regulate tensions and conflicts between members."
+        },
+        "exclusion-process": {
+          "label": "Exclusion Process",
+          "description": "How to separate from a person harming the organization or its members."
+        },
+        "collaborative-methods": {
+          "label": "Collaborative Methods",
+          "description": "Project management methods used in complement to this constitution."
+        },
+        "individual-support": {
+          "label": "Individual Support Process",
+          "description": "How to offer personal support."
+        },
+        "peer-support": {
+          "label": "Peer Support Process",
+          "description": "How to help each other and learn together."
+        }
+      }
+    },
+    "categoryOptional": "optional",
+    "placeholder": "Write your {{field}} here..."
+  },
+  "dreamTop": {
+    "dreamBoard": "Dream Board",
+    "intentionalFramework": "Intentional Framework",
+    "collaborativeFramework": "Collaborative Framework",
+    "storyboardView": "Storyboard View",
+    "prioritizationView": "Prioritization View",
+    "filtersAndControls": "Filters & Controls",
+    "noTasksToPlan": "No tasks to plan.",
+    "subtasksOf": "Subtasks of: {{title}}",
+    "toggle": {
+      "intention": "Intention",
+      "collaboration": "Collaboration",
+      "dream": "Dream",
+      "storyboard": "Storyboard",
+      "prioritization": "Prioritization"
+    }
+  },
+  "nav": {
+    "navigationMenu": "Navigation menu",
+    "closeNavigation": "Close navigation",
+    "celebration": "Celebration",
+    "dream": "Dream",
+    "plan": "Plan",
+    "action": "Action",
+    "tools": "Tools",
+    "fertilizationBoard": "Fertilization Board",
+    "intention": "Intention",
+    "collaboration": "Collaboration",
+    "dreamBoard": "Dream Board",
+    "storyboard": "Storyboard",
+    "prioritization": "Prioritization",
+    "program": "Program",
+    "resources": "Resources",
+    "circles": "Circles",
+    "roles": "Roles",
+    "salarySystem": "Salary System",
+    "project": "Project",
+    "focus": "Focus",
+    "timetable": "Timetable",
+    "voting": "Voting",
+    "metrics": "Metrics",
+    "settings": "Settings"
+  },
+  "program": {
+    "inProgressNoDate": "In Progress (No Termination Date)",
+    "quickAddTask": "Quick add task...",
+    "filtersAndControls": "Filters & Controls",
+    "newTask": "New Task",
+    "titleLabel": "Title",
+    "taskTitlePlaceholder": "Task title...",
+    "scheduledFor": "Scheduled for: {{date}}",
+    "create": "Create",
+    "dragStartTime": "Drag to change start time",
+    "dragEndTime": "Drag to change end time"
+  },
+  "prioritization": {
+    "title": "Comparative Prioritization",
+    "results": "Prioritization Results:",
+    "cancel": "Cancel",
+    "applyNewPriorities": "Apply New Priorities",
+    "selectTasks": "Select Tasks for Comparison:",
+    "filterByCriticity": "Filter by Criticity:",
+    "urgent": "Urgent:",
+    "highImpact": "High Impact:",
+    "incident": "Incident:",
+    "sprintTarget": "Sprint Target:",
+    "all": "All",
+    "yes": "Yes",
+    "no": "No",
+    "badgeUrgent": "Urgent",
+    "badgeHighImpact": "High Impact",
+    "badgeIncident": "Incident",
+    "badgeSprintTarget": "Sprint Target",
+    "itemsPerBatch": "Items per batch:",
+    "batchSizeHelp": "Compare 2 at a time (take longer) or more at once (pick best then worst, faster as it uses Plackett-Luce algorithm).",
+    "finalizeNow": "Finalize now",
+    "finalizeTooltipDisabled": "Compare at least one batch first.",
+    "finalizeTooltipEnabled": "Apply the current partial ranking now.",
+    "resetComparison": "Reset Comparison",
+    "resetConfirm": "Interrupt and reset the current comparison? All progress will be lost.",
+    "startComparison": "Start Comparative Prioritization ({{count}} tasks, ~{{batches}} batches)",
+    "copyList": "Copy List to Clipboard",
+    "deselectAll": "Deselect All",
+    "selectAll": "Select All",
+    "deleteSelected": "Delete Selected ({{count}})",
+    "deleteTooltipEnabled": "Delete selected tasks",
+    "deleteTooltipDisabled": "Hover for 0.5s to enable deletion",
+    "alertSelectTwo": "Please select at least two tasks to compare.",
+    "copySuccess": "Task titles copied to clipboard!",
+    "copyFailed": "Failed to copy task titles to clipboard.",
+    "deleteConfirm": "Delete {{count}} selected task{{s}}? This cannot be undone.",
+    "whichOneFirst": "Which one should be done first?",
+    "pickHighest": "Pick the highest priority task:",
+    "pickLowest": "Now pick the lowest priority task:",
+    "batchProgress": "Batch {{n}} · {{percent}}% confident",
+    "pairwiseHint": "Click the highest priority task — the other is automatically lowest.",
+    "batchLowestHint": "Pick the lowest among the remaining — or click the highlighted highest again to undo and re-pick.",
+    "finalizeDialogTitle": "Finalize with current order?",
+    "finalizeDialogDesc": "This is the ranking computed so far from {{n}} batch{{es}}. You can apply it now or keep comparing to refine.",
+    "finalizeDialogDescSimple": "This is the ranking computed so far.",
+    "keepComparing": "Keep comparing",
+    "applyOrder": "Apply this order"
+  },
+  "timetable": {
+    "loading": "Loading timetable...",
+    "title": "Timetable",
+    "timetableViewAria": "Timetable View",
+    "categorical": "Categorical",
+    "categoricalAria": "Categorical View",
+    "chronological": "Chronological",
+    "chronologicalAria": "Chronological View",
+    "timePeriod": "Time period",
+    "timeChunk": "Time Chunk",
+    "allDay": "All Day",
+    "am": "AM",
+    "amAria": "AM (before {{time}})",
+    "pm": "PM",
+    "pmAria": "PM (after {{time}})",
+    "predefinedRanges": "Predefined Ranges",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "thisWeek": "This Week",
+    "lastWeek": "Last Week",
+    "thisMonth": "This Month",
+    "lastMonth": "Last Month",
+    "yearToDate": "Year to Date",
+    "sinceXWeeks": "Since {{n}} weeks",
+    "status": "Status",
+    "statusPlaceholder": "Select status...",
+    "categories": "Categories",
+    "categoryPlaceholder": "Select category...",
+    "uncategorized": "Uncategorized",
+    "criticity": "Criticity",
+    "urgent": "Urgent",
+    "highImpact": "High Impact",
+    "incidentOnDelivery": "Incident on Delivery",
+    "sprintTarget": "Sprint Target",
+    "clearAllFilters": "Clear All Filters",
+    "timeSummaryByCategory": "Time Summary by Category",
+    "category": "Category",
+    "totalTime": "Total Time",
+    "total": "Total",
+    "detailedTimetable": "Detailed Timetable",
+    "noTimerData": "No timer data matches the selected filters.",
+    "task": "Task",
+    "user": "User",
+    "startTime": "Start Time",
+    "endTime": "End Time",
+    "duration": "Duration",
+    "unknownTask": "Unknown Task",
+    "grandTotal": "Grand Total"
+  },
+  "quickTimer": {
+    "phaseFocus": "Focus",
+    "phaseShortBreak": "Break",
+    "phaseLongBreak": "Long Break",
+    "pause": "Pause",
+    "resume": "Resume",
+    "startWork": "Start work",
+    "skipPhase": "Skip phase",
+    "reset": "Reset",
+    "closePip": "Close PiP",
+    "openPip": "Open in PiP",
+    "switchTechnique": "Switch technique",
+    "pomodoro": "Pomodoro",
+    "traveler": "Traveler",
+    "jumpToTask": "Jump to task",
+    "flight": "Flight",
+    "break": "Break",
+    "flightLabel": "Flight",
+    "train": "Train",
+    "from": "From",
+    "to": "To",
+    "searchTravelDuration": "Search travel duration",
+    "startTraveler": "Start Traveler timer",
+    "pauseTask": "Pause task",
+    "resumeTask": "Resume task",
+    "resumeTimer": "Resume timer",
+    "noActiveTimer": "No active timer",
+    "reopenSpotlight": "Reopen the What's Next spotlight",
+    "whatsNext": "What's next?"
+  },
+  "pomodoroUi": {
+    "ready": "Ready",
+    "focusTime": "Focus Time",
+    "break": "Break",
+    "longBreak": "Long Break",
+    "flight": "Flight",
+    "work": "Work",
+    "pause": "Pause",
+    "resume": "Resume",
+    "skip": "Skip",
+    "end": "End",
+    "closePip": "Close PiP",
+    "pip": "PiP",
+    "dismiss": "Dismiss",
+    "start": "Start",
+    "startBreak": "Start break",
+    "startLongBreak": "Start long break",
+    "startWork": "Start work",
+    "timesUp": "Time's up!",
+    "takeShortBreak": "Take a short break",
+    "earnedLongBreak": "You earned a long break",
+    "breaksOver": "Break's over!",
+    "timeToFocus": "Time to focus",
+    "pin": "Pin",
+    "pinHint": "Pin:",
+    "alwaysOnTop": "Always on Top",
+    "resetCycle": "Reset cycle",
+    "howToPin": "How to pin on top",
+    "toPinOnTop": "To pin on top:",
+    "pressSuperRightClick": "Press Super + Right-Click",
+    "technique": "Technique",
+    "today": "Today",
+    "thisWeek": "This Week",
+    "thisMonth": "This Month",
+    "allTime": "All Time",
+    "sessions": "session",
+    "sessionsPlural": "sessions",
+    "minAvg": "{{minutes}} min · avg {{avg}}/day",
+    "timeOfDayDistribution": "Time of Day Distribution",
+    "dayOfWeekDistribution": "Day of Week Distribution",
+    "impactWork": "Impact work",
+    "focusWork": "Focus work",
+    "startedTasks": "Started tasks",
+    "noVotes": "No votes"
+  },
+  "board": {
+    "search": "Search:",
+    "searchPlaceholder": "Search cards...",
+    "column": "Column:",
+    "columnPlaceholder": "All columns...",
+    "minLikes": "Min Likes:",
+    "tags": "Tags:",
+    "tagsPlaceholder": "All tags...",
+    "clearFilters": "Clear Filters",
+    "filtersAndControls": "Filters & Controls",
+    "sortByVotes": "Sort by votes",
+    "sortedHighToLow": "Sorted by votes (high to low)",
+    "sortedLowToHigh": "Sorted by votes (low to low)",
+    "typePlaceholder": "Type...",
+    "tag": "Tag",
+    "addAnonymously": "Add (Anonymously)",
+    "addCard": "Add Card",
+    "addCardWithName": "Add card with your name",
+    "addAnonymousCard": "Add anonymous card",
+    "noCards": "No cards in this column yet.",
+    "noVotesCastYet": "No votes cast yet",
+    "voters": "voters",
+    "pts": "pts",
+    "unknown": "Unknown",
+    "anonymous": "Anonymous",
+    "msgAuthor": "Msg author",
+    "unassigned": "Unassigned",
+    "myself": "Myself ({{name}})",
+    "offline": "Offline",
+    "offlineVoters": "Offline Voters",
+    "addVoter": "Add Voter",
+    "noOfflineVoters": "No offline voters added yet.",
+    "voter": "Voter",
+    "clearAllOfflineVoters": "Clear All Offline Voters",
+    "offlineCount": "{{count}} offline",
+    "votes": "votes",
+    "offlineThumbsUp": "({{count}} offline)",
+    "noVotesCast": "No votes",
+    "medianLabel": "Median: {{label}}",
+    "votesCount": "({{count}} votes)",
+    "unspent": "Unspent: {{remaining}} pts",
+    "noVotesYet": "No Votes",
+    "evaluate": "Evaluate...",
+    "selectGrade": "Select Grade",
+    "hiddenContent": "Hidden content",
+    "cancelLinking": "Cancel linking",
+    "linkCards": "Link cards",
+    "promoteToBacklog": "Promote to backlog",
+    "difficultyLabel": "Difficulty: {{level}}"
+  },
+  "storyboard": {
+    "difficultyTitle": "Difficulty: {{level}}"
+  },
+  "todolist": {
+    "loadingFilters": "Loading filters...",
+    "topTaskPlaceholder": "Enter a title for a new top-level task",
+    "subtaskPlaceholder": "Enter a new subtask",
+    "noTasksMatch": "No tasks match the current filters.",
+    "setDeadline": "Set deadline",
+    "durationLabel": "Duration:",
+    "duplicate": "Duplicate",
+    "delete": "Delete",
+    "markUrgent": "Mark Urgent",
+    "removeUrgent": "Remove Urgent",
+    "markHighImpact": "Mark High Impact",
+    "removeHighImpact": "Remove Impact",
+    "markIncidentOnDelivery": "Mark Incident on Delivery",
+    "removeIncidentOnDelivery": "Remove IoD",
+    "markSprintTarget": "Mark Sprint Target",
+    "removeSprintTarget": "Remove Sprint Target",
+    "badge": {
+      "urgent": "Urgent",
+      "impact": "Impact",
+      "iod": "IoD",
+      "sprint": "Sprint"
+    }
+  },
+  "todoStrip": {
+    "title": "Your Receipt Todos",
+    "addPlaceholder": "Add a new task...",
+    "add": "Add",
+    "done": "Done",
+    "undo": "Undo",
+    "task": "Task",
+    "emptyHint": "No tasks yet — add one to print it on your \u201creceipt\u201d."
+  },
+  "circles": {
+    "viewTitle": "Circles View",
+    "hideTreePanel": "Hide tree panel",
+    "showTreePanel": "Show tree panel",
+    "add": "Add",
+    "edit": "Edit",
+    "move": "Move",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "save": "Save",
+    "noCircles": "No circles yet. Create your first organization!",
+    "createOrganization": "Create Organization",
+    "organizationTree": "Organization Tree",
+    "noDetails": "No details defined. Click Edit to add.",
+    "assignedUsers": "Assigned Users",
+    "purpose": "Purpose",
+    "missions": "Missions",
+    "authorityScope": "Authority Scope",
+    "roleAssignments": "Role Assignments",
+    "addUserAssignment": "Add User Assignment",
+    "selectUser": "Select user...",
+    "selectParent": "Select parent...",
+    "noParentRoot": "No Parent (Root)",
+    "newParent": "New Parent",
+    "name": "Name",
+    "type": "Type",
+    "color": "Color",
+    "addNode": "Add Node",
+    "editNode": "Edit Node",
+    "addNodeDesc": "Add a new circle or role.",
+    "editNodeDesc": "Edit the selected circle or role.",
+    "moveNode": "Move \u201c{{name}}\u201d",
+    "moveNodeDesc": "Move the selected node to a new parent.",
+    "deleteConfirmTitle": "Are you sure?",
+    "deleteConfirmDesc": "This will permanently delete \u201c{{name}}\u201d and all its child circles/roles. This action cannot be undone.",
+    "nodeType": {
+      "organization": "Organization",
+      "circle": "Circle",
+      "group": "Group",
+      "role": "Role"
+    },
+    "involvement": {
+      "P": "PILOT / DRI (P)",
+      "CP": "COPILOT (CP)",
+      "PA": "PARTICIPANT (PA)",
+      "F": "FOCUS (F)",
+      "A": "APPRENTICE (A)",
+      "R": "RESOURCE (R)"
+    },
+    "purposePlaceholder": "What service or general functionality does the role-circle provide to the organization, other role-circles or external stakeholders?",
+    "missionsPlaceholder": "What specific services or tasks does the role-circle provide to the organization, to other role-circles or to external stakeholders?",
+    "authorityScopePlaceholder": "What are the elements over which the role-circle has exclusive authority and for which it alone can decide?"
+  },
+  "chronological": {
+    "noTimerData": "No timer data matches the selected filters.",
+    "task": "Task",
+    "category": "Category",
+    "user": "User",
+    "startTime": "Start Time",
+    "endTime": "End Time",
+    "duration": "Duration"
+  },
+  "programTop": {
+    "calendar": "Calendar",
+    "resources": "Resources",
+    "programCalendar": "Program Calendar",
+    "resourcesWorkload": "Resources Workload",
+    "teamMembers": "Team Members",
+    "today": "Today",
+    "tasksAssigned": "{{count}} tasks assigned",
+    "tasksAssigned_one": "{{count}} task assigned",
+    "unassigned": "Unassigned",
+    "duration": "Duration: {{count}} pts",
+    "startLabel": "Start: {{date}}",
+    "endLabel": "End: {{date}}",
+    "points": "{{count}} pts"
+  },
+  "roles": {
+    "searchPlaceholder": "Search roles...",
+    "roleName": "Role Name",
+    "circleGroup": "Circle / Group",
+    "roleAssignments": "Role Assignments",
+    "involvement": "Involvement",
+    "filterPrefix": "Filter",
+    "noRolesMatch": "No roles match the current filters.",
+    "unassigned": "Unassigned",
+    "noCircle": "No Circle",
+    "unknown": "Unknown",
+    "roleCount": "{{count}} role(s)",
+    "viewList": "List",
+    "viewByUser": "By User",
+    "rolesViewAria": "Roles View",
+    "listViewAria": "List View",
+    "byUserAria": "By User",
+    "expandAll": "Expand All",
+    "collapseAll": "Collapse All"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "clearAll": "Clear All",
+    "empty": "No new notifications.",
+    "markAsRead": "Mark as Read",
+    "snooze": "Snooze",
+    "snoozePlaceholder": "Snooze",
+    "snoozeDuration": {
+      "5min": "5 minutes",
+      "15min": "15 minutes",
+      "30min": "30 minutes",
+      "1hour": "1 hour",
+      "2hours": "2 hours",
+      "1day": "1 day"
+    }
+  },
+  "spotlight": {
+    "greeting": {
+      "welcomeBack": "Good to see you. Here's today's next action.",
+      "workingOn": "Currently working on",
+      "nextTask": "Next task to work on"
+    },
+    "welcomeBackBanner": "Good to see you.",
+    "moodQuestion": "How are you feeling right now?",
+    "moodHelper": "This helps me propose the best fitting next task for you.",
+    "mood": {
+      "ready": "Ready",
+      "steady": "Steady",
+      "struggling": "Struggling"
+    },
+    "moodReason": {
+      "green": "Ready for anything",
+      "orange": "Something a bit easier",
+      "red": "Smallest possible step"
+    },
+    "alternative": "Alternative: ",
+    "alternativeChecked": "✓ Alternative: ",
+    "viewConsistencyDetails": "View consistency details",
+    "jumpToTask": "Jump to task",
+    "startWorking": "Start working",
+    "consistency": "Consistency",
+    "consistencyScore": "Consistency score",
+    "score": "Score",
+    "heatmap": {
+      "hidden": "{{label}} (hidden)",
+      "focusSession": "focus session",
+      "focusSessions": "focus sessions",
+      "tasksStartedNoFocus": "{{count}} task started (no focus technique)",
+      "tasksStartedNoFocus_plural": "{{count}} tasks started (no focus technique)",
+      "impactDay": "Impact day",
+      "noActivity": "no activity",
+      "dayOff": "day off",
+      "on": "on {{date}}"
+    }
+  }
+}

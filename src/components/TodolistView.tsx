@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { Task, TriageStatus, Category } from "@/hooks/useTasks";
 import { Filters } from "./FilterControls";
 import { aStarTextSearch } from "@/lib/a-star-search";
@@ -64,6 +65,7 @@ const TodolistView: React.FC<TodolistViewProps> = ({
   expandedParents,
   onToggleExpand,
 }) => {
+  const { t } = useTranslation();
   const map = useMemo(() => {
     const m = new Map<string, Task>();
     tasks.forEach(t => m.set(t.id, t));
@@ -150,7 +152,7 @@ const TodolistView: React.FC<TodolistViewProps> = ({
   }, [filteredTopTasks, expandedParents, map, displayFilters.status]);
 
   if (loadingFilters) {
-    return <div className="text-xs text-muted-foreground px-4 py-8">Loading filters...</div>;
+    return <div className="text-xs text-muted-foreground px-4 py-8">{t('todolist.loadingFilters')}</div>;
   }
 
   return (
@@ -158,7 +160,7 @@ const TodolistView: React.FC<TodolistViewProps> = ({
       {/* Quick add row at top */}
       <div className="px-3 py-1.5 border-b border-border bg-accent/5 shrink-0 min-w-[1000px]">
         <QuickAddTask
-          placeholder="Enter a title for a new top-level task"
+          placeholder={t('todolist.topTaskPlaceholder')}
           showPlusIcon
           userId={storedFilters.selectedUserId && storedFilters.selectedUserId !== 'UNASSIGNED' ? storedFilters.selectedUserId : undefined}
         />
@@ -167,7 +169,7 @@ const TodolistView: React.FC<TodolistViewProps> = ({
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto">
         <div className="min-w-[1000px]">
           {flattenedRows.length === 0 ? (
-            <div className="text-xs text-muted-foreground px-4 py-8">No tasks match the current filters.</div>
+            <div className="text-xs text-muted-foreground px-4 py-8">{t('todolist.noTasksMatch')}</div>
           ) : (
             flattenedRows.map(row => (
               <LazyRow key={row.task.id}>

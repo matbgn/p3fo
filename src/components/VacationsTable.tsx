@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
     Table,
     TableBody,
@@ -24,6 +25,7 @@ const EditableCell: React.FC<{
     onSave: (val: number) => void;
     isEditable: boolean;
 }> = ({ value, onSave, isEditable }) => {
+    const { t } = useTranslation();
     const [isEditing, setIsEditing] = useState(false);
     const [tempValue, setTempValue] = useState(value.toString());
 
@@ -70,7 +72,7 @@ const EditableCell: React.FC<{
         <div
             onDoubleClick={() => setIsEditing(true)}
             className="cursor-pointer hover:bg-gray-100 p-1 rounded"
-            title="Double click to edit"
+            title={t("metrics.vacations.doubleClickToEdit")}
         >
             {value.toFixed(1)}
         </div>
@@ -78,6 +80,7 @@ const EditableCell: React.FC<{
 };
 
 const VacationsTable: React.FC<VacationsTableProps> = ({ data, onUpdate, onDelete, isRowDeletable }) => {
+    const { t } = useTranslation();
     const now = new Date();
     const currentDescId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
@@ -86,11 +89,11 @@ const VacationsTable: React.FC<VacationsTableProps> = ({ data, onUpdate, onDelet
             <Table>
                 <TableHeader>
                     <TableRow>
-                        <TableHead className="w-[100px]">Month</TableHead>
-                        <TableHead>Workload %</TableHead>
-                        <TableHead>Due [h]</TableHead>
-                        <TableHead>Taken [h]</TableHead>
-                        <TableHead>Balance [h]</TableHead>
+                        <TableHead className="w-[100px]">{t("metrics.vacations.column.month")}</TableHead>
+                        <TableHead>{t("metrics.vacations.column.workload")}</TableHead>
+                        <TableHead>{t("metrics.vacations.column.due")}</TableHead>
+                        <TableHead>{t("metrics.vacations.column.taken")}</TableHead>
+                        <TableHead>{t("metrics.vacations.column.balance")}</TableHead>
                         <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
                 </TableHeader>

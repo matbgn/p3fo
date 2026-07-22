@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Task } from "@/hooks/useTasks";
@@ -22,6 +23,7 @@ const TimetableRecordsCell: React.FC<TimetableRecordsCellProps> = ({
     vacationsTaken = 0,
     previousBalance = 0
 }) => {
+    const { t } = useTranslation();
     const projectedHoursResult = getProjectedHoursForActualMonth(
         year,
         month,
@@ -60,7 +62,7 @@ const TimetableRecordsCell: React.FC<TimetableRecordsCellProps> = ({
         <>
             <Card className="h-28">
                 <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Hours per month done</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t("metrics.forecast.hoursDone")}</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{projectedHoursResult.totalTimeElapsedForAllMonth}</div>
@@ -69,7 +71,7 @@ const TimetableRecordsCell: React.FC<TimetableRecordsCellProps> = ({
 
             <Card className="h-28">
                 <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Hours per month due</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t("metrics.forecast.hoursDue")}</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{projectedHoursResult.hoursDue}</div>
@@ -78,7 +80,7 @@ const TimetableRecordsCell: React.FC<TimetableRecordsCellProps> = ({
 
             <Card className="h-28 border-t-4 border-t-indigo-500">
                 <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Hours per month projected</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t("metrics.forecast.hoursProjected")}</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{projectedHoursResult.totalTimeExpandedInHours}</div>
@@ -87,7 +89,7 @@ const TimetableRecordsCell: React.FC<TimetableRecordsCellProps> = ({
 
             <Card className="h-28">
                 <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Delta hours projected with due</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t("metrics.forecast.deltaProjected")}</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{projectedHoursResult.actualHourlyBalance}</div>
@@ -96,7 +98,7 @@ const TimetableRecordsCell: React.FC<TimetableRecordsCellProps> = ({
 
             <Card className="h-28">
                 <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Workload</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t("metrics.forecast.workload")}</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{workloadPercentage}%</div>
@@ -105,7 +107,7 @@ const TimetableRecordsCell: React.FC<TimetableRecordsCellProps> = ({
 
             <Card className="h-28">
                 <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Last month hourly balance</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t("metrics.forecast.lastMonthBalance")}</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">{previousBalance}</div>
@@ -114,11 +116,11 @@ const TimetableRecordsCell: React.FC<TimetableRecordsCellProps> = ({
 
             <Card className="h-28 col-span-1 sm:col-span-2">
                 <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">New hourly balance (projection)</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t("metrics.forecast.newBalance")}</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="flex justify-between items-center">
-                        <div className="text-2xl font-bold">{Math.round(totalProjectedBalance * 10) / 10} Hours</div>
+                        <div className="text-2xl font-bold">{Math.round(totalProjectedBalance * 10) / 10} {t("metrics.forecast.hoursUnit")}</div>
                         <Badge
                             className={`text-lg px-3 py-1 ${getBadgeColorClass(ratio)}`}
                         >

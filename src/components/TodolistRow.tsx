@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -121,6 +122,7 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
   isHighlighted,
   scrollTodolistRowRef,
 }) => {
+  const { t } = useTranslation();
   const { task, depth, hasChildren, isExpanded } = row;
   const [isHovered, setIsHovered] = React.useState(false);
   const [subtaskDropdownOpen, setSubtaskDropdownOpen] = React.useState(false);
@@ -248,25 +250,25 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
             {task.urgent && (
               <Badge variant="destructive" className="text-[9px] px-1 py-0 h-4 leading-none">
                 <AlertTriangle className="h-2 w-2 mr-0.5" />
-                Urgent
+                {t('todolist.badge.urgent')}
               </Badge>
             )}
             {task.impact && (
               <Badge variant="secondary" className="bg-yellow-500 hover:bg-yellow-600 text-yellow-900 text-[9px] px-1 py-0 h-4 leading-none">
                 <CircleDot className="h-2 w-2 mr-0.5" />
-                Impact
+                {t('todolist.badge.impact')}
               </Badge>
             )}
             {task.majorIncident && (
               <Badge variant="destructive" className="bg-red-700 hover:bg-red-800 text-white text-[9px] px-1 py-0 h-4 leading-none">
                 <Flame className="h-2 w-2 mr-0.5" />
-                IoD
+                {t('todolist.badge.iod')}
               </Badge>
             )}
             {task.sprintTarget && (
               <Badge variant="secondary" className="bg-violet-500 hover:bg-violet-600 text-violet-100 text-[9px] px-1 py-0 h-4 leading-none">
                 <Crosshair className="h-2 w-2 mr-0.5" />
-                Sprint
+                {t('todolist.badge.sprint')}
               </Badge>
             )}
           </div>
@@ -310,7 +312,7 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
                       <div className={`w-2.5 h-2.5 rounded-full ${getDifficultyColor(d)} mr-1.5`} />
                       <span>{d}</span>
                       {d === 8 && (
-                        <span className="text-xs text-muted-foreground ml-2">~1 day, consider splitting</span>
+                        <span className="text-xs text-muted-foreground ml-2">{t('task.difficulty8Hint')}</span>
                       )}
                     </div>
                   </SelectItem>
@@ -419,7 +421,7 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
                       }}
                     >
                       <AlertTriangle className={`h-3.5 w-3.5 ${task.urgent ? "text-red-500" : "text-gray-400"}`} />
-                      <span>{task.urgent ? "Remove Urgent" : "Mark Urgent"}</span>
+                      <span>{task.urgent ? t('todolist.removeUrgent') : t('todolist.markUrgent')}</span>
                     </button>
                     <button
                       className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-md hover:bg-accent w-full"
@@ -429,7 +431,7 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
                       }}
                     >
                       <CircleDot className={`h-3.5 w-3.5 ${task.impact ? "text-yellow-500" : "text-gray-400"}`} />
-                      <span>{task.impact ? "Remove Impact" : "Mark High Impact"}</span>
+                      <span>{task.impact ? t('todolist.removeHighImpact') : t('todolist.markHighImpact')}</span>
                     </button>
                     <button
                       className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-md hover:bg-accent w-full"
@@ -439,7 +441,7 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
                       }}
                     >
                       <Flame className={`h-3.5 w-3.5 ${task.majorIncident ? "text-red-700" : "text-gray-400"}`} />
-                      <span>{task.majorIncident ? "Remove IoD" : "Mark Incident on Delivery"}</span>
+                      <span>{task.majorIncident ? t('todolist.removeIncidentOnDelivery') : t('todolist.markIncidentOnDelivery')}</span>
                     </button>
                     <button
                       className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-md hover:bg-accent w-full"
@@ -449,14 +451,14 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
                       }}
                     >
                       <Crosshair className={`h-3.5 w-3.5 ${task.sprintTarget ? "text-violet-500" : "text-gray-400"}`} />
-                      <span>{task.sprintTarget ? "Remove Sprint Target" : "Mark Sprint Target"}</span>
+                      <span>{task.sprintTarget ? t('todolist.removeSprintTarget') : t('todolist.markSprintTarget')}</span>
                     </button>
                     <div className="h-px bg-border my-1" />
                     <Popover>
                       <PopoverTrigger asChild>
                         <button className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-md hover:bg-accent w-full">
                           <CalendarIcon className="h-3.5 w-3.5 text-gray-400" />
-                          <span>{task.terminationDate ? format(new Date(task.terminationDate), "PP") : "Set deadline"}</span>
+                          <span>{task.terminationDate ? format(new Date(task.terminationDate), "PP") : t('todolist.setDeadline')}</span>
                         </button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
@@ -478,10 +480,10 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
                       </PopoverContent>
                     </Popover>
                     <div className="flex items-center gap-2 px-2 py-1.5">
-                      <span className="text-xs text-muted-foreground">Duration:</span>
+                      <span className="text-xs text-muted-foreground">{t('todolist.durationLabel')}</span>
                       <Input
                         type="number"
-                        placeholder="min."
+                        placeholder={t('task.durationPlaceholder')}
                         min="0"
                         value={durationValue}
                         onChange={(e) => setDurationValue(e.target.value)}
@@ -507,7 +509,7 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
                     <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
                     <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
                   </svg>
-                  <span>Duplicate</span>
+                  <span>{t('todolist.duplicate')}</span>
                 </button>
                 <button
                   className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-md hover:bg-accent hover:text-red-500 w-full"
@@ -517,7 +519,7 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
                   }}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                  <span>Delete</span>
+                  <span>{t('todolist.delete')}</span>
                 </button>
               </div>
             </PopoverContent>
@@ -533,7 +535,7 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
           onClick={(e) => e.stopPropagation()}
         >
           <QuickAddTask
-            placeholder="Enter a new subtask"
+            placeholder={t('todolist.subtaskPlaceholder')}
             parentId={task.id}
             showPlusIcon
             onDropdownOpenChange={setSubtaskDropdownOpen}
@@ -569,19 +571,19 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
         <Dialog open={isCommentModalOpen} onOpenChange={setIsCommentModalOpen}>
           <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col" aria-describedby={undefined}>
             <DialogHeader>
-              <DialogTitle>Edit Comment - {task.title}</DialogTitle>
+              <DialogTitle>{t('task.editCommentTitle', { title: task.title })}</DialogTitle>
               <DialogDescription className="sr-only">
-                Edit comment for task: {task.title}
+                {t('task.editCommentDescription', { title: task.title })}
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <label htmlFor="todolist-comment" className="sr-only">Comment</label>
+                <label htmlFor="todolist-comment" className="sr-only">{t('task.commentLabel')}</label>
                 <RichTextField
                   value={commentText}
                   onChange={(json) => setCommentText(json)}
-                  label="Comment"
-                  placeholder="Add a comment..."
+                  label={t('task.commentFieldLabel')}
+                  placeholder={t('task.commentPlaceholder')}
                   className="min-h-[200px]"
                 />
               </div>
@@ -594,7 +596,7 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
                   setIsCommentModalOpen(false);
                 }}
               >
-                Save Comment
+                {t('task.saveComment')}
               </Button>
             </div>
           </DialogContent>
@@ -605,9 +607,9 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
         <Dialog open={isTimeSheetOpen} onOpenChange={setIsTimeSheetOpen}>
           <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col p-0" aria-describedby={undefined}>
             <DialogHeader className="p-6 pb-4">
-              <DialogTitle>Time Sheet - {task.title}</DialogTitle>
+              <DialogTitle>{t('task.timeSheetTitle', { title: task.title })}</DialogTitle>
               <DialogDescription className="sr-only">
-                View and edit time entries for task: {task.title}
+                {t('task.timeSheetDescription', { title: task.title })}
               </DialogDescription>
             </DialogHeader>
             <div className="flex-grow overflow-y-auto px-6 pb-6">

@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import * as d3 from 'd3';
+import { useTranslation } from 'react-i18next';
 import { useCircles, CircleTreeNode } from '@/hooks/useCircles';
 import { CircleNodeType, RoleAssignment, RoleInvolvementType } from '@/lib/persistence-types';
 import { UserAvatar } from '@/components/UserAvatar';
@@ -101,6 +102,7 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
   depth,
   users,
 }) => {
+  const { t } = useTranslation();
   const hasChildren = node.children && node.children.length > 0;
   const isExpanded = expandedNodes.has(node.id);
   const isSelected = currentNodeId === node.id;
@@ -142,7 +144,9 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
             node.nodeType === 'role' && 'text-yellow-500'
           )}
         />
-        <span className="text-sm truncate flex-1">{node.name}</span>
+        <span className="text-sm truncate flex-1">
+          {node.id === 'virtual-root' ? t('circles.nodeType.organization') : node.name}
+        </span>
       </div>
       {hasChildren && isExpanded && (
         <div>
@@ -199,6 +203,7 @@ function extractTextFromBlock(block: any): string {
 }
 
 const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOnTask, embedded = false, hideHeaderActions = false }, ref) => {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hiddenCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -287,13 +292,13 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
   const { users } = useUsersContext();
 
   // Involvement labels
-  const INVOLVEMENT_OPTIONS: { value: RoleInvolvementType; label: string }[] = [
-    { value: 'P', label: 'PILOT / DRI (P)' },
-    { value: 'CP', label: 'COPILOT (CP)' },
-    { value: 'PA', label: 'PARTICIPANT (PA)' },
-    { value: 'F', label: 'FOCUS (F)' },
-    { value: 'A', label: 'APPRENTICE (A)' },
-    { value: 'R', label: 'RESOURCE (R)' },
+  const INVOLVEMENT_OPTIONS: { value: RoleInvolvementType; labelKey: string }[] = [
+    { value: 'P', labelKey: 'circles.involvement.P' },
+    { value: 'CP', labelKey: 'circles.involvement.CP' },
+    { value: 'PA', labelKey: 'circles.involvement.PA' },
+    { value: 'F', labelKey: 'circles.involvement.F' },
+    { value: 'A', labelKey: 'circles.involvement.A' },
+    { value: 'R', labelKey: 'circles.involvement.R' },
   ];
 
   // Edit dialog state
@@ -1396,7 +1401,7 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
         {!hideHeaderActions && (
         <CardHeader className="flex flex-row items-center justify-between pb-2 shrink-0">
           <div className="flex items-center gap-4">
-            {!embedded && <CardTitle>Circles View</CardTitle>}
+            {!embedded && <CardTitle>{t('circles.viewTitle')}</CardTitle>}
             {currentNode && currentNode.id !== 'virtual-root' && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Button
@@ -1408,7 +1413,7 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
                 </Button>
                 <span>/</span>
                 <span className="font-medium">{currentNode.name}</span>
-                <span className="text-xs">({currentNode.nodeType})</span>
+                <span className="text-xs">({t(`circles.nodeType.${currentNode.nodeType}`)})</span>
               </div>
             )}
           </div>
@@ -1417,7 +1422,7 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
               variant="ghost"
               size="sm"
               onClick={() => setTreePanelOpen(!treePanelOpen)}
-              title={treePanelOpen ? 'Hide tree panel' : 'Show tree panel'}
+              title={treePanelOpen ? t('circles.hideTreePanel') : t('circles.showTreePanel')}
             >
               {treePanelOpen ? (
                 <PanelLeftClose className="w-4 h-4" />
@@ -1426,7 +1431,7 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
               )}
             </Button>
             <Button variant="outline" size="sm" onClick={openAddDialog}>
-              <Plus className="w-4 h-4 mr-1" /> Add
+              <Plus className="w-4 h-4 mr-1" /> {t('circles.add')}
             </Button>
             <Button
               variant="outline"
@@ -1434,7 +1439,7 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
               onClick={openEditDialog}
               disabled={!currentNode || currentNode.id === 'virtual-root'}
             >
-              <Edit className="w-4 h-4 mr-1" /> Edit
+              <Edit className="w-4 h-4 mr-1" /> {t('circles.edit')}
             </Button>
             <Button
               variant="outline"
@@ -1442,7 +1447,7 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
               onClick={openMoveDialog}
               disabled={!currentNode || currentNode.id === 'virtual-root'}
             >
-              <Move className="w-4 h-4 mr-1" /> Move
+              <Move className="w-4 h-4 mr-1" /> {t('circles.move')}
             </Button>
             <Button
               variant="destructive"
@@ -1450,7 +1455,7 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
               onClick={handleDeleteNode}
               disabled={!currentNode || currentNode.id === 'virtual-root'}
             >
-              <Trash2 className="w-4 h-4 mr-1" /> Delete
+              <Trash2 className="w-4 h-4 mr-1" /> {t('circles.delete')}
             </Button>
           </div>
         </CardHeader>
@@ -1458,9 +1463,9 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
         <CardContent className="flex-1 min-h-0 overflow-hidden p-0">
           {circles.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-2">
-              <p className="mb-4">No circles yet. Create your first organization!</p>
+              <p className="mb-4">{t('circles.noCircles')}</p>
               <Button onClick={openAddDialog}>
-                <Plus className="w-4 h-4 mr-2" /> Create Organization
+                <Plus className="w-4 h-4 mr-2" /> {t('circles.createOrganization')}
               </Button>
             </div>
           ) : (
@@ -1471,7 +1476,7 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
                   <ResizablePanel id="circles-tree" order={1} defaultSize={25} minSize={15} maxSize={40}>
                     <div className="h-full overflow-hidden border-r bg-muted/30 flex flex-col">
                       <div className="shrink-0 p-2 border-b bg-muted/50">
-                        <h3 className="text-sm font-medium text-muted-foreground">Organization Tree</h3>
+                        <h3 className="text-sm font-medium text-muted-foreground">{t('circles.organizationTree')}</h3>
                       </div>
                       <ScrollArea className="flex-1 min-h-0">
                         <div className="p-1">
@@ -1497,13 +1502,13 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
                             <>
                               {currentNode.purpose && (
                                 <div className="mb-2">
-                                  <span className="text-xs font-medium text-muted-foreground">Purpose</span>
+                                  <span className="text-xs font-medium text-muted-foreground">{t('circles.purpose')}</span>
                                   <BlockNotePreview value={currentNode.purpose} />
                                 </div>
                               )}
                               {currentNode.assignments && currentNode.assignments.length > 0 && (
                                 <div className="mb-2">
-                                  <span className="text-xs font-medium text-muted-foreground">Assigned Users</span>
+                                  <span className="text-xs font-medium text-muted-foreground">{t('circles.assignedUsers')}</span>
                                   <div className="flex flex-wrap gap-2 mt-1">
                                     {currentNode.assignments.map((assignment, index) => {
                                       const assignedUser = users.find(u => u.userId === assignment.userId);
@@ -1527,7 +1532,7 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
                             </>
                           )}
                           {currentNode.nodeType === 'role' && !currentNode.purpose && !currentNode.missions && !currentNode.authorityScope && (!currentNode.assignments || currentNode.assignments.length === 0) && (
-                            <p className="text-sm text-muted-foreground italic">No details defined. Click Edit to add.</p>
+                            <p className="text-sm text-muted-foreground italic">{t('circles.noDetails')}</p>
                           )}
                           {currentNode.nodeType !== 'role' && (
                             <p className="text-sm text-muted-foreground italic">{currentNode.name}</p>
@@ -1631,39 +1636,39 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
           <DialogContent className="max-h-[calc(100vh-6rem)] flex flex-col">
             <DialogHeader>
               <DialogTitle>
-                {editMode === 'add' ? 'Add Node' : 'Edit Node'}
+                {editMode === 'add' ? t('circles.addNode') : t('circles.editNode')}
               </DialogTitle>
               <DialogDescription className="sr-only">
-                {editMode === 'add' ? 'Add a new circle or role.' : 'Edit the selected circle or role.'}
+                {editMode === 'add' ? t('circles.addNodeDesc') : t('circles.editNodeDesc')}
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4 overflow-y-auto flex-1 min-h-0 pr-6">
               <div className="grid gap-2">
-                <Label htmlFor="name">Name</Label>
+                <Label htmlFor="name">{t('circles.name')}</Label>
                 <Input
                   id="name"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  placeholder="Enter name..."
+                  placeholder="..."
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="type">Type</Label>
+                <Label htmlFor="type">{t('circles.type')}</Label>
                 <Select value={editNodeType} onValueChange={(v) => setEditNodeType(v as CircleNodeType)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="organization">Organization</SelectItem>
-                    <SelectItem value="circle">Circle</SelectItem>
-                    <SelectItem value="group">Group</SelectItem>
-                    <SelectItem value="role">Role</SelectItem>
+                    <SelectItem value="organization">{t('circles.nodeType.organization')}</SelectItem>
+                    <SelectItem value="circle">{t('circles.nodeType.circle')}</SelectItem>
+                    <SelectItem value="group">{t('circles.nodeType.group')}</SelectItem>
+                    <SelectItem value="role">{t('circles.nodeType.role')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               {editNodeType === 'role' && (
                 <div className="grid gap-2">
-                  <Label htmlFor="color">Color</Label>
+                  <Label htmlFor="color">{t('circles.color')}</Label>
                   <Input
                     id="color"
                     type="color"
@@ -1677,37 +1682,37 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
               {editNodeType === 'role' && (
                 <>
                   <div className="grid gap-2">
-                    <Label htmlFor="purpose">Purpose</Label>
+                    <Label htmlFor="purpose">{t('circles.purpose')}</Label>
                     <RichTextField
                       value={editPurpose}
                       onChange={(text) => setEditPurpose(text)}
-                      label="Purpose"
-                      placeholder="What service or general functionality does the role-circle provide to the organization, other role-circles or external stakeholders?"
+                      label={t('circles.purpose')}
+                      placeholder={t('circles.purposePlaceholder')}
                       collaborativeKey={editMode === 'edit' && currentNode ? `circle-${currentNode.id}-purpose` : undefined}
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="missions">Missions</Label>
+                    <Label htmlFor="missions">{t('circles.missions')}</Label>
                     <RichTextField
                       value={editMissions}
                       onChange={(text) => setEditMissions(text)}
-                      label="Missions"
-                      placeholder="What specific services or tasks does the role-circle provide to the organization, to other role-circles or to external stakeholders?"
+                      label={t('circles.missions')}
+                      placeholder={t('circles.missionsPlaceholder')}
                       collaborativeKey={editMode === 'edit' && currentNode ? `circle-${currentNode.id}-missions` : undefined}
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="authorityScope">Authority Scope</Label>
+                    <Label htmlFor="authorityScope">{t('circles.authorityScope')}</Label>
                     <RichTextField
                       value={editAuthorityScope}
                       onChange={(text) => setEditAuthorityScope(text)}
-                      label="Authority Scope"
-                      placeholder="What are the elements over which the role-circle has exclusive authority and for which it alone can decide?"
+                      label={t('circles.authorityScope')}
+                      placeholder={t('circles.authorityScopePlaceholder')}
                       collaborativeKey={editMode === 'edit' && currentNode ? `circle-${currentNode.id}-authorityScope` : undefined}
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label>Role Assignments</Label>
+                    <Label>{t('circles.roleAssignments')}</Label>
                     <div className="space-y-2">
                       {editAssignments.map((assignment, index) => {
                         const assignedUser = users.find(u => u.userId === assignment.userId);
@@ -1722,7 +1727,7 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
                               }}
                             >
                               <SelectTrigger className="flex-1">
-                                <SelectValue placeholder="Select user...">
+                                <SelectValue placeholder={t('circles.selectUser')}>
                                   {assignedUser ? (
                                     <div className="flex items-center gap-2">
                                       <UserAvatar
@@ -1735,7 +1740,7 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
                                       <span className="text-sm">{assignedUser.username}</span>
                                     </div>
                                   ) : (
-                                    <span className="text-sm text-muted-foreground">Select user...</span>
+                                    <span className="text-sm text-muted-foreground">{t('circles.selectUser')}</span>
                                   )}
                                 </SelectValue>
                               </SelectTrigger>
@@ -1770,7 +1775,7 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
                               <SelectContent>
                                 {INVOLVEMENT_OPTIONS.map(opt => (
                                   <SelectItem key={opt.value} value={opt.value}>
-                                    {opt.label}
+                                    {t(opt.labelKey)}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -1796,7 +1801,7 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
                         onClick={() => setEditAssignments([...editAssignments, { userId: '', involvementType: 'P' }])}
                         className="w-full"
                       >
-                        <Plus className="w-4 h-4 mr-1" /> Add User Assignment
+                        <Plus className="w-4 h-4 mr-1" /> {t('circles.addUserAssignment')}
                       </Button>
                     </div>
                   </div>
@@ -1805,10 +1810,10 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
-                Cancel
+                {t('circles.cancel')}
               </Button>
               <Button onClick={editMode === 'add' ? handleAddNode : handleEditNode}>
-                {editMode === 'add' ? 'Add' : 'Save'}
+                {editMode === 'add' ? t('circles.add') : t('circles.save')}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1818,16 +1823,15 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogTitle>{t('circles.deleteConfirmTitle')}</AlertDialogTitle>
               <AlertDialogDescription>
-                This will permanently delete "{currentNode?.name}" and all its child circles/roles.
-                This action cannot be undone.
+                {t('circles.deleteConfirmDesc', { name: currentNode?.name })}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogCancel>{t('circles.cancel')}</AlertDialogCancel>
               <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                Delete
+                {t('circles.delete')}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -1837,26 +1841,26 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
         <Dialog open={moveDialogOpen} onOpenChange={setMoveDialogOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Move "{currentNode?.name}"</DialogTitle>
+              <DialogTitle>{t('circles.moveNode', { name: currentNode?.name })}</DialogTitle>
               <DialogDescription className="sr-only">
-                Move the selected node to a new parent.
+                {t('circles.moveNodeDesc')}
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="target">New Parent</Label>
+                <Label htmlFor="target">{t('circles.newParent')}</Label>
                 <Select
                   value={moveTargetId || 'none'}
                   onValueChange={(v) => setMoveTargetId(v === 'none' ? null : v)}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select parent..." />
+                    <SelectValue placeholder={t('circles.selectParent')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">No Parent (Root)</SelectItem>
+                    <SelectItem value="none">{t('circles.noParentRoot')}</SelectItem>
                     {getMoveTargetOptions().map(circle => (
                       <SelectItem key={circle.id} value={circle.id}>
-                        {circle.name} ({circle.nodeType})
+                        {circle.name} ({t(`circles.nodeType.${circle.nodeType}`)})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1865,10 +1869,10 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setMoveDialogOpen(false)}>
-                Cancel
+                {t('circles.cancel')}
               </Button>
               <Button onClick={handleMoveNode}>
-                Move
+                {t('circles.move')}
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -8,6 +8,7 @@ import type {
   FilterStateEntity,
   FertilizationBoardEntity,
   DreamBoardEntity,
+  SalaryBoardEntity,
   CircleEntity,
   CircleNodeType,
   CircleNodeModifier,
@@ -230,6 +231,7 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
   },
   focusModeConfig: {
     enablePiP: true,
+    autoOpenPiPOnStart: true,
     pipWidth: 320,
     pipHeight: 400,
     wakeLock: true,
@@ -385,6 +387,14 @@ class SqliteClient implements DbClient {
     // Dream Board table
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS "dreamBoard" (
+          "id" INTEGER PRIMARY KEY,
+          "data" TEXT NOT NULL -- JSON string
+        )
+        `);
+
+    // Salary Board table (transparent salary system)
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS "salaryBoard" (
           "id" INTEGER PRIMARY KEY,
           "data" TEXT NOT NULL -- JSON string
         )
@@ -1322,6 +1332,20 @@ class SqliteClient implements DbClient {
   async updateDreamBoardState(state: DreamBoardEntity): Promise<void> {
     this.db.prepare(`
       INSERT INTO "dreamBoard"("id", "data")
+      VALUES(1, @data)
+      ON CONFLICT("id") DO UPDATE SET "data" = excluded."data"
+        `).run({ data: JSON.stringify(state) });
+  }
+
+  // Salary Board
+  async getSalaryBoardState(): Promise<SalaryBoardEntity | null> {
+    const row = this.db.prepare('SELECT data FROM "salaryBoard" WHERE "id" = 1').get() as { data?: string } | undefined;
+    return row?.data ? JSON.parse(row.data) : null;
+  }
+
+  async updateSalaryBoardState(state: SalaryBoardEntity): Promise<void> {
+    this.db.prepare(`
+      INSERT INTO "salaryBoard"("id", "data")
       VALUES(1, @data)
       ON CONFLICT("id") DO UPDATE SET "data" = excluded."data"
         `).run({ data: JSON.stringify(state) });
@@ -2618,6 +2642,7 @@ class SqliteClient implements DbClient {
       this.db.exec('DROP TABLE IF EXISTS "filters"');
       this.db.exec('DROP TABLE IF EXISTS "fertilizationBoard"');
       this.db.exec('DROP TABLE IF EXISTS "dreamBoard"');
+      this.db.exec('DROP TABLE IF EXISTS "salaryBoard"');
       this.db.exec('DROP TABLE IF EXISTS "circles"');
       this.db.exec('DROP TABLE IF EXISTS "reminders"');
       this.db.exec('DROP TABLE IF EXISTS "frameworks"');

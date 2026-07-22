@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { PomodoroStatsData } from '@/hooks/usePomodoroStats';
 import type { DayEntry } from '@/hooks/useConsistencyScore';
@@ -17,19 +18,19 @@ interface PomodoroStatsProps {
   weekStartDay?: 0 | 1;
 }
 
-const StatCard: React.FC<{ label: string; count: number; minutes: number; avg: number }> = ({
-  label, count, minutes, avg,
+const StatCard: React.FC<{ label: string; count: number; minutes: number; avg: number; t: (key: string, opts?: Record<string, unknown>) => string }> = ({
+  label, count, minutes, avg, t,
 }) => (
   <div className="rounded-lg border bg-card text-card-foreground p-4">
     <div className="text-sm font-medium text-muted-foreground">{label}</div>
     <div className="mt-1 flex items-baseline gap-2">
       <span className="text-2xl font-bold">{count}</span>
       <span className="text-sm text-muted-foreground">
-        session{count !== 1 ? 's' : ''}
+        {t('pomodoroUi.sessions', { count })}
       </span>
     </div>
     <div className="text-sm text-muted-foreground mt-0.5">
-      {minutes} min &middot; avg {avg}/day
+      {t('pomodoroUi.minAvg', { minutes, avg })}
     </div>
   </div>
 );
@@ -42,6 +43,7 @@ const COLOR_BLUE = '#3b82f6';
 const COLOR_GOLD = '#fbbf24';
 
 const PomodoroStats: React.FC<PomodoroStatsProps> = ({ stats, userId, consistencyDays, sessions, tasks, visible: visibleProp, onToggleLegend, weekStartDay = 1 }) => {
+  const { t } = useTranslation();
   const [internalVisible, setInternalVisible] = useState<Set<LegendKey>>(ALL_LEGEND_KEYS);
   const visible = visibleProp ?? internalVisible;
 
@@ -139,17 +141,17 @@ const PomodoroStats: React.FC<PomodoroStatsProps> = ({ stats, userId, consistenc
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="Today" count={stats.today} minutes={stats.todayMinutes} avg={stats.todayAverage} />
-        <StatCard label="This Week" count={stats.week} minutes={stats.weekMinutes} avg={stats.weekAverage} />
-        <StatCard label="This Month" count={stats.month} minutes={stats.monthMinutes} avg={stats.monthAverage} />
-        <StatCard label="All Time" count={stats.total} minutes={stats.totalMinutes} avg={0} />
+        <StatCard label={t('pomodoroUi.today')} count={stats.today} minutes={stats.todayMinutes} avg={stats.todayAverage} t={t} />
+        <StatCard label={t('pomodoroUi.thisWeek')} count={stats.week} minutes={stats.weekMinutes} avg={stats.weekAverage} t={t} />
+        <StatCard label={t('pomodoroUi.thisMonth')} count={stats.month} minutes={stats.monthMinutes} avg={stats.monthAverage} t={t} />
+        <StatCard label={t('pomodoroUi.allTime')} count={stats.total} minutes={stats.totalMinutes} avg={0} t={t} />
       </div>
 
       <ConsistencyLegend visible={visible} onToggle={toggleLegend} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="rounded-lg border bg-card text-card-foreground p-4">
-          <h3 className="text-sm font-medium mb-3">Time of Day Distribution</h3>
+          <h3 className="text-sm font-medium mb-3">{t('pomodoroUi.timeOfDayDistribution')}</h3>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={hourlyData} margin={{ top: 5, right: 5, bottom: 5, left: -20 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -161,24 +163,24 @@ const PomodoroStats: React.FC<PomodoroStatsProps> = ({ stats, userId, consistenc
               />
               <YAxis fontSize={10} allowDecimals={false} />
               <Tooltip />
-              {visible.has('gold') && <Bar dataKey="gold" stackId="a" fill={COLOR_GOLD} radius={[0, 0, 0, 0]} name="Impact work" />}
-              {visible.has('green') && <Bar dataKey="green" stackId="a" fill={COLOR_GREEN} radius={[0, 0, 0, 0]} name="Focus work" />}
-              {visible.has('blue') && <Bar dataKey="blue" stackId="a" fill={COLOR_BLUE} radius={[2, 2, 0, 0]} name="Started tasks" />}
+              {visible.has('gold') && <Bar dataKey="gold" stackId="a" fill={COLOR_GOLD} radius={[0, 0, 0, 0]} name={t('pomodoroUi.impactWork')} />}
+              {visible.has('green') && <Bar dataKey="green" stackId="a" fill={COLOR_GREEN} radius={[0, 0, 0, 0]} name={t('pomodoroUi.focusWork')} />}
+              {visible.has('blue') && <Bar dataKey="blue" stackId="a" fill={COLOR_BLUE} radius={[2, 2, 0, 0]} name={t('pomodoroUi.startedTasks')} />}
             </BarChart>
           </ResponsiveContainer>
         </div>
 
         <div className="rounded-lg border bg-card text-card-foreground p-4">
-          <h3 className="text-sm font-medium mb-3">Day of Week Distribution</h3>
+          <h3 className="text-sm font-medium mb-3">{t('pomodoroUi.dayOfWeekDistribution')}</h3>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={weeklyData} margin={{ top: 5, right: 5, bottom: 5, left: -20 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="name" fontSize={10} />
               <YAxis fontSize={10} allowDecimals={false} />
               <Tooltip />
-              {visible.has('gold') && <Bar dataKey="gold" stackId="a" fill={COLOR_GOLD} radius={[0, 0, 0, 0]} name="Impact work" />}
-              {visible.has('green') && <Bar dataKey="green" stackId="a" fill={COLOR_GREEN} radius={[0, 0, 0, 0]} name="Focus work" />}
-              {visible.has('blue') && <Bar dataKey="blue" stackId="a" fill={COLOR_BLUE} radius={[2, 2, 0, 0]} name="Started tasks" />}
+              {visible.has('gold') && <Bar dataKey="gold" stackId="a" fill={COLOR_GOLD} radius={[0, 0, 0, 0]} name={t('pomodoroUi.impactWork')} />}
+              {visible.has('green') && <Bar dataKey="green" stackId="a" fill={COLOR_GREEN} radius={[0, 0, 0, 0]} name={t('pomodoroUi.focusWork')} />}
+              {visible.has('blue') && <Bar dataKey="blue" stackId="a" fill={COLOR_BLUE} radius={[2, 2, 0, 0]} name={t('pomodoroUi.startedTasks')} />}
             </BarChart>
           </ResponsiveContainer>
         </div>

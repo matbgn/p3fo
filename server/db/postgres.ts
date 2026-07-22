@@ -8,6 +8,7 @@ import type {
   FilterStateEntity,
   FertilizationBoardEntity,
   DreamBoardEntity,
+  SalaryBoardEntity,
   CircleEntity,
   CircleNodeType,
   CircleNodeModifier,
@@ -159,6 +160,7 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
   },
   focusModeConfig: {
     enablePiP: true,
+    autoOpenPiPOnStart: true,
     pipWidth: 320,
     pipHeight: 400,
     wakeLock: true,
@@ -323,6 +325,14 @@ class PostgresClient implements DbClient {
     // Create dreamBoard table
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS "dreamBoard" (
+        "id" INTEGER PRIMARY KEY DEFAULT 1,
+        "data" JSONB
+      )
+    `);
+
+    // Create salaryBoard table (transparent salary system)
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS "salaryBoard" (
         "id" INTEGER PRIMARY KEY DEFAULT 1,
         "data" JSONB
       )
@@ -1234,6 +1244,23 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
   async updateDreamBoardState(state: DreamBoardEntity): Promise<void> {
     await this.pool.query(`
         INSERT INTO "dreamBoard" ("id", "data")
+        VALUES (1, $1)
+        ON CONFLICT ("id") DO UPDATE SET "data" = EXCLUDED."data"
+      `, [JSON.stringify(state)]);
+  }
+
+  // Salary Board
+  async getSalaryBoardState(): Promise<SalaryBoardEntity | null> {
+    const result = await this.pool.query('SELECT "data" FROM "salaryBoard" WHERE "id" = 1');
+    if (result.rows.length > 0 && result.rows[0].data) {
+      return result.rows[0].data;
+    }
+    return null;
+  }
+
+  async updateSalaryBoardState(state: SalaryBoardEntity): Promise<void> {
+    await this.pool.query(`
+        INSERT INTO "salaryBoard" ("id", "data")
         VALUES (1, $1)
         ON CONFLICT ("id") DO UPDATE SET "data" = EXCLUDED."data"
       `, [JSON.stringify(state)]);
@@ -2358,6 +2385,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       await client.query('DROP TABLE IF EXISTS "filters" CASCADE');
       await client.query('DROP TABLE IF EXISTS "fertilizationBoard" CASCADE');
       await client.query('DROP TABLE IF EXISTS "dreamBoard" CASCADE');
+      await client.query('DROP TABLE IF EXISTS "salaryBoard" CASCADE');
       await client.query('DROP TABLE IF EXISTS "circles" CASCADE');
       await client.query('DROP TABLE IF EXISTS "reminders" CASCADE');
       await client.query('DROP TABLE IF EXISTS "frameworks" CASCADE');

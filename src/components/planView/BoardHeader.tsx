@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,6 +43,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
     tagOptions,
     className = '',
 }) => {
+    const { t } = useTranslation();
     const hasActiveFilters = filterState.searchText.trim() !== '' ||
         filterState.userId !== null ||
         filterState.columns.length > 0 ||
@@ -65,11 +67,11 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
     return (
         <div className={`flex flex-wrap items-center gap-4 ${className}`}>
             <div className="flex items-center gap-2">
-                <Label>Search:</Label>
+                <Label>{t('board.search')}</Label>
                 <div className="relative">
                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
-                        placeholder="Search cards..."
+                        placeholder={t('board.searchPlaceholder')}
                         value={filterState.searchText}
                         onChange={(e) => updateFilter('searchText', e.target.value)}
                         className="pl-8 w-40"
@@ -90,12 +92,12 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
             <div className="h-6 border-l border-gray-300"></div>
 
             <div className="flex items-center gap-2">
-                <Label>Column:</Label>
+                <Label>{t('board.column')}</Label>
                 <MultiSelect
                     options={columnOptions}
                     selected={filterState.columns}
                     onChange={(cols) => updateFilter('columns', cols)}
-                    placeholder="All columns..."
+                    placeholder={t('board.columnPlaceholder')}
                     className="w-40"
                 />
             </div>
@@ -103,7 +105,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
             <div className="h-6 border-l border-gray-300"></div>
 
             <div className="flex items-center gap-2">
-                <Label>Min Likes:</Label>
+                <Label>{t('board.minLikes')}</Label>
                 <Input
                     type="number"
                     min={0}
@@ -117,12 +119,12 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                 <>
                     <div className="h-6 border-l border-gray-300"></div>
                     <div className="flex items-center gap-2">
-                        <Label>Tags:</Label>
+                        <Label>{t('board.tags')}</Label>
                         <MultiSelect
                             options={tagOptions}
                             selected={filterState.tags}
                             onChange={(tags) => updateFilter('tags', tags)}
-                            placeholder="All tags..."
+                            placeholder={t('board.tagsPlaceholder')}
                             className="w-40"
                         />
                     </div>
@@ -134,7 +136,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
                     <div className="h-6 border-l border-gray-300"></div>
                     <Button variant="outline" size="sm" onClick={clearFilters}>
                         <X className="mr-2 h-4 w-4" />
-                        Clear Filters
+                        {t('board.clearFilters')}
                     </Button>
                 </>
             )}
@@ -167,6 +169,7 @@ export const BoardHeader: React.FC<BoardHeaderProps> = ({
     focusModeLeftContent,
     focusModeRightExtra,
 }) => {
+    const { t } = useTranslation();
     const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(true);
     const [isModeratorControlsOpen, setIsModeratorControlsOpen] = useState(false);
     const { isFocusMode } = useFocusMode();
@@ -236,7 +239,7 @@ export const BoardHeader: React.FC<BoardHeaderProps> = ({
                         className="text-sm font-medium text-muted-foreground cursor-pointer select-none"
                         onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}
                     >
-                        Filters & Controls
+                        {t('board.filtersAndControls')}
                         {hasActiveFilters && (
                             <span className="ml-2 bg-primary text-primary-foreground rounded-full px-1.5 text-xs">!</span>
                         )}

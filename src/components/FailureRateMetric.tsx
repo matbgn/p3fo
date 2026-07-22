@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTaskMetrics } from "@/hooks/useTaskMetrics";
 import { useSettingsContext } from "@/context/SettingsContext";
@@ -6,6 +7,7 @@ import { useUsersContext } from "@/context/UsersContext";
 import { calculateFailureRatePerEFT, UserWorkload } from "@/lib/metrics";
 
 const FailureRateMetric: React.FC = () => {
+  const { t } = useTranslation();
   const { tasks } = useTaskMetrics();
   const { settings } = useSettingsContext();
   const { users } = useUsersContext();
@@ -36,14 +38,14 @@ const FailureRateMetric: React.FC = () => {
   return (
     <Card className={`h-42 ${getCardClass()}`}>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">Failure Rate / EFT (Incidents on Delivery)</CardTitle>
+        <CardTitle className="text-sm font-medium">{t('metrics.card.failureRateTitle')}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">
           {formattedFailureRate}%
         </div>
         <CardDescription className="text-xs mt-1">
-          Goal ≤{failureRateGoal.toFixed(2)}% in {weeksComputation} weeks
+          {t('metrics.card.failureRateDescription', { goal: failureRateGoal.toFixed(2), weeks: weeksComputation })}
         </CardDescription>
       </CardContent>
     </Card>

@@ -5,6 +5,7 @@ import { useVoteResults } from "@/hooks/useVotes";
 import { useVoteLoops } from "@/hooks/useVoteLoops";
 import { tallyThumbsUp, tallyUDNeutral, tallyPoints, tallyMajorityJudgment, tallyConsentLoop, getBestConsentRound } from "@/lib/vote-tally";
 import { getVotingStrings } from "@/lib/voting-i18n";
+import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { BarChart3, Users, MessageSquare, Trophy } from "lucide-react";
 import { LoopRoundProposalTooltip } from "./LoopRoundProposalTooltip";
@@ -24,6 +25,7 @@ const PHASE_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "
 
 const ConsentLoopResults: React.FC<{ vote: VoteEntity }> = ({ vote }) => {
   const t = getVotingStrings();
+  const { t: tt } = useTranslation();
   const { responses, isLoading: responsesLoading } = useVoteResults(vote.id);
   const { loops, isLoading: loopsLoading } = useVoteLoops(vote.id);
   const activeProposals = vote.proposals.filter((p) => p.active);
@@ -110,7 +112,7 @@ const ConsentLoopResults: React.FC<{ vote: VoteEntity }> = ({ vote }) => {
           >
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-sm font-medium text-gray-900">
-                {proposal.description || `${t.labels.proposals} ${idx + 1}`}
+                {proposal.description || tt("voting.proposalN", { n: idx + 1 })}
               </h4>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-500">
@@ -182,6 +184,7 @@ const ConsentLoopResults: React.FC<{ vote: VoteEntity }> = ({ vote }) => {
 
 export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
   const t = getVotingStrings();
+  const { t: tt } = useTranslation();
   const { responses, isLoading } = useVoteResults(vote.id);
   const isAnonymous = vote.config.isAnonymous ?? true;
 
@@ -210,7 +213,7 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
               <p className="text-sm text-blue-700 mt-1 italic">"{vote.outcome.signature}"</p>
             )}
             <p className="text-xs text-blue-500 mt-2">
-              Finalized {new Date(vote.outcome.finalizedAt).toLocaleString()}
+              {tt("voting.finalizedPrefix")} {new Date(vote.outcome.finalizedAt).toLocaleString()}
             </p>
           </div>
         )}
@@ -254,7 +257,7 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
             <p className="text-sm text-blue-700 mt-1 italic">"{vote.outcome.signature}"</p>
           )}
           <p className="text-xs text-blue-500 mt-2">
-            Finalized {new Date(vote.outcome.finalizedAt).toLocaleString()}
+            {tt("voting.finalizedPrefix")} {new Date(vote.outcome.finalizedAt).toLocaleString()}
           </p>
         </div>
       )}
@@ -291,7 +294,7 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="text-sm font-medium text-gray-900">
                     {isWinning && <Trophy className="w-4 h-4 text-blue-600 inline mr-1" />}
-                    Proposal {proposal.position + 1}
+                    {tt("voting.proposalN", { n: proposal.position + 1 })}
                   </h4>
                 </div>
                 {proposal.content && <ProposalContentDisplay content={proposal.content} className="mb-2" />}
@@ -373,7 +376,7 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
                     <div className="mt-2 space-y-1">
                       {voterRows.map((r) => (
                         <div key={r.id} className="flex items-center gap-2 text-xs text-gray-500">
-                          <span>{r.userId || "Anonymous"}</span>
+                          <span>{r.userId || tt("voting.anonymous")}</span>
                           {r.comment && (
                             <span className="italic text-gray-400">— {r.comment}</span>
                           )}

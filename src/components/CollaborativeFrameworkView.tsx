@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FrameworkCategoryView } from '@/components/FrameworkCategoryView';
@@ -10,17 +11,17 @@ import { FocusModeBar } from '@/components/planView/FocusModeBar';
 import { useFocusMode } from '@/hooks/useFocusMode';
 import { Plus, PlusCircle, MinusCircle } from 'lucide-react';
 
-const COLLABORATIVE_CATEGORIES: Omit<FrameworkCategory, 'content' | 'order'>[] = [
-  { id: 'collaborative-values', label: 'Collaborative Values & Principles', description: 'The values important for efficient and pleasant collaboration and the principles that translate these values into action within the organization.' },
-  { id: 'expected-behaviors', label: 'Expected Behaviors', description: 'Behaviors to encourage, indispensable ones, to avoid, or unacceptable for efficient and pleasant collaboration.' },
-  { id: 'regular-meetings', label: 'Regular Meetings', description: 'The types of meetings practiced, their frequency and duration.' },
-  { id: 'entry-process', label: 'Entry Process', description: 'How a person can join the organization.' },
-  { id: 'exit-process', label: 'Exit Process', description: 'How a person can leave the organization.' },
-  { id: 'conflict-resolution', label: 'Conflict Resolution Process', description: 'How to constructively regulate tensions and conflicts between members.' },
-  { id: 'exclusion-process', label: 'Exclusion Process', description: 'How to separate from a person harming the organization or its members.' },
-  { id: 'collaborative-methods', label: 'Collaborative Methods', description: 'Project management methods used in complement to this constitution.', optional: true },
-  { id: 'individual-support', label: 'Individual Support Process', description: 'How to offer personal support.', optional: true },
-  { id: 'peer-support', label: 'Peer Support Process', description: 'How to help each other and learn together.', optional: true },
+const COLLABORATIVE_CATEGORY_IDS: { id: string; optional?: boolean }[] = [
+  { id: 'collaborative-values' },
+  { id: 'expected-behaviors' },
+  { id: 'regular-meetings' },
+  { id: 'entry-process' },
+  { id: 'exit-process' },
+  { id: 'conflict-resolution' },
+  { id: 'exclusion-process' },
+  { id: 'collaborative-methods', optional: true },
+  { id: 'individual-support', optional: true },
+  { id: 'peer-support', optional: true },
 ];
 
 interface CollaborativeFrameworkViewProps {
@@ -29,10 +30,21 @@ interface CollaborativeFrameworkViewProps {
 }
 
 const CollaborativeFrameworkViewInner: React.FC<CollaborativeFrameworkViewProps> = ({ hideHeader }) => {
+  const { t } = useTranslation();
   const { frameworks, createFramework, updateFramework } = useFrameworks('collaborative');
   const { isFocusMode } = useFocusMode();
   const [framework, setFramework] = useState<FrameworkEntity | null>(null);
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
+
+  const collaborativeCategories = useMemo<Omit<FrameworkCategory, 'content' | 'order'>[]>(
+    () => COLLABORATIVE_CATEGORY_IDS.map(({ id, optional }) => ({
+      id,
+      label: t(`framework.collaborative.category.${id}.label`),
+      description: t(`framework.collaborative.category.${id}.description`),
+      optional,
+    })),
+    [t],
+  );
 
   const allCategoryIds = useMemo(
     () => (framework ? framework.categories.map(c => c.id) : []),
@@ -56,18 +68,18 @@ const CollaborativeFrameworkViewInner: React.FC<CollaborativeFrameworkViewProps>
   }, [frameworks]);
 
   const handleCreateFramework = useCallback(async () => {
-    const categories: FrameworkCategory[] = COLLABORATIVE_CATEGORIES.map((cat, idx) => ({
+    const categories: FrameworkCategory[] = collaborativeCategories.map((cat, idx) => ({
       ...cat,
       content: '',
       order: idx,
     }));
     const created = await createFramework({
-      name: 'Collaborative Framework',
+      name: t('framework.collaborative.name'),
       frameworkType: 'collaborative',
       categories,
     });
     if (created) setFramework(created);
-  }, [createFramework]);
+  }, [createFramework, collaborativeCategories, t]);
 
   const handleCategoryChange = useCallback((categoryId: string, content: string) => {
     if (!framework) return;
@@ -79,7 +91,7 @@ const CollaborativeFrameworkViewInner: React.FC<CollaborativeFrameworkViewProps>
     updateFramework(framework.id, { categories: updatedCategories });
   }, [framework, updateFramework]);
 
-  const viewTitle = 'Collaborative Framework';
+  const viewTitle = t('framework.collaborative.title');
 
   if (!framework) {
     return (
@@ -89,15 +101,15 @@ const CollaborativeFrameworkViewInner: React.FC<CollaborativeFrameworkViewProps>
           {!hideHeader && !isFocusMode && (
             <CardHeader className="flex flex-col space-y-4 pb-2 shrink-0">
               <div className="flex flex-row items-center justify-between">
-                <CardTitle>Collaborative Framework</CardTitle>
+                <CardTitle>{viewTitle}</CardTitle>
               </div>
             </CardHeader>
           )}
           <CardContent className="flex-1 min-h-0 overflow-auto">
             <div className="flex flex-col items-center justify-center h-full text-gray-500">
-              <p className="mb-4">No collaborative framework created yet.</p>
+              <p className="mb-4">{t('framework.collaborative.noFramework')}</p>
               <Button onClick={handleCreateFramework}>
-                <Plus className="w-4 h-4 mr-2" /> Create Collaborative Framework
+                <Plus className="w-4 h-4 mr-2" /> {t('framework.collaborative.createTitle')}
               </Button>
             </div>
           </CardContent>
@@ -113,13 +125,13 @@ const CollaborativeFrameworkViewInner: React.FC<CollaborativeFrameworkViewProps>
         {!hideHeader && !isFocusMode && (
           <CardHeader className="flex flex-col space-y-4 pb-2 shrink-0">
             <div className="flex flex-row items-center justify-between">
-              <CardTitle>Collaborative Framework</CardTitle>
+              <CardTitle>{viewTitle}</CardTitle>
               <div className="flex items-center gap-2">
                 <Button variant="ghost" size="sm" onClick={expandAll}>
-                  <PlusCircle className="w-4 h-4 mr-1" /> Expand All
+                  <PlusCircle className="w-4 h-4 mr-1" /> {t('framework.collaborative.expandAll')}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={collapseAll}>
-                  <MinusCircle className="w-4 h-4 mr-1" /> Collapse All
+                  <MinusCircle className="w-4 h-4 mr-1" /> {t('framework.collaborative.collapseAll')}
                 </Button>
               </div>
             </div>
@@ -129,29 +141,36 @@ const CollaborativeFrameworkViewInner: React.FC<CollaborativeFrameworkViewProps>
           {hideHeader && (
             <div className="flex items-center gap-2 mb-2">
               <Button variant="ghost" size="sm" onClick={expandAll}>
-                <PlusCircle className="w-4 h-4 mr-1" /> Expand All
+                <PlusCircle className="w-4 h-4 mr-1" /> {t('framework.collaborative.expandAll')}
               </Button>
               <Button variant="ghost" size="sm" onClick={collapseAll}>
-                <MinusCircle className="w-4 h-4 mr-1" /> Collapse All
+                <MinusCircle className="w-4 h-4 mr-1" /> {t('framework.collaborative.collapseAll')}
               </Button>
             </div>
           )}
           {framework.categories
             .sort((a, b) => a.order - b.order)
-            .map(category => (
-              <FrameworkCategoryView
-                key={category.id}
-                categoryId={category.id}
-                label={category.label}
-                description={category.description}
-                content={category.content}
-                onChange={(content) => handleCategoryChange(category.id, content)}
-                frameworkId={framework.id}
-                optional={category.optional}
-                collapsed={collapsedCats.has(category.id)}
-                onToggleCollapsed={() => toggleCategory(category.id)}
-              />
-            ))}
+            .map(category => {
+              const knownId = COLLABORATIVE_CATEGORY_IDS.find(c => c.id === category.id);
+              const labelKey = `framework.collaborative.category.${category.id}.label`;
+              const descKey = `framework.collaborative.category.${category.id}.description`;
+              const trLabel = t(labelKey);
+              const trDesc = t(descKey);
+              return (
+                <FrameworkCategoryView
+                  key={category.id}
+                  categoryId={category.id}
+                  label={knownId && trLabel !== labelKey ? trLabel : category.label}
+                  description={knownId && trDesc !== descKey ? trDesc : category.description}
+                  content={category.content}
+                  onChange={(content) => handleCategoryChange(category.id, content)}
+                  frameworkId={framework.id}
+                  optional={category.optional}
+                  collapsed={collapsedCats.has(category.id)}
+                  onToggleCollapsed={() => toggleCategory(category.id)}
+                />
+              );
+            })}
         </CardContent>
       </Card>
     </div>

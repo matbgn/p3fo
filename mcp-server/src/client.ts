@@ -76,11 +76,14 @@ export class P3foClient {
   }
 
   updateTask(id: string, patch: Record<string, unknown>) {
-    return this.patch(`/api/tasks/${id}`, patch);
+    // Use POST alias instead of PATCH so requests work through HTTP/1.1
+    // proxies that route to backends lacking PATCH support.
+    return this.post(`/api/tasks/${id}/update`, patch);
   }
 
   deleteTask(id: string) {
-    return this.del(`/api/tasks/${id}`);
+    // Use POST alias instead of DELETE for the same reason.
+    return this.post(`/api/tasks/${id}/delete`, {});
   }
 
   bulkUpdateTaskPriorities(items: { id: string; priority: number | undefined }[]) {

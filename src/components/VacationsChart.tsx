@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import {
     BarChart,
     Bar,
@@ -47,6 +48,7 @@ const CustomTooltip: React.FC<TooltipProps<number, string>> = ({ active, payload
 };
 
 const VacationsChart: React.FC<VacationsChartProps> = ({ data, limitMultiplier }) => {
+    const { t } = useTranslation();
     // Calculate limit based on the first data point's workload (or handle dynamic workload if it changes per month)
     // The requirement is "1.5x of the workload". Workload is in data point.
     // We can add a line for each bar? No, ReferenceLine is usually horizontal.
@@ -79,10 +81,10 @@ const VacationsChart: React.FC<VacationsChartProps> = ({ data, limitMultiplier }
                 <Tooltip content={<CustomTooltip />} />
                 <Legend />
                 <ReferenceLine y={0} stroke="#000" />
-                <Line type="step" dataKey="limit" stroke="red" strokeDasharray="3 3" dot={false} name="Limit" />
+                <Line type="step" dataKey="limit" stroke="red" strokeDasharray="3 3" dot={false} name={t("metrics.vacations.chart.limit")} />
 
-                <Bar dataKey="balance_history" name="Vacations Balance" fill="#6366f1" stackId="a" />
-                <Bar dataKey="balance_projected" name="Vacations Projected" fill="#06b6d4" stackId="a" />
+                <Bar dataKey="balance_history" name={t("metrics.vacations.chart.balance")} fill="#6366f1" stackId="a" />
+                <Bar dataKey="balance_projected" name={t("metrics.vacations.chart.projected")} fill="#06b6d4" stackId="a" />
             </ComposedChart>
         </ResponsiveContainer>
     );

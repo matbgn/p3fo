@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useTasks, Task, TriageStatus, Category } from "@/hooks/useTasks";
@@ -88,6 +89,7 @@ const Column: React.FC<{
   onArchive?: (title: TriageStatus) => void;
   wipLimit?: number;
 }> = React.memo(({ title, cards, tasks, isOver, onChangeStatus, onUpdateCategory, onUpdateUser, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onToggleSprintTarget, onToggleDone, onUpdateDifficulty, onUpdateTitle, onDelete, duplicateTaskStructure, openParents, onToggleParent, onReparent, onFocusOnTask, updateTerminationDate, updateDurationInMinutes, updateComment, onToggleTimer, highlightedTaskId, highlightedCardRef, onArchive, wipLimit = 5 }) => {
+  const { t } = useTranslation();
   // Calculate total difficulty points for this column
   // Only count leaf tasks (tasks with no children) to avoid double-counting
   // Parent tasks and intermediate parents should not be counted
@@ -198,7 +200,7 @@ const Column: React.FC<{
   return (
     <Card className={`w-80 shrink-0 overflow-hidden flex flex-col transition-colors ${droppableIsOver || isOver ? 'ring-2 ring-primary/50' : ''}`}>
       <div className="px-3 py-2 border-b text-sm font-medium flex items-center justify-between shrink-0">
-        <span>{title === "WIP" ? `Work in Progress [MAX ${wipLimit}/p]` : title}</span>
+        <span>{title === "WIP" ? t('kanban.wipHeader', { n: wipLimit }) : t(`kanban.column.${title}`)}</span>
         <div className="flex items-center gap-2">
           {totalDifficulty > 0 && (
             <Badge variant="secondary" className="ml-2">
@@ -211,17 +213,17 @@ const Column: React.FC<{
               size="sm"
               className="h-6 px-2 text-xs"
               onClick={() => onArchive(title)}
-              title={`Archive all ${cards.length} cards in ${title}`}
+              title={t('kanban.archiveAllTitle', { n: cards.length, title: t(`kanban.column.${title}`) })}
             >
               <Archive className="h-3 w-3 mr-1" />
-              Archive ({cards.length})
+              {t('kanban.archiveCount', { n: cards.length })}
             </Button>
           )}
         </div>
       </div>
       <div ref={setNodeRef} className="flex-1 p-2 space-y-2 overflow-y-auto min-h-0">
         {finalBlocks.length === 0 ? (
-          <div className="text-xs text-muted-foreground px-2 py-6">No tasks</div>
+          <div className="text-xs text-muted-foreground px-2 py-6">{t('kanban.noTasks')}</div>
         ) : (
           finalBlocks.map((blk) =>
             blk.type === "single" ? (
@@ -246,7 +248,7 @@ const Column: React.FC<{
                 className="rounded-md border border-blue-300/60 bg-blue-50/50 dark:bg-blue-950/20 p-2 space-y-2"
               >
                 <div className="text-xs font-medium text-blue-700 dark:text-blue-300 px-1">
-                  Subtasks of: {blk.parent.title}
+                  {t('kanban.subtasksOf', { title: blk.parent.title })}
                 </div>
                 {blk.children.map(({ task, parent }) => (
                   <TaskCard
@@ -294,6 +296,7 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
 };
 
 const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; highlightedTaskId?: string | null }> = ({ onFocusOnTask, highlightedTaskId }) => {
+  const { t } = useTranslation();
   const { isFocusMode } = useFocusMode();
   const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, toggleSprintTarget, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, reparent, toggleDone, toggleTimer, updateTerminationDate, updateDurationInMinutes, updateComment, loadTasksByUser, reloadTasks } = useTasks();
   const { userId: currentUserId } = useUserSettings();
@@ -688,7 +691,7 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
                   {isFiltersCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                 </Button>
                 <span className="text-sm font-medium text-muted-foreground cursor-pointer select-none" onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}>
-                  Filters & Controls
+                  {t('kanban.filtersAndControls')}
                 </span>
               </div>
 
@@ -710,7 +713,7 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
 
         {isFocusMode && (
           <FocusModeBar
-            title="Kanban Board"
+            title={t('kanban.boardTitle')}
             hasActiveFilters={
               !!storedFilters.searchText?.trim() ||
               !!storedFilters.selectedUserId ||
@@ -738,19 +741,19 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
         {loadingFilters ? (
           <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
             <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
-            Loading filters...
+            {t('kanban.loadingFilters')}
           </div>
         ) : !initialLoadComplete ? (
           <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
             <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
-            Applying filters...
+            {t('kanban.applyingFilters')}
           </div>
         ) : (
           <>
             {isLoadingTasks && (
               <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
                 <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
-                Loading tasks...
+                {t('kanban.loadingTasks')}
               </div>
             )}
             <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
@@ -808,12 +811,12 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
         <Dialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Archive Tasks</DialogTitle>
+              <DialogTitle>{t('kanban.archiveDialogTitle')}</DialogTitle>
               <DialogDescription>
-                Archive all tasks from the {archiveColumnTitle} column.
+                {t('kanban.archiveDialogDescription', { column: archiveColumnTitle ? t(`kanban.column.${archiveColumnTitle}`) : '' })}
                 {grouped[archiveColumnTitle || "Done"]?.length > 0 && (
                   <span className="block mt-2">
-                    This will archive {grouped[archiveColumnTitle || "Done"].length} tasks.
+                    {t('kanban.archiveCountDescription', { n: grouped[archiveColumnTitle || "Done"].length })}
                   </span>
                 )}
               </DialogDescription>
@@ -826,16 +829,16 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
                   onCheckedChange={(checked) => setArchiveOnlyOldCards(!!checked)}
                 />
                 <Label htmlFor="archive-old-only">
-                  Only archive cards older than {settings.weeksComputation || 4} weeks
+                  {t('kanban.archiveOldOnly', { n: settings.weeksComputation || 4 })}
                 </Label>
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={handleCancelArchive}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button onClick={handleConfirmArchive} variant="default">
-                Archive
+                {t('kanban.archive')}
               </Button>
             </DialogFooter>
           </DialogContent>

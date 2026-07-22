@@ -1,5 +1,5 @@
 // Database client interface and factory
-import { TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, FertilizationBoardEntity, DreamBoardEntity, CircleEntity, ReminderEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from '../../src/lib/persistence-types.js';
+import { TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, FertilizationBoardEntity, DreamBoardEntity, SalaryBoardEntity, CircleEntity, ReminderEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from '../../src/lib/persistence-types.js';
 
 // Pagination options for queries
 export interface PaginationOptions {
@@ -64,6 +64,10 @@ export interface DbClient {
   // Dream Board
   getDreamBoardState(): Promise<DreamBoardEntity | null>;
   updateDreamBoardState(state: DreamBoardEntity): Promise<void>;
+
+  // Salary Board
+  getSalaryBoardState(): Promise<SalaryBoardEntity | null>;
+  updateSalaryBoardState(state: SalaryBoardEntity): Promise<void>;
 
   // Reminders
   listReminders(userId?: string): Promise<ReminderEntity[]>;

@@ -84,6 +84,7 @@ export type ModuleId =
   | 'dream.prioritization'
   | 'plan.circles'
   | 'plan.roles'
+  | 'plan.salary'
   | 'program.calendar'
   | 'program.resources'
   | 'dream.intentionalFramework'
@@ -198,6 +199,10 @@ export interface PersistenceAdapter {
   // Dream Board
   getDreamBoardState(): Promise<DreamBoardEntity | null>;
   updateDreamBoardState(state: DreamBoardEntity): Promise<void>;
+
+  // Salary Board (transparent salary system)
+  getSalaryBoardState(): Promise<SalaryBoardEntity | null>;
+  updateSalaryBoardState(state: SalaryBoardEntity): Promise<void>;
 
   // Reminders
   listReminders(userId?: string): Promise<ReminderEntity[]>;
@@ -430,6 +435,153 @@ export interface DreamBoardEntity {
   showAllLinks?: boolean;
   mjLabels?: Record<number, string>;
   showOfflineVotesPanel?: boolean;
+}
+
+// Salary System (transparent salary calculator)
+// Transparent salary system with fully configurable dimensions/levels
+// so it can be tailored to any client.
+
+export interface SalaryDimension {
+  id: string;
+  name: string;
+  /** Monetary step added to base salary per level (CHF/month at 100%). */
+  stepValue: number;
+  /** Maximum level reachable for this dimension (0..maxLevel). */
+  maxLevel: number;
+  /** Optional human-readable description per level (index 0..maxLevel). */
+  levelDescriptions?: string[];
+  /** Whether this dimension contributes additively to the base salary (default true).
+   *  When false, the dimension is stored for information only and does not affect the computed salary. */
+  affectsSalary?: boolean;
+  /** Optional color used in the UI to distinguish the dimension. */
+  color?: string;
+}
+
+export interface SalaryEmployeeLevel {
+  dimensionId: string;
+  level: number;
+}
+
+export interface SalaryEmployee {
+  id: string;
+  name: string;
+  /** Workload percentage, 0..100 (e.g. 40, 80, 100). */
+  workload: number;
+  /** Age in years (drives age-bracket increases). */
+  age: number;
+  /** Years of seniority (drives seniority compounding). */
+  seniority: number;
+  /** Per-dimension level picks. Missing entries default to level 0. */
+  levels: SalaryEmployeeLevel[];
+  /** Optional employer-paid complements added on top of the formula salary
+   *  (e.g. 13th salary top-up, bonus, transport, etc.). Each has a label and
+   *  a monthly amount in CHF. */
+  employerAdjustments?: EmployerAdjustment[];
+  /** Free-form comment/note. */
+  comment?: string;
+  /** Internal: temporarily hidden in team simulator (not persisted). */
+  _simHidden?: boolean;
+}
+
+export type EmployerAdjustmentFrequency = 'monthly' | 'semesterly' | 'annually';
+
+export interface EmployerAdjustment {
+  id: string;
+  label: string;
+  /** Amount per frequency period (CHF). */
+  amount: number;
+  /** How often the amount is paid. Monthly amounts are added as-is to the
+   *  monthly gross. Semesterly is divided by 6, annually by 12 to get the
+   *  monthly equivalent. */
+  frequency: EmployerAdjustmentFrequency;
+}
+
+export interface SalaryConfig {
+  /** Reference minimum hourly wage (CHF/h). */
+  indexHourlyWage: number;
+  /** Reference weekly hours (e.g. 40). */
+  hoursPerWeek: number;
+  /** Weeks per month divisor (golden standard uses 4.33333333333333). */
+  weeksPerMonth: number;
+  /** Annual seniority raise applied as a compounding factor (e.g. 0.01 = 1%/year). */
+  seniorityIncrease: number;
+  /** Age-bracket raise applied as a compounding factor (e.g. 0.05 = 5%).
+   *  Triggered when the employee crosses each threshold in `ageBrackets`. */
+  ageIncrease: number;
+  /** Age thresholds that trigger an `ageIncrease` step (e.g. [25,35,45,55,65]). */
+  ageBrackets: number[];
+  /** Social charges rate deducted from gross to obtain net (e.g. 0.1202). */
+  socialChargesRate: number;
+  /** Whether a 13th salary is included (affects monthly = annual/13 vs /12). */
+  include13thSalary: boolean;
+  /** Hours per day and days per week used for hourly-rate derivation (golden standard: 8h x 5d). */
+  hoursPerDay: number;
+  daysPerWeek: number;
+  /** Round salary to the nearest multiple of this value (golden standard: 5). */
+  roundingStep: number;
+  /** Currency label (e.g. 'CHF'). */
+  currency: string;
+  /** Optional client-specific name for the system. */
+  label?: string;
+
+  /** Expense factor — multiplier applied to annual gross to compute the total
+   *  employer cost (social insurances, AVS, 2nd pillar, building maintenance, etc.).
+   *  Golden standard: 1.80 (= +80% on top of gross).
+   *  Employer cost = grossAnnual × expenseFactor. */
+  expenseFactor: number;
+
+  /** Default persona for the "Taux horaire" tab. */
+  hourlyRatePersona?: {
+    seniorityYears: number;
+    age: number;
+    reducedRateMultiplier: number;
+    riskBenefitMultiplier: number;
+    levels: { dimensionId: string; level: number }[];
+  };
+}
+
+/** Budget target for the salary system. Reproduces the "Bilan prévisionnel"
+ *  block: revenues minus non-salary charges
+ *  leaves a masse salariale disponible that must cover the computed salaries.
+ *  Stored as 1-3 scenarios (min / intermediate / max). */
+export interface SalaryBudgetScenario {
+  id: string;
+  name: string;
+  /** Total annual revenues (CHF). */
+  revenues: number;
+  /** Total annual non-salary charges (CHF): rent, lab, insurances, etc.
+   *  Used when `chargesMode` is 'manual'. Ignored when 'expenseFactor'. */
+  charges: number;
+  /** Annual reserve to keep (CHF). */
+  reserve: number;
+  /** How the charges are computed for this scenario.
+   *  - 'manual'        → use the `charges` field directly. Charges include
+   *                      everything (rent, lab, employer social charges, etc.).
+   *                      Balance = revenues − charges − reserve.
+   *  - 'expenseFactor' → charges are computed as totalGrossAnnual × expenseFactor.
+   *                      The manual `charges` field is ignored.
+   *                      Balance = revenues − (gross × expenseFactor) − reserve.
+   *                      The expense factor can be overridden per scenario. */
+  chargesMode?: 'manual' | 'expenseFactor';
+  /** Expense factor override for this scenario. Falls back to config.expenseFactor. */
+  expenseFactorOverride?: number;
+  /** Computed = revenues - charges - reserve. The available salary mass. */
+  // (computed at runtime, not persisted)
+}
+
+export interface SalaryBudget {
+  scenarios: SalaryBudgetScenario[];
+  /** Selected scenario id used for the "budget vs computed" comparison. */
+  activeScenarioId?: string;
+}
+
+export interface SalaryBoardEntity {
+  config: SalaryConfig;
+  dimensions: SalaryDimension[];
+  employees: SalaryEmployee[];
+  budget?: SalaryBudget;
+  /** ISO timestamp of last edit. */
+  updatedAt?: string;
 }
 
 // Circles (EasyCIRCLE) - Organizational structure visualization

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useViewNavigation } from '@/hooks/useView';
 import { cn } from '@/lib/utils';
 import type { ViewType } from '@/context/ViewContextDefinition';
@@ -18,6 +19,7 @@ import {
   ShieldCheck,
   Target,
   Vote,
+  Wallet,
 } from 'lucide-react';
 
 interface UmbrellaNavigationProps {
@@ -27,7 +29,7 @@ interface UmbrellaNavigationProps {
 
 interface SubView {
   id: string;
-  label: string;
+  labelKey: string;
   icon: React.ReactNode;
   view: string;
   subView?: string;
@@ -35,7 +37,7 @@ interface SubView {
 
 interface Section {
   id: string;
-  label: string;
+  labelKey: string;
   colorClass: string;
   hoverClass: string;
   textClass: string;
@@ -47,72 +49,73 @@ interface Section {
 const SECTIONS: Section[] = [
   {
     id: 'celebration',
-    label: 'Celebration',
+    labelKey: 'nav.celebration',
     colorClass: 'bg-green-500/90',
     hoverClass: 'hover:bg-green-400',
     textClass: 'text-white',
     icon: <PartyPopper className="w-5 h-5" />,
     position: 'top-left',
     views: [
-      { id: 'fertilization', label: 'Fertilization Board', icon: <PartyPopper className="w-3 h-3" />, view: 'celebration' },
+      { id: 'fertilization', labelKey: 'nav.fertilizationBoard', icon: <PartyPopper className="w-3 h-3" />, view: 'celebration' },
     ],
   },
   {
     id: 'dream',
-    label: 'Dream',
+    labelKey: 'nav.dream',
     colorClass: 'bg-blue-500/90',
     hoverClass: 'hover:bg-blue-400',
     textClass: 'text-white',
     icon: <Sparkles className="w-5 h-5" />,
     position: 'bottom-left',
     views: [
-      { id: 'intentional-framework', label: 'Intention', icon: <Target className="w-3 h-3" />, view: 'dream', subView: 'intentionalFramework' },
-      { id: 'collaborative-framework', label: 'Collaboration', icon: <Users className="w-3 h-3" />, view: 'dream', subView: 'collaborativeFramework' },
-      { id: 'dream-board', label: 'Dream Board', icon: <Sparkles className="w-3 h-3" />, view: 'dream', subView: 'dream' },
-      { id: 'storyboard', label: 'Storyboard', icon: <LayoutDashboard className="w-3 h-3" />, view: 'dream', subView: 'storyboard' },
-      { id: 'prioritization', label: 'Prioritization', icon: <ListChecks className="w-3 h-3" />, view: 'dream', subView: 'prioritization' },
+      { id: 'intentional-framework', labelKey: 'nav.intention', icon: <Target className="w-3 h-3" />, view: 'dream', subView: 'intentionalFramework' },
+      { id: 'collaborative-framework', labelKey: 'nav.collaboration', icon: <Users className="w-3 h-3" />, view: 'dream', subView: 'collaborativeFramework' },
+      { id: 'dream-board', labelKey: 'nav.dreamBoard', icon: <Sparkles className="w-3 h-3" />, view: 'dream', subView: 'dream' },
+      { id: 'storyboard', labelKey: 'nav.storyboard', icon: <LayoutDashboard className="w-3 h-3" />, view: 'dream', subView: 'storyboard' },
+      { id: 'prioritization', labelKey: 'nav.prioritization', icon: <ListChecks className="w-3 h-3" />, view: 'dream', subView: 'prioritization' },
     ],
   },
   {
     id: 'plan',
-    label: 'Plan',
+    labelKey: 'nav.plan',
     colorClass: 'bg-orange-500/90',
     hoverClass: 'hover:bg-orange-400',
     textClass: 'text-white',
     icon: <CircleDot className="w-5 h-5" />,
     position: 'bottom-right',
     views: [
-      { id: 'program', label: 'Program', icon: <Calendar className="w-3 h-3" />, view: 'program', subView: 'calendar' },
-      { id: 'resources', label: 'Resources', icon: <Users className="w-3 h-3" />, view: 'program', subView: 'resources' },
-      { id: 'circles', label: 'Circles', icon: <Users className="w-3 h-3" />, view: 'plan', subView: 'circles' },
-      { id: 'roles', label: 'Roles', icon: <ShieldCheck className="w-3 h-3" />, view: 'plan', subView: 'roles' },
+      { id: 'program', labelKey: 'nav.program', icon: <Calendar className="w-3 h-3" />, view: 'program', subView: 'calendar' },
+      { id: 'resources', labelKey: 'nav.resources', icon: <Users className="w-3 h-3" />, view: 'program', subView: 'resources' },
+      { id: 'circles', labelKey: 'nav.circles', icon: <Users className="w-3 h-3" />, view: 'plan', subView: 'circles' },
+      { id: 'roles', labelKey: 'nav.roles', icon: <ShieldCheck className="w-3 h-3" />, view: 'plan', subView: 'roles' },
+      { id: 'salary', labelKey: 'nav.salarySystem', icon: <Wallet className="w-3 h-3" />, view: 'plan', subView: 'salary' },
     ],
   },
   {
     id: 'action',
-    label: 'Action',
+    labelKey: 'nav.action',
     colorClass: 'bg-red-500/90',
     hoverClass: 'hover:bg-red-400',
     textClass: 'text-white',
     icon: <ListChecks className="w-5 h-5" />,
     position: 'top-right',
     views: [
-      { id: 'kanban', label: 'Project', icon: <LayoutDashboard className="w-3 h-3" />, view: 'kanban' },
-      { id: 'focus', label: 'Focus', icon: <ListChecks className="w-3 h-3" />, view: 'focus' },
+      { id: 'kanban', labelKey: 'nav.project', icon: <LayoutDashboard className="w-3 h-3" />, view: 'kanban' },
+      { id: 'focus', labelKey: 'nav.focus', icon: <ListChecks className="w-3 h-3" />, view: 'focus' },
     ],
   },
 ];
 
 const CENTER_VIEWS: SubView[] = [
-  { id: 'timetable', label: 'Timetable', icon: <Clock className="w-3 h-3" />, view: 'timetable' },
-  { id: 'voting', label: 'Voting', icon: <Vote className="w-3 h-3" />, view: 'voting' },
-  { id: 'metrics', label: 'Metrics', icon: <BarChart3 className="w-3 h-3" />, view: 'metrics' },
-  { id: 'settings', label: 'Settings', icon: <Settings className="w-3 h-3" />, view: 'settings' },
+  { id: 'timetable', labelKey: 'nav.timetable', icon: <Clock className="w-3 h-3" />, view: 'timetable' },
+  { id: 'voting', labelKey: 'nav.voting', icon: <Vote className="w-3 h-3" />, view: 'voting' },
+  { id: 'metrics', labelKey: 'nav.metrics', icon: <BarChart3 className="w-3 h-3" />, view: 'metrics' },
+  { id: 'settings', labelKey: 'nav.settings', icon: <Settings className="w-3 h-3" />, view: 'settings' },
 ];
 
 const CENTER_SECTION: Section = {
   id: 'tools',
-  label: 'Tools',
+  labelKey: 'nav.tools',
   colorClass: 'bg-gray-600/90',
   hoverClass: 'hover:bg-gray-500',
   textClass: 'text-white',
@@ -168,6 +171,7 @@ const QUARTER_CONFIG: Record<QuarterKey, QuarterConfig> = {
 };
 
 export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, onClose }) => {
+  const { t } = useTranslation();
   const { navigateTo, disabledModules } = useViewNavigation();
   const [hovered, setHovered] = useState<string | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -234,7 +238,7 @@ export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, on
     <div
       ref={overlayRef}
       role="dialog"
-      aria-label="Navigation menu"
+      aria-label={t('nav.navigationMenu')}
       tabIndex={-1}
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 transition-opacity duration-300"
       onClick={(e) => {
@@ -249,7 +253,7 @@ export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, on
         <button
           onClick={onClose}
           className="absolute -top-14 right-0 text-white/80 hover:text-white transition-colors"
-          aria-label="Close navigation"
+          aria-label={t('nav.closeNavigation')}
         >
           <X className="w-8 h-8" />
         </button>
@@ -316,7 +320,7 @@ export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, on
                     )}
                   >
                     {section.icon}
-                    <span className="text-sm font-semibold">{section.label}</span>
+                    <span className="text-sm font-semibold">{t(section.labelKey)}</span>
                   </div>
 
                   {/* Expanded content – anchored at inner corner, nudged outward with margin */}
@@ -328,7 +332,7 @@ export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, on
                   >
                     <div className={cn('flex items-center gap-1.5', section.textClass)}>
                       {section.icon}
-                      <span className="text-sm font-bold">{section.label}</span>
+                      <span className="text-sm font-bold">{t(section.labelKey)}</span>
                     </div>
                     <div className="flex flex-col gap-1.5 w-full">
                       {section.views.map((v) => (
@@ -341,7 +345,7 @@ export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, on
                           }}
                         >
                           {v.icon}
-                          <span>{v.label}</span>
+                          <span>{t(v.labelKey)}</span>
                         </button>
                       ))}
                     </div>
@@ -373,7 +377,7 @@ export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, on
               )}
             >
               {CENTER_SECTION.icon}
-              <span className="text-xs font-semibold">{CENTER_SECTION.label}</span>
+              <span className="text-xs font-semibold">{t(CENTER_SECTION.labelKey)}</span>
             </div>
 
             {/* Expanded content */}
@@ -385,7 +389,7 @@ export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, on
             >
               <div className={cn('flex items-center gap-1', CENTER_SECTION.textClass)}>
                 {CENTER_SECTION.icon}
-                <span className="text-xs font-bold">{CENTER_SECTION.label}</span>
+                <span className="text-xs font-bold">{t(CENTER_SECTION.labelKey)}</span>
               </div>
               <div className="flex flex-col gap-1.5 w-full">
                 {filteredCenterViews.map((v) => (
@@ -398,7 +402,7 @@ export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, on
                     }}
                   >
                     {v.icon}
-                    <span>{v.label}</span>
+                    <span>{t(v.labelKey)}</span>
                   </button>
                 ))}
               </div>

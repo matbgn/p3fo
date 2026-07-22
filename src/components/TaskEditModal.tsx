@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from 'react-i18next';
 import {
     Dialog,
     DialogContent,
@@ -81,6 +82,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
     updateLinkedVoteIds: updateLinkedVoteIdsProp,
 }) => {
     const { settings } = useSettingsContext();
+    const { t } = useTranslation();
     const weekStartsOn = settings.weekStartDay as 0 | 1;
 
     // Internal state to track which task is currently being edited
@@ -124,7 +126,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
                             className="text-lg font-bold border-none shadow-none focus-visible:ring-0 px-0 flex-1"
-                            placeholder="Task Title"
+                            placeholder={t('task.titlePlaceholder')}
                         />
                         <div className="flex items-center gap-1">
                             {onToggleTimer && (
@@ -158,9 +160,9 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
                                 </DialogTrigger>
                                 <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col p-0">
                                     <DialogHeader className="p-6 pb-4">
-                                        <DialogTitle>Time Sheet - {activeTask.title}</DialogTitle>
+                                        <DialogTitle>{t('task.timeSheetTitle', { title: activeTask.title })}</DialogTitle>
                                         <DialogDescription className="sr-only">
-                                            View and edit time entries for task: {activeTask.title}
+                                            {t('task.timeSheetDescription', { title: activeTask.title })}
                                         </DialogDescription>
                                     </DialogHeader>
                                     <div className="flex-grow overflow-y-auto px-6 pb-6">
@@ -185,7 +187,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
                         </div>
                     </DialogTitle>
                     <DialogDescription>
-                        Edit task details
+                        {t('task.editDetails')}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -193,12 +195,12 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
                     {/* Main Column */}
                     <div className="md:col-span-2 flex flex-col gap-4">
                         <div className="flex flex-col gap-2 flex-1">
-                            <Label htmlFor="description" className="text-base font-semibold">Description</Label>
+                            <Label htmlFor="description" className="text-base font-semibold">{t('task.descriptionLabel')}</Label>
                             <RichTextField
                                 value={comment}
                                 onChange={(text) => setComment(text)}
-                                label="Description"
-                                placeholder="Add a detailed description..."
+                                label={t('task.descriptionFieldLabel')}
+                                placeholder={t('task.descriptionPlaceholder')}
                                 className="flex-1 min-h-[300px]"
                             />
                         </div>
@@ -206,7 +208,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
 
                         <div className="flex flex-col gap-2 pt-4 border-t">
                             <div className="flex items-center justify-between">
-                                <Label className="text-base font-semibold">Task Hierarchy</Label>
+                                <Label className="text-base font-semibold">{t('task.hierarchyLabel')}</Label>
                                 {activeTask.children && activeTask.children.length > 0 && (
                                     <SubtaskProgress task={activeTask} tasks={tasks} />
                                 )}
@@ -221,19 +223,19 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
                                             if (parent) setActiveTask(parent);
                                         }}
                                     >
-                                        <span className="text-sm text-muted-foreground">Parent:</span>
+                                        <span className="text-sm text-muted-foreground">{t('task.parentLabel')}</span>
                                         <span className="text-sm font-medium text-blue-600 hover:underline">
-                                            {tasks.find((t) => t.id === activeTask.parentId)?.title || "Unknown Parent"}
+                                            {tasks.find((tt) => tt.id === activeTask.parentId)?.title || t('task.unknownParent')}
                                         </span>
                                     </div>
                                 ) : (
-                                    <div className="text-sm text-muted-foreground italic">No parent task</div>
+                                    <div className="text-sm text-muted-foreground italic">{t('task.noParent')}</div>
                                 )}
 
                                 {/* Current Task */}
                                 <div className="flex items-center gap-2 pl-4 border-l-2 border-primary">
                                     <span className="text-sm font-bold">{activeTask.title}</span>
-                                    <span className="text-xs text-muted-foreground">(Current)</span>
+                                    <span className="text-xs text-muted-foreground">{t('task.current')}</span>
                                 </div>
 
                                 {/* Children */}
@@ -257,14 +259,14 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
                                                         readOnly
                                                     />
                                                     <span className={isDone ? "line-through text-muted-foreground text-blue-600" : "text-blue-600 hover:underline"}>
-                                                        {child?.title || "Unknown Child"}
+                                                        {child?.title || t('task.unknownChild')}
                                                     </span>
                                                 </div>
                                             );
                                         })}
                                     </div>
                                 ) : (
-                                    <div className="text-sm text-muted-foreground italic pl-8">No subtasks</div>
+                                    <div className="text-sm text-muted-foreground italic pl-8">{t('task.noSubtasks')}</div>
                                 )}
                             </div>
                         </div>
@@ -273,12 +275,12 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
                     {/* Sidebar Column */}
                     <div className="flex flex-col gap-6">
                         <div className="flex flex-col gap-2">
-                            <Label>Status</Label>
+                            <Label>{t('task.statusLabel')}</Label>
                             <TaskStatusSelect value={activeTask.triageStatus} onChange={(s) => updateStatus(activeTask.id, s)} />
                         </div>
 
                         <div className="flex flex-col gap-2">
-                            <Label>Assigned To</Label>
+                            <Label>{t('task.assignedToLabel')}</Label>
                             <UserSelector
                                 value={activeTask.userId || ''}
                                 onChange={(selectedId) => updateUser(activeTask.id, selectedId === 'current-user' ? currentUserId : selectedId)}
@@ -286,7 +288,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
                         </div>
 
                         <div className="flex flex-col gap-2">
-                            <Label>Category</Label>
+                            <Label>{t('task.categoryLabel')}</Label>
                             <CategorySelect
                                 value={activeTask.category || "none"}
                                 onChange={(category) => updateCategory(activeTask.id, category === "none" ? undefined : category)}
@@ -294,10 +296,10 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
                         </div>
 
                         <div className="flex flex-col gap-2">
-                            <Label>Difficulty</Label>
+                            <Label>{t('task.difficultyLabel')}</Label>
                             <Select value={activeTask.difficulty?.toString() || "1"} onValueChange={(v) => updateDifficulty(activeTask.id, parseFloat(v) as 0.5 | 1 | 2 | 3 | 5 | 8)}>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Select difficulty" />
+                                    <SelectValue placeholder={t('task.selectDifficulty')} />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {DIFFICULTY_OPTIONS.map((diff) => (
@@ -310,7 +312,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
                         </div>
 
                         <div className="flex flex-col gap-2">
-                            <Label>Termination Date</Label>
+                            <Label>{t('task.terminationDateLabel')}</Label>
                             <div className="flex gap-2">
                                 <Popover>
                                     <PopoverTrigger asChild>
@@ -322,7 +324,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
                                             )}
                                         >
                                             <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {activeTask.terminationDate ? format(new Date(activeTask.terminationDate), "PPP") : <span>Pick a date</span>}
+                                            {activeTask.terminationDate ? format(new Date(activeTask.terminationDate), "PPP") : <span>{t('task.pickDate')}</span>}
                                         </Button>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-auto p-0">
@@ -350,7 +352,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
                                         activeTask.terminationDate && "text-blue-500"
                                     )}
                                     onClick={() => setTimePickerOpen(true)}
-                                    title="Set time"
+                                    title={t('task.setTime')}
                                 >
                                     <Clock2 className="h-4 w-4" />
                                 </Button>
@@ -363,7 +365,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
                         </div>
 
                         <div className="flex flex-col gap-2">
-                            <Label>Planned Duration (min)</Label>
+                            <Label>{t('task.plannedDurationLabel')}</Label>
                             <Input
                                 type="number"
                                 min="0"
@@ -382,19 +384,19 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
 
                         <div className="flex flex-col gap-4 pt-2 border-t">
                             <div className="flex items-center justify-between">
-                                <Label htmlFor="urgent" className="cursor-pointer">Urgent</Label>
+                                <Label htmlFor="urgent" className="cursor-pointer">{t('task.urgentLabel')}</Label>
                                 <Switch id="urgent" checked={activeTask.urgent} onCheckedChange={() => toggleUrgent(activeTask.id)} />
                             </div>
                             <div className="flex items-center justify-between">
-                                <Label htmlFor="impact" className="cursor-pointer">High Impact</Label>
+                                <Label htmlFor="impact" className="cursor-pointer">{t('task.highImpactLabel')}</Label>
                                 <Switch id="impact" checked={activeTask.impact} onCheckedChange={() => toggleImpact(activeTask.id)} />
                             </div>
                             <div className="flex items-center justify-between">
-                                <Label htmlFor="incident" className="cursor-pointer">Incident</Label>
+                                <Label htmlFor="incident" className="cursor-pointer">{t('task.incidentLabel')}</Label>
                                 <Switch id="incident" checked={activeTask.majorIncident} onCheckedChange={() => toggleMajorIncident(activeTask.id)} />
                             </div>
                             <div className="flex items-center justify-between">
-                                <Label htmlFor="sprintTarget" className="cursor-pointer">Sprint Target</Label>
+                                <Label htmlFor="sprintTarget" className="cursor-pointer">{t('task.sprintTargetLabel')}</Label>
                                 <Switch id="sprintTarget" checked={activeTask.sprintTarget} onCheckedChange={() => toggleSprintTarget(activeTask.id)} />
                             </div>
                         </div>
@@ -410,8 +412,8 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
                     </div>
 
                 <div className="flex justify-end gap-2 pt-4 border-t mt-auto">
-                    <Button variant="outline" onClick={onClose}>Cancel</Button>
-                    <Button onClick={handleSave}>Save & Close</Button>
+                    <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
+                    <Button onClick={handleSave}>{t('task.saveAndClose')}</Button>
                 </div>
             </DialogContent>
 

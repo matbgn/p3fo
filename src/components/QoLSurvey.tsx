@@ -1,35 +1,40 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { usePersistence } from '@/hooks/usePersistence';
 
-const surveyQuestions = [
-    "Documentation & access to information",
-    "Deep work/focus time",
-    "Automation processes",
-    "Change confidence (Impact & Effectiveness)",
-    "Incident responses",
-    "Local tools experience",
-    "Planning processes",
-    "Cross-team dependencies",
-    "Ease of Delivery (difficulty to implement change)",
-    "Maintainability of delivered assets",
-];
+// Stable internal keys (also used as response storage keys) — keep English so existing
+// saved responses remain valid across locales.
+const surveyQuestionKeys = [
+    "documentation",
+    "deepWork",
+    "automation",
+    "changeConfidence",
+    "incidentResponses",
+    "localTools",
+    "planning",
+    "crossTeam",
+    "easeOfDelivery",
+    "maintainability",
+] as const;
 
-const satisfactionLevels = [
-    "No answer",
-    "Very dissatisfied",
-    "Dissatisfied",
-    "Neutral",
-    "Satisfied",
-    "Very satisfied",
-];
+// Stable internal keys for satisfaction levels (radio values, stored in responses).
+const satisfactionLevelKeys = [
+    "noAnswer",
+    "veryDissatisfied",
+    "dissatisfied",
+    "neutral",
+    "satisfied",
+    "verySatisfied",
+] as const;
 
 interface QoLSurveyProps {
     userId: string;
 }
 
 const QoLSurvey: React.FC<QoLSurveyProps> = ({ userId }) => {
+    const { t } = useTranslation();
     const [responses, setResponses] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
     const persistence = usePersistence();
@@ -58,8 +63,8 @@ const QoLSurvey: React.FC<QoLSurveyProps> = ({ userId }) => {
         }
     }, [userId, persistence]);
 
-    const handleResponseChange = (question: string, value: string) => {
-        setResponses((prev) => ({ ...prev, [question]: value }));
+    const handleResponseChange = (questionKey: string, value: string) => {
+        setResponses((prev) => ({ ...prev, [questionKey]: value }));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -67,50 +72,50 @@ const QoLSurvey: React.FC<QoLSurveyProps> = ({ userId }) => {
 
         try {
             await persistence.saveQolSurveyResponse(userId, responses);
-            alert("Survey responses saved!");
+            alert(t("metrics.qolSurvey.saved"));
             // Trigger a storage event to update other components if needed (though persistence hook might handle this differently depending on implementation)
             window.dispatchEvent(new Event('storage'));
         } catch (error) {
             console.error("Failed to save survey responses to persistence:", error);
-            alert("Error: Could not save survey responses.");
+            alert(t("metrics.qolSurvey.saveError"));
         }
     };
 
     if (loading) {
         return (
             <div className="py-8">
-                <div className="text-center">Loading survey...</div>
+                <div className="text-center">{t("metrics.qolSurvey.loading")}</div>
             </div>
         );
     }
 
     return (
         <div className="py-4">
-            <h2 className="text-xl font-semibold mb-2">Quality of Life Effectiveness Survey</h2>
+            <h2 className="text-xl font-semibold mb-2">{t("metrics.qolSurvey.title")}</h2>
             <p className="text-muted-foreground mb-6">
-                Rate your satisfaction with the items below
+                {t("metrics.qolSurvey.description")}
             </p>
 
             <form onSubmit={handleSubmit}>
                 <div className="border rounded-lg overflow-x-auto">
                     <div className="min-w-[700px]">
                         <div className="grid grid-cols-[2fr_repeat(6,1fr)] bg-muted/50 font-semibold items-center">
-                            <div className="p-3">Question</div>
-                            {satisfactionLevels.map((level) => (
-                                <div key={level} className="p-3 text-center text-sm">{level}</div>
+                            <div className="p-3">{t("metrics.qolSurvey.column.question")}</div>
+                            {satisfactionLevelKeys.map((levelKey) => (
+                                <div key={levelKey} className="p-3 text-center text-sm">{t(`metrics.qolSurvey.level.${levelKey}`)}</div>
                             ))}
                         </div>
-                        {surveyQuestions.map((question, qIndex) => (
-                            <div key={question} className={`grid grid-cols-[2fr_repeat(6,1fr)] items-center ${qIndex > 0 ? 'border-t' : ''}`}>
-                                <h3 className="text-sm font-normal p-3">{question}</h3>
+                        {surveyQuestionKeys.map((qKey, qIndex) => (
+                            <div key={qKey} className={`grid grid-cols-[2fr_repeat(6,1fr)] items-center ${qIndex > 0 ? 'border-t' : ''}`}>
+                                <h3 className="text-sm font-normal p-3">{t(`metrics.qolSurvey.question.${qKey}`)}</h3>
                                 <RadioGroup
-                                    value={responses[question] || ""}
-                                    onValueChange={(value) => handleResponseChange(question, value)}
+                                    value={responses[qKey] || ""}
+                                    onValueChange={(value) => handleResponseChange(qKey, value)}
                                     className="col-span-6 grid grid-cols-6"
                                 >
-                                    {satisfactionLevels.map((level) => (
-                                        <div key={level} className="flex justify-center items-center p-3">
-                                            <RadioGroupItem value={level} id={`${question}-${level}`} />
+                                    {satisfactionLevelKeys.map((levelKey) => (
+                                        <div key={levelKey} className="flex justify-center items-center p-3">
+                                            <RadioGroupItem value={levelKey} id={`${qKey}-${levelKey}`} />
                                         </div>
                                     ))}
                                 </RadioGroup>
@@ -119,25 +124,25 @@ const QoLSurvey: React.FC<QoLSurveyProps> = ({ userId }) => {
                     </div>
                 </div>
                 <div className="flex gap-4 mt-8">
-                    <Button type="submit">Submit Responses</Button>
+                    <Button type="submit">{t("metrics.qolSurvey.submit")}</Button>
                     <Button
                         type="button"
                         variant="destructive"
                         onClick={async () => {
-                            if (window.confirm("Are you sure you want to clear your survey responses?")) {
+                            if (window.confirm(t("metrics.qolSurvey.clearConfirm"))) {
                                 try {
                                     await persistence.saveQolSurveyResponse(userId, {});
                                     setResponses({});
-                                    alert("Survey responses cleared!");
+                                    alert(t("metrics.qolSurvey.cleared"));
                                     window.dispatchEvent(new Event('storage'));
                                 } catch (error) {
                                     console.error("Failed to clear survey responses:", error);
-                                    alert("Error: Could not clear survey responses.");
+                                    alert(t("metrics.qolSurvey.clearError"));
                                 }
                             }
                         }}
                     >
-                        Clear Survey
+                        {t("metrics.qolSurvey.clear")}
                     </Button>
                 </div>
             </form>

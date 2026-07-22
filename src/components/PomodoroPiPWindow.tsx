@@ -34,6 +34,23 @@ export const PomodoroPiPWindow: React.FC = () => {
   const pomodoroTransitioning = pomodoro.pomodoroEnabled && pomodoro.phaseTransition !== null;
   const anyTimerEnabled = pomodoro.pomodoroEnabled || traveler.travelerEnabled;
 
+  // Auto-open PiP when a session starts (idle → active), but only once per
+  // session. We track the previous "active" state and only trigger on the
+  // rising edge, so manual close mid-session is respected.
+  const wasActiveRef = useRef(false);
+  useEffect(() => {
+    if (!focusConfig.enablePiP || !focusConfig.autoOpenPiPOnStart || !anyTimerEnabled) {
+      wasActiveRef.current = false;
+      return;
+    }
+    const isActive = travelerActive || pomodoroActive;
+    if (isActive && !wasActiveRef.current && !isPiPActive && isSupported) {
+      openPiP(focusConfig.pipWidth, focusConfig.pipHeight);
+    }
+    wasActiveRef.current = isActive;
+  }, [travelerActive, pomodoroActive, focusConfig.enablePiP, focusConfig.autoOpenPiPOnStart,
+      focusConfig.pipWidth, focusConfig.pipHeight, anyTimerEnabled, isPiPActive, isSupported, openPiP]);
+
   useEffect(() => {
     if (!isPiPActive || !focusConfig.enablePiP || !anyTimerEnabled) {
       deferUnmount(rootRef.current);

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { DreamBoardEntity, DreamColumn, TimeFrame, DreamCard } from '@/lib/persistence-types';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { usePersistence } from '@/hooks/usePersistence';
@@ -55,10 +56,19 @@ import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
 type VotingMode = 'THUMBS_UP' | 'THUMBS_UD_NEUTRAL' | 'POINTS' | 'MAJORITY_JUDGMENT';
 type VotingPhase = 'IDLE' | 'VOTING' | 'REVEALED';
 
-import { MJ_SCALE, VOTING_MODES_LABELS } from './planView/constants';
+import { MJ_SCALE, votingModeLabel, mjGradeLabel } from './planView/constants';
 import { BoardOptions, BoardTypeConfig } from './planView/BoardOptions';
 
 // Default columns for Dream Board
+const DREAM_COLUMN_IDS = ['dreams', 'strengths', 'threats', 'levers', 'priorities'];
+
+function dreamColumnTitle(t: (key: string, opts?: Record<string, unknown>) => string, col: { id: string; title: string }): string {
+    if (DREAM_COLUMN_IDS.includes(col.id)) {
+        return t(`dream.column.${col.id}`);
+    }
+    return col.title;
+}
+
 const DEFAULT_DREAM_COLUMNS: DreamColumn[] = [
   { id: 'dreams', title: 'Dreams', color: '#FFFFFF', isLocked: false },
   { id: 'strengths', title: 'Strengths', color: '#FACC15', isLocked: true },
@@ -112,22 +122,23 @@ const TIME_FRAME_ORDER: Record<TimeFrame, number> = {
   '4y': 5,
 };
 
-// Time frame display labels for expanded timeline view
-const TIME_FRAME_LABELS: Record<TimeFrame, string> = {
-  '3mo': '3 months',
-  '6mo': '6 months',
-  '1y': '12 months',
-  '2y': '2 years',
-  '4y': '4 years',
+const TIME_FRAME_TAG_OPTIONS = [
+  { value: '3mo', className: 'bg-blue-400 text-white px-1 rounded font-bold' },
+  { value: '6mo', className: 'bg-green-400 text-black px-1 rounded font-bold' },
+  { value: '1y', className: 'bg-yellow-400 text-black px-1 rounded font-bold' },
+  { value: '2y', className: 'bg-orange-400 text-black px-1 rounded font-bold' },
+  { value: '4y', className: 'bg-red-400 text-white px-1 rounded font-bold' },
+];
+
+const TIMEFRAME_KEY: Record<TimeFrame, string> = {
+  '3mo': 'dream.timeFrame.3mo',
+  '6mo': 'dream.timeFrame.6mo',
+  '1y': 'dream.timeFrame.1y',
+  '2y': 'dream.timeFrame.2y',
+  '4y': 'dream.timeFrame.4y',
 };
 
-const TIME_FRAME_TAG_OPTIONS = [
-  { value: '3mo', label: TIME_FRAME_LABELS['3mo'], className: 'bg-blue-400 text-white px-1 rounded font-bold' },
-  { value: '6mo', label: TIME_FRAME_LABELS['6mo'], className: 'bg-green-400 text-black px-1 rounded font-bold' },
-  { value: '1y', label: TIME_FRAME_LABELS['1y'], className: 'bg-yellow-400 text-black px-1 rounded font-bold' },
-  { value: '2y', label: TIME_FRAME_LABELS['2y'], className: 'bg-orange-400 text-black px-1 rounded font-bold' },
-  { value: '4y', label: TIME_FRAME_LABELS['4y'], className: 'bg-red-400 text-white px-1 rounded font-bold' },
-];
+const timeFrameLabel = (t: (key: string) => string, tf: TimeFrame): string => t(TIMEFRAME_KEY[tf]);
 
 // TimeTagBadge component
 interface TimeTagBadgeProps {
@@ -186,6 +197,7 @@ interface DreamViewProps {
 }
 
 export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban, focusModeHeaderContent }) => {
+  const { t } = useTranslation();
   const persistence = usePersistence();
   const { userId: currentUserId, userSettings } = useUserSettings();
   const { users } = useUsersContext();
@@ -306,7 +318,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
   // Reset votes for a specific column only
   const resetColumnVotes = async (columnId: string) => {
     if (!boardState || !isModerator) return;
-    if (!confirm(`Are you sure you want to reset all votes in the "${boardState.columns.find(c => c.id === columnId)?.title}" column? This will clear every vote in this column but keep all cards.`)) return;
+    if (!confirm(t('dream.resetColumnVotesConfirm', { column: dreamColumnTitle(t, boardState.columns.find(c => c.id === columnId) ?? { id: columnId, title: columnId }) }))) return;
     const newCards = boardState.cards.map(c =>
       c.columnId === columnId ? { ...c, votes: {}, offlineVotes: {} } : c
     );
@@ -667,7 +679,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
 
   const resetVotes = async () => {
     if (!boardState || !isModerator) return;
-    if (!confirm('Are you sure you want to reset all votes? This will clear every vote but keep all cards.')) return;
+    if (!confirm(t('dream.resetAllVotesConfirm'))) return;
     const newCards = boardState.cards.map(c => ({ ...c, votes: {}, offlineVotes: {} }));
     await saveBoard({ ...boardState, cards: newCards, votingPhase: 'IDLE' as VotingPhase });
   };
@@ -702,15 +714,15 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
 
   const renderMJDistribution = (votes: Record<string, number>) => {
     const totalVotes = Object.keys(votes).length;
-    if (totalVotes === 0) return <div className="text-sm text-muted-foreground p-2">No votes cast yet.</div>;
+    if (totalVotes === 0) return <div className="text-sm text-muted-foreground p-2">{t('dream.noVotesCastYet')}</div>;
 
     const medianValue = getMJMedian(votes);
 
     return (
       <div className="p-2 space-y-2">
         <div className="text-xs font-semibold mb-2">
-          Median Grade: {MJ_SCALE.find(g => g.value === medianValue)?.label || 'N/A'}
-          <span className="ml-1 text-muted-foreground">({totalVotes} votes)</span>
+          {t('dream.medianGrade')} {medianValue !== null ? mjGradeLabel(t, medianValue) : 'N/A'}
+          <span className="ml-1 text-muted-foreground">{t('dream.votesCount', { n: totalVotes })}</span>
         </div>
         <div className="space-y-1">
           {MJ_SCALE.map(grade => {
@@ -718,7 +730,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
             const percentage = Math.round((count / totalVotes) * 100);
             return (
               <div key={grade.value} className="flex items-center text-[10px] gap-2">
-                <div className="w-20 truncate" title={grade.label}>{grade.icon} {grade.label}</div>
+                <div className="w-20 truncate" title={mjGradeLabel(t, grade.value)}>{grade.icon} {mjGradeLabel(t, grade.value)}</div>
                 <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
                   <div className={`h-full ${grade.color}`} style={{ width: `${percentage}%` }} />
                 </div>
@@ -1085,8 +1097,8 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
     }
   };
 
-  if (loading) return <div>Loading...</div>;
-  if (!boardState) return <div>Error loading board</div>;
+  if (loading) return <div>{t('common.loading')}</div>;
+  if (!boardState) return <div>{t('dream.errorLoadingBoard')}</div>;
 
   // Card Sorting specific to DreamView
   const getSortedCardsForColumn = (columnId: string) => {
@@ -1131,9 +1143,9 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
   if (!boardState?.isSessionActive) {
     return (
       <div className="flex flex-col items-center justify-center h-full space-y-4">
-        <h2 className="text-2xl font-bold">Dream Board</h2>
-        <p className="text-muted-foreground">No moderator active. Start a session to become the moderator.</p>
-        <Button onClick={startSession}>Start Session</Button>
+        <h2 className="text-2xl font-bold">{t('dream.title')}</h2>
+        <p className="text-muted-foreground">{t('dream.noModerator')}</p>
+        <Button onClick={startSession}>{t('dream.startSession')}</Button>
       </div>
     );
   }
@@ -1145,14 +1157,14 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
           <Dialog open={promoteDialogOpen} onOpenChange={setPromoteDialogOpen}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Promote to Kanban</DialogTitle>
+                <DialogTitle>{t('dream.promote.title')}</DialogTitle>
                 <DialogDescription>
-                  This will create a new task in the Kanban board with the content of this card.
+                  {t('dream.promote.description')}
                 </DialogDescription>
               </DialogHeader>
               <div className="flex justify-end space-x-2">
-                <Button variant="outline" onClick={() => setPromoteDialogOpen(false)}>Cancel</Button>
-                <Button onClick={promoteToBacklog}>Promote</Button>
+                <Button variant="outline" onClick={() => setPromoteDialogOpen(false)}>{t('common.cancel')}</Button>
+                <Button onClick={promoteToBacklog}>{t('dream.promote.confirm')}</Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -1160,28 +1172,28 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
           {/* Points Config Dialog */}
           <Dialog open={pointsConfigColumnId !== null} onOpenChange={(open) => !open && setPointsConfigColumnId(null)}>
             <DialogContent className="sm:max-w-sm">
-              <DialogHeader><DialogTitle>Configure Points Budget</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>{t('dream.pointsConfig.title')}</DialogTitle></DialogHeader>
               <div className="flex items-center gap-4 py-4">
-                <Label className="text-right">Max Points:</Label>
+                <Label className="text-right">{t('dream.pointsConfig.maxPoints')}</Label>
                 <Input type="number" value={pointsConfigValue} onChange={(e) => setPointsConfigValue(Math.max(1, parseInt(e.target.value) || 0))} className="col-span-3" />
               </div>
-              <Button onClick={confirmColumnPointsConfig}>Start Points Voting</Button>
+              <Button onClick={confirmColumnPointsConfig}>{t('dream.pointsConfig.start')}</Button>
             </DialogContent>
           </Dialog>
 
           {/* MJ Labels Config Dialog */}
           <Dialog open={mjConfigColumnId !== null} onOpenChange={(open) => !open && setMjConfigColumnId(null)}>
             <DialogContent className="sm:max-w-md">
-              <DialogHeader><DialogTitle>Configure Majority Judgment Labels</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>{t('dream.mjConfig.title')}</DialogTitle></DialogHeader>
               <div className="space-y-3 py-2">
                 {MJ_SCALE.map(grade => (
                   <div key={grade.value} className="flex items-center gap-3">
                     <span className={`flex items-center justify-center w-6 h-6 rounded ${grade.color} text-[10px]`}>{grade.icon}</span>
                     <Input
-                      value={mjLabelInputs[grade.value] ?? grade.label}
+                      value={mjLabelInputs[grade.value] ?? mjGradeLabel(t, grade.value)}
                       onChange={(e) => setMjLabelInputs(prev => ({ ...prev, [grade.value]: e.target.value }))}
                       className="flex-1"
-                      placeholder={`Label for grade ${grade.value}`}
+                      placeholder={t('dream.mjConfig.labelPlaceholder', { n: grade.value })}
                     />
                   </div>
                 ))}
@@ -1194,24 +1206,24 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
                 await saveBoard({ ...boardState, columns: newColumns });
                 setMjConfigColumnId(null);
                 setMjLabelInputs({});
-              }}>Save & Start MJ Voting</Button>
+              }}>{t('dream.mjConfig.saveAndStart')}</Button>
             </DialogContent>
           </Dialog>
 
           <BoardHeader
-            title="Dream Board"
+            title={t('dream.title')}
             focusModeRightExtra={focusModeHeaderContent}
             titleContent={
             boardState?.votingMode === 'POINTS' && boardState.votingPhase === 'VOTING' && (
               <div className="text-sm font-normal px-3 py-1 bg-primary/10 rounded-full border border-primary/20 text-primary">
-                Budget: <span className="font-bold">{calculateUserUsedPoints(currentUserId)}</span> / {boardState.maxPointsPerUser || 10} pts
+                {t('dream.budget')}: <span className="font-bold">{calculateUserUsedPoints(currentUserId)}</span> / {boardState.maxPointsPerUser || 10} {t('dream.pts')}
               </div>
             )
           }
           filterState={filterState}
           onFilterChange={setFilterState}
-          columnOptions={boardState.columns.map(c => ({ label: c.title, value: c.id }))}
-          tagOptions={TIME_FRAME_TAG_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+          columnOptions={boardState.columns.map(c => ({ label: dreamColumnTitle(t, c), value: c.id }))}
+          tagOptions={TIME_FRAME_TAG_OPTIONS.map(o => ({ value: o.value, label: timeFrameLabel(t, o.value as TimeFrame) }))}
           sessionControls={
             <>
               {/* Timer Display */}
@@ -1223,23 +1235,23 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
                 <>
                   {boardState.timer?.isRunning ? (
                     <Button variant="outline" size="sm" onClick={stopTimer}>
-                      <Square className="mr-2 h-4 w-4" /> Stop Timer
+                      <Square className="mr-2 h-4 w-4" /> {t('dream.timer.stop')}
                     </Button>
                   ) : (
                     <Dialog open={isTimerDialogOpen} onOpenChange={setIsTimerDialogOpen}>
                       <DialogTrigger asChild>
                         <Button variant="outline" size="sm">
-                          <Clock className="mr-2 h-4 w-4" /> Set Timer
+                          <Clock className="mr-2 h-4 w-4" /> {t('dream.timer.set')}
                         </Button>
                       </DialogTrigger>
                       <DialogContent className="sm:max-w-md">
                         <DialogHeader>
-                          <DialogTitle>Start/Stop Timer</DialogTitle>
-                          <DialogDescription>Adjust minutes and seconds.</DialogDescription>
+                          <DialogTitle>{t('dream.timer.dialogTitle')}</DialogTitle>
+                          <DialogDescription>{t('dream.timer.dialogDescription')}</DialogDescription>
                         </DialogHeader>
                         <div className="flex justify-center gap-4 py-4">
                           <div className="flex flex-col items-center">
-                            <span className="text-sm text-muted-foreground mb-2">Minutes</span>
+                            <span className="text-sm text-muted-foreground mb-2">{t('dream.timer.minutes')}</span>
                             <div className="flex items-center gap-2">
                               <Input type="number" min={0} max={60} value={timerMinutes} onChange={(e) => setTimerMinutes(Math.min(60, Math.max(0, parseInt(e.target.value) || 0)))} className="w-16 text-center" />
                               <div className="flex flex-col">
@@ -1249,7 +1261,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
                             </div>
                           </div>
                           <div className="flex flex-col items-center">
-                            <span className="text-sm text-muted-foreground mb-2">Seconds</span>
+                            <span className="text-sm text-muted-foreground mb-2">{t('dream.timer.seconds')}</span>
                             <div className="flex items-center gap-2">
                               <Input type="number" min={0} max={59} value={timerSeconds} onChange={(e) => setTimerSeconds(Math.min(59, Math.max(0, parseInt(e.target.value) || 0)))} className="w-16 text-center" />
                               <div className="flex flex-col">
@@ -1259,7 +1271,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
                             </div>
                           </div>
                         </div>
-                        <Button onClick={startTimerWithDuration} className="w-full">Start</Button>
+                        <Button onClick={startTimerWithDuration} className="w-full">{t('dream.timer.start')}</Button>
                       </DialogContent>
                     </Dialog>
                   )}
@@ -1269,10 +1281,10 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
                     saveBoard(newState);
                   }}>
                     {boardState.hiddenEdition ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
-                    {boardState.hiddenEdition ? 'Hidden Mode' : 'Visible Mode'}
+                    {boardState.hiddenEdition ? t('dream.hiddenMode') : t('dream.visibleMode')}
                   </Button>
                   <Button variant="destructive" size="sm" onClick={() => {
-                    if (confirm('Are you sure you want to restart the session? This will clear all cards.')) {
+                    if (confirm(t('dream.restartSessionConfirm'))) {
                       const newState = {
                         ...boardState,
                         isSessionActive: false,
@@ -1286,7 +1298,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
                       saveBoard(newState);
                     }
                   }}>
-                    <RotateCcw className="mr-2 h-4 w-4" /> Restart Session
+                    <RotateCcw className="mr-2 h-4 w-4" /> {t('dream.restartSession')}
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => {
                     const newState = { ...boardState, areCursorsVisible: !boardState.areCursorsVisible };
@@ -1296,7 +1308,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
                     window.dispatchEvent(event);
                   }}>
                     {boardState.areCursorsVisible ? <MousePointer2 className="mr-2 h-4 w-4" /> : <MousePointerClick className="mr-2 h-4 w-4 text-muted-foreground" />}
-                    {boardState.areCursorsVisible ? 'Hide Cursors' : 'Show Cursors'}
+                    {boardState.areCursorsVisible ? t('dream.hideCursors') : t('dream.showCursors')}
                   </Button>
 
                   <Button variant={boardState.showAllLinks ? "secondary" : "outline"} size="sm" onClick={() => {
@@ -1304,7 +1316,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
                     saveBoard(newState);
                   }}>
                     {boardState.showAllLinks ? <Unlink className="mr-2 h-4 w-4" /> : <Link className="mr-2 h-4 w-4" />}
-                    {boardState.showAllLinks ? 'Hide Links' : 'Show Links'}
+                    {boardState.showAllLinks ? t('dream.hideLinks') : t('dream.showLinks')}
                   </Button>
 
                   <BoardOptions
@@ -1319,20 +1331,20 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
               {!isModerator && boardState.isSessionActive && (
                 <div className="flex items-center gap-2 border-l pl-4 ml-2">
                   <div className="px-3 py-1 bg-muted rounded-full text-xs font-semibold">
-                    {boardState.votingPhase === 'VOTING' && <span className="text-green-600 flex items-center gap-1"><Play className="h-3 w-3" /> Voting Open</span>}
-                    {boardState.votingPhase === 'IDLE' && <span className="text-muted-foreground">Voting Closed</span>}
-                    {boardState.votingPhase === 'REVEALED' && <span className="text-blue-600 flex items-center gap-1"><Eye className="h-3 w-3" /> Results Revealed</span>}
+                    {boardState.votingPhase === 'VOTING' && <span className="text-green-600 flex items-center gap-1"><Play className="h-3 w-3" /> {t('dream.votingOpen')}</span>}
+                    {boardState.votingPhase === 'IDLE' && <span className="text-muted-foreground">{t('dream.votingClosed')}</span>}
+                    {boardState.votingPhase === 'REVEALED' && <span className="text-blue-600 flex items-center gap-1"><Eye className="h-3 w-3" /> {t('dream.resultsRevealed')}</span>}
                   </div>
                 </div>
               )}
 
               {boardState.moderatorId !== currentUserId && (
                 <Button size="sm" variant="outline" onClick={() => {
-                  if (confirm('Become moderator?')) {
+                  if (confirm(t('dream.becomeModeratorConfirm'))) {
                     const newState = { ...boardState, moderatorId: currentUserId };
                     saveBoard(newState);
                   }
-                }}>Become Moderator</Button>
+                }}>{t('dream.becomeModerator')}</Button>
               )}
             </>
           }
@@ -1340,18 +1352,18 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
             <>
               {isModerator && (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium mr-1">Voting:</span>
+                  <span className="text-sm font-medium mr-1">{t('dream.votingLabel')}</span>
                   <Select value={boardState.votingMode} onValueChange={(val: VotingMode) => saveBoard({ ...boardState!, votingMode: val, votingPhase: 'IDLE' as VotingPhase })} disabled={boardState.votingPhase !== 'IDLE'}>
-                    <SelectTrigger className="w-[180px] h-8"><SelectValue placeholder="Mode" /></SelectTrigger>
+                    <SelectTrigger className="w-[180px] h-8"><SelectValue placeholder={t('dream.mode')} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="THUMBS_UP">Thumbs Up</SelectItem>
-                      <SelectItem value="THUMBS_UD_NEUTRAL">Up / Down / Neutral</SelectItem>
-                      <SelectItem value="POINTS">Points Budget</SelectItem>
-                      <SelectItem value="MAJORITY_JUDGMENT">Majority Judgment</SelectItem>
+                      <SelectItem value="THUMBS_UP">{votingModeLabel(t, 'THUMBS_UP')}</SelectItem>
+                      <SelectItem value="THUMBS_UD_NEUTRAL">{votingModeLabel(t, 'THUMBS_UD_NEUTRAL')}</SelectItem>
+                      <SelectItem value="POINTS">{votingModeLabel(t, 'POINTS')}</SelectItem>
+                      <SelectItem value="MAJORITY_JUDGMENT">{votingModeLabel(t, 'MAJORITY_JUDGMENT')}</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Button size="sm" variant="outline" onClick={() => saveBoard({ ...boardState!, votingPhase: 'REVEALED' as VotingPhase })}><Eye className="h-3 w-3 mr-1" /> Reveal Votes</Button>
-                  <Button size="sm" variant="outline" className="text-destructive border-destructive/50 hover:bg-destructive/10" onClick={resetVotes}><Trash2 className="h-3 w-3 mr-1" /> Reset Votes</Button>
+                  <Button size="sm" variant="outline" onClick={() => saveBoard({ ...boardState!, votingPhase: 'REVEALED' as VotingPhase })}><Eye className="h-3 w-3 mr-1" /> {t('dream.revealAll')}</Button>
+                  <Button size="sm" variant="outline" className="text-destructive border-destructive/50 hover:bg-destructive/10" onClick={resetVotes}><Trash2 className="h-3 w-3 mr-1" /> {t('dream.resetAllVotes')}</Button>
                 </div>
               )}
               
@@ -1365,7 +1377,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
             <div className="flex items-center gap-2">
               <Link className="h-4 w-4 text-blue-600" />
               <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                Linking mode: Click on other cards to link/unlink them
+                {t('dream.linkingMode')}
               </span>
             </div>
             <Button
@@ -1374,7 +1386,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
               onClick={() => setLinkingCardId(null)}
               className="border-blue-300 text-blue-700 hover:bg-blue-200 dark:border-blue-600 dark:text-blue-300"
             >
-              <X className="h-4 w-4 mr-1" /> Cancel
+              <X className="h-4 w-4 mr-1" /> {t('common.cancel')}
             </Button>
           </div>
         )}
@@ -1428,7 +1440,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
                   size="icon"
                   className="h-6 w-6"
                   onClick={toggleTimelineExpansion}
-                  title={boardState.isTimelineExpanded ? "Collapse Timeline" : "Expand Timeline"}
+                  title={boardState.isTimelineExpanded ? t('dream.collapseTimeline') : t('dream.expandTimeline')}
                 >
                   {boardState.isTimelineExpanded ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
                 </Button>
@@ -1439,11 +1451,11 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
             const displayColumn = boardState.isTimelineExpanded && COLUMN_TO_TIMEFRAME[column.id]
               ? {
                 ...column,
-                title: TIME_FRAME_LABELS[COLUMN_TO_TIMEFRAME[column.id]],
+                 title: timeFrameLabel(t, COLUMN_TO_TIMEFRAME[column.id]),
                 isLocked: false,
                 color: '#FFFFFF'
               }
-              : column;
+              : { ...column, title: dreamColumnTitle(t, column) };
 
             const colMode = getColumnVotingMode(column.id);
             const colPhase = getColumnVotingPhase(column.id);
@@ -1474,41 +1486,41 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
                 isEditingTitle={false} // Dream headers are static for now or add logic
                 votingToolbar={isModerator ? (
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-xs font-medium whitespace-nowrap">{VOTING_MODES_LABELS[colMode]}</span>
+                    <span className="text-xs font-medium whitespace-nowrap">{votingModeLabel(t, colMode)}</span>
                     {colMode === 'POINTS' && colPhase === 'VOTING' && (
                       <span className="text-xs text-primary whitespace-nowrap">
-                        Budget: {colPointsUsed}/{colMaxPoints || 10} pts
+                        {t('dream.budget')}: {colPointsUsed}/{colMaxPoints || 10} {t('dream.pts')}
                       </span>
                     )}
                     {colPhase === 'IDLE' && (
-                      <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => startColumnVoting(column.id)}><Play className="h-3 w-3 mr-1" /> Vote</Button>
+                      <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => startColumnVoting(column.id)}><Play className="h-3 w-3 mr-1" /> {t('dream.vote')}</Button>
                     )}
                     {colPhase === 'VOTING' && (
-                      <Button size="sm" variant="secondary" className="h-6 px-2 text-xs" onClick={() => setColumnVotingPhase(column.id, 'IDLE')}><Square className="h-3 w-3 mr-1" /> Stop</Button>
+                      <Button size="sm" variant="secondary" className="h-6 px-2 text-xs" onClick={() => setColumnVotingPhase(column.id, 'IDLE')}><Square className="h-3 w-3 mr-1" /> {t('dream.stop')}</Button>
                     )}
                     {colPhase !== 'REVEALED' && (
-                      <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => setColumnVotingPhase(column.id, 'REVEALED')}><Eye className="h-3 w-3 mr-1" /> Reveal</Button>
+                      <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => setColumnVotingPhase(column.id, 'REVEALED')}><Eye className="h-3 w-3 mr-1" /> {t('dream.reveal')}</Button>
                     )}
                     {colPhase === 'REVEALED' && (
-                      <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => setColumnVotingPhase(column.id, 'IDLE')}><RotateCcw className="h-3 w-3 mr-1" /> Revote</Button>
+                      <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => setColumnVotingPhase(column.id, 'IDLE')}><RotateCcw className="h-3 w-3 mr-1" /> {t('dream.revote')}</Button>
                     )}
-                    <Button size="sm" variant="outline" className="h-6 px-2 text-xs text-destructive border-destructive/50 hover:bg-destructive/10" onClick={() => resetColumnVotes(column.id)}><Trash2 className="h-3 w-3 mr-1" /> Reset</Button>
+                    <Button size="sm" variant="outline" className="h-6 px-2 text-xs text-destructive border-destructive/50 hover:bg-destructive/10" onClick={() => resetColumnVotes(column.id)}><Trash2 className="h-3 w-3 mr-1" /> {t('dream.reset')}</Button>
                     <Select value={colMode} onValueChange={(val: VotingMode) => setColumnVotingMode(column.id, val)} disabled={colPhase !== 'IDLE'}>
-                      <SelectTrigger className="w-[100px] h-6 text-xs px-1"><SelectValue placeholder="Mode" /></SelectTrigger>
+                      <SelectTrigger className="w-[100px] h-6 text-xs px-1"><SelectValue placeholder={t('dream.mode')} /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="THUMBS_UP">Thumbs Up</SelectItem>
-                        <SelectItem value="THUMBS_UD_NEUTRAL">Up/Down</SelectItem>
-                        <SelectItem value="POINTS">Points</SelectItem>
-                        <SelectItem value="MAJORITY_JUDGMENT">MJ</SelectItem>
+                        <SelectItem value="THUMBS_UP">{votingModeLabel(t, 'THUMBS_UP')}</SelectItem>
+                        <SelectItem value="THUMBS_UD_NEUTRAL">{t('dream.upDown')}</SelectItem>
+                        <SelectItem value="POINTS">{t('dream.points')}</SelectItem>
+                        <SelectItem value="MAJORITY_JUDGMENT">{t('dream.mj')}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 ) : (
                   <div className="flex items-center gap-1">
-                    <span className="text-xs text-muted-foreground">{VOTING_MODES_LABELS[colMode]}</span>
-                    {colPhase === 'VOTING' && <span className="text-[10px] text-green-600 flex items-center gap-0.5"><Play className="h-2.5 w-2.5" />Open</span>}
-                    {colPhase === 'REVEALED' && <span className="text-[10px] text-blue-600 flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" />Revealed</span>}
-                    {colPhase === 'IDLE' && <span className="text-[10px] text-muted-foreground">Closed</span>}
+                    <span className="text-xs text-muted-foreground">{votingModeLabel(t, colMode)}</span>
+                    {colPhase === 'VOTING' && <span className="text-[10px] text-green-600 flex items-center gap-0.5"><Play className="h-2.5 w-2.5" />{t('dream.open')}</span>}
+                    {colPhase === 'REVEALED' && <span className="text-[10px] text-blue-600 flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" />{t('dream.revealed')}</span>}
+                    {colPhase === 'IDLE' && <span className="text-[10px] text-muted-foreground">{t('dream.closed')}</span>}
                   </div>
                 )}
                 renderCard={(card) => {
@@ -1520,7 +1532,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
                     onOfflineVotesChange={updateOfflineVotes}
                     showOfflineVotesPanel={boardState.showOfflineVotesPanel ?? false}
                     tags={(!boardState.isTimelineExpanded && card.columnId === 'dreams') ? [{
-                      label: TIME_FRAME_LABELS[card.timeFrame],
+                      label: timeFrameLabel(t, card.timeFrame),
                       className: (() => {
                         const colId = TIMEFRAME_TO_COLUMN[card.timeFrame];
                         if (colId === 'dreams') return "bg-white text-black border border-gray-200";

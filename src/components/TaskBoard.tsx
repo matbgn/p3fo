@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { otelProfilerCallback } from "@/telemetry";
@@ -56,6 +57,7 @@ type Column = {
 };
 
 const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: (taskId: string) => void }> = ({ focusedTaskId, onFocusOnTask }) => {
+  const { t } = useTranslation();
   const { isFocusMode } = useFocusMode();
   const [focusView, setFocusView] = React.useState<FocusBoardView>(loadViewPreference);
 
@@ -444,12 +446,12 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
     storedFilters.showSprintTarget;
 
   const viewToggle = (
-    <ToggleGroup type="single" value={focusView} onValueChange={handleFocusViewChange} aria-label="Focus Board View">
-      <ToggleGroupItem value="flow" aria-label="Flow View">
-        Flow
+    <ToggleGroup type="single" value={focusView} onValueChange={handleFocusViewChange} aria-label={t('taskboard.flowViewAria')}>
+      <ToggleGroupItem value="flow" aria-label={t('taskboard.flowViewAria')}>
+        {t('taskboard.flow')}
       </ToggleGroupItem>
-      <ToggleGroupItem value="todolist" aria-label="Todolist View">
-        Todolist
+      <ToggleGroupItem value="todolist" aria-label={t('taskboard.todolistViewAria')}>
+        {t('taskboard.todolist')}
       </ToggleGroupItem>
     </ToggleGroup>
   );
@@ -460,7 +462,7 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
     <div className="w-full h-full flex flex-col">
       {isFocusMode && (
         <FocusModeBar
-          title={focusView === 'flow' ? 'Flow View' : 'Todolist View'}
+          title={focusView === 'flow' ? t('taskboard.flowViewTitle') : t('taskboard.todolistViewTitle')}
           rightContent={viewToggle}
           hasActiveFilters={hasActiveFilters}
           filterDropdownContent={
@@ -484,15 +486,15 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
             {isFiltersCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </Button>
           <span className="text-sm font-medium text-muted-foreground cursor-pointer select-none" onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}>
-            Filters & Controls
+            {t('taskboard.filtersAndControls')}
           </span>
           {focusView === "todolist" && (
             <div className="flex items-center gap-1 ml-2">
               <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={expandAllParents}>
-                <PlusCircle className="w-3.5 h-3.5 mr-1" /> Expand All
+                <PlusCircle className="w-3.5 h-3.5 mr-1" /> {t('taskboard.expandAll')}
               </Button>
               <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={collapseAllParents}>
-                <MinusCircle className="w-3.5 h-3.5 mr-1" /> Collapse All
+                <MinusCircle className="w-3.5 h-3.5 mr-1" /> {t('taskboard.collapseAll')}
               </Button>
             </div>
           )}
@@ -574,22 +576,22 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
                     )}
                     <span>
                       {col.parentId === "search-results"
-                        ? "Results"
+                        ? t('taskboard.results')
                         : i === 0
-                          ? "Top tasks"
-                          : map[col.parentId!]?.title || "Subtasks"}
+                          ? t('taskboard.topTasks')
+                          : map[col.parentId!]?.title || t('taskboard.subtasks')}
                     </span>
                   </div>
                   <Button size="sm" variant="secondary" onClick={() => handleAdd(i, "New task")}>
                     <Printer className="h-4 w-4 mr-1" />
-                    Print
+                    {t('taskboard.print')}
                   </Button>
                 </div>
 
                 <div className="p-3 border-b shrink-0">
                   <div className="flex gap-2">
                     <Input
-                      placeholder={i === 0 ? "New top task..." : "New subtask..."}
+                      placeholder={i === 0 ? t('taskboard.placeholder.topTask') : t('taskboard.placeholder.subtask')}
                       onKeyDown={(e) => {
                         const target = e.target as HTMLInputElement;
                         if (e.key === "Enter" && target.value.trim()) {
@@ -626,7 +628,7 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
                   }}
                 >
                   {loadingFilters ? (
-                    <div className="text-xs text-muted-foreground px-2 py-6">Loading filters...</div>
+                    <div className="text-xs text-muted-foreground px-2 py-6">{t('taskboard.loadingFilters')}</div>
                   ) : (() => {
                     // Apply text search filter only if this is the search results column
                     let filteredItems = col.items;
@@ -707,7 +709,7 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
                     });
 
                     return fullyFilteredItems.length === 0 ? (
-                      <div className="text-xs text-muted-foreground px-2 py-6">No items yet.</div>
+                      <div className="text-xs text-muted-foreground px-2 py-6">{t('taskboard.noItems')}</div>
                     ) : (
                       fullyFilteredItems.map((t) => (
                         <LazyCard

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Table,
   TableBody,
@@ -31,6 +32,7 @@ const EditableCell: React.FC<{
   onSave: (val: number) => void;
   isEditable: boolean;
 }> = ({ value, onSave, isEditable }) => {
+  const { t } = useTranslation();
   const [isEditing, setIsEditing] = useState(false);
   const [tempValue, setTempValue] = useState(value.toString());
 
@@ -77,7 +79,7 @@ const EditableCell: React.FC<{
     <div
       onDoubleClick={() => setIsEditing(true)}
       className="cursor-pointer hover:bg-gray-100 p-1 rounded"
-      title="Double click to edit"
+      title={t("metrics.hourlyBalance.doubleClickToEdit")}
     >
       {value.toFixed(1)}
     </div>
@@ -85,6 +87,7 @@ const EditableCell: React.FC<{
 };
 
 const TimetableRawTable: React.FC<TimetableRawTableProps> = ({ data, onUpdate, onDelete, isRowDeletable }) => {
+  const { t } = useTranslation();
   // Helper to check if a row is the current month
   // In getHistoricalHourlyBalances, data is pushed from oldest to newest.
   // So the last element is the current month.
@@ -99,10 +102,10 @@ const TimetableRawTable: React.FC<TimetableRawTableProps> = ({ data, onUpdate, o
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[100px]">Month</TableHead>
-            <TableHead>Workload %</TableHead>
-            <TableHead>Hourly Balance</TableHead>
-            <TableHead>Hours Done</TableHead>
+            <TableHead className="w-[100px]">{t("metrics.hourlyBalance.column.month")}</TableHead>
+            <TableHead>{t("metrics.hourlyBalance.column.workload")}</TableHead>
+            <TableHead>{t("metrics.hourlyBalance.column.hourlyBalance")}</TableHead>
+            <TableHead>{t("metrics.hourlyBalance.column.hoursDone")}</TableHead>
             <TableHead className="w-[50px]"></TableHead>
           </TableRow>
         </TableHeader>
@@ -126,7 +129,7 @@ const TimetableRawTable: React.FC<TimetableRawTableProps> = ({ data, onUpdate, o
                           <Pen className="h-3 w-3 text-blue-500" />
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p>Edited by {row.modifiedBy || 'Unknown'}</p>
+                          <p>{t("metrics.hourlyBalance.editedBy", { user: row.modifiedBy || t("metrics.hourlyBalance.unknown") })}</p>
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>

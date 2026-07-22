@@ -27,6 +27,7 @@ import {
   Save,
 } from "lucide-react";
 import { getVotingStrings } from "@/lib/voting-i18n";
+import { useTranslation } from "react-i18next";
 
 
 
@@ -268,6 +269,7 @@ const ProposalEditorPanel: React.FC<{
   moderatorDisplayName: string;
 }> = ({ vote, moderatorDisplayName: _moderatorDisplayName }) => {
   const t = getVotingStrings();
+  const { t: tt } = useTranslation();
   const [proposals, setProposals] = React.useState(vote.proposals);
   const [isSaving, setIsSaving] = React.useState(false);
 
@@ -299,7 +301,7 @@ const ProposalEditorPanel: React.FC<{
         <div key={proposal.id} className="space-y-2">
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="text-xs">
-              Proposal {index + 1}
+              {tt("voting.proposalN", { n: index + 1 })}
             </Badge>
             {proposal.infoUrl && (
               <a

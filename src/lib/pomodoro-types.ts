@@ -32,6 +32,7 @@ export interface PomodoroState {
 
 export interface FocusModeConfig {
   enablePiP: boolean;
+  autoOpenPiPOnStart: boolean;
   pipWidth: number;
   pipHeight: number;
   wakeLock: boolean;
@@ -51,6 +52,7 @@ export const DEFAULT_POMODORO_CONFIG: PomodoroConfig = {
 
 export const DEFAULT_FOCUS_MODE_CONFIG: FocusModeConfig = {
   enablePiP: true,
+  autoOpenPiPOnStart: true,
   pipWidth: 320,
   pipHeight: 400,
   wakeLock: true,

@@ -1,0 +1,1641 @@
+{
+  "common": {
+    "loading": "Laden…",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "close": "Schliessen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "add": "Hinzufügen",
+    "duplicate": "Duplizieren",
+    "reset": "Zurücksetzen",
+    "confirm": "Bestätigen",
+    "unassigned": "Nicht zugewiesen",
+    "unnamed": "unbenannt",
+    "day": {
+      "monday": "Montag",
+      "sunday": "Sonntag"
+    },
+    "view": {
+      "week": "Woche",
+      "month": "Monat"
+    }
+  },
+  "notFound": {
+    "title": "404",
+    "subtitle": "Hoppla! Seite nicht gefunden",
+    "returnHome": "Zurück zur Startseite"
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "tabs": {
+      "user": "Benutzereinstellungen",
+      "workspace": "Arbeitsbereich-Einstellungen"
+    },
+    "personalPreferences": {
+      "title": "Persönliche Einstellungen",
+      "daySplitTime": "Tagesteiltzeit",
+      "setTime": "Zeit festlegen...",
+      "daySplitTimeHelp": "Legen Sie die Zeit fest, die verwendet wird, um den Tag für die Stundenplanansicht in zwei Hälften zu teilen.",
+      "userWorkloadLabel": "Benutzer-Pensum in Prozent",
+      "userWorkloadHelp": "Ihr Pensum in Prozent (Standard: 60%)",
+      "userTrigramLabel": "Benutzer-Trigramm",
+      "trigramPlaceholder": "XYZ",
+      "trigramHelp": "Ihr 3-Buchstaben-Kürzel (z.B. MAB)",
+      "startOfWeekLabel": "Wochenbeginn",
+      "startOfWeekHelp": "Wählen Sie, an welchem Tag die Woche beginnt.",
+      "defaultPlanViewLabel": "Standard-Plan-Ansicht",
+      "defaultPlanViewHelp": "Wählen Sie die Standardansicht für die Programm/Plan-Seite.",
+      "cardCompactnessLabel": "Karten-Kompaktheit",
+      "cardCompactnessHelp": "Passen Sie die Kompaktheit der Aufgabenkarten an.",
+      "preferredWorkingDaysLabel": "Bevorzugte Arbeitstage",
+      "preferredWorkingDaysHelp": "Wählen Sie die Tage, an denen Sie normalerweise arbeiten."
+    },
+    "personalLocation": {
+      "title": "Persönliche Standorteinstellungen",
+      "help": "Überschreiben Sie die Arbeitsbereich-Standards mit Ihren spezifischen Standorteinstellungen.",
+      "timezoneLabel": "Meine Zeitzone",
+      "timezonePlaceholder": "Europe/Zurich",
+      "timezoneHelp": "Ihre lokale Zeitzone (überschreibt Arbeitsbereich-Standard)"
+    },
+    "personalTemplates": {
+      "title": "Meine persönlichen Vorlagen",
+      "help": "Ihre persönlichen Vorlagen, ergänzend zu den Arbeitsbereich-Vorlagen. Nur für Sie verfügbar."
+    },
+    "workspace": {
+      "version": "Version:",
+      "taskTemplatesTitle": "Aufgabenvorlagen",
+      "taskTemplatesHelp": "Vorlagen strukturieren gängige Workflows als übergeordnete Aufgabe mit vordefinierten Unteraufgaben. Jedes Teammitglied kann Vorlagen erstellen."
+    },
+    "metricsGoals": {
+      "title": "Kennzahlenziele",
+      "weeksComputationLabel": "Wochenberechnung",
+      "weeksComputationHelp": "Anzahl Wochen zur Berechnung der Kennzahlen (Standard: 4 Wochen)",
+      "highImpactTaskGoalLabel": "Ziel für High-Impact-Aufgaben",
+      "highImpactTaskGoalHelp": "Ziel für High-Impact-Aufgaben pro VZA (Standard: 3.63)",
+      "failureRateGoalLabel": "Fehlerraten-Ziel (Vorfall bei Lieferung)",
+      "failureRateGoalHelp": "Ziel-Fehlerratenprozentsatz (Standard: 5%)",
+      "qliGoalLabel": "Ziel für Lebensqualitätsindex",
+      "qliGoalHelp": "Ziel-QLI-Score (Standard: 60%)",
+      "newCapabilitiesGoalLabel": "Ziel für neue Fähigkeiten",
+      "newCapabilitiesGoalHelp": "Zielzeit für neue Fähigkeiten (Standard: 57.98%)"
+    },
+    "timeHours": {
+      "title": "Zeit & Stunden",
+      "standardDailyHoursLabel": "Standard-Tagesstunden",
+      "standardDailyHoursHelp": "Standard-Arbeitsstunden pro Tag (Standard: 8)",
+      "vacationLimitMultiplierLabel": "Ferienlimit-Multiplikator",
+      "vacationLimitMultiplierHelp": "Multiplikator für maximales Ferienguthaben (Standard: 1.5)",
+      "hourlyBalanceUpperLabel": "Obere Stundensaldo-Grenze Multiplikator",
+      "hourlyBalanceUpperHelp": "Multiplikator für obere Stundensaldogrenze (Standard: 0.5)",
+      "hourlyBalanceLowerLabel": "Untere Stundensaldo-Grenze Multiplikator",
+      "hourlyBalanceLowerHelp": "Multiplikator für untere Stundensaldogrenze (Standard: -0.5)",
+      "timezoneLabel": "Zeitzone",
+      "timezonePlaceholder": "Europe/Zurich",
+      "timezoneHelp": "IANA-Zeitzonenkennung (Standard: Europe/Zurich)",
+      "countryLabel": "Land",
+      "countryPlaceholder": "CH",
+      "countryHelp": "Ländercode für Feiertage (Standard: CH)",
+      "regionLabel": "Region",
+      "regionPlaceholder": "BE",
+      "regionHelp": "Regionscode für Feiertage (Standard: BE)",
+      "cardAgingBaseDaysLabel": "Basis-Tage für Kartenalterung",
+      "cardAgingBaseDaysHelp": "Tage, bevor Karten Alterungseffekte zeigen. Auf 0 setzen zum Deaktivieren. (Standard: 30). Verwenden Sie Dezimalzahlen wie 0.005 für Tests (~7 Min.).",
+      "wipLimitPerUserLabel": "WIP-Limit pro Benutzer",
+      "wipLimitPerUserHelp": "Maximale WIP-Aufgaben pro Benutzer. Auf 0 setzen zum Deaktivieren. (Standard: 5). Harte Sperre — Aufgaben können nicht in WIP eintreten, wenn Kapazität erreicht.",
+      "nonActionPeriodLabel": "Nicht-Aktions-Periode (Stunden)",
+      "nonActionPeriodHelp": "Stunden Inaktivität, bevor die Stimmungsauswahl erscheint. Auf 0 setzen zum Deaktivieren. (Standard: 3)."
+    },
+    "moduleManagement": {
+      "title": "Modulverwaltung",
+      "help": "Aktivieren oder deaktivieren Sie Module, um Ihren Arbeitsbereich anzupassen. Deaktivierte Module werden in Navigation und Dach-Menü ausgeblendet."
+    },
+    "dataManagement": {
+      "title": "Datenverwaltung",
+      "help": "Exportieren, importieren oder löschen Sie alle Aufgaben- und Timerdaten der Anwendung.",
+      "clearAllButton": "Alle Daten löschen",
+      "clearAllConfirm": "Sind Sie sicher, dass Sie ALLE Anwendungsdaten löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden und entfernt alle Aufgaben, Einstellungen, Benutzer und Boards."
+    },
+    "module": {
+      "celebration": {
+        "label": "Feier",
+        "description": "Düngungs-Board für Errungenschaften und Feiern"
+      },
+      "dream": {
+        "label": "Traum",
+        "description": "Traum-Board, Storyboard und Priorisierungsansichten",
+        "dream": {
+          "label": "Traum-Board",
+          "description": "Traum-Board-Unteransicht innerhalb von Traum"
+        },
+        "storyboard": {
+          "label": "Storyboard",
+          "description": "Storyboard-Unteransicht innerhalb von Traum"
+        },
+        "prioritization": {
+          "label": "Priorisierung",
+          "description": "Priorisierungs-Unteransicht innerhalb von Traum"
+        }
+      },
+      "plan": {
+        "label": "Plan",
+        "description": "Organisatorische Kreis- und Rollen-Ansichten",
+        "circles": {
+          "label": "Kreise",
+          "description": "Organisatorische Kreise-Unteransicht innerhalb von Plan"
+        },
+        "roles": {
+          "label": "Rollen",
+          "description": "Rollen-Unteransicht innerhalb von Plan"
+        },
+        "salary": {
+          "label": "Lohnsystem",
+          "description": "Transparenter Lohnrechner-Unteransicht innerhalb von Plan"
+        }
+      },
+      "program": {
+        "label": "Programm",
+        "description": "Kalender- und Ressourcen-Planungsansichten",
+        "calendar": {
+          "label": "Kalender",
+          "description": "Kalender-Unteransicht innerhalb von Programm"
+        },
+        "resources": {
+          "label": "Ressourcen",
+          "description": "Ressourcen-Unteransicht innerhalb von Programm"
+        }
+      },
+      "kanban": {
+        "label": "Projekt",
+        "description": "Kanban-Board für Projektmanagement"
+      },
+      "focus": {
+        "label": "Fokus",
+        "description": "Fokusmodus für konzentriertes Aufgabenarbeiten"
+      },
+      "timetable": {
+        "label": "Stundenplan",
+        "description": "Zeitbasierte Ansicht für Stundenplanung"
+      },
+      "metrics": {
+        "label": "Kennzahlen",
+        "description": "Leistungskennzahlen und Dashboards"
+      },
+      "voting": {
+        "label": "Abstimmung",
+        "description": "Führen Sie Umfragen und formelle Entscheidungen mit Ihrem Publikum durch"
+      }
+    }
+  },
+  "metrics": {
+    "loading": "Kennzahlen werden geladen...",
+    "loadingFocusStats": "Fokus-Sitzungsstatistiken werden geladen...",
+    "collaborativeTitle": "Kollaborative Kennzahlen",
+    "individualTitle": "Individuelle Kennzahlen",
+    "selectUser": "Benutzer auswählen",
+    "selectUserQol": "Bitte wählen Sie einen Benutzer aus, um die Umfrage anzuzeigen",
+    "selectUserFocus": "Bitte wählen Sie einen Benutzer aus, um die Fokus-Sitzungsstatistiken anzuzeigen",
+    "graphicsPlaceholder": "Grafikinhalte für {{tab}} werden hier erscheinen",
+    "consistencyScore": {
+      "title": "Konsistenz-Score"
+    },
+    "consistencyActivity": {
+      "title": "Konsistenz-Aktivität"
+    },
+    "resetStatsButton": "Statistiken zurücksetzen",
+    "resetStatsTitle": "Fokus-Sitzungsstatistiken zurücksetzen?",
+    "resetStatsDescription": "Dadurch wird Ihr gesamter Fokus-Sitzungsverlauf dauerhaft gelöscht, einschliesslich Heatmap und Statistiken. Diese Aktion kann nicht rückgängig gemacht werden.",
+    "deleteAllSessionsButton": "Alle Sitzungen löschen",
+    "tab": {
+      "forecast": "Prognose",
+      "hourlyBalance": "Stundensaldo",
+      "vacations": "Ferien",
+      "individualQol": "Individuelle LQI",
+      "focusSessions": "Fokus-Sitzungen"
+    },
+    "card": {
+      "highImpactTitle": "High-Impact-Aufgaben erreicht / VZÄ / Woche",
+      "highImpactDescription": "Ziel: {{goal}} in {{weeks}} Wochen",
+      "failureRateTitle": "Fehlerrate / VZÄ (Incidents on Delivery)",
+      "failureRateDescription": "Ziel ≤{{goal}}% in {{weeks}} Wochen",
+      "newCapabilitiesTitle": "Zeit für High-Impact-Arbeit / VZÄ",
+      "newCapabilitiesDescription": "Ziel: {{goal}}% in {{weeks}} Wochen",
+      "qliTitle": "Team-Lebensqualitätsindex",
+      "qliLoading": "Wird geladen...",
+      "qliCalculating": "LQI-Score wird berechnet",
+      "qliError": "Fehler",
+      "qliNoData": "Keine Daten",
+      "qliNoDataDescription": "Keine LQI-Daten verfügbar",
+      "qliDescription": "Ziel: {{goal}}%"
+    },
+    "forecast": {
+      "user": "Benutzer",
+      "year": "Jahr",
+      "month": "Monat",
+      "workingDays": "Arbeitstage",
+      "selectUser": "Benutzer auswählen",
+      "hoursDone": "Stunden pro Monat erledigt",
+      "hoursDue": "Stunden pro Monat geschuldet",
+      "hoursProjected": "Stunden pro Monat prognostiziert",
+      "deltaProjected": "Stundendifferenz prognostiziert vs. geschuldet",
+      "workload": "Arbeitsbelastung",
+      "lastMonthBalance": "Stundensaldo des letzten Monats",
+      "newBalance": "Neuer Stundensaldo (Prognose)",
+      "hoursUnit": "Stunden"
+    },
+    "hourlyBalance": {
+      "addPastRecord": "+ Vergangenen Eintrag hinzufügen",
+      "loadPrevious": "Vergangene Monate laden",
+      "editedBy": "Bearbeitet von {{user}}",
+      "unknown": "Unbekannt",
+      "doubleClickToEdit": "Zum Bearbeiten doppeltklicken",
+      "column": {
+        "month": "Monat",
+        "workload": "Belastung %",
+        "hourlyBalance": "Stundensaldo",
+        "hoursDone": "Stunden erledigt"
+      },
+      "chart": {
+        "hoursDelta": "Stundendifferenz pro Monat",
+        "cumulativeBalance": "Kumulativer Stundensaldo",
+        "limit": "Grenze"
+      }
+    },
+    "vacations": {
+      "addFutureRecord": "+ Zukünftigen Eintrag hinzufügen",
+      "loadPrevious": "Vergangene Monate laden",
+      "doubleClickToEdit": "Zum Bearbeiten doppeltklicken",
+      "column": {
+        "month": "Monat",
+        "workload": "Belastung %",
+        "due": "Geschuldet [h]",
+        "taken": "Genommen [h]",
+        "balance": "Saldo [h]"
+      },
+      "chart": {
+        "limit": "Grenze",
+        "balance": "Ferien-Saldo",
+        "projected": "Ferien prognostiziert"
+      }
+    },
+    "qolSurvey": {
+      "title": "Umfrage zur Wirksamkeit der Lebensqualität",
+      "description": "Bewerten Sie Ihre Zufriedenheit mit den untenstehenden Punkten",
+      "loading": "Umfrage wird geladen...",
+      "column": {
+        "question": "Frage"
+      },
+      "question": {
+        "documentation": "Dokumentation & Zugang zu Informationen",
+        "deepWork": "Tiefenarbeit / Fokuszeit",
+        "automation": "Automatisierungsprozesse",
+        "changeConfidence": "Veränderungszuversicht (Wirkung & Effektivität)",
+        "incidentResponses": "Vorfallreaktionen",
+        "localTools": "Erfahrung mit lokalen Werkzeugen",
+        "planning": "Planungsprozesse",
+        "crossTeam": "Teamübergreifende Abhängigkeiten",
+        "easeOfDelivery": "Lieferfreundlichkeit (Schwierigkeit, Änderungen umzusetzen)",
+        "maintainability": "Wartbarkeit der gelieferten Assets"
+      },
+      "level": {
+        "noAnswer": "Keine Antwort",
+        "veryDissatisfied": "Sehr unzufrieden",
+        "dissatisfied": "Unzufrieden",
+        "neutral": "Neutral",
+        "satisfied": "Zufrieden",
+        "verySatisfied": "Sehr zufrieden"
+      },
+      "submit": "Antworten absenden",
+      "clear": "Umfrage löschen",
+      "clearConfirm": "Sind Sie sicher, dass Sie Ihre Umfrageantworten löschen möchten?",
+      "saved": "Umfrageantworten gespeichert!",
+      "saveError": "Fehler: Umfrageantworten konnten nicht gespeichert werden.",
+      "cleared": "Umfrageantworten gelöscht!",
+      "clearError": "Fehler: Umfrageantworten konnten nicht gelöscht werden."
+    }
+  },
+  "status": {
+    "backlog": "Backlog",
+    "ready": "Bereit",
+    "wip": "In Arbeit",
+    "blocked": "Blockiert",
+    "done": "Erledigt",
+    "dropped": "Verworfen",
+    "archived": "Archiviert"
+  },
+  "task": {
+    "titlePlaceholder": "Aufgabentitel",
+    "pickDate": "Datum wählen",
+    "setTime": "Zeit festlegen...",
+    "plannedDuration": "Geplante Dauer:",
+    "durationPlaceholder": "Min.",
+    "setReminder": "Erinnerung festlegen",
+    "reminder": {
+      "none": "Keine Erinnerung",
+      "onTime": "Pünktlich",
+      "15Min": "15 Min. vorher",
+      "1Hour": "1 Stunde vorher",
+      "2Hours": "2 Stunden vorher",
+      "1Day": "1 Tag vorher",
+      "1Week": "1 Woche vorher"
+    },
+    "subtasks": "Teilaufgaben",
+    "badge": {
+      "urgent": "Dringend",
+      "highImpact": "Hoher Impact",
+      "incidentOnDelivery": "Vorfall bei Lieferung",
+      "sprintTarget": "Sprint-Ziel"
+    },
+    "difficulty8Hint": "~1 Tag, erwägen Sie Aufteilung",
+    "editCommentTitle": "Kommentar bearbeiten - {{title}}",
+    "editCommentDescription": "Kommentar für Aufgabe bearbeiten: {{title}}",
+    "commentLabel": "Kommentar",
+    "commentFieldLabel": "Kommentar",
+    "commentPlaceholder": "Kommentar hinzufügen...",
+    "saveComment": "Kommentar speichern",
+    "timeSheetTitle": "Stundenblatt - {{title}}",
+    "timeSheetDescription": "Zeiteinträge für Aufgabe ansehen und bearbeiten: {{title}}",
+    "editDetails": "Aufgabendetails bearbeiten",
+    "descriptionLabel": "Beschreibung",
+    "descriptionFieldLabel": "Beschreibung",
+    "descriptionPlaceholder": "Detaillierte Beschreibung hinzufügen...",
+    "hierarchyLabel": "Aufgaben-Hierarchie",
+    "parentLabel": "Übergeordnet:",
+    "unknownParent": "Unbekannte übergeordnete Aufgabe",
+    "noParent": "Keine übergeordnete Aufgabe",
+    "current": "(Aktuell)",
+    "unknownChild": "Unbekannte Teilaufgabe",
+    "noSubtasks": "Keine Teilaufgaben",
+    "statusLabel": "Status",
+    "assignedToLabel": "Zugewiesen an",
+    "categoryLabel": "Kategorie",
+    "difficultyLabel": "Schwierigkeit",
+    "selectDifficulty": "Schwierigkeit auswählen",
+    "terminationDateLabel": "Enddatum",
+    "plannedDurationLabel": "Geplante Dauer (Min.)",
+    "urgentLabel": "Dringend",
+    "highImpactLabel": "Hoher Impact",
+    "incidentLabel": "Vorfall",
+    "sprintTargetLabel": "Sprint-Ziel",
+    "saveAndClose": "Speichern & Schliessen"
+  },
+  "taskboard": {
+    "flowViewAria": "Fluss-Ansicht",
+    "flow": "Fluss",
+    "todolistViewAria": "Todo-Listen-Ansicht",
+    "todolist": "Todo-Liste",
+    "flowViewTitle": "Fluss-Ansicht",
+    "todolistViewTitle": "Todo-Listen-Ansicht",
+    "filtersAndControls": "Filter & Steuerelemente",
+    "expandAll": "Alle aufklappen",
+    "collapseAll": "Alle einklappen",
+    "results": "Ergebnisse",
+    "topTasks": "Hauptaufgaben",
+    "subtasks": "Teilaufgaben",
+    "print": "Drucken",
+    "placeholder": {
+      "topTask": "Neue Hauptaufgabe...",
+      "subtask": "Neue Teilaufgabe..."
+    },
+    "loadingFilters": "Filter werden geladen...",
+    "noItems": "Noch keine Elemente."
+  },
+  "kanban": {
+    "wipHeader": "In Arbeit [MAX {{n}}/p]",
+    "archiveAllTitle": "Alle {{n}} Karten in {{title}} archivieren",
+    "archiveCount": "Archivieren ({{n}})",
+    "noTasks": "Keine Aufgaben",
+    "subtasksOf": "Teilaufgaben von: {{title}}",
+    "filtersAndControls": "Filter & Steuerelemente",
+    "boardTitle": "Kanban-Board",
+    "loadingFilters": "Filter werden geladen...",
+    "applyingFilters": "Filter werden angewendet...",
+    "loadingTasks": "Aufgaben werden geladen...",
+    "archiveDialogTitle": "Aufgaben archivieren",
+    "archiveDialogDescription": "Alle Aufgaben aus der Spalte {{column}} archivieren.",
+    "archiveCountDescription": "Dies wird {{n}} Aufgaben archivieren.",
+    "archiveOldOnly": "Nur Karten archivieren, die älter als {{n}} Wochen sind",
+    "archive": "Archivieren",
+    "column": {
+      "Backlog": "Backlog",
+      "Ready": "Bereit",
+      "WIP": "In Arbeit",
+      "Blocked": "Blockiert",
+      "Done": "Erledigt",
+      "Dropped": "Verworfen",
+      "Archived": "Archiviert"
+    }
+  },
+  "filters": {
+    "searchPlaceholder": "Aufgaben suchen...",
+    "urgent": "Dringend",
+    "highImpact": "Hoher Impact",
+    "incidentOnDelivery": "Vorfall bei Lieferung",
+    "sprintTarget": "Sprint-Ziel",
+    "status": "Status:",
+    "statusPlaceholder": "Status auswählen...",
+    "done": "Erledigt",
+    "difficulty": "Schwierigkeit:",
+    "difficultyPlaceholder": "Schwierigkeit auswählen...",
+    "category": "Kategorie:",
+    "uncategorized": "Nicht kategorisiert",
+    "categoryPlaceholder": "Kategorie auswählen...",
+    "clearAll": "Alle Filter löschen"
+  },
+  "quickadd": {
+    "placeholder": "Schnell Hauptaufgabe hinzufügen...",
+    "noTasksTitle": "Keine Aufgaben zu importieren",
+    "noTasksDescription": "Fügen Sie einen Aufgabentitel pro Zeile ein.",
+    "batchCompleteTitle": "Stapelimport abgeschlossen",
+    "batchCompleteDescription": "{{n}} Aufgabe(n) importiert.",
+    "batchErrorTitle": "Fehler beim Stapelimport",
+    "batchErrorDescription": "Einige Aufgaben wurden möglicherweise nicht importiert.",
+    "diffAppliedTitle": "Diff-Import angewendet",
+    "diffAppliedDescription": "{{created}} erstellt, {{updated}} aktualisiert.",
+    "diffErrorTitle": "Fehler beim Diff-Import",
+    "diffErrorDescription": "Einige Änderungen wurden möglicherweise nicht angewendet.",
+    "add": "Hinzufügen",
+    "fromTemplate": "Aus Vorlage erstellen",
+    "workspaceTemplates": "Arbeitsbereich-Vorlagen",
+    "nSteps": "{{n}} Schritte",
+    "myTemplates": "Meine Vorlagen",
+    "importTasks": "Aufgaben importieren",
+    "batchImport": "Stapelimport",
+    "diffImport": "Diff-Import",
+    "batchDialogTitle": "Stapelimport von Aufgaben",
+    "batchDialogDescription": "Fügen Sie einen Aufgabentitel pro Zeile ein. Jede nicht-leere Zeile wird als separate Aufgabe erstellt.",
+    "batchPlaceholder": "Aufgabentitel eins\nAufgabentitel zwei\nAufgabentitel drei",
+    "importing": "Importiere...",
+    "import": "Importieren"
+  },
+  "userManagement": {
+    "deleteConfirm": "Sind Sie sicher, dass Sie Benutzer \"{{name}}\" löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
+    "deleteFailed": "Benutzer konnte nicht gelöscht werden. Bitte versuchen Sie es erneut.",
+    "workloadInvalid": "Pensum muss eine Zahl zwischen 0 und 100 sein",
+    "workloadUpdateFailed": "Pensum konnte nicht aktualisiert werden. Bitte versuchen Sie es erneut.",
+    "loading": "Benutzer werden geladen...",
+    "title": "Benutzerverwaltung",
+    "help": "Verwalten Sie Benutzer, die im Anwendungskontext gespeichert sind. Sie können Benutzer ohne zugewiesene Aufgaben löschen.",
+    "colUser": "Benutzer",
+    "colTrigram": "Trigramm",
+    "colWorkload": "Pensum",
+    "colUserId": "Benutzer-ID",
+    "colAssignedTasks": "Zugewiesene Aufgaben",
+    "colActions": "Aktionen",
+    "noUsers": "Keine Benutzer gefunden.",
+    "doubleClickEdit": "Doppelklick zum Bearbeiten",
+    "noTrigram": "???",
+    "deleteUser": "Benutzer löschen",
+    "cannotDelete": "Löschen nicht möglich"
+  },
+  "template": {
+    "defaultStep": "Neuer Schritt",
+    "nameLabel": "Vorlagenname",
+    "namePlaceholder": "z.B. Deployment-Checkliste",
+    "parentTitleLabel": "Übergeordneter Aufgabentitel",
+    "parentTitlePlaceholder": "z.B. Release",
+    "add": "Vorlage hinzufügen",
+    "empty": "Noch keine Vorlagen. Erstellen Sie oben eine, um gängige Workflows als übergeordnete Aufgabe mit vordefinierten Unteraufgaben zu strukturieren.",
+    "nSteps": "{{n}} Schritte",
+    "difficulty": "Schwierigkeit",
+    "addStep": "Schritt hinzufügen"
+  },
+  "data": {
+    "exporting": "Exportiere...",
+    "export": "Daten exportieren"
+  },
+  "dataImport": {
+    "button": "Daten importieren",
+    "successTitle": "Daten erfolgreich importiert!",
+    "successDescription": "Die Seite wird neu geladen, um die importierten Daten anzuwenden.",
+    "errorTitle": "Fehler beim Datenimport",
+    "unsupportedSchemaTitle": "Nicht unterstützte Schema-Version",
+    "unsupportedSchemaDescription": "Schema-Version {{v}} ist neuer als die unterstützte Version {{max}}. Bitte aktualisieren Sie die Anwendung.",
+    "networkError": "Netzwerkfehler — Backend-Server konnte nicht erreicht werden.",
+    "unknownError": "Unbekannter Fehler. Siehe Browser-Konsole für Details.",
+    "error": {
+      "400": "Ungültige Anfrage — der Server hat die Datenstruktur abgelehnt.",
+      "401": "Nicht autorisiert — bitte neu authentifizieren.",
+      "403": "Verboten — Ihr Konto kann diesen Import nicht durchführen.",
+      "404": "Nicht gefunden — ein API-Endpunkt fehlt.",
+      "500": "Serverfehler beim Speichern — Serverprotokolle prüfen."
+    }
+  },
+  "pomodoro": {
+    "settings": {
+      "title": "Pomodoro-Timer",
+      "enable": "Pomodoro aktivieren",
+      "enableHelp": "Aktivieren Sie den Pomodoro-Timer mit Arbeits-/Pausenzyklen.",
+      "workDuration": "Arbeitsdauer: {{n}} Min.",
+      "workDurationHelp": "Dauer jeder Arbeitsperiode (1–60 Min., Standard: 25 Min.)",
+      "breakDuration": "Pausendauer: {{n}} Min.",
+      "breakDurationHelp": "Kurze Pause zwischen Arbeitsperioden (1–15 Min., Standard: 5 Min.)",
+      "longBreakDuration": "Lange Pausendauer: {{n}} Min.",
+      "longBreakHelp": "Pause nach Abschluss eines vollständigen Zyklussets (5–30 Min., Standard: 15 Min.)",
+      "cyclesBeforeLongBreak": "Zyklen vor langer Pause",
+      "cyclesHelp": "Anzahl Arbeitsperioden vor einer langen Pause (1–10, Standard: 4)"
+    }
+  },
+  "focusMode": {
+    "pipSize": {
+      "tiny": "Winzig (200×100)",
+      "small": "Klein (240×140)",
+      "medium": "Mittel (260×240)",
+      "normal": "Normal (320×400)"
+    },
+    "settings": {
+      "title": "Fokusmodus",
+      "autoStartBreak": "Pause automatisch starten",
+      "autoStartBreakHelp": "Startet die Pause automatisch nach Ende der Arbeitsperiode.",
+      "autoStartWork": "Arbeit automatisch starten",
+      "autoStartWorkHelp": "Startet automatisch die nächste Arbeitsperiode nach Ende der Pause.",
+      "enablePiP": "Bild-in-Bild aktivieren",
+      "enablePiPHelp": "Zeigt ein immer-im-Vordergrund-Timerfenster während Pomodoro-Sitzungen.",
+      "autoOpenPiP": "PiP beim Start automatisch öffnen",
+      "autoOpenPiPHelp": "Öffnet automatisch das PiP-Fenster beim Beginn einer Pomodoro-Sitzung.",
+      "pipSize": "PiP-Fenstergrösse",
+      "pipSizeHelp": "Grösse des immer-im-Vordergrund-Timerfensters.",
+      "showFocusOverlay": "Fokus-Overlay anzeigen",
+      "showFocusOverlayHelp": "Zeigt ein Vollbild-Timer-Overlay im Hauptfenster während Pomodoro-Sitzungen (statt PiP).",
+      "wakeLock": "Bildschirm-Energiesparen verhindern",
+      "wakeLockHelp": "Hält den Bildschirm während Pomodoro-Sitzungen wach via Wake Lock API.",
+      "soundNotifications": "Ton-Benachrichtigungen",
+      "soundNotificationsHelp": "Spielt einen Ton bei Pomodoro-Phasenübergängen."
+    }
+  },
+  "traveler": {
+    "settings": {
+      "title": "Reisenden-Timer",
+      "enable": "Reisenden aktivieren",
+      "enableHelp": "Arbeiten Sie basierend auf der Flugdauer zwischen zwei Städten.",
+      "dataBy": "Flugdauerdaten bereitgestellt von",
+      "transitous": "Transitous"
+    }
+  },
+  "userSection": {
+    "noTrigram": "???",
+    "clickToEdit": "Klicken Sie, um Ihr Profil zu bearbeiten",
+    "trigram": "Trigramm:",
+    "switchUuid": "UUID wechseln",
+    "switchUuidHelp": "Geben Sie eine andere UUID ein, um deren Arbeitsbereich zu übernehmen",
+    "uploadLogo": "Logo hochladen",
+    "editUsername": "Benutzername bearbeiten",
+    "generateName": "Neuen Namen generieren",
+    "changeUuid": "UUID ändern",
+    "namePlaceholder": "Namen eingeben",
+    "trigramPlaceholder": "TRG",
+    "recomputeHelp": "Trigramm neu berechnen oder direkt bearbeiten, dann speichern",
+    "enterToSave": "Enter zum Speichern oder Esc zum Abbrechen",
+    "recomputeTrigram": "Trigramm neu berechnen",
+    "uuidPlaceholder": "Neue UUID eingeben",
+    "switchWarning": "Sie haben {{n}} Aufgabe(n). UUID-Wechsel verwirft Ihren aktuellen Arbeitsbereich zugunsten der Ziel-UUID.",
+    "switch": "Wechseln",
+    "removeLogo": "Logo entfernen"
+  },
+  "salary": {
+    "loading": "Laden…",
+    "loadError": "Lohnsystem konnte nicht geladen werden.",
+    "defaults": {
+      "systemLabel": "Transparentes Lohnsystem",
+      "simulationName": "Simulation"
+    },
+    "config": {
+      "indexHourlyWage": "Referenz-Stundenlohn",
+      "hoursPerWeek": "Stunden pro Woche",
+      "weeksPerMonth": "Wochen pro Monat",
+      "seniorityIncrease": "Dienstaltersteigerung / Jahr",
+      "seniorityIncreaseHelp": "z.B. 0.01 = 1% pro Jahr (kumuliert)",
+      "ageIncrease": "Steigerung pro Altersklasse",
+      "ageIncreaseHelp": "z.B. 0.05 = 5% (kumuliert)",
+      "ageBrackets": "Altersklassen",
+      "ageBracketsPlaceholder": "25, 35, 45, 55, 65",
+      "socialChargesRate": "Sozialabgaben-Satz",
+      "socialChargesHelp": "z.B. 0.1202 = 12.02% (vom Netto abgezogen)",
+      "expenseFactor": "Kostenfaktor (expense factor)",
+      "expenseFactorHelp": "z.B. 1.95 entspricht 195% der jährlichen Brutto-Löhne (deckt arbeitgeberseitige Sozialversicherungen, Infrastruktur, Gemeinkosten, etc. ab).",
+      "expenseFactorNote": "Generell machen Gemeinkosten 180%–220% des Brutto-Lohns aus.",
+      "roundingStep": "Runden auf Vielfache von",
+      "currency": "Währung",
+      "hoursPerDay": "Stunden pro Tag",
+      "daysPerWeek": "Tage pro Woche",
+      "include13th": "13. Monatslohn",
+      "salaries13": "13 Löhne",
+      "salaries12": "12 Löhne",
+      "dialogTitle": "Systemeinstellungen",
+      "dialogDescription": "Lohnberechnungsvariablen. Passen Sie diese an den Kunden an."
+    },
+    "dimension": {
+      "expertise": {
+        "name": "Expertise",
+        "levelDescription": {
+          "0": "Keine Expertise in der Hauptfunktion. Lehrling oder radikaler Karrierewechsel.",
+          "1": "Grundkenntnisse, Anfänger. Fähig, unter Aufsicht zu arbeiten.",
+          "2": "Beherrschung der Hauptrolle, autonom. Gute Fähigkeit, Know-how des Teams zu erwerben.",
+          "3": "Referenzperson (Expert/in) in einem oder mehreren Bereichen. Informationsquelle für Kollegen.",
+          "4": "Pionier/in, der/die Forschung leitet, Proof of Concepts entwickelt und neues Wissen einbringt.",
+          "5": "Beherrschung der gesamten Architektur. Aussergewöhnliche, anerkannte Expertise in der Organisation.",
+          "6": "Schafft neue Organisationsmodelle und -werkzeuge, die weitgehend von Teams inner- oder ausserhalb des Unternehmens verwendet werden. Anerkannte Referenz im Bereich."
+        }
+      },
+      "impact": {
+        "name": "Impact",
+        "levelDescription": {
+          "0": "Mobilisiert mehr Ressourcen als Ergebnisse. In Ausbildung, benötigt Unterstützung.",
+          "1": "Begrenzter Impact, hauptsächlich individuell.",
+          "2": "Gelegentlicher Impact auf Kollegen oder andere Subsysteme.",
+          "3": "Säule des Teams, Impact auf den gesamten Kreis.",
+          "4": "Impact auf andere Bereiche der Organisation erweitert. Quer-einflussreiche/r.",
+          "5": "Unleugbarer Impact auf das gesamte Unternehmen kurzfristig.",
+          "6": "Langfristiger Impact und erweiterte Reichweite. Vertritt die Organisation nach aussen."
+        }
+      }
+    },
+    "dimensions": {
+      "dialogTitle": "Lohn-Determinanten",
+      "dialogDescription": "Fügen Sie hinzu, benennen Sie um oder konfigurieren Sie jede Dimension (Expertise, Impact, Situation, Verantwortung, …)."
+    },
+    "employee": {
+      "editTitle": "Mitarbeitende bearbeiten",
+      "addTitle": "Mitarbeitende hinzufügen",
+      "dialogDescription": "Determinanten bestimmen den Lohn über die transparente Formel.",
+      "name": "Name",
+      "workload": "Pensum (%)",
+      "age": "Alter",
+      "seniority": "Dienstalter (Jahre)",
+      "employerAdjustments": "Arbeitgeber-Zuschläge",
+      "defaultAdjustmentLabel": "Arbeitgeber-Zuschlag",
+      "addAdjustment": "Hinzufügen",
+      "adjustmentLabelPlaceholder": "Bezeichnung",
+      "comment": "Kommentar",
+      "determinants": "Determinanten",
+      "levelN": "Stufe {{i}}",
+      "unnamed": "unbenannt",
+      "linkedUserComment": "Verknüpft mit Benutzer/in {{name}}"
+    },
+    "frequency": {
+      "monthly": "Monatlich",
+      "semesterly": "Semesterlich",
+      "annually": "Jährlich"
+    },
+    "action": {
+      "cancel": "Abbrechen",
+      "save": "Speichern",
+      "settings": "Einstellungen",
+      "close": "Schliessen",
+      "dimensions": "Determinanten",
+      "linkUsers": "Mit Benutzer/innen verknüpfen",
+      "allColumns": "Alle Spalten",
+      "compactView": "Kompaktansicht",
+      "addEmployee": "Mitarbeitende",
+      "edit": "Bearbeiten",
+      "duplicate": "Duplizieren",
+      "include": "Einschliessen",
+      "exclude": "Von Simulation ausschliessen"
+    },
+    "metric": {
+      "headcount": "Köpfe",
+      "fte": "VZA",
+      "grossMonthly": "Brutto monatlich",
+      "grossAnnual": "Brutto jährlich",
+      "netApprox": "Netto ~",
+      "employerCostAnnual": "Arbeitgeberkosten / Jahr",
+      "hourlyRate": "Stundenlohn CHF/h",
+      "grossMonthly100": "Brutto monatlich bei 100%",
+      "grossAnnual100": "Brutto jährlich bei 100%",
+      "grossMonthly13": "Brutto monatlich (m. 13.)",
+      "grossMonthly13Adj": "Brutto monatlich (m. 13. & Zuschl.)"
+    },
+    "table": {
+      "name": "Name",
+      "workload": "Pensum (%)",
+      "age": "Alter",
+      "seniority": "Dienstalter",
+      "hourlyRate": "Stundenlohn CHF/h",
+      "grossMonthly100": "Brutto monatlich bei 100%",
+      "grossAnnual100": "Brutto jährlich bei 100%",
+      "adjustmentsMonthly": "Monatliche Zuschläge",
+      "grossMonthly": "Brutto monatlich",
+      "grossMonthly13": "Brutto monatlich (m. 13.)",
+      "grossMonthly13Adj": "Brutto monatlich (m. 13. & Zuschl.)",
+      "grossAnnualAdj": "Brutto jährlich (inkl. Zuschl.)",
+      "net": "Netto ~",
+      "empty": "Keine Mitarbeitenden. Klicken Sie auf \"Mitarbeitende\", um eine/n hinzuzufügen.",
+      "totals": "Total ({{n}} VZA)"
+    },
+    "employees": {
+      "title": "Mitarbeitende"
+    },
+    "tab": {
+      "budget": "Budget",
+      "simulator": "Einzel-Simulator",
+      "teamSimulator": "Team-Simulator",
+      "hourlyRate": "Stundenlohn"
+    },
+    "legend": {
+      "title": "Legende",
+      "base": "<strong>Monatliche Basis</strong> = Referenz-Stundenlohn × Stunden pro Woche × Wochen pro Monat",
+      "determinants": "<strong>+ Determinanten</strong> = Summe von (Stufe × Wert pro Stufe) für jede lohnbeeinflussende Dimension",
+      "gross100": "<strong>Brutto-Lohn bei 100%</strong> = (Basis + Determinanten) × (1 + Dienstaltersteigerung)^Jahre × (1 + Alterssteigerung)^erreichte Altersklassen",
+      "grossAnnual100": "<strong>Jahres-Brutto-Lohn bei 100%</strong> = Brutto-Lohn bei 100% × 12",
+      "hourly": "<strong>Stundenlohn</strong> = Brutto-Lohn bei 100% ÷ (21 Tage × 8 Stunden × 5)",
+      "monthlyWith13": "<strong>Monatslohn mit 13.</strong> = Brutto-Lohn bei 100% × Pensum",
+      "annualGross": "<strong>Jahres-Brutto-Lohn</strong> = Monatslohn mit 13. × 12",
+      "monthly": "<strong>Monatslohn</strong> = Monatslohn mit 13. ÷ 13 × 12 + monatliche Zuschläge",
+      "net": "<strong>Netto ~</strong> = (Monatslohn mit 13. + Zuschläge) × (1 − Sozialabgaben)",
+      "employerCost": "<strong>Arbeitgeberkosten</strong> = Jahres-Brutto-Lohn × Kostenfaktor",
+      "budgetBalance": "<strong>Budget — Saldo</strong> = Einnahmen − Kosten − Brutto-Löhne",
+      "chargesIntro": "<strong>Kosten</strong> — zwei exklusive Modi pro Szenario:",
+      "manualMode": "• <strong>Manueller Betrag</strong>: Gemeinkosten werden direkt erfasst (Miete, Versicherungen, Material, etc.). Kosten = Gemeinkosten + Reserve.",
+      "expenseFactorMode": "• <strong>Kostenfaktor</strong>: Kosten = (Jahres-Brutto-Lohn × Faktor) + Reserve. Der Standardfaktor ist pro Szenario überschreibbar."
+    },
+    "budget": {
+      "defaultScenarioName": "Neues Szenario",
+      "scenarioCopy": "{{name}} (Kopie)",
+      "title": "Budget — verfügbare Lohnmasse",
+      "addScenario": "Szenario",
+      "empty": "Kein Szenario. Klicken Sie auf \"Szenario\", um min/intermediate/max hinzuzufügen.",
+      "duplicate": "Szenario duplizieren",
+      "revenues": "Einnahmen / Jahr",
+      "chargesMode": "Gemeinkosten — Berechnungsmodus",
+      "manualMode": "Manueller Betrag",
+      "expenseFactorMode": "Kostenfaktor",
+      "expenseFactorLabel": "Kostenfaktor (Standard: {{n}})",
+      "expenseFactorNote": "Generell machen Gemeinkosten 180%–220% des Brutto-Lohns aus.",
+      "charges": "Gemeinkosten / Jahr",
+      "reserve": "Reserve / Jahr",
+      "grossSalaries": "Brutto-Löhne",
+      "overheadPortion": "davon Gemeinkosten (× {{n}})",
+      "overheadPortionShort": "davon Gemeinkosten",
+      "reservePortion": "davon Reserve",
+      "totalCost": "Gesamtkosten",
+      "surplus": "Überschuss",
+      "deficit": "Defizit",
+      "scenario": "Szenario",
+      "balance": "Saldo"
+    },
+    "scenario": {
+      "minName": "Min (min Einnahmen − max Kosten)",
+      "intermediateName": "Intermediate",
+      "maxName": "Max (max Einnahmen − min Kosten)"
+    },
+    "simulator": {
+      "title": "Einzel-Simulator",
+      "workload": "Pensum (%)",
+      "age": "Alter",
+      "seniority": "Dienstalter (Jahre)",
+      "projectionYears": "Projektionshorizont (Jahre)",
+      "determinants": "Determinanten",
+      "levelN": "Stufe {{i}}",
+      "adjustments": "Arbeitgeber-Zuschläge",
+      "addAdjustment": "Hinzufügen",
+      "adjustmentPlaceholder": "Bezeichnung",
+      "projectionTitle": "Projektion über {{n}} Jahre"
+    },
+    "projection": {
+      "year": "Jahr",
+      "age": "Alter",
+      "seniority": "Dienstalter",
+      "hourlyRate": "Stundenlohn CHF/h",
+      "grossMonthly100": "Brutto monatlich bei 100%",
+      "grossAnnual100": "Brutto jährlich bei 100%",
+      "grossMonthly": "Brutto monatlich",
+      "grossMonthly13": "Brutto monatlich (m. 13.)",
+      "grossMonthly13Adj": "Brutto monatlich (m. 13. & Zuschl.)",
+      "grossAnnualAdj": "Brutto jährlich (inkl. Zuschl.)",
+      "net": "Netto ~",
+      "employerCostAnnual": "Arbeitgeberkosten / Jahr",
+      "ageBrackets": "Altersklassen"
+    },
+    "teamSimulator": {
+      "title": "Team-Simulator",
+      "reset": "Zurücksetzen",
+      "help": "Ändern Sie die Parameter unten, um die Auswirkungen auf Lohnmasse und Budget zu simulieren. Diese Änderungen sind temporär und werden nicht gespeichert.",
+      "indexHourlyWage": "Referenz-Stundenlohn",
+      "hoursPerWeek": "Stunden pro Woche",
+      "seniorityIncrease": "Dienstaltersteigerung / Jahr",
+      "ageIncrease": "Steigerung pro Altersklasse",
+      "socialCharges": "Sozialabgaben-Satz",
+      "expenseFactor": "Kostenfaktor",
+      "dimensionSteps": "Wert pro Stufe (Determinanten)",
+      "chfPerLevel": "CHF/Stufe",
+      "staff": "Simuliertes Personal",
+      "add": "Hinzufügen",
+      "empty": "Keine Mitarbeitenden in der Simulation.",
+      "budgetImpact": "Auswirkungen auf Budget-Szenarien",
+      "grossMonthly": "Brutto-Monatslohn",
+      "grossAnnual": "Brutto-Jahreslohn"
+    },
+    "hourlyRate": {
+      "toastTitle": "Neuer Stundenlohn gespeichert",
+      "toastDescription": "Die Stundenlohn-Parameter wurden gespeichert.",
+      "title": "Stundenlohn",
+      "save": "Speichern",
+      "help": "Simuliert den verrechenbaren Stundenlohn basierend auf einem typischen Profil (alle Determinanten standardmässig auf Maximum), mit Dienstalter und projizierten Altersklassen.",
+      "determinants": "Profil-Determinanten",
+      "levelN": "Stufe {{i}}",
+      "seniorityYears": "Projiziertes Dienstalter (Jahre)",
+      "personaAge": "Persona-Alter",
+      "riskBenefit": "Risiken & Nutzen (Standard: 0.3 = 30%)",
+      "reducedRateMultiplier": "Reduzierter Tarif-Multiplikator (Standard: 0.5 = 50%)",
+      "projectedGross": "Projizierter Brutto-Lohn bei 100%",
+      "clientRate": "Kunden-Stundenlohn (inkl. R&B)",
+      "reducedRate": "Reduzierter Tarif"
+    }
+  },
+  "voting": {
+    "openPublicPage": "Öffentliche Seite öffnen",
+    "delete": "Löschen",
+    "share": "Teilen",
+    "edit": "Bearbeiten",
+    "back": "← Zurück",
+    "proposalN": "Vorschlag {{n}}",
+    "proposalNColon": "Vorschlag {{n}}:",
+    "editableBeforeRound": "Vor Rundenstart bearbeitbar",
+    "clear": "Löschen",
+    "createLinkedDescription": "Konsultations-Abstimmung verknüpft mit „{{title}}“ erstellen",
+    "createLinkedAutoTitle": "Aufgabe – {{title}} – Abstimmung",
+    "createLinkedDefaultProposal": "<p>Vorschlag 1</p>",
+    "openModerationView": "Moderationsansicht öffnen",
+    "finalizeSummaryProposal": "Vorschlag {{n}} als Entscheid ausgewählt.",
+    "finalizeSummaryGeneric": "Vorschlag als Entscheid ausgewählt.",
+    "finalizeSummaryTie": "Gleichstand — kein Ergebnis erreicht.",
+    "placeholders": {
+      "refineNextRound": "Vorschlagstext für die nächste Runde bearbeiten..."
+    },
+    "newPrefix": "Neu",
+    "finalizedPrefix": "Abgeschlossen",
+    "closesPrefix": "Schliesst",
+    "no": "Nein",
+    "neutral": "Neutral",
+    "yes": "Ja",
+    "previousRounds": "vorherige Runden",
+    "nClosed": " ({{n}} geschlossen)",
+    "totalBudget": "Gesamtbudget:",
+    "anonymous": "Anonym",
+    "mjGrade": {
+      "reject": "Ablehnen",
+      "insufficient": "Ungenügend",
+      "passable": "Genügend",
+      "acceptable": "Akzeptabel",
+      "good": "Gut",
+      "excellent": "Ausgezeichnet"
+    },
+    "mode": {
+      "thumbsUp": "Daumen hoch",
+      "thumbsUdNeutral": "Hoch / Runter / Neutral",
+      "points": "Punkte-Budget",
+      "majorityJudgment": "Major Judgment",
+      "consentLoop": "Zustimmungs-Schleife"
+    }
+  },
+  "fertilization": {
+    "title": "Düngungstafel",
+    "noModerator": "Kein aktiver Moderator. Starten Sie eine Sitzung, um Moderator zu werden.",
+    "startSession": "Sitzung starten",
+    "becomeModerator": "Moderator werden",
+    "hiddenMode": "Versteckter Modus",
+    "visibleMode": "Sichtbarer Modus",
+    "restartSession": "Sitzung neu starten",
+    "hideCursors": "Cursor ausblenden",
+    "showCursors": "Cursor anzeigen",
+    "hideLinks": "Verbindungen ausblenden",
+    "showLinks": "Verbindungen anzeigen",
+    "votingOpen": "Abstimmung offen",
+    "votingClosed": "Abstimmung geschlossen",
+    "resultsRevealed": "Ergebnisse enthüllt",
+    "defaultVoting": "Standard-Abstimmung",
+    "mode": "Modus",
+    "revealAll": "Alle enthüllen",
+    "resetAllVotes": "Alle Stimmen zurücksetzen",
+    "linkingMode": "Verbindungsmodus: Klicken Sie auf andere Karten, um sie zu verknüpfen/trennen",
+    "noVotesCastYet": "Noch keine Stimmen abgegeben.",
+    "resetColumnVotesConfirm": "Sind Sie sicher, dass Sie alle Stimmen in der Spalte \"{{column}}\" zurücksetzen möchten? Dies löscht jede Stimme in dieser Spalte, behält aber alle Karten.",
+    "budget": "Budget",
+    "pts": "Pkt",
+    "vote": "Abstimmen",
+    "stop": "Stopp",
+    "reveal": "Enthüllen",
+    "revote": "Neu abstimmen",
+    "reset": "Zurücksetzen",
+    "open": "Offen",
+    "revealed": "Enthüllt",
+    "closed": "Geschlossen",
+    "upDown": "Auf/Ab",
+    "points": "Punkte",
+    "mj": "MJ",
+    "promote": {
+      "title": "Zum Kanban befördern",
+      "description": "Dies erstellt eine neue Aufgabe im Kanban-Board mit dem Inhalt dieser Karte.",
+      "confirm": "Befördern"
+    },
+    "pointsConfig": {
+      "title": "Punktebudget konfigurieren",
+      "maxPoints": "Max. Punkte:",
+      "start": "Punkte-Abstimmung starten"
+    },
+    "mjConfig": {
+      "title": "Mehrheitsurteil-Etiketten konfigurieren",
+      "labelPlaceholder": "Etikett für Grad {{n}}",
+      "saveAndStart": "Speichern & MJ-Abstimmung starten"
+    },
+    "timer": {
+      "stop": "Timer stoppen",
+      "set": "Timer einstellen",
+      "dialogTitle": "Timer starten/stoppen",
+      "dialogDescription": "Minuten und Sekunden anpassen.",
+      "minutes": "Minuten",
+      "seconds": "Sekunden",
+      "start": "Starten"
+    },
+    "column": {
+      "facts": "Fakten",
+      "satisfactions": "Zufriedenheiten",
+      "discomfort": "Unbehagen",
+      "levers": "Hebel",
+      "priorities": "Prioritäten"
+    },
+    "factTag": {
+      "A": "Erreicht",
+      "N": "Nicht erreicht",
+      "K": "Kennzahlen",
+      "P": "Geplant"
+    }
+  },
+  "dream": {
+    "title": "Traumtafel",
+    "noModerator": "Kein aktiver Moderator. Starten Sie eine Sitzung, um Moderator zu werden.",
+    "startSession": "Sitzung starten",
+    "becomeModerator": "Moderator werden",
+    "becomeModeratorConfirm": "Moderator werden?",
+    "hiddenMode": "Versteckter Modus",
+    "visibleMode": "Sichtbarer Modus",
+    "restartSession": "Sitzung neu starten",
+    "restartSessionConfirm": "Möchten Sie die Sitzung wirklich neu starten? Dies löscht alle Karten.",
+    "hideCursors": "Cursor ausblenden",
+    "showCursors": "Cursor anzeigen",
+    "hideLinks": "Verbindungen ausblenden",
+    "showLinks": "Verbindungen anzeigen",
+    "votingOpen": "Abstimmung offen",
+    "votingClosed": "Abstimmung geschlossen",
+    "resultsRevealed": "Ergebnisse enthüllt",
+    "defaultVoting": "Standard-Abstimmung",
+    "votingLabel": "Abstimmung:",
+    "mode": "Modus",
+    "revealAll": "Alle enthüllen",
+    "revealVotes": "Stimmen enthüllen",
+    "resetAllVotes": "Alle Stimmen zurücksetzen",
+    "resetAllVotesConfirm": "Möchten Sie wirklich alle Stimmen zurücksetzen? Dies löscht jede Stimme, behält aber alle Karten.",
+    "resetColumnVotesConfirm": "Möchten Sie wirklich alle Stimmen in der Spalte „{{column}}“ zurücksetzen? Dies löscht jede Stimme in dieser Spalte, behält aber alle Karten.",
+    "linkingMode": "Verbindungsmodus: Klicken Sie auf andere Karten, um sie zu verknüpfen/trennen",
+    "noVotesCastYet": "Noch keine Stimmen abgegeben.",
+    "medianGrade": "Median-Note:",
+    "votesCount": "({{n}} Stimmen)",
+    "budget": "Budget",
+    "pts": "Pkt",
+    "vote": "Abstimmen",
+    "stop": "Stopp",
+    "reveal": "Enthüllen",
+    "revote": "Neu abstimmen",
+    "reset": "Zurücksetzen",
+    "open": "Offen",
+    "revealed": "Enthüllt",
+    "closed": "Geschlossen",
+    "upDown": "Auf/Ab",
+    "points": "Punkte",
+    "mj": "MJ",
+    "expandTimeline": "Zeitleiste ausklappen",
+    "collapseTimeline": "Zeitleiste einklappen",
+    "timeFrame": {
+      "3mo": "3 Monate",
+      "6mo": "6 Monate",
+      "1y": "12 Monate",
+      "2y": "2 Jahre",
+      "4y": "4 Jahre"
+    },
+    "errorLoadingBoard": "Fehler beim Laden der Tafel",
+    "promote": {
+      "title": "Zum Kanban befördern",
+      "description": "Dies erstellt eine neue Aufgabe im Kanban-Board mit dem Inhalt dieser Karte.",
+      "confirm": "Befördern"
+    },
+    "pointsConfig": {
+      "title": "Punktebudget konfigurieren",
+      "maxPoints": "Max. Punkte:",
+      "start": "Punkte-Abstimmung starten"
+    },
+    "mjConfig": {
+      "title": "Mehrheitsurteil-Etiketten konfigurieren",
+      "labelPlaceholder": "Etikett für Grad {{n}}",
+      "saveAndStart": "Speichern & MJ-Abstimmung starten"
+    },
+    "timer": {
+      "stop": "Timer stoppen",
+      "set": "Timer einstellen",
+      "dialogTitle": "Timer starten/stoppen",
+      "dialogDescription": "Minuten und Sekunden anpassen.",
+      "minutes": "Minuten",
+      "seconds": "Sekunden",
+      "start": "Starten"
+    },
+    "column": {
+      "dreams": "Träume",
+      "strengths": "Stärken",
+      "threats": "Bedrohungen",
+      "levers": "Hebel",
+      "priorities": "Prioritäten"
+    }
+  },
+  "boardOptions": {
+    "options": "Optionen",
+    "title": "Tafel-Optionen",
+    "offlineVotes": "Offline-Stimmen",
+    "on": "An",
+    "off": "Aus",
+    "exporting": "Exportiere...",
+    "exportJson": "Als JSON exportieren",
+    "importBoard": "Tafel importieren",
+    "importTitle": "Tafel importieren",
+    "importDescription": "Importieren Sie eine Tafel aus einer JSON-Datei. Dies ersetzt die aktuellen Tafeldaten.",
+    "warningTitle": "Warnung: Dies wird die aktuelle Tafel zerstören",
+    "warningBody": "Das Importieren einer Tafel wird die aktuelle {{type}}-Tafel vollständig ersetzen — alle Karten, Spalten, Stimmen und Einstellungen gehen verloren. Diese Aktion kann nicht rückgängig gemacht werden.",
+    "warningBackup": "Erwägen Sie, die aktuelle Tafel zuerst als Backup zu exportieren.",
+    "understand": "Ich verstehe, fortfahren",
+    "selected": "Ausgewählt",
+    "importing": "Importiere...",
+    "importReplace": "Tafel importieren & ersetzen",
+    "fertilization": "Düngung",
+    "dream": "Traum",
+    "exportFailed": "Tafelexport fehlgeschlagen: {{error}}",
+    "importSuccess": "Tafel erfolgreich importiert!",
+    "importFailed": "Fehler beim Importieren der Tafel: {{error}}"
+  },
+  "framework": {
+    "intentional": {
+      "title": "Intentionaler Rahmen",
+      "createTitle": "Intentionalen Rahmen erstellen",
+      "noFramework": "Noch kein intentionaler Rahmen erstellt.",
+      "name": "Intentionaler Rahmen",
+      "expandAll": "Alle ausklappen",
+      "collapseAll": "Alle einklappen",
+      "category": {
+        "mission": {
+          "label": "Mission",
+          "description": "Was tun wir konkret und für wen? Was sind unsere wichtigsten Produkte oder Dienstleistungen, unsere Wertversprechen?"
+        },
+        "purpose": {
+          "label": "Zweck",
+          "description": "Warum, für wen und wofür tun wir, was wir tun? Welche Wirkung wollen wir erzeugen? Was ist unsere Hauptmotivation für die Erfüllung unserer Mission(en)?"
+        },
+        "values": {
+          "label": "Werte & Prinzipien",
+          "description": "Was sind unsere Werte und ihre Prinzipien für die praktische Anwendung? Wer oder was ist uns wirklich wichtig? Welche Handlungsweise erlaubt es uns, Werte in Taten umzusetzen?"
+        },
+        "regenerative": {
+          "label": "Regenerative Ziele",
+          "description": "Welche positiven Beiträge wollen wir zu natürlichen und sozialen Systemen leisten? Welche Ergebnisse wollen wir erzielen und in welchem Zeitraum?"
+        },
+        "legal": {
+          "label": "Rechtliches & Wirtschaftliches",
+          "description": "Ist uns eine bestimmte Rechtsform wichtig und, wenn ja, welche? Ist uns ein bestimmtes Wirtschaftsmodell wichtig und, wenn ja, welches?"
+        },
+        "ambition": {
+          "label": "Ambition",
+          "description": "Was sind unsere konkreten und messbaren Ambitionen? Unsere qualitativen oder quantitativen Ambitionen? Welche Ergebnisse wollen wir erzielen? In welchem Zeitraum?"
+        },
+        "temporality": {
+          "label": "Zeitlichkeit",
+          "description": "Ist uns ein bestimmter Zeitrahmen wichtig und, wenn ja, welcher?"
+        },
+        "vision": {
+          "label": "Vision",
+          "description": "Welche ideale Welt wünschen wir uns? Warum, für wen oder wofür wünschen wir uns diese Welt?"
+        },
+        "socialRoles": {
+          "label": "Soziale Rollen",
+          "description": "Mit welcher Rolle identifizieren wir uns, um unsere Mission(en) zu erfüllen? Was sind unsere Berufe, um unsere Produkte oder Dienstleistungen anzubieten?"
+        },
+        "identity": {
+          "label": "Identität",
+          "description": "Als wen identifizieren wir uns als Mitglieder der Organisation? Symbolisch, wie sieht diese Identität aus?"
+        }
+      }
+    },
+    "collaborative": {
+      "title": "Kollaborativer Rahmen",
+      "createTitle": "Kollaborativen Rahmen erstellen",
+      "noFramework": "Noch kein kollaborativer Rahmen erstellt.",
+      "name": "Kollaborativer Rahmen",
+      "expandAll": "Alle ausklappen",
+      "collapseAll": "Alle einklappen",
+      "category": {
+        "collaborative-values": {
+          "label": "Kollaborative Werte & Prinzipien",
+          "description": "Die Werte, die für eine effiziente und angenehme Zusammenarbeit wichtig sind, und die Prinzipien, die diese Werte in Handeln umsetzen."
+        },
+        "expected-behaviors": {
+          "label": "Erwartete Verhaltensweisen",
+          "description": "Verhaltensweisen, die zu fördern, unverzichtbar, zu vermeiden oder inakzeptabel für eine effiziente und angenehme Zusammenarbeit sind."
+        },
+        "regular-meetings": {
+          "label": "Regelmäßige Treffen",
+          "description": "Die Arten von Meetings, ihre Häufigkeit und Dauer."
+        },
+        "entry-process": {
+          "label": "Eintrittsprozess",
+          "description": "Wie eine Person der Organisation beitreten kann."
+        },
+        "exit-process": {
+          "label": "Austrittsprozess",
+          "description": "Wie eine Person die Organisation verlassen kann."
+        },
+        "conflict-resolution": {
+          "label": "Konfliktlösungsprozess",
+          "description": "Wie Spannungen und Konflikte zwischen Mitgliedern konstruktiv reguliert werden."
+        },
+        "exclusion-process": {
+          "label": "Ausschlussprozess",
+          "description": "Wie man sich von einer Person trennt, die der Organisation oder ihren Mitgliedern schadet."
+        },
+        "collaborative-methods": {
+          "label": "Kollaborative Methoden",
+          "description": "Projektmanagement-Methoden, die diese Verfassung ergänzen."
+        },
+        "individual-support": {
+          "label": "Individuelle Begleitung",
+          "description": "Wie persönliche Unterstützung angeboten wird."
+        },
+        "peer-support": {
+          "label": "Gegenseitige Unterstützung",
+          "description": "Wie man sich gegenseitig hilft und gemeinsam lernt."
+        }
+      }
+    },
+    "categoryOptional": "optional",
+    "placeholder": "Schreiben Sie hier Ihr {{field}} ..."
+  },
+  "dreamTop": {
+    "dreamBoard": "Dream Board",
+    "intentionalFramework": "Intentionaler Rahmen",
+    "collaborativeFramework": "Kollaborativer Rahmen",
+    "storyboardView": "Storyboard-Ansicht",
+    "prioritizationView": "Priorisierungs-Ansicht",
+    "filtersAndControls": "Filter & Steuerung",
+    "noTasksToPlan": "Keine Aufgaben zu planen.",
+    "subtasksOf": "Teilaufgaben von: {{title}}",
+    "toggle": {
+      "intention": "Intention",
+      "collaboration": "Kollaboration",
+      "dream": "Dream",
+      "storyboard": "Storyboard",
+      "prioritization": "Priorisierung"
+    }
+  },
+  "nav": {
+    "navigationMenu": "Navigationsmenü",
+    "closeNavigation": "Navigation schließen",
+    "celebration": "Feier",
+    "dream": "Dream",
+    "plan": "Plan",
+    "action": "Aktion",
+    "tools": "Werkzeuge",
+    "fertilizationBoard": "Fertilization Board",
+    "intention": "Intention",
+    "collaboration": "Kollaboration",
+    "dreamBoard": "Dream Board",
+    "storyboard": "Storyboard",
+    "prioritization": "Priorisierung",
+    "program": "Programm",
+    "resources": "Ressourcen",
+    "circles": "Kreise",
+    "roles": "Rollen",
+    "salarySystem": "Gehaltssystem",
+    "project": "Projekt",
+    "focus": "Fokus",
+    "timetable": "Timetable",
+    "voting": "Abstimmung",
+    "metrics": "Metriken",
+    "settings": "Einstellungen"
+  },
+  "program": {
+    "inProgressNoDate": "In Bearbeitung (kein Enddatum)",
+    "quickAddTask": "Schnellaufgabe hinzufügen...",
+    "filtersAndControls": "Filter & Steuerung",
+    "newTask": "Neue Aufgabe",
+    "titleLabel": "Titel",
+    "taskTitlePlaceholder": "Aufgabentitel...",
+    "scheduledFor": "Geplant für: {{date}}",
+    "create": "Erstellen",
+    "dragStartTime": "Ziehen, um Startzeit zu ändern",
+    "dragEndTime": "Ziehen, um Endzeit zu ändern"
+  },
+  "prioritization": {
+    "title": "Vergleichende Priorisierung",
+    "results": "Priorisierungsergebnisse:",
+    "cancel": "Abbrechen",
+    "applyNewPriorities": "Neue Prioritäten anwenden",
+    "selectTasks": "Aufgaben zum Vergleich auswählen:",
+    "filterByCriticity": "Nach Kritikalität filtern:",
+    "urgent": "Dringend:",
+    "highImpact": "Hoher Einfluss:",
+    "incident": "Vorfall:",
+    "sprintTarget": "Sprint-Ziel:",
+    "all": "Alle",
+    "yes": "Ja",
+    "no": "Nein",
+    "badgeUrgent": "Dringend",
+    "badgeHighImpact": "Hoher Einfluss",
+    "badgeIncident": "Vorfall",
+    "badgeSprintTarget": "Sprint-Ziel",
+    "itemsPerBatch": "Elemente pro Batch:",
+    "batchSizeHelp": "Vergleichen Sie 2 gleichzeitig (dauert länger) oder mehr auf einmal (wählen Sie das beste und dann das schlechteste, schneller durch den Plackett-Luce-Algorithmus).",
+    "finalizeNow": "Jetzt finalisieren",
+    "finalizeTooltipDisabled": "Vergleichen Sie zuerst mindestens einen Batch.",
+    "finalizeTooltipEnabled": "Wenden Sie das aktuelle teilweise Ranking jetzt an.",
+    "resetComparison": "Vergleich zurücksetzen",
+    "resetConfirm": "Aktuellen Vergleich abbrechen und zurücksetzen? Aller Fortschritt geht verloren.",
+    "startComparison": "Vergleichende Priorisierung starten ({{count}} Aufgaben, ~{{batches}} Batches)",
+    "copyList": "Liste kopieren",
+    "deselectAll": "Alle abwählen",
+    "selectAll": "Alle auswählen",
+    "deleteSelected": "Auswahl löschen ({{count}})",
+    "deleteTooltipEnabled": "Ausgewählte Aufgaben löschen",
+    "deleteTooltipDisabled": "0,5s warten, um Löschen zu aktivieren",
+    "alertSelectTwo": "Bitte wählen Sie mindestens zwei Aufgaben zum Vergleichen.",
+    "copySuccess": "Aufgabentitel in die Zwischenablage kopiert!",
+    "copyFailed": "Kopieren der Aufgabentitel fehlgeschlagen.",
+    "deleteConfirm": "{{count}} ausgewählte Aufgabe{{s}} löschen? Dies kann nicht rückgängig gemacht werden.",
+    "whichOneFirst": "Welche sollte zuerst erledigt werden?",
+    "pickHighest": "Wählen Sie die Aufgabe mit der höchsten Priorität:",
+    "pickLowest": "Wählen Sie jetzt die Aufgabe mit der niedrigsten Priorität:",
+    "batchProgress": "Batch {{n}} · {{percent}}% sicher",
+    "pairwiseHint": "Klicken Sie auf die Aufgabe mit der höchsten Priorität — die andere ist automatisch die niedrigste.",
+    "batchLowestHint": "Wählen Sie die niedrigste der verbleibenden — oder klicken Sie erneut auf die hervorgehobene höchste, um rückgängig zu machen.",
+    "finalizeDialogTitle": "Mit aktueller Reihenfolge finalisieren?",
+    "finalizeDialogDesc": "Dies ist das bisher berechnete Ranking aus {{n}} Batch{{es}}. Sie können es jetzt anwenden oder weiter vergleichen.",
+    "finalizeDialogDescSimple": "Dies ist das bisher berechnete Ranking.",
+    "keepComparing": "Weiter vergleichen",
+    "applyOrder": "Diese Reihenfolge anwenden"
+  },
+  "timetable": {
+    "loading": "Timetable wird geladen...",
+    "title": "Timetable",
+    "timetableViewAria": "Timetable-Ansicht",
+    "categorical": "Kategorial",
+    "categoricalAria": "Kategoriale Ansicht",
+    "chronological": "Chronologisch",
+    "chronologicalAria": "Chronologische Ansicht",
+    "timePeriod": "Zeitraum",
+    "timeChunk": "Tageszeit",
+    "allDay": "Ganztag",
+    "am": "Vormittag",
+    "amAria": "Vormittag (vor {{time}})",
+    "pm": "Nachmittag",
+    "pmAria": "Nachmittag (nach {{time}})",
+    "predefinedRanges": "Vordefinierte Bereiche",
+    "today": "Heute",
+    "yesterday": "Gestern",
+    "thisWeek": "Diese Woche",
+    "lastWeek": "Letzte Woche",
+    "thisMonth": "Dieser Monat",
+    "lastMonth": "Letzter Monat",
+    "yearToDate": "Jahr bis heute",
+    "sinceXWeeks": "Seit {{n}} Wochen",
+    "status": "Status",
+    "statusPlaceholder": "Status auswählen...",
+    "categories": "Kategorien",
+    "categoryPlaceholder": "Kategorie auswählen...",
+    "uncategorized": "Nicht kategorisiert",
+    "criticity": "Kritikalität",
+    "urgent": "Dringend",
+    "highImpact": "Hoher Einfluss",
+    "incidentOnDelivery": "Vorfall bei Lieferung",
+    "sprintTarget": "Sprint-Ziel",
+    "clearAllFilters": "Alle Filter löschen",
+    "timeSummaryByCategory": "Zeitzusammenfassung nach Kategorie",
+    "category": "Kategorie",
+    "totalTime": "Gesamtzeit",
+    "total": "Total",
+    "detailedTimetable": "Detaillierter Timetable",
+    "noTimerData": "Keine Timer-Daten entsprechen den ausgewählten Filtern.",
+    "task": "Aufgabe",
+    "user": "Benutzer",
+    "startTime": "Startzeit",
+    "endTime": "Endzeit",
+    "duration": "Dauer",
+    "unknownTask": "Unbekannte Aufgabe",
+    "grandTotal": "Gesamttotal"
+  },
+  "quickTimer": {
+    "phaseFocus": "Fokus",
+    "phaseShortBreak": "Pause",
+    "phaseLongBreak": "Lange Pause",
+    "pause": "Pause",
+    "resume": "Fortsetzen",
+    "startWork": "Arbeit starten",
+    "skipPhase": "Phase überspringen",
+    "reset": "Zurücksetzen",
+    "closePip": "PiP schließen",
+    "openPip": "In PiP öffnen",
+    "switchTechnique": "Technik wechseln",
+    "pomodoro": "Pomodoro",
+    "traveler": "Traveler",
+    "jumpToTask": "Zur Aufgabe springen",
+    "flight": "Flug",
+    "break": "Pause",
+    "flightLabel": "Flug",
+    "train": "Zug",
+    "from": "Von",
+    "to": "Nach",
+    "searchTravelDuration": "Reisedauer suchen",
+    "startTraveler": "Traveler-Timer starten",
+    "pauseTask": "Aufgabe pausieren",
+    "resumeTask": "Aufgabe fortsetzen",
+    "resumeTimer": "Timer fortsetzen",
+    "noActiveTimer": "Kein aktiver Timer",
+    "reopenSpotlight": "What's Next Spotlight erneut öffnen",
+    "whatsNext": "Was ist next?"
+  },
+  "pomodoroUi": {
+    "ready": "Bereit",
+    "focusTime": "Fokuszeit",
+    "break": "Pause",
+    "longBreak": "Lange Pause",
+    "flight": "Flug",
+    "work": "Arbeit",
+    "pause": "Pause",
+    "resume": "Fortsetzen",
+    "skip": "Überspringen",
+    "end": "Ende",
+    "closePip": "PiP schließen",
+    "pip": "PiP",
+    "dismiss": "Verwerfen",
+    "start": "Start",
+    "startBreak": "Pause starten",
+    "startLongBreak": "Lange Pause starten",
+    "startWork": "Arbeit starten",
+    "timesUp": "Zeit ist um!",
+    "takeShortBreak": "Machen Sie eine kurze Pause",
+    "earnedLongBreak": "Sie haben eine lange Pause verdient",
+    "breaksOver": "Pause vorbei!",
+    "timeToFocus": "Zeit zu fokussieren",
+    "pin": "Anheften",
+    "pinHint": "Anheften:",
+    "alwaysOnTop": "Immer im Vordergrund",
+    "resetCycle": "Cycle zurücksetzen",
+    "howToPin": "Wie im Vordergrund anheften",
+    "toPinOnTop": "So heften Sie im Vordergrund an:",
+    "pressSuperRightClick": "Super + Rechtsklick drücken",
+    "technique": "Technik",
+    "today": "Heute",
+    "thisWeek": "Diese Woche",
+    "thisMonth": "Dieser Monat",
+    "allTime": "Gesamt",
+    "sessions": "Session",
+    "sessionsPlural": "Sessions",
+    "minAvg": "{{minutes}} min · Ø {{avg}}/Tag",
+    "timeOfDayDistribution": "Verteilung nach Tageszeit",
+    "dayOfWeekDistribution": "Verteilung nach Wochentag",
+    "impactWork": "Impact-Arbeit",
+    "focusWork": "Fokus-Arbeit",
+    "startedTasks": "Gestartete Aufgaben",
+    "noVotes": "Keine Stimmen"
+  },
+  "board": {
+    "search": "Suchen:",
+    "searchPlaceholder": "Karten suchen...",
+    "column": "Spalte:",
+    "columnPlaceholder": "Alle Spalten...",
+    "minLikes": "Min. Likes:",
+    "tags": "Tags:",
+    "tagsPlaceholder": "Alle Tags...",
+    "clearFilters": "Filter löschen",
+    "filtersAndControls": "Filter & Steuerung",
+    "sortByVotes": "Nach Stimmen sortieren",
+    "sortedHighToLow": "Sortiert nach Stimmen (absteigend)",
+    "sortedLowToHigh": "Sortiert nach Stimmen (aufsteigend)",
+    "typePlaceholder": "Eingeben...",
+    "tag": "Tag",
+    "addAnonymously": "Hinzufügen (Anonym)",
+    "addCard": "Karte hinzufügen",
+    "addCardWithName": "Karte mit Ihrem Namen hinzufügen",
+    "addAnonymousCard": "Anonyme Karte hinzufügen",
+    "noCards": "Noch keine Karten in dieser Spalte.",
+    "noVotesCastYet": "Noch keine Stimmen abgegeben",
+    "voters": "Abstimmende",
+    "pts": "Pkt",
+    "unknown": "Unbekannt",
+    "anonymous": "Anonym",
+    "msgAuthor": "Nachrichtenautor",
+    "unassigned": "Nicht zugewiesen",
+    "myself": "Ich selbst ({{name}})",
+    "offline": "Offline",
+    "offlineVoters": "Offline-Stimmen",
+    "addVoter": "Stimme hinzufügen",
+    "noOfflineVoters": "Noch keine Offline-Stimmen hinzugefügt.",
+    "voter": "Stimme",
+    "clearAllOfflineVoters": "Alle Offline-Stimmen löschen",
+    "offlineCount": "{{count}} offline",
+    "votes": "Stimmen",
+    "offlineThumbsUp": "({{count}} offline)",
+    "noVotesCast": "Keine Stimmen",
+    "medianLabel": "Median: {{label}}",
+    "votesCount": "({{count}} Stimmen)",
+    "unspent": "Verbleibend: {{remaining}} Pkt",
+    "noVotesYet": "Keine Stimmen",
+    "evaluate": "Bewerten...",
+    "selectGrade": "Note auswählen",
+    "hiddenContent": "Versteckter Inhalt",
+    "cancelLinking": "Verknüpfung abbrechen",
+    "linkCards": "Karten verknüpfen",
+    "promoteToBacklog": "Zum Backlog befördern",
+    "difficultyLabel": "Schwierigkeit: {{level}}"
+  },
+  "storyboard": {
+    "difficultyTitle": "Schwierigkeit: {{level}}"
+  },
+  "todolist": {
+    "loadingFilters": "Filter werden geladen...",
+    "topTaskPlaceholder": "Titel für eine neue übergeordnete Aufgabe eingeben",
+    "subtaskPlaceholder": "Neue Teilaufgabe eingeben",
+    "noTasksMatch": "Keine Aufgaben entsprechen den aktuellen Filtern.",
+    "setDeadline": "Frist festlegen",
+    "durationLabel": "Dauer:",
+    "duplicate": "Duplizieren",
+    "delete": "Löschen",
+    "markUrgent": "Als dringend markieren",
+    "removeUrgent": "Dringend entfernen",
+    "markHighImpact": "Als hohen Impact markieren",
+    "removeHighImpact": "Impact entfernen",
+    "markIncidentOnDelivery": "Vorfall bei Lieferung markieren",
+    "removeIncidentOnDelivery": "IoD entfernen",
+    "markSprintTarget": "Als Sprint-Ziel markieren",
+    "removeSprintTarget": "Sprint-Ziel entfernen",
+    "badge": {
+      "urgent": "Dringend",
+      "impact": "Impact",
+      "iod": "IoD",
+      "sprint": "Sprint"
+    }
+  },
+  "todoStrip": {
+    "title": "Ihre Quittungs-Aufgaben",
+    "addPlaceholder": "Neue Aufgabe hinzufügen...",
+    "add": "Hinzufügen",
+    "done": "Erledigt",
+    "undo": "Rückgängig",
+    "task": "Aufgabe",
+    "emptyHint": "Noch keine Aufgaben — fügen Sie eine hinzu, um sie auf Ihrer \u201eQuittung\u201c zu drucken."
+  },
+  "circles": {
+    "viewTitle": "Kreisansicht",
+    "hideTreePanel": "Baumansicht ausblenden",
+    "showTreePanel": "Baumansicht anzeigen",
+    "add": "Hinzufügen",
+    "edit": "Bearbeiten",
+    "move": "Verschieben",
+    "delete": "Löschen",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "noCircles": "Noch keine Kreise. Erstellen Sie Ihre erste Organisation!",
+    "createOrganization": "Organisation erstellen",
+    "organizationTree": "Organisationsbaum",
+    "noDetails": "Keine Details definiert. Klicken Sie auf Bearbeiten, um welche hinzuzufügen.",
+    "assignedUsers": "Zugewiesene Benutzer",
+    "purpose": "Zweck",
+    "missions": "Missionen",
+    "authorityScope": "Befugnisbereich",
+    "roleAssignments": "Rollenzuweisungen",
+    "addUserAssignment": "Benutzerzuweisung hinzufügen",
+    "selectUser": "Benutzer auswählen...",
+    "selectParent": "Übergeordnetes Element auswählen...",
+    "noParentRoot": "Kein übergeordnetes Element (Root)",
+    "newParent": "Neues übergeordnetes Element",
+    "name": "Name",
+    "type": "Typ",
+    "color": "Farbe",
+    "addNode": "Knoten hinzufügen",
+    "editNode": "Knoten bearbeiten",
+    "addNodeDesc": "Einen neuen Kreis oder eine Rolle hinzufügen.",
+    "editNodeDesc": "Den ausgewählten Kreis oder die Rolle bearbeiten.",
+    "moveNode": "\u201e{{name}}\u201c verschieben",
+    "moveNodeDesc": "Den ausgewählten Knoten zu einem neuen übergeordneten Element verschieben.",
+    "deleteConfirmTitle": "Sind Sie sicher?",
+    "deleteConfirmDesc": "Dadurch wird \u201e{{name}}\u201c und alle untergeordneten Kreise/Rollen dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.",
+    "nodeType": {
+      "organization": "Organisation",
+      "circle": "Kreis",
+      "group": "Gruppe",
+      "role": "Rolle"
+    },
+    "involvement": {
+      "P": "PILOT / DRI (P)",
+      "CP": "COPILOT (CP)",
+      "PA": "TEILNEHMER (PA)",
+      "F": "FOCUS (F)",
+      "A": "AUSZUBILDENDER (A)",
+      "R": "RESSOURCE (R)"
+    },
+    "purposePlaceholder": "Welchen Dienst oder welche allgemeine Funktionalität bietet der Rollen-Kreis der Organisation, anderen Rollen-Kreisen oder externen Stakeholdern?",
+    "missionsPlaceholder": "Welche spezifischen Dienste oder Aufgaben bietet der Rollen-Kreis der Organisation, anderen Rollen-Kreisen oder externen Stakeholdern?",
+    "authorityScopePlaceholder": "Über welche Elemente hat der Rollen-Kreis exklusive Befugnis und über welche kann er allein entscheiden?"
+  },
+  "chronological": {
+    "noTimerData": "Keine Timer-Daten passen zu den ausgewählten Filtern.",
+    "task": "Aufgabe",
+    "category": "Kategorie",
+    "user": "Benutzer",
+    "startTime": "Startzeit",
+    "endTime": "Endzeit",
+    "duration": "Dauer"
+  },
+  "programTop": {
+    "calendar": "Kalender",
+    "resources": "Ressourcen",
+    "programCalendar": "Programmkalender",
+    "resourcesWorkload": "Ressourcenauslastung",
+    "teamMembers": "Teammitglieder",
+    "today": "Heute",
+    "tasksAssigned": "{{count}} Aufgaben zugewiesen",
+    "tasksAssigned_one": "{{count}} Aufgabe zugewiesen",
+    "unassigned": "Nicht zugewiesen",
+    "duration": "Dauer: {{count}} Pkt.",
+    "startLabel": "Start: {{date}}",
+    "endLabel": "Ende: {{date}}",
+    "points": "{{count}} Pkt."
+  },
+  "roles": {
+    "searchPlaceholder": "Rollen suchen...",
+    "roleName": "Rollenname",
+    "circleGroup": "Kreis / Gruppe",
+    "roleAssignments": "Rollenzuweisungen",
+    "involvement": "Beteiligung",
+    "filterPrefix": "Filter",
+    "noRolesMatch": "Keine Rollen entsprechen den aktuellen Filtern.",
+    "unassigned": "Nicht zugewiesen",
+    "noCircle": "Kein Kreis",
+    "unknown": "Unbekannt",
+    "roleCount": "{{count}} Rolle(n)",
+    "viewList": "Liste",
+    "viewByUser": "Nach Benutzer",
+    "rolesViewAria": "Rollenansicht",
+    "listViewAria": "Listenansicht",
+    "byUserAria": "Nach Benutzer",
+    "expandAll": "Alle aufklappen",
+    "collapseAll": "Alle einklappen"
+  },
+  "notifications": {
+    "title": "Benachrichtigungen",
+    "clearAll": "Alle löschen",
+    "empty": "Keine neuen Benachrichtigungen.",
+    "markAsRead": "Als gelesen markieren",
+    "snooze": "Später",
+    "snoozePlaceholder": "Später",
+    "snoozeDuration": {
+      "5min": "5 Minuten",
+      "15min": "15 Minuten",
+      "30min": "30 Minuten",
+      "1hour": "1 Stunde",
+      "2hours": "2 Stunden",
+      "1day": "1 Tag"
+    }
+  },
+  "spotlight": {
+    "greeting": {
+      "welcomeBack": "Schön, dass Sie da sind. Hier ist die nächste Aktion für heute.",
+      "workingOn": "Aktuell in Bearbeitung",
+      "nextTask": "Nächste zu bearbeitende Aufgabe"
+    },
+    "welcomeBackBanner": "Schön, dass Sie da sind.",
+    "moodQuestion": "Wie fühlen Sie sich gerade?",
+    "moodHelper": "Das hilft mir, die am besten passende nächste Aufgabe vorzuschlagen.",
+    "mood": {
+      "ready": "Bereit",
+      "steady": "Stetig",
+      "struggling": "Schwierig"
+    },
+    "moodReason": {
+      "green": "Für alles bereit",
+      "orange": "Etwas Einfacheres",
+      "red": "Kleinstmöglicher Schritt"
+    },
+    "alternative": "Alternative: ",
+    "alternativeChecked": "✓ Alternative: ",
+    "viewConsistencyDetails": "Konsistenz-Details anzeigen",
+    "jumpToTask": "Zur Aufgabe springen",
+    "startWorking": "Loslegen",
+    "consistency": "Konsistenz",
+    "consistencyScore": "Konsistenzwert",
+    "score": "Wert",
+    "heatmap": {
+      "hidden": "{{label}} (ausgeblendet)",
+      "focusSession": "Fokus-Sitzung",
+      "focusSessions": "Fokus-Sitzungen",
+      "tasksStartedNoFocus": "{{count}} Aufgabe gestartet (ohne Fokus-Technik)",
+      "tasksStartedNoFocus_plural": "{{count}} Aufgaben gestartet (ohne Fokus-Technik)",
+      "impactDay": "Impact-Tag",
+      "noActivity": "keine Aktivität",
+      "dayOff": "Freier Tag",
+      "on": "am {{date}}"
+    }
+  }
+}

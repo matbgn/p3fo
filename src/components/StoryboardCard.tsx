@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { TaskCard } from './TaskCard';
 import { Task, Category, TriageStatus } from '@/hooks/useTasks';
 import { cn } from '@/lib/utils';
@@ -82,6 +83,7 @@ export const StoryboardCard: React.FC<StoryboardCardProps> = React.memo(({
   onDragOver,
   onDrop,
 }) => {
+  const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
   const hoverTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -211,7 +213,7 @@ export const StoryboardCard: React.FC<StoryboardCardProps> = React.memo(({
           </div>
           <div className="flex items-center flex-wrap" style={{ gap: gapPx, marginTop: gapPx }}>
             {task.difficulty && (
-              <div className={cn('rounded-full shrink-0', difficultyColor)} style={{ width: dotPx, height: dotPx }} title={`Difficulty: ${task.difficulty}`} />
+              <div className={cn('rounded-full shrink-0', difficultyColor)} style={{ width: dotPx, height: dotPx }} title={t('storyboard.difficultyTitle', { level: task.difficulty })} />
             )}
             {task.urgent && (
               <AlertTriangle className="text-red-500 shrink-0" style={{ width: iconPx, height: iconPx }} />

@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from 'react-i18next';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -113,6 +114,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
   },
   ref
 ) => {
+  const { t } = useTranslation();
   const [isHovered, setIsHovered] = React.useState(false);
   const hoverTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -385,7 +387,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                             <div className={`w-3 h-3 rounded-full ${getDifficultyColor(difficulty)} mr-2`} />
                             <span>{difficulty}</span>
                             {difficulty === 8 && (
-                              <span className="text-xs text-muted-foreground ml-2">~1 day, consider splitting</span>
+                              <span className="text-xs text-muted-foreground ml-2">{t('task.difficulty8Hint')}</span>
                             )}
                           </div>
                         </SelectItem>
@@ -499,11 +501,11 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                    onClick={(e) => e.stopPropagation()}
                  >
                   <CalendarIcon className="mr-2 h-3 w-3" />
-                  {task.terminationDate ? (
-                    format(new Date(task.terminationDate), "PPP p")
-                  ) : (
-                    <span>Pick a date</span>
-                  )}
+                   {task.terminationDate ? (
+                     format(new Date(task.terminationDate), "PPP p")
+                   ) : (
+                     <span>{t('task.pickDate')}</span>
+                   )}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start" onClick={(e) => e.stopPropagation()}>
@@ -534,21 +536,21 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                     onClick={() => setTimePickerOpen(true)}
                   >
                     <Clock className="mr-2 h-4 w-4" />
-                    {task.terminationDate ? (
-                      format(new Date(task.terminationDate), "HH:mm")
-                    ) : (
-                      <span className="text-muted-foreground">Set time...</span>
-                    )}
+                     {task.terminationDate ? (
+                       format(new Date(task.terminationDate), "HH:mm")
+                     ) : (
+                       <span className="text-muted-foreground">{t('task.setTime')}</span>
+                     )}
                   </Button>
                 </div>
               </PopoverContent>
             </Popover>
           </div>
           <div style={{ display: "flex", alignItems: "center" }} className={`ml-1 gap-2 text-xs flex-1 cursor-pointer select-none`}>
-            Planed duration :
+            {t('task.plannedDuration')}
             <Input
               type="number"
-              placeholder="min."
+              placeholder={t('task.durationPlaceholder')}
               min="0"
               value={durationValue}
               onChange={(e) => setDurationValue(e.target.value)}
@@ -606,18 +608,18 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                    }}
                    onOpenChange={handleDropdownOpenChange}
                  >
-                  <SelectTrigger className="h-7 w-full text-xs">
-                    <SelectValue placeholder="Set Reminder" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="-1">No reminder</SelectItem>
-                    <SelectItem value="0">On time</SelectItem>
-                    <SelectItem value="15">15 min before</SelectItem>
-                    <SelectItem value="60">1 hour before</SelectItem>
-                    <SelectItem value="120">2 hours before</SelectItem>
-                    <SelectItem value="1440">1 day before</SelectItem>
-                    <SelectItem value="10080">1 week before</SelectItem>
-                  </SelectContent>
+                   <SelectTrigger className="h-7 w-full text-xs">
+                     <SelectValue placeholder={t('task.setReminder')} />
+                   </SelectTrigger>
+                   <SelectContent>
+                     <SelectItem value="-1">{t('task.reminder.none')}</SelectItem>
+                     <SelectItem value="0">{t('task.reminder.onTime')}</SelectItem>
+                     <SelectItem value="15">{t('task.reminder.15Min')}</SelectItem>
+                     <SelectItem value="60">{t('task.reminder.1Hour')}</SelectItem>
+                     <SelectItem value="120">{t('task.reminder.2Hours')}</SelectItem>
+                     <SelectItem value="1440">{t('task.reminder.1Day')}</SelectItem>
+                     <SelectItem value="10080">{t('task.reminder.1Week')}</SelectItem>
+                   </SelectContent>
                 </Select>
               </PopoverContent>
             </Popover>
@@ -691,8 +693,8 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
               }}
               aria-pressed={open}
             >
-              {open ? <ChevronDown className="h-4 w-4 mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
-              Subtasks
+               {open ? <ChevronDown className="h-4 w-4 mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
+               {t('task.subtasks')}
               <SubtaskProgress task={task} tasks={tasks} />
             </button>
             <div className="flex flex-wrap gap-1">
@@ -702,34 +704,34 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                   className="cursor-default"
                 >
                   <AlertTriangle className="h-3 w-3 mr-1" />
-                  Urgent
-                </Badge>
-              )}
-              {task.impact && (
-                <Badge
-                  variant="secondary"
-                  className="bg-yellow-500 hover:bg-yellow-600 text-yellow-900 cursor-default"
-                >
-                  <CircleDot className="h-3 w-3 mr-1" />
-                  High Impact
-                </Badge>
-              )}
-              {task.majorIncident && (
-                <Badge
-                  variant="destructive"
-                  className="bg-red-700 hover:bg-red-800 text-white cursor-default"
-                >
-                  <Flame className="h-3 w-3 mr-1" />
-                  Incident on Delivery
-                </Badge>
-              )}
-              {task.sprintTarget && (
-                <Badge
-                  variant="secondary"
-                  className="bg-violet-500 hover:bg-violet-600 text-violet-100 cursor-default"
-                >
-                  <Crosshair className="h-3 w-3 mr-1" />
-                  Sprint Target
+                  {t('task.badge.urgent')}
+                 </Badge>
+               )}
+               {task.impact && (
+                 <Badge
+                   variant="secondary"
+                   className="bg-yellow-500 hover:bg-yellow-600 text-yellow-900 cursor-default"
+                 >
+                   <CircleDot className="h-3 w-3 mr-1" />
+                   {t('task.badge.highImpact')}
+                 </Badge>
+               )}
+               {task.majorIncident && (
+                 <Badge
+                   variant="destructive"
+                   className="bg-red-700 hover:bg-red-800 text-white cursor-default"
+                 >
+                   <Flame className="h-3 w-3 mr-1" />
+                   {t('task.badge.incidentOnDelivery')}
+                 </Badge>
+               )}
+               {task.sprintTarget && (
+                 <Badge
+                   variant="secondary"
+                   className="bg-violet-500 hover:bg-violet-600 text-violet-100 cursor-default"
+                 >
+                   <Crosshair className="h-3 w-3 mr-1" />
+                   {t('task.badge.sprintTarget')}
                 </Badge>
               )}
             </div>
@@ -750,7 +752,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                 className="mb-2 cursor-default"
               >
                 <AlertTriangle className="h-3 w-3 mr-1" />
-                Urgent
+                {t('task.badge.urgent')}
               </Badge>
             )}
             {task.impact && !task.parentId && (
@@ -759,7 +761,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                 className="bg-yellow-500 hover:bg-yellow-600 text-yellow-900 mb-2 cursor-default"
               >
                 <CircleDot className="h-3 w-3 mr-1" />
-                High Impact
+                {t('task.badge.highImpact')}
               </Badge>
             )}
             {task.majorIncident && !task.parentId && (
@@ -768,7 +770,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                 className="bg-red-700 hover:bg-red-800 text-white mb-2 cursor-default"
               >
                 <Flame className="h-3 w-3 mr-1" />
-                Incident on Delivery
+                {t('task.badge.incidentOnDelivery')}
               </Badge>
             )}
             {task.sprintTarget && !task.parentId && (
@@ -777,7 +779,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                 className="bg-violet-500 hover:bg-violet-600 text-violet-100 mb-2 cursor-default"
               >
                 <Crosshair className="h-3 w-3 mr-1" />
-                Sprint Target
+                {t('task.badge.sprintTarget')}
               </Badge>
             )}
           </div>
@@ -983,19 +985,19 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
         <Dialog open={isCommentModalOpen} onOpenChange={setIsCommentModalOpen}>
           <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col" aria-describedby={undefined}>
             <DialogHeader>
-              <DialogTitle>Edit Comment - {task.title}</DialogTitle>
+              <DialogTitle>{t('task.editCommentTitle', { title: task.title })}</DialogTitle>
               <DialogDescription className="sr-only">
-                Edit comment for task: {task.title}
+                {t('task.editCommentDescription', { title: task.title })}
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <label htmlFor="comment" className="sr-only">Comment</label>
+                <label htmlFor="comment" className="sr-only">{t('task.commentLabel')}</label>
                 <RichTextField
                   value={commentText}
                   onChange={(json) => setCommentText(json)}
-                  label="Comment"
-                  placeholder="Add a comment..."
+                  label={t('task.commentFieldLabel')}
+                  placeholder={t('task.commentPlaceholder')}
                   className="min-h-[200px]"
                 />
               </div>
@@ -1008,7 +1010,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                   setIsCommentModalOpen(false);
                 }}
               >
-                Save Comment
+                {t('task.saveComment')}
               </Button>
             </div>
           </DialogContent>
@@ -1019,9 +1021,9 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
         <Dialog open={isTimeSheetOpen} onOpenChange={setIsTimeSheetOpen}>
           <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col p-0" aria-describedby={undefined}>
             <DialogHeader className="p-6 pb-4">
-              <DialogTitle>Time Sheet - {task.title}</DialogTitle>
+              <DialogTitle>{t('task.timeSheetTitle', { title: task.title })}</DialogTitle>
               <DialogDescription className="sr-only">
-                View and edit time entries for task: {task.title}
+                {t('task.timeSheetDescription', { title: task.title })}
               </DialogDescription>
             </DialogHeader>
             <div className="flex-grow overflow-y-auto px-6 pb-6">

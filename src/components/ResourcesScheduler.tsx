@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import moment from 'moment';
+import { useTranslation } from 'react-i18next';
 import { useAllTasks } from '@/hooks/useAllTasks';
 import { useUsersContext, UserWithTrigram } from '@/context/UsersContext';
 import { Task } from '@/hooks/useTasks';
@@ -37,6 +38,7 @@ const ROW_HEIGHT = 80; // Increased height to fit bubbles
 const SIDEBAR_WIDTH = 250;
 
 const ResourcesScheduler: React.FC<ResourcesSchedulerProps> = ({ onFocusOnTask, onEditTask }) => {
+    const { t } = useTranslation();
     const { tasks } = useAllTasks();
     const { users, updateUser } = useUsersContext();
     const [viewStartDate, setViewStartDate] = useState(moment().startOf('day'));
@@ -238,10 +240,10 @@ const ResourcesScheduler: React.FC<ResourcesSchedulerProps> = ({ onFocusOnTask, 
     return (
         <Card className="h-full flex flex-col border-none shadow-none">
             <CardHeader className="py-2 px-4 border-b flex flex-row items-center justify-between shrink-0 h-[60px]">
-                <CardTitle className="text-lg">Resources Workload</CardTitle>
+                <CardTitle className="text-lg">{t('programTop.resourcesWorkload')}</CardTitle>
                 <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" onClick={handlePrevWeek}><ChevronLeft className="h-4 w-4" /></Button>
-                    <Button variant="outline" size="sm" onClick={handleToday}>Today</Button>
+                    <Button variant="outline" size="sm" onClick={handleToday}>{t('programTop.today')}</Button>
                     <Button variant="outline" size="sm" onClick={handleNextWeek}><ChevronRight className="h-4 w-4" /></Button>
                 </div>
             </CardHeader>
@@ -259,7 +261,7 @@ const ResourcesScheduler: React.FC<ResourcesSchedulerProps> = ({ onFocusOnTask, 
                             className="border-b flex items-center px-4 font-medium text-sm text-muted-foreground sticky top-0 z-10 bg-background"
                             style={{ height: HEADER_HEIGHT }}
                         >
-                            Team Members
+                            {t('programTop.teamMembers')}
                         </div>
 
                         {resources.map((user) => (
@@ -279,7 +281,7 @@ const ResourcesScheduler: React.FC<ResourcesSchedulerProps> = ({ onFocusOnTask, 
                                     <div className="text-sm font-medium truncate">{user.name}</div>
                                     <div className="flex flex-col gap-1 mt-1">
                                         <div className="text-xs text-muted-foreground">
-                                            {scheduledData[user.id]?.length || 0} tasks assigned
+                                            {t('programTop.tasksAssigned', { count: scheduledData[user.id]?.length || 0 })}
                                         </div>
                                         <DaySelector
                                             value={user.preferredWorkingDays}
@@ -298,7 +300,7 @@ const ResourcesScheduler: React.FC<ResourcesSchedulerProps> = ({ onFocusOnTask, 
                                 <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
                                     <UserIcon className="h-4 w-4" />
                                 </div>
-                                <div className="text-sm font-medium text-muted-foreground">Unassigned</div>
+                                <div className="text-sm font-medium text-muted-foreground">{t('programTop.unassigned')}</div>
                             </div>
                         )}
                     </div>
@@ -372,15 +374,15 @@ const ResourcesScheduler: React.FC<ResourcesSchedulerProps> = ({ onFocusOnTask, 
                                                             onClick={() => onEditTask ? onEditTask(block.task) : onFocusOnTask(block.task.id)}
                                                         >
                                                             <div className="font-semibold truncate">{block.task.title}</div>
-                                                            <div className="opacity-75">{block.totalDifficulty} pts</div>
+                                                            <div className="opacity-75">{t('programTop.points', { count: block.totalDifficulty })}</div>
                                                         </div>
                                                     </TooltipTrigger>
                                                     <TooltipContent>
                                                         <div className="text-xs">
                                                             <div className="font-bold">{block.task.title}</div>
-                                                            <div>Duration: {block.totalDifficulty} pts</div>
-                                                            <div>Start: {moment(block.start).format('MMM D')}</div>
-                                                            <div>End: {moment(block.end).format('MMM D')}</div>
+                                                            <div>{t('programTop.duration', { count: block.totalDifficulty })}</div>
+                                                            <div>{t('programTop.startLabel', { date: moment(block.start).format('MMM D') })}</div>
+                                                            <div>{t('programTop.endLabel', { date: moment(block.end).format('MMM D') })}</div>
                                                         </div>
                                                     </TooltipContent>
                                                 </Tooltip>

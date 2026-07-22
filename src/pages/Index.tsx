@@ -1,4 +1,5 @@
 import React, { Suspense, useEffect, useState, useCallback } from "react";
+import { useTranslation } from 'react-i18next';
 const TaskBoard = React.lazy(() => import("@/components/TaskBoard"));
 const KanbanBoard = React.lazy(() => import("@/components/KanbanBoard"));
 import { ViewSwitcher } from "@/components/ViewSwitcher";
@@ -19,6 +20,7 @@ import type { ModuleId } from "@/lib/persistence-types";
 import { CompactnessSelector } from "@/components/CompactnessSelector";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { UserSection } from "@/components/UserSection";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { QuickTimer } from "@/components/QuickTimer";
 import { UmbrellaNavigation } from "@/components/UmbrellaNavigation";
 import { GlobalFocusModeToggle } from "@/components/GlobalFocusModeToggle";
@@ -26,11 +28,14 @@ import { NextTaskSpotlight } from "@/components/NextTaskSpotlight";
 import { ConfirmModalHost } from "@/components/ConfirmModalHost";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
-const LazyWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <Suspense fallback={<LoadingSpinner label="Loading..." />}>
-    {children}
-  </Suspense>
-);
+const LazyWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { t } = useTranslation();
+  return (
+    <Suspense fallback={<LoadingSpinner label={t('common.loading')} />}>
+      {children}
+    </Suspense>
+  );
+};
 
 // Styles for the keep-alive view slots.
 // content-visibility:hidden tells the browser to skip layout+paint for hidden subtrees.
@@ -164,6 +169,7 @@ const Index: React.FC = () => {
               <>
                 <NotificationCenter />
                 <UserSection />
+                <LanguageSwitcher />
               </>
             }
             rightItems={

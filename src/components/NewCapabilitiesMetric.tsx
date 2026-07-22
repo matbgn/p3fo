@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTaskMetrics } from "@/hooks/useTaskMetrics";
 import { useSettingsContext } from "@/context/SettingsContext";
@@ -6,6 +7,7 @@ import { useUsersContext } from "@/context/UsersContext";
 import { calculateTimeSpentOnNewCapabilitiesPerEFT, UserWorkload } from "@/lib/metrics";
 
 const NewCapabilitiesMetric: React.FC = () => {
+  const { t } = useTranslation();
   const { tasks, taskMap, highImpactMap } = useTaskMetrics();
   const { settings } = useSettingsContext();
   const { users } = useUsersContext();
@@ -36,14 +38,14 @@ const NewCapabilitiesMetric: React.FC = () => {
   return (
     <Card className={`h-42 ${getCardClass()}`}>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">Time spent on High Impact work / EFT</CardTitle>
+        <CardTitle className="text-sm font-medium">{t('metrics.card.newCapabilitiesTitle')}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">
           {formattedPercentage}%
         </div>
         <CardDescription className="text-xs mt-1">
-          Goal: {goal.toFixed(2)}% in {weeksComputation} weeks
+          {t('metrics.card.newCapabilitiesDescription', { goal: goal.toFixed(2), weeks: weeksComputation })}
         </CardDescription>
       </CardContent>
     </Card>

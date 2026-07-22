@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { DreamView } from './DreamView';
 import { useViewNavigation, useViewDisplay } from '@/hooks/useView';
 import { useTasks, Task } from '@/hooks/useTasks';
@@ -29,14 +30,16 @@ interface DreamTopViewProps {
 
 type ActiveView = 'intentionalFramework' | 'collaborativeFramework' | 'dream' | 'storyboard' | 'prioritization';
 
-const ViewToggleButtons: React.FC<{ activeView: ActiveView; setActiveView: (v: ActiveView) => void; enabledSubViews: ActiveView[] }> = React.memo(({ activeView, setActiveView, enabledSubViews }) => (
+const ViewToggleButtons: React.FC<{ activeView: ActiveView; setActiveView: (v: ActiveView) => void; enabledSubViews: ActiveView[] }> = React.memo(({ activeView, setActiveView, enabledSubViews }) => {
+  const { t } = useTranslation();
+  return (
   <div className="flex space-x-2">
     {enabledSubViews.includes('intentionalFramework') && (
     <Button
       variant={activeView === 'intentionalFramework' ? 'default' : 'outline'}
       onClick={() => setActiveView('intentionalFramework')}
     >
-      Intention
+      {t('dreamTop.toggle.intention')}
     </Button>
     )}
     {enabledSubViews.includes('collaborativeFramework') && (
@@ -44,7 +47,7 @@ const ViewToggleButtons: React.FC<{ activeView: ActiveView; setActiveView: (v: A
       variant={activeView === 'collaborativeFramework' ? 'default' : 'outline'}
       onClick={() => setActiveView('collaborativeFramework')}
     >
-      Collaboration
+      {t('dreamTop.toggle.collaboration')}
     </Button>
     )}
     {enabledSubViews.includes('dream') && (
@@ -52,7 +55,7 @@ const ViewToggleButtons: React.FC<{ activeView: ActiveView; setActiveView: (v: A
       variant={activeView === 'dream' ? 'default' : 'outline'}
       onClick={() => setActiveView('dream')}
     >
-      Dream
+      {t('dreamTop.toggle.dream')}
     </Button>
     )}
     {enabledSubViews.includes('storyboard') && (
@@ -60,7 +63,7 @@ const ViewToggleButtons: React.FC<{ activeView: ActiveView; setActiveView: (v: A
       variant={activeView === 'storyboard' ? 'default' : 'outline'}
       onClick={() => setActiveView('storyboard')}
     >
-      Storyboard
+      {t('dreamTop.toggle.storyboard')}
     </Button>
     )}
     {enabledSubViews.includes('prioritization') && (
@@ -68,13 +71,15 @@ const ViewToggleButtons: React.FC<{ activeView: ActiveView; setActiveView: (v: A
       variant={activeView === 'prioritization' ? 'default' : 'outline'}
       onClick={() => setActiveView('prioritization')}
     >
-      Prioritization
+      {t('dreamTop.toggle.prioritization')}
     </Button>
     )}
   </div>
-));
+  );
+});
 
 const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
+  const { t } = useTranslation();
   const { setFocusedTaskId, focusedTaskId, pendingSubView, clearPendingSubView, disabledModules } = useViewNavigation();
   const { cardCompactness } = useViewDisplay();
   const { updateStatus, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleUrgent, toggleImpact, toggleMajorIncident, toggleSprintTarget, toggleDone, toggleTimer, reparent, updateTerminationDate, updateComment, updateDurationInMinutes, updatePrioritiesBulk } = useTasks();
@@ -345,7 +350,7 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
           {!isFocusMode && (
             <CardHeader className="flex flex-col space-y-4 pb-2">
               <div className="flex flex-row items-center justify-between">
-                <CardTitle>Dream Board</CardTitle>
+                <CardTitle>{t('dreamTop.dreamBoard')}</CardTitle>
                 <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} enabledSubViews={enabledSubViews} />
               </div>
             </CardHeader>
@@ -363,7 +368,7 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
 
   // Render Intentional Framework sub-view
   if (activeView === 'intentionalFramework') {
-    const viewTitle = 'Intentional Framework';
+    const viewTitle = t('dreamTop.intentionalFramework');
     return (
       <div className={`h-full flex flex-col ${isFocusMode ? 'relative' : ''}`}>
         {isFocusMode && <FocusModeBar title={viewTitle} rightContent={<ViewToggleButtons activeView={activeView} setActiveView={setActiveView} enabledSubViews={enabledSubViews} />} />}
@@ -386,7 +391,7 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
 
   // Render Collaborative Framework sub-view
   if (activeView === 'collaborativeFramework') {
-    const viewTitle = 'Collaborative Framework';
+    const viewTitle = t('dreamTop.collaborativeFramework');
     return (
       <div className={`h-full flex flex-col ${isFocusMode ? 'relative' : ''}`}>
         {isFocusMode && <FocusModeBar title={viewTitle} rightContent={<ViewToggleButtons activeView={activeView} setActiveView={setActiveView} enabledSubViews={enabledSubViews} />} />}
@@ -408,7 +413,7 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
   }
 
   // Render Storyboard or Prioritization view
-  const viewTitle = activeView === 'storyboard' ? 'Storyboard View' : 'Prioritization View';
+  const viewTitle = activeView === 'storyboard' ? t('dreamTop.storyboardView') : t('dreamTop.prioritizationView');
 
   return (
     <div className={`h-full flex flex-col ${isFocusMode ? 'relative' : ''}`}>
@@ -467,7 +472,7 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
                   {isFiltersCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                 </Button>
                 <span className="text-sm font-medium text-muted-foreground cursor-pointer select-none" onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}>
-                  Filters & Controls
+                  {t('dreamTop.filtersAndControls')}
                 </span>
               </div>
 
@@ -496,7 +501,7 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
               }}
             >
               {prioritizedTasks.length === 0 ? (
-                <div className="text-muted-foreground p-4">No tasks to plan.</div>
+                <div className="text-muted-foreground p-4">{t('dreamTop.noTasksToPlan')}</div>
               ) : (
                 prioritizedTasks.map(task => {
                   const children = getAllChildren(task);
@@ -540,7 +545,7 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
                       {openParents[task.id] && children.length > 0 && (
                         <div className="space-y-2">
                           <div className="text-xs font-medium text-muted-foreground px-1">
-                            Subtasks of: {task.title}
+                            {t('dreamTop.subtasksOf', { title: task.title })}
                           </div>
                           {children.map(child => (
                             <StoryboardCard

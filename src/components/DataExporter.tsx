@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useTasks } from '@/hooks/useTasks';
 import { Button } from '@/components/ui/button';
 import { useReminderStore } from '@/hooks/useReminders';
@@ -9,6 +10,7 @@ import { getAllTemplates } from '@/lib/task-templates';
 import { VoteResponseEntity, VoteLoop, VoteModerator } from '@/lib/persistence-types';
 
 const DataExporter: React.FC = () => {
+  const { t } = useTranslation();
   const { allTasks: tasks } = useTasks();
   const { userId } = useUserSettings();
   const [isExporting, setIsExporting] = useState(false);
@@ -60,6 +62,9 @@ const DataExporter: React.FC = () => {
       // Fetch Dream Board state
       const dreamBoardState = await adapter.getDreamBoardState();
 
+      // Fetch Salary Board state
+      const salaryBoardState = await adapter.getSalaryBoardState();
+
       // Fetch ALL reminders
       const allReminders = await adapter.listReminders();
 
@@ -96,8 +101,9 @@ const DataExporter: React.FC = () => {
         tasks: allTasks,
         scheduledReminders: allReminders,
         qolSurveyResponses: allQolSurveyResponses,
-        fertilizationBoard: fertilizationBoardState,
-        dreamBoard: dreamBoardState,
+fertilizationBoard: fertilizationBoardState,
+dreamBoard: dreamBoardState,
+salaryBoard: salaryBoardState,
         circles: allCircles,
         frameworks: allFrameworks,
         settings: settingsToExport,
@@ -138,7 +144,7 @@ const DataExporter: React.FC = () => {
 
   return (
     <Button onClick={handleExport} disabled={isExporting}>
-      {isExporting ? 'Exporting...' : 'Export Data'}
+      {isExporting ? t('data.exporting') : t('data.export')}
     </Button>
   );
 };
