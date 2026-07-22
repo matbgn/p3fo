@@ -479,6 +479,8 @@ export interface SalaryEmployee {
   employerAdjustments?: EmployerAdjustment[];
   /** Free-form comment/note. */
   comment?: string;
+  /** Internal: temporarily hidden in team simulator (not persisted). */
+  _simHidden?: boolean;
 }
 
 export type EmployerAdjustmentFrequency = 'monthly' | 'semesterly' | 'annually';

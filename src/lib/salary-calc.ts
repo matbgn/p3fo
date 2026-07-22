@@ -189,7 +189,9 @@ export const computeSalary = (
 export const computeAllSalaries = (
   board: SalaryBoardEntity
 ): Array<{ employee: SalaryEmployee; computation: SalaryComputation }> => {
-  return board.employees.map(employee => ({
+  return board.employees
+    .filter(e => !e._simHidden)
+    .map(employee => ({
     employee,
     computation: computeSalary(board.config, board.dimensions, employee),
   }));
@@ -239,7 +241,7 @@ export const aggregateSalaries = (
     totalNetAnnual: roundToNickel(totalNetAnnual),
     totalEmployerCostMonthly: roundToNickel(totalEmployerCostMonthly),
     totalEmployerCostAnnual: roundToNickel(totalEmployerCostAnnual),
-    headcount: board.employees.length,
+    headcount: board.employees.filter(e => !e._simHidden).length,
     fte: Math.round(fte * 100) / 100,
   };
 };
@@ -286,8 +288,10 @@ export const computeBudget = (
   let totalCost: number;
   if (scenario.chargesMode === 'expenseFactor') {
     const factor = scenario.expenseFactorOverride ?? board.config.expenseFactor ?? 1;
-    charges = roundToNickel(totals.totalGrossAnnual * factor);
-    totalCost = charges + scenario.reserve;
+    // Charges (frais) = overhead only (brut × (factor - 1)) + reserve
+    charges = roundToNickel(totals.totalGrossAnnual * (factor - 1)) + scenario.reserve;
+    // Total cost = salaires bruts + frais (always adds up)
+    totalCost = totals.totalGrossAnnual + charges;
   } else {
     charges = scenario.charges;
     totalCost = charges + scenario.reserve + totals.totalGrossAnnual;
@@ -296,11 +300,11 @@ export const computeBudget = (
   const balance = scenario.revenues - totalCost;
 
   return {
-    revenues: roundToStep(scenario.revenues, step),
-    charges: roundToStep(charges, step),
-    reserve: roundToStep(scenario.reserve, step),
-    totalCost: roundToStep(totalCost, step),
-    balance: roundToStep(balance, step),
+    revenues: roundToNickel(scenario.revenues),
+    charges: roundToNickel(charges),
+    reserve: roundToNickel(scenario.reserve),
+    totalCost: roundToNickel(totalCost),
+    balance: roundToNickel(balance),
     isBalanced: balance >= 0,
   };
 };
@@ -452,7 +456,7 @@ export const DEFAULT_SALARY_DIMENSIONS: SalaryDimension[] = [
       "Personne de référence (expert) dans un ou plusieurs domaines. Source d'information pour les collègues.",
       "Pionnier-ère qui mène des recherches, élabore des preuves de concept et apporte de nouvelles connaissances.",
       "Niveau Maîtrise de l'ensemble de l'architecture. Expertise exceptionnelle reconnue dans l'organisation.",
-      "Crée de nouveaux modèles d'organisation largement utilisés. Référence dans tout le domaine.",
+      "Crée de nouveaux modèles d'organisation et d'outils largement utilisés par les équipes internes ou externes à l'entreprise. Référence reconnue dans le domaine.",
     ],
   },
   {
@@ -479,8 +483,8 @@ export const createDefaultSalaryBoard = (): SalaryBoardEntity => ({
   dimensions: DEFAULT_SALARY_DIMENSIONS.map(d => ({ ...d, levelDescriptions: [...(d.levelDescriptions ?? [])] })),
   employees: [],
   budget: {
-    scenarios: DEFAULT_SALARY_BUDGET_SCENARIOS.map(s => ({ ...s })),
-    activeScenarioId: 'intermediate',
+    scenarios: [],
+    activeScenarioId: undefined,
   },
   updatedAt: new Date().toISOString(),
 });

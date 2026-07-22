@@ -73,6 +73,8 @@ import {
   Columns2,
   Maximize2,
   RotateCcw,
+  Eye,
+  EyeOff,
   TrendingUp,
   PieChart,
   UserPlus,
@@ -817,13 +819,12 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
 
       {/* Totals */}
       {totals && (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
           <MetricCard label="Effectifs" value={String(totals.headcount)} />
           <MetricCard label="ETP" value={totals.fte.toFixed(2)} />
           <MetricCard label="Brut mensuel" value={formatCurrency(totals.totalGrossMonthly, currency)} />
           <MetricCard label="Brut annuel" value={formatCurrency(totals.totalGrossAnnual, currency)} />
           <MetricCard label="Net ~" value={formatCurrency(totals.totalNetMonthlyWith13, currency)} />
-          <MetricCard label="Net mensuel" value={formatCurrency(totals.totalNetMonthly, currency)} />
           <MetricCard
             label="Coût employeur / an"
             value={formatCurrency(totals.totalEmployerCostAnnual, currency)}
@@ -1190,13 +1191,11 @@ const BudgetPanel: React.FC<{
                       <>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Frais</span>
-                          <span className="font-medium">
-                            {formatCurrency(roundToNickel((totals?.totalGrossAnnual ?? 0) * ((s.expenseFactorOverride ?? board.config.expenseFactor ?? 1) - 1)) + s.reserve, currency)}
-                          </span>
+                          <span className="font-medium">{formatCurrency(sc.charges, currency)}</span>
                         </div>
                         <div className="flex justify-between pl-4 text-xs text-muted-foreground">
                           <span>dont Frais généraux (× {((s.expenseFactorOverride ?? board.config.expenseFactor ?? 1) - 1).toFixed(2)})</span>
-                          <span>{formatCurrency(roundToNickel((totals?.totalGrossAnnual ?? 0) * ((s.expenseFactorOverride ?? board.config.expenseFactor ?? 1) - 1)), currency)}</span>
+                          <span>{formatCurrency(sc.charges - s.reserve, currency)}</span>
                         </div>
                         <div className="flex justify-between pl-4 text-xs text-muted-foreground">
                           <span>dont réserve</span>
@@ -1470,18 +1469,25 @@ const TeamSimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) =
   const [simDimensions, setSimDimensions] = useState<SalaryDimension[]>(
     board.dimensions.map(d => ({ ...d, levelDescriptions: [...(d.levelDescriptions ?? [])] }))
   );
+  const [simEmployees, setSimEmployees] = useState<SalaryEmployee[]>(
+    board.employees.map(e => ({ ...e, levels: [...e.levels], employerAdjustments: e.employerAdjustments?.map(a => ({ ...a })) }))
+  );
+  const [simEmployeeOpen, setSimEmployeeOpen] = useState(false);
+  const [editingSimEmployee, setEditingSimEmployee] = useState<SalaryEmployee | null>(null);
 
   // Reset when board changes externally
   useEffect(() => {
     setSimConfig({ ...board.config });
     setSimDimensions(board.dimensions.map(d => ({ ...d, levelDescriptions: [...(d.levelDescriptions ?? [])] })));
-  }, [board.config, board.dimensions]);
+    setSimEmployees(board.employees.map(e => ({ ...e, levels: [...e.levels], employerAdjustments: e.employerAdjustments?.map(a => ({ ...a })) })));
+  }, [board.config, board.dimensions, board.employees]);
 
   const simBoard = useMemo<SalaryBoardEntity>(() => ({
     ...board,
     config: simConfig,
     dimensions: simDimensions,
-  }), [board, simConfig, simDimensions]);
+    employees: simEmployees,
+  }), [board, simConfig, simDimensions, simEmployees]);
 
   const totals = useMemo(() => aggregateSalaries(simBoard), [simBoard]);
   const currency = simConfig.currency;
@@ -1491,6 +1497,45 @@ const TeamSimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) =
 
   const updateDimension = (id: string, patch: Partial<SalaryDimension>) =>
     setSimDimensions(prev => prev.map(d => (d.id === id ? { ...d, ...patch } : d)));
+
+  const toggleEmployee = (id: string) =>
+    setSimEmployees(prev => prev.map(e => e.id === id ? { ...e, _simHidden: !e._simHidden } : e));
+
+  const addSimEmployee = () => {
+    setEditingSimEmployee(null);
+    setSimEmployeeOpen(true);
+  };
+
+  const editSimEmployee = (emp: SalaryEmployee) => {
+    setEditingSimEmployee(emp);
+    setSimEmployeeOpen(true);
+  };
+
+  const saveSimEmployee = (emp: SalaryEmployee) => {
+    setSimEmployees(prev => {
+      const exists = prev.some(e => e.id === emp.id);
+      return exists
+        ? prev.map(e => e.id === emp.id ? emp : e)
+        : [...prev, emp];
+    });
+  };
+
+  const removeSimEmployee = (id: string) =>
+    setSimEmployees(prev => prev.filter(e => e.id !== id));
+
+  const duplicateSimEmployee = (id: string) => {
+    const original = simEmployees.find(e => e.id === id);
+    if (!original) return;
+    const copy: SalaryEmployee = {
+      ...original,
+      id: newId(),
+      name: `${original.name} (copie)`,
+      levels: [...original.levels],
+      employerAdjustments: original.employerAdjustments?.map(a => ({ ...a })),
+      _simHidden: false,
+    };
+    setSimEmployees(prev => [...prev, copy]);
+  };
 
   // Compute budget for each scenario with the simulated config
   const budgetResults = useMemo(() => {
@@ -1504,9 +1549,11 @@ const TeamSimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) =
   const resetToBoard = () => {
     setSimConfig({ ...board.config });
     setSimDimensions(board.dimensions.map(d => ({ ...d, levelDescriptions: [...(d.levelDescriptions ?? [])] })));
+    setSimEmployees(board.employees.map(e => ({ ...e, levels: [...e.levels], employerAdjustments: e.employerAdjustments?.map(a => ({ ...a })) })));
   };
 
   return (
+    <>
     <Card className="border">
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
         <CardTitle className="text-lg flex items-center gap-2">
@@ -1599,6 +1646,57 @@ const TeamSimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) =
           </div>
         </div>
 
+        {/* Employee list with toggle/add/remove */}
+        <div className="space-y-2 pt-2 border-t">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs font-medium">Personnel simulé</Label>
+            <Button variant="outline" size="sm" onClick={addSimEmployee}>
+              <Plus className="w-3 h-3 mr-1" /> Ajouter
+            </Button>
+          </div>
+          <div className="space-y-1">
+            {simEmployees.map(emp => {
+              const comp = computeSalary(simConfig, simDimensions, { ...emp, _simHidden: false });
+              return (
+                <div
+                  key={emp.id}
+                  className={`flex items-center gap-2 px-2 py-1 rounded border ${emp._simHidden ? 'opacity-40' : ''}`}
+                >
+                  <span className="text-sm flex-1 truncate font-medium">
+                    {emp.name || <span className="italic text-muted-foreground">sans nom</span>}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{emp.workload}%</span>
+                  {!emp._simHidden && (
+                    <span className="text-xs text-right w-28">{formatCurrency(comp.grossMonthly, currency)}</span>
+                  )}
+                  <div className="flex items-center">
+                    <Button variant="ghost" size="sm" onClick={() => editSimEmployee(emp)} className="w-8 h-8 p-0" title="Modifier">
+                      <Pencil className="w-3 h-3" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => duplicateSimEmployee(emp.id)} className="w-8 h-8 p-0" title="Dupliquer">
+                      <Copy className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toggleEmployee(emp.id)}
+                      title={emp._simHidden ? 'Inclure' : 'Exclure de la simulation'}
+                      className="w-8 h-8 p-0"
+                    >
+                      {emp._simHidden
+                        ? <EyeOff className="w-3 h-3" />
+                        : <Eye className="w-3 h-3" />}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+            {simEmployees.length === 0 && (
+              <p className="text-xs text-muted-foreground italic">Aucun·e employé·e dans la simulation.</p>
+            )}
+          </div>
+        </div>
+
         {/* Results: salary mass */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 pt-2 border-t">
           <MetricCard label="Effectifs" value={String(totals.headcount)} />
@@ -1638,11 +1736,19 @@ const TeamSimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) =
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+             </Table>
           </div>
         )}
       </CardContent>
     </Card>
+      <EmployeeDialog
+        open={simEmployeeOpen}
+        onOpenChange={setSimEmployeeOpen}
+        employee={editingSimEmployee}
+        dimensions={simDimensions}
+        onSave={saveSimEmployee}
+      />
+    </>
   );
 };
 
