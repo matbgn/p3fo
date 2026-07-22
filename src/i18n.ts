@@ -3,6 +3,8 @@ import LanguageDetector from 'i18next-browser-languagedetector';
 import Backend from 'i18next-http-backend';
 import { initReactI18next } from 'react-i18next';
 
+import { assetUrl } from '@/lib/base-url';
+
 i18n
   .use(Backend)
   .use(LanguageDetector)
@@ -10,7 +12,7 @@ i18n
   .init({
     ns: ['translation'],
     backend: {
-      loadPath: '/locales/{{lng}}/{{ns}}.json',
+      loadPath: assetUrl('/locales/{{lng}}/{{ns}}.json'),
     },
     fallbackNS: 'translation',
     load: 'languageOnly',

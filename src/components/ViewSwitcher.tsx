@@ -17,6 +17,7 @@ import {
 import { useCursors } from '@/hooks/useCursors';
 import { Badge } from './ui/badge';
 import { cn } from '@/lib/utils';
+import { assetUrl } from '@/lib/base-url';
 import {
   Popover,
   PopoverContent,
@@ -308,7 +309,7 @@ export function ViewSwitcher({ value, onChange, disabledModules = [], utilityIte
       {/* Logo */}
       <div ref={logoRef} className="flex items-center shrink-0">
         <img
-          src={`${import.meta.env.BASE_URL}P3Fo_Logo.png`}
+          src={assetUrl('P3Fo_Logo.png')}
           alt="P3Fo"
           className="h-10 w-auto"
         />
