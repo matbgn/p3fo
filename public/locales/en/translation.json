@@ -1492,5 +1492,21 @@
     "byUserAria": "By User",
     "expandAll": "Expand All",
     "collapseAll": "Collapse All"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "clearAll": "Clear All",
+    "empty": "No new notifications.",
+    "markAsRead": "Mark as Read",
+    "snooze": "Snooze",
+    "snoozePlaceholder": "Snooze",
+    "snoozeDuration": {
+      "5min": "5 minutes",
+      "15min": "15 minutes",
+      "30min": "30 minutes",
+      "1hour": "1 hour",
+      "2hours": "2 hours",
+      "1day": "1 day"
+    }
   }
 }
