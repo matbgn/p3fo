@@ -234,9 +234,9 @@
       "month": "Mois",
       "workingDays": "Jours ouvrés",
       "selectUser": "Sélectionner un·e utilisateur·rice",
-      "hoursDone": "Heures effectuées par mois",
-      "hoursDue": "Heures dues par mois",
-      "hoursProjected": "Heures projetées par mois",
+      "hoursDone": "Heures effectuées ce mois",
+      "hoursDue": "Heures dues ce mois",
+      "hoursProjected": "Heures projetées ce mois",
       "deltaProjected": "Différence d'heures projetée avec dues",
       "workload": "Charge de travail",
       "lastMonthBalance": "Solde horaire du mois dernier",
@@ -1601,9 +1601,9 @@
     "moodQuestion": "Comment vous sentez-vous en ce moment ?",
     "moodHelper": "Cela m'aide à vous proposer la tâche la plus adaptée.",
     "mood": {
-      "ready": "Prêt",
-      "steady": "Stable",
-      "struggling": "En difficulté"
+      "ready": "Frais et dispo",
+      "steady": "OK",
+      "struggling": "Pas idéal"
     },
     "moodReason": {
       "green": "Prêt pour tout",
