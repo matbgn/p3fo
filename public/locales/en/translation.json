@@ -932,5 +932,126 @@
     "exportFailed": "Failed to export board: {{error}}",
     "importSuccess": "Board imported successfully!",
     "importFailed": "Error importing board: {{error}}"
+  },
+  "framework": {
+    "intentional": {
+      "title": "Intentional Framework",
+      "createTitle": "Create Intentional Framework",
+      "noFramework": "No intentional framework created yet.",
+      "name": "Intentional Framework",
+      "expandAll": "Expand All",
+      "collapseAll": "Collapse All",
+      "category": {
+        "mission": {
+          "label": "Mission",
+          "description": "What do we concretely do, and for whom? What are our main product or service offerings, our value propositions?"
+        },
+        "purpose": {
+          "label": "Purpose",
+          "description": "Why, for whom, and for what do we do what we do? What effect are we seeking to produce by doing what we do? What is our main motivation for carrying out our mission(s)?"
+        },
+        "values": {
+          "label": "Values & Principles",
+          "description": "What are our values and their principles for practical application? Who or what truly matters to us? What way of acting allows us to translate our values into action?"
+        },
+        "regenerative": {
+          "label": "Regenerative Aims",
+          "description": "What positive contributions do we wish to make to natural and social systems? What results do we want to achieve, and in what timeframe?"
+        },
+        "legal": {
+          "label": "Legal & Economic",
+          "description": "Is a particular legal status important to us, and if so, which one? Is a particular economic model important to us, and if so, which one?"
+        },
+        "ambition": {
+          "label": "Ambition",
+          "description": "What are our concrete and measurable ambitions? What are our qualitative or quantitative ambitions? What results do we want to achieve? In what timeframe?"
+        },
+        "temporality": {
+          "label": "Temporality",
+          "description": "Is a particular timeframe important to us, and if so, which one?"
+        },
+        "vision": {
+          "label": "Vision",
+          "description": "What ideal world do we wish for? Why, for whom, or for what do we wish for this world?"
+        },
+        "socialRoles": {
+          "label": "Social Roles",
+          "description": "What role do we identify with to fulfill our mission(s)? What are our professions to offer our products or services?"
+        },
+        "identity": {
+          "label": "Identity",
+          "description": "Who do we identify as, as members of the organization? Symbolically, what is this identity like?"
+        }
+      }
+    },
+    "collaborative": {
+      "title": "Collaborative Framework",
+      "createTitle": "Create Collaborative Framework",
+      "noFramework": "No collaborative framework created yet.",
+      "name": "Collaborative Framework",
+      "expandAll": "Expand All",
+      "collapseAll": "Collapse All",
+      "category": {
+        "collaborative-values": {
+          "label": "Collaborative Values & Principles",
+          "description": "The values important for efficient and pleasant collaboration and the principles that translate these values into action within the organization."
+        },
+        "expected-behaviors": {
+          "label": "Expected Behaviors",
+          "description": "Behaviors to encourage, indispensable ones, to avoid, or unacceptable for efficient and pleasant collaboration."
+        },
+        "regular-meetings": {
+          "label": "Regular Meetings",
+          "description": "The types of meetings practiced, their frequency and duration."
+        },
+        "entry-process": {
+          "label": "Entry Process",
+          "description": "How a person can join the organization."
+        },
+        "exit-process": {
+          "label": "Exit Process",
+          "description": "How a person can leave the organization."
+        },
+        "conflict-resolution": {
+          "label": "Conflict Resolution Process",
+          "description": "How to constructively regulate tensions and conflicts between members."
+        },
+        "exclusion-process": {
+          "label": "Exclusion Process",
+          "description": "How to separate from a person harming the organization or its members."
+        },
+        "collaborative-methods": {
+          "label": "Collaborative Methods",
+          "description": "Project management methods used in complement to this constitution."
+        },
+        "individual-support": {
+          "label": "Individual Support Process",
+          "description": "How to offer personal support."
+        },
+        "peer-support": {
+          "label": "Peer Support Process",
+          "description": "How to help each other and learn together."
+        }
+      }
+    },
+    "categoryOptional": "optional",
+    "placeholder": "Write your {{field}} here..."
+  },
+  "dreamTop": {
+    "dreamBoard": "Dream Board",
+    "intentionalFramework": "Intentional Framework",
+    "collaborativeFramework": "Collaborative Framework",
+    "storyboardView": "Storyboard View",
+    "prioritizationView": "Prioritization View",
+    "filtersAndControls": "Filters & Controls",
+    "noTasksToPlan": "No tasks to plan.",
+    "subtasksOf": "Subtasks of: {{title}}",
+    "toggle": {
+      "intention": "Intention",
+      "collaboration": "Collaboration",
+      "dream": "Dream",
+      "storyboard": "Storyboard",
+      "prioritization": "Prioritization"
+    }
   }
 }

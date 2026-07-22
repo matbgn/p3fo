@@ -932,5 +932,126 @@
     "exportFailed": "Échec de l'export du tableau : {{error}}",
     "importSuccess": "Tableau importé avec succès !",
     "importFailed": "Erreur lors de l'import du tableau : {{error}}"
+  },
+  "framework": {
+    "intentional": {
+      "title": "Cadre intentionnel",
+      "createTitle": "Créer un cadre intentionnel",
+      "noFramework": "Aucun cadre intentionnel créé pour le moment.",
+      "name": "Cadre intentionnel",
+      "expandAll": "Tout déplier",
+      "collapseAll": "Tout replier",
+      "category": {
+        "mission": {
+          "label": "Mission",
+          "description": "Que faisons-nous concrètement, et pour qui ? Quels sont nos principaux produits ou services, nos propositions de valeur ?"
+        },
+        "purpose": {
+          "label": "Finalité",
+          "description": "Pourquoi, pour qui et pour quoi faisons-nous ce que nous faisons ? Quel effet cherchons-nous à produire ? Quelle est notre principale motivation pour accomplir notre(s) mission(s) ?"
+        },
+        "values": {
+          "label": "Valeurs & Principes",
+          "description": "Quelles sont nos valeurs et leurs principes d'application pratique ? Qui ou quoi compte vraiment pour nous ? Quelle manière d'agir nous permet de traduire nos valeurs en actes ?"
+        },
+        "regenerative": {
+          "label": "Objectifs régénératifs",
+          "description": "Quelles contributions positives souhaitons-nous apporter aux systèmes naturels et sociaux ? Quels résultats voulons-nous atteindre, et dans quel délai ?"
+        },
+        "legal": {
+          "label": "Juridique & Économique",
+          "description": "Un statut juridique particulier est-il important pour nous, et si oui, lequel ? Un modèle économique particulier est-il important pour nous, et si oui, lequel ?"
+        },
+        "ambition": {
+          "label": "Ambition",
+          "description": "Quelles sont nos ambitions concrètes et mesurables ? Nos ambitions qualitatives ou quantitatives ? Quels résultats voulons-nous atteindre ? Dans quel délai ?"
+        },
+        "temporality": {
+          "label": "Temporalité",
+          "description": "Une temporalité particulière est-elle importante pour nous, et si oui, laquelle ?"
+        },
+        "vision": {
+          "label": "Vision",
+          "description": "Quel monde idéal souhaitons-nous ? Pourquoi, pour qui ou pour quoi souhaitons-nous ce monde ?"
+        },
+        "socialRoles": {
+          "label": "Rôles sociaux",
+          "description": "À quel rôle nous identifions-nous pour accomplir notre(s) mission(s) ? Quels sont nos métiers pour offrir nos produits ou services ?"
+        },
+        "identity": {
+          "label": "Identité",
+          "description": "À qui nous identifions-nous, en tant que membres de l'organisation ? Symboliquement, à quoi ressemble cette identité ?"
+        }
+      }
+    },
+    "collaborative": {
+      "title": "Cadre collaboratif",
+      "createTitle": "Créer un cadre collaboratif",
+      "noFramework": "Aucun cadre collaboratif créé pour le moment.",
+      "name": "Cadre collaboratif",
+      "expandAll": "Tout déplier",
+      "collapseAll": "Tout replier",
+      "category": {
+        "collaborative-values": {
+          "label": "Valeurs & Principes collaboratifs",
+          "description": "Les valeurs importantes pour une collaboration efficace et agréable, et les principes qui traduisent ces valeurs en actions au sein de l'organisation."
+        },
+        "expected-behaviors": {
+          "label": "Comportements attendus",
+          "description": "Comportements à encourager, indispensables, à éviter ou inacceptables pour une collaboration efficace et agréable."
+        },
+        "regular-meetings": {
+          "label": "Réunions régulières",
+          "description": "Les types de réunions pratiquées, leur fréquence et leur durée."
+        },
+        "entry-process": {
+          "label": "Processus d'entrée",
+          "description": "Comment une personne peut-elle rejoindre l'organisation ?"
+        },
+        "exit-process": {
+          "label": "Processus de sortie",
+          "description": "Comment une personne peut-elle quitter l'organisation ?"
+        },
+        "conflict-resolution": {
+          "label": "Processus de résolution des conflits",
+          "description": "Comment réguler constructivement les tensions et les conflits entre les membres."
+        },
+        "exclusion-process": {
+          "label": "Processus d'exclusion",
+          "description": "Comment se séparer d'une personne qui nuit à l'organisation ou à ses membres."
+        },
+        "collaborative-methods": {
+          "label": "Méthodes collaboratives",
+          "description": "Méthodes de gestion de projet utilisées en complément de cette constitution."
+        },
+        "individual-support": {
+          "label": "Processus d'accompagnement individuel",
+          "description": "Comment offrir un accompagnement personnel."
+        },
+        "peer-support": {
+          "label": "Entraide entre pairs",
+          "description": "Comment s'entraider et apprendre ensemble."
+        }
+      }
+    },
+    "categoryOptional": "facultatif",
+    "placeholder": "Écrivez votre {{field}} ici..."
+  },
+  "dreamTop": {
+    "dreamBoard": "Tableau des rêves",
+    "intentionalFramework": "Cadre intentionnel",
+    "collaborativeFramework": "Cadre collaboratif",
+    "storyboardView": "Vue storyboard",
+    "prioritizationView": "Vue de priorisation",
+    "filtersAndControls": "Filtres & Contrôles",
+    "noTasksToPlan": "Aucune tâche à planifier.",
+    "subtasksOf": "Sous-tâches de : {{title}}",
+    "toggle": {
+      "intention": "Intention",
+      "collaboration": "Collaboration",
+      "dream": "Rêve",
+      "storyboard": "Storyboard",
+      "prioritization": "Priorisation"
+    }
   }
 }

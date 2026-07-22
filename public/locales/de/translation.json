@@ -932,5 +932,126 @@
     "exportFailed": "Tafelexport fehlgeschlagen: {{error}}",
     "importSuccess": "Tafel erfolgreich importiert!",
     "importFailed": "Fehler beim Importieren der Tafel: {{error}}"
+  },
+  "framework": {
+    "intentional": {
+      "title": "Intentionaler Rahmen",
+      "createTitle": "Intentionalen Rahmen erstellen",
+      "noFramework": "Noch kein intentionaler Rahmen erstellt.",
+      "name": "Intentionaler Rahmen",
+      "expandAll": "Alle ausklappen",
+      "collapseAll": "Alle einklappen",
+      "category": {
+        "mission": {
+          "label": "Mission",
+          "description": "Was tun wir konkret und für wen? Was sind unsere wichtigsten Produkte oder Dienstleistungen, unsere Wertversprechen?"
+        },
+        "purpose": {
+          "label": "Zweck",
+          "description": "Warum, für wen und wofür tun wir, was wir tun? Welche Wirkung wollen wir erzeugen? Was ist unsere Hauptmotivation für die Erfüllung unserer Mission(en)?"
+        },
+        "values": {
+          "label": "Werte & Prinzipien",
+          "description": "Was sind unsere Werte und ihre Prinzipien für die praktische Anwendung? Wer oder was ist uns wirklich wichtig? Welche Handlungsweise erlaubt es uns, Werte in Taten umzusetzen?"
+        },
+        "regenerative": {
+          "label": "Regenerative Ziele",
+          "description": "Welche positiven Beiträge wollen wir zu natürlichen und sozialen Systemen leisten? Welche Ergebnisse wollen wir erzielen und in welchem Zeitraum?"
+        },
+        "legal": {
+          "label": "Rechtliches & Wirtschaftliches",
+          "description": "Ist uns eine bestimmte Rechtsform wichtig und, wenn ja, welche? Ist uns ein bestimmtes Wirtschaftsmodell wichtig und, wenn ja, welches?"
+        },
+        "ambition": {
+          "label": "Ambition",
+          "description": "Was sind unsere konkreten und messbaren Ambitionen? Unsere qualitativen oder quantitativen Ambitionen? Welche Ergebnisse wollen wir erzielen? In welchem Zeitraum?"
+        },
+        "temporality": {
+          "label": "Zeitlichkeit",
+          "description": "Ist uns ein bestimmter Zeitrahmen wichtig und, wenn ja, welcher?"
+        },
+        "vision": {
+          "label": "Vision",
+          "description": "Welche ideale Welt wünschen wir uns? Warum, für wen oder wofür wünschen wir uns diese Welt?"
+        },
+        "socialRoles": {
+          "label": "Soziale Rollen",
+          "description": "Mit welcher Rolle identifizieren wir uns, um unsere Mission(en) zu erfüllen? Was sind unsere Berufe, um unsere Produkte oder Dienstleistungen anzubieten?"
+        },
+        "identity": {
+          "label": "Identität",
+          "description": "Als wen identifizieren wir uns als Mitglieder der Organisation? Symbolisch, wie sieht diese Identität aus?"
+        }
+      }
+    },
+    "collaborative": {
+      "title": "Kollaborativer Rahmen",
+      "createTitle": "Kollaborativen Rahmen erstellen",
+      "noFramework": "Noch kein kollaborativer Rahmen erstellt.",
+      "name": "Kollaborativer Rahmen",
+      "expandAll": "Alle ausklappen",
+      "collapseAll": "Alle einklappen",
+      "category": {
+        "collaborative-values": {
+          "label": "Kollaborative Werte & Prinzipien",
+          "description": "Die Werte, die für eine effiziente und angenehme Zusammenarbeit wichtig sind, und die Prinzipien, die diese Werte in Handeln umsetzen."
+        },
+        "expected-behaviors": {
+          "label": "Erwartete Verhaltensweisen",
+          "description": "Verhaltensweisen, die zu fördern, unverzichtbar, zu vermeiden oder inakzeptabel für eine effiziente und angenehme Zusammenarbeit sind."
+        },
+        "regular-meetings": {
+          "label": "Regelmäßige Treffen",
+          "description": "Die Arten von Meetings, ihre Häufigkeit und Dauer."
+        },
+        "entry-process": {
+          "label": "Eintrittsprozess",
+          "description": "Wie eine Person der Organisation beitreten kann."
+        },
+        "exit-process": {
+          "label": "Austrittsprozess",
+          "description": "Wie eine Person die Organisation verlassen kann."
+        },
+        "conflict-resolution": {
+          "label": "Konfliktlösungsprozess",
+          "description": "Wie Spannungen und Konflikte zwischen Mitgliedern konstruktiv reguliert werden."
+        },
+        "exclusion-process": {
+          "label": "Ausschlussprozess",
+          "description": "Wie man sich von einer Person trennt, die der Organisation oder ihren Mitgliedern schadet."
+        },
+        "collaborative-methods": {
+          "label": "Kollaborative Methoden",
+          "description": "Projektmanagement-Methoden, die diese Verfassung ergänzen."
+        },
+        "individual-support": {
+          "label": "Individuelle Begleitung",
+          "description": "Wie persönliche Unterstützung angeboten wird."
+        },
+        "peer-support": {
+          "label": "Gegenseitige Unterstützung",
+          "description": "Wie man sich gegenseitig hilft und gemeinsam lernt."
+        }
+      }
+    },
+    "categoryOptional": "optional",
+    "placeholder": "Schreiben Sie hier Ihr {{field}} ..."
+  },
+  "dreamTop": {
+    "dreamBoard": "Dream Board",
+    "intentionalFramework": "Intentionaler Rahmen",
+    "collaborativeFramework": "Kollaborativer Rahmen",
+    "storyboardView": "Storyboard-Ansicht",
+    "prioritizationView": "Priorisierungs-Ansicht",
+    "filtersAndControls": "Filter & Steuerung",
+    "noTasksToPlan": "Keine Aufgaben zu planen.",
+    "subtasksOf": "Teilaufgaben von: {{title}}",
+    "toggle": {
+      "intention": "Intention",
+      "collaboration": "Kollaboration",
+      "dream": "Dream",
+      "storyboard": "Storyboard",
+      "prioritization": "Priorisierung"
+    }
   }
 }

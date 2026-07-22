@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FrameworkCategoryView } from '@/components/FrameworkCategoryView';
@@ -10,17 +11,17 @@ import { FocusModeBar } from '@/components/planView/FocusModeBar';
 import { useFocusMode } from '@/hooks/useFocusMode';
 import { Plus, ChevronDown, ChevronRight, PlusCircle, MinusCircle } from 'lucide-react';
 
-const INTENTIONAL_CATEGORIES: Omit<FrameworkCategory, 'content' | 'order'>[] = [
-  { id: 'mission', label: 'Mission', description: 'What do we concretely do, and for whom? What are our main product or service offerings, our value propositions?' },
-  { id: 'purpose', label: 'Purpose', description: 'Why, for whom, and for what do we do what we do? What effect are we seeking to produce by doing what we do? What is our main motivation for carrying out our mission(s)?' },
-  { id: 'values', label: 'Values & Principles', description: 'What are our values and their principles for practical application? Who or what truly matters to us? What way of acting allows us to translate our values into action?' },
-  { id: 'regenerative', label: 'Regenerative Aims', description: 'What positive contributions do we wish to make to natural and social systems? What results do we want to achieve, and in what timeframe?', optional: true },
-  { id: 'legal', label: 'Legal & Economic', description: 'Is a particular legal status important to us, and if so, which one? Is a particular economic model important to us, and if so, which one?', optional: true },
-  { id: 'ambition', label: 'Ambition', description: 'What are our concrete and measurable ambitions? What are our qualitative or quantitative ambitions? What results do we want to achieve? In what timeframe?', optional: true },
-  { id: 'temporality', label: 'Temporality', description: 'Is a particular timeframe important to us, and if so, which one?', optional: true },
-  { id: 'vision', label: 'Vision', description: 'What ideal world do we wish for? Why, for whom, or for what do we wish for this world?', optional: true },
-  { id: 'socialRoles', label: 'Social Roles', description: 'What role do we identify with to fulfill our mission(s)? What are our professions to offer our products or services?', optional: true },
-  { id: 'identity', label: 'Identity', description: 'Who do we identify as, as members of the organization? Symbolically, what is this identity like?', optional: true },
+const INTENTIONAL_CATEGORY_IDS: { id: string; optional?: boolean }[] = [
+  { id: 'mission' },
+  { id: 'purpose' },
+  { id: 'values' },
+  { id: 'regenerative', optional: true },
+  { id: 'legal', optional: true },
+  { id: 'ambition', optional: true },
+  { id: 'temporality', optional: true },
+  { id: 'vision', optional: true },
+  { id: 'socialRoles', optional: true },
+  { id: 'identity', optional: true },
 ];
 
 interface IntentionalFrameworkViewProps {
@@ -29,10 +30,21 @@ interface IntentionalFrameworkViewProps {
 }
 
 const IntentionalFrameworkViewInner: React.FC<IntentionalFrameworkViewProps> = ({ hideHeader }) => {
+  const { t } = useTranslation();
   const { frameworks, createFramework, updateFramework } = useFrameworks('intentional');
   const { isFocusMode } = useFocusMode();
   const [framework, setFramework] = useState<FrameworkEntity | null>(null);
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
+
+  const intentionalCategories = useMemo<Omit<FrameworkCategory, 'content' | 'order'>[]>(
+    () => INTENTIONAL_CATEGORY_IDS.map(({ id, optional }) => ({
+      id,
+      label: t(`framework.intentional.category.${id}.label`),
+      description: t(`framework.intentional.category.${id}.description`),
+      optional,
+    })),
+    [t],
+  );
 
   const allCategoryIds = useMemo(
     () => (framework ? framework.categories.map(c => c.id) : []),
@@ -56,18 +68,18 @@ const IntentionalFrameworkViewInner: React.FC<IntentionalFrameworkViewProps> = (
   }, [frameworks]);
 
   const handleCreateFramework = useCallback(async () => {
-    const categories: FrameworkCategory[] = INTENTIONAL_CATEGORIES.map((cat, idx) => ({
+    const categories: FrameworkCategory[] = intentionalCategories.map((cat, idx) => ({
       ...cat,
       content: '',
       order: idx,
     }));
     const created = await createFramework({
-      name: 'Intentional Framework',
+      name: t('framework.intentional.name'),
       frameworkType: 'intentional',
       categories,
     });
     if (created) setFramework(created);
-  }, [createFramework]);
+  }, [createFramework, intentionalCategories, t]);
 
   const handleCategoryChange = useCallback((categoryId: string, content: string) => {
     if (!framework) return;
@@ -79,7 +91,7 @@ const IntentionalFrameworkViewInner: React.FC<IntentionalFrameworkViewProps> = (
     updateFramework(framework.id, { categories: updatedCategories });
   }, [framework, updateFramework]);
 
-  const viewTitle = 'Intentional Framework';
+  const viewTitle = t('framework.intentional.title');
 
   if (!framework) {
     return (
@@ -89,15 +101,15 @@ const IntentionalFrameworkViewInner: React.FC<IntentionalFrameworkViewProps> = (
           {!hideHeader && !isFocusMode && (
             <CardHeader className="flex flex-col space-y-4 pb-2 shrink-0">
               <div className="flex flex-row items-center justify-between">
-                <CardTitle>Intentional Framework</CardTitle>
+                <CardTitle>{viewTitle}</CardTitle>
               </div>
             </CardHeader>
           )}
           <CardContent className="flex-1 min-h-0 overflow-auto">
             <div className="flex flex-col items-center justify-center h-full text-gray-500">
-              <p className="mb-4">No intentional framework created yet.</p>
+              <p className="mb-4">{t('framework.intentional.noFramework')}</p>
               <Button onClick={handleCreateFramework}>
-                <Plus className="w-4 h-4 mr-2" /> Create Intentional Framework
+                <Plus className="w-4 h-4 mr-2" /> {t('framework.intentional.createTitle')}
               </Button>
             </div>
           </CardContent>
@@ -113,13 +125,13 @@ const IntentionalFrameworkViewInner: React.FC<IntentionalFrameworkViewProps> = (
         {!hideHeader && !isFocusMode && (
           <CardHeader className="flex flex-col space-y-4 pb-2 shrink-0">
             <div className="flex flex-row items-center justify-between">
-              <CardTitle>Intentional Framework</CardTitle>
+              <CardTitle>{viewTitle}</CardTitle>
               <div className="flex items-center gap-2">
                 <Button variant="ghost" size="sm" onClick={expandAll}>
-                  <PlusCircle className="w-4 h-4 mr-1" /> Expand All
+                  <PlusCircle className="w-4 h-4 mr-1" /> {t('framework.intentional.expandAll')}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={collapseAll}>
-                  <MinusCircle className="w-4 h-4 mr-1" /> Collapse All
+                  <MinusCircle className="w-4 h-4 mr-1" /> {t('framework.intentional.collapseAll')}
                 </Button>
               </div>
             </div>
@@ -129,10 +141,10 @@ const IntentionalFrameworkViewInner: React.FC<IntentionalFrameworkViewProps> = (
           {hideHeader && (
             <div className="flex items-center gap-2 mb-2">
               <Button variant="ghost" size="sm" onClick={expandAll}>
-                <PlusCircle className="w-4 h-4 mr-1" /> Expand All
+                <PlusCircle className="w-4 h-4 mr-1" /> {t('framework.intentional.expandAll')}
               </Button>
               <Button variant="ghost" size="sm" onClick={collapseAll}>
-                <MinusCircle className="w-4 h-4 mr-1" /> Collapse All
+                <MinusCircle className="w-4 h-4 mr-1" /> {t('framework.intentional.collapseAll')}
               </Button>
             </div>
           )}
