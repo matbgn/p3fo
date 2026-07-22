@@ -1446,7 +1446,17 @@
   "programTop": {
     "calendar": "Kalender",
     "resources": "Ressourcen",
-    "programCalendar": "Programmkalender"
+    "programCalendar": "Programmkalender",
+    "resourcesWorkload": "Ressourcenauslastung",
+    "teamMembers": "Teammitglieder",
+    "today": "Heute",
+    "tasksAssigned": "{{count}} Aufgaben zugewiesen",
+    "tasksAssigned_one": "{{count}} Aufgabe zugewiesen",
+    "unassigned": "Nicht zugewiesen",
+    "duration": "Dauer: {{count}} Pkt.",
+    "startLabel": "Start: {{date}}",
+    "endLabel": "Ende: {{date}}",
+    "points": "{{count}} Pkt."
   },
   "roles": {
     "searchPlaceholder": "Rollen suchen...",

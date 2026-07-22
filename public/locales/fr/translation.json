@@ -1446,7 +1446,17 @@
   "programTop": {
     "calendar": "Calendrier",
     "resources": "Ressources",
-    "programCalendar": "Calendrier du programme"
+    "programCalendar": "Calendrier du programme",
+    "resourcesWorkload": "Charge des ressources",
+    "teamMembers": "Membres de l'équipe",
+    "today": "Aujourd'hui",
+    "tasksAssigned": "{{count}} tâches assignées",
+    "tasksAssigned_one": "{{count}} tâche assignée",
+    "unassigned": "Non assigné",
+    "duration": "Durée : {{count}} pts",
+    "startLabel": "Début : {{date}}",
+    "endLabel": "Fin : {{date}}",
+    "points": "{{count}} pts"
   },
   "roles": {
     "searchPlaceholder": "Rechercher des rôles...",
