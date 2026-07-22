@@ -1317,5 +1317,29 @@
   },
   "storyboard": {
     "difficultyTitle": "Difficulty: {{level}}"
+  },
+  "todolist": {
+    "loadingFilters": "Loading filters...",
+    "topTaskPlaceholder": "Enter a title for a new top-level task",
+    "subtaskPlaceholder": "Enter a new subtask",
+    "noTasksMatch": "No tasks match the current filters.",
+    "setDeadline": "Set deadline",
+    "durationLabel": "Duration:",
+    "duplicate": "Duplicate",
+    "delete": "Delete",
+    "markUrgent": "Mark Urgent",
+    "removeUrgent": "Remove Urgent",
+    "markHighImpact": "Mark High Impact",
+    "removeHighImpact": "Remove Impact",
+    "markIncidentOnDelivery": "Mark Incident on Delivery",
+    "removeIncidentOnDelivery": "Remove IoD",
+    "markSprintTarget": "Mark Sprint Target",
+    "removeSprintTarget": "Remove Sprint Target",
+    "badge": {
+      "urgent": "Urgent",
+      "impact": "Impact",
+      "iod": "IoD",
+      "sprint": "Sprint"
+    }
   }
 }

@@ -1317,5 +1317,29 @@
   },
   "storyboard": {
     "difficultyTitle": "Schwierigkeit: {{level}}"
+  },
+  "todolist": {
+    "loadingFilters": "Filter werden geladen...",
+    "topTaskPlaceholder": "Titel für eine neue übergeordnete Aufgabe eingeben",
+    "subtaskPlaceholder": "Neue Teilaufgabe eingeben",
+    "noTasksMatch": "Keine Aufgaben entsprechen den aktuellen Filtern.",
+    "setDeadline": "Frist festlegen",
+    "durationLabel": "Dauer:",
+    "duplicate": "Duplizieren",
+    "delete": "Löschen",
+    "markUrgent": "Als dringend markieren",
+    "removeUrgent": "Dringend entfernen",
+    "markHighImpact": "Als hohen Impact markieren",
+    "removeHighImpact": "Impact entfernen",
+    "markIncidentOnDelivery": "Vorfall bei Lieferung markieren",
+    "removeIncidentOnDelivery": "IoD entfernen",
+    "markSprintTarget": "Als Sprint-Ziel markieren",
+    "removeSprintTarget": "Sprint-Ziel entfernen",
+    "badge": {
+      "urgent": "Dringend",
+      "impact": "Impact",
+      "iod": "IoD",
+      "sprint": "Sprint"
+    }
   }
 }
