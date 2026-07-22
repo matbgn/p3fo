@@ -534,8 +534,6 @@
       "hoursPerDay": "Hours per day",
       "daysPerWeek": "Days per week",
       "include13th": "13th salary",
-      "systemName": "System name",
-      "systemNamePlaceholder": "Transparent salary system",
       "salaries13": "13 salaries",
       "salaries12": "12 salaries",
       "dialogTitle": "System settings",

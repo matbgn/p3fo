@@ -534,8 +534,6 @@
       "hoursPerDay": "Stunden pro Tag",
       "daysPerWeek": "Tage pro Woche",
       "include13th": "13. Monatslohn",
-      "systemName": "Systemname",
-      "systemNamePlaceholder": "Transparentes Lohnsystem",
       "salaries13": "13 Löhne",
       "salaries12": "12 Löhne",
       "dialogTitle": "Systemeinstellungen",

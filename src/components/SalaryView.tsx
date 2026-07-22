@@ -261,15 +261,6 @@ const ConfigEditor: React.FC<{
         />
         <Label htmlFor="cfg-13th">{t('salary.config.include13th')}</Label>
       </div>
-      <div className="space-y-1 md:col-span-2 lg:col-span-3">
-        <Label htmlFor="cfg-label">{t('salary.config.systemName')}</Label>
-        <Input
-          id="cfg-label"
-          value={config.label ?? ''}
-          onChange={e => update('label', e.target.value)}
-          placeholder={t('salary.config.systemNamePlaceholder')}
-        />
-      </div>
     </div>
   );
 };
@@ -766,10 +757,6 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Coins className="w-5 h-5" />
-            {board.config.label ?? t('salary.defaults.systemLabel')}
-          </h2>
           <p className="text-sm text-muted-foreground">
             {t('salary.config.indexHourlyWage')} {formatCurrency(board.config.indexHourlyWage, currency)} ·
             {' '}{board.config.hoursPerWeek}h/sem ·

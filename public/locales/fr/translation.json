@@ -534,8 +534,6 @@
       "hoursPerDay": "Heures par jour",
       "daysPerWeek": "Jours par semaine",
       "include13th": "13ème salaire",
-      "systemName": "Nom du système",
-      "systemNamePlaceholder": "Système de salaires transparents",
       "salaries13": "13 salaires",
       "salaries12": "12 salaires",
       "dialogTitle": "Paramètres du système",

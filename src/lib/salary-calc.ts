@@ -418,7 +418,6 @@ export const DEFAULT_SALARY_CONFIG = (): SalaryConfig => ({
   daysPerWeek: 5,
   roundingStep: 5,
   currency: 'CHF',
-  label: i18n.t('salary.defaults.systemLabel'),
 });
 
 export const DEFAULT_SALARY_BUDGET_SCENARIOS = (): SalaryBudgetScenario[] => [
