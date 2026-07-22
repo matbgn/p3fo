@@ -832,6 +832,83 @@
       "start": "Starten"
     }
   },
+  "dream": {
+    "title": "Traumtafel",
+    "noModerator": "Kein aktiver Moderator. Starten Sie eine Sitzung, um Moderator zu werden.",
+    "startSession": "Sitzung starten",
+    "becomeModerator": "Moderator werden",
+    "becomeModeratorConfirm": "Moderator werden?",
+    "hiddenMode": "Versteckter Modus",
+    "visibleMode": "Sichtbarer Modus",
+    "restartSession": "Sitzung neu starten",
+    "restartSessionConfirm": "Möchten Sie die Sitzung wirklich neu starten? Dies löscht alle Karten.",
+    "hideCursors": "Cursor ausblenden",
+    "showCursors": "Cursor anzeigen",
+    "hideLinks": "Verbindungen ausblenden",
+    "showLinks": "Verbindungen anzeigen",
+    "votingOpen": "Abstimmung offen",
+    "votingClosed": "Abstimmung geschlossen",
+    "resultsRevealed": "Ergebnisse enthüllt",
+    "defaultVoting": "Standard-Abstimmung",
+    "votingLabel": "Abstimmung:",
+    "mode": "Modus",
+    "revealAll": "Alle enthüllen",
+    "revealVotes": "Stimmen enthüllen",
+    "resetAllVotes": "Alle Stimmen zurücksetzen",
+    "resetAllVotesConfirm": "Möchten Sie wirklich alle Stimmen zurücksetzen? Dies löscht jede Stimme, behält aber alle Karten.",
+    "resetColumnVotesConfirm": "Möchten Sie wirklich alle Stimmen in der Spalte „{{column}}“ zurücksetzen? Dies löscht jede Stimme in dieser Spalte, behält aber alle Karten.",
+    "linkingMode": "Verbindungsmodus: Klicken Sie auf andere Karten, um sie zu verknüpfen/trennen",
+    "noVotesCastYet": "Noch keine Stimmen abgegeben.",
+    "medianGrade": "Median-Note:",
+    "votesCount": "({{n}} Stimmen)",
+    "budget": "Budget",
+    "pts": "Pkt",
+    "vote": "Abstimmen",
+    "stop": "Stopp",
+    "reveal": "Enthüllen",
+    "revote": "Neu abstimmen",
+    "reset": "Zurücksetzen",
+    "open": "Offen",
+    "revealed": "Enthüllt",
+    "closed": "Geschlossen",
+    "upDown": "Auf/Ab",
+    "points": "Punkte",
+    "mj": "MJ",
+    "expandTimeline": "Zeitleiste ausklappen",
+    "collapseTimeline": "Zeitleiste einklappen",
+    "timeFrame": {
+      "3mo": "3 Monate",
+      "6mo": "6 Monate",
+      "1y": "12 Monate",
+      "2y": "2 Jahre",
+      "4y": "4 Jahre"
+    },
+    "errorLoadingBoard": "Fehler beim Laden der Tafel",
+    "promote": {
+      "title": "Zum Kanban befördern",
+      "description": "Dies erstellt eine neue Aufgabe im Kanban-Board mit dem Inhalt dieser Karte.",
+      "confirm": "Befördern"
+    },
+    "pointsConfig": {
+      "title": "Punktebudget konfigurieren",
+      "maxPoints": "Max. Punkte:",
+      "start": "Punkte-Abstimmung starten"
+    },
+    "mjConfig": {
+      "title": "Mehrheitsurteil-Etiketten konfigurieren",
+      "labelPlaceholder": "Etikett für Grad {{n}}",
+      "saveAndStart": "Speichern & MJ-Abstimmung starten"
+    },
+    "timer": {
+      "stop": "Timer stoppen",
+      "set": "Timer einstellen",
+      "dialogTitle": "Timer starten/stoppen",
+      "dialogDescription": "Minuten und Sekunden anpassen.",
+      "minutes": "Minuten",
+      "seconds": "Sekunden",
+      "start": "Starten"
+    }
+  },
   "boardOptions": {
     "options": "Optionen",
     "title": "Tafel-Optionen",

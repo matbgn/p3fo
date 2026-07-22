@@ -832,6 +832,83 @@
       "start": "Start"
     }
   },
+  "dream": {
+    "title": "Dream Board",
+    "noModerator": "No moderator active. Start a session to become the moderator.",
+    "startSession": "Start Session",
+    "becomeModerator": "Become Moderator",
+    "becomeModeratorConfirm": "Become moderator?",
+    "hiddenMode": "Hidden Mode",
+    "visibleMode": "Visible Mode",
+    "restartSession": "Restart Session",
+    "restartSessionConfirm": "Are you sure you want to restart the session? This will clear all cards.",
+    "hideCursors": "Hide Cursors",
+    "showCursors": "Show Cursors",
+    "hideLinks": "Hide Links",
+    "showLinks": "Show Links",
+    "votingOpen": "Voting Open",
+    "votingClosed": "Voting Closed",
+    "resultsRevealed": "Results Revealed",
+    "defaultVoting": "Default Voting",
+    "votingLabel": "Voting:",
+    "mode": "Mode",
+    "revealAll": "Reveal All",
+    "revealVotes": "Reveal Votes",
+    "resetAllVotes": "Reset All Votes",
+    "resetAllVotesConfirm": "Are you sure you want to reset all votes? This will clear every vote but keep all cards.",
+    "resetColumnVotesConfirm": "Are you sure you want to reset all votes in the \"{{column}}\" column? This will clear every vote in this column but keep all cards.",
+    "linkingMode": "Linking mode: Click on other cards to link/unlink them",
+    "noVotesCastYet": "No votes cast yet.",
+    "medianGrade": "Median Grade:",
+    "votesCount": "({{n}} votes)",
+    "budget": "Budget",
+    "pts": "pts",
+    "vote": "Vote",
+    "stop": "Stop",
+    "reveal": "Reveal",
+    "revote": "Revote",
+    "reset": "Reset",
+    "open": "Open",
+    "revealed": "Revealed",
+    "closed": "Closed",
+    "upDown": "Up/Down",
+    "points": "Points",
+    "mj": "MJ",
+    "expandTimeline": "Expand Timeline",
+    "collapseTimeline": "Collapse Timeline",
+    "timeFrame": {
+      "3mo": "3 months",
+      "6mo": "6 months",
+      "1y": "12 months",
+      "2y": "2 years",
+      "4y": "4 years"
+    },
+    "errorLoadingBoard": "Error loading board",
+    "promote": {
+      "title": "Promote to Kanban",
+      "description": "This will create a new task in the Kanban board with the content of this card.",
+      "confirm": "Promote"
+    },
+    "pointsConfig": {
+      "title": "Configure Points Budget",
+      "maxPoints": "Max Points:",
+      "start": "Start Points Voting"
+    },
+    "mjConfig": {
+      "title": "Configure Majority Judgment Labels",
+      "labelPlaceholder": "Label for grade {{n}}",
+      "saveAndStart": "Save & Start MJ Voting"
+    },
+    "timer": {
+      "stop": "Stop Timer",
+      "set": "Set Timer",
+      "dialogTitle": "Start/Stop Timer",
+      "dialogDescription": "Adjust minutes and seconds.",
+      "minutes": "Minutes",
+      "seconds": "Seconds",
+      "start": "Start"
+    }
+  },
   "boardOptions": {
     "options": "Options",
     "title": "Board Options",

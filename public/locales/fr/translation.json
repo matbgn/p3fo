@@ -832,6 +832,83 @@
       "start": "Démarrer"
     }
   },
+  "dream": {
+    "title": "Tableau des rêves",
+    "noModerator": "Aucun modérateur actif. Démarrez une session pour devenir modérateur.",
+    "startSession": "Démarrer la session",
+    "becomeModerator": "Devenir modérateur",
+    "becomeModeratorConfirm": "Devenir modérateur ?",
+    "hiddenMode": "Mode masqué",
+    "visibleMode": "Mode visible",
+    "restartSession": "Relancer la session",
+    "restartSessionConfirm": "Voulez-vous vraiment relancer la session ? Cela effacera toutes les cartes.",
+    "hideCursors": "Masquer les curseurs",
+    "showCursors": "Afficher les curseurs",
+    "hideLinks": "Masquer les liens",
+    "showLinks": "Afficher les liens",
+    "votingOpen": "Vote ouvert",
+    "votingClosed": "Vote clôturé",
+    "resultsRevealed": "Résultats révélés",
+    "defaultVoting": "Vote par défaut",
+    "votingLabel": "Vote :",
+    "mode": "Mode",
+    "revealAll": "Tout révéler",
+    "revealVotes": "Révéler les votes",
+    "resetAllVotes": "Réinitialiser tous les votes",
+    "resetAllVotesConfirm": "Voulez-vous vraiment réinitialiser tous les votes ? Cela effacera chaque vote mais conservera les cartes.",
+    "resetColumnVotesConfirm": "Voulez-vous vraiment réinitialiser tous les votes dans la colonne « {{column}} » ? Cela effacera chaque vote de cette colonne mais conservera les cartes.",
+    "linkingMode": "Mode liaison : cliquez sur d'autres cartes pour les lier/délier",
+    "noVotesCastYet": "Aucun vote pour le moment.",
+    "medianGrade": "Grade médian :",
+    "votesCount": "({{n}} votes)",
+    "budget": "Budget",
+    "pts": "pts",
+    "vote": "Voter",
+    "stop": "Arrêter",
+    "reveal": "Révéler",
+    "revote": "Revoter",
+    "reset": "Réinitialiser",
+    "open": "Ouvert",
+    "revealed": "Révélé",
+    "closed": "Clôturé",
+    "upDown": "Haut/Bas",
+    "points": "Points",
+    "mj": "JM",
+    "expandTimeline": "Déplier la chronologie",
+    "collapseTimeline": "Replier la chronologie",
+    "timeFrame": {
+      "3mo": "3 mois",
+      "6mo": "6 mois",
+      "1y": "12 mois",
+      "2y": "2 ans",
+      "4y": "4 ans"
+    },
+    "errorLoadingBoard": "Erreur lors du chargement du tableau",
+    "promote": {
+      "title": "Promouvoir vers le Kanban",
+      "description": "Ceci créera une nouvelle tâche dans le tableau Kanban avec le contenu de cette carte.",
+      "confirm": "Promouvoir"
+    },
+    "pointsConfig": {
+      "title": "Configurer le budget de points",
+      "maxPoints": "Points max :",
+      "start": "Démarrer le vote par points"
+    },
+    "mjConfig": {
+      "title": "Configurer les étiquettes du Jugement Majoritaire",
+      "labelPlaceholder": "Étiquette pour le grade {{n}}",
+      "saveAndStart": "Enregistrer & démarrer le vote JM"
+    },
+    "timer": {
+      "stop": "Arrêter le minuteur",
+      "set": "Définir le minuteur",
+      "dialogTitle": "Démarrer/Arrêter le minuteur",
+      "dialogDescription": "Ajustez les minutes et les secondes.",
+      "minutes": "Minutes",
+      "seconds": "Secondes",
+      "start": "Démarrer"
+    }
+  },
   "boardOptions": {
     "options": "Options",
     "title": "Options du tableau",
