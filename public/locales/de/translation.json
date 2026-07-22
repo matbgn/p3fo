@@ -851,6 +851,14 @@
     "proposalN": "Vorschlag {{n}}",
     "proposalNColon": "Vorschlag {{n}}:",
     "editableBeforeRound": "Vor Rundenstart bearbeitbar",
+    "clear": "Löschen",
+    "createLinkedDescription": "Konsultations-Abstimmung verknüpft mit „{{title}}“ erstellen",
+    "createLinkedAutoTitle": "Aufgabe – {{title}} – Abstimmung",
+    "createLinkedDefaultProposal": "<p>Vorschlag 1</p>",
+    "openModerationView": "Moderationsansicht öffnen",
+    "finalizeSummaryProposal": "Vorschlag {{n}} als Entscheid ausgewählt.",
+    "finalizeSummaryGeneric": "Vorschlag als Entscheid ausgewählt.",
+    "finalizeSummaryTie": "Gleichstand — kein Ergebnis erreicht.",
     "placeholders": {
       "refineNextRound": "Vorschlagstext für die nächste Runde bearbeiten..."
     },

@@ -16,6 +16,7 @@ import {
   Mail,
 } from "lucide-react";
 import { getVotingStrings } from "@/lib/voting-i18n";
+import { useTranslation } from "react-i18next";
 
 interface ModerationPanelProps {
   vote: VoteEntity;
@@ -156,6 +157,7 @@ const ModeratorRow: React.FC<{
   copiedToken: string | null;
 }> = ({ moderator, voteSlug, onCopyLink, onRevoke, onOpenPopout, copiedToken }) => {
   const t = getVotingStrings();
+  const { t: tt } = useTranslation();
   const isActive = moderator.active;
   const isCopied = copiedToken === moderator.token;
 
@@ -196,7 +198,7 @@ const ModeratorRow: React.FC<{
             variant="ghost"
             className="h-7 w-7 p-0"
             onClick={() => onOpenPopout(moderator.token)}
-            title="Open moderation view"
+            title={tt("voting.openModerationView")}
           >
             <ExternalLink className="w-3 h-3" />
           </Button>

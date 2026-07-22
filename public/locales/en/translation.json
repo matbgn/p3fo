@@ -851,6 +851,14 @@
     "proposalN": "Proposal {{n}}",
     "proposalNColon": "Proposal {{n}}:",
     "editableBeforeRound": "Editable before starting round",
+    "clear": "Clear",
+    "createLinkedDescription": "Create a consultation vote linked to \u201c{{title}}\u201d",
+    "createLinkedAutoTitle": "Task \u2013 {{title}} \u2013 vote",
+    "createLinkedDefaultProposal": "<p>Proposal 1</p>",
+    "openModerationView": "Open moderation view",
+    "finalizeSummaryProposal": "Proposal {{n}} selected as the decision.",
+    "finalizeSummaryGeneric": "Proposal selected as the decision.",
+    "finalizeSummaryTie": "Tie — no decision reached.",
     "placeholders": {
       "refineNextRound": "Modify the proposal text for the next round..."
     },

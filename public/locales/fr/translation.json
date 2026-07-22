@@ -851,6 +851,14 @@
     "proposalN": "Proposition {{n}}",
     "proposalNColon": "Proposition {{n}} :",
     "editableBeforeRound": "Modifiable avant de démarrer le tour",
+    "clear": "Effacer",
+    "createLinkedDescription": "Créer un vote de consultation lié à « {{title}} »",
+    "createLinkedAutoTitle": "Tâche – {{title}} – vote",
+    "createLinkedDefaultProposal": "<p>Proposition 1</p>",
+    "openModerationView": "Ouvrir la vue modération",
+    "finalizeSummaryProposal": "Proposition {{n}} sélectionnée comme décision.",
+    "finalizeSummaryGeneric": "Proposition sélectionnée comme décision.",
+    "finalizeSummaryTie": "Égalité — aucune décision atteinte.",
     "placeholders": {
       "refineNextRound": "Modifiez le texte de la proposition pour le prochain tour..."
     },

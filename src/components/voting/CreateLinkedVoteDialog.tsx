@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { VoteEntity, VoteProposal } from "@/lib/persistence-types";
 import { getVotingStrings } from "@/lib/voting-i18n";
+import { useTranslation } from "react-i18next";
 import { ModeSelector } from "./ModeSelector";
 import { ProposalEditor } from "./ProposalEditor";
 
@@ -33,13 +34,14 @@ export const CreateLinkedVoteDialog: React.FC<CreateLinkedVoteDialogProps> = ({
   taskComment,
   onSave,
 }) => {
+  const { t: tt } = useTranslation();
   const [mode, setMode] = React.useState<VoteEntity["config"]["mode"]>("THUMBS_UP");
   const [isAnonymous, setIsAnonymous] = React.useState(true);
   const [allowFreeText, setAllowFreeText] = React.useState(false);
   const [proposals, setProposals] = React.useState<VoteProposal[]>([
     {
       id: crypto.randomUUID(),
-      content: taskComment || taskTitle || "<p>Proposal 1</p>",
+      content: taskComment || taskTitle || tt("voting.createLinkedDefaultProposal"),
       position: 0,
       active: true,
     },
@@ -47,18 +49,20 @@ export const CreateLinkedVoteDialog: React.FC<CreateLinkedVoteDialogProps> = ({
   const [isSaving, setIsSaving] = React.useState(false);
   const t = getVotingStrings();
 
-  const autoTitle = `Task – ${taskTitle} – vote`;
+  const autoTitle = tt("voting.createLinkedAutoTitle", { title: taskTitle });
+
+  const defaultProposalContent = tt("voting.createLinkedDefaultProposal");
 
   React.useEffect(() => {
     setProposals([
       {
         id: crypto.randomUUID(),
-        content: taskComment || taskTitle || "<p>Proposal 1</p>",
+        content: taskComment || taskTitle || defaultProposalContent,
         position: 0,
         active: true,
       },
     ]);
-  }, [taskComment, taskTitle, open]);
+  }, [taskComment, taskTitle, open, defaultProposalContent]);
 
   const handleSave = async (andClose: boolean = false) => {
     setIsSaving(true);
@@ -91,7 +95,7 @@ export const CreateLinkedVoteDialog: React.FC<CreateLinkedVoteDialogProps> = ({
         <DialogHeader>
           <DialogTitle>{t.labels.newLinkedVote}</DialogTitle>
           <DialogDescription>
-            Create a consultation vote linked to &ldquo;{taskTitle}&rdquo;
+            {tt("voting.createLinkedDescription", { title: taskTitle })}
           </DialogDescription>
         </DialogHeader>
 

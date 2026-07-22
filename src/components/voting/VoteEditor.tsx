@@ -22,6 +22,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { VoteEntity, VoteMode, VoteKind, VoteConfig, VoteProposal } from "@/lib/persistence-types";
 import { getVotingStrings } from "@/lib/voting-i18n";
+import { useTranslation } from "react-i18next";
 import { KindSelector } from "./KindSelector";
 import { ModeSelector } from "./ModeSelector";
 import { ProposalEditor, ProposalEditorHandle } from "./ProposalEditor";
@@ -55,6 +56,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
   const isFinalized = vote?.config.phase === "FINALIZED";
   const hasStarted = isEditing && vote?.config.phase !== "IDLE";
   const t = getVotingStrings();
+  const { t: tt } = useTranslation();
   const proposalEditorRef = React.useRef<ProposalEditorHandle>(null);
 
   const [title, setTitle] = React.useState("");
@@ -332,7 +334,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
                       disabled={isFinalized}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {openAt ? format(new Date(openAt), "PPP p") : <span>Pick a date</span>}
+                      {openAt ? format(new Date(openAt), "PPP p") : <span>{tt("task.pickDate")}</span>}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -367,14 +369,14 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
                         }}
                       >
                         <Clock className="mr-2 h-4 w-4" />
-                        {openAt ? format(new Date(openAt), "HH:mm") : <span className="text-muted-foreground">Set time...</span>}
+                        {openAt ? format(new Date(openAt), "HH:mm") : <span className="text-muted-foreground">{tt("task.setTime")}</span>}
                       </Button>
                     </div>
                   </PopoverContent>
                 </Popover>
                 {openAt && !isFinalized && (
                   <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setOpenAt(null)}>
-                    Clear
+                    {tt("voting.clear")}
                   </Button>
                 )}
               </div>
@@ -391,7 +393,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
                       disabled={isFinalized}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {closeAt ? format(new Date(closeAt), "PPP p") : <span>Pick a date</span>}
+                      {closeAt ? format(new Date(closeAt), "PPP p") : <span>{tt("task.pickDate")}</span>}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -428,14 +430,14 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
                         }}
                       >
                         <Clock className="mr-2 h-4 w-4" />
-                        {closeAt ? format(new Date(closeAt), "HH:mm") : <span className="text-muted-foreground">Set time...</span>}
+                        {closeAt ? format(new Date(closeAt), "HH:mm") : <span className="text-muted-foreground">{tt("task.setTime")}</span>}
                       </Button>
                     </div>
                   </PopoverContent>
                 </Popover>
                 {closeAt && !isFinalized && (
                   <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setCloseAt(null)}>
-                    Clear
+                    {tt("voting.clear")}
                   </Button>
                 )}
               </div>
