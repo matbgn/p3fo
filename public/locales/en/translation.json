@@ -794,6 +794,7 @@
     "resetAllVotes": "Reset All Votes",
     "linkingMode": "Linking mode: Click on other cards to link/unlink them",
     "noVotesCastYet": "No votes cast yet.",
+    "resetColumnVotesConfirm": "Are you sure you want to reset all votes in the \"{{column}}\" column? This will clear every vote in this column but keep all cards.",
     "budget": "Budget",
     "pts": "pts",
     "vote": "Vote",
@@ -830,6 +831,19 @@
       "minutes": "Minutes",
       "seconds": "Seconds",
       "start": "Start"
+    },
+    "column": {
+      "facts": "Facts",
+      "satisfactions": "Satisfactions",
+      "discomfort": "Discomfort",
+      "levers": "Levers",
+      "priorities": "Priorities"
+    },
+    "factTag": {
+      "A": "Achieved",
+      "N": "Non-Achieved",
+      "K": "Key numbers",
+      "P": "Planned"
     }
   },
   "dream": {
@@ -907,6 +921,13 @@
       "minutes": "Minutes",
       "seconds": "Seconds",
       "start": "Start"
+    },
+    "column": {
+      "dreams": "Dreams",
+      "strengths": "Strengths",
+      "threats": "Threats",
+      "levers": "Levers",
+      "priorities": "Priorities"
     }
   },
   "boardOptions": {

@@ -55,6 +55,15 @@ type VotingPhase = 'IDLE' | 'VOTING' | 'REVEALED';
 import { MJ_SCALE, votingModeLabel, mjGradeLabel } from './planView/constants';
 import { BoardOptions, BoardTypeConfig } from './planView/BoardOptions';
 
+const FERTILIZATION_COLUMN_IDS = ['facts', 'satisfactions', 'discomfort', 'levers', 'priorities'];
+
+function fertilizationColumnTitle(t: (key: string, opts?: Record<string, unknown>) => string, col: { id: string; title: string }): string {
+    if (FERTILIZATION_COLUMN_IDS.includes(col.id)) {
+        return t(`fertilization.column.${col.id}`);
+    }
+    return col.title;
+}
+
 // Default columns
 const DEFAULT_COLUMNS: FertilizationColumn[] = [
     { id: 'facts', title: 'Facts', color: '#FFFFFF', isLocked: false },
@@ -101,10 +110,10 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
     const [factTag, setFactTag] = useState<FactTag>('A');
 
     const FACT_TAG_OPTIONS = [
-        { value: 'A', label: 'Achieved', letter: 'A', className: 'bg-green-400 text-black px-1 rounded font-bold' },
-        { value: 'N', label: 'Non-Achieved', letter: 'NA', className: 'bg-black text-white px-1 rounded font-bold' },
-        { value: 'K', label: 'Key numbers', letter: 'K', className: 'bg-white text-black border border-gray-200 px-1 rounded font-bold' },
-        { value: 'P', label: 'Planned', letter: 'P', className: 'bg-yellow-400 text-black px-1 rounded font-bold' },
+        { value: 'A', label: t('fertilization.factTag.A'), letter: 'A', className: 'bg-green-400 text-black px-1 rounded font-bold' },
+        { value: 'N', label: t('fertilization.factTag.N'), letter: 'NA', className: 'bg-black text-white px-1 rounded font-bold' },
+        { value: 'K', label: t('fertilization.factTag.K'), letter: 'K', className: 'bg-white text-black border border-gray-200 px-1 rounded font-bold' },
+        { value: 'P', label: t('fertilization.factTag.P'), letter: 'P', className: 'bg-yellow-400 text-black px-1 rounded font-bold' },
     ];
 
     // Helper: get effective voting mode for a column (falls back to board-level)
@@ -166,7 +175,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
     // Reset votes for a specific column only
     const resetColumnVotes = async (columnId: string) => {
         if (!boardState || !isModerator) return;
-        if (!confirm(`Are you sure you want to reset all votes in the "${boardState.columns.find(c => c.id === columnId)?.title}" column? This will clear every vote in this column but keep all cards.`)) return;
+        if (!confirm(t('fertilization.resetColumnVotesConfirm', { column: fertilizationColumnTitle(t, boardState.columns.find(c => c.id === columnId) ?? { id: columnId, title: columnId }) }))) return;
         const newCards = boardState.cards.map(c =>
             c.columnId === columnId ? { ...c, votes: {}, offlineVotes: {} } : c
         );
@@ -1098,7 +1107,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                 }
                 filterState={filterState}
                 onFilterChange={setFilterState}
-                columnOptions={boardState.columns.map(col => ({ value: col.id, label: col.title }))}
+                columnOptions={boardState.columns.map(col => ({ value: col.id, label: fertilizationColumnTitle(t, col) }))}
                 tagOptions={FACT_TAG_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
                 sessionControls={
                     <>
@@ -1282,7 +1291,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                     return (
                         <BoardColumn
                             key={column.id}
-                            column={column}
+                            column={{ ...column, title: fertilizationColumnTitle(t, column) }}
                             cards={filteredCards.filter(c => c.columnId === column.id).sort((a, b) => {
                                 const sortOrder = columnSortOrder[column.id];
                                 if (!sortOrder || sortOrder === 'none') return 0;

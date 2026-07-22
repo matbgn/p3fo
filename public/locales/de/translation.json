@@ -794,6 +794,7 @@
     "resetAllVotes": "Alle Stimmen zurücksetzen",
     "linkingMode": "Verbindungsmodus: Klicken Sie auf andere Karten, um sie zu verknüpfen/trennen",
     "noVotesCastYet": "Noch keine Stimmen abgegeben.",
+    "resetColumnVotesConfirm": "Sind Sie sicher, dass Sie alle Stimmen in der Spalte \"{{column}}\" zurücksetzen möchten? Dies löscht jede Stimme in dieser Spalte, behält aber alle Karten.",
     "budget": "Budget",
     "pts": "Pkt",
     "vote": "Abstimmen",
@@ -830,6 +831,19 @@
       "minutes": "Minuten",
       "seconds": "Sekunden",
       "start": "Starten"
+    },
+    "column": {
+      "facts": "Fakten",
+      "satisfactions": "Zufriedenheiten",
+      "discomfort": "Unbehagen",
+      "levers": "Hebel",
+      "priorities": "Prioritäten"
+    },
+    "factTag": {
+      "A": "Erreicht",
+      "N": "Nicht erreicht",
+      "K": "Kennzahlen",
+      "P": "Geplant"
     }
   },
   "dream": {
@@ -907,6 +921,13 @@
       "minutes": "Minuten",
       "seconds": "Sekunden",
       "start": "Starten"
+    },
+    "column": {
+      "dreams": "Träume",
+      "strengths": "Stärken",
+      "threats": "Bedrohungen",
+      "levers": "Hebel",
+      "priorities": "Prioritäten"
     }
   },
   "boardOptions": {

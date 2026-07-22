@@ -60,6 +60,15 @@ import { MJ_SCALE, votingModeLabel, mjGradeLabel } from './planView/constants';
 import { BoardOptions, BoardTypeConfig } from './planView/BoardOptions';
 
 // Default columns for Dream Board
+const DREAM_COLUMN_IDS = ['dreams', 'strengths', 'threats', 'levers', 'priorities'];
+
+function dreamColumnTitle(t: (key: string, opts?: Record<string, unknown>) => string, col: { id: string; title: string }): string {
+    if (DREAM_COLUMN_IDS.includes(col.id)) {
+        return t(`dream.column.${col.id}`);
+    }
+    return col.title;
+}
+
 const DEFAULT_DREAM_COLUMNS: DreamColumn[] = [
   { id: 'dreams', title: 'Dreams', color: '#FFFFFF', isLocked: false },
   { id: 'strengths', title: 'Strengths', color: '#FACC15', isLocked: true },
@@ -309,7 +318,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
   // Reset votes for a specific column only
   const resetColumnVotes = async (columnId: string) => {
     if (!boardState || !isModerator) return;
-    if (!confirm(t('dream.resetColumnVotesConfirm', { column: boardState.columns.find(c => c.id === columnId)?.title ?? '' }))) return;
+    if (!confirm(t('dream.resetColumnVotesConfirm', { column: dreamColumnTitle(t, boardState.columns.find(c => c.id === columnId) ?? { id: columnId, title: columnId }) }))) return;
     const newCards = boardState.cards.map(c =>
       c.columnId === columnId ? { ...c, votes: {}, offlineVotes: {} } : c
     );
@@ -1213,7 +1222,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
           }
           filterState={filterState}
           onFilterChange={setFilterState}
-          columnOptions={boardState.columns.map(c => ({ label: c.title, value: c.id }))}
+          columnOptions={boardState.columns.map(c => ({ label: dreamColumnTitle(t, c), value: c.id }))}
           tagOptions={TIME_FRAME_TAG_OPTIONS.map(o => ({ value: o.value, label: timeFrameLabel(t, o.value as TimeFrame) }))}
           sessionControls={
             <>
@@ -1446,7 +1455,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
                 isLocked: false,
                 color: '#FFFFFF'
               }
-              : column;
+              : { ...column, title: dreamColumnTitle(t, column) };
 
             const colMode = getColumnVotingMode(column.id);
             const colPhase = getColumnVotingPhase(column.id);

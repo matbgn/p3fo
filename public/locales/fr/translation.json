@@ -767,7 +767,7 @@
     },
     "mode": {
       "thumbsUp": "Pouce levé",
-      "thumbsUdNeutral": "Haut / Bas / Neutre",
+      "thumbsUdNeutral": "Pour / Contre / Pas contre",
       "points": "Budget de points",
       "majorityJudgment": "Jugement Majoritaire",
       "consentLoop": "Boucle de consentement"
@@ -794,6 +794,7 @@
     "resetAllVotes": "Réinitialiser tous les votes",
     "linkingMode": "Mode liaison : cliquez sur d'autres cartes pour les lier/délier",
     "noVotesCastYet": "Aucun vote pour le moment.",
+    "resetColumnVotesConfirm": "Êtes-vous sûr de vouloir réinitialiser tous les votes dans la colonne « {{column}} » ? Cela effacera chaque vote dans cette colonne mais conservera toutes les cartes.",
     "budget": "Budget",
     "pts": "pts",
     "vote": "Voter",
@@ -830,6 +831,19 @@
       "minutes": "Minutes",
       "seconds": "Secondes",
       "start": "Démarrer"
+    },
+    "column": {
+      "facts": "Faits",
+      "satisfactions": "Satisfactions",
+      "discomfort": "Inconfort",
+      "levers": "Leviers",
+      "priorities": "Priorités"
+    },
+    "factTag": {
+      "A": "Atteint",
+      "N": "Non atteint",
+      "K": "Chiffres clés",
+      "P": "Planifié"
     }
   },
   "dream": {
@@ -907,6 +921,13 @@
       "minutes": "Minutes",
       "seconds": "Secondes",
       "start": "Démarrer"
+    },
+    "column": {
+      "dreams": "Rêves",
+      "strengths": "Forces",
+      "threats": "Menaces",
+      "levers": "Leviers",
+      "priorities": "Priorités"
     }
   },
   "boardOptions": {
