@@ -1447,5 +1447,25 @@
     "calendar": "Kalender",
     "resources": "Ressourcen",
     "programCalendar": "Programmkalender"
+  },
+  "roles": {
+    "searchPlaceholder": "Rollen suchen...",
+    "roleName": "Rollenname",
+    "circleGroup": "Kreis / Gruppe",
+    "roleAssignments": "Rollenzuweisungen",
+    "involvement": "Beteiligung",
+    "filterPrefix": "Filter",
+    "noRolesMatch": "Keine Rollen entsprechen den aktuellen Filtern.",
+    "unassigned": "Nicht zugewiesen",
+    "noCircle": "Kein Kreis",
+    "unknown": "Unbekannt",
+    "roleCount": "{{count}} Rolle(n)",
+    "viewList": "Liste",
+    "viewByUser": "Nach Benutzer",
+    "rolesViewAria": "Rollenansicht",
+    "listViewAria": "Listenansicht",
+    "byUserAria": "Nach Benutzer",
+    "expandAll": "Alle aufklappen",
+    "collapseAll": "Alle einklappen"
   }
 }

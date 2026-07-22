@@ -1447,5 +1447,25 @@
     "calendar": "Calendar",
     "resources": "Resources",
     "programCalendar": "Program Calendar"
+  },
+  "roles": {
+    "searchPlaceholder": "Search roles...",
+    "roleName": "Role Name",
+    "circleGroup": "Circle / Group",
+    "roleAssignments": "Role Assignments",
+    "involvement": "Involvement",
+    "filterPrefix": "Filter",
+    "noRolesMatch": "No roles match the current filters.",
+    "unassigned": "Unassigned",
+    "noCircle": "No Circle",
+    "unknown": "Unknown",
+    "roleCount": "{{count}} role(s)",
+    "viewList": "List",
+    "viewByUser": "By User",
+    "rolesViewAria": "Roles View",
+    "listViewAria": "List View",
+    "byUserAria": "By User",
+    "expandAll": "Expand All",
+    "collapseAll": "Collapse All"
   }
 }

@@ -68,8 +68,8 @@ import { useUsersContext } from '@/context/UsersContext';
     expect(screen.getByText('Frontend Dev')).toBeTruthy();
     // Engineering appears twice as the parent circle for both roles
     expect(screen.getAllByText('Engineering').length).toBe(2);
-    expect(screen.getByText('P')).toBeTruthy();
-    expect(screen.getByText('CP')).toBeTruthy();
+    expect(screen.getByText('circles.involvement.P')).toBeTruthy();
+    expect(screen.getByText('circles.involvement.CP')).toBeTruthy();
   });
 
   it('shows search field and toggle buttons', () => {
@@ -77,9 +77,9 @@ import { useUsersContext } from '@/context/UsersContext';
     mockUseUsers.mockReturnValue({ users: [] });
 
     render(<RolesTable />);
-    expect(screen.getByPlaceholderText('Search roles...')).toBeTruthy();
-    expect(screen.getByText('List')).toBeTruthy();
-    expect(screen.getByText('By User')).toBeTruthy();
+    expect(screen.getByPlaceholderText('roles.searchPlaceholder')).toBeTruthy();
+    expect(screen.getByText('roles.viewList')).toBeTruthy();
+    expect(screen.getByText('roles.viewByUser')).toBeTruthy();
   });
 
   it('shows no roles message when circles array is empty', () => {
@@ -87,6 +87,6 @@ import { useUsersContext } from '@/context/UsersContext';
     mockUseUsers.mockReturnValue({ users: [] });
 
     render(<RolesTable />);
-    expect(screen.getByText('No roles match the current filters.')).toBeTruthy();
+    expect(screen.getByText('roles.noRolesMatch')).toBeTruthy();
   });
 });

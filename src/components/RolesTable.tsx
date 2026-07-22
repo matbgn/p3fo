@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   useReactTable,
   getCoreRowModel,
@@ -30,9 +31,18 @@ type RoleRow = {
 
 type RoleTableView = 'list' | 'byUser';
 
-const AssignmentBadges: React.FC<{ assignments: RoleAssignment[]; users: UserWithTrigram[] }> = ({ assignments, users }) => {
+const INVOLVEMENT_KEY: Record<string, string> = {
+  P: 'circles.involvement.P',
+  CP: 'circles.involvement.CP',
+  PA: 'circles.involvement.PA',
+  F: 'circles.involvement.F',
+  A: 'circles.involvement.A',
+  R: 'circles.involvement.R',
+};
+
+const AssignmentBadges: React.FC<{ assignments: RoleAssignment[]; users: UserWithTrigram[]; t: (key: string) => string }> = ({ assignments, users, t }) => {
   if (!assignments || assignments.length === 0) {
-    return <span className="text-muted-foreground italic">Unassigned</span>;
+    return <span className="text-muted-foreground italic">{t('roles.unassigned')}</span>;
   }
   return (
     <div className="flex gap-2 flex-wrap items-center">
@@ -42,7 +52,7 @@ const AssignmentBadges: React.FC<{ assignments: RoleAssignment[]; users: UserWit
         return (
           <Badge key={`${a.userId}-${i}`} variant="outline" className="flex items-center gap-1 px-2 py-1">
             <UserAvatar username={user.username} size="sm" trigram={user.trigram} showTooltip={false} />
-            <span className="text-xs">{a.involvementType}</span>
+            <span className="text-xs">{INVOLVEMENT_KEY[a.involvementType] ? t(INVOLVEMENT_KEY[a.involvementType]) : a.involvementType}</span>
           </Badge>
         );
       })}
@@ -51,19 +61,21 @@ const AssignmentBadges: React.FC<{ assignments: RoleAssignment[]; users: UserWit
 };
 
 // eslint-disable-next-line react-refresh/only-export-components
-export const getCircleParent = (role: CircleEntity, map: Map<string, CircleEntity>): { id: string; name: string } => {
-  if (!role.parentId) return { id: 'none', name: 'No Circle' };
+export const getCircleParent = (role: CircleEntity, map: Map<string, CircleEntity>, t?: (key: string) => string): { id: string; name: string } => {
+  const noCircleName = t ? t('roles.noCircle') : 'No Circle';
+  if (!role.parentId) return { id: 'none', name: noCircleName };
   let current = map.get(role.parentId);
   while (current) {
     if (current.nodeType !== 'role') {
-      return { id: current.id, name: current.name || 'Unknown' };
+      return { id: current.id, name: current.name || (t ? t('roles.unknown') : 'Unknown') };
     }
     current = current.parentId ? map.get(current.parentId) : undefined;
   }
-  return { id: 'none', name: 'No Circle' };
+  return { id: 'none', name: noCircleName };
 };
 
 export const RolesTable: React.FC = () => {
+  const { t } = useTranslation();
   const { circles } = useCircles();
   const { users } = useUsersContext();
 
@@ -74,7 +86,7 @@ export const RolesTable: React.FC = () => {
     return circles
       .filter(c => c.nodeType === 'role')
       .map(c => {
-        const parent = getCircleParent(c, circleMap);
+        const parent = getCircleParent(c, circleMap, t);
         return {
           id: c.id,
           name: c.name,
@@ -83,7 +95,7 @@ export const RolesTable: React.FC = () => {
           assignments: c.assignments || [],
         };
       });
-  }, [circles]);
+  }, [circles, t]);
 
   const [globalFilter, setGlobalFilter] = useState('');
   const [sorting, setSorting] = useState<SortingState>([{ id: 'name', desc: false }]);
@@ -109,19 +121,19 @@ export const RolesTable: React.FC = () => {
   const columns = useMemo<ColumnDef<RoleRow>[]>(() => [
     {
       accessorKey: 'name',
-      header: 'Role Name',
+      header: () => t('roles.roleName'),
       cell: info => <span className="font-medium">{info.getValue<string>()}</span>,
     },
     {
       accessorKey: 'circleName',
-      header: 'Circle / Group',
+      header: () => t('roles.circleGroup'),
       cell: info => info.getValue<string>(),
     },
     {
       id: 'assignments',
       accessorKey: 'assignments',
-      header: 'Role Assignments',
-      cell: info => <AssignmentBadges assignments={info.getValue<RoleAssignment[]>()} users={users} />,
+      header: () => t('roles.roleAssignments'),
+      cell: info => <AssignmentBadges assignments={info.getValue<RoleAssignment[]>()} users={users} t={t} />,
       filterFn: (row, _columnId, filterValue) => {
         if (!filterValue) return true;
         const val = String(filterValue).toLowerCase();
@@ -138,7 +150,7 @@ export const RolesTable: React.FC = () => {
       },
       enableColumnFilter: true,
     },
-  ], [users]);
+  ], [users, t]);
 
   const table = useReactTable({
     data: roles,
@@ -234,7 +246,7 @@ export const RolesTable: React.FC = () => {
                 <TableHead key={`${header.id}-filter`} className="pt-0 pb-2">
                   {header.column.getCanFilter() ? (
                     <Input
-                      placeholder={`Filter ${String(header.column.columnDef.header)}...`}
+                      placeholder={`${t('roles.filterPrefix')} ${t('roles.roleAssignments')}...`}
                       value={(header.column.getFilterValue() as string) || ''}
                       onChange={e => header.column.setFilterValue(e.target.value)}
                       className="h-7 text-xs w-full"
@@ -250,7 +262,7 @@ export const RolesTable: React.FC = () => {
         {filteredRows.length === 0 ? (
           <TableRow>
             <TableCell colSpan={columns.length} className="text-center text-muted-foreground py-8">
-              No roles match the current filters.
+              {t('roles.noRolesMatch')}
             </TableCell>
           </TableRow>
         ) : (
@@ -274,14 +286,14 @@ export const RolesTable: React.FC = () => {
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={expandAll}>
-            <PlusCircle className="w-4 h-4 mr-1" /> Expand All
+            <PlusCircle className="w-4 h-4 mr-1" /> {t('roles.expandAll')}
           </Button>
           <Button variant="ghost" size="sm" onClick={() => collapseAll(allGroupIds)}>
-            <MinusCircle className="w-4 h-4 mr-1" /> Collapse All
+            <MinusCircle className="w-4 h-4 mr-1" /> {t('roles.collapseAll')}
           </Button>
         </div>
         {groupedByUser.length === 0 ? (
-          <p className="text-center text-muted-foreground py-8">No roles match the current filters.</p>
+          <p className="text-center text-muted-foreground py-8">{t('roles.noRolesMatch')}</p>
         ) : (
           groupedByUser.map(group => {
             const groupId = group.user?.userId || 'unassigned';
@@ -312,7 +324,7 @@ export const RolesTable: React.FC = () => {
                         {group.user.username}
                       </>
                     ) : (
-                      <span className="italic">Unassigned</span>
+                      <span className="italic">{t('roles.unassigned')}</span>
                     )}
                   </div>
                   <Badge variant="secondary" className="text-xs">{group.rows.length}</Badge>
@@ -321,9 +333,9 @@ export const RolesTable: React.FC = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Role Name</TableHead>
-                        <TableHead>Circle / Group</TableHead>
-                        <TableHead>Involvement</TableHead>
+                        <TableHead>{t('roles.roleName')}</TableHead>
+                        <TableHead>{t('roles.circleGroup')}</TableHead>
+                        <TableHead>{t('roles.involvement')}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -341,7 +353,7 @@ export const RolesTable: React.FC = () => {
                                 <div className="flex gap-1 flex-wrap">
                                   {relevantAssignments.map((a, i) => (
                                     <Badge key={i} variant="secondary" className="text-xs">
-                                      {a.involvementType}
+                                      {INVOLVEMENT_KEY[a.involvementType] ? t(INVOLVEMENT_KEY[a.involvementType]) : a.involvementType}
                                     </Badge>
                                   ))}
                                 </div>
@@ -368,7 +380,7 @@ export const RolesTable: React.FC = () => {
       <div className="flex justify-between items-center flex-wrap gap-3 shrink-0">
         <div className="flex items-center gap-2">
           <Input
-            placeholder="Search roles..."
+            placeholder={t('roles.searchPlaceholder')}
             value={globalFilter}
             onChange={e => setGlobalFilter(e.target.value)}
             className="w-64"
@@ -376,19 +388,19 @@ export const RolesTable: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-sm text-muted-foreground">
-            {filteredRows.length} role(s)
+            {t('roles.roleCount', { count: filteredRows.length })}
           </span>
           <ToggleGroup
             type="single"
             value={view}
             onValueChange={(value) => value && setView(value as RoleTableView)}
-            aria-label="Roles View"
+            aria-label={t('roles.rolesViewAria')}
           >
-            <ToggleGroupItem value="list" aria-label="List View">
-              List
+            <ToggleGroupItem value="list" aria-label={t('roles.listViewAria')}>
+              {t('roles.viewList')}
             </ToggleGroupItem>
-            <ToggleGroupItem value="byUser" aria-label="By User">
-              By User
+            <ToggleGroupItem value="byUser" aria-label={t('roles.byUserAria')}>
+              {t('roles.viewByUser')}
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
