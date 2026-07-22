@@ -438,20 +438,12 @@ export interface DreamBoardEntity {
 }
 
 // Salary System (transparent salary calculator)
-// Reproduces the ADT Salary Calculator with fully configurable dimensions/levels
-// so it can be tailored to any client (see Calculateur_salaires.xlsx).
-
-export type SalaryDimensionKind =
-  | 'expertise'        // determinant "Expertise" — additive step value per level
-  | 'impact'           // determinant "Impact"    — additive step value per level
-  | 'situation'        // determinant "Situation familiale" (family/care situation)
-  | 'responsibility'   // determinant "Responsabilité clinique"
-  | 'custom';          // any client-specific determinant added at runtime
+// Transparent salary system with fully configurable dimensions/levels
+// so it can be tailored to any client.
 
 export interface SalaryDimension {
   id: string;
   name: string;
-  kind: SalaryDimensionKind;
   /** Monetary step added to base salary per level (CHF/month at 100%). */
   stepValue: number;
   /** Maximum level reachable for this dimension (0..maxLevel). */
@@ -503,7 +495,7 @@ export interface EmployerAdjustment {
 }
 
 export interface SalaryConfig {
-  /** Reference minimum hourly wage (CHF/h). Source: Geneva minimum wage in golden standard. */
+  /** Reference minimum hourly wage (CHF/h). */
   indexHourlyWage: number;
   /** Reference weekly hours (e.g. 40). */
   hoursPerWeek: number;
@@ -538,7 +530,7 @@ export interface SalaryConfig {
 }
 
 /** Budget target for the salary system. Reproduces the "Bilan prévisionnel"
- *  block from the ADT / Budget spreadsheets: revenues minus non-salary charges
+ *  block: revenues minus non-salary charges
  *  leaves a masse salariale disponible that must cover the computed salaries.
  *  Stored as 1-3 scenarios (min / intermediate / max). */
 export interface SalaryBudgetScenario {

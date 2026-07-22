@@ -4,7 +4,6 @@ import {
   SalaryBudgetScenario,
   SalaryConfig,
   SalaryDimension,
-  SalaryDimensionKind,
   SalaryEmployee,
   SalaryEmployeeLevel,
   EmployerAdjustment,
@@ -94,14 +93,6 @@ interface SalaryViewProps {
   embedded?: boolean;
   hideHeaderActions?: boolean;
 }
-
-const DIMENSION_KIND_OPTIONS: { value: SalaryDimensionKind; label: string }[] = [
-  { value: 'expertise', label: 'Expertise' },
-  { value: 'impact', label: 'Impact' },
-  { value: 'situation', label: 'Situation familiale' },
-  { value: 'responsibility', label: 'Responsabilité clinique' },
-  { value: 'custom', label: 'Personnalisé' },
-];
 
 const newId = (): string =>
   (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
@@ -214,8 +205,10 @@ const ConfigEditor: React.FC<{
           onChange={e => update('expenseFactor', parseFloat(e.target.value) || 1)}
         />
         <p className="text-xs text-muted-foreground">
-          ex: 1.75 = le coût employeur total = brut annuel × 1.75
-          (couvre AVS, 2ème pilier, entretien, etc. — ADT Q12=1.75).
+          ex: 1.95 qui correspond à 195% des salaires bruts annuels (couvre assurances sociales côté employeur, infrastructures, frais généraux, etc.).
+        </p>
+        <p className="text-xs text-muted-foreground italic">
+          En général les frais généraux représentent 180%–220% du salaire brut.
         </p>
       </div>
       <div className="space-y-1">
@@ -289,7 +282,6 @@ const DimensionEditor: React.FC<{
     const next: SalaryDimension = {
       id: newId(),
       name: 'Nouveau déterminant',
-      kind: 'custom',
       stepValue: 0,
       maxLevel: 4,
       affectsSalary: true,
@@ -311,20 +303,6 @@ const DimensionEditor: React.FC<{
                   value={dim.name}
                   onChange={e => updateDimension(dim.id, { name: e.target.value })}
                 />
-              </div>
-              <div className="space-y-1">
-                <Label>Type</Label>
-                <Select
-                  value={dim.kind}
-                  onValueChange={v => updateDimension(dim.id, { kind: v as SalaryDimensionKind })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {DIMENSION_KIND_OPTIONS.map(o => (
-                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
               <div className="space-y-1">
                 <Label>Palier max</Label>
@@ -867,7 +845,7 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
                 <TableHead className="text-right">Taux (%)</TableHead>
                 {!compactView && <TableHead className="text-right">Âge</TableHead>}
                 {!compactView && <TableHead className="text-right">Ancienneté</TableHead>}
-                {!compactView && board.dimensions.map(d => (
+                {board.dimensions.map(d => (
                   <TableHead key={d.id} className="text-center" style={{ color: d.color }}>
                     {d.name}
                   </TableHead>
@@ -875,10 +853,11 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
                 <TableHead className="text-right bg-muted/50">Salaire horaire CHF/h</TableHead>
                 {!compactView && <TableHead className="text-right">Brut mensuel à 100%</TableHead>}
                 {!compactView && <TableHead className="text-right">Brut annuel à 100%</TableHead>}
-                <TableHead className="text-right bg-muted/50">Brut mensuel</TableHead>
-                {!compactView && <TableHead className="text-right">Brut mensuel (ac 13e)</TableHead>}
-                {!compactView && <TableHead className="text-right">Brut annuel</TableHead>}
                 <TableHead className="text-right bg-muted/50">Compléments mensuel</TableHead>
+                {!compactView && <TableHead className="text-right">Brut mensuel</TableHead>}
+                {!compactView && <TableHead className="text-right">Brut mensuel (ac 13e)</TableHead>}
+                <TableHead className="text-right bg-muted/50">Brut mensuel (ac 13e & compl.)</TableHead>
+                {!compactView && <TableHead className="text-right">Brut annuel (incl. compl.)</TableHead>}
                 {!compactView && <TableHead className="text-right">Net ~</TableHead>}
                 <TableHead></TableHead>
               </TableRow>
@@ -886,20 +865,20 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
             <TableBody>
               {rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={compactView ? 7 : 12 + board.dimensions.length} className="text-center text-muted-foreground italic py-6">
+                  <TableCell colSpan={compactView ? 7 + board.dimensions.length : 14 + board.dimensions.length} className="text-center text-muted-foreground italic py-6">
                     Aucun·e employé·e. Cliquez sur « Employé·e » pour en ajouter un·e.
                   </TableCell>
                 </TableRow>
               )}
               {rows.map(({ employee, computation }) => (
-                <TableRow key={employee.id}>
+                <TableRow key={employee.id} onDoubleClick={() => editEmployee(employee)} className="cursor-pointer">
                   <TableCell className="font-medium">
                     {employee.name || <span className="italic text-muted-foreground">sans nom</span>}
                   </TableCell>
                   <TableCell className="text-right">{employee.workload}</TableCell>
                   {!compactView && <TableCell className="text-right">{employee.age}</TableCell>}
                   {!compactView && <TableCell className="text-right">{employee.seniority}</TableCell>}
-                  {!compactView && board.dimensions.map(dim => {
+                  {board.dimensions.map(dim => {
                     const level = employee.levels.find(l => l.dimensionId === dim.id)?.level ?? 0;
                     return (
                       <TableCell key={dim.id} className="text-center" style={{ color: dim.color }}>
@@ -910,9 +889,6 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
                   <TableCell className="text-right bg-muted/30">{formatCurrency(computation.gross100Hourly, currency)}</TableCell>
                   {!compactView && <TableCell className="text-right">{formatCurrency(computation.gross100, currency)}</TableCell>}
                   {!compactView && <TableCell className="text-right">{formatCurrency(computation.gross100Annual, currency)}</TableCell>}
-                  <TableCell className="text-right bg-muted/30 font-medium">{formatCurrency(computation.grossMonthly, currency)}{employee.workload !== 100 && <span className="text-xs text-muted-foreground ml-1">({employee.workload}%)</span>}</TableCell>
-                  {!compactView && <TableCell className="text-right">{formatCurrency(computation.grossMonthlyWith13, currency)}{employee.workload !== 100 && <span className="text-xs text-muted-foreground ml-1">({employee.workload}%)</span>}</TableCell>}
-                  {!compactView && <TableCell className="text-right">{formatCurrency(computation.grossAnnual, currency)}{employee.workload !== 100 && <span className="text-xs text-muted-foreground ml-1">({employee.workload}%)</span>}</TableCell>}
                   <TableCell className="text-right bg-muted/30">{(() => {
                     const adjs = employee.employerAdjustments ?? [];
                     const monthlySum = adjs.reduce((s, a) => {
@@ -924,6 +900,10 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
                     if (monthlySum === 0) return <span className="text-muted-foreground">—</span>;
                     return <span title={adjs.map(a => `${a.label}: ${formatCurrency(a.amount, currency)} (${a.frequency ?? 'monthly'})`).join('\n')}>{formatCurrency(monthlySum, currency)}</span>;
                   })()}</TableCell>
+                  {!compactView && <TableCell className="text-right">{formatCurrency(computation.grossMonthlyPure, currency)}{employee.workload !== 100 && <span className="text-xs text-muted-foreground ml-1">({employee.workload}%)</span>}</TableCell>}
+                  {!compactView && <TableCell className="text-right">{formatCurrency(computation.grossMonthlyWith13, currency)}{employee.workload !== 100 && <span className="text-xs text-muted-foreground ml-1">({employee.workload}%)</span>}</TableCell>}
+                  <TableCell className="text-right bg-muted/30 font-medium">{formatCurrency(computation.grossMonthlyWith13AndAdjustments, currency)}{employee.workload !== 100 && <span className="text-xs text-muted-foreground ml-1">({employee.workload}%)</span>}</TableCell>
+                  {!compactView && <TableCell className="text-right">{formatCurrency(computation.grossAnnualWithout13, currency)}{employee.workload !== 100 && <span className="text-xs text-muted-foreground ml-1">({employee.workload}%)</span>}</TableCell>}
                   {!compactView && <TableCell className="text-right">{formatCurrency(computation.netMonthlyWith13, currency)}</TableCell>}
                   <TableCell className="text-right whitespace-nowrap">
                     <Button variant="ghost" size="sm" onClick={() => editEmployee(employee)}>
@@ -939,16 +919,17 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
             {totals && rows.length > 0 && (
               <TableFooter>
                 <TableRow>
-                  <TableCell className="font-semibold" colSpan={compactView ? 4 : 4 + board.dimensions.length}>
+                  <TableCell className="font-semibold" colSpan={compactView ? 2 + board.dimensions.length : 4 + board.dimensions.length}>
                     Totaux ({totals.fte.toFixed(2)} ETP)
                   </TableCell>
                   <TableCell className="text-right font-semibold bg-muted/30">—</TableCell>
                   {!compactView && <TableCell className="text-right font-semibold">—</TableCell>}
                   {!compactView && <TableCell className="text-right font-semibold">—</TableCell>}
-                  <TableCell className="text-right font-semibold bg-muted/30">{formatCurrency(totals.totalGrossMonthly, currency)}</TableCell>
-                  {!compactView && <TableCell className="text-right font-semibold">—</TableCell>}
-                  {!compactView && <TableCell className="text-right font-semibold">{formatCurrency(totals.totalGrossAnnual, currency)}</TableCell>}
                   <TableCell className="text-right font-semibold bg-muted/30">—</TableCell>
+                  {!compactView && <TableCell className="text-right font-semibold">—</TableCell>}
+                  {!compactView && <TableCell className="text-right font-semibold">—</TableCell>}
+                  <TableCell className="text-right font-semibold bg-muted/30">{formatCurrency(totals.totalGrossMonthlyWith13AndAdjustments, currency)}</TableCell>
+                  {!compactView && <TableCell className="text-right font-semibold">{formatCurrency(totals.totalGrossAnnual, currency)}</TableCell>}
                   {!compactView && <TableCell className="text-right font-semibold">{formatCurrency(totals.totalNetMonthlyWith13, currency)}</TableCell>}
                   <TableCell></TableCell>
                 </TableRow>
@@ -958,12 +939,11 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
         </CardContent>
       </Card>
 
-      {/* Budget + Simulator + Projection tabs */}
+      {/* Budget + Simulator tabs */}
       <Tabs defaultValue="budget" className="w-full">
         <TabsList>
           <TabsTrigger value="budget"><PieChart className="w-4 h-4 mr-1" />Budget</TabsTrigger>
-          <TabsTrigger value="simulator"><Calculator className="w-4 h-4 mr-1" />Simulateur</TabsTrigger>
-          <TabsTrigger value="projection"><TrendingUp className="w-4 h-4 mr-1" />Projection</TabsTrigger>
+          <TabsTrigger value="simulator"><Calculator className="w-4 h-4 mr-1" />Simulateur individuel</TabsTrigger>
         </TabsList>
 
         <TabsContent value="budget">
@@ -973,65 +953,57 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
         <TabsContent value="simulator">
           <SimulatorPanel board={board} />
         </TabsContent>
-
-        <TabsContent value="projection">
-          <ProjectionPanel board={board} />
-        </TabsContent>
       </Tabs>
 
       {/* Formula reference */}
       <Card className="border bg-muted/30">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Formule transparente</CardTitle>
+          <CardTitle className="text-sm">Légende</CardTitle>
         </CardHeader>
         <CardContent className="text-xs text-muted-foreground space-y-1">
           <p>
-            <strong>Base</strong> = indexHoraire × heures/sem × semaines/mois
-            <span className="ml-2 text-foreground">
-              {formatCurrency(board.config.indexHourlyWage * board.config.hoursPerWeek * board.config.weeksPerMonth, currency)}
-            </span>
+            <strong>Base mensuelle</strong> = salaire horaire de référence × heures par semaine × semaines par mois
           </p>
           <p>
-            <strong>+ déterminants</strong> = Σ (niveau × stepValue) pour chaque dimension qui impacte le salaire
+            <strong>+ Déterminants</strong> = somme de (niveau × valeur par niveau) pour chaque dimension qui impacte le salaire
           </p>
           <p>
-            <strong>Brut 100% (G5)</strong> = ROUND((base + déterminants) × (1 + ancienneté)^années × (1 + augm. âge)^tranches, 0)
+            <strong>Salaire brut à 100%</strong> = (base + déterminants) × (1 + augmentation ancienneté)^années × (1 + augmentation âge)^tranches d'âge atteintes
           </p>
           <p>
-            <strong>Brut annuel 100% (J5)</strong> = G5 × 12
-            &nbsp;&nbsp; <strong>CHF/h (M5)</strong> = ROUND(G5 / 21 / 8 / 5, 2) × 5
+            <strong>Salaire annuel brut à 100%</strong> = salaire brut à 100% × 12
           </p>
           <p>
-            <strong>Brut 13e (G6)</strong> = ROUND(G5 × taux, 0) — salaire mensuel incluant le 13ème
+            <strong>Salaire horaire</strong> = salaire brut à 100% ÷ (21 jours × 8 heures × 5)
           </p>
           <p>
-            <strong>Brut annuel (J6)</strong> = G6 × 12
+            <strong>Salaire mensuel avec 13ème</strong> = salaire brut à 100% × taux d'activité
           </p>
           <p>
-            <strong>Brut mensuel</strong> = ROUND(G6 / 13 × 12, 0.05) — sans le 13ème (+ ajustement manuel)
+            <strong>Salaire annuel brut</strong> = salaire mensuel avec 13ème × 12
           </p>
           <p>
-            <strong>Net ~ (G7)</strong> = G6 × (1 − charges sociales) — net approximatif avec 13ème
+            <strong>Salaire mensuel</strong> = salaire mensuel avec 13ème ÷ 13 × 12 + compléments mensuels
           </p>
           <p>
-            <strong>Coût employeur</strong> = Brut annuel × facteur de coût
-            <span className="ml-2 text-foreground">
-              × {(board.config.expenseFactor ?? 1).toFixed(2)}
-            </span>
+            <strong>Net ~</strong> = (salaire mensuel avec 13ème + compléments) × (1 − charges sociales)
           </p>
           <p>
-            <strong>Budget — Solde</strong> = revenus − charges − réserve
+            <strong>Coût employeur</strong> = salaire annuel brut × facteur de coût
+          </p>
+          <p className="pt-2 border-t">
+            <strong>Budget — Solde</strong> = revenus − frais − salaires bruts
           </p>
           <p>
-            <strong>Frais généraux</strong> — deux modes exclusifs par scénario :
+            <strong>Frais</strong> — deux modes exclusifs par scénario :
           </p>
           <p className="pl-4">
-            • <strong>Montant manuel</strong> : les frais généraux incluent tout
-            (loyer, labo, assurances, charges sociales employeur, etc.) — saisis directement.
+            • <strong>Montant manuel</strong> : les frais généraux sont saisis directement
+            (loyer, assurances, matériel, etc.). Frais = frais généraux + réserve.
           </p>
           <p className="pl-4">
-            • <strong>Facteur de coût</strong> : frais généraux = brut annuel × facteur
-            (défaut {(board.config.expenseFactor ?? 1).toFixed(2)}, surchargeable par scénario).
+            • <strong>Facteur de coût</strong> : frais = (salaire brut annuel × facteur) + réserve.
+            Le facteur par défaut est surchargeable par scénario.
           </p>
         </CardContent>
       </Card>
@@ -1121,7 +1093,7 @@ const BudgetPanel: React.FC<{
             Aucun scénario. Cliquez sur « Scénario » pour ajouter min/intermédiaire/max.
           </p>
         )}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
           {budget.scenarios.map(s => {
             const isActive = s.id === budget.activeScenarioId;
             const sc = computeBudget(board, s);
@@ -1159,11 +1131,6 @@ const BudgetPanel: React.FC<{
 
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Frais généraux — mode de calcul</Label>
-                    <p className="text-xs text-muted-foreground italic">
-                      En général les frais généraux représentent 180%–220% du brut salaire.
-                      Avec un facteur de 1.75 on est ~10% sous cette fourchette, ce qui est
-                      normal pour une entreprise informatique.
-                    </p>
                     <div className="flex gap-2">
                       <Button
                         type="button"
@@ -1186,20 +1153,21 @@ const BudgetPanel: React.FC<{
 
                   {s.chargesMode === 'expenseFactor' ? (
                     <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">
-                        Facteur de coût (défaut: {board.config.expenseFactor?.toFixed(2) ?? '1.75'})
-                      </Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={s.expenseFactorOverride ?? board.config.expenseFactor ?? 1.75}
-                        onClick={e => e.stopPropagation()}
-                        onChange={e => updateScenario(s.id, { expenseFactorOverride: parseFloat(e.target.value) || 1 })}
-                        className="h-8"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Frais généraux = brut annuel × {s.expenseFactorOverride ?? board.config.expenseFactor ?? 1.75}
-                        {' '}= {formatCurrency(roundToNickel((totals?.totalGrossAnnual ?? 0) * (s.expenseFactorOverride ?? board.config.expenseFactor ?? 1.75)), currency)}
+                      <div className="flex items-center justify-between gap-2">
+                        <Label className="text-xs text-muted-foreground flex-1">
+                          Facteur de coût (défaut: {board.config.expenseFactor?.toFixed(2) ?? '1.75'})
+                        </Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={s.expenseFactorOverride ?? board.config.expenseFactor ?? 1.75}
+                          onClick={e => e.stopPropagation()}
+                          onChange={e => updateScenario(s.id, { expenseFactorOverride: parseFloat(e.target.value) || 1 })}
+                          className="w-32 h-8 text-right"
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground italic">
+                        En général les frais généraux représentent 180%–220% du salaire brut.
                       </p>
                     </div>
                   ) : (
@@ -1209,21 +1177,19 @@ const BudgetPanel: React.FC<{
                   <BudgetField label="Réserve / an" value={s.reserve} onChange={v => updateScenario(s.id, { reserve: v })} currency={currency} />
                   <div className="pt-2 border-t space-y-1 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Brut salaires</span>
+                      <span className="text-muted-foreground">Salaires bruts</span>
                       <span className="font-medium">{formatCurrency(totals?.totalGrossAnnual ?? 0, currency)}</span>
                     </div>
                     {s.chargesMode === 'expenseFactor' ? (
                       <>
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">
-                            Frais généraux (overhead + réserve)
-                          </span>
+                          <span className="text-muted-foreground">Frais</span>
                           <span className="font-medium">
                             {formatCurrency(roundToNickel((totals?.totalGrossAnnual ?? 0) * ((s.expenseFactorOverride ?? board.config.expenseFactor ?? 1) - 1)) + s.reserve, currency)}
                           </span>
                         </div>
                         <div className="flex justify-between pl-4 text-xs text-muted-foreground">
-                          <span>dont overhead (brut × {(s.expenseFactorOverride ?? board.config.expenseFactor ?? 1).toFixed(2)} − 1 = × {((s.expenseFactorOverride ?? board.config.expenseFactor ?? 1) - 1).toFixed(2)})</span>
+                          <span>dont Frais généraux (× {((s.expenseFactorOverride ?? board.config.expenseFactor ?? 1) - 1).toFixed(2)})</span>
                           <span>{formatCurrency(roundToNickel((totals?.totalGrossAnnual ?? 0) * ((s.expenseFactorOverride ?? board.config.expenseFactor ?? 1) - 1)), currency)}</span>
                         </div>
                         <div className="flex justify-between pl-4 text-xs text-muted-foreground">
@@ -1234,8 +1200,16 @@ const BudgetPanel: React.FC<{
                     ) : (
                       <>
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Frais généraux (charges + réserve)</span>
+                          <span className="text-muted-foreground">Frais</span>
                           <span className="font-medium">{formatCurrency(sc.charges + sc.reserve, currency)}</span>
+                        </div>
+                        <div className="flex justify-between pl-4 text-xs text-muted-foreground">
+                          <span>dont Frais généraux</span>
+                          <span>{formatCurrency(sc.charges, currency)}</span>
+                        </div>
+                        <div className="flex justify-between pl-4 text-xs text-muted-foreground">
+                          <span>dont réserve</span>
+                          <span>{formatCurrency(s.reserve, currency)}</span>
                         </div>
                       </>
                     )}
@@ -1253,20 +1227,6 @@ const BudgetPanel: React.FC<{
             );
           })}
         </div>
-
-        {computation && (
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 pt-2 border-t">
-            <MetricCard label="Revenus (scénario actif)" value={formatCurrency(computation.revenues, currency)} />
-            <MetricCard label="Frais généraux" value={formatCurrency(computation.charges, currency)} />
-            <MetricCard label="Réserve" value={formatCurrency(computation.reserve, currency)} />
-            <MetricCard label="Coût total" value={formatCurrency(computation.totalCost, currency)} />
-            <MetricCard
-              label="Solde"
-              value={formatCurrency(computation.balance, currency)}
-              tone={computation.isBalanced ? 'positive' : 'negative'}
-            />
-          </div>
-        )}
       </CardContent>
     </Card>
   );
@@ -1289,37 +1249,54 @@ const BudgetField: React.FC<{
   </div>
 );
 
-// ---------- Simulator panel ----------
+// ---------- Simulator panel (with integrated projection) ----------
 const SimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) => {
   const [workload, setWorkload] = useState(100);
   const [age, setAge] = useState(30);
   const [seniority, setSeniority] = useState(0);
   const [adjustments, setAdjustments] = useState<EmployerAdjustment[]>([{ id: newId(), label: 'Complément employeur', amount: 0, frequency: 'monthly' }]);
   const [levels, setLevels] = useState<SalaryEmployeeLevel[]>([]);
+  const [years, setYears] = useState(20);
 
   const setLevel = (dimId: string, level: number) => {
     const others = levels.filter(l => l.dimensionId !== dimId);
     setLevels([...others, { dimensionId: dimId, level }]);
   };
 
+  const simulatedEmployee: SalaryEmployee = useMemo(() => ({
+    id: 'sim',
+    name: 'Simulation',
+    workload,
+    age,
+    seniority,
+    levels,
+    employerAdjustments: adjustments,
+  }), [workload, age, seniority, levels, adjustments]);
+
   const result = useMemo(
     () => simulateSalary(board.config, board.dimensions, { workload, age, seniority, levels, employerAdjustments: adjustments }),
     [board, workload, age, seniority, levels, adjustments]
   );
+
+  const projection = useMemo(
+    () => buildProjection(board.config, board.dimensions, simulatedEmployee, years),
+    [board.config, board.dimensions, simulatedEmployee, years]
+  );
+
   const currency = board.config.currency;
 
   return (
     <Card className="border">
       <CardHeader className="pb-2">
         <CardTitle className="text-lg flex items-center gap-2">
-          <Calculator className="w-4 h-4" /> Simulateur one-shot
+          <Calculator className="w-4 h-4" /> Simulateur individuel
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="space-y-1">
             <Label>Taux d'activité (%)</Label>
-            <Input type="number" min={0} max={100} value={workload} onChange={e => setWorkload(parseFloat(e.target.value) || 0)} />
+            <Input type="number" min={0} value={workload} onChange={e => setWorkload(parseFloat(e.target.value) || 0)} />
           </div>
           <div className="space-y-1">
             <Label>Âge</Label>
@@ -1328,6 +1305,10 @@ const SimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) => {
           <div className="space-y-1">
             <Label>Ancienneté (années)</Label>
             <Input type="number" min={0} value={seniority} onChange={e => setSeniority(parseInt(e.target.value) || 0)} />
+          </div>
+          <div className="space-y-1">
+            <Label>Horizon projection (années)</Label>
+            <Input type="number" min={1} max={50} value={years} onChange={e => setYears(Math.max(1, Math.min(50, parseInt(e.target.value) || 1)))} />
           </div>
         </div>
         <div className="space-y-2">
@@ -1356,104 +1337,121 @@ const SimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) => {
             })}
           </div>
         </div>
+
+        {/* Employer adjustments */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label>Compléments employeur</Label>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setAdjustments([...adjustments, { id: newId(), label: 'Complément employeur', amount: 0, frequency: 'monthly' }])}
+            >
+              <Plus className="w-3 h-3 mr-1" /> Ajouter
+            </Button>
+          </div>
+          {adjustments.map((adj, i) => (
+            <div key={adj.id} className="flex gap-2 items-center">
+              <Input
+                value={adj.label}
+                onChange={e => {
+                  const next = [...adjustments];
+                  next[i] = { ...adj, label: e.target.value };
+                  setAdjustments(next);
+                }}
+                placeholder="Libellé"
+                className="flex-1"
+              />
+              <Input
+                type="number"
+                value={adj.amount}
+                onChange={e => {
+                  const next = [...adjustments];
+                  next[i] = { ...adj, amount: parseFloat(e.target.value) || 0 };
+                  setAdjustments(next);
+                }}
+                className="w-28 text-right"
+              />
+              <Select
+                value={adj.frequency ?? 'monthly'}
+                onValueChange={v => {
+                  const next = [...adjustments];
+                  next[i] = { ...adj, frequency: v as 'monthly' | 'semesterly' | 'annually' };
+                  setAdjustments(next);
+                }}
+              >
+                <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="monthly">Mensuel</SelectItem>
+                  <SelectItem value="semesterly">Semestriel</SelectItem>
+                  <SelectItem value="annually">Annuel</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setAdjustments(adjustments.filter((_, idx) => idx !== i))}
+              >
+                <Trash2 className="w-3 h-3" />
+              </Button>
+            </div>
+          ))}
+        </div>
+
+        {/* Results */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 pt-2 border-t">
-          <MetricCard label="Base 100%" value={formatCurrency(result.baseSalary, currency)} />
-          <MetricCard label="Étapes déterminants" value={formatCurrency(result.dimensionSteps, currency)} />
-          <MetricCard label="Brut 100% (G5)" value={formatCurrency(result.gross100, currency)} />
-          <MetricCard label="Brut 13e (G6)" value={formatCurrency(result.grossMonthlyWith13, currency)} />
-          <MetricCard label="Brut mensuel" value={formatCurrency(result.grossMonthly, currency)} />
-          <MetricCard label="Net ~ (G7)" value={formatCurrency(result.netMonthlyWith13, currency)} />
+          <MetricCard label="Salaire horaire CHF/h" value={formatCurrency(result.gross100Hourly, currency)} />
+          <MetricCard label="Brut mensuel à 100%" value={formatCurrency(result.gross100, currency)} />
+          <MetricCard label="Brut annuel à 100%" value={formatCurrency(result.gross100Annual, currency)} />
+          <MetricCard label="Brut mensuel (ac 13e)" value={formatCurrency(result.grossMonthlyWith13, currency)} />
+          <MetricCard label="Brut mensuel (ac 13e & compl.)" value={formatCurrency(result.grossMonthlyWith13AndAdjustments, currency)} />
+          <MetricCard label="Net ~" value={formatCurrency(result.netMonthlyWith13, currency)} />
         </div>
-      </CardContent>
-    </Card>
-  );
-};
 
-// ---------- Projection panel ----------
-const ProjectionPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) => {
-  const [employeeId, setEmployeeId] = useState<string>(board.employees[0]?.id ?? '');
-  const [years, setYears] = useState(20);
-
-  useEffect(() => {
-    if (!board.employees.some(e => e.id === employeeId)) {
-      setEmployeeId(board.employees[0]?.id ?? '');
-    }
-  }, [board.employees, employeeId]);
-
-  const employee = board.employees.find(e => e.id === employeeId);
-  const projection = useMemo(
-    () => employee ? buildProjection(board.config, board.dimensions, employee, years) : [],
-    [board.config, board.dimensions, employee, years]
-  );
-  const currency = board.config.currency;
-
-  if (board.employees.length === 0) {
-    return (
-      <Card className="border">
-        <CardContent className="p-6 text-center text-muted-foreground italic">
-          Ajoutez au moins un·e employé·e pour voir la projection.
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card className="border">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <TrendingUp className="w-4 h-4" /> Projection salariale
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="space-y-1">
-            <Label>Employé·e</Label>
-            <Select value={employeeId} onValueChange={setEmployeeId}>
-              <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {board.employees.map(e => (
-                  <SelectItem key={e.id} value={e.id}>{e.name || 'sans nom'}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label>Horizon (années)</Label>
-            <Input type="number" min={1} max={50} value={years} onChange={e => setYears(Math.max(1, Math.min(50, parseInt(e.target.value) || 1)))} className="w-24" />
-          </div>
-        </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Année</TableHead>
-              <TableHead className="text-right">Âge</TableHead>
-              <TableHead className="text-right">Ancienneté</TableHead>
-              <TableHead className="text-right">Brut 100% (G5)</TableHead>
-              <TableHead className="text-right">Brut 13e (G6)</TableHead>
-              <TableHead className="text-right">Brut mensuel</TableHead>
-              <TableHead className="text-right">Brut annuel</TableHead>
-              <TableHead className="text-right">Net ~ (G7)</TableHead>
-              <TableHead className="text-right">Coût employeur / an</TableHead>
-              <TableHead className="text-right">Tranches âge</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {projection.map(row => (
-              <TableRow key={row.year}>
-                <TableCell>+{row.year}</TableCell>
-                <TableCell className="text-right">{row.age}</TableCell>
-                <TableCell className="text-right">{row.seniority}</TableCell>
-                <TableCell className="text-right">{formatCurrency(row.gross100, currency)}</TableCell>
-                <TableCell className="text-right">{formatCurrency(row.grossMonthlyWith13, currency)}</TableCell>
-                <TableCell className="text-right">{formatCurrency(row.grossMonthly, currency)}</TableCell>
-                <TableCell className="text-right">{formatCurrency(row.grossAnnualWithout13, currency)}</TableCell>
-                <TableCell className="text-right">{formatCurrency(row.netMonthlyWith13, currency)}</TableCell>
-                <TableCell className="text-right">{formatCurrency(row.employerCostAnnual, currency)}</TableCell>
-                <TableCell className="text-right">{row.ageBracketSteps}</TableCell>
+        {/* Projection table */}
+        <div className="space-y-2 pt-2 border-t">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <TrendingUp className="w-4 h-4" /> Projection sur {years} ans
+          </CardTitle>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Année</TableHead>
+                <TableHead className="text-right">Âge</TableHead>
+                <TableHead className="text-right">Ancienneté</TableHead>
+                <TableHead className="text-right bg-muted/50">Salaire horaire CHF/h</TableHead>
+                <TableHead className="text-right">Brut mensuel à 100%</TableHead>
+                <TableHead className="text-right">Brut annuel à 100%</TableHead>
+                <TableHead className="text-right bg-muted/50">Brut mensuel</TableHead>
+                <TableHead className="text-right">Brut mensuel (ac 13e)</TableHead>
+                <TableHead className="text-right bg-muted/50">Brut mensuel (ac 13e & compl.)</TableHead>
+                <TableHead className="text-right">Brut annuel (incl. compl.)</TableHead>
+                <TableHead className="text-right">Net ~</TableHead>
+                <TableHead className="text-right">Coût employeur / an</TableHead>
+                <TableHead className="text-right">Tranches âge</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {projection.map(row => (
+                <TableRow key={row.year}>
+                  <TableCell>+{row.year}</TableCell>
+                  <TableCell className="text-right">{row.age}</TableCell>
+                  <TableCell className="text-right">{row.seniority}</TableCell>
+                  <TableCell className="text-right bg-muted/30">{formatCurrency(row.gross100Hourly, currency)}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(row.gross100, currency)}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(row.gross100Annual, currency)}</TableCell>
+                  <TableCell className="text-right bg-muted/30">{formatCurrency(row.grossMonthlyPure, currency)}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(row.grossMonthlyWith13, currency)}</TableCell>
+                  <TableCell className="text-right bg-muted/30">{formatCurrency(row.grossMonthlyWith13AndAdjustments, currency)}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(row.grossAnnualWithout13, currency)}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(row.netMonthlyWith13, currency)}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(row.employerCostAnnual, currency)}</TableCell>
+                  <TableCell className="text-right">{row.ageBracketSteps}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
     </Card>
   );

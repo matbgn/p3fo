@@ -14,27 +14,33 @@ export interface SalaryComputation {
   /** Sum of dimension steps for this employee (CHF/month). */
   dimensionSteps: number;
   /** Gross monthly salary at 100% workload, after seniority & age compounding (CHF).
-   *  Matches ADT G5 "Salary 100%". */
+   *  Salaire brut mensuel à 100%. */
   gross100: number;
-  /** Annual gross salary at 100% workload (CHF). Matches ADT J5 = G5 × 12. */
+  /** Annual gross salary at 100% workload (CHF). Salaire annuel à 100%. */
   gross100Annual: number;
-  /** Hourly rate at 100% workload (CHF/h). Matches ADT M5 = ROUND(G5/21/8/5, 2)×5. */
+  /** Hourly rate at 100% workload (CHF/h). Taux horaire à 100%. */
   gross100Hourly: number;
-  /** Gross monthly salary WITH 13th (CHF). Matches ADT G6 = ROUND(G5 × workload, 0).
+  /** Gross monthly salary WITH 13th (CHF). Salaire mensuel avec 13e.
    *  This is the "brut avec 13ème" shown to the employee. */
   grossMonthlyWith13: number;
-  /** Gross annual salary at the employee's workload (CHF). Matches ADT J6 = G6 × 12. */
+  /** Gross annual salary at the employee's workload (CHF). Salaire annuel avec 13e. */
   grossAnnual: number;
-  /** Gross monthly salary WITHOUT 13th (CHF). Matches ADT X7 = ROUND(G6/13×12/5, 2)×5.
-   *  This is the "brut sans 13ème" — what the employee actually receives each month. */
+  /** Gross monthly salary WITHOUT 13th, pure formula (CHF). Salaire mensuel sans 13e
+   *  before any employer adjustments. */
+  grossMonthlyPure: number;
+  /** Gross monthly salary WITH 13th + complements (CHF) = G6 + adjustments.
+   *  This is the "Brut mensuel (ac 13e & compl.)" column. */
+  grossMonthlyWith13AndAdjustments: number;
+  /** Gross monthly salary WITHOUT 13th (CHF). Salaire mensuel sans 13e = pure + adjustments.
+   *  This is the "Brut mensuel" column the employee actually receives each month. */
   grossMonthly: number;
-  /** Net monthly salary WITH 13th basis (CHF). Matches ADT G7 "Net ~" = G6 × (1 - charges). */
+  /** Net monthly salary WITH 13th basis (CHF). Net approximatif. */
   netMonthlyWith13: number;
   /** Net monthly salary WITHOUT 13th (CHF) = netMonthlyWith13 / 13 × 12. */
   netMonthly: number;
   /** Net annual salary (CHF). */
   netAnnual: number;
-  /** Annual gross without 13th × 13 (CHF). Matches ADT X10 = X7 × 13. */
+  /** Annual gross without 13th × 13 (CHF). Salaire annuel sans 13e. */
   grossAnnualWithout13: number;
   /** Total employer cost (gross + employer expense factor) per year (CHF). */
   employerCostAnnual: number;
@@ -49,7 +55,7 @@ export const roundToStep = (value: number, step: number): number => {
   return Math.round(value / step) * step;
 };
 
-/** Round to the nearest 5 centimes (0.05 CHF), matching the ADT golden
+/** Round to the nearest 5 centimes (0.05 CHF), matching the golden
  *  standard formula: ROUND(value / 5, 2) * 5. */
 export const roundToNickel = (value: number): number => {
   // Use string rounding to avoid floating-point artifacts (3750.45000...01)
@@ -113,22 +119,23 @@ export const computeSalary = (
   const seniorityFactor = Math.pow(1 + safeConfig.seniorityIncrease, Math.max(0, employee.seniority));
   const ageFactor = Math.pow(1 + safeConfig.ageIncrease, ageSteps);
 
-  // ADT G5: ROUND((base + steps) × seniority × age, 0) — gross monthly at 100%
+  // Salaire brut à 100%: ROUND((base + steps) × seniority × age, 0) — gross monthly at 100%
   const gross100 = Math.round(startingPoint * seniorityFactor * ageFactor);
-  // ADT J5: G5 × 12 — annual gross at 100%
+  // Salaire annuel à 100% = brut100 × 12 — annual gross at 100%
   const gross100Annual = gross100 * 12;
-  // ADT M5: ROUND(G5 / 21 / 8 / 5, 2) × 5 — hourly rate at 100%
+  // Taux horaire = brut100 ÷ (21 × 8 × 5) — hourly rate at 100%
   // Note: ROUND(x, 2) then × 5 (not roundToNickel)
   const gross100Hourly = Math.round((gross100 / 21 / 8 / 5) * 100) / 100 * 5;
 
   const workloadFraction = Math.max(0, employee.workload) / 100;
-  // ADT G6: ROUND(gross100 × workload, 0) — gross monthly WITH 13th at workload
+  // Salaire mensuel avec 13e = ROUND(brut100 × taux) — gross monthly WITH 13th at workload
   const grossMonthlyWith13 = Math.round(gross100 * workloadFraction);
-  // ADT J6: G6 × 12 — annual gross at workload (with 13th = 13 salaries)
+  // Salaire annuel = mensuel13 × 12 — annual gross at workload (with 13th = 13 salaries)
   const grossAnnual = grossMonthlyWith13 * 12;
 
-  // ADT X7: ROUND(G6 / 13 × 12 / 5, 2) × 5 — gross monthly WITHOUT 13th
-  // Employer adjustments are converted to monthly equivalent:
+  // Salaire mensuel sans 13e = ROUND(mensuel13 ÷ 13 × 12, 0.05) — gross monthly WITHOUT 13th (pure formula)
+  const grossMonthlyPure = roundToNickel(grossMonthlyWith13 / 13 * 12);
+  // Employer adjustments converted to monthly equivalent:
   //  - monthly: amount as-is (per normal month, 12× per year, never 13th)
   //  - semesterly: amount / 6
   //  - annually: amount / 12
@@ -138,19 +145,22 @@ export const computeSalary = (
       : (a.amount || 0);
     return sum + monthly;
   }, 0);
-  const grossMonthly = roundToNickel(grossMonthlyWith13 / 13 * 12) + adjustmentsTotal;
-  // ADT X10: X7 × 13 — annual gross without 13th (13 × the monthly without 13th)
-  const grossAnnualWithout13 = roundToNickel(grossMonthly * 13);
+  const grossMonthly = roundToNickel(grossMonthlyPure + adjustmentsTotal);
+  // Gross monthly WITH 13th + complements = G6 + adjustments
+  const grossMonthlyWith13AndAdjustments = roundToNickel(grossMonthlyWith13 + adjustmentsTotal);
+  // Salaire annuel = (mensuel13 + compléments) × 12 — same basis as gross100Annual
+  const grossAnnualWithout13 = roundToNickel(grossMonthlyWith13AndAdjustments * 12);
 
-  // ADT G7: G6 × (1 - socialChargesRate) — net ~ with 13th basis
+  // Net computed on the FULL gross with 13th + complements
   const netFactor = 1 - safeConfig.socialChargesRate;
-  const netMonthlyWith13 = roundToNickel(grossMonthlyWith13 * netFactor);
+  const grossForNet = grossMonthlyWith13 + adjustmentsTotal;
+  const netMonthlyWith13 = roundToNickel(grossForNet * netFactor);
   // Net monthly without 13th = netMonthlyWith13 / 13 × 12
   const netMonthly = roundToNickel(netMonthlyWith13 / 13 * 12);
   const netAnnual = roundToNickel(netMonthly * 13);
 
-  // Employer cost = (X7 × 13) × expenseFactor (ADT: X11 = X8 × 13 × Q12)
-  // X8 = SUM of X column (monthly without 13th), X10 = X8 × 13, X11 = X10 × Q12
+  // Coût employeur = salaire annuel × facteur de coût
+  
   const expenseFactor = safeConfig.expenseFactor ?? 1;
   const employerCostAnnual = roundToNickel(grossAnnualWithout13 * expenseFactor);
   const employerCostMonthly = roundToNickel(employerCostAnnual / 12);
@@ -163,6 +173,8 @@ export const computeSalary = (
     gross100Hourly,
     grossMonthlyWith13,
     grossAnnual,
+    grossMonthlyPure,
+    grossMonthlyWith13AndAdjustments,
     grossMonthly,
     netMonthlyWith13,
     netMonthly,
@@ -187,6 +199,7 @@ export const aggregateSalaries = (
   board: SalaryBoardEntity
 ): {
   totalGrossMonthly: number;
+  totalGrossMonthlyWith13AndAdjustments: number;
   totalGrossAnnual: number;
   totalNetMonthly: number;
   totalNetMonthlyWith13: number;
@@ -198,6 +211,7 @@ export const aggregateSalaries = (
 } => {
   const rows = computeAllSalaries(board);
   let totalGrossMonthly = 0;
+  let totalGrossMonthlyWith13AndAdjustments = 0;
   let totalGrossAnnual = 0;
   let totalNetMonthly = 0;
   let totalNetMonthlyWith13 = 0;
@@ -207,6 +221,7 @@ export const aggregateSalaries = (
   let fte = 0;
   for (const { employee, computation } of rows) {
     totalGrossMonthly += computation.grossMonthly;
+    totalGrossMonthlyWith13AndAdjustments += computation.grossMonthlyWith13AndAdjustments;
     totalGrossAnnual += computation.grossAnnualWithout13;
     totalNetMonthly += computation.netMonthly;
     totalNetMonthlyWith13 += computation.netMonthlyWith13;
@@ -217,6 +232,7 @@ export const aggregateSalaries = (
   }
   return {
     totalGrossMonthly: roundToNickel(totalGrossMonthly),
+    totalGrossMonthlyWith13AndAdjustments: roundToNickel(totalGrossMonthlyWith13AndAdjustments),
     totalGrossAnnual: roundToNickel(totalGrossAnnual),
     totalNetMonthly: roundToNickel(totalNetMonthly),
     totalNetMonthlyWith13: roundToNickel(totalNetMonthlyWith13),
@@ -229,7 +245,7 @@ export const aggregateSalaries = (
 };
 
 export const formatCurrency = (value: number, currency = 'CHF'): string => {
-  // Match ADT golden standard: 2 decimals always (e.g. "CHF 4 836.00", "CHF 3 750.45")
+  // Match golden standard: 2 decimals always (e.g. "CHF 4 836.00", "CHF 3 750.45")
   const safe = Number.isFinite(value) ? value : 0;
   return `${currency} ${safe.toLocaleString('fr-CH', {
     minimumFractionDigits: 2,
@@ -316,7 +332,7 @@ export const simulateSalary = (
 };
 
 // ---------- Projection table ----------
-// Reproduces the ADT projection rows: for a given profile, simulate the salary
+// Builds projection rows: for a given profile, simulate the salary
 // progression across N future years. Each year: seniority +1, age +1; if the
 // employee crosses an age bracket threshold, an ageIncrease step is added.
 
@@ -326,7 +342,10 @@ export interface ProjectionRow {
   seniority: number;
   gross100: number;
   gross100Annual: number;
+  gross100Hourly: number;
   grossMonthlyWith13: number;
+  grossMonthlyPure: number;
+  grossMonthlyWith13AndAdjustments: number;
   grossMonthly: number;
   grossAnnualWithout13: number;
   netMonthlyWith13: number;
@@ -356,7 +375,10 @@ export const buildProjection = (
       seniority: projectedEmployee.seniority,
       gross100: computation.gross100,
       gross100Annual: computation.gross100Annual,
+      gross100Hourly: computation.gross100Hourly,
       grossMonthlyWith13: computation.grossMonthlyWith13,
+      grossMonthlyPure: computation.grossMonthlyPure,
+      grossMonthlyWith13AndAdjustments: computation.grossMonthlyWith13AndAdjustments,
       grossMonthly: computation.grossMonthly,
       grossAnnualWithout13: computation.grossAnnualWithout13,
       netMonthlyWith13: computation.netMonthlyWith13,
@@ -368,8 +390,8 @@ export const buildProjection = (
   return rows;
 };
 
-// Golden-standard defaults reproduced from Calculateur_salaires.xlsx
-// (ADT Salary Calculator tab) and 2026-07-21_Budget.xlsx (Charges tab).
+// Golden-standard defaults for the transparent salary system
+
 // Used as a starting point when no board exists.
 export const DEFAULT_SALARY_CONFIG: SalaryConfig = {
   indexHourlyWage: 24.59,
@@ -419,7 +441,6 @@ export const DEFAULT_SALARY_DIMENSIONS: SalaryDimension[] = [
   {
     id: 'expertise',
     name: 'Expertise',
-    kind: 'expertise',
     stepValue: 390,
     maxLevel: 6,
     color: '#729FCF',
@@ -437,7 +458,6 @@ export const DEFAULT_SALARY_DIMENSIONS: SalaryDimension[] = [
   {
     id: 'impact',
     name: 'Impact',
-    kind: 'impact',
     stepValue: 390,
     maxLevel: 6,
     color: '#FACC15',
