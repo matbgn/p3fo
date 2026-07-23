@@ -1,6 +1,13 @@
 import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, SalaryBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from './persistence-types';
 import { DEFAULT_TASKS_INITIALIZED_KEY } from '@/hooks/useTasks';
 
+let authRedirectPending = false;
+function handleAuthRedirect() {
+  if (authRedirectPending || typeof window === 'undefined') return;
+  authRedirectPending = true;
+  window.location.reload();
+}
+
 export class HttpApiPersistence implements PersistenceAdapter {
   private baseUrl: string;
 
@@ -13,10 +20,16 @@ export class HttpApiPersistence implements PersistenceAdapter {
     const response = await fetch(url, {
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
         ...options.headers,
       },
       ...options,
     });
+
+    if (response.status === 401) {
+      handleAuthRedirect();
+      throw new Error(`HTTP error! status: 401`);
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
