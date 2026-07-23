@@ -4,7 +4,7 @@ import { ClockDial } from './clock-dial';
 import { Button } from './button';
 import { Input } from './input';
 import { cn } from '@/lib/utils';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './dialog';
 import { useSettingsContext } from '@/context/SettingsContext';
 
 interface TimePickerProps {
@@ -165,9 +165,10 @@ export const TimePickerDialog: React.FC<TimePickerProps> = ({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="w-auto max-w-[320px] p-0 overflow-hidden flex flex-col items-center">
+            <DialogContent className="w-auto max-w-[320px] p-0 overflow-hidden flex flex-col items-center" aria-describedby={undefined}>
                 <div className="bg-primary p-6 w-full flex flex-col items-center justify-center text-primary-foreground">
-                    <div className="text-xs font-medium opacity-70 mb-2 uppercase tracking-wider">Select Time</div>
+                    <DialogTitle className="text-xs font-medium opacity-70 mb-2 uppercase tracking-wider">Select Time</DialogTitle>
+                    <DialogDescription className="sr-only">Use the clock dial or type a time in HH:MM format to set the time.</DialogDescription>
                     <div className="flex items-end gap-1 text-5xl font-light">
                         <button
                             className={cn("focus:outline-none", mode === 'hours' ? "opacity-100" : "opacity-60")}
