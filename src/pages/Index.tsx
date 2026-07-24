@@ -172,12 +172,10 @@ const Index: React.FC = () => {
                 <LanguageSwitcher />
               </>
             }
-            rightItems={
-              <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap">
-                <QuickTimer onJumpToTask={handleFocusOnTask} />
-              </div>
-            }
           />
+          <div className="mt-2">
+            <QuickTimer onJumpToTask={handleFocusOnTask} />
+          </div>
         </div>
       </header>
 
