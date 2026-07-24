@@ -249,7 +249,7 @@ const PomodoroControls: React.FC<{
         <Button size="sm" variant="outline" onClick={pomodoro.resume} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.resume')} aria-label={t('quickTimer.resume')}>
           <Play className="h-3 w-3 sm:h-4 sm:w-4" />
         </Button>
-      ) : isIdle && pomodoro.displayCycleIndex >= 0 ? (
+      ) : isIdle ? (
         <Button size="sm" variant="outline" onClick={() => pomodoro.startWork()} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.startWork')} aria-label={t('quickTimer.startWork')}>
           <Play className="h-3 w-3 sm:h-4 sm:w-4" />
         </Button>
@@ -259,9 +259,11 @@ const PomodoroControls: React.FC<{
           <SkipForward className="h-3 w-3 sm:h-4 sm:w-4" />
         </Button>
       )}
-      <Button size="sm" variant="outline" onClick={() => pomodoro.reset()} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.reset')} aria-label={t('quickTimer.reset')}>
-        <RotateCcw className="h-3 w-3 sm:h-4 sm:w-4" />
-      </Button>
+      {!isIdle && (
+        <Button size="sm" variant="outline" onClick={() => pomodoro.reset()} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.reset')} aria-label={t('quickTimer.reset')}>
+          <RotateCcw className="h-3 w-3 sm:h-4 sm:w-4" />
+        </Button>
+      )}
     </>
   );
 };
@@ -383,9 +385,11 @@ const TravelerControls: React.FC<{
           <SkipForward className="h-3 w-3 sm:h-4 sm:w-4" />
         </Button>
       )}
-      <Button size="sm" variant="outline" onClick={() => traveler.reset()} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.reset')} aria-label={t('quickTimer.reset')}>
-        <RotateCcw className="h-3 w-3 sm:h-4 sm:w-4" />
-      </Button>
+      {!isIdle && (
+        <Button size="sm" variant="outline" onClick={() => traveler.reset()} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.reset')} aria-label={t('quickTimer.reset')}>
+          <RotateCcw className="h-3 w-3 sm:h-4 sm:w-4" />
+        </Button>
+      )}
     </>
   );
 };
@@ -576,7 +580,10 @@ export const QuickTimer: React.FC<{
   useEffect(() => registerPomodoroStartFn(() => { pomodoro.startWork(); }), [pomodoro]);
 
   // ---- Render: two-zone layout ----
-  const techniqueHasContent = pomodoroActive || (activeMode === 'pomodoro' && pomodoro.pomodoroEnabled && pomodoro.displayCycleIndex >= 0) || travelerActive || (activeMode === 'traveler' && traveler.travelerEnabled);
+  // The technique zone is always visible when any timer technique is enabled,
+  // even when idle — so the user can quick-start a pomodoro or configure the
+  // traveler. The zone only hides when no technique is enabled at all.
+  const techniqueHasContent = anyTimerEnabled;
   const taskHasContent = !!runningTask || !!lastStoppedTask;
 
   return (
