@@ -1448,6 +1448,8 @@
     "cancelLinking": "Cancel linking",
     "linkCards": "Link cards",
     "promoteToBacklog": "Promote to backlog",
+    "pinCard": "Pin to top",
+    "unpinCard": "Unpin",
     "difficultyLabel": "Difficulty: {{level}}"
   },
   "storyboard": {

@@ -47,7 +47,9 @@ import {
     Plus,
     ChevronDown,
     BarChart3,
-    UsersRound
+    UsersRound,
+    Pin,
+    PinOff
 } from 'lucide-react';
 import { MJ_SCALE } from './constants';
 import { UserWithTrigram } from '@/context/UsersContext';
@@ -82,6 +84,7 @@ export interface CardViewProps {
     onPromote?: () => void;
     onVote: (value: number) => void;
     onToggleLink: () => void;
+    onTogglePin?: () => void;
     onOfflineVotesChange?: (cardId: string, newValue: Record<string, number>) => void;
     showOfflineVotesPanel?: boolean;
 
@@ -115,6 +118,7 @@ export const CardView: React.FC<CardViewProps> = ({
     onPromote,
     onVote,
     onToggleLink,
+    onTogglePin,
     onOfflineVotesChange,
     showOfflineVotesPanel = false,
     onDragStart,
@@ -468,6 +472,17 @@ export const CardView: React.FC<CardViewProps> = ({
                             {onPromote && !card.promotedTaskId && (
                                  <Button variant="ghost" size="icon" className="h-4 w-4 text-muted-foreground hover:text-green-600" onClick={(e) => { e.stopPropagation(); onPromote(); }} title={t('board.promoteToBacklog')}>
                                     <ArrowUpRight className="h-3 w-3" />
+                                </Button>
+                            )}
+                            {onTogglePin && isModerator && (
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className={`h-4 w-4 ${card.pinnedAt != null ? 'text-amber-500 hover:text-amber-600' : 'text-muted-foreground hover:text-amber-500'}`}
+                                    onClick={(e) => { e.stopPropagation(); onTogglePin(); }}
+                                    title={card.pinnedAt != null ? t('board.unpinCard') : t('board.pinCard')}
+                                >
+                                    {card.pinnedAt != null ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
                                 </Button>
                             )}
                             {(card.authorId === currentUserId || isModerator) && (

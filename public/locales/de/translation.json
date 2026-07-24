@@ -1448,6 +1448,8 @@
     "cancelLinking": "Verknüpfung abbrechen",
     "linkCards": "Karten verknüpfen",
     "promoteToBacklog": "Zum Backlog befördern",
+    "pinCard": "Oben anheften",
+    "unpinCard": "Lösen",
     "difficultyLabel": "Schwierigkeit: {{level}}"
   },
   "storyboard": {

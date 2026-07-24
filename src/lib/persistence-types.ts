@@ -282,6 +282,7 @@ export interface FertilizationCard {
   linkedCardIds?: string[];
   promotedTaskId?: string | null;
   factTag?: FactTag;
+  pinnedAt?: number | null;
 }
 
 export interface DreamCard extends FertilizationCard {
