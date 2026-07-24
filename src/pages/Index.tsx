@@ -27,6 +27,8 @@ import { GlobalFocusModeToggle } from "@/components/GlobalFocusModeToggle";
 import { NextTaskSpotlight } from "@/components/NextTaskSpotlight";
 import { ConfirmModalHost } from "@/components/ConfirmModalHost";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Button } from "@/components/ui/button";
+import { Minimize2 } from "lucide-react";
 
 const LazyWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { t } = useTranslation();
@@ -175,7 +177,6 @@ const Index: React.FC = () => {
             rightItems={
               <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap">
                 <QuickTimer onJumpToTask={handleFocusOnTask} />
-                <CompactnessSelector />
                 <GlobalFocusModeToggle activeViewId={view} />
               </div>
             }
@@ -243,6 +244,23 @@ const Index: React.FC = () => {
         </div>
         )}
       </main>
+
+      {/* ===== Floating top-right overlay: always visible, even in focus mode ===== */}
+      <div className="fixed top-2 right-2 z-[90] flex items-center gap-1.5 sm:gap-2 bg-background/80 backdrop-blur-sm rounded-md px-1.5 py-1 shadow-sm border border-border/50">
+        <CompactnessSelector />
+        {isGlobalFocusMode && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => window.dispatchEvent(new CustomEvent('exitfocusmode', { detail: { viewId: view } }))}
+            title="Exit Focus Mode (F11 or Esc)"
+          >
+            <Minimize2 className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline ml-1">Exit Focus</span>
+          </Button>
+        )}
+      </div>
 
       <UmbrellaNavigation open={umbrellaOpen} onClose={() => setUmbrellaOpen(false)} onFocusOnTask={handleFocusOnTask} />
       <ConfirmModalHost />
