@@ -173,11 +173,23 @@ const Index: React.FC = () => {
               </>
             }
           />
-          <div className="mt-2">
+          <div className="mt-2 flex items-center gap-2">
             <QuickTimer onJumpToTask={handleFocusOnTask} />
+            <div className="flex items-center gap-2 ml-auto shrink-0">
+              <CompactnessSelector />
+              <GlobalFocusModeToggle activeViewId={view} />
+            </div>
           </div>
         </div>
       </header>
+
+      {/* Slim bar that stays visible even in focus mode */}
+      {isGlobalFocusMode && (
+        <div className="flex items-center justify-end gap-2 px-4 py-1 border-b bg-background/95 backdrop-blur-sm">
+          <CompactnessSelector />
+          <GlobalFocusModeToggle activeViewId={view} />
+        </div>
+      )}
 
       <main className={`flex flex-col px-4 sm:px-8 md:px-12 py-4 sm:py-8 transition-all duration-300 ${isGlobalFocusMode ? 'px-0 py-0 h-screen' : 'h-[calc(100vh-4rem)] min-h-0'}`}>
         {!isGlobalFocusMode && (
@@ -239,12 +251,6 @@ const Index: React.FC = () => {
         </div>
         )}
       </main>
-
-      {/* ===== Floating top-right: size slider + focus toggle, always visible ===== */}
-      <div className="fixed top-3 right-3 z-[90] flex items-center gap-2">
-        <CompactnessSelector />
-        <GlobalFocusModeToggle activeViewId={view} />
-      </div>
 
       <UmbrellaNavigation open={umbrellaOpen} onClose={() => setUmbrellaOpen(false)} onFocusOnTask={handleFocusOnTask} />
       <ConfirmModalHost />
