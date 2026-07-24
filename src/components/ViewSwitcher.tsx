@@ -301,8 +301,9 @@ export function ViewSwitcher({ value, onChange, disabledModules = [], utilityIte
   const visibleMainViews = visibleViews.filter(v => !v.isUtility);
   const visibleUtilViews = visibleViews.filter(v => v.isUtility);
 
-  // Show utilityItems (NotificationCenter, UserSection) inline when no overflow
-  const showUtilityItemsInline = displayMode !== 'overflow';
+  // Show utility items inline — they are small (avatar, bell, flag) and
+  // should never disappear on narrow screens.
+  const showUtilityItemsInline = true;
 
   return (
     <div ref={containerRef} className="flex flex-wrap items-center gap-4 w-full">
@@ -345,24 +346,15 @@ export function ViewSwitcher({ value, onChange, disabledModules = [], utilityIte
             >
               <div className="flex flex-col gap-0.5">
                 {overflowViews.map(view => renderOverflowItem(view))}
-                {/* Utility items in overflow dropdown */}
-                {utilityItems && (
-                  <>
-                    <div className="h-px bg-gray-200 my-1" />
-                    <div className="flex items-center gap-2 px-3 py-2">
-                      {utilityItems}
-                    </div>
-                  </>
-                )}
               </div>
             </PopoverContent>
           </Popover>
         )}
       </div>
 
-      {/* Utility items on white background — NotificationCenter, UserSection */}
-      {showUtilityItemsInline && utilityItems && (
-        <div className="flex items-center gap-1 shrink min-w-0">
+      {/* Utility items — always visible, pushed right */}
+      {utilityItems && (
+        <div className="flex items-center gap-1 ml-auto shrink-0">
           {utilityItems}
         </div>
       )}
