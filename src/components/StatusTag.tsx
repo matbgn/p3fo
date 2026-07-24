@@ -3,10 +3,11 @@ import { TriageStatus } from "@/hooks/useTasks";
 
 interface StatusTagProps {
   status: TriageStatus;
+  compact?: boolean;
 }
 
 const statusColors: Record<TriageStatus, string> = {
-  Backlog: "bg-gray-500",
+  Backlog: "bg-violet-500",
   Ready: "bg-blue-500",
   WIP: "bg-yellow-500",
   Blocked: "bg-red-500",
@@ -25,9 +26,12 @@ const statusLabels: Record<TriageStatus, string> = {
   Archived: "Archived",
 };
 
-export const StatusTag: React.FC<StatusTagProps> = ({ status }) => {
+export const StatusTag: React.FC<StatusTagProps> = ({ status, compact = false }) => {
+  const sizeClasses = compact
+    ? "px-1.5 py-0.5 text-[10px]"
+    : "px-2.5 py-0.5 text-xs";
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-white ${statusColors[status]}`}>
+    <span className={`inline-flex items-center shrink-0 rounded-full font-medium text-white ${sizeClasses} ${statusColors[status]}`}>
       {statusLabels[status]}
     </span>
   );

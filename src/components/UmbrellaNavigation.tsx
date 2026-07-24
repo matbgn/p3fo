@@ -28,6 +28,7 @@ import {
   Plus,
   ArrowRight,
 } from 'lucide-react';
+import { StatusTag } from '@/components/StatusTag';
 
 interface UmbrellaNavigationProps {
   open: boolean;
@@ -201,7 +202,12 @@ export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, on
         const task = tasks.find(t => t.id === r.taskId);
         return task ? { task, score: r.score } : null;
       })
-      .filter((r): r is { task: typeof tasks[number]; score: number } => r !== null);
+      .filter((r): r is { task: typeof tasks[number]; score: number } => r !== null)
+      .sort((a, b) => {
+        const aArchived = a.task.triageStatus === 'Archived' ? 1 : 0;
+        const bArchived = b.task.triageStatus === 'Archived' ? 1 : 0;
+        return aArchived - bArchived;
+      });
   }, [query, tasks]);
 
   const canCreate = query.trim().length > 0 && searchResults.every(r => r.task.title.toLowerCase() !== query.trim().toLowerCase());
@@ -362,6 +368,7 @@ export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, on
                       )}
                     >
                       <span className="flex-1 truncate">{r.task.title}</span>
+                      <StatusTag status={r.task.triageStatus} compact />
                       <ArrowRight className="w-3 h-3 shrink-0 text-muted-foreground" />
                     </button>
                   ))}
