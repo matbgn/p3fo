@@ -18,26 +18,20 @@ export const GlobalFocusModeToggle: React.FC<GlobalFocusModeToggleProps> = ({ ac
     window.dispatchEvent(new CustomEvent('exitfocusmode', { detail: { viewId: activeViewId } }));
   }, [activeViewId]);
 
-  // If not in focus mode, clicking enters it for the active view
-  // If in focus mode, clicking exits it
   return (
     <Button
-      variant="outline"
+      variant={isFocusMode ? "secondary" : "outline"}
       size="sm"
       onClick={isFocusMode ? handleExit : handleToggle}
-      title={isFocusMode ? 'Exit Focus Mode (F11)' : 'Enter Focus Mode (F11)'}
+      title={isFocusMode ? 'Exit Focus Mode (F11 or Esc)' : 'Enter Focus Mode (F11)'}
+      className="h-7 w-7 sm:h-8 sm:w-8 sm:px-2 sm:w-auto p-0"
     >
       {isFocusMode ? (
-        <>
-          <Minimize2 className="h-4 w-4 mr-2" />
-          Focus
-        </>
+        <Minimize2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
       ) : (
-        <>
-          <Maximize2 className="h-4 w-4 mr-2" />
-          Focus
-        </>
+        <Maximize2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
       )}
+      <span className="hidden sm:inline sm:ml-1.5 text-xs">Focus</span>
     </Button>
   );
 };
