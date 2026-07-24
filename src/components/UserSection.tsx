@@ -177,9 +177,6 @@ export function UserSection() {
               {displayInitial}
             </AvatarFallback>
           </Avatar>
-          <span className="text-sm font-mono font-semibold tracking-wide">
-            {displayInitial}
-          </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-80 p-0" align="end">
