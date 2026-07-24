@@ -158,7 +158,7 @@ const TaskRunningBlock: React.FC<{
 }> = ({ title, elapsed, isRunning, onPause, onJumpToTask, taskId, jumpLabel, pauseLabel, resumeLabel }) => {
   return (
     <>
-      <div className="text-xs sm:text-sm font-medium shrink-0" title={title}>
+      <div className="text-xs sm:text-sm font-medium min-w-0 flex-1 truncate" title={title}>
         {truncateTitle(title)}
       </div>
       <div className="text-xs sm:text-sm font-mono shrink-0 text-foreground">
@@ -191,7 +191,7 @@ const LastStoppedTaskBlock: React.FC<{
     <>
       <button
         onClick={() => onJumpToTask && taskId && onJumpToTask(taskId)}
-        className="text-xs sm:text-sm text-muted-foreground/60 hover:text-muted-foreground cursor-pointer hover:underline transition-colors shrink-0"
+        className="text-xs sm:text-sm text-muted-foreground/60 hover:text-muted-foreground cursor-pointer hover:underline transition-colors truncate"
         title={title}
       >
         {truncateTitle(title)}
@@ -618,10 +618,10 @@ export const QuickTimer: React.FC<{
   const taskHasContent = !!runningTask || !!lastStoppedTask;
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 bg-secondary rounded-md min-h-[32px] sm:min-h-[36px]">
+<div className="flex flex-col items-center min-[512px]:flex-row gap-1 min-[512px]:gap-1.5 px-2 min-[512px]:px-3 py-1.5 min-[512px]:py-2 bg-secondary rounded-md min-h-[32px] min-[512px]:min-h-[36px] w-full min-[630px]:w-auto">
       {/* ===== TASK ZONE (top on mobile, right on desktop) ===== */}
       {runningTask ? (
-        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 order-1 sm:order-2">
+        <div className="flex items-center gap-1 min-[512px]:gap-1.5 order-1 min-[630px]:order-2 w-auto min-[512px]:w-full min-[630px]:w-auto">
           <TaskRunningBlock
             title={runningTask.task.title}
             elapsed={elapsedTime}
@@ -635,7 +635,7 @@ export const QuickTimer: React.FC<{
           />
         </div>
       ) : lastStoppedTask ? (
-        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 order-1 sm:order-2">
+        <div className="flex items-center gap-1 min-[512px]:gap-1.5 order-1 min-[630px]:order-2 w-auto min-[512px]:w-full min-[630px]:w-auto">
           <LastStoppedTaskBlock
             title={lastStoppedTask.task.title}
             onResume={() => toggleTimer(lastStoppedTask.task.id, currentUserId)}
@@ -646,7 +646,7 @@ export const QuickTimer: React.FC<{
           />
         </div>
       ) : !techniqueHasContent ? (
-        <div className="text-xs sm:text-sm text-muted-foreground italic flex items-center h-full order-1 sm:order-2">
+        <div className="text-xs min-[512px]:text-sm text-muted-foreground italic flex items-center h-full order-1 min-[630px]:order-2">
           {t('quickTimer.noActiveTimer')}
         </div>
       ) : null}
@@ -658,12 +658,12 @@ export const QuickTimer: React.FC<{
 
       {/* ===== GUTTER (desktop only) ===== */}
       {techniqueHasContent && taskHasContent && (
-        <div className="hidden sm:block w-px h-5 bg-border shrink-0 order-none" />
+        <div className="hidden min-[630px]:block w-px h-5 bg-border shrink-0 order-none" />
       )}
 
       {/* ===== TECHNIQUE ZONE (bottom on mobile, left on desktop) ===== */}
       {techniqueHasContent && (
-        <div className="flex items-center gap-1 sm:gap-1.5 bg-muted/30 rounded px-1.5 sm:px-2 py-0.5 order-2 sm:order-1 overflow-x-auto">
+        <div className="flex items-center gap-1 min-[512px]:gap-1.5 bg-muted/30 rounded px-1.5 min-[512px]:px-2 py-0.5 order-2 min-[630px]:order-1 w-auto min-[512px]:w-full min-[630px]:w-auto min-w-0">
           {activeMode === 'pomodoro' ? (
             <PomodoroControls pomodoro={pomodoro} t={t} />
           ) : (

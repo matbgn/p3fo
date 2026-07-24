@@ -170,12 +170,18 @@ const Index: React.FC = () => {
                 <NotificationCenter />
                 <UserSection />
                 <LanguageSwitcher />
+                {/* Slider + focus: shown inline on narrow screens */}
+                <div className="flex items-center pl-4 gap-2 sm:hidden">
+                  <CompactnessSelector />
+                  <GlobalFocusModeToggle activeViewId={view} />
+                </div>
               </>
             }
           />
           <div className="mt-2 flex items-center gap-2">
             <QuickTimer onJumpToTask={handleFocusOnTask} />
-            <div className="flex items-center gap-2 ml-auto shrink-0">
+            {/* Slider + focus: shown on the QuickTimer row only on sm+ */}
+            <div className="hidden sm:flex items-center gap-2 ml-auto shrink-0">
               <CompactnessSelector />
               <GlobalFocusModeToggle activeViewId={view} />
             </div>
