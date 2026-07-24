@@ -5,6 +5,7 @@ import { Pause, Square, ArrowRight, Play, SkipForward, Apple, RotateCcw, Picture
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useTasks } from "@/hooks/useTasks";
 import { useAllTasks } from "@/hooks/useAllTasks";
 import { useUserSettings } from "@/hooks/useUserSettings";
@@ -23,7 +24,13 @@ import { cn } from "@/lib/utils";
 // Constants
 // ---------------------------------------------------------------------------
 
-const TASK_TITLE_MAX_W = "max-w-[80px] sm:max-w-[120px] md:max-w-[150px]";
+// Cap task titles to a fixed character count for predictable strip width.
+// CSS max-width varies by font; a char cap guarantees the same pixel budget
+// regardless of content.
+const TASK_TITLE_MAX_CHARS = 24;
+
+const truncateTitle = (title: string, max = TASK_TITLE_MAX_CHARS) =>
+  title.length > max ? title.slice(0, max - 1) + '…' : title;
 
 const phaseDotColor: Record<PomodoroPhase, string> = {
   idle: 'bg-muted-foreground/30',
@@ -151,8 +158,8 @@ const TaskRunningBlock: React.FC<{
 }> = ({ title, elapsed, isRunning, onPause, onJumpToTask, taskId, jumpLabel, pauseLabel, resumeLabel }) => {
   return (
     <>
-      <div className={cn("text-xs sm:text-sm font-medium truncate shrink min-w-0", TASK_TITLE_MAX_W)} title={title}>
-        {title}
+      <div className="text-xs sm:text-sm font-medium shrink-0" title={title}>
+        {truncateTitle(title)}
       </div>
       <div className="text-xs sm:text-sm font-mono shrink-0 text-foreground">
         {formatTime(elapsed)}
@@ -184,10 +191,10 @@ const LastStoppedTaskBlock: React.FC<{
     <>
       <button
         onClick={() => onJumpToTask && taskId && onJumpToTask(taskId)}
-        className="text-xs sm:text-sm text-muted-foreground/60 hover:text-muted-foreground truncate cursor-pointer hover:underline transition-colors shrink min-w-0"
+        className="text-xs sm:text-sm text-muted-foreground/60 hover:text-muted-foreground cursor-pointer hover:underline transition-colors shrink-0"
         title={title}
       >
-        {title}
+        {truncateTitle(title)}
       </button>
       <Button size="sm" variant="ghost" onClick={onResume} className="h-7 w-7 sm:h-8 sm:w-8 p-0 text-muted-foreground/60 hover:text-foreground" title={resumeLabel} aria-label={resumeLabel}>
         <Play className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -288,89 +295,117 @@ const TravelerControls: React.FC<{
 }> = ({ traveler, t, departure, destination, travelMode, durationPreview, durationLoading, onDeparture, onDestination, onTravelMode, onSearch, onStart }) => {
   const phase = traveler.state.phase;
   const isIdle = phase === 'idle';
+  const [popoverOpen, setPopoverOpen] = useState(false);
 
+  // Compact idle summary: "✈ GVA → CDG 2h30/0h30"
+  const idleSummary = departure && destination
+    ? `${departure} → ${destination}`
+    : t('quickTimer.traveler');
+  const idleDuration = durationPreview
+    ? `${formatDuration(durationPreview.travelMs)}/${formatDuration(durationPreview.breakMs)}`
+    : null;
+
+  if (isIdle) {
+    return (
+      <>
+        {/* Compact idle trigger — opens a popover with the full config */}
+        <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+          <PopoverTrigger asChild>
+            <button className="flex items-center gap-1.5 h-7 sm:h-8 px-2 rounded-md hover:bg-accent transition-colors text-xs font-medium">
+              {travelMode === 'flight' ? <PlaneTakeoff className="h-3 w-3 sm:h-4 sm:w-4" /> : <Train className="h-3 w-3 sm:h-4 sm:w-4" />}
+              <span className="truncate max-w-[100px]">{idleSummary}</span>
+              {idleDuration && (
+                <span className="text-[10px] text-muted-foreground shrink-0">{idleDuration}</span>
+              )}
+              <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64 p-3" align="start">
+            <div className="space-y-2">
+              {/* Travel mode */}
+              <Select value={travelMode} onValueChange={(v) => onTravelMode(v as TravelMode)}>
+                <SelectTrigger className="h-8 text-xs">
+                  {travelMode === 'flight' ? <PlaneTakeoff className="h-3 w-3 mr-1" /> : <Train className="h-3 w-3 mr-1" />}
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="flight"><span className="flex items-center gap-1.5"><PlaneTakeoff className="h-3 w-3" /> {t('quickTimer.flightLabel')}</span></SelectItem>
+                  <SelectItem value="train"><span className="flex items-center gap-1.5"><Train className="h-3 w-3" /> {t('quickTimer.train')}</span></SelectItem>
+                </SelectContent>
+              </Select>
+              {/* Departure */}
+              {travelMode === 'train' ? (
+                <Input value={departure} onChange={(e) => onDeparture(e.target.value)} placeholder={t('quickTimer.from')} className="h-8 text-xs" />
+              ) : (
+                <Select value={departure} onValueChange={onDeparture}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t('quickTimer.from')} /></SelectTrigger>
+                  <SelectContent>
+                    {CITIES.map((city) => <SelectItem key={city.code} value={city.code}>{city.code}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+              {/* Destination */}
+              {travelMode === 'train' ? (
+                <Input value={destination} onChange={(e) => onDestination(e.target.value)} placeholder={t('quickTimer.to')} className="h-8 text-xs" />
+              ) : (
+                <Select value={destination} onValueChange={onDestination}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t('quickTimer.to')} /></SelectTrigger>
+                  <SelectContent>
+                    {CITIES.filter((city) => {
+                      if (city.code === departure) return false;
+                      if (travelMode === 'flight' && departure) return getShortFlightDestinations(departure).includes(city.code);
+                      return true;
+                    }).map((city) => {
+                      const ms = travelMode === 'flight' && departure ? getFlightDurationMs(departure, city.code) ?? Infinity : Infinity;
+                      const dotClass = travelMode === 'flight' && departure ? getFlightDurationColor(ms) : '';
+                      return (
+                        <SelectItem key={city.code} value={city.code}>
+                          <span className="flex items-center gap-1.5">
+                            {travelMode === 'flight' && departure && <span className={cn("inline-block w-2 h-2 rounded-full", dotClass)} />}
+                            {city.code}
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              )}
+              {/* Duration preview */}
+              {durationPreview && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className={cn("inline-block w-2 h-2 rounded-full", getFlightDurationColor(durationPreview.travelMs))} />
+                  {formatDuration(durationPreview.travelMs)} / {formatDuration(durationPreview.breakMs)}
+                </div>
+              )}
+              {/* Actions */}
+              <div className="flex items-center gap-2 pt-1">
+                {travelMode !== 'flight' && departure && destination && (
+                  <Button size="sm" variant="outline" onClick={onSearch} disabled={durationLoading} className="h-8 px-2">
+                    {durationLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />}
+                  </Button>
+                )}
+                {departure && destination && durationPreview && (
+                  <Button size="sm" onClick={() => { onStart(); setPopoverOpen(false); }} className="h-8 px-3">
+                    <Play className="h-3 w-3 mr-1" /> {t('quickTimer.startTraveler')}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </>
+    );
+  }
+
+  // Active traveler — full countdown + controls inline
   return (
     <>
-      {!isIdle ? (
-        <>
-          <span className="shrink-0" title={phase === 'work' ? t('quickTimer.flight') : t('quickTimer.break')}>
-            {phase === 'work' ? <ChartNoAxesGantt className="h-3 w-3 sm:h-4 sm:w-4 text-red-500" /> : <Coffee className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" />}
-          </span>
-          <div className={cn("w-2 h-2 rounded-full shrink-0", phase === 'work' ? 'bg-red-500' : 'bg-green-500')} title={phase === 'work' ? t('quickTimer.flight') : t('quickTimer.break')} />
-        </>
-      ) : (
-        <Select value={travelMode} onValueChange={(v) => onTravelMode(v as TravelMode)}>
-          <SelectTrigger className="w-[42px] h-7 sm:h-8 text-xs px-2">
-            {travelMode === 'flight' ? <PlaneTakeoff className="h-3 w-3 sm:h-4 sm:w-4" /> : <Train className="h-3 w-3 sm:h-4 sm:w-4" />}
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="flight"><span className="flex items-center gap-1.5"><PlaneTakeoff className="h-3 w-3" /> {t('quickTimer.flightLabel')}</span></SelectItem>
-            <SelectItem value="train"><span className="flex items-center gap-1.5"><Train className="h-3 w-3" /> {t('quickTimer.train')}</span></SelectItem>
-          </SelectContent>
-        </Select>
-      )}
-      {!isIdle ? (
-        <div className="text-xs sm:text-sm font-mono shrink-0 font-semibold text-foreground">{formatTravelerTime(traveler.remaining)}</div>
-      ) : travelMode === 'train' ? (
-        <Input value={departure} onChange={(e) => onDeparture(e.target.value)} placeholder={t('quickTimer.from')} className="w-[100px] h-7 sm:h-8 text-xs px-2" />
-      ) : (
-        <Select value={departure} onValueChange={onDeparture}>
-          <SelectTrigger className="w-[64px] h-7 sm:h-8 text-xs px-2"><SelectValue placeholder={t('quickTimer.from')} /></SelectTrigger>
-          <SelectContent>
-            {CITIES.map((city) => <SelectItem key={city.code} value={city.code}>{city.code}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      )}
-      {!isIdle ? (
-        <span className="text-[10px] sm:text-xs text-muted-foreground shrink-0">{traveler.state.departure}→{traveler.state.destination}</span>
-      ) : travelMode === 'train' ? (
-        <Input value={destination} onChange={(e) => onDestination(e.target.value)} placeholder={t('quickTimer.to')} className="w-[100px] h-7 sm:h-8 text-xs px-2" />
-      ) : (
-        <>
-          <span className="text-xs text-muted-foreground">→</span>
-          <Select value={destination} onValueChange={onDestination}>
-            <SelectTrigger className="w-[64px] h-7 sm:h-8 text-xs px-2"><SelectValue placeholder={t('quickTimer.to')} /></SelectTrigger>
-            <SelectContent>
-              {CITIES.filter((city) => {
-                if (city.code === departure) return false;
-                if (travelMode === 'flight' && departure) return getShortFlightDestinations(departure).includes(city.code);
-                return true;
-              }).map((city) => {
-                const ms = travelMode === 'flight' && departure ? getFlightDurationMs(departure, city.code) ?? Infinity : Infinity;
-                const dotClass = travelMode === 'flight' && departure ? getFlightDurationColor(ms) : '';
-                return (
-                  <SelectItem key={city.code} value={city.code}>
-                    <span className="flex items-center gap-1.5">
-                      {travelMode === 'flight' && departure && <span className={cn("inline-block w-2 h-2 rounded-full", dotClass)} />}
-                      {city.code}
-                    </span>
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-        </>
-      )}
-      {/* Duration preview */}
-      {isIdle && durationPreview && (
-        <span className="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap flex items-center gap-1">
-          <span className={cn("inline-block w-2 h-2 rounded-full", getFlightDurationColor(durationPreview.travelMs))} title={getFlightDurationColor(durationPreview.travelMs)} />
-          {formatDuration(durationPreview.travelMs)}/{formatDuration(durationPreview.breakMs)}
-        </span>
-      )}
-      {/* Search button (train only) */}
-      {isIdle && departure && destination && travelMode !== 'flight' && (
-        <Button size="sm" variant="outline" onClick={onSearch} disabled={durationLoading} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.searchTravelDuration')} aria-label={t('quickTimer.searchTravelDuration')}>
-          {durationLoading ? <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" /> : <Search className="h-3 w-3 sm:h-4 sm:w-4" />}
-        </Button>
-      )}
-      {/* Start traveler */}
-      {isIdle && departure && destination && durationPreview && (
-        <Button size="sm" variant="outline" onClick={onStart} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.startTraveler')} aria-label={t('quickTimer.startTraveler')}>
-          <Play className="h-3 w-3 sm:h-4 sm:w-4" />
-        </Button>
-      )}
-      {/* Pause / Resume */}
+      <span className="shrink-0" title={phase === 'work' ? t('quickTimer.flight') : t('quickTimer.break')}>
+        {phase === 'work' ? <ChartNoAxesGantt className="h-3 w-3 sm:h-4 sm:w-4 text-red-500" /> : <Coffee className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" />}
+      </span>
+      <div className={cn("w-2 h-2 rounded-full shrink-0", phase === 'work' ? 'bg-red-500' : 'bg-green-500')} title={phase === 'work' ? t('quickTimer.flight') : t('quickTimer.break')} />
+      <div className="text-xs sm:text-sm font-mono shrink-0 font-semibold text-foreground">{formatTravelerTime(traveler.remaining)}</div>
+      <span className="text-[10px] sm:text-xs text-muted-foreground shrink-0">{traveler.state.departure}→{traveler.state.destination}</span>
       {traveler.isRunning && !traveler.isPaused ? (
         <Button size="sm" variant="outline" onClick={traveler.pause} className="h-7 w-7 sm:h-8 sm:w-8 p-0" aria-label={t('quickTimer.pause')}>
           <Pause className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -380,16 +415,12 @@ const TravelerControls: React.FC<{
           <Play className="h-3 w-3 sm:h-4 sm:w-4" />
         </Button>
       ) : null}
-      {!isIdle && (
-        <Button size="sm" variant="outline" onClick={traveler.skip} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.skipPhase')} aria-label={t('quickTimer.skipPhase')}>
-          <SkipForward className="h-3 w-3 sm:h-4 sm:w-4" />
-        </Button>
-      )}
-      {!isIdle && (
-        <Button size="sm" variant="outline" onClick={() => traveler.reset()} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.reset')} aria-label={t('quickTimer.reset')}>
-          <RotateCcw className="h-3 w-3 sm:h-4 sm:w-4" />
-        </Button>
-      )}
+      <Button size="sm" variant="outline" onClick={traveler.skip} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.skipPhase')} aria-label={t('quickTimer.skipPhase')}>
+        <SkipForward className="h-3 w-3 sm:h-4 sm:w-4" />
+      </Button>
+      <Button size="sm" variant="outline" onClick={() => traveler.reset()} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.reset')} aria-label={t('quickTimer.reset')}>
+        <RotateCcw className="h-3 w-3 sm:h-4 sm:w-4" />
+      </Button>
     </>
   );
 };
