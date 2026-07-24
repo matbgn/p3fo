@@ -1359,7 +1359,11 @@
     "resumeTimer": "Resume timer",
     "noActiveTimer": "No active timer",
     "reopenSpotlight": "Reopen the What's Next spotlight",
-    "whatsNext": "What's next?"
+    "whatsNext": "What's next?",
+    "taskZone": "Task",
+    "techniqueZone": "Technique",
+    "stopTask": "Stop task timer",
+    "techniqueIdle": "Idle"
   },
   "pomodoroUi": {
     "ready": "Ready",

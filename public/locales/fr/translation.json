@@ -1359,7 +1359,11 @@
     "resumeTimer": "Reprendre le timer",
     "noActiveTimer": "Aucun timer actif",
     "reopenSpotlight": "Rouvrir le spotlight What's Next",
-    "whatsNext": "Quelle est la suite ?"
+    "whatsNext": "Quelle est la suite ?",
+    "taskZone": "Tâche",
+    "techniqueZone": "Technique",
+    "stopTask": "Arrêter le timer de la tâche",
+    "techniqueIdle": "Inactif"
   },
   "pomodoroUi": {
     "ready": "Prêt",
