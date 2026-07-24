@@ -1214,7 +1214,13 @@
     "timetable": "Timetable",
     "voting": "Vote",
     "metrics": "Métriques",
-    "settings": "Paramètres"
+    "settings": "Paramètres",
+    "searchPlaceholder": "Rechercher des tâches ou taper pour créer...",
+    "searchResults": "Tâches",
+    "searchEmpty": "Aucune tâche correspondante.",
+    "createTask": "Créer la tâche",
+    "createTaskHint": "Appuyez sur Entrée pour créer",
+    "scratchHint": "Scratch — capturez une tâche instantanément"
   },
   "program": {
     "inProgressNoDate": "En cours (sans date de fin)",

@@ -1214,7 +1214,13 @@
     "timetable": "Timetable",
     "voting": "Abstimmung",
     "metrics": "Metriken",
-    "settings": "Einstellungen"
+    "settings": "Einstellungen",
+    "searchPlaceholder": "Aufgaben suchen oder tippen zum Erstellen...",
+    "searchResults": "Aufgaben",
+    "searchEmpty": "Keine passenden Aufgaben.",
+    "createTask": "Aufgabe erstellen",
+    "createTaskHint": "Enter zum Erstellen drücken",
+    "scratchHint": "Scratch — erfasse sofort eine Aufgabe"
   },
   "program": {
     "inProgressNoDate": "In Bearbeitung (kein Enddatum)",

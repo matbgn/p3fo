@@ -244,7 +244,7 @@ const Index: React.FC = () => {
         )}
       </main>
 
-      <UmbrellaNavigation open={umbrellaOpen} onClose={() => setUmbrellaOpen(false)} />
+      <UmbrellaNavigation open={umbrellaOpen} onClose={() => setUmbrellaOpen(false)} onFocusOnTask={handleFocusOnTask} />
       <ConfirmModalHost />
     </div>
   );

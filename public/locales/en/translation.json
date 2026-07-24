@@ -1214,7 +1214,13 @@
     "timetable": "Timetable",
     "voting": "Voting",
     "metrics": "Metrics",
-    "settings": "Settings"
+    "settings": "Settings",
+    "searchPlaceholder": "Search tasks or type to create...",
+    "searchResults": "Tasks",
+    "searchEmpty": "No matching tasks.",
+    "createTask": "Create task",
+    "createTaskHint": "Press Enter to create",
+    "scratchHint": "Scratch — capture a task instantly"
   },
   "program": {
     "inProgressNoDate": "In Progress (No Termination Date)",
