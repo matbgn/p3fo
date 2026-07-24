@@ -618,10 +618,52 @@ export const QuickTimer: React.FC<{
   const taskHasContent = !!runningTask || !!lastStoppedTask;
 
   return (
-    <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-secondary rounded-md min-h-[32px] sm:min-h-[36px]">
-      {/* ===== TECHNIQUE ZONE ===== */}
+    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 bg-secondary rounded-md min-h-[32px] sm:min-h-[36px]">
+      {/* ===== TASK ZONE (top on mobile, right on desktop) ===== */}
+      {runningTask ? (
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 order-1 sm:order-2">
+          <TaskRunningBlock
+            title={runningTask.task.title}
+            elapsed={elapsedTime}
+            isRunning={runningTask.entry.endTime === 0}
+            onPause={() => toggleTimer(runningTask.task.id, currentUserId)}
+            onJumpToTask={onJumpToTask}
+            taskId={runningTask.task.id}
+            jumpLabel={t('quickTimer.jumpToTask')}
+            pauseLabel={t('quickTimer.pauseTask')}
+            resumeLabel={t('quickTimer.resumeTask')}
+          />
+        </div>
+      ) : lastStoppedTask ? (
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 order-1 sm:order-2">
+          <LastStoppedTaskBlock
+            title={lastStoppedTask.task.title}
+            onResume={() => toggleTimer(lastStoppedTask.task.id, currentUserId)}
+            onJumpToTask={onJumpToTask}
+            taskId={lastStoppedTask.task.id}
+            resumeLabel={t('quickTimer.resumeTimer')}
+            jumpLabel={t('quickTimer.jumpToTask')}
+          />
+        </div>
+      ) : !techniqueHasContent ? (
+        <div className="text-xs sm:text-sm text-muted-foreground italic flex items-center h-full order-1 sm:order-2">
+          {t('quickTimer.noActiveTimer')}
+        </div>
+      ) : null}
+
+      {/* ===== WHAT'S NEXT (only when no task is running) ===== */}
+      {!spotlightVisible && !runningTask && (
+        <WhatsNextButton visible label={t('quickTimer.whatsNext')} title={t('quickTimer.reopenSpotlight')} />
+      )}
+
+      {/* ===== GUTTER (desktop only) ===== */}
+      {techniqueHasContent && taskHasContent && (
+        <div className="hidden sm:block w-px h-5 bg-border shrink-0 order-none" />
+      )}
+
+      {/* ===== TECHNIQUE ZONE (bottom on mobile, left on desktop) ===== */}
       {techniqueHasContent && (
-        <div className="flex items-center gap-1 sm:gap-1.5 bg-muted/30 rounded px-1.5 sm:px-2 py-0.5">
+        <div className="flex items-center gap-1 sm:gap-1.5 bg-muted/30 rounded px-1.5 sm:px-2 py-0.5 order-2 sm:order-1 overflow-x-auto">
           {activeMode === 'pomodoro' ? (
             <PomodoroControls pomodoro={pomodoro} t={t} />
           ) : (
@@ -651,48 +693,6 @@ export const QuickTimer: React.FC<{
             label={t('quickTimer.switchTechnique')}
           />
         </div>
-      )}
-
-      {/* ===== GUTTER ===== */}
-      {techniqueHasContent && taskHasContent && (
-        <div className="w-px h-5 bg-border shrink-0" />
-      )}
-
-      {/* ===== TASK ZONE ===== */}
-      {runningTask ? (
-        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-          <TaskRunningBlock
-            title={runningTask.task.title}
-            elapsed={elapsedTime}
-            isRunning={runningTask.entry.endTime === 0}
-            onPause={() => toggleTimer(runningTask.task.id, currentUserId)}
-            onJumpToTask={onJumpToTask}
-            taskId={runningTask.task.id}
-            jumpLabel={t('quickTimer.jumpToTask')}
-            pauseLabel={t('quickTimer.pauseTask')}
-            resumeLabel={t('quickTimer.resumeTask')}
-          />
-        </div>
-      ) : lastStoppedTask ? (
-        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-          <LastStoppedTaskBlock
-            title={lastStoppedTask.task.title}
-            onResume={() => toggleTimer(lastStoppedTask.task.id, currentUserId)}
-            onJumpToTask={onJumpToTask}
-            taskId={lastStoppedTask.task.id}
-            resumeLabel={t('quickTimer.resumeTimer')}
-            jumpLabel={t('quickTimer.jumpToTask')}
-          />
-        </div>
-      ) : !techniqueHasContent ? (
-        <div className="text-xs sm:text-sm text-muted-foreground italic flex items-center h-full">
-          {t('quickTimer.noActiveTimer')}
-        </div>
-      ) : null}
-
-      {/* ===== WHAT'S NEXT (only when no task is running) ===== */}
-      {!spotlightVisible && !runningTask && (
-        <WhatsNextButton visible label={t('quickTimer.whatsNext')} title={t('quickTimer.reopenSpotlight')} />
       )}
     </div>
   );
