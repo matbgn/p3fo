@@ -393,6 +393,24 @@ export const QuickTimer: React.FC<{
               return <div key={i} className={`w-1.5 h-1.5 rounded-full transition-colors ${dotColor}`} />;
             })}
           </div>
+          {runningTask && (
+            <>
+              <div className="w-px h-4 bg-border/60 shrink-0" />
+              <div className="text-xs sm:text-sm font-medium truncate max-w-[60px] sm:max-w-[90px] md:max-w-[110px] shrink" title={runningTask.task.title}>
+                {runningTask.task.title}
+              </div>
+              <div className="text-xs sm:text-sm font-mono shrink-0 text-muted-foreground">
+                {formatTime(elapsedTime)}
+              </div>
+              <Button size="sm" variant="outline" onClick={() => toggleTimer(runningTask.task.id, currentUserId)} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={runningTask.entry.endTime === 0 ? t('quickTimer.pauseTask') : t('quickTimer.resumeTask')}>
+                {runningTask.entry.endTime === 0 ? (
+                  <Pause className="h-3 w-3 sm:h-4 sm:w-4" />
+                ) : (
+                  <Play className="h-3 w-3 sm:h-4 sm:w-4" />
+                )}
+              </Button>
+            </>
+          )}
           {pomodoro.isRunning && !pomodoro.isPaused ? (
             <Button size="sm" variant="outline" onClick={pomodoro.pause} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.pause')}>
               <Pause className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -600,6 +618,24 @@ export const QuickTimer: React.FC<{
               <Play className="h-3 w-3 sm:h-4 sm:w-4" />
             </Button>
           ) : null}
+          {runningTask && (
+            <>
+              <div className="w-px h-4 bg-border/60 shrink-0" />
+              <div className="text-xs sm:text-sm font-medium truncate max-w-[60px] sm:max-w-[90px] md:max-w-[110px] shrink" title={runningTask.task.title}>
+                {runningTask.task.title}
+              </div>
+              <div className="text-xs sm:text-sm font-mono shrink-0 text-muted-foreground">
+                {formatTime(elapsedTime)}
+              </div>
+              <Button size="sm" variant="outline" onClick={() => toggleTimer(runningTask.task.id, currentUserId)} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={runningTask.entry.endTime === 0 ? t('quickTimer.pauseTask') : t('quickTimer.resumeTask')}>
+                {runningTask.entry.endTime === 0 ? (
+                  <Pause className="h-3 w-3 sm:h-4 sm:w-4" />
+                ) : (
+                  <Play className="h-3 w-3 sm:h-4 sm:w-4" />
+                )}
+              </Button>
+            </>
+          )}
           {traveler.state.phase !== 'idle' && (
             <Button size="sm" variant="outline" onClick={traveler.skip} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.skipPhase')}>
               <SkipForward className="h-3 w-3 sm:h-4 sm:w-4" />
