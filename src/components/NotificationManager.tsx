@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useReminderStore } from '@/hooks/useReminders';
 import { loadRemindersFromPersistence } from '@/hooks/useReminders';
 import { useUserSettingsContext } from '@/context/UserSettingsContext';
@@ -11,6 +12,9 @@ const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const BLOCKED_THRESHOLD_MS = 30 * 60 * 1000;
 const AGING_REMINDER_PREFIX = 'aging:';
 const BLOCKED_REMINDER_PREFIX = 'blocked:';
+// Stable key for the onboarding reminder, so we can find and dismiss it
+// regardless of the current locale (the visible title is localized).
+export const WELCOME_REMINDER_KEY = 'welcome:onboarding';
 
 function getAgingLevel(task: Task, baseDays: number): 0 | 1 | 2 | 3 {
   if (!baseDays || baseDays <= 0) return 0;
@@ -25,18 +29,17 @@ function getAgingLevel(task: Task, baseDays: number): 0 | 1 | 2 | 3 {
   return 3;
 }
 
-const AGING_MESSAGES: Record<number, string> = {
-  1: 'This card is getting stale. Maybe time to act on it?',
-  2: "This card hasn't moved in a while. Consider asking for support or reprioritizing.",
-  3: 'This card has been idle for a long time. Is it still relevant? Consider dropping it or asking for help.',
-};
+function agingMessageKey(level: 1 | 2 | 3): string {
+  return `notifications.aging.level${level}`;
+}
 
 export const NotificationManager: React.FC = () => {
+    const { t } = useTranslation();
     const { checkAndTriggerReminders, isNotified, markNotified, setUserId } = useReminderStore();
     const { userSettings, loading, completeOnboarding, userId } = useUserSettingsContext();
     const { tasks } = useAllTasks();
     const { settings } = useSettingsContext();
-    const { dismissReminder, scheduledReminders } = useReminderStore();
+    const { dismissReminder, scheduledReminders, reminders } = useReminderStore();
 
     // 0. Sync userId + load persisted reminders when userId is available
     useEffect(() => {
@@ -64,7 +67,10 @@ export const NotificationManager: React.FC = () => {
 
         if (!userSettings.hasCompletedOnboarding && tasks.length > 0) {
             completeOnboarding();
-            const welcomeReminder = scheduledReminders.find(r => r.title === "Welcome to P3Fo!");
+            // Dismiss any welcome reminder (active or scheduled) regardless of locale.
+            const welcomeReminder = [...reminders, ...scheduledReminders].find(
+                r => r.taskId === WELCOME_REMINDER_KEY || r.title === t('notifications.welcome.title') || r.title === "Welcome to P3Fo!"
+            );
             if (welcomeReminder) {
                 dismissReminder(welcomeReminder.id);
             }
@@ -72,13 +78,21 @@ export const NotificationManager: React.FC = () => {
         }
 
         if (!userSettings.hasCompletedOnboarding && tasks.length === 0) {
-            addReminder({
-                title: "Welcome to P3Fo!",
-                description: "Don't forget to set up your first task.",
-                persistent: true,
-            });
+            // Avoid duplicates if the locale changed: check both active and
+            // scheduled reminders for our stable welcome key before adding.
+            const existingWelcome = [...reminders, ...scheduledReminders].some(
+                r => r.taskId === WELCOME_REMINDER_KEY
+            );
+            if (!existingWelcome) {
+                addReminder({
+                    title: t('notifications.welcome.title'),
+                    description: t('notifications.welcome.description'),
+                    persistent: true,
+                    taskId: WELCOME_REMINDER_KEY,
+                });
+            }
         }
-    }, [loading, userSettings.hasCompletedOnboarding, tasks.length, completeOnboarding, tasks, scheduledReminders, dismissReminder]);
+    }, [loading, userSettings.hasCompletedOnboarding, tasks.length, completeOnboarding, tasks, scheduledReminders, reminders, dismissReminder, t]);
 
     // 3. Condition-based triggers: aging transitions + blocked escalation
     useEffect(() => {
@@ -93,11 +107,12 @@ export const NotificationManager: React.FC = () => {
             // Aging trigger
             const agingLevel = getAgingLevel(task, baseDays);
             if (agingLevel > 0) {
-                const reminderKey = `${AGING_REMINDER_PREFIX}${task.id}:${agingLevel}`;
+                const level = agingLevel as 1 | 2 | 3;
+                const reminderKey = `${AGING_REMINDER_PREFIX}${task.id}:${level}`;
                 if (!isNotified(reminderKey)) {
                     addReminder({
-                        title: `Card aging: "${task.title}"`,
-                        description: AGING_MESSAGES[agingLevel],
+                        title: t('notifications.aging.title', { title: task.title }),
+                        description: t(agingMessageKey(level)),
                         persistent: false,
                         taskId: task.id,
                     });
@@ -112,8 +127,8 @@ export const NotificationManager: React.FC = () => {
                     const reminderKey = `${BLOCKED_REMINDER_PREFIX}${task.id}`;
                     if (!isNotified(reminderKey)) {
                         addReminder({
-                            title: `Blocked: "${task.title}"`,
-                            description: `You've been blocked for a while. Have you told someone? Consider asking for support or escalating.`,
+                            title: t('notifications.blocked.title', { title: task.title }),
+                            description: t('notifications.blocked.description'),
                             persistent: false,
                             taskId: task.id,
                         });
@@ -122,7 +137,7 @@ export const NotificationManager: React.FC = () => {
                 }
             }
         }
-    }, [loading, tasks, settings.cardAgingBaseDays, isNotified, markNotified]);
+    }, [loading, tasks, settings.cardAgingBaseDays, isNotified, markNotified, t]);
 
     return null;
 };

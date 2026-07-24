@@ -1599,6 +1599,21 @@
       "1hour": "1 heure",
       "2hours": "2 heures",
       "1day": "1 jour"
+    },
+    "jumpToTask": "Aller à la tâche",
+    "welcome": {
+      "title": "Bienvenue sur P3Fo !",
+      "description": "N'oubliez pas de créer votre première tâche."
+    },
+    "aging": {
+      "title": "Carte en attente : « {{title}} »",
+      "level1": "Cette carte commence à stagner. Peut-être temps d'agir ?",
+      "level2": "Cette carte n'a pas bougé depuis un moment. Envisagez de demander du support ou de la reprioriser.",
+      "level3": "Cette carte est inactive depuis longtemps. Est-elle toujours pertinente ? Envisagez de l'abandonner ou de demander de l'aide."
+    },
+    "blocked": {
+      "title": "Bloqué : « {{title}} »",
+      "description": "Vous êtes bloqué depuis un moment. L'avez-vous signalé ? Envisagez de demander du support ou d'escalader."
     }
   },
   "spotlight": {

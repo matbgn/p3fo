@@ -1599,6 +1599,21 @@
       "1hour": "1 hour",
       "2hours": "2 hours",
       "1day": "1 day"
+    },
+    "jumpToTask": "Jump to task",
+    "welcome": {
+      "title": "Welcome to P3Fo!",
+      "description": "Don't forget to set up your first task."
+    },
+    "aging": {
+      "title": "Card aging: \"{{title}}\"",
+      "level1": "This card is getting stale. Maybe time to act on it?",
+      "level2": "This card hasn't moved in a while. Consider asking for support or reprioritizing.",
+      "level3": "This card has been idle for a long time. Is it still relevant? Consider dropping it or asking for help."
+    },
+    "blocked": {
+      "title": "Blocked: \"{{title}}\"",
+      "description": "You've been blocked for a while. Have you told someone? Consider asking for support or escalating."
     }
   },
   "spotlight": {

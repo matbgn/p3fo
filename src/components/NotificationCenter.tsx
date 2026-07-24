@@ -1,8 +1,10 @@
 import * as React from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Bell, X, BellPlus } from "lucide-react";
+import { Bell, X, BellPlus, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useReminderStore, Reminder } from "@/hooks/useReminders";
+import { useViewNavigation } from "@/hooks/useView";
+import { WELCOME_REMINDER_KEY } from "@/components/NotificationManager";
 import { cn } from "@/lib/utils";
 import {
   Select,
@@ -25,6 +27,7 @@ const SNOOZE_OPTIONS = [
 function ReminderItem({ reminder }: { reminder: Reminder }) {
   const { t } = useTranslation();
   const { dismissReminder, markAsRead, snoozeReminder } = useReminderStore();
+  const { handleFocusOnTask } = useViewNavigation();
   const [snoozeDuration, setSnoozeDuration] = React.useState(SNOOZE_OPTIONS[0].value);
 
   const handleDismiss = () => {
@@ -39,6 +42,18 @@ function ReminderItem({ reminder }: { reminder: Reminder }) {
     snoozeReminder(reminder.id, snoozeDuration);
   };
 
+  // A reminder can jump to a task when it carries a real taskId.
+  // The onboarding welcome reminder uses a sentinel key, not a task id.
+  const jumpableTaskId = reminder.taskId && reminder.taskId !== WELCOME_REMINDER_KEY
+    ? reminder.taskId
+    : undefined;
+
+  const handleJumpToTask = () => {
+    if (jumpableTaskId) {
+      handleFocusOnTask(jumpableTaskId);
+    }
+  };
+
   return (
     <div
       className={cn(
@@ -47,8 +62,20 @@ function ReminderItem({ reminder }: { reminder: Reminder }) {
       )}
     >
       <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <p className="font-medium">{reminder.title}</p>
+        <div className="flex-1 min-w-0">
+          {jumpableTaskId ? (
+            <button
+              type="button"
+              onClick={handleJumpToTask}
+              className="font-medium text-left hover:underline cursor-pointer flex items-center gap-1 min-w-0"
+              title={t("notifications.jumpToTask")}
+            >
+              <span className="truncate">{reminder.title}</span>
+              <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+            </button>
+          ) : (
+            <p className="font-medium">{reminder.title}</p>
+          )}
           {reminder.description && (
             <p className="text-muted-foreground">{reminder.description}</p>
           )}

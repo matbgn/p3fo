@@ -1599,6 +1599,21 @@
       "1hour": "1 Stunde",
       "2hours": "2 Stunden",
       "1day": "1 Tag"
+    },
+    "jumpToTask": "Zur Aufgabe springen",
+    "welcome": {
+      "title": "Willkommen bei P3Fo!",
+      "description": "Vergiss nicht, deine erste Aufgabe einzurichten."
+    },
+    "aging": {
+      "title": "Karte altert: „{{title}}“",
+      "level1": "Diese Karte wird langsam unaktuell. Vielleicht Zeit, tätig zu werden?",
+      "level2": "Diese Karte ist seit einer Weile nicht mehr bewegt worden. Erwäge, Unterstützung anzufordern oder neu zu priorisieren.",
+      "level3": "Diese Karte ist schon lange inaktiv. Ist sie noch relevant? Erwäge, sie fallen zu lassen oder Hilfe anzufordern."
+    },
+    "blocked": {
+      "title": "Blockiert: „{{title}}“",
+      "description": "Du bist seit einer Weile blockiert. Hast du jemandem Bescheid gegeben? Erwäge, Unterstützung anzufordern oder zu eskalieren."
     }
   },
   "spotlight": {
