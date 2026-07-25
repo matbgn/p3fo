@@ -359,10 +359,12 @@ export function ViewSwitcher({ value, onChange, disabledModules = [], utilityIte
         </div>
       )}
 
-      {/* Right section: always visible (e.g. CompactnessSelector) */}
-      <div ref={rightRef} className="flex items-center gap-2 ml-auto">
-        {rightItems}
-      </div>
+      {/* Right section */}
+      {rightItems && (
+        <div ref={rightRef} className="flex items-center gap-2 ml-auto">
+          {rightItems}
+        </div>
+      )}
     </div>
   );
 }
