@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.33.1 (2026-07-25)
+
+---
+
 ## v0.33.0 (2026-07-25)
 
 ### Features
@@ -154,13 +158,5 @@
 
 - **pomodoro:** distinguish traveler from pomodoro sessions and improve robustness (2bf4b48)
 - **pomodoro:** fix config defaults and deduplicate chime logic (97677c4)
-
----
-
-## v0.25.1 (2026-06-10)
-
-### Bug Fixes
-
-- **voting tool:** display rich text content of proposal's to public view (2971f16)
 
 ---
