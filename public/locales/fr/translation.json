@@ -1611,6 +1611,10 @@
       "1day": "1 jour"
     },
     "jumpToTask": "Aller à la tâche",
+    "taskReminder": {
+      "title": "Rappel de tâche : {{title}}",
+      "description": "Cette tâche est due le {{formattedDate}}"
+    },
     "welcome": {
       "title": "Bienvenue sur P3Fo !",
       "description": "N'oubliez pas de créer votre première tâche."

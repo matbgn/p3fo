@@ -1611,6 +1611,10 @@
       "1day": "1 day"
     },
     "jumpToTask": "Jump to task",
+    "taskReminder": {
+      "title": "Task Reminder: {{title}}",
+      "description": "This task is due on {{formattedDate}}"
+    },
     "welcome": {
       "title": "Welcome to P3Fo!",
       "description": "Don't forget to set up your first task."

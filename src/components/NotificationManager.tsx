@@ -12,8 +12,13 @@ const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const BLOCKED_THRESHOLD_MS = 30 * 60 * 1000;
 const AGING_REMINDER_PREFIX = 'aging:';
 const BLOCKED_REMINDER_PREFIX = 'blocked:';
-// Stable key for the onboarding reminder, so we can find and dismiss it
-// regardless of the current locale (the visible title is localized).
+// Stable i18n key identifying the onboarding welcome reminder. We match on
+// this (locale-independent) instead of a fake taskId, because the reminders
+// table has a FOREIGN KEY on taskId → tasks(id) and "welcome:onboarding" is
+// not a real task. Welcome reminders are stored with taskId = undefined.
+export const WELCOME_REMINDER_TITLE_KEY = 'notifications.welcome.title';
+// Kept for backward-compat with legacy persisted reminders that used the
+// sentinel as a taskId before the FK-safe fix.
 export const WELCOME_REMINDER_KEY = 'welcome:onboarding';
 
 function getAgingLevel(task: Task, baseDays: number): 0 | 1 | 2 | 3 {
@@ -68,9 +73,11 @@ export const NotificationManager: React.FC = () => {
         if (!userSettings.hasCompletedOnboarding && tasks.length > 0) {
             completeOnboarding();
             // Dismiss any welcome reminder (active or scheduled) regardless of locale.
-            const welcomeReminder = [...reminders, ...scheduledReminders].find(
-                r => r.taskId === WELCOME_REMINDER_KEY || r.title === t('notifications.welcome.title') || r.title === "Welcome to P3Fo!"
-            );
+            // Match by the stable titleKey; also check legacy taskId sentinel
+            // for reminders persisted before the FK-safe fix.
+            const isWelcome = (r: { titleKey?: string; taskId?: string }) =>
+                r.titleKey === WELCOME_REMINDER_TITLE_KEY || r.taskId === WELCOME_REMINDER_KEY;
+            const welcomeReminder = [...reminders, ...scheduledReminders].find(isWelcome);
             if (welcomeReminder) {
                 dismissReminder(welcomeReminder.id);
             }
@@ -79,16 +86,19 @@ export const NotificationManager: React.FC = () => {
 
         if (!userSettings.hasCompletedOnboarding && tasks.length === 0) {
             // Avoid duplicates if the locale changed: check both active and
-            // scheduled reminders for our stable welcome key before adding.
-            const existingWelcome = [...reminders, ...scheduledReminders].some(
-                r => r.taskId === WELCOME_REMINDER_KEY
-            );
+            // scheduled reminders for our welcome identifier before adding.
+            const isWelcome = (r: { titleKey?: string; taskId?: string }) =>
+                r.titleKey === WELCOME_REMINDER_TITLE_KEY || r.taskId === WELCOME_REMINDER_KEY;
+            const existingWelcome = [...reminders, ...scheduledReminders].some(isWelcome);
             if (!existingWelcome) {
                 addReminder({
-                    title: t('notifications.welcome.title'),
+                    title: t(WELCOME_REMINDER_TITLE_KEY),
                     description: t('notifications.welcome.description'),
+                    titleKey: WELCOME_REMINDER_TITLE_KEY,
+                    descriptionKey: 'notifications.welcome.description',
                     persistent: true,
-                    taskId: WELCOME_REMINDER_KEY,
+                    // No taskId: the welcome reminder is not tied to a real
+                    // task, and the reminders table enforces a FK on taskId.
                 });
             }
         }
@@ -110,9 +120,15 @@ export const NotificationManager: React.FC = () => {
                 const level = agingLevel as 1 | 2 | 3;
                 const reminderKey = `${AGING_REMINDER_PREFIX}${task.id}:${level}`;
                 if (!isNotified(reminderKey)) {
+                    const titleKey = 'notifications.aging.title';
+                    const descriptionKey = agingMessageKey(level);
+                    const titleParams = { title: task.title };
                     addReminder({
-                        title: t('notifications.aging.title', { title: task.title }),
-                        description: t(agingMessageKey(level)),
+                        title: t(titleKey, titleParams),
+                        description: t(descriptionKey),
+                        titleKey,
+                        titleParams,
+                        descriptionKey,
                         persistent: false,
                         taskId: task.id,
                     });
@@ -126,9 +142,15 @@ export const NotificationManager: React.FC = () => {
                 if (blockedDuration > BLOCKED_THRESHOLD_MS) {
                     const reminderKey = `${BLOCKED_REMINDER_PREFIX}${task.id}`;
                     if (!isNotified(reminderKey)) {
+                        const titleKey = 'notifications.blocked.title';
+                        const descriptionKey = 'notifications.blocked.description';
+                        const titleParams = { title: task.title };
                         addReminder({
-                            title: t('notifications.blocked.title', { title: task.title }),
-                            description: t('notifications.blocked.description'),
+                            title: t(titleKey, titleParams),
+                            description: t(descriptionKey),
+                            titleKey,
+                            titleParams,
+                            descriptionKey,
                             persistent: false,
                             taskId: task.id,
                         });

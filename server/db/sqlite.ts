@@ -113,6 +113,10 @@ interface ReminderDbRow {
   taskId: string | null;
   title: string;
   description: string | null;
+  titleKey: string | null;
+  titleParams: string | null;
+  descriptionKey: string | null;
+  descriptionParams: string | null;
   read: number;
   persistent: number;
   triggerDate: string | null;
@@ -429,6 +433,10 @@ class SqliteClient implements DbClient {
         "taskId" TEXT,
         "title" TEXT NOT NULL,
         "description" TEXT,
+        "titleKey" TEXT,
+        "titleParams" TEXT,
+        "descriptionKey" TEXT,
+        "descriptionParams" TEXT,
         "read" BOOLEAN DEFAULT 0,
         "persistent" BOOLEAN DEFAULT 0,
         "triggerDate" TEXT,
@@ -712,6 +720,14 @@ class SqliteClient implements DbClient {
 
     // VoteLoops proposalId column (per-proposal loops)
     addColumn('voteLoops', 'proposalId', 'TEXT NOT NULL DEFAULT \'\'');
+
+    // Reminders i18n columns (system-generated reminders store a translation
+    // key + params instead of baked-in text, so they re-localize on language
+    // change). Stored as TEXT; params are JSON-encoded.
+    addColumn('reminders', 'titleKey', 'TEXT');
+    addColumn('reminders', 'titleParams', 'TEXT');
+    addColumn('reminders', 'descriptionKey', 'TEXT');
+    addColumn('reminders', 'descriptionParams', 'TEXT');
 
     this.tryFixVoteLoopsUniqueConstraint();
   }
@@ -1604,6 +1620,10 @@ class SqliteClient implements DbClient {
       taskId: input.taskId,
       title: input.title!,
       description: input.description,
+      titleKey: input.titleKey,
+      titleParams: input.titleParams,
+      descriptionKey: input.descriptionKey,
+      descriptionParams: input.descriptionParams,
       read: input.read ?? false,
       persistent: input.persistent ?? false,
       triggerDate: input.triggerDate,
@@ -1616,9 +1636,11 @@ class SqliteClient implements DbClient {
     };
 
     this.db.prepare(`
-      INSERT INTO "reminders"("id", "userId", "taskId", "title", "description", "read", "persistent",
+      INSERT INTO "reminders"("id", "userId", "taskId", "title", "description", "titleKey", "titleParams",
+        "descriptionKey", "descriptionParams", "read", "persistent",
         "triggerDate", "offsetMinutes", "snoozeDurationMinutes", "originalTriggerDate", "state", "createdAt", "updatedAt")
-      VALUES(@id, @userId, @taskId, @title, @description, @read, @persistent,
+      VALUES(@id, @userId, @taskId, @title, @description, @titleKey, @titleParams,
+        @descriptionKey, @descriptionParams, @read, @persistent,
         @triggerDate, @offsetMinutes, @snoozeDurationMinutes, @originalTriggerDate, @state, @createdAt, @updatedAt)
     `).run({
       id: reminder.id,
@@ -1626,6 +1648,10 @@ class SqliteClient implements DbClient {
       taskId: reminder.taskId ?? null,
       title: reminder.title,
       description: reminder.description ?? null,
+      titleKey: reminder.titleKey ?? null,
+      titleParams: reminder.titleParams ? JSON.stringify(reminder.titleParams) : null,
+      descriptionKey: reminder.descriptionKey ?? null,
+      descriptionParams: reminder.descriptionParams ? JSON.stringify(reminder.descriptionParams) : null,
       read: reminder.read ? 1 : 0,
       persistent: reminder.persistent ? 1 : 0,
       triggerDate: reminder.triggerDate ?? null,
@@ -1652,6 +1678,10 @@ class SqliteClient implements DbClient {
       UPDATE "reminders" SET
         "title" = @title,
         "description" = @description,
+        "titleKey" = @titleKey,
+        "titleParams" = @titleParams,
+        "descriptionKey" = @descriptionKey,
+        "descriptionParams" = @descriptionParams,
         "read" = @read,
         "persistent" = @persistent,
         "triggerDate" = @triggerDate,
@@ -1665,6 +1695,10 @@ class SqliteClient implements DbClient {
       id: updated.id,
       title: updated.title,
       description: updated.description ?? null,
+      titleKey: updated.titleKey ?? null,
+      titleParams: updated.titleParams ? JSON.stringify(updated.titleParams) : null,
+      descriptionKey: updated.descriptionKey ?? null,
+      descriptionParams: updated.descriptionParams ? JSON.stringify(updated.descriptionParams) : null,
       read: updated.read ? 1 : 0,
       persistent: updated.persistent ? 1 : 0,
       triggerDate: updated.triggerDate ?? null,
@@ -1692,15 +1726,21 @@ class SqliteClient implements DbClient {
 
   async importReminders(reminders: ReminderEntity[]): Promise<void> {
     const insertStmt = this.db.prepare(`
-      INSERT INTO "reminders"("id", "userId", "taskId", "title", "description", "read", "persistent",
+      INSERT INTO "reminders"("id", "userId", "taskId", "title", "description", "titleKey", "titleParams",
+        "descriptionKey", "descriptionParams", "read", "persistent",
         "triggerDate", "offsetMinutes", "snoozeDurationMinutes", "originalTriggerDate", "state", "createdAt", "updatedAt")
-      VALUES(@id, @userId, @taskId, @title, @description, @read, @persistent,
+      VALUES(@id, @userId, @taskId, @title, @description, @titleKey, @titleParams,
+        @descriptionKey, @descriptionParams, @read, @persistent,
         @triggerDate, @offsetMinutes, @snoozeDurationMinutes, @originalTriggerDate, @state, @createdAt, @updatedAt)
       ON CONFLICT("id") DO UPDATE SET
         "userId" = excluded."userId",
         "taskId" = excluded."taskId",
         "title" = excluded."title",
         "description" = excluded."description",
+        "titleKey" = excluded."titleKey",
+        "titleParams" = excluded."titleParams",
+        "descriptionKey" = excluded."descriptionKey",
+        "descriptionParams" = excluded."descriptionParams",
         "read" = excluded."read",
         "persistent" = excluded."persistent",
         "triggerDate" = excluded."triggerDate",
@@ -1720,6 +1760,10 @@ class SqliteClient implements DbClient {
           taskId: reminder.taskId ?? null,
           title: reminder.title,
           description: reminder.description ?? null,
+          titleKey: reminder.titleKey ?? null,
+          titleParams: reminder.titleParams ? JSON.stringify(reminder.titleParams) : null,
+          descriptionKey: reminder.descriptionKey ?? null,
+          descriptionParams: reminder.descriptionParams ? JSON.stringify(reminder.descriptionParams) : null,
           read: reminder.read ? 1 : 0,
           persistent: reminder.persistent ? 1 : 0,
           triggerDate: reminder.triggerDate ?? null,
@@ -2515,6 +2559,10 @@ class SqliteClient implements DbClient {
       taskId: row.taskId ?? undefined,
       title: row.title,
       description: row.description ?? undefined,
+      titleKey: row.titleKey ?? undefined,
+      titleParams: row.titleParams ? JSON.parse(row.titleParams) : undefined,
+      descriptionKey: row.descriptionKey ?? undefined,
+      descriptionParams: row.descriptionParams ? JSON.parse(row.descriptionParams) : undefined,
       read: row.read === 1,
       persistent: row.persistent === 1,
       triggerDate: row.triggerDate ?? undefined,

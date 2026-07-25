@@ -1611,6 +1611,10 @@
       "1day": "1 Tag"
     },
     "jumpToTask": "Zur Aufgabe springen",
+    "taskReminder": {
+      "title": "Aufgabenerinnerung: {{title}}",
+      "description": "Diese Aufgabe ist fällig am {{formattedDate}}"
+    },
     "welcome": {
       "title": "Willkommen bei P3Fo!",
       "description": "Vergiss nicht, deine erste Aufgabe einzurichten."
