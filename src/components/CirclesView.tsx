@@ -378,9 +378,17 @@ const CirclesView = forwardRef<CirclesViewHandle, CirclesViewProps>(({ onFocusOn
 
     const diameter = Math.min(dimensions.width, dimensions.height) * 0.9;
 
+    // Give the top-level organization circle more padding so its first child
+    // doesn't visually collide with its boundary. Deeper levels keep a tight
+    // 3px gap. d3.pack.padding(node) returns the padding between a parent and
+    // its children, keyed off the parent node.
     const pack = d3.pack<CircleTreeNode>()
       .size([diameter, diameter])
-      .padding(3);
+      .padding((node) => {
+        // Root / organization level: larger gap to separate it from its circles.
+        if (!node.parent) return 20;
+        return 3;
+      });
 
     const hierarchy = d3.hierarchy(rootData)
       .sum(d => {

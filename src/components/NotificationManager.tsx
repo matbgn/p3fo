@@ -7,6 +7,7 @@ import { useAllTasks } from '@/hooks/useAllTasks';
 import { useSettingsContext } from '@/context/SettingsContext';
 import { addReminder } from '@/utils/reminders';
 import type { Task } from '@/hooks/useTasks';
+import { EXAMPLE_DATA_PROMPTED_KEY } from '@/components/ExampleDataModal';
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const BLOCKED_THRESHOLD_MS = 30 * 60 * 1000;
@@ -85,6 +86,13 @@ export const NotificationManager: React.FC = () => {
         }
 
         if (!userSettings.hasCompletedOnboarding && tasks.length === 0) {
+            // Don't show the generic "set up your first task" welcome reminder
+            // until the user has answered the ExampleDataModal. The modal is the
+            // new first-run onboarding entry point; once dismissed/accepted it
+            // sets EXAMPLE_DATA_PROMPTED_KEY and we fall back to the reminder.
+            if (!localStorage.getItem(EXAMPLE_DATA_PROMPTED_KEY)) {
+                return;
+            }
             // Avoid duplicates if the locale changed: check both active and
             // scheduled reminders for our welcome identifier before adding.
             const isWelcome = (r: { titleKey?: string; taskId?: string }) =>

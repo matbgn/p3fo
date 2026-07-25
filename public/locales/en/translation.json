@@ -1676,5 +1676,134 @@
       "dayOff": "day off",
       "on": "on {{date}}"
     }
+  },
+  "exampleData": {
+    "title": "Load example data?",
+    "description": "Start with a small demo workspace so you can explore P3Fo right away. You can clear it anytime from Settings.",
+    "datasetName": "ACME Corporation — The Acme Theatre",
+    "datasetSummary": "A single-screen cinema run by Eddie, Roger and Jessica Rabbit, programming upcoming movies.",
+    "bullet": {
+      "movies": "5 upcoming movies, each with box office, scanning and projection subtasks",
+      "roles": "Circles & roles: who runs the box office, scans tickets, preps the DCP",
+      "frameworks": "Intentional & collaborative frameworks (the basics)",
+      "salary": "A simple transparent salary system (USD)",
+      "celebration": "Past achievements on the Celebration board"
+    },
+    "existingDataWarning": "You already have some data. Loading the example will overwrite it.",
+    "dismiss": "Not now",
+    "load": "Load example data",
+    "loading": "Loading…",
+    "successTitle": "Example data loaded",
+    "successDescription": "The ACME Theatre workspace is ready. Reloading…",
+    "errorTitle": "Could not load example data",
+    "error": {
+      "400": "Bad request — the server rejected the sample data shape.",
+      "500": "Server error while saving — check the server logs."
+    },
+    "languageLabel": "Language of the example data"
+  },
+  "acme": {
+    "task": {
+      "movie1": "Somersault Symphony — Premiere",
+      "movie2": "The Dip Disaster — Late Show",
+      "movie3": "Patty-Cake Pandemonium — Matinée",
+      "movie4": "Toon Noir — Evening Run",
+      "movie5": "Benny the Cab — Family Matinée",
+      "subBoxOffice": "Staff the box office",
+      "subScan": "Scan tickets at the door",
+      "subDcp": "Prepare & ingest the DCP",
+      "subAnnounce": "Finalize marquee & announcements",
+      "sideRent": "Pay the theatre rent (monthly)",
+      "sideBookkeeping": "Reconcile last month's ticket sales",
+      "sideProjector": "Service the projector (bulb & lens)",
+      "sideSupply": "Restock concessions (popcorn & drinks)"
+    },
+    "circle": {
+      "org": "ACME Corporation",
+      "theatre": "The Acme Theatre",
+      "operations": "Front-of-House Operations",
+      "programming": "Programming & Projection",
+      "boxOffice": "Box Office Lead",
+      "boxOfficePurpose": "Sell tickets and manage the cash desk for each screening.",
+      "boxOfficeMissions": "* Open and reconcile the cash drawer\n* Sell tickets (window + walk-up)\n* Hand off the session sheet to the scanner",
+      "boxOfficeAuthority": "Cash drawer and ticket sales records.",
+      "scanner": "Ticket Scanner",
+      "scannerPurpose": "Validate tickets and welcome guests at the door.",
+      "scannerMissions": "* Scan entry tickets\n* Manage the queue\n* Flag sold-out screenings to the box office",
+      "scannerAuthority": "Door entry and seating flow.",
+      "dcpOperator": "DCP & Projection Operator",
+      "dcpPurpose": "Prepare the digital cinema package and run the projection.",
+      "dcpMissions": "* Ingest and verify the DCP\n* Build the playlist\n* Cue and monitor the projection",
+      "dcpAuthority": "Projection booth and playback equipment.",
+      "programmer": "Programmer",
+      "programmerPurpose": "Select and schedule the upcoming movies.",
+      "programmerMissions": "* Curate the weekly programme\n* Negotiate rights with distributors\n* Publish the schedule",
+      "programmerAuthority": "Programming calendar and distributor relations."
+    },
+    "framework": {
+      "intentionalName": "Intentional Framework",
+      "collaborativeName": "Collaborative Framework",
+      "missionLabel": "Mission",
+      "missionDesc": "What do we concretely do, and for whom?",
+      "missionContent": "Programme and project movies for the Acme Theatre, for the toons and humans of Toontown.",
+      "purposeLabel": "Purpose",
+      "purposeDesc": "Why, for whom, and for what do we do what we do?",
+      "purposeContent": "Keep Toontown's single screen alive so toons and humans keep sharing stories together.",
+      "valuesLabel": "Values & Principles",
+      "valuesDesc": "What are our values and their principles for practical application?",
+      "valuesContent": "* Show up on time\n* The show must go on\n* Treat every guest (toon or human) the same",
+      "collabValuesLabel": "Collaborative Values & Principles",
+      "collabValuesDesc": "The values important for efficient and pleasant collaboration.",
+      "collabValuesContent": "* Reliability over heroics\n* Talk to each other before the screening, not during",
+      "behaviorsLabel": "Expected Behaviors",
+      "behaviorsDesc": "Behaviors to encourage, indispensable ones, to avoid, or unacceptable.",
+      "behaviorsContent": "* Indispensable: confirm your shift the day before\n* Avoid: last-minute DCP swaps\n* Unacceptable: leaving the booth unattended during a reel",
+      "meetingsLabel": "Regular Meetings",
+      "meetingsDesc": "The types of meetings practiced, their frequency and duration.",
+      "meetingsContent": "Weekly programming sync, Mondays 10:00, 30 min."
+    },
+    "salary": {
+      "dimExpertise": "Expertise",
+      "dimResponsibility": "Responsibility",
+      "expertiseL0": "Trainee — learning the ropes.",
+      "expertiseL1": "Can run a shift unsupervised.",
+      "expertiseL2": "Reliable operator, handles common issues.",
+      "expertiseL3": "Reference person for the role.",
+      "expertiseL4": "Defines how the role is done.",
+      "responsibilityL0": "Own task only.",
+      "responsibilityL1": "Own task + helps others.",
+      "responsibilityL2": "Coordinates a circle.",
+      "responsibilityL3": "Coordinates the theatre.",
+      "responsibilityL4": "Owner / final authority.",
+      "eddieComment": "Box office lead; on the wagon (mostly).",
+      "rogerComment": "Energetic scanner; keep away from the dip.",
+      "jessicaComment": "Programmer & DCP operator. Not bad, just drawn that way.",
+      "adjLabel": "Projection booth allowance",
+      "budgetName": "Typical month",
+      "systemLabel": "ACME Theatre Salary System"
+    },
+    "fertilization": {
+      "fact1": "Sold out the Somersault Symphony premiere (320 seats).",
+      "fact2": "Ran 14 screenings in a row without a single projection fault.",
+      "fact3": "Monthly attendance: 2,140 guests (best month since reopening).",
+      "satisfaction1": "Guests love the new matinée slot for families."
+    },
+    "dream": {
+      "dream1": "Open a second screen in Toontown within 2 years.",
+      "strength1": "A loyal regular audience that trusts our programming.",
+      "threat1": "Streaming at home keeps pulling family audiences away."
+    },
+    "reminder": {
+      "premiereTitle": "Somersault Symphony premiere is in {{count}} day",
+      "premiereTitle_plural": "Somersault Symphony premiere is in {{count}} days",
+      "premiereDesc": "DCP ingest is in progress — confirm the KDM is ready.",
+      "projectorTitle": "Projector maintenance is blocked",
+      "projectorDesc": "The spare bulb shipment is late — chase the supplier."
+    },
+    "template": {
+      "name": "Screening prep",
+      "parentTitle": "Premiere",
+      "childAnnounce": "Finalize marquee & announcements"
+    }
   }
 }

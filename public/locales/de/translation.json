@@ -1676,5 +1676,134 @@
       "dayOff": "Freier Tag",
       "on": "am {{date}}"
     }
+  },
+  "exampleData": {
+    "title": "Beispieldaten laden?",
+    "description": "Starte mit einem kleinen Demo-Arbeitsbereich, um P3Fo sofort zu erkunden. Du kannst ihn jederzeit in den Einstellungen löschen.",
+    "datasetName": "ACME Corporation — Das Acme Theatre",
+    "datasetSummary": "Ein Ein-Saal-Kino, betrieben von Eddie, Roger und Jessica Rabbit, das kommende Filme programmiert.",
+    "bullet": {
+      "movies": "5 kommende Filme, jeder mit Kasse, Scan- und Projektions-Teilaufgaben",
+      "roles": "Kreise & Rollen: wer die Kasse führt, Tickets scannt, das DCP vorbereitet",
+      "frameworks": "Intentional & Collaborative Framework (die Grundlagen)",
+      "salary": "Ein einfaches transparentes Gehaltssystem (USD)",
+      "celebration": "Frühere Erfolge auf der Celebration-Tafel"
+    },
+    "existingDataWarning": "Du hast bereits Daten. Das Laden des Beispiels überschreibt sie.",
+    "dismiss": "Nicht jetzt",
+    "load": "Beispieldaten laden",
+    "loading": "Lädt…",
+    "successTitle": "Beispieldaten geladen",
+    "successDescription": "Der Acme-Theatre-Arbeitsbereich ist bereit. Neuladen…",
+    "errorTitle": "Beispieldaten konnten nicht geladen werden",
+    "error": {
+      "400": "Ungültige Anfrage — der Server hat die Form der Beispieldaten abgelehnt.",
+      "500": "Serverfehler beim Speichern — siehe Server-Logs."
+    },
+    "languageLabel": "Sprache der Beispieldaten"
+  },
+  "acme": {
+    "task": {
+      "movie1": "Salto-Symphonie — Premiere",
+      "movie2": "Die Dip-Katastrophe — Spätvorstellung",
+      "movie3": "Klatschkrawall — Matinée",
+      "movie4": "Toon-Noir — Abendvorstellung",
+      "movie5": "Benny das Taxi — Familien-Matinée",
+      "subBoxOffice": "Kasse besetzen",
+      "subScan": "Tickets am Eingang scannen",
+      "subDcp": "DCP vorbereiten und importieren",
+      "subAnnounce": "Markquee & Ankündigungen finalisieren",
+      "sideRent": "Kinomiete bezahlen (monatlich)",
+      "sideBookkeeping": "Ticketverkäufe des letzten Monats abstimmen",
+      "sideProjector": "Projektor warten (Lampe & Objektiv)",
+      "sideSupply": "Buffet auffüllen (Popcorn & Getränke)"
+    },
+    "circle": {
+      "org": "ACME Corporation",
+      "theatre": "Das Acme Theatre",
+      "operations": "Kinobetrieb — Besucherempfang",
+      "programming": "Programmierung & Projection",
+      "boxOffice": "Kassenleitung",
+      "boxOfficePurpose": "Tickets verkaufen und die Kasse für jede Vorführung verwalten.",
+      "boxOfficeMissions": "* Kassenlade öffnen und abstimmen\n* Tickets verkaufen (Schalter + Laufkundschaft)\n* Vorstellungsblatt an den Scanner übergeben",
+      "boxOfficeAuthority": "Kassenlade und Ticketverkaufsunterlagen.",
+      "scanner": "Ticket-Scanner",
+      "scannerPurpose": "Tickets prüfen und Gäste am Eingang willkommen heissen.",
+      "scannerMissions": "* Eintrittstickets scannen\n* Warteschlange steuern\n* Ausverkaufte Vorstellungen der Kasse melden",
+      "scannerAuthority": "Einlass und Sitzfluss.",
+      "dcpOperator": "DCP- & Projektionsoperator",
+      "dcpPurpose": "Das Digital Cinema Package vorbereiten und die Projektion leiten.",
+      "dcpMissions": "* DCP importieren und prüfen\n* Playlist zusammenstellen\n* Projektion starten und überwachen",
+      "dcpAuthority": "Projektionskabine und Abspielgeräte.",
+      "programmer": "Programmierer",
+      "programmerPurpose": "Die kommenden Filme auswählen und planen.",
+      "programmerMissions": "* Das Wochenprogramm kuratieren\n* Rechte mit den Verleihern aushandeln\n* Den Spielplan veröffentlichen",
+      "programmerAuthority": "Programmkalender und Verleihkontakte."
+    },
+    "framework": {
+      "intentionalName": "Intentional Framework",
+      "collaborativeName": "Collaborative Framework",
+      "missionLabel": "Mission",
+      "missionDesc": "Was tun wir konkret und für wen?",
+      "missionContent": "Filme für das Acme Theatre programmieren und projizieren, für die Toons und Menschen von Toontown.",
+      "purposeLabel": "Zweck",
+      "purposeDesc": "Warum, für wen und wofür tun wir, was wir tun?",
+      "purposeContent": "Toontowns einzige Leinwand lebendig halten, damit Toons und Menschen weiter Geschichten teilen.",
+      "valuesLabel": "Werte & Prinzipien",
+      "valuesDesc": "Was sind unsere Werte und ihre Prinzipien für die praktische Anwendung?",
+      "valuesContent": "* Pünktlich erscheinen\n* Die Show muss weitergehen\n* Jeden Gast (Toon oder Mensch) gleich behandeln",
+      "collabValuesLabel": "Collaborative Values & Principles",
+      "collabValuesDesc": "Die Werte, die für eine effiziente und angenehme Zusammenarbeit wichtig sind.",
+      "collabValuesContent": "* Verlässlichkeit statt Heldentum\n* Vor der Vorstellung reden, nicht währenddessen",
+      "behaviorsLabel": "Expected Behaviors",
+      "behaviorsDesc": "Verhalten, das zu fördern, unverzichtbar, zu vermeiden oder inakzeptabel ist.",
+      "behaviorsContent": "* Unverzichtbar: Schicht am Vortag bestätigen\n* Vermeiden: DCP-Wechsel in letzter Minute\n* Inakzeptabel: Kabine während einer Rolle unbeaufsichtigt lassen",
+      "meetingsLabel": "Regular Meetings",
+      "meetingsDesc": "Die praktizierten Meeting-Arten, ihre Häufigkeit und Dauer.",
+      "meetingsContent": "Wöchentlicher Programmierungs-Sync, montags 10:00 Uhr, 30 Min."
+    },
+    "salary": {
+      "dimExpertise": "Expertise",
+      "dimResponsibility": "Verantwortung",
+      "expertiseL0": "Azubi — lernt das Handwerk.",
+      "expertiseL1": "Kann eine Schicht unbeaufsichtigt leiten.",
+      "expertiseL2": "Zuverlässiger Operator, löst gängige Probleme.",
+      "expertiseL3": "Referenzperson für die Rolle.",
+      "expertiseL4": "Definiert, wie die Rolle ausgeführt wird.",
+      "responsibilityL0": "Nur eigene Aufgabe.",
+      "responsibilityL1": "Eigene Aufgabe + hilft anderen.",
+      "responsibilityL2": "Koordiniert einen Kreis.",
+      "responsibilityL3": "Koordiniert das Kino.",
+      "responsibilityL4": "Eigentümer / letzte Instanz.",
+      "eddieComment": "Kassenleitung; wieder nüchtern (meistens).",
+      "rogerComment": "Energischer Scanner; vom Dip fernhalten.",
+      "jessicaComment": "Programmiererin & DCP-Operatorin. Nicht böse, nur so gezeichnet.",
+      "adjLabel": "Zulage Projektionskabine",
+      "budgetName": "Typischer Monat",
+      "systemLabel": "Gehaltssystem des Acme Theatre"
+    },
+    "fertilization": {
+      "fact1": "Premiere der Salto-Symphonie ausverkauft (320 Plätze).",
+      "fact2": "14 Vorführungen in Folge ohne einen einzigen Projektionsfehler.",
+      "fact3": "Monatliche Besucherzahl: 2.140 Gäste (bester Monat seit Wiedereröffnung).",
+      "satisfaction1": "Gäste lieben den neuen Matinée-Termin für Familien."
+    },
+    "dream": {
+      "dream1": "Innerhalb von 2 Jahren einen zweiten Saal in Toontown eröffnen.",
+      "strength1": "Ein treues Stammpublikum, das unserer Programmierung vertraut.",
+      "threat1": "Streaming zu Hause hält weiterhin Familien vom Kino ab."
+    },
+    "reminder": {
+      "premiereTitle": "Premiere der Salto-Symphonie in {{count}} Tag",
+      "premiereTitle_plural": "Premiere der Salto-Symphonie in {{count}} Tagen",
+      "premiereDesc": "DCP-Import läuft — prüfen, ob der KDM bereit ist.",
+      "projectorTitle": "Projektorwartung blockiert",
+      "projectorDesc": "Die Ersatzlampe ist verspätet — Lieferanten kontaktieren."
+    },
+    "template": {
+      "name": "Vorstellungsvorbereitung",
+      "parentTitle": "Premiere",
+      "childAnnounce": "Markquee & Ankündigungen finalisieren"
+    }
   }
 }

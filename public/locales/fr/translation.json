@@ -1676,5 +1676,134 @@
       "dayOff": "jour de repos",
       "on": "le {{date}}"
     }
+  },
+  "exampleData": {
+    "title": "Charger des données d'exemple ?",
+    "description": "Démarrez avec un petit espace de démonstration pour explorer P3Fo tout de suite. Vous pourrez tout effacer depuis les Réglages.",
+    "datasetName": "ACME Corporation — Le Acme Theatre",
+    "datasetSummary": "Un cinéma mono-écran tenu par Eddie, Roger et Jessica Rabbit, programmant les films à venir.",
+    "bullet": {
+      "movies": "5 films à venir, chacun avec caisse, scan et projection en sous-tâches",
+      "roles": "Cercles & rôles : qui tient la caisse, scanne les billets, prépare le DCP",
+      "frameworks": "Cadres intentionnel & collaboratif (les bases)",
+      "salary": "Un système de salaire transparent simple (USD)",
+      "celebration": "Succès passés sur le tableau Celebration"
+    },
+    "existingDataWarning": "Vous avez déjà des données. Charger l'exemple les écrasera.",
+    "dismiss": "Pas maintenant",
+    "load": "Charger les données d'exemple",
+    "loading": "Chargement…",
+    "successTitle": "Données d'exemple chargées",
+    "successDescription": "L'espace Acme Theatre est prêt. Rechargement…",
+    "errorTitle": "Impossible de charger les données d'exemple",
+    "error": {
+      "400": "Requête invalide — le serveur a refusé le format des données d'exemple.",
+      "500": "Erreur serveur lors de l'enregistrement — consultez les logs du serveur."
+    },
+    "languageLabel": "Langue des données d'exemple"
+  },
+  "acme": {
+    "task": {
+      "movie1": "Symphonie de la Culbute — Première",
+      "movie2": "La Catastrophe de la Trempette — Séance du soir",
+      "movie3": "Pagaille de Tape-Mains — Matinée",
+      "movie4": "Toon Noir — Séance du soir",
+      "movie5": "Benny le Taxi — Matinée familiale",
+      "subBoxOffice": "Tenir la caisse",
+      "subScan": "Scanner les billets à l'entrée",
+      "subDcp": "Préparer et ingérer le DCP",
+      "subAnnounce": "Finaliser l'affichage et les annonces",
+      "sideRent": "Payer le loyer du cinéma (mensuel)",
+      "sideBookkeeping": "Rapprocher les ventes de billets du mois dernier",
+      "sideProjector": "Réviser le projecteur (ampoule et objectif)",
+      "sideSupply": "Réapprovisionner le buffet (pop-corn et boissons)"
+    },
+    "circle": {
+      "org": "ACME Corporation",
+      "theatre": "Le Acme Theatre",
+      "operations": "Exploitation — Accueil du public",
+      "programming": "Programmation et Projection",
+      "boxOffice": "Responsable de la caisse",
+      "boxOfficePurpose": "Vendre les billets et gérer la caisse pour chaque séance.",
+      "boxOfficeMissions": "* Ouvrir et rapprocher la caisse\n* Vendre les billets (guichet et passage)\n* Transmettre la feuille de séance au scanner",
+      "boxOfficeAuthority": "Tiroir-caisse et registre des ventes de billets.",
+      "scanner": "Scanner de billets",
+      "scannerPurpose": "Valider les billets et accueillir les spectateurs à l'entrée.",
+      "scannerMissions": "* Scanner les billets d'entrée\n* Gérer la file d'attente\n* Signaler les séances complètes à la caisse",
+      "scannerAuthority": "Entrée et flux vers les sièges.",
+      "dcpOperator": "Opérateur DCP et Projection",
+      "dcpPurpose": "Préparer le paquet cinéma numérique et assurer la projection.",
+      "dcpMissions": "* Ingérer et vérifier le DCP\n* Construire la playlist\n* Lancer et surveiller la projection",
+      "dcpAuthority": "Cabin de projection et matériel de lecture.",
+      "programmer": "Programmeur",
+      "programmerPurpose": "Sélectionner et planifier les films à venir.",
+      "programmerMissions": "* Établir le programme hebdomadaire\n* Négocier les droits avec les distributeurs\n* Publier la programmation",
+      "programmerAuthority": "Calendrier de programmation et relations distributeurs."
+    },
+    "framework": {
+      "intentionalName": "Cadre Intentionnel",
+      "collaborativeName": "Cadre Collaboratif",
+      "missionLabel": "Mission",
+      "missionDesc": "Que faisons-nous concrètement, et pour qui ?",
+      "missionContent": "Programmer et projeter des films pour le Acme Theatre, pour les toons et les humains de Toontown.",
+      "purposeLabel": "Vocation",
+      "purposeDesc": "Pourquoi, pour qui et pour quoi faisons-nous ce que nous faisons ?",
+      "purposeContent": "Maintenir vivant l'unique écran de Toontown pour que toons et humains continuent de partager des histoires.",
+      "valuesLabel": "Valeurs et Principes",
+      "valuesDesc": "Quelles sont nos valeurs et leurs principes d'application pratique ?",
+      "valuesContent": "* Être à l'heure\n* Le spectacle doit continuer\n* Traiter chaque spectateur (toon ou humain) de la même façon",
+      "collabValuesLabel": "Valeurs et Principes collaboratifs",
+      "collabValuesDesc": "Les valeurs importantes pour une collaboration efficace et agréable.",
+      "collabValuesContent": "* La fiabilité avant l'héroïsme\n* Se parler avant la séance, pas pendant",
+      "behaviorsLabel": "Comportements attendus",
+      "behaviorsDesc": "Comportements à encourager, indispensables, à éviter, ou inacceptables.",
+      "behaviorsContent": "* Indispensable : confirmer sa vacation la veille\n* À éviter : les changements de DCP de dernière minute\n* Inacceptable : laisser le cabine sans surveillance pendant un film",
+      "meetingsLabel": "Réunions régulières",
+      "meetingsDesc": "Les types de réunions pratiquées, leur fréquence et leur durée.",
+      "meetingsContent": "Point de programmation hebdomadaire, lundis 10h00, 30 min."
+    },
+    "salary": {
+      "dimExpertise": "Expertise",
+      "dimResponsibility": "Responsabilité",
+      "expertiseL0": "Stagiaire — en formation.",
+      "expertiseL1": "Peut tenir une vacation seul.",
+      "expertiseL2": "Opérateur fiable, gère les problèmes courants.",
+      "expertiseL3": "Personne de référence pour le rôle.",
+      "expertiseL4": "Définit la façon de faire le rôle.",
+      "responsibilityL0": "Sa tâche uniquement.",
+      "responsibilityL1": "Sa tâche + aide les autres.",
+      "responsibilityL2": "Coordonne un cercle.",
+      "responsibilityL3": "Coordonne le cinéma.",
+      "responsibilityL4": "Propriétaire / autorité finale.",
+      "eddieComment": "Responsable de la caisse ; (re)sobre (enfin, surtout).",
+      "rogerComment": "Scanner énergique ; à tenir éloigné de la trempette.",
+      "jessicaComment": "Programmeuse et opératerice DCP. Pas méchante, juste dessinée comme ça.",
+      "adjLabel": "Indemnité de cabine de projection",
+      "budgetName": "Mois type",
+      "systemLabel": "Système de salaire du Acme Theatre"
+    },
+    "fertilization": {
+      "fact1": "Complet pour la première de la Symphonie de la Culbute (320 places).",
+      "fact2": "14 séances d'affilée sans la moindre panne de projection.",
+      "fact3": "Fréquentation mensuelle : 2 140 spectateurs (meilleur mois depuis la réouverture).",
+      "satisfaction1": "Les spectateurs adorent le nouveau créneau matinée pour les familles."
+    },
+    "dream": {
+      "dream1": "Ouvrir un deuxième écran à Toontown d'ici 2 ans.",
+      "strength1": "Un public fidèle qui fait confiance à notre programmation.",
+      "threat1": "Le streaming à la maison continue d'éloigner le public familial."
+    },
+    "reminder": {
+      "premiereTitle": "La première de la Symphonie de la Culbute est dans {{count}} jour",
+      "premiereTitle_plural": "La première de la Symphonie de la Culbute est dans {{count}} jours",
+      "premiereDesc": "L'ingestion du DCP est en cours — confirmer que le KDM est prêt.",
+      "projectorTitle": "La révision du projecteur est bloquée",
+      "projectorDesc": "La livraison de l'ampoule de rechange est en retard — relancer le fournisseur."
+    },
+    "template": {
+      "name": "Préparation de séance",
+      "parentTitle": "Première",
+      "childAnnounce": "Finaliser l'affichage et les annonces"
+    }
   }
 }
