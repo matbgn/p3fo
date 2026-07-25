@@ -27,6 +27,8 @@ import { GlobalFocusModeToggle } from "@/components/GlobalFocusModeToggle";
 import { NextTaskSpotlight } from "@/components/NextTaskSpotlight";
 import { ConfirmModalHost } from "@/components/ConfirmModalHost";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import ExampleDataModal, { EXAMPLE_DATA_PROMPTED_KEY } from "@/components/ExampleDataModal";
+import { useAllTasks } from "@/hooks/useAllTasks";
 
 const LazyWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { t } = useTranslation();
@@ -62,7 +64,8 @@ const Index: React.FC = () => {
     sessionStorage.setItem('p3fo_metrics_tab', 'pomodoro');
     setView('metrics');
   }, [setView]);
-  const { userSettings } = useUserSettingsContext();
+  const { userSettings, loading: userSettingsLoading } = useUserSettingsContext();
+  const { tasks } = useAllTasks();
 
   // Track which views have been mounted (lazy-mount on first visit, keep-alive after)
   const [mountedViews, setMountedViews] = React.useState<Set<string>>(() => new Set([view]));
@@ -72,6 +75,19 @@ const Index: React.FC = () => {
 
   // Umbrella overlay open state
   const [umbrellaOpen, setUmbrellaOpen] = useState(false);
+
+  // Example-data onboarding modal: show once per browser, only when the user
+  // has not completed onboarding and there is no existing data to clobber.
+  const [exampleModalOpen, setExampleModalOpen] = useState(false);
+  React.useEffect(() => {
+    if (userSettingsLoading) return;
+    if (userSettings.hasCompletedOnboarding) return;
+    if (localStorage.getItem(EXAMPLE_DATA_PROMPTED_KEY)) return;
+    // Defer until tasks have been loaded so we don't flash the modal over
+    // data that's still hydrating from persistence.
+    if (tasks.length > 0) return;
+    setExampleModalOpen(true);
+  }, [userSettingsLoading, userSettings.hasCompletedOnboarding, tasks.length]);
 
   const toggleUmbrella = useCallback(() => {
     setUmbrellaOpen(prev => !prev);
@@ -259,6 +275,7 @@ const Index: React.FC = () => {
       </main>
 
       <UmbrellaNavigation open={umbrellaOpen} onClose={() => setUmbrellaOpen(false)} onFocusOnTask={handleFocusOnTask} />
+      <ExampleDataModal open={exampleModalOpen} onOpenChange={setExampleModalOpen} />
       <ConfirmModalHost />
     </div>
   );

@@ -203,28 +203,14 @@ async function loadTasks() {
       });
     }
 
-    // If no tasks, initialize defaults (but only if not already initialized)
+    // Auto-seeding of default tasks ("Plan vacation") was removed in favor of
+    // the ExampleDataModal onboarding prompt. The DEFAULT_TASKS_INITIALIZED_KEY
+    // flag is still set by the modal (and the clear-all handlers) so legacy
+    // code paths keep behaving consistently.
     if (tasks.length === 0) {
       const alreadyInitialized = localStorage.getItem(DEFAULT_TASKS_INITIALIZED_KEY);
-
       if (!alreadyInitialized) {
-        // In browser-only mode, call the backend endpoint only if the backend is reachable.
-        if (!PERSISTENCE_CONFIG.FORCE_BROWSER) {
-          try {
-            const response = await fetch('/api/tasks/init-defaults', { method: 'POST' });
-            const result = await response.json();
-            if (result.success) {
-              await initializeDefaultTasks();
-              localStorage.setItem(DEFAULT_TASKS_INITIALIZED_KEY, 'true');
-            }
-          } catch (error) {
-            console.error('Error calling init-defaults endpoint:', error);
-          }
-        } else {
-          // In browser-only mode with no backend, initialize defaults locally
-          await initializeDefaultTasks();
-          localStorage.setItem(DEFAULT_TASKS_INITIALIZED_KEY, 'true');
-        }
+        localStorage.setItem(DEFAULT_TASKS_INITIALIZED_KEY, 'true');
       }
     }
     
@@ -256,24 +242,11 @@ async function loadTasks() {
         tasks = parsed;
       } catch (e) {
         console.error("Error parsing legacy tasks:", e);
-        await initializeDefaultTasks();
       }
-    } else {
-      await initializeDefaultTasks();
     }
+    // No fallback seeding: the ExampleDataModal handles first-run onboarding.
   }
 }
-
-async function initializeDefaultTasks() {
-  // Create task A (top level)
-  const taskAId = await createTask("Plan vacation", null);
-
-  // Create task B (child of A)
-  const taskBId = await createTask("Research", taskAId);
-
-  // Create task C (child of B)
-  await createTask("Find accommodations", taskBId);
-};
 
 // Load tasks on module initialization
 loadTasks();
