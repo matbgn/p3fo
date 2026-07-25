@@ -1631,6 +1631,13 @@
     }
   },
   "spotlight": {
+    "empty": {
+      "greeting": "Willkommen!",
+      "message": "Du hast noch keine Aufgaben. Erstelle deine erste Aufgabe, um loszulegen.",
+      "noAssignedMessage": "Dir sind noch keine Aufgaben zugewiesen. Erstelle eine, um loszulegen, oder wähle eine aus dem Board.",
+      "createFirstTask": "Erste Aufgabe erstellen",
+      "firstTaskTitle": "Meine erste Aufgabe"
+    },
     "greeting": {
       "welcomeBack": "Schön, dass Sie da sind. Hier ist die nächste Aktion für heute.",
       "workingOn": "Aktuell in Bearbeitung",

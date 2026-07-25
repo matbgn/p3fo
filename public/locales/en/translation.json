@@ -1631,6 +1631,13 @@
     }
   },
   "spotlight": {
+    "empty": {
+      "greeting": "Welcome!",
+      "message": "You don't have any tasks yet. Create your first one to get started.",
+      "noAssignedMessage": "No tasks assigned to you yet. Create one to get started, or pick one from the board.",
+      "createFirstTask": "Create first task",
+      "firstTaskTitle": "My first task"
+    },
     "greeting": {
       "welcomeBack": "Good to see you. Here's today's next action.",
       "workingOn": "Currently working on",

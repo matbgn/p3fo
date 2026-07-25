@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -26,8 +26,8 @@ interface NextTaskSpotlightProps {
 export const NextTaskSpotlight: React.FC<NextTaskSpotlightProps> = ({ onFocusOnTask, onNavigateToFocusSessions }) => {
   const { t } = useTranslation();
   const { nextAction } = useNextAction();
-  const { tasks } = useAllTasks();
-  const { toggleTimer } = useTasks();
+  const { tasks, loading } = useAllTasks();
+  const { toggleTimer, createTask } = useTasks();
   const { userId: currentUserId } = useUserSettings();
   const { isNonAction, isDisabled: isMoodDisabled, updateInteraction } = useNonActionPeriod();
   const [dismissed, setDismissed] = useState(false);
@@ -61,6 +61,18 @@ export const NextTaskSpotlight: React.FC<NextTaskSpotlightProps> = ({ onFocusOnT
     if (stored) setDismissed(true);
   }, []);
 
+  // Reset dismissal when the active user changes so a new user joining the
+  // board sees the spotlight/empty-state invite instead of inheriting the
+  // previous user's dismissed state from sessionStorage.
+  const prevUserIdRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (prevUserIdRef.current !== undefined && prevUserIdRef.current !== currentUserId) {
+      setDismissed(false);
+      sessionStorage.removeItem(DISMISS_KEY);
+    }
+    prevUserIdRef.current = currentUserId;
+  }, [currentUserId]);
+
   useEffect(() => {
     if (isNonAction && !sessionStorage.getItem(WELCOME_BACK_KEY)) {
       setShowWelcomeBack(true);
@@ -85,7 +97,12 @@ export const NextTaskSpotlight: React.FC<NextTaskSpotlightProps> = ({ onFocusOnT
     sessionStorage.setItem(DISMISS_KEY, 'true');
   }, []);
 
-  const isVisible = !!nextAction && !dismissed;
+  // Include the empty-state in visibility so the QuickTimer's "What's next"
+  // button hides when the invite card is on screen, and reappears when it
+  // is dismissed — regardless of whether nextAction exists.
+  const hasNoTasks = !loading && tasks.length === 0;
+  const hasNoAssignedTasks = !loading && !nextAction && tasks.length > 0;
+  const isVisible = (!dismissed) && (!!nextAction || hasNoTasks || hasNoAssignedTasks);
 
   useEffect(() => {
     eventBus.publish('spotlightVisibilityChange', isVisible);
@@ -130,7 +147,49 @@ export const NextTaskSpotlight: React.FC<NextTaskSpotlightProps> = ({ onFocusOnT
     updateInteraction();
   }, [updateInteraction]);
 
-  if (!nextAction || dismissed) return null;
+  const handleCreateFirstTask = useCallback(async () => {
+    const title = t('spotlight.empty.firstTaskTitle');
+    await createTask(title, null, currentUserId ?? undefined);
+    handleDismiss();
+  }, [createTask, currentUserId, t, handleDismiss]);
+
+  if (dismissed) return null;
+
+  // Empty state: no tasks at all OR tasks exist but none are assigned to this
+  // user (e.g. a new member joining a shared board). Invite them to create
+  // their first task instead of showing nothing. (hasNoTasks and
+  // hasNoAssignedTasks are computed above for isVisible.)
+  if (hasNoTasks || hasNoAssignedTasks) {
+    return (
+      <Card className="border-primary/30 bg-primary/5 shadow-md">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <span className="text-xs font-medium text-primary uppercase tracking-wide">
+                {t('spotlight.empty.greeting')}
+              </span>
+              <p className="text-sm font-medium mt-1">
+                {hasNoTasks
+                  ? t('spotlight.empty.message')
+                  : t('spotlight.empty.noAssignedMessage')}
+              </p>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <Button size="sm" onClick={handleCreateFirstTask} className="gap-1.5">
+                <Play className="h-3.5 w-3.5" />
+                {t('spotlight.empty.createFirstTask')}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={handleDismiss} className="h-8 w-8 p-0">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!nextAction) return null;
 
   const hasRunningTimer = effectiveTask?.timer?.some(e => e.endTime === 0) ?? false;
 

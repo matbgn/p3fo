@@ -1631,6 +1631,13 @@
     }
   },
   "spotlight": {
+    "empty": {
+      "greeting": "Bienvenue !",
+      "message": "Vous n'avez pas encore de tâches. Créez votre première tâche pour commencer.",
+      "noAssignedMessage": "Aucune tâche ne vous est assignée pour le moment. Créez-en une pour commencer, ou choisissez-en une dans le tableau.",
+      "createFirstTask": "Créer la première tâche",
+      "firstTaskTitle": "Ma première tâche"
+    },
     "greeting": {
       "welcomeBack": "Content de vous revoir. Voici la prochaine action du jour.",
       "workingOn": "En cours",
