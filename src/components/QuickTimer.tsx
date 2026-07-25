@@ -618,7 +618,7 @@ export const QuickTimer: React.FC<{
   const taskHasContent = !!runningTask || !!lastStoppedTask;
 
   return (
-<div className="flex flex-col items-center min-[512px]:flex-row gap-1 min-[512px]:gap-1.5 px-2 min-[512px]:px-3 py-1.5 min-[512px]:py-2 bg-secondary rounded-md min-h-[32px] min-[512px]:min-h-[36px] w-full min-[630px]:w-auto">
+<div className="flex flex-col items-center min-[512px]:flex-row gap-1 min-[512px]:gap-1.5 px-2 min-[512px]:px-3 py-1 min-[512px]:py-1 bg-gray-100 rounded-lg min-h-[36px] min-[512px]:min-h-[40px] w-full min-[630px]:w-auto">
       {/* ===== TASK ZONE (top on mobile, right on desktop) ===== */}
       {runningTask ? (
         <div className="flex items-center gap-1 min-[512px]:gap-1.5 order-1 min-[630px]:order-2 w-auto min-[512px]:w-full min-[630px]:w-auto">

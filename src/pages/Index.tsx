@@ -178,10 +178,10 @@ const Index: React.FC = () => {
               </>
             }
           />
-          <div className="mt-2 flex items-center gap-2">
+          <div className="mt-2 relative flex items-center gap-2 lg:justify-center">
             <QuickTimer onJumpToTask={handleFocusOnTask} />
             {/* Slider + focus: shown on the QuickTimer row only on sm+ */}
-            <div className="hidden sm:flex items-center gap-2 ml-auto shrink-0">
+            <div className="hidden sm:flex items-center gap-2 ml-auto shrink-0 lg:absolute lg:right-0 lg:ml-0">
               <CompactnessSelector />
               <GlobalFocusModeToggle activeViewId={view} />
             </div>
