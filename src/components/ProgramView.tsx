@@ -42,7 +42,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ onFocusOnTask, onEditTask }) 
 
   const { settings } = useSettingsContext();
   const weekStartsOn = settings.weekStartDay;
-  const defaultPlanView = settings.defaultPlanView || 'week';
+  const defaultPlanView = settings.defaultPlanView || 'month';
 
   const [view, setView] = React.useState<View>(defaultPlanView);
 
