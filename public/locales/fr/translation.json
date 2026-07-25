@@ -103,8 +103,8 @@
       "cardAgingBaseDaysHelp": "Jours avant que les cartes montrent des effets de vieillissement. Mettre à 0 pour désactiver. (défaut : 30). Utilisez des décimales comme 0.005 pour les tests (~7 min).",
       "wipLimitPerUserLabel": "Limite WIP par utilisateur",
       "wipLimitPerUserHelp": "Tâches WIP maximum par utilisateur. Mettre à 0 pour désactiver. (défaut : 5). Blocage strict — les tâches ne peuvent pas entrer en WIP à capacité atteinte.",
-      "nonActionPeriodLabel": "Période sans action (heures)",
-      "nonActionPeriodHelp": "Heures d'inactivité avant l'apparition du sélecteur d'humeur. Mettre à 0 pour désactiver. (défaut : 3)."
+      "nonActionPeriodLabel": "Intervalle de re-demande d'humeur (heures)",
+      "nonActionPeriodHelp": "Heures entre les relances automatiques de l'humeur. La question est posée une fois au premier chargement de chaque jour, puis toutes les N heures. Mettre à 0 pour désactiver. (défaut : 5)."
     },
     "moduleManagement": {
       "title": "Gestion des modules",
@@ -1635,6 +1635,7 @@
     "welcomeBackBanner": "Content de vous revoir.",
     "moodQuestion": "Comment vous sentez-vous en ce moment ?",
     "moodHelper": "Cela m'aide à vous proposer la tâche la plus adaptée.",
+    "moodUpdatePrompt": "Souhaitez-vous mettre à jour votre humeur ?",
     "mood": {
       "ready": "Frais et dispo",
       "steady": "OK",

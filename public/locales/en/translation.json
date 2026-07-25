@@ -103,8 +103,8 @@
       "cardAgingBaseDaysHelp": "Days before cards show aging effects. Set to 0 to disable. (default: 30). Use decimals like 0.005 for testing (~7 min).",
       "wipLimitPerUserLabel": "WIP Limit Per User",
       "wipLimitPerUserHelp": "Maximum tasks in WIP per user. Set to 0 to disable. (default: 5). Hard block — tasks cannot enter WIP when at capacity.",
-      "nonActionPeriodLabel": "Non-Action Period (hours)",
-      "nonActionPeriodHelp": "Hours of inactivity before the mood selector appears. Set to 0 to disable. (default: 3)."
+      "nonActionPeriodLabel": "Mood Re-ask Interval (hours)",
+      "nonActionPeriodHelp": "Hours between automatic mood prompts. The mood question is asked once on first load of each day, then every N hours. Set to 0 to disable. (default: 5)."
     },
     "moduleManagement": {
       "title": "Module Management",
@@ -1635,6 +1635,7 @@
     "welcomeBackBanner": "Good to see you.",
     "moodQuestion": "How are you feeling right now?",
     "moodHelper": "This helps me propose the best fitting next task for you.",
+    "moodUpdatePrompt": "Would you like to update your mood?",
     "mood": {
       "ready": "Ready",
       "steady": "Steady",

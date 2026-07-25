@@ -79,7 +79,7 @@ const defaultCombinedSettings: CombinedSettings = {
     pomodoroConfig: DEFAULT_POMODORO_CONFIG,
     focusModeConfig: DEFAULT_FOCUS_MODE_CONFIG,
     travelerConfig: DEFAULT_TRAVELER_CONFIG,
-    nonActionPeriodHours: 3,
+                nonActionPeriodHours: 5,
 };
 
 interface SettingsContextType {
@@ -135,7 +135,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 pomodoroConfig: appSettings.pomodoroConfig ?? DEFAULT_POMODORO_CONFIG,
                 focusModeConfig: appSettings.focusModeConfig ?? DEFAULT_FOCUS_MODE_CONFIG,
                 travelerConfig: appSettings.travelerConfig ?? DEFAULT_TRAVELER_CONFIG,
-                nonActionPeriodHours: (userSettings?.nonActionPeriodHours as number | undefined) ?? 3,
+                nonActionPeriodHours: (userSettings?.nonActionPeriodHours as number | undefined) ?? 5,
             };
 
             if (userSettings) {
@@ -295,7 +295,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 pomodoroConfig: appSettings.pomodoroConfig ?? DEFAULT_POMODORO_CONFIG,
                 focusModeConfig: appSettings.focusModeConfig ?? DEFAULT_FOCUS_MODE_CONFIG,
                 travelerConfig: appSettings.travelerConfig ?? DEFAULT_TRAVELER_CONFIG,
-                nonActionPeriodHours: 3,
+    nonActionPeriodHours: 5,
             };
 
             // Migration: move autoStartBreak/autoStartWork from pomodoroConfig to focusModeConfig

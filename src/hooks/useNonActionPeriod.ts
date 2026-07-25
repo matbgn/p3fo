@@ -1,29 +1,28 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSettingsContext } from '@/context/SettingsContext';
 
-const DEFAULT_THRESHOLD_HOURS = 3;
-const STORAGE_KEY = 'p3fo_last_interaction';
-const GRACE_PERIOD_MS = 2000;
+const DEFAULT_THRESHOLD_HOURS = 5;
+const STORAGE_KEY = 'p3fo_last_mood_ask';
+const DAY_KEY = 'p3fo_last_mood_ask_day';
+const TICK_MS = 60 * 1000;
+
+function startOfDay(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
 
 export function useNonActionPeriod() {
   const { settings } = useSettingsContext();
   const thresholdMs = (settings.nonActionPeriodHours ?? DEFAULT_THRESHOLD_HOURS) * 60 * 60 * 1000;
   const isDisabled = (settings.nonActionPeriodHours ?? DEFAULT_THRESHOLD_HOURS) === 0;
 
-  const [lastInteraction, setLastInteraction] = useState<number | null>(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? parseInt(stored, 10) : null;
-  });
   const [isNonAction, setIsNonAction] = useState(false);
-  const mountTimeRef = useRef(Date.now());
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const updateInteraction = useCallback(() => {
-    if (Date.now() - mountTimeRef.current < GRACE_PERIOD_MS) return;
+  const recordAsk = useCallback(() => {
     const now = Date.now();
-    setLastInteraction(now);
     localStorage.setItem(STORAGE_KEY, String(now));
-    setIsNonAction(false);
+    localStorage.setItem(DAY_KEY, startOfDay(now));
+    setIsNonAction(true);
   }, []);
 
   useEffect(() => {
@@ -32,35 +31,41 @@ export function useNonActionPeriod() {
       return;
     }
 
-    mountTimeRef.current = Date.now();
+    const now = Date.now();
+    const stored = localStorage.getItem(STORAGE_KEY);
+    const lastAsk = stored ? parseInt(stored, 10) : null;
+    const lastDay = localStorage.getItem(DAY_KEY);
+    const today = startOfDay(now);
 
-    if (lastInteraction === null) {
-      setIsNonAction(true);
-    } else {
-      const elapsed = Date.now() - lastInteraction;
-      setIsNonAction(elapsed > thresholdMs);
+    if (lastAsk === null || lastDay !== today) {
+      recordAsk();
+      return;
     }
 
-    const timer = setTimeout(() => {
-      window.addEventListener('click', updateInteraction);
-      window.addEventListener('keydown', updateInteraction);
-      window.addEventListener('touchstart', updateInteraction);
-    }, GRACE_PERIOD_MS);
+    setIsNonAction(now - (lastAsk as number) >= thresholdMs);
 
-    intervalRef.current = setInterval(() => {
-      if (lastInteraction === null) return;
-      const e = Date.now() - lastInteraction;
-      setIsNonAction(e > thresholdMs);
-    }, 30 * 1000);
+    const interval = setInterval(() => {
+      const t = Date.now();
+      const s = localStorage.getItem(STORAGE_KEY);
+      if (s === null) {
+        recordAsk();
+        return;
+      }
+      if (startOfDay(t) !== localStorage.getItem(DAY_KEY)) {
+        recordAsk();
+        return;
+      }
+      if (t - parseInt(s, 10) >= thresholdMs) {
+        recordAsk();
+      }
+    }, TICK_MS);
 
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('click', updateInteraction);
-      window.removeEventListener('keydown', updateInteraction);
-      window.removeEventListener('touchstart', updateInteraction);
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [isDisabled, thresholdMs, lastInteraction, updateInteraction]);
+    return () => clearInterval(interval);
+  }, [isDisabled, thresholdMs, recordAsk]);
+
+  const updateInteraction = useCallback(() => {
+    setIsNonAction(false);
+  }, []);
 
   return { isNonAction, isDisabled, updateInteraction };
 }

@@ -224,6 +224,9 @@ export const NextTaskSpotlight: React.FC<NextTaskSpotlightProps> = ({ onFocusOnT
                     {moodAdaptation.alternatives[0].title}
                   </button>
                 )}
+                <p className="text-xs text-muted-foreground mt-3">
+                  {t('spotlight.moodUpdatePrompt')}
+                </p>
                 <div className="flex items-center gap-1.5 mt-2">
                   {moodButton('green', t('spotlight.mood.ready'), 'bg-green-500', 'border-green-500/30', 'hover:bg-green-500/10')}
                   {moodButton('orange', t('spotlight.mood.steady'), 'bg-orange-500', 'border-orange-500/30', 'hover:bg-orange-500/10')}

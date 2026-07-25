@@ -103,8 +103,8 @@
       "cardAgingBaseDaysHelp": "Tage, bevor Karten Alterungseffekte zeigen. Auf 0 setzen zum Deaktivieren. (Standard: 30). Verwenden Sie Dezimalzahlen wie 0.005 für Tests (~7 Min.).",
       "wipLimitPerUserLabel": "WIP-Limit pro Benutzer",
       "wipLimitPerUserHelp": "Maximale WIP-Aufgaben pro Benutzer. Auf 0 setzen zum Deaktivieren. (Standard: 5). Harte Sperre — Aufgaben können nicht in WIP eintreten, wenn Kapazität erreicht.",
-      "nonActionPeriodLabel": "Nicht-Aktions-Periode (Stunden)",
-      "nonActionPeriodHelp": "Stunden Inaktivität, bevor die Stimmungsauswahl erscheint. Auf 0 setzen zum Deaktivieren. (Standard: 3)."
+      "nonActionPeriodLabel": "Stimmungs-Nachfrageintervall (Stunden)",
+      "nonActionPeriodHelp": "Stunden zwischen automatischen Stimmungsabfragen. Die Frage wird beim ersten Laden eines Tages gestellt, danach alle N Stunden. Auf 0 setzen zum Deaktivieren. (Standard: 5)."
     },
     "moduleManagement": {
       "title": "Modulverwaltung",
@@ -1635,6 +1635,7 @@
     "welcomeBackBanner": "Schön, dass Sie da sind.",
     "moodQuestion": "Wie fühlen Sie sich gerade?",
     "moodHelper": "Das hilft mir, die am besten passende nächste Aufgabe vorzuschlagen.",
+    "moodUpdatePrompt": "Möchten Sie Ihre Stimmung aktualisieren?",
     "mood": {
       "ready": "Bereit",
       "steady": "Stetig",
