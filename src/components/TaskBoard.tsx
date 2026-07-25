@@ -20,7 +20,7 @@ import { LazyCard } from "./LazyCard";
 import { TodolistView } from "./TodolistView";
 
 import { byId } from "@/lib/utils";
-import { useViewDisplay } from "@/hooks/useView";
+import { useViewDisplay, useViewNavigation } from "@/hooks/useView";
 import { COMPACTNESS_ULTRA, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
 import { HOVER_ENTER_DELAY_MS } from "@/lib/hover-constants";
 import { FocusModeProvider } from "./FocusModeProvider";
@@ -59,7 +59,11 @@ type Column = {
 const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: (taskId: string) => void }> = ({ focusedTaskId, onFocusOnTask }) => {
   const { t } = useTranslation();
   const { isFocusMode } = useFocusMode();
+  const { view } = useViewNavigation();
   const [focusView, setFocusView] = React.useState<FocusBoardView>(loadViewPreference);
+  // Track the previous view to detect cross-view jumps (instant scroll) vs
+  // in-board clicks (smooth scroll).
+  const prevViewRef = React.useRef<string>(view);
 
   const handleFocusViewChange = React.useCallback((view: string) => {
     if (view === "flow" || view === "todolist") {
@@ -112,6 +116,9 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
 
   const scrollTodolistRowRef = React.useRef<Map<string, HTMLElement>>(new Map());
   const lastHandledFocusIdRef = React.useRef<string | null>(null);
+  // Tracks whether the latest focus jump came from a different view (cross-view)
+  // vs. an in-board click. Cross-view jumps use instant scroll; same-view uses smooth.
+  const crossViewJumpRef = React.useRef(false);
 
   const handleFocusOnTaskInternal = React.useCallback((taskId: string) => {
     setHighlightedTaskId(taskId);
@@ -137,14 +144,24 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
       }
     }
 
-    setTimeout(() => {
+    // Poll for the element instead of a fixed timeout. The row may not be
+    // registered yet if parents need to expand or the view just mounted.
+    const useSmooth = !crossViewJumpRef.current;
+    const scrollBehavior: ScrollBehavior = useSmooth ? "smooth" : "auto";
+    let attempts = 0;
+    const MAX_ATTEMPTS = 60; // ~1s at 60fps
+    const tryScroll = () => {
       const el = scrollTodolistRowRef.current.get(taskId);
       if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.scrollIntoView({ behavior: scrollBehavior, block: "center" });
+        return;
       }
-    }, 150);
-
-    setTimeout(() => setHighlightedTaskId(null), 3000);
+      if (attempts++ < MAX_ATTEMPTS) {
+        requestAnimationFrame(tryScroll);
+      }
+    };
+    // Start on next frame so state updates (parent expansion) can flush first.
+    requestAnimationFrame(tryScroll);
 
     if (onFocusOnTask) onFocusOnTask(taskId);
   }, [map, focusView, onFocusOnTask]);
@@ -197,14 +214,23 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
   }, [cardCompactness]);
 
   React.useEffect(() => {
-    if (focusedTaskId && focusedTaskId !== lastHandledFocusIdRef.current && map[focusedTaskId] && focusView === "todolist") {
+    if (focusedTaskId && focusedTaskId !== lastHandledFocusIdRef.current && map[focusedTaskId]) {
+      // Cross-view jump: the view switched to "focus" from something else
+      // (or the board just mounted). Use instant scroll. Same-view clicks
+      // (user clicked a task within the board) use smooth scroll.
+      crossViewJumpRef.current = prevViewRef.current !== "focus";
       lastHandledFocusIdRef.current = focusedTaskId;
       handleFocusOnTaskInternal(focusedTaskId);
     }
     if (!focusedTaskId) {
       lastHandledFocusIdRef.current = null;
     }
-  }, [focusedTaskId, focusView, map, handleFocusOnTaskInternal]);
+  }, [focusedTaskId, map, handleFocusOnTaskInternal]);
+
+  // Keep prevViewRef in sync after each render
+  React.useEffect(() => {
+    prevViewRef.current = view;
+  }, [view]);
 
   // Load filters on mount
   useEffect(() => {
@@ -539,6 +565,9 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
           toggleTimer={(id, userId) => toggleTimer(id, userId || currentUserId)}
           createTask={createTask}
           onFocusOnTask={handleFocusOnTaskInternal}
+          onRowClick={(taskId: string) =>
+            setHighlightedTaskId(prev => (prev === taskId ? null : taskId))
+          }
           highlightedTaskId={highlightedTaskId}
           scrollTodolistRowRef={scrollTodolistRowRef}
           expandedParents={expandedParents}

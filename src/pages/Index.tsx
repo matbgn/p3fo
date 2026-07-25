@@ -170,18 +170,32 @@ const Index: React.FC = () => {
                 <NotificationCenter />
                 <UserSection />
                 <LanguageSwitcher />
+                {/* Slider + focus: shown inline on narrow screens */}
+                <div className="flex items-center pl-4 gap-2 sm:hidden">
+                  <CompactnessSelector />
+                  <GlobalFocusModeToggle activeViewId={view} />
+                </div>
               </>
             }
-            rightItems={
-              <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap">
-                <QuickTimer onJumpToTask={handleFocusOnTask} />
-                <CompactnessSelector />
-                <GlobalFocusModeToggle activeViewId={view} />
-              </div>
-            }
           />
+          <div className="mt-2 relative flex items-center gap-2 lg:justify-center">
+            <QuickTimer onJumpToTask={handleFocusOnTask} />
+            {/* Slider + focus: shown on the QuickTimer row only on sm+ */}
+            <div className="hidden sm:flex items-center gap-2 ml-auto shrink-0 lg:absolute lg:right-0 lg:ml-0">
+              <CompactnessSelector />
+              <GlobalFocusModeToggle activeViewId={view} />
+            </div>
+          </div>
         </div>
       </header>
+
+      {/* Slim bar that stays visible even in focus mode */}
+      {isGlobalFocusMode && (
+        <div className="flex items-center justify-end gap-2 px-4 py-1 border-b bg-background/95 backdrop-blur-sm">
+          <CompactnessSelector />
+          <GlobalFocusModeToggle activeViewId={view} />
+        </div>
+      )}
 
       <main className={`flex flex-col px-4 sm:px-8 md:px-12 py-4 sm:py-8 transition-all duration-300 ${isGlobalFocusMode ? 'px-0 py-0 h-screen' : 'h-[calc(100vh-4rem)] min-h-0'}`}>
         {!isGlobalFocusMode && (
@@ -244,7 +258,7 @@ const Index: React.FC = () => {
         )}
       </main>
 
-      <UmbrellaNavigation open={umbrellaOpen} onClose={() => setUmbrellaOpen(false)} />
+      <UmbrellaNavigation open={umbrellaOpen} onClose={() => setUmbrellaOpen(false)} onFocusOnTask={handleFocusOnTask} />
       <ConfirmModalHost />
     </div>
   );

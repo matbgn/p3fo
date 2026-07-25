@@ -85,22 +85,26 @@ interface CircleDbRow {
   updatedAt: string;
 }
 
-interface ReminderDbRow {
-  id: string;
-  userId: string;
-  taskId: string | null;
-  title: string;
-  description: string | null;
-  read: boolean;
-  persistent: boolean;
-  triggerDate: string | null;
-  offsetMinutes: number | null;
-  snoozeDurationMinutes: number | null;
-  originalTriggerDate: string | null;
-  state: string;
-  createdAt: string;
-  updatedAt: string;
-}
+ interface ReminderDbRow {
+   id: string;
+   userId: string;
+   taskId: string | null;
+   title: string;
+   description: string | null;
+   titleKey: string | null;
+   titleParams: Record<string, unknown> | null;
+   descriptionKey: string | null;
+   descriptionParams: Record<string, unknown> | null;
+   read: boolean;
+   persistent: boolean;
+   triggerDate: string | null;
+   offsetMinutes: number | null;
+   snoozeDurationMinutes: number | null;
+   originalTriggerDate: string | null;
+   state: string;
+   createdAt: string;
+   updatedAt: string;
+ }
 
 interface FrameworkDbRow {
   id: string;
@@ -367,6 +371,10 @@ class PostgresClient implements DbClient {
         "taskId" TEXT,
         "title" TEXT NOT NULL,
         "description" TEXT,
+        "titleKey" TEXT,
+        "titleParams" JSONB,
+        "descriptionKey" TEXT,
+        "descriptionParams" JSONB,
         "read" BOOLEAN DEFAULT false,
         "persistent" BOOLEAN DEFAULT false,
         "triggerDate" TIMESTAMP WITH TIME ZONE,
@@ -697,6 +705,14 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     await addColumn('voteLoops', 'proposalId', 'TEXT NOT NULL DEFAULT \'\'');
     await addColumn('voteLoops', 'gatingValue', 'INTEGER');
     await addColumn('voteLoops', 'gatingComment', 'TEXT');
+
+    // Reminders i18n columns (system-generated reminders store a translation
+    // key + params instead of baked-in text, so they re-localize on language
+    // change). Params stored as JSONB for native parsing.
+    await addColumn('reminders', 'titleKey', 'TEXT');
+    await addColumn('reminders', 'titleParams', 'JSONB');
+    await addColumn('reminders', 'descriptionKey', 'TEXT');
+    await addColumn('reminders', 'descriptionParams', 'JSONB');
 
      await this.tryAddVoteLoopsUniqueConstraint();
    }
@@ -1463,6 +1479,10 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       taskId: input.taskId,
       title: input.title!,
       description: input.description,
+      titleKey: input.titleKey,
+      titleParams: input.titleParams,
+      descriptionKey: input.descriptionKey,
+      descriptionParams: input.descriptionParams,
       read: input.read ?? false,
       persistent: input.persistent ?? false,
       triggerDate: input.triggerDate,
@@ -1475,15 +1495,20 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     };
 
     await this.pool.query(`
-      INSERT INTO "reminders"("id", "userId", "taskId", "title", "description", "read", "persistent",
+      INSERT INTO "reminders"("id", "userId", "taskId", "title", "description", "titleKey", "titleParams",
+        "descriptionKey", "descriptionParams", "read", "persistent",
         "triggerDate", "offsetMinutes", "snoozeDurationMinutes", "originalTriggerDate", "state", "createdAt", "updatedAt")
-      VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
     `, [
       reminder.id,
       reminder.userId,
       reminder.taskId ?? null,
       reminder.title,
       reminder.description ?? null,
+      reminder.titleKey ?? null,
+      reminder.titleParams ?? null,
+      reminder.descriptionKey ?? null,
+      reminder.descriptionParams ?? null,
       reminder.read,
       reminder.persistent,
       reminder.triggerDate ?? null,
@@ -1510,18 +1535,26 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       UPDATE "reminders" SET
         "title" = $1,
         "description" = $2,
-        "read" = $3,
-        "persistent" = $4,
-        "triggerDate" = $5,
-        "offsetMinutes" = $6,
-        "snoozeDurationMinutes" = $7,
-        "originalTriggerDate" = $8,
-        "state" = $9,
-        "updatedAt" = $10
-      WHERE "id" = $11
+        "titleKey" = $3,
+        "titleParams" = $4,
+        "descriptionKey" = $5,
+        "descriptionParams" = $6,
+        "read" = $7,
+        "persistent" = $8,
+        "triggerDate" = $9,
+        "offsetMinutes" = $10,
+        "snoozeDurationMinutes" = $11,
+        "originalTriggerDate" = $12,
+        "state" = $13,
+        "updatedAt" = $14
+      WHERE "id" = $15
     `, [
       updated.title,
       updated.description ?? null,
+      updated.titleKey ?? null,
+      updated.titleParams ?? null,
+      updated.descriptionKey ?? null,
+      updated.descriptionParams ?? null,
       updated.read,
       updated.persistent,
       updated.triggerDate ?? null,
@@ -1555,14 +1588,19 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
 
       for (const reminder of reminders) {
         await client.query(`
-          INSERT INTO "reminders"("id", "userId", "taskId", "title", "description", "read", "persistent",
+          INSERT INTO "reminders"("id", "userId", "taskId", "title", "description", "titleKey", "titleParams",
+            "descriptionKey", "descriptionParams", "read", "persistent",
             "triggerDate", "offsetMinutes", "snoozeDurationMinutes", "originalTriggerDate", "state", "createdAt", "updatedAt")
-          VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
           ON CONFLICT ("id") DO UPDATE SET
             "userId" = EXCLUDED."userId",
             "taskId" = EXCLUDED."taskId",
             "title" = EXCLUDED."title",
             "description" = EXCLUDED."description",
+            "titleKey" = EXCLUDED."titleKey",
+            "titleParams" = EXCLUDED."titleParams",
+            "descriptionKey" = EXCLUDED."descriptionKey",
+            "descriptionParams" = EXCLUDED."descriptionParams",
             "read" = EXCLUDED."read",
             "persistent" = EXCLUDED."persistent",
             "triggerDate" = EXCLUDED."triggerDate",
@@ -1577,6 +1615,10 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
           reminder.taskId ?? null,
           reminder.title,
           reminder.description ?? null,
+          reminder.titleKey ?? null,
+          reminder.titleParams ?? null,
+          reminder.descriptionKey ?? null,
+          reminder.descriptionParams ?? null,
           reminder.read,
           reminder.persistent,
           reminder.triggerDate ?? null,
@@ -2254,6 +2296,10 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       taskId: row.taskId ?? undefined,
       title: row.title,
       description: row.description ?? undefined,
+      titleKey: row.titleKey ?? undefined,
+      titleParams: row.titleParams ?? undefined,
+      descriptionKey: row.descriptionKey ?? undefined,
+      descriptionParams: row.descriptionParams ?? undefined,
       read: row.read,
       persistent: row.persistent,
       triggerDate: row.triggerDate ?? undefined,

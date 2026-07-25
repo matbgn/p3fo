@@ -93,6 +93,7 @@ interface TodolistRowProps {
   toggleTimer: (id: string, currentUserId?: string) => void;
   createTask: (title: string, parentId?: string | null, userId?: string) => Promise<string>;
   onFocusOnTask?: (taskId: string) => void;
+  onRowClick?: (taskId: string) => void;
   isHighlighted?: boolean;
   scrollTodolistRowRef?: React.MutableRefObject<Map<string, HTMLElement>>;
 }
@@ -119,6 +120,7 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
   toggleTimer,
   createTask,
   onFocusOnTask,
+  onRowClick,
   isHighlighted,
   scrollTodolistRowRef,
 }) => {
@@ -207,7 +209,10 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
           gridTemplateColumns: "auto 1fr 100px 80px 68px 90px 36px 36px 56px 28px",
           paddingLeft: depth > 0 ? `${depth * 20 + 8}px` : undefined,
         }}
-        onClick={hasChildren ? () => onToggleExpand(task.id) : undefined}
+        onClick={(e) => {
+          onRowClick?.(task.id);
+          if (hasChildren) onToggleExpand(task.id);
+        }}
         onDoubleClick={handleDoubleClick}
       >
         {/* Col 1: checkbox/folder + chevron */}

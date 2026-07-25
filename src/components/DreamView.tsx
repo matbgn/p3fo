@@ -566,7 +566,18 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
 
   const boardConfig: BoardTypeConfig = {
     type: 'dream',
-    exportData: () => boardState ? { schemaVersion: 3, boardType: 'dream', ...boardState } : { schemaVersion: 3, boardType: 'dream' },
+    exportData: () => boardState ? {
+      schemaVersion: 3,
+      boardType: 'dream',
+      ...boardState,
+      cards: [...boardState.cards].sort((a, b) => {
+        const aP = a.pinnedAt != null ? 1 : 0;
+        const bP = b.pinnedAt != null ? 1 : 0;
+        if (aP !== bP) return bP - aP;
+        if (aP && bP) return (b.pinnedAt ?? 0) - (a.pinnedAt ?? 0);
+        return 0;
+      }),
+    } : { schemaVersion: 3, boardType: 'dream' },
     importData: async (data: Record<string, unknown>) => {
       const boardData = data as unknown as DreamBoardEntity;
       const cards = (boardData.cards || []).map((c: DreamCard & { offlineVotes?: number | Record<string, number> }) => ({
@@ -836,6 +847,19 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
     const newState = { ...boardState, cards: boardState.cards.map(c => c.id === cardId ? { ...c, authorId } : c) };
     await saveBoard(newState);
   }, [boardState, saveBoard]);
+
+  const togglePinCard = useCallback(async (cardId: string) => {
+    if (!boardState || !isModerator) return;
+    const newState = {
+      ...boardState,
+      cards: boardState.cards.map(c => {
+        if (c.id !== cardId) return c;
+        const isPinned = c.pinnedAt != null;
+        return { ...c, pinnedAt: isPinned ? null : Date.now() };
+      }),
+    };
+    await saveBoard(newState);
+  }, [boardState, saveBoard, isModerator]);
 
   const updateOfflineVotes = async (cardId: string, newValue: Record<string, number>) => {
     if (!boardState || !isModerator) return;
@@ -1135,6 +1159,15 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
         return sortOrder === 'desc' ? scoreB - scoreA : scoreA - scoreB;
       });
     }
+
+    // Pinned cards always surface to the top (stable: preserves prior relative order)
+    cardsInColumn.sort((a, b) => {
+      const aP = a.pinnedAt != null ? 1 : 0;
+      const bP = b.pinnedAt != null ? 1 : 0;
+      if (aP !== bP) return bP - aP;
+      if (aP && bP) return (b.pinnedAt ?? 0) - (a.pinnedAt ?? 0);
+      return 0;
+    });
 
     return cardsInColumn;
   };
@@ -1566,6 +1599,7 @@ export const DreamView: React.FC<DreamViewProps> = ({ onClose, onPromoteToKanban
                     onUpdateAuthor={(authorId) => updateCardAuthor(card.id, authorId)}
                     onDelete={() => deleteCard(card.id)}
                     onPromote={() => openPromoteDialog(card)}
+                    onTogglePin={() => togglePinCard(card.id)}
                     onVote={(value) => {
                       if (colMode === 'POINTS') {
                         voteColumnPoints(card.id, value, column.id);

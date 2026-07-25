@@ -103,8 +103,8 @@
       "cardAgingBaseDaysHelp": "Jours avant que les cartes montrent des effets de vieillissement. Mettre à 0 pour désactiver. (défaut : 30). Utilisez des décimales comme 0.005 pour les tests (~7 min).",
       "wipLimitPerUserLabel": "Limite WIP par utilisateur",
       "wipLimitPerUserHelp": "Tâches WIP maximum par utilisateur. Mettre à 0 pour désactiver. (défaut : 5). Blocage strict — les tâches ne peuvent pas entrer en WIP à capacité atteinte.",
-      "nonActionPeriodLabel": "Période sans action (heures)",
-      "nonActionPeriodHelp": "Heures d'inactivité avant l'apparition du sélecteur d'humeur. Mettre à 0 pour désactiver. (défaut : 3)."
+      "nonActionPeriodLabel": "Intervalle de re-demande d'humeur (heures)",
+      "nonActionPeriodHelp": "Heures entre les relances automatiques de l'humeur. La question est posée une fois au premier chargement de chaque jour, puis toutes les N heures. Mettre à 0 pour désactiver. (défaut : 5)."
     },
     "moduleManagement": {
       "title": "Gestion des modules",
@@ -1214,7 +1214,13 @@
     "timetable": "Timetable",
     "voting": "Vote",
     "metrics": "Métriques",
-    "settings": "Paramètres"
+    "settings": "Paramètres",
+    "searchPlaceholder": "Rechercher des tâches ou taper pour créer...",
+    "searchResults": "Tâches",
+    "searchEmpty": "Aucune tâche correspondante.",
+    "createTask": "Créer la tâche",
+    "createTaskHint": "Appuyez sur Entrée pour créer",
+    "scratchHint": "Scratch — capturez une tâche instantanément"
   },
   "program": {
     "inProgressNoDate": "En cours (sans date de fin)",
@@ -1353,7 +1359,11 @@
     "resumeTimer": "Reprendre le timer",
     "noActiveTimer": "Aucun timer actif",
     "reopenSpotlight": "Rouvrir le spotlight What's Next",
-    "whatsNext": "Quelle est la suite ?"
+    "whatsNext": "Quelle est la suite ?",
+    "taskZone": "Tâche",
+    "techniqueZone": "Technique",
+    "stopTask": "Arrêter le timer de la tâche",
+    "techniqueIdle": "Inactif"
   },
   "pomodoroUi": {
     "ready": "Prêt",
@@ -1448,6 +1458,8 @@
     "cancelLinking": "Annuler le lien",
     "linkCards": "Lier des cartes",
     "promoteToBacklog": "Promouvoir au backlog",
+    "pinCard": "Épingler en haut",
+    "unpinCard": "Désépingler",
     "difficultyLabel": "Difficulté : {{level}}"
   },
   "storyboard": {
@@ -1597,9 +1609,35 @@
       "1hour": "1 heure",
       "2hours": "2 heures",
       "1day": "1 jour"
+    },
+    "jumpToTask": "Aller à la tâche",
+    "taskReminder": {
+      "title": "Rappel de tâche : {{title}}",
+      "description": "Cette tâche est due le {{formattedDate}}"
+    },
+    "welcome": {
+      "title": "Bienvenue sur P3Fo !",
+      "description": "N'oubliez pas de créer votre première tâche."
+    },
+    "aging": {
+      "title": "Carte en attente : « {{title}} »",
+      "level1": "Cette carte commence à stagner. Peut-être temps d'agir ?",
+      "level2": "Cette carte n'a pas bougé depuis un moment. Envisagez de demander du support ou de la reprioriser.",
+      "level3": "Cette carte est inactive depuis longtemps. Est-elle toujours pertinente ? Envisagez de l'abandonner ou de demander de l'aide."
+    },
+    "blocked": {
+      "title": "Bloqué : « {{title}} »",
+      "description": "Vous êtes bloqué depuis un moment. L'avez-vous signalé ? Envisagez de demander du support ou d'escalader."
     }
   },
   "spotlight": {
+    "empty": {
+      "greeting": "Bienvenue !",
+      "message": "Vous n'avez pas encore de tâches. Créez votre première tâche pour commencer.",
+      "noAssignedMessage": "Aucune tâche ne vous est assignée pour le moment. Créez-en une pour commencer, ou choisissez-en une dans le tableau.",
+      "createFirstTask": "Créer la première tâche",
+      "firstTaskTitle": "Ma première tâche"
+    },
     "greeting": {
       "welcomeBack": "Content de vous revoir. Voici la prochaine action du jour.",
       "workingOn": "En cours",
@@ -1608,6 +1646,7 @@
     "welcomeBackBanner": "Content de vous revoir.",
     "moodQuestion": "Comment vous sentez-vous en ce moment ?",
     "moodHelper": "Cela m'aide à vous proposer la tâche la plus adaptée.",
+    "moodUpdatePrompt": "Souhaitez-vous mettre à jour votre humeur ?",
     "mood": {
       "ready": "Frais et dispo",
       "steady": "OK",

@@ -591,17 +591,28 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                            r.originalTriggerDate === new Date(task.terminationDate || 0).toISOString()
                        );
 
-                       if (existingReminder) {
-                         // If it exists, update it instead of creating a new one
-                         updateScheduledReminderTriggerDate(task.id, new Date(task.terminationDate).toISOString(), newOffset);
-                       } else {
-                         addReminder({
-                           title: `Task Reminder: ${task.title}`,
-                           description: `This task is due on ${format(new Date(task.terminationDate), "PPP p")}`,
-                           persistent: true,
-                           triggerDate: new Date(task.terminationDate).toISOString(),
-                           taskId: task.id,
-                           offsetMinutes: newOffset,
+                        if (existingReminder) {
+                          // If it exists, update it instead of creating a new one
+                          updateScheduledReminderTriggerDate(task.id, new Date(task.terminationDate).toISOString(), newOffset);
+                        } else {
+                          const dueDateIso = new Date(task.terminationDate).toISOString();
+                          const titleKey = 'notifications.taskReminder.title';
+                          const titleParams = { title: task.title };
+                          const descriptionKey = 'notifications.taskReminder.description';
+                          // Store the raw ISO date; NotificationCenter formats it
+                          // locale-aware at render time so it re-localizes on switch.
+                          const descriptionParams = { date: dueDateIso };
+                          addReminder({
+                            title: t(titleKey, titleParams),
+                            description: t(descriptionKey, { formattedDate: format(new Date(dueDateIso), "PPP p") }),
+                            titleKey,
+                            titleParams,
+                            descriptionKey,
+                            descriptionParams,
+                            persistent: true,
+                            triggerDate: dueDateIso,
+                            taskId: task.id,
+                            offsetMinutes: newOffset,
                          });
                        }
                      }

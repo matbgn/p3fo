@@ -722,6 +722,17 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
     if (!board) return;
     save({ ...board, employees: board.employees.filter(e => e.id !== id) });
   };
+  const duplicateEmployee = (emp: SalaryEmployee) => {
+    if (!board) return;
+    const copy: SalaryEmployee = {
+      ...emp,
+      id: newId(),
+      name: `${emp.name} (${t('common.duplicate').toLowerCase()})`,
+      levels: [...emp.levels],
+      employerAdjustments: emp.employerAdjustments?.map(a => ({ ...a })),
+    };
+    save({ ...board, employees: [...board.employees, copy] });
+  };
 
   const seedFromUsers = () => {
     if (!board) return;
@@ -911,6 +922,9 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
                   <TableCell className="text-right whitespace-nowrap">
                     <Button variant="ghost" size="sm" onClick={() => editEmployee(employee)}>
                       <Pencil className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => duplicateEmployee(employee)} title={t('salary.action.duplicate')}>
+                      <Copy className="w-4 h-4" />
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => removeEmployee(employee.id)}>
                       <Trash2 className="w-4 h-4" />

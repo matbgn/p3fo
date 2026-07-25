@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.33.0 (2026-07-25)
+
+### Features
+
+- **layout:** floating top-right overlay for size slider + exit focus button (3ab0b8d)
+- **umbrella:** add a scratch search bar to the umbrella navigation (df8881c)
+- **salary:** add a duplicate button on the employee table (3b295c4)
+- **notifications:** click title to jump to card and localize aging/blocked messages (6300c50)
+- **6 hats boards:** add card pinning to retro boards (f9e0c0f)
+
+### Bug Fixes
+
+- **notifications:** re-localize reminders via i18n keys at render (9c58551)
+- **mood:** ask on daily load then every N hours (c0c67cd)
+- **viewSwitcher:** move slider + focus button next to user icon on narrow screens (77fe887)
+- **viewSwitcher:** keep user icon, notification bell and language flag visible on narrow screens (f410261)
+- **userSection:** remove redundant trigram text next to avatar (9db0199)
+- **layout:** size slider + focus button in normal flow, not floating (23888a2)
+- **layout:** move focus toggle to floating top-right, simplify size slider (f46da91)
+- **quickTimer:** two-line layout on mobile, task zone on top (1281709)
+- **quickTimer:** cap task title to 24 chars and collapse traveler idle config into a popover (eae8553)
+- **quickTimer:** always show technique zone when a technique is enabled (f25a5d9)
+- **quickTimer:** keep running task title, elapsed time and pause button visible while a pomodoro or traveler session is active (e41c7f1)
+- **time picker:** add a11y title to time picker dialog (a8e0e9e)
+- **auth:** reload on 401 to refresh proxy session (f677dc4)
+- **i18n:** respect base url for locale loading (c97c43c)
+
+---
+
 ## v0.32.0 (2026-07-22)
 
 ### Features
@@ -133,47 +162,5 @@
 ### Bug Fixes
 
 - **voting tool:** display rich text content of proposal's to public view (2971f16)
-
----
-
-## v0.25.0 (2026-06-03)
-
-### Features
-
-- **voting tool:** add submit-all-votes flow for multi-proposal voting when single vote is expected (34bd46d)
-- **voting:** real-time updates via Yjs for vote proposals, loops, and responses (0084565)
-- **voting:** restore per-proposal diff dialog, add pre-round editor, disable editing during active round (d06af2c)
-- **voting:** Redesign CONSENT_LOOP as per-proposal loops (5f128a8)
-- **voting:** offer a reset votes option (339f288)
-- **voting:** Phase 10+11 — unit tests + i18n (EN/FR) (a8ecce6)
-- **voting:** add Vitest unit tests for vote-tally.ts (32cd9ff)
-- **voting:** add vote data to global export/import (Phase 9) (0251cba)
-- **voting:** Phase 7 — TaskCard-to-Vote linking (e8802b0)
-- **voting:** Phase 5-6 — CONSENT_LOOP mode + multi-moderator & moderation pop-out (4b403e7)
-- **voting:** extract shared tally functions into src/lib/vote-tally.ts (8f34c71)
-- **voting:** add PublicVotePage with /v/:slug routes for anonymous voting (9f01a5d)
-- **voting:** Phase 2 — BlockNote proposals & manager UI components (dd102cd)
-- **voting:** add data model, DB schema, REST routes, adapters, and hooks (391cdd0)
-- **dream phase:** add intentional and collaborative frameworks (bd581e7)
-
-### Bug Fixes
-
-- **voting tool:** replace datetime-local inputs with shared calendar picker (fddf82b)
-- **voting tool:** keep vote UI visible and disabled after voting when changes not allowed (3d9b2ee)
-- **voting tool:** ensure moderator get a fresh modal settings view (6f7e200)
-- **voting tool:** prevent showing results to public when toggle is not activated (2b4ab10)
-- **voting tool:** render live per-proposal results overview in consent loop (85236b2)
-- **voting tool:** permit mulitple proposals opening vote at once (d62144d)
-- **voting tool:** offer ability for the moderator to edit consent loop proposition before next round (3d884d2)
-- CONSENT_LOOP draft persistence and build errors (6cc0675)
-- resolve lint errors in PublicVotePage and BlockNoteProposalEditor (acccb5c)
-- **voting:** remove stale i18n keys and fix duplicate withdraw key (6ae469a)
-- **voting tool:** make consent loop mode kind of work (7e48e7c)
-- **voting tool:** fix do not show result before close in MJ (4d746d8)
-- **voting tool:** fix points vote with caping option (2fba169)
-- **voting tool:** fix thumbs up single VS multiple choice vote (9102d8c)
-- **voting:** correct modal opening (3a21565)
-- **voting:** fix TS build errors in CreateLinkedVoteDialog and useVoteModerators (9230cc8)
-- **dream phase:** import missing yFrameworks (f07bb4d)
 
 ---

@@ -282,6 +282,7 @@ export interface FertilizationCard {
   linkedCardIds?: string[];
   promotedTaskId?: string | null;
   factTag?: FactTag;
+  pinnedAt?: number | null;
 }
 
 export interface DreamCard extends FertilizationCard {
@@ -619,6 +620,13 @@ export interface ReminderEntity {
   taskId?: string;
   title: string;
   description?: string;
+  // i18n fields (preferred over title/description for system-generated reminders).
+  // When present, the UI renders via t(titleKey, titleParams) so the reminder
+  // stays localized after a language switch instead of baking in one language.
+  titleKey?: string;
+  titleParams?: Record<string, unknown>;
+  descriptionKey?: string;
+  descriptionParams?: Record<string, unknown>;
   read: boolean;
   persistent: boolean;
   triggerDate?: string; // ISO date string for scheduling

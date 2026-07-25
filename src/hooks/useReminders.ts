@@ -9,6 +9,14 @@ export type Reminder = {
   id: string;
   title: string;
   description?: string;
+  // i18n fields (preferred over title/description for system-generated reminders).
+  // When set, NotificationCenter renders via t(titleKey, titleParams) so the
+  // reminder re-translates when the locale changes instead of storing one
+  // language's text.
+  titleKey?: string;
+  titleParams?: Record<string, unknown>;
+  descriptionKey?: string;
+  descriptionParams?: Record<string, unknown>;
   read: boolean;
   persistent: boolean;
   triggerDate?: string; // ISO date string for scheduling
@@ -125,11 +133,15 @@ export const useReminderStore = create<ReminderStore>((set, get) => ({
       return;
     }
     set((state) => {
-      // Check if a similar reminder already exists to prevent duplicates
+      // Check if a similar reminder already exists to prevent duplicates.
+      // Prefer comparing i18n keys (locale-independent) when present; fall
+      // back to rendered text for legacy reminders without keys.
       const isDuplicate = state.reminders.some(
         r => r.taskId === newReminder.taskId &&
-             r.title === newReminder.title &&
-             r.description === newReminder.description
+             ((newReminder.titleKey && r.titleKey === newReminder.titleKey) ||
+              (r.titleKey === newReminder.titleKey && r.title === newReminder.title)) &&
+             ((newReminder.descriptionKey && r.descriptionKey === newReminder.descriptionKey) ||
+              (r.descriptionKey === newReminder.descriptionKey && r.description === newReminder.description))
       );
       
       if (isDuplicate) {
@@ -423,6 +435,10 @@ const reminderToEntity = (reminder: Reminder, userId: string): ReminderEntity =>
   taskId: reminder.taskId,
   title: reminder.title,
   description: reminder.description,
+  titleKey: reminder.titleKey,
+  titleParams: reminder.titleParams,
+  descriptionKey: reminder.descriptionKey,
+  descriptionParams: reminder.descriptionParams,
   read: reminder.read,
   persistent: reminder.persistent,
   triggerDate: reminder.triggerDate,
@@ -439,6 +455,10 @@ const entityToReminder = (entity: ReminderEntity): Reminder => ({
   id: entity.id,
   title: entity.title,
   description: entity.description,
+  titleKey: entity.titleKey,
+  titleParams: entity.titleParams,
+  descriptionKey: entity.descriptionKey,
+  descriptionParams: entity.descriptionParams,
   read: entity.read,
   persistent: entity.persistent,
   triggerDate: entity.triggerDate,

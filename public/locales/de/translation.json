@@ -103,8 +103,8 @@
       "cardAgingBaseDaysHelp": "Tage, bevor Karten Alterungseffekte zeigen. Auf 0 setzen zum Deaktivieren. (Standard: 30). Verwenden Sie Dezimalzahlen wie 0.005 für Tests (~7 Min.).",
       "wipLimitPerUserLabel": "WIP-Limit pro Benutzer",
       "wipLimitPerUserHelp": "Maximale WIP-Aufgaben pro Benutzer. Auf 0 setzen zum Deaktivieren. (Standard: 5). Harte Sperre — Aufgaben können nicht in WIP eintreten, wenn Kapazität erreicht.",
-      "nonActionPeriodLabel": "Nicht-Aktions-Periode (Stunden)",
-      "nonActionPeriodHelp": "Stunden Inaktivität, bevor die Stimmungsauswahl erscheint. Auf 0 setzen zum Deaktivieren. (Standard: 3)."
+      "nonActionPeriodLabel": "Stimmungs-Nachfrageintervall (Stunden)",
+      "nonActionPeriodHelp": "Stunden zwischen automatischen Stimmungsabfragen. Die Frage wird beim ersten Laden eines Tages gestellt, danach alle N Stunden. Auf 0 setzen zum Deaktivieren. (Standard: 5)."
     },
     "moduleManagement": {
       "title": "Modulverwaltung",
@@ -1214,7 +1214,13 @@
     "timetable": "Timetable",
     "voting": "Abstimmung",
     "metrics": "Metriken",
-    "settings": "Einstellungen"
+    "settings": "Einstellungen",
+    "searchPlaceholder": "Aufgaben suchen oder tippen zum Erstellen...",
+    "searchResults": "Aufgaben",
+    "searchEmpty": "Keine passenden Aufgaben.",
+    "createTask": "Aufgabe erstellen",
+    "createTaskHint": "Enter zum Erstellen drücken",
+    "scratchHint": "Scratch — erfasse sofort eine Aufgabe"
   },
   "program": {
     "inProgressNoDate": "In Bearbeitung (kein Enddatum)",
@@ -1353,7 +1359,11 @@
     "resumeTimer": "Timer fortsetzen",
     "noActiveTimer": "Kein aktiver Timer",
     "reopenSpotlight": "What's Next Spotlight erneut öffnen",
-    "whatsNext": "Was ist next?"
+    "whatsNext": "Was ist next?",
+    "taskZone": "Aufgabe",
+    "techniqueZone": "Technik",
+    "stopTask": "Aufgaben-Timer stoppen",
+    "techniqueIdle": "Inaktiv"
   },
   "pomodoroUi": {
     "ready": "Bereit",
@@ -1448,6 +1458,8 @@
     "cancelLinking": "Verknüpfung abbrechen",
     "linkCards": "Karten verknüpfen",
     "promoteToBacklog": "Zum Backlog befördern",
+    "pinCard": "Oben anheften",
+    "unpinCard": "Lösen",
     "difficultyLabel": "Schwierigkeit: {{level}}"
   },
   "storyboard": {
@@ -1597,9 +1609,35 @@
       "1hour": "1 Stunde",
       "2hours": "2 Stunden",
       "1day": "1 Tag"
+    },
+    "jumpToTask": "Zur Aufgabe springen",
+    "taskReminder": {
+      "title": "Aufgabenerinnerung: {{title}}",
+      "description": "Diese Aufgabe ist fällig am {{formattedDate}}"
+    },
+    "welcome": {
+      "title": "Willkommen bei P3Fo!",
+      "description": "Vergiss nicht, deine erste Aufgabe einzurichten."
+    },
+    "aging": {
+      "title": "Karte altert: „{{title}}“",
+      "level1": "Diese Karte wird langsam unaktuell. Vielleicht Zeit, tätig zu werden?",
+      "level2": "Diese Karte ist seit einer Weile nicht mehr bewegt worden. Erwäge, Unterstützung anzufordern oder neu zu priorisieren.",
+      "level3": "Diese Karte ist schon lange inaktiv. Ist sie noch relevant? Erwäge, sie fallen zu lassen oder Hilfe anzufordern."
+    },
+    "blocked": {
+      "title": "Blockiert: „{{title}}“",
+      "description": "Du bist seit einer Weile blockiert. Hast du jemandem Bescheid gegeben? Erwäge, Unterstützung anzufordern oder zu eskalieren."
     }
   },
   "spotlight": {
+    "empty": {
+      "greeting": "Willkommen!",
+      "message": "Du hast noch keine Aufgaben. Erstelle deine erste Aufgabe, um loszulegen.",
+      "noAssignedMessage": "Dir sind noch keine Aufgaben zugewiesen. Erstelle eine, um loszulegen, oder wähle eine aus dem Board.",
+      "createFirstTask": "Erste Aufgabe erstellen",
+      "firstTaskTitle": "Meine erste Aufgabe"
+    },
     "greeting": {
       "welcomeBack": "Schön, dass Sie da sind. Hier ist die nächste Aktion für heute.",
       "workingOn": "Aktuell in Bearbeitung",
@@ -1608,6 +1646,7 @@
     "welcomeBackBanner": "Schön, dass Sie da sind.",
     "moodQuestion": "Wie fühlen Sie sich gerade?",
     "moodHelper": "Das hilft mir, die am besten passende nächste Aufgabe vorzuschlagen.",
+    "moodUpdatePrompt": "Möchten Sie Ihre Stimmung aktualisieren?",
     "mood": {
       "ready": "Bereit",
       "steady": "Stetig",

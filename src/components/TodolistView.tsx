@@ -31,6 +31,7 @@ interface TodolistViewProps {
   toggleTimer: (id: string, currentUserId?: string) => void;
   createTask: (title: string, parentId?: string | null, userId?: string) => Promise<string>;
   onFocusOnTask?: (taskId: string) => void;
+  onRowClick?: (taskId: string) => void;
   highlightedTaskId: string | null;
   scrollTodolistRowRef: React.MutableRefObject<Map<string, HTMLElement>>;
   expandedParents: Set<string>;
@@ -60,6 +61,7 @@ const TodolistView: React.FC<TodolistViewProps> = ({
   toggleTimer,
   createTask,
   onFocusOnTask,
+  onRowClick,
   highlightedTaskId,
   scrollTodolistRowRef,
   expandedParents,
@@ -195,6 +197,7 @@ const TodolistView: React.FC<TodolistViewProps> = ({
                   toggleTimer={toggleTimer}
                   createTask={createTask}
                   onFocusOnTask={onFocusOnTask}
+                  onRowClick={onRowClick}
                   isHighlighted={row.task.id === highlightedTaskId}
                   scrollTodolistRowRef={scrollTodolistRowRef}
                 />

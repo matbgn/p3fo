@@ -1,6 +1,10 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useViewNavigation } from '@/hooks/useView';
+import { useAllTasks } from '@/hooks/useAllTasks';
+import { useTasks } from '@/hooks/useTasks';
+import { useUserSettings } from '@/hooks/useUserSettings';
+import { aStarTextSearch } from '@/lib/a-star-search';
 import { cn } from '@/lib/utils';
 import type { ViewType } from '@/context/ViewContextDefinition';
 import type { ModuleId } from '@/lib/persistence-types';
@@ -20,11 +24,16 @@ import {
   Target,
   Vote,
   Wallet,
+  Search,
+  Plus,
+  ArrowRight,
 } from 'lucide-react';
+import { StatusTag } from '@/components/StatusTag';
 
 interface UmbrellaNavigationProps {
   open: boolean;
   onClose: () => void;
+  onFocusOnTask?: (taskId: string) => void;
 }
 
 interface SubView {
@@ -170,11 +179,77 @@ const QUARTER_CONFIG: Record<QuarterKey, QuarterConfig> = {
   },
 };
 
-export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, onClose }) => {
+export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, onClose, onFocusOnTask }) => {
   const { t } = useTranslation();
   const { navigateTo, disabledModules } = useViewNavigation();
   const [hovered, setHovered] = useState<string | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+
+  // Scratch search bar
+  const { tasks } = useAllTasks();
+  const { createTask } = useTasks();
+  const { userId: currentUserId } = useUserSettings();
+  const [query, setQuery] = useState('');
+  const [activeIndex, setActiveIndex] = useState(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const searchResults = useMemo(() => {
+    const q = query.trim();
+    if (!q) return [];
+    return aStarTextSearch(q, tasks.map(t => ({ id: t.id, title: t.title })))
+      .slice(0, 6)
+      .map(r => {
+        const task = tasks.find(t => t.id === r.taskId);
+        return task ? { task, score: r.score } : null;
+      })
+      .filter((r): r is { task: typeof tasks[number]; score: number } => r !== null)
+      .sort((a, b) => {
+        const aArchived = a.task.triageStatus === 'Archived' ? 1 : 0;
+        const bArchived = b.task.triageStatus === 'Archived' ? 1 : 0;
+        return aArchived - bArchived;
+      });
+  }, [query, tasks]);
+
+  const canCreate = query.trim().length > 0 && searchResults.every(r => r.task.title.toLowerCase() !== query.trim().toLowerCase());
+
+  const handleSearchSubmit = useCallback(async () => {
+    if (searchResults.length > 0 && activeIndex >= 0 && activeIndex < searchResults.length) {
+      const target = searchResults[activeIndex].task;
+      if (onFocusOnTask) {
+        onFocusOnTask(target.id);
+      } else {
+        navigateTo('focus' as ViewType);
+      }
+      onClose();
+      setQuery('');
+      setActiveIndex(0);
+      return;
+    }
+    if (canCreate) {
+      await createTask(query.trim(), null, currentUserId || undefined);
+      onClose();
+      setQuery('');
+      setActiveIndex(0);
+    }
+  }, [searchResults, activeIndex, canCreate, query, createTask, currentUserId, onFocusOnTask, navigateTo, onClose]);
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const max = canCreate ? searchResults.length : searchResults.length - 1;
+      setActiveIndex(i => Math.min(i + 1, max < 0 ? 0 : max));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex(i => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSearchSubmit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setQuery('');
+      setActiveIndex(0);
+    }
+  };
 
   const isModuleDisabled = useCallback((view: string, subView?: string): boolean => {
     if (subView) {
@@ -214,7 +289,9 @@ export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, on
   useEffect(() => {
     if (open) {
       setHovered(null);
-      setTimeout(() => overlayRef.current?.focus(), 0);
+      setQuery('');
+      setActiveIndex(0);
+      setTimeout(() => searchInputRef.current?.focus(), 50);
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -257,6 +334,72 @@ export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, on
         >
           <X className="w-8 h-8" />
         </button>
+
+        {/* Scratch search bar */}
+        <div className="w-80 max-w-[90vw]">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={query}
+              onChange={(e) => { setQuery(e.target.value); setActiveIndex(0); }}
+              onKeyDown={handleSearchKeyDown}
+              placeholder={t('nav.searchPlaceholder')}
+              className="w-full pl-9 pr-3 py-2 text-sm rounded-md bg-background/95 border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 shadow-lg"
+              aria-label={t('nav.searchPlaceholder')}
+            />
+          </div>
+          {query.trim() && (searchResults.length > 0 || canCreate) && (
+            <div className="mt-1.5 w-full rounded-md border border-border bg-popover/95 shadow-lg overflow-hidden">
+              {searchResults.length > 0 && (
+                <div className="p-1">
+                  <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {t('nav.searchResults')}
+                  </div>
+                  {searchResults.map((r, i) => (
+                    <button
+                      key={r.task.id}
+                      onMouseEnter={() => setActiveIndex(i)}
+                      onClick={handleSearchSubmit}
+                      className={cn(
+                        'w-full flex items-center gap-2 px-2 py-1.5 rounded-sm text-left text-sm transition-colors',
+                        i === activeIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+                      )}
+                    >
+                      <span className="flex-1 truncate">{r.task.title}</span>
+                      <StatusTag status={r.task.triageStatus} compact />
+                      <ArrowRight className="w-3 h-3 shrink-0 text-muted-foreground" />
+                    </button>
+                  ))}
+                </div>
+              )}
+              {canCreate && (
+                <div className="p-1 border-t border-border">
+                  <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {t('nav.scratchHint')}
+                  </div>
+                  <button
+                    onMouseEnter={() => setActiveIndex(searchResults.length)}
+                    onClick={handleSearchSubmit}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-2 py-1.5 rounded-sm text-left text-sm transition-colors',
+                      activeIndex === searchResults.length ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+                    )}
+                  >
+                    <Plus className="w-3 h-3 shrink-0 text-primary" />
+                    <span className="flex-1 truncate font-medium">{t('nav.createTask')}: "{query.trim()}"</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          {query.trim() && searchResults.length === 0 && !canCreate && (
+            <div className="mt-1.5 w-full rounded-md border border-border bg-popover/95 shadow-lg px-3 py-2 text-sm text-muted-foreground">
+              {t('nav.searchEmpty')}
+            </div>
+          )}
+        </div>
 
         {/* Circle Menu – no overflow-hidden so expanded clip-path can spill out */}
         <div className="relative w-80 h-80 rounded-full">

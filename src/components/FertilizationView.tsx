@@ -550,7 +550,18 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
 
     const boardConfig: BoardTypeConfig = {
         type: 'fertilization',
-        exportData: () => boardState ? { schemaVersion: 3, boardType: 'fertilization', ...boardState } : { schemaVersion: 3, boardType: 'fertilization' },
+        exportData: () => boardState ? {
+            schemaVersion: 3,
+            boardType: 'fertilization',
+            ...boardState,
+            cards: [...boardState.cards].sort((a, b) => {
+                const aP = a.pinnedAt != null ? 1 : 0;
+                const bP = b.pinnedAt != null ? 1 : 0;
+                if (aP !== bP) return bP - aP;
+                if (aP && bP) return (b.pinnedAt ?? 0) - (a.pinnedAt ?? 0);
+                return 0;
+            }),
+        } : { schemaVersion: 3, boardType: 'fertilization' },
         importData: async (data: Record<string, unknown>) => {
             const boardData = data as unknown as FertilizationBoardEntity;
             const cards = (boardData.cards || []).map((c: FertilizationCard & { offlineVotes?: number | Record<string, number> }) => ({
@@ -644,6 +655,16 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
     const updateCardFactTag = async (cardId: string, factTag: FactTag) => {
         if (!boardState) return;
         const newCards = boardState.cards.map(c => c.id === cardId ? { ...c, factTag } : c);
+        await saveBoard({ ...boardState, cards: newCards });
+    };
+
+    const togglePinCard = async (cardId: string) => {
+        if (!boardState || !isModerator) return;
+        const newCards = boardState.cards.map(c => {
+            if (c.id !== cardId) return c;
+            const isPinned = c.pinnedAt != null;
+            return { ...c, pinnedAt: isPinned ? null : Date.now() };
+        });
         await saveBoard({ ...boardState, cards: newCards });
     };
 
@@ -1293,6 +1314,12 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                             key={column.id}
                             column={{ ...column, title: fertilizationColumnTitle(t, column) }}
                             cards={filteredCards.filter(c => c.columnId === column.id).sort((a, b) => {
+                                const aPinned = a.pinnedAt != null ? 1 : 0;
+                                const bPinned = b.pinnedAt != null ? 1 : 0;
+                                if (aPinned !== bPinned) return bPinned - aPinned;
+                                if (aPinned && bPinned && a.pinnedAt !== b.pinnedAt) {
+                                    return (b.pinnedAt ?? 0) - (a.pinnedAt ?? 0);
+                                }
                                 const sortOrder = columnSortOrder[column.id];
                                 if (!sortOrder || sortOrder === 'none') return 0;
                                 if (column.id === 'facts') {
@@ -1409,6 +1436,7 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
                                     onUpdateAuthor={(authorId) => updateCardAuthor(card.id, authorId)}
                                     onDelete={() => deleteCard(card.id)}
                                     onPromote={() => openPromoteDialog(card)}
+                                    onTogglePin={() => togglePinCard(card.id)}
                                     onVote={(value) => {
                                         if (colMode === 'POINTS') {
                                             voteColumnPoints(card.id, value, column.id);

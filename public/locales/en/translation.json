@@ -103,8 +103,8 @@
       "cardAgingBaseDaysHelp": "Days before cards show aging effects. Set to 0 to disable. (default: 30). Use decimals like 0.005 for testing (~7 min).",
       "wipLimitPerUserLabel": "WIP Limit Per User",
       "wipLimitPerUserHelp": "Maximum tasks in WIP per user. Set to 0 to disable. (default: 5). Hard block — tasks cannot enter WIP when at capacity.",
-      "nonActionPeriodLabel": "Non-Action Period (hours)",
-      "nonActionPeriodHelp": "Hours of inactivity before the mood selector appears. Set to 0 to disable. (default: 3)."
+      "nonActionPeriodLabel": "Mood Re-ask Interval (hours)",
+      "nonActionPeriodHelp": "Hours between automatic mood prompts. The mood question is asked once on first load of each day, then every N hours. Set to 0 to disable. (default: 5)."
     },
     "moduleManagement": {
       "title": "Module Management",
@@ -1214,7 +1214,13 @@
     "timetable": "Timetable",
     "voting": "Voting",
     "metrics": "Metrics",
-    "settings": "Settings"
+    "settings": "Settings",
+    "searchPlaceholder": "Search tasks or type to create...",
+    "searchResults": "Tasks",
+    "searchEmpty": "No matching tasks.",
+    "createTask": "Create task",
+    "createTaskHint": "Press Enter to create",
+    "scratchHint": "Scratch — capture a task instantly"
   },
   "program": {
     "inProgressNoDate": "In Progress (No Termination Date)",
@@ -1353,7 +1359,11 @@
     "resumeTimer": "Resume timer",
     "noActiveTimer": "No active timer",
     "reopenSpotlight": "Reopen the What's Next spotlight",
-    "whatsNext": "What's next?"
+    "whatsNext": "What's next?",
+    "taskZone": "Task",
+    "techniqueZone": "Technique",
+    "stopTask": "Stop task timer",
+    "techniqueIdle": "Idle"
   },
   "pomodoroUi": {
     "ready": "Ready",
@@ -1448,6 +1458,8 @@
     "cancelLinking": "Cancel linking",
     "linkCards": "Link cards",
     "promoteToBacklog": "Promote to backlog",
+    "pinCard": "Pin to top",
+    "unpinCard": "Unpin",
     "difficultyLabel": "Difficulty: {{level}}"
   },
   "storyboard": {
@@ -1597,9 +1609,35 @@
       "1hour": "1 hour",
       "2hours": "2 hours",
       "1day": "1 day"
+    },
+    "jumpToTask": "Jump to task",
+    "taskReminder": {
+      "title": "Task Reminder: {{title}}",
+      "description": "This task is due on {{formattedDate}}"
+    },
+    "welcome": {
+      "title": "Welcome to P3Fo!",
+      "description": "Don't forget to set up your first task."
+    },
+    "aging": {
+      "title": "Card aging: \"{{title}}\"",
+      "level1": "This card is getting stale. Maybe time to act on it?",
+      "level2": "This card hasn't moved in a while. Consider asking for support or reprioritizing.",
+      "level3": "This card has been idle for a long time. Is it still relevant? Consider dropping it or asking for help."
+    },
+    "blocked": {
+      "title": "Blocked: \"{{title}}\"",
+      "description": "You've been blocked for a while. Have you told someone? Consider asking for support or escalating."
     }
   },
   "spotlight": {
+    "empty": {
+      "greeting": "Welcome!",
+      "message": "You don't have any tasks yet. Create your first one to get started.",
+      "noAssignedMessage": "No tasks assigned to you yet. Create one to get started, or pick one from the board.",
+      "createFirstTask": "Create first task",
+      "firstTaskTitle": "My first task"
+    },
     "greeting": {
       "welcomeBack": "Good to see you. Here's today's next action.",
       "workingOn": "Currently working on",
@@ -1608,6 +1646,7 @@
     "welcomeBackBanner": "Good to see you.",
     "moodQuestion": "How are you feeling right now?",
     "moodHelper": "This helps me propose the best fitting next task for you.",
+    "moodUpdatePrompt": "Would you like to update your mood?",
     "mood": {
       "ready": "Ready",
       "steady": "Steady",
