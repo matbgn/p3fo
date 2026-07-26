@@ -463,6 +463,7 @@ export const QuickTimer: React.FC<{
     let lastStoppedTime = 0;
     for (const task of tasks) {
       if (task.userId && task.userId !== currentUserId) continue;
+      if (task.triageStatus === 'Archived') continue;
       if (task.timer && task.timer.length > 0) {
         const lastEntry = task.timer[task.timer.length - 1];
         if (lastEntry) {
