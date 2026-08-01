@@ -16,6 +16,7 @@ import { loadFiltersFromSessionStorage } from "@/lib/filter-storage";
 import { getDefaultFilters, validateFilters, mergeViewFilters } from "@/lib/filter-merge";
 import { COMPACTNESS_ULTRA, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import { renumberSiblings } from "@/utils/priorityEncoding";
 import { FocusModeProvider } from "./FocusModeProvider";
 import { FocusModeOverlay } from "./FocusModeOverlay";
 import { FocusModeBar } from './planView/FocusModeBar';
@@ -326,10 +327,7 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
       newDisplayOrder.push(draggedTask);
     }
 
-    const updatedPriorities = newDisplayOrder.map((task, index) => ({
-      id: task.id,
-      priority: index + 1,
-    }));
+    const updatedPriorities = renumberSiblings(newDisplayOrder, 0, 0);
 
     // Set reordering state to show spinner
     setReorderingTaskId(draggedTaskId);

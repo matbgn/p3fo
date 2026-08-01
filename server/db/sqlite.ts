@@ -288,7 +288,7 @@ class SqliteClient implements DbClient {
         "terminationDate" TEXT,
         "comment" TEXT,
         "durationInMinutes" INTEGER,
-        "priority" INTEGER,
+        "priority" REAL,
         "updatedAt" TEXT,
         "userId" TEXT,
         "linkedVoteIds" TEXT,
@@ -730,6 +730,76 @@ class SqliteClient implements DbClient {
     addColumn('reminders', 'descriptionParams', 'TEXT');
 
     this.tryFixVoteLoopsUniqueConstraint();
+
+    // Migrate tasks.priority column type from INTEGER to REAL so dot-notation
+    // float priorities (e.g. 1.01, 1.0102) can be stored. SQLite cannot
+    // ALTER COLUMN type in place, so we rebuild the table when needed.
+    this.tryMigrateTasksPriorityToReal();
+  }
+
+  /**
+   * Rebuild the tasks table if the priority column is still INTEGER.
+   * SQLite has dynamic typing (INTEGER columns accept REAL values), so this
+   * migration is mainly cosmetic — but it keeps `PRAGMA table_info` honest
+   * and avoids surprises with strict-mode databases.
+   */
+  private tryMigrateTasksPriorityToReal(): void {
+    try {
+      const tableInfo = this.db.prepare(`PRAGMA table_info("tasks")`).all() as { name: string; type: string }[];
+      const priorityCol = tableInfo.find(col => col.name === 'priority');
+      if (!priorityCol) return;
+      // SQLite type affinity: INTEGER/INT means integer affinity. REAL/FLOAT/DOUBLE means real affinity.
+      const typeUpper = (priorityCol.type || '').toUpperCase();
+      if (typeUpper === 'INTEGER' || typeUpper === 'INT' || typeUpper === '') {
+        console.log('Migrating tasks.priority INTEGER -> REAL (table rebuild)...');
+        // Disable FK enforcement for the rebuild: the bulk INSERT may copy
+        // child rows before their parent rows, which violates the
+        // parentId self-reference even though the final data is consistent.
+        const fkState = this.db.prepare('PRAGMA foreign_keys').get() as { foreign_keys: number };
+        const wasFkEnabled = fkState.foreign_keys === 1;
+        this.db.exec('PRAGMA foreign_keys = OFF');
+        try {
+          // Drop any stale "tasks_new" left behind by a previously failed
+          // migration attempt before recreating it fresh.
+          this.db.exec(`DROP TABLE IF EXISTS "tasks_new";`);
+          this.db.exec(`
+            CREATE TABLE "tasks_new" (
+              "id" TEXT PRIMARY KEY,
+              "parentId" TEXT,
+              "title" TEXT NOT NULL,
+              "createdAt" TEXT NOT NULL,
+              "triageStatus" TEXT NOT NULL,
+              "urgent" BOOLEAN DEFAULT 0,
+              "impact" BOOLEAN DEFAULT 0,
+              "majorIncident" BOOLEAN DEFAULT 0,
+              "sprintTarget" BOOLEAN DEFAULT 0,
+              "difficulty" REAL DEFAULT 1,
+              "timer" TEXT,
+              "category" TEXT DEFAULT 'General',
+              "terminationDate" TEXT,
+              "comment" TEXT,
+              "durationInMinutes" INTEGER,
+              "priority" REAL,
+              "updatedAt" TEXT,
+              "userId" TEXT,
+              "linkedVoteIds" TEXT,
+              "blockedSince" TEXT,
+              FOREIGN KEY("parentId") REFERENCES "tasks"("id")
+            );
+          `);
+          this.db.exec(`INSERT INTO "tasks_new" SELECT * FROM "tasks";`);
+          this.db.exec(`DROP TABLE "tasks";`);
+          this.db.exec(`ALTER TABLE "tasks_new" RENAME TO "tasks";`);
+          // Recreate index dropped with the table.
+          this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_tasks_priority" ON "tasks"("priority")`);
+          console.log('tasks.priority migrated to REAL.');
+        } finally {
+          if (wasFkEnabled) this.db.exec('PRAGMA foreign_keys = ON');
+        }
+      }
+    } catch (e) {
+      console.error('Error migrating tasks.priority to REAL:', e);
+    }
   }
 
   async testConnection(): Promise<void> {

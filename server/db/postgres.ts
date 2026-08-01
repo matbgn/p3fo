@@ -223,7 +223,7 @@ class PostgresClient implements DbClient {
         "terminationDate" TIMESTAMP WITH TIME ZONE,
         "comment" TEXT,
         "durationInMinutes" INTEGER,
-        "priority" INTEGER,
+        "priority" REAL,
         "userId" TEXT,
         "linkedVoteIds" JSONB,
         "blockedSince" TIMESTAMP WITH TIME ZONE,
@@ -715,7 +715,34 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     await addColumn('reminders', 'descriptionParams', 'JSONB');
 
      await this.tryAddVoteLoopsUniqueConstraint();
-   }
+
+    // Migrate tasks.priority from INTEGER to REAL so dot-notation float
+    // priorities (e.g. 1.01, 1.0102) can be stored and ordered correctly.
+    await this.tryMigrateTasksPriorityToReal();
+  }
+
+  /**
+   * Alter tasks.priority column type from INTEGER to REAL if needed.
+   * Postgres supports ALTER COLUMN TYPE in place — no table rebuild required.
+   */
+  private async tryMigrateTasksPriorityToReal(): Promise<void> {
+    try {
+      const res = await this.pool.query(
+        `SELECT data_type FROM information_schema.columns
+         WHERE table_name = 'tasks' AND column_name = 'priority'`,
+      );
+      if (res.rows.length === 0) return;
+      const dataType = (res.rows[0] as { data_type: string }).data_type;
+      // integer → needs migration. real/double precision/numeric are already float-compatible.
+      if (dataType === 'integer') {
+        console.log('Migrating tasks.priority INTEGER -> REAL...');
+        await this.pool.query(`ALTER TABLE "tasks" ALTER COLUMN "priority" TYPE REAL`);
+        console.log('tasks.priority migrated to REAL.');
+      }
+    } catch (e) {
+      console.error('Error migrating tasks.priority to REAL:', e);
+    }
+  }
 
   private async tryAddVoteLoopsUniqueConstraint(): Promise<void> {
     try {

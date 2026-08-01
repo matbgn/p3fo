@@ -132,13 +132,13 @@ export const computeSalary = (
   const gross100Hourly = Math.round((unroundedGross100 / (safeConfig.hoursPerWeek * safeConfig.weeksPerMonth)) * 100) / 100;
 
   const workloadFraction = Math.max(0, employee.workload) / 100;
-  // Salaire mensuel avec 13e = ROUND(brut100 × taux) — gross monthly WITH 13th at workload
-  const grossMonthlyWith13 = Math.round(gross100 * workloadFraction);
-  // Salaire annuel = mensuel13 × 12 — annual gross at workload (with 13th = 13 salaries)
-  const grossAnnual = grossMonthlyWith13 * 12;
 
-  // Salaire mensuel sans 13e = ROUND(mensuel13 ÷ 13 × 12, 0.05) — gross monthly WITHOUT 13th (pure formula)
-  const grossMonthlyPure = roundToNickel(grossMonthlyWith13 / 13 * 12);
+  // Headline monthly gross "sur 12 mois" = annual minimum ÷ 12. Built on
+  // indexHourlyWage, it guarantees the minimum salary per hour (Geneva
+  // standard: 40h/week → CHF 4'262.27/month sur 12). This is the final gross
+  // the employee obtains and the "Gross monthly (w/ 13th)" column.
+  const grossMonthlyBase = Math.round(gross100 * workloadFraction);
+
   // Employer adjustments converted to monthly equivalent:
   //  - monthly: amount as-is (per normal month, 12× per year, never 13th)
   //  - semesterly: amount / 6
@@ -149,19 +149,41 @@ export const computeSalary = (
       : (a.amount || 0);
     return sum + monthly;
   }, 0);
-  const grossMonthly = roundToNickel(grossMonthlyPure + adjustmentsTotal);
-  // Gross monthly WITH 13th + complements = G6 + adjustments
-  const grossMonthlyWith13AndAdjustments = roundToNickel(grossMonthlyWith13 + adjustmentsTotal);
-  // Salaire annuel = (mensuel13 + compléments) × 12 — same basis as gross100Annual
-  const grossAnnualWithout13 = roundToNickel(grossMonthlyWith13AndAdjustments * 12);
 
-  // Net computed on the FULL gross with 13th + complements
+  // Fixed annual gross mass = sur-12 base × 12 + adjustments × 12. The 13th
+  // switch only REDISTRIBUTES this fixed minimum mass (Geneva: "sur 12" and
+  // "sur 13" express the SAME annual), it does not change the annual cost or
+  // the budget.
+  const annualBase = roundToNickel(grossMonthlyBase * 12);
+  const annualGross = roundToNickel((grossMonthlyBase + adjustmentsTotal) * 12);
+
+  // "Gross monthly (w/ 13th)" = the final number obtained by the employee =
+  // the headline sur-12 monthly (4'262). Always equal to the base; it is the
+  // reference gross whose annual, spread over 13 months, yields the sur-13
+  // paycheck below.
+  const grossMonthlyWith13 = grossMonthlyBase;
+
+  // "Gross monthly" (w/o 13th) = the actual monthly paycheck when the 13th is
+  // paid as one of 13 equal installments = annual ÷ 13 (3'934, LOWERED). When
+  // the 13th is excluded the two columns are identical (no 13th to spread).
+  const grossMonthlyPure = safeConfig.include13thSalary
+    ? roundToNickel(annualBase / 13)
+    : grossMonthlyBase;
+
+  const grossMonthly = roundToNickel(grossMonthlyPure + adjustmentsTotal);
+  // Gross monthly WITH 13th + complements = headline + adjustments (highest)
+  const grossMonthlyWith13AndAdjustments = roundToNickel(grossMonthlyWith13 + adjustmentsTotal);
+
+  // Annual figures (fixed minimum mass, independent of the 13th switch).
+  const grossAnnual = annualBase;
+  const grossAnnualWithout13 = annualGross;
+
+  // Net. netMonthlyWith13 = net of the headline (w/ 13th) gross; netMonthly =
+  // net of the actual (lowered) paycheck. Annual net = fixed annual × factor.
   const netFactor = 1 - safeConfig.socialChargesRate;
-  const grossForNet = grossMonthlyWith13 + adjustmentsTotal;
-  const netMonthlyWith13 = roundToNickel(grossForNet * netFactor);
-  // Net monthly without 13th = netMonthlyWith13 / 13 × 12
-  const netMonthly = roundToNickel(netMonthlyWith13 / 13 * 12);
-  const netAnnual = roundToNickel(netMonthly * 13);
+  const netMonthlyWith13 = roundToNickel((grossMonthlyWith13 + adjustmentsTotal) * netFactor);
+  const netMonthly = roundToNickel((grossMonthlyPure + adjustmentsTotal) * netFactor);
+  const netAnnual = roundToNickel(annualGross * netFactor);
 
   // Coût employeur = salaire annuel × facteur de coût
   

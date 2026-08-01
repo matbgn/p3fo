@@ -41,7 +41,7 @@ describe('useTasks mutations - updatedAt injection', () => {
       const funcStart = lines.findIndex(l => l.includes('const reparent = async (taskId: string, newParentId: string | null)'))
       expect(funcStart).toBeGreaterThanOrEqual(0)
       
-      const funcBody = lines.slice(funcStart, funcStart + 50).join('\n')
+      const funcBody = lines.slice(funcStart, funcStart + 70).join('\n')
       
       expect(funcBody).toMatch(/updatedAt\s*:\s*Date\.now\(\)/)
     })
@@ -96,7 +96,7 @@ describe('createTask - subtask metadata inheritance', () => {
     const lines = source.split('\n')
 
     const funcStart = lines.findIndex(l => l.includes('async function createTask'))
-    const funcBody = lines.slice(funcStart, funcStart + 30).join('\n')
+    const funcBody = lines.slice(funcStart, funcStart + 40).join('\n')
 
     // Each inherited field should use parentTask?.field ?? default
     expect(funcBody).toMatch(/parentTask\?\.category/)
@@ -113,7 +113,7 @@ describe('createTask - subtask metadata inheritance', () => {
     const lines = source.split('\n')
 
     const funcStart = lines.findIndex(l => l.includes('async function createTask'))
-    const funcBody = lines.slice(funcStart, funcStart + 30).join('\n')
+    const funcBody = lines.slice(funcStart, funcStart + 40).join('\n')
 
     // userId should use caller override first, then parent fallback
     expect(funcBody).toMatch(/userId\s*[:=].*userId.*parentTask\?\.userId/)
@@ -126,7 +126,7 @@ describe('createTask - timer transfer persistence', () => {
     const lines = source.split('\n')
 
     const funcStart = lines.findIndex(l => l.includes('async function createTask'))
-    const funcBody = lines.slice(funcStart, funcStart + 80).join('\n')
+    const funcBody = lines.slice(funcStart, funcStart + 100).join('\n')
 
     // Must call adapter.updateTask for the child after timer transfer
     expect(funcBody).toMatch(/adapter\.updateTask\(t\.id/)
@@ -137,7 +137,7 @@ describe('createTask - timer transfer persistence', () => {
     const lines = source.split('\n')
 
     const funcStart = lines.findIndex(l => l.includes('async function createTask'))
-    const funcBody = lines.slice(funcStart, funcStart + 80).join('\n')
+    const funcBody = lines.slice(funcStart, funcStart + 100).join('\n')
 
     // Must call adapter.updateTask for the parent after timer transfer
     expect(funcBody).toMatch(/adapter\.updateTask\(parentId/)

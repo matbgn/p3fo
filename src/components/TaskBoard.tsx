@@ -18,6 +18,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TaskCard } from "./TaskCard";
 import { LazyCard } from "./LazyCard";
 import { TodolistView } from "./TodolistView";
+import { SubfocusView } from "./SubfocusView";
 
 import { byId } from "@/lib/utils";
 import { useViewDisplay, useViewNavigation } from "@/hooks/useView";
@@ -28,14 +29,14 @@ import { FocusModeOverlay } from "./FocusModeOverlay";
 import { FocusModeBar } from "./planView/FocusModeBar";
 import { useFocusMode } from "@/hooks/useFocusMode";
 
-type FocusBoardView = "flow" | "todolist";
+type FocusBoardView = "subfocus" | "flow" | "todolist";
 
 const FOCUS_BOARD_VIEW_KEY = "focus-board-view";
 
 const loadViewPreference = (): FocusBoardView => {
   try {
     const stored = sessionStorage.getItem(FOCUS_BOARD_VIEW_KEY);
-    if (stored === "todolist" || stored === "flow") return stored;
+    if (stored === "todolist" || stored === "flow" || stored === "subfocus") return stored;
   } catch {
     // sessionStorage not available
   }
@@ -66,13 +67,13 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
   const prevViewRef = React.useRef<string>(view);
 
   const handleFocusViewChange = React.useCallback((view: string) => {
-    if (view === "flow" || view === "todolist") {
+    if (view === "subfocus" || view === "flow" || view === "todolist") {
       setFocusView(view);
       saveViewPreference(view);
     }
   }, []);
 
-  const { createTask, reparent, updateStatus, toggleUrgent, toggleImpact, toggleMajorIncident, toggleSprintTarget, updateDifficulty, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleDone, updateTaskTimer, toggleTimer, updateTimeEntry, updateCategory, updateComment, updateTerminationDate, updateDurationInMinutes } = useTasks();
+  const { createTask, reparent, updateStatus, toggleUrgent, toggleImpact, toggleMajorIncident, toggleSprintTarget, updateDifficulty, updateTitle, updateUser, deleteTask, duplicateTaskStructure, toggleDone, updateTaskTimer, toggleTimer, updateTimeEntry, updateCategory, updateComment, updateTerminationDate, updateDurationInMinutes, updatePrioritiesBulk } = useTasks();
   const { tasks } = useAllTasks();
   const { userId: currentUserId } = useUserSettings();
   const map = React.useMemo(() => byId(tasks), [tasks]);
@@ -473,6 +474,9 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
 
   const viewToggle = (
     <ToggleGroup type="single" value={focusView} onValueChange={handleFocusViewChange} aria-label={t('taskboard.flowViewAria')}>
+      <ToggleGroupItem value="subfocus" aria-label={t('taskboard.subfocusViewAria')}>
+        {t('taskboard.subfocus')}
+      </ToggleGroupItem>
       <ToggleGroupItem value="flow" aria-label={t('taskboard.flowViewAria')}>
         {t('taskboard.flow')}
       </ToggleGroupItem>
@@ -488,7 +492,7 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
     <div className="w-full h-full flex flex-col">
       {isFocusMode && (
         <FocusModeBar
-          title={focusView === 'flow' ? t('taskboard.flowViewTitle') : t('taskboard.todolistViewTitle')}
+          title={focusView === 'flow' ? t('taskboard.flowViewTitle') : focusView === 'subfocus' ? t('taskboard.subfocusViewTitle') : t('taskboard.todolistViewTitle')}
           rightContent={viewToggle}
           hasActiveFilters={hasActiveFilters}
           filterDropdownContent={
@@ -540,6 +544,42 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
         )}
       </div>
       )}
+
+      {focusView === "subfocus" && (() => {
+        const selectedParentId = path.length > 0 ? path[path.length - 1] : (focusedTaskId ?? null);
+        const subfocusDepth = path.length > 0 ? path.length : 0;
+        return (
+          <SubfocusView
+            tasks={tasks}
+            map={map}
+            selectedParentId={selectedParentId}
+            depth={subfocusDepth}
+            focusedTaskId={focusedTaskId}
+            currentUserId={currentUserId}
+            displayFilters={displayFilters}
+            storedFilters={storedFilters}
+            updateStatus={handleChangeStatus}
+            updateDifficulty={updateDifficulty}
+            updateCategory={updateCategory}
+            updateTitle={(id, title) => updateTitle(id, title)}
+            updateUser={handleUpdateUser}
+            deleteTask={deleteTask}
+            duplicateTaskStructure={duplicateTaskStructure}
+            toggleUrgent={toggleUrgent}
+            toggleImpact={toggleImpact}
+            toggleMajorIncident={toggleMajorIncident}
+            toggleSprintTarget={toggleSprintTarget}
+            toggleDone={id => toggleDone(id)}
+            toggleTimer={(id, userId) => toggleTimer(id, userId || currentUserId)}
+            reparent={reparent}
+            updateTerminationDate={updateTerminationDate}
+            updateComment={updateComment}
+            updateDurationInMinutes={updateDurationInMinutes}
+            updatePrioritiesBulk={updatePrioritiesBulk}
+            onFocusOnTask={handleFocusOnTaskInternal}
+          />
+        );
+      })()}
 
       {focusView === "todolist" && (
         <TodolistView

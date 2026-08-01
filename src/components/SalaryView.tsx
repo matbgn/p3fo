@@ -13,6 +13,7 @@ import { usePersistence } from '@/hooks/usePersistence';
 import { useToast } from '@/hooks/use-toast';
 import { doc, isCollaborationEnabled, ySalaryState } from '@/lib/collaboration';
 import { useUsersContext } from '@/context/UsersContext';
+import { useSettingsContext } from '@/context/SettingsContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -109,10 +110,26 @@ const newId = (): string =>
 const ConfigEditor: React.FC<{
   config: SalaryConfig;
   onChange: (next: SalaryConfig) => void;
-}> = ({ config, onChange }) => {
+  onHoursPerDayChange?: (hoursPerDay: number) => void;
+}> = ({ config, onChange, onHoursPerDayChange }) => {
   const { t } = useTranslation();
   const update = <K extends keyof SalaryConfig>(key: K, value: SalaryConfig[K]) =>
     onChange({ ...config, [key]: value });
+
+  // When hours-per-week or days-per-week change, derive hoursPerDay and keep
+  // the global workspace setting (hoursToBeDoneByDay) in sync.
+  const updateHoursPerWeek = (hoursPerWeek: number) => {
+    const daysPerWeek = config.daysPerWeek || 1;
+    const hoursPerDay = +(hoursPerWeek / daysPerWeek).toFixed(2);
+    onChange({ ...config, hoursPerWeek, hoursPerDay });
+    onHoursPerDayChange?.(hoursPerDay);
+  };
+  const updateDaysPerWeek = (daysPerWeek: number) => {
+    const safeDays = daysPerWeek || 1;
+    const hoursPerDay = +(config.hoursPerWeek / safeDays).toFixed(2);
+    onChange({ ...config, daysPerWeek, hoursPerDay });
+    onHoursPerDayChange?.(hoursPerDay);
+  };
 
   const [bracketsText, setBracketsText] = useState(config.ageBrackets.join(', '));
   useEffect(() => {
@@ -146,7 +163,7 @@ const ConfigEditor: React.FC<{
           id="cfg-hours"
           type="number"
           value={config.hoursPerWeek}
-          onChange={e => update('hoursPerWeek', parseFloat(e.target.value) || 0)}
+          onChange={e => updateHoursPerWeek(parseFloat(e.target.value) || 0)}
         />
       </div>
       <div className="space-y-1">
@@ -241,8 +258,11 @@ const ConfigEditor: React.FC<{
           id="cfg-hours-day"
           type="number"
           value={config.hoursPerDay}
-          onChange={e => update('hoursPerDay', parseFloat(e.target.value) || 0)}
+          readOnly
+          disabled
+          className="bg-muted/50 cursor-not-allowed"
         />
+        <p className="text-xs text-muted-foreground">{t('salary.config.hoursPerDayHelp')}</p>
       </div>
       <div className="space-y-1">
         <Label htmlFor="cfg-days-week">{t('salary.config.daysPerWeek')}</Label>
@@ -250,16 +270,19 @@ const ConfigEditor: React.FC<{
           id="cfg-days-week"
           type="number"
           value={config.daysPerWeek}
-          onChange={e => update('daysPerWeek', parseFloat(e.target.value) || 0)}
+          onChange={e => updateDaysPerWeek(parseFloat(e.target.value) || 0)}
         />
       </div>
-      <div className="flex items-center space-x-2 pt-6">
-        <Switch
-          id="cfg-13th"
-          checked={config.include13thSalary}
-          onCheckedChange={v => update('include13thSalary', v)}
-        />
-        <Label htmlFor="cfg-13th">{t('salary.config.include13th')}</Label>
+      <div className="space-y-1 pt-6">
+        <div className="flex items-center space-x-2">
+          <Switch
+            id="cfg-13th"
+            checked={config.include13thSalary}
+            onCheckedChange={v => update('include13thSalary', v)}
+          />
+          <Label htmlFor="cfg-13th">{t('salary.config.include13th')}</Label>
+        </div>
+        <p className="text-xs text-muted-foreground">{t('salary.config.include13thHelp')}</p>
       </div>
     </div>
   );
@@ -592,6 +615,7 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
   const persistence = usePersistence();
   const { toast } = useToast();
   const { users } = useUsersContext();
+  const { updateSettings } = useSettingsContext();
   const [board, setBoard] = useState<SalaryBoardEntity | null>(null);
   const [loading, setLoading] = useState(true);
   const [configOpen, setConfigOpen] = useState(false);
@@ -789,7 +813,11 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
                   {t('salary.config.dialogDescription')}
                 </DialogDescription>
               </DialogHeader>
-              <ConfigEditor config={board.config} onChange={updateConfig} />
+              <ConfigEditor
+                config={board.config}
+                onChange={updateConfig}
+                onHoursPerDayChange={hoursPerDay => updateSettings({ hoursToBeDoneByDay: hoursPerDay }, 'global')}
+              />
               <DialogFooter>
                 <Button onClick={() => setConfigOpen(false)}>{t('salary.action.close')}</Button>
               </DialogFooter>

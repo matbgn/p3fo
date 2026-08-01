@@ -9,6 +9,7 @@ import { useReminderStore } from "./useReminders";
 import { BrowserJsonPersistence } from "@/lib/persistence-browser";
 import { getSelectedMode } from "@/lib/persistence-factory";
 import { confirmDialog } from "@/lib/confirm-modal";
+import { computeChildPriority } from "@/utils/priorityEncoding";
 if (typeof crypto.randomUUID !== 'function') {
   crypto.randomUUID = function () {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
@@ -72,6 +73,21 @@ let isFiltered = false;
 export const DEFAULT_TASKS_INITIALIZED_KEY = 'p3fo_default_tasks_initialized';
 
 const byId = (arr: Task[]) => Object.fromEntries(arr.map((t) => [t.id, t]));
+
+// Compute the depth of a task by walking its parentId chain via the tasks array.
+// Roots (no parentId) have depth 0. Direct children of a root have depth 1, etc.
+const getDepth = (task: Task, taskList: Task[]): number => {
+  let depth = 0;
+  const map = byId(taskList);
+  let cursor: string | null | undefined = task.parentId;
+  while (cursor) {
+    depth++;
+    const parent: Task | undefined = map[cursor];
+    if (!parent) break;
+    cursor = parent.parentId;
+  }
+  return depth;
+};
 
 // Sync task to Yjs if collaboration is enabled
 const syncTaskToYjs = (taskId: string, task: Task) => {
@@ -258,6 +274,15 @@ async function createTask(title: string, parentId: string | null, userId?: strin
   // Look up parent for metadata inheritance
   const parentTask = parentId ? tasks.find(t => t.id === parentId) : null;
 
+  // Compute dot-notation priority so new children sort last among siblings.
+  // Roots get integer priorities; children get parentPriority + (childCount+1) * 10^(-2*depth).
+  const childCount = parentTask?.children?.length ?? 0;
+  const parentPriority = parentTask?.priority ?? 0;
+  const childDepth = parentTask ? getDepth(parentTask, tasks) + 1 : 0;
+  const newPriority = parentTask
+    ? computeChildPriority(parentPriority, childCount, childDepth)
+    : 0;
+
   const t: Task = {
     id: crypto.randomUUID(),
     title: title.trim(),
@@ -276,7 +301,7 @@ async function createTask(title: string, parentId: string | null, userId?: strin
     terminationDate: undefined,
     comment: undefined,
     durationInMinutes: undefined,
-    priority: parentTask?.priority ?? 0,
+    priority: newPriority,
     userId: userId ?? parentTask?.userId ?? undefined,
   };
 
@@ -420,10 +445,26 @@ const reparent = async (taskId: string, newParentId: string | null) => {
 
   const oldParentId = task.parentId ?? null;
 
+  // Recompute priority for the reparented task within its new sibling group.
+  // New children always sort last among their new siblings.
+  let newPriority: number | undefined;
+  if (newParentId) {
+    const newParent = map[newParentId];
+    if (newParent) {
+      const newSiblingCount = (newParent.children || []).length;
+      const newDepth = getDepth(newParent, tasks) + 1;
+      newPriority = computeChildPriority(newParent.priority ?? 0, newSiblingCount, newDepth);
+    }
+  } else {
+    // Moved to root level — keep existing root priority or 0.
+    // Root reordering is handled by the storyboard drag-drop renumbering.
+    newPriority = task.priority ?? 0;
+  }
+
   // Update local tasks state
   tasks = tasks.map(t => {
     if (t.id === taskId) {
-      const updated = { ...t, parentId: newParentId, updatedAt: Date.now() };
+      const updated = { ...t, parentId: newParentId, priority: newPriority, updatedAt: Date.now() };
       syncTaskToYjs(taskId, updated);
       return updated;
     } else if (t.id === oldParentId) {
