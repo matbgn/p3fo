@@ -97,16 +97,19 @@ const ConsistencyHeatmap: React.FC<ConsistencyHeatmapProps> = ({ days, weeks = 3
   const { cells, months, width, height } = useMemo(() => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const endDate = d3.timeDay.floor(today);
-    const startDate = d3.timeDay.offset(endDate, -(weeks * 7));
-
-    const allDays = d3.timeDays(startDate, d3.timeDay.offset(endDate, 1));
     const isDark = document.documentElement.classList.contains('dark');
+
+    const weekOf = weekStartDay === 1 ? d3.timeMonday : d3.timeWeek;
+    const weekOfToday = weekOf.floor(today);
+    const startDate = weekOf.offset(weekOfToday, -(weeks - 1));
+    const endDate = d3.timeDay.offset(today, 1);
+
+    const allDays = d3.timeDays(startDate, endDate);
 
     const cellsData = allDays.map((d) => {
       const key = d3.timeFormat('%Y-%m-%d')(d);
       const day = dayMap.get(key);
-      const colIndex = Math.floor((d.getTime() - startDate.getTime()) / 86400000 / 7);
+      const colIndex = weekOf.count(startDate, d);
       const dayOfWeek = (d.getDay() - weekStartDay + 7) % 7;
       const isHidden = day && day.kind !== 'empty' && !visible.has(day.kind as LegendKey);
       return {

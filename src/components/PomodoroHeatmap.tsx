@@ -41,10 +41,13 @@ const PomodoroHeatmap: React.FC<PomodoroHeatmapProps> = ({ sessions, weeks = 39,
   const { cells, months, width, height } = useMemo(() => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const endDate = d3.timeDay.floor(today);
-    const startDate = d3.timeDay.offset(endDate, -(weeks * 7));
 
-    const days = d3.timeDays(startDate, d3.timeDay.offset(endDate, 1));
+    const weekOf = weekStartDay === 1 ? d3.timeMonday : d3.timeWeek;
+    const weekOfToday = weekOf.floor(today);
+    const startDate = weekOf.offset(weekOfToday, -(weeks - 1));
+    const endDate = d3.timeDay.offset(today, 1);
+
+    const days = d3.timeDays(startDate, endDate);
 
     const maxCount = d3.max(Array.from(dailyCounts.values())) || 1;
 
@@ -55,7 +58,7 @@ const PomodoroHeatmap: React.FC<PomodoroHeatmapProps> = ({ sessions, weeks = 39,
     const cellsData = days.map((d) => {
       const key = d3.timeFormat('%Y-%m-%d')(d);
       const count = dailyCounts.get(key) || 0;
-      const colIndex = Math.floor((d.getTime() - startDate.getTime()) / 86400000 / 7);
+      const colIndex = weekOf.count(startDate, d);
       const dayOfWeek = (d.getDay() - weekStartDay + 7) % 7;
       return {
         date: d,
