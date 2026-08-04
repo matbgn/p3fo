@@ -31,7 +31,8 @@ export function useQLI() {
           return;
         }
 
-        const favorableScores = ["Satisfied", "Very satisfied"];
+        const favorableScores = new Set(["satisfied", "verySatisfied", "Satisfied", "Very satisfied"]);
+        const invalidAnswers = new Set(["noAnswer", "No answer"]);
         let totalFavorableCount = 0;
         let totalValidResponseCount = 0;
 
@@ -41,9 +42,9 @@ export function useQLI() {
 
           // Iterate through answers in a user's response
           for (const answer of Object.values(userResponses)) {
-            if (answer && answer !== "No answer") {
+            if (answer && !invalidAnswers.has(answer as string)) {
               totalValidResponseCount++;
-              if (favorableScores.includes(answer as string)) {
+              if (favorableScores.has(answer as string)) {
                 totalFavorableCount++;
               }
             }
