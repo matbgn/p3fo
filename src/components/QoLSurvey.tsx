@@ -70,6 +70,12 @@ const QoLSurvey: React.FC<QoLSurveyProps> = ({ userId }) => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
+        const unanswered = surveyQuestionKeys.filter((qKey) => responses[qKey] === undefined);
+        if (unanswered.length > 0) {
+            alert(t("metrics.qolSurvey.requiredMessage"));
+            return;
+        }
+
         try {
             await persistence.saveQolSurveyResponse(userId, responses);
             alert(t("metrics.qolSurvey.saved"));

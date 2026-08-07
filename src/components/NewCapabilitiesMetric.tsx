@@ -3,24 +3,17 @@ import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTaskMetrics } from "@/hooks/useTaskMetrics";
 import { useSettingsContext } from "@/context/SettingsContext";
-import { useUsersContext } from "@/context/UsersContext";
-import { calculateTimeSpentOnNewCapabilitiesPerEFT, UserWorkload } from "@/lib/metrics";
+import { calculateTimeSpentOnNewCapabilities } from "@/lib/metrics";
 
 const NewCapabilitiesMetric: React.FC = () => {
   const { t } = useTranslation();
   const { tasks, taskMap, highImpactMap } = useTaskMetrics();
   const { settings } = useSettingsContext();
-  const { users } = useUsersContext();
 
   const weeksComputation = settings.weeksComputation;
   const goal = settings.newCapabilitiesGoal;
 
-  const userWorkloads: UserWorkload[] = users.map(u => ({
-    userId: u.userId,
-    workload: u.workload ?? 0,
-  }));
-
-  const { percentage } = calculateTimeSpentOnNewCapabilitiesPerEFT(tasks, weeksComputation, taskMap, highImpactMap, userWorkloads);
+  const { percentage } = calculateTimeSpentOnNewCapabilities(tasks, weeksComputation, taskMap, highImpactMap);
 
   const formattedPercentage = percentage.toFixed(1);
 

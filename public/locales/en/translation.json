@@ -72,7 +72,7 @@
       "weeksComputationLabel": "Weeks Computation",
       "weeksComputationHelp": "Number of weeks to compute metrics (default: 4 weeks)",
       "highImpactTaskGoalLabel": "High Impact Task Goal",
-      "highImpactTaskGoalHelp": "Target high impact tasks per EFT (default: 3.63)",
+      "highImpactTaskGoalHelp": "Target high impact tasks per EFT per week (default: 3.63)",
       "failureRateGoalLabel": "Failure Rate Goal (Incident on Delivery)",
       "failureRateGoalHelp": "Target failure rate percentage (default: 5%)",
       "qliGoalLabel": "Quality of Life Index Goal",
@@ -215,10 +215,10 @@
     },
     "card": {
       "highImpactTitle": "High Impact Task Achievement / EFT / week",
-      "highImpactDescription": "Goal: {{goal}} in {{weeks}} weeks",
-      "failureRateTitle": "Failure Rate / EFT (Incidents on Delivery)",
+      "highImpactDescription": "Goal: ≥{{goal}} per EFT per week",
+      "failureRateTitle": "Failure Rate (Incidents on Delivery)",
       "failureRateDescription": "Goal ≤{{goal}}% in {{weeks}} weeks",
-      "newCapabilitiesTitle": "Time spent on High Impact work / EFT",
+      "newCapabilitiesTitle": "Time spent on High Impact work",
       "newCapabilitiesDescription": "Goal: {{goal}}% in {{weeks}} weeks",
       "qliTitle": "Team Quality of Life Index",
       "qliLoading": "Loading...",
@@ -311,7 +311,8 @@
       "saved": "Survey responses saved!",
       "saveError": "Error: Could not save survey responses.",
       "cleared": "Survey responses cleared!",
-      "clearError": "Error: Could not clear survey responses."
+      "clearError": "Error: Could not clear survey responses.",
+      "requiredMessage": "Please answer all questions before submitting. \"No answer\" is a valid choice if a question does not apply."
     }
   },
   "status": {

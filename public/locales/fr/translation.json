@@ -72,7 +72,7 @@
       "weeksComputationLabel": "Calcul des semaines",
       "weeksComputationHelp": "Nombre de semaines pour calculer les métriques (défaut : 4 semaines)",
       "highImpactTaskGoalLabel": "Objectif de tâches à fort impact",
-      "highImpactTaskGoalHelp": "Tâches à fort impact cibles par ETP (défaut : 3.63)",
+      "highImpactTaskGoalHelp": "Tâches à fort impact cibles par ETP par semaine (défaut : 3.63)",
       "failureRateGoalLabel": "Objectif de taux d'échec (Incident à la livraison)",
       "failureRateGoalHelp": "Pourcentage cible de taux d'échec (défaut : 5%)",
       "qliGoalLabel": "Objectif d'indice de qualité de vie",
@@ -215,10 +215,10 @@
     },
     "card": {
       "highImpactTitle": "Tâches à fort impact réalisées / ETP / semaine",
-      "highImpactDescription": "Objectif : {{goal}} en {{weeks}} semaines",
-      "failureRateTitle": "Taux d'échec / ETP (Incidents à la livraison)",
+      "highImpactDescription": "Objectif : ≥{{goal}} par ETP par semaine",
+      "failureRateTitle": "Taux d'échec (Incidents à la livraison)",
       "failureRateDescription": "Objectif ≤{{goal}}% en {{weeks}} semaines",
-      "newCapabilitiesTitle": "Temps consacré au travail à fort impact / ETP",
+      "newCapabilitiesTitle": "Temps consacré au travail à fort impact",
       "newCapabilitiesDescription": "Objectif : {{goal}}% en {{weeks}} semaines",
       "qliTitle": "Indice de qualité de vie de l'équipe",
       "qliLoading": "Chargement...",
@@ -311,7 +311,8 @@
       "saved": "Réponses au sondage enregistrées !",
       "saveError": "Erreur : Impossible d'enregistrer les réponses au sondage.",
       "cleared": "Réponses au sondage effacées !",
-      "clearError": "Erreur : Impossible d'effacer les réponses au sondage."
+      "clearError": "Erreur : Impossible d'effacer les réponses au sondage.",
+      "requiredMessage": "Merci de répondre à toutes les questions avant de soumettre. « Sans réponse » est un choix valide si une question ne s'applique pas."
     }
   },
   "status": {

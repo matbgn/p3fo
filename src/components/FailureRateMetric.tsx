@@ -3,24 +3,17 @@ import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTaskMetrics } from "@/hooks/useTaskMetrics";
 import { useSettingsContext } from "@/context/SettingsContext";
-import { useUsersContext } from "@/context/UsersContext";
-import { calculateFailureRatePerEFT, UserWorkload } from "@/lib/metrics";
+import { calculateFailureRate } from "@/lib/metrics";
 
 const FailureRateMetric: React.FC = () => {
   const { t } = useTranslation();
   const { tasks } = useTaskMetrics();
   const { settings } = useSettingsContext();
-  const { users } = useUsersContext();
 
   const weeksComputation = settings.weeksComputation;
   const failureRateGoal = settings.failureRateGoal;
 
-  const userWorkloads: UserWorkload[] = users.map(u => ({
-    userId: u.userId,
-    workload: u.workload ?? 0,
-  }));
-
-  const failureRate = calculateFailureRatePerEFT(tasks, weeksComputation, userWorkloads);
+  const failureRate = calculateFailureRate(tasks, weeksComputation);
 
   const formattedFailureRate = failureRate.toFixed(2);
 

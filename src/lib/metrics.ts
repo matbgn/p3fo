@@ -1,4 +1,17 @@
-import { Task } from "@/hooks/useTasks";
+import { Task, TriageStatus } from "@/hooks/useTasks";
+
+// Completion time of a task. Done tasks are guaranteed to carry a
+// terminationDate set at completion (useTasks.ts:603). No fallback to
+// updatedAt/createdAt: updatedAt is an edit timestamp and createdAt is the
+// created-vs-achieved flaw this windowing fixes. A Done task without a
+// terminationDate carries no achievement time and is excluded from windowed
+// metrics.
+const getAchievedTime = (task: Task): number => task.terminationDate ?? 0;
+
+// A task is "in flight" when it has not reached a terminal status
+// (Done/Dropped/Archived). Such tasks were never shipped.
+const isInFlightStatus = (status: TriageStatus): boolean =>
+  status === "Backlog" || status === "Ready" || status === "WIP" || status === "Blocked";
 
 // Helper to check if a task or any of its ancestors is high impact
 const isHighImpactOrHasHighImpactAncestor = (task: Task, taskMap: Record<string, Task>): boolean => {
@@ -32,7 +45,10 @@ export const createHighImpactMap = (tasks: Task[], taskMap: Record<string, Task>
   }, {} as Record<string, boolean>);
 };
 
-// Get tasks completed in the last N weeks
+// Get tasks achieved (completed) in the last N weeks.
+// Only root tasks (no parentId) count: a Done high-impact task with a parent
+// is a subtask, not the achieved unit, avoiding double counting of
+// parent/child trees.
 export const getCompletedHighImpactTasks = (
   tasks: Task[],
   weeks: number = 4,
@@ -47,7 +63,8 @@ export const getCompletedHighImpactTasks = (
 
   return tasks.filter(task =>
     task.triageStatus === 'Done' &&
-    task.createdAt >= cutoffDate &&
+    !task.parentId &&
+    getAchievedTime(task) >= cutoffDate &&
     impactMap[task.id]
   );
 };
@@ -108,42 +125,37 @@ export const calculateHighImpactTaskFrequency = (
   return completedHighImpactTasks.length / weeks;
 };
 
-export const calculateFailureRatePerEFT = (
-  tasks: Task[],
-  weeks: number = 4,
-  userWorkloads: UserWorkload[]
-): number => {
-  if (userWorkloads.length === 0) return 0;
-
-  const activeUserIds = new Set(
-    userWorkloads.filter(uw => (uw.workload || 0) > 0).map(uw => uw.userId)
-  );
-
-  if (activeUserIds.size === 0) return 0;
-
-  const filteredTasks = tasks.filter(t => activeUserIds.has(t.userId || ''));
-
-  return calculateFailureRate(filteredTasks, weeks);
-};
-
-// Calculate failure rate (major incidents / all tasks in the period)
+// Calculate failure rate (major incidents / Done tasks in the period).
+// An incident is counted at the stage of its lifecycle:
+// - in-flight (Backlog/Ready/WIP/Blocked): never shipped, counts regardless of
+//   when the task was created (no window);
+// - Done: delivered, counts as an incident on delivery when achieved within
+//   the period;
+// - Dropped/Archived: never counted.
 export const calculateFailureRate = (
   tasks: Task[],
   weeks: number = 4
 ): number => {
   const cutoffDate = Date.now() - (weeks * 7 * 24 * 60 * 60 * 1000);
 
-  // Get all tasks in the period (regardless of status)
-  const allTasksInPeriod = tasks.filter(task =>
-    task.createdAt >= cutoffDate
+  const incidents = tasks.filter(task =>
+    task.majorIncident === true &&
+    (
+      isInFlightStatus(task.triageStatus) ||
+      (task.triageStatus === 'Done' && getAchievedTime(task) >= cutoffDate)
+    )
   );
 
-  // Get major incidents in the period
-  const majorIncidents = getMajorIncidents(tasks, weeks);
+  // Only finished work dilutes the denominator: Done tasks achieved within the
+  // period.
+  const doneTasksInPeriod = tasks.filter(task =>
+    task.triageStatus === 'Done' &&
+    getAchievedTime(task) >= cutoffDate
+  );
 
-  // Return failure rate as percentage of all tasks that had incidents
-  return allTasksInPeriod.length > 0
-    ? (majorIncidents.length / allTasksInPeriod.length) * 100
+  // Return failure rate as percentage of delivered tasks that had incidents
+  return doneTasksInPeriod.length > 0
+    ? (incidents.length / doneTasksInPeriod.length) * 100
     : 0;
 };
 
@@ -234,53 +246,4 @@ export const calculateTimeSpentOnNewCapabilities = (
   const percentage = totalTime > 0 ? (newCapabilitiesTime / totalTime) * 100 : 0;
 
   return { totalTime, newCapabilitiesTime, percentage };
-};
-
-export const calculateTimeSpentOnNewCapabilitiesPerEFT = (
-  tasks: Task[],
-  weeks: number = 4,
-  taskMap: Record<string, Task>,
-  highImpactMap: Record<string, boolean>,
-  userWorkloads: UserWorkload[]
-): { totalTime: number; newCapabilitiesTime: number; percentage: number } => {
-  const activeUserIds = new Set(
-    userWorkloads.filter(uw => (uw.workload || 0) > 0).map(uw => uw.userId)
-  );
-
-  let weightedPercentageSum = 0;
-  let totalWorkload = 0;
-  let grandTotalTime = 0;
-  let grandHighImpactTime = 0;
-
-  for (const uw of userWorkloads) {
-    if ((uw.workload || 0) <= 0) continue;
-
-    const userTasks = tasks.filter(t => t.userId === uw.userId);
-    const result = calculateTimeSpentOnNewCapabilities(userTasks, weeks, taskMap, highImpactMap);
-
-    weightedPercentageSum += result.percentage * uw.workload;
-    totalWorkload += uw.workload;
-    grandTotalTime += result.totalTime;
-    grandHighImpactTime += result.newCapabilitiesTime;
-  }
-
-  // Include tasks with no userId or unknown userId, weighted by average workload of active users
-  const knownUserIds = new Set(userWorkloads.map(uw => uw.userId));
-  const unassignedTasks = tasks.filter(t => !t.userId || !knownUserIds.has(t.userId));
-  if (unassignedTasks.length > 0 && totalWorkload > 0) {
-    const activeUserCount = userWorkloads.filter(uw => (uw.workload || 0) > 0).length;
-    const avgWorkload = totalWorkload / activeUserCount;
-    const result = calculateTimeSpentOnNewCapabilities(unassignedTasks, weeks, taskMap, highImpactMap);
-
-    if (result.totalTime > 0) {
-      weightedPercentageSum += result.percentage * avgWorkload;
-      totalWorkload += avgWorkload;
-      grandTotalTime += result.totalTime;
-      grandHighImpactTime += result.newCapabilitiesTime;
-    }
-  }
-
-  const percentage = totalWorkload > 0 ? weightedPercentageSum / totalWorkload : 0;
-
-  return { totalTime: grandTotalTime, newCapabilitiesTime: grandHighImpactTime, percentage };
 };

@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import {
   getCompletedHighImpactTasks,
   calculateHighImpactTaskFrequencyPerEFT,
-  calculateFailureRatePerEFT,
   calculateFailureRate,
   createTaskMap,
   createHighImpactMap,
@@ -50,7 +49,7 @@ describe('Metrics: Terminal Status Edge Cases', () => {
   describe('getCompletedHighImpactTasks', () => {
     it('counts only Done tasks, not Dropped or Archived', () => {
       const tasks: Task[] = [
-        makeTask({ id: 'done', createdAt: recent, impact: true, triageStatus: 'Done' }),
+        makeTask({ id: 'done', createdAt: recent, terminationDate: recent, impact: true, triageStatus: 'Done' }),
         makeTask({ id: 'dropped', createdAt: recent, impact: true, triageStatus: 'Dropped' }),
         makeTask({ id: 'archived', createdAt: recent, impact: true, triageStatus: 'Archived' }),
       ];
@@ -60,22 +59,22 @@ describe('Metrics: Terminal Status Edge Cases', () => {
       expect(result[0].id).toBe('done');
     });
 
-    it('counts multiple Done tasks with impact', () => {
+    it('counts multiple Done root tasks with impact', () => {
       const tasks: Task[] = [
-        makeTask({ id: 'd1', createdAt: recent, impact: true, triageStatus: 'Done' }),
-        makeTask({ id: 'd2', createdAt: recent, impact: true, triageStatus: 'Done' }),
-        makeTask({ id: 'd3', createdAt: recent, impact: true, triageStatus: 'Done' }),
+        makeTask({ id: 'd1', createdAt: recent, terminationDate: recent, impact: true, triageStatus: 'Done' }),
+        makeTask({ id: 'd2', createdAt: recent, terminationDate: recent, impact: true, triageStatus: 'Done' }),
+        makeTask({ id: 'd3', createdAt: recent, terminationDate: recent, impact: true, triageStatus: 'Done' }),
       ];
 
       const result = getCompletedHighImpactTasks(tasks, 4);
       expect(result).toHaveLength(3);
     });
 
-    it('excludes Done tasks that are outside the time window', () => {
+    it('excludes Done tasks achieved outside the time window', () => {
       const oldDate = cutoffDate - DAY;
       const tasks: Task[] = [
-        makeTask({ id: 'old', createdAt: oldDate, impact: true, triageStatus: 'Done' }),
-        makeTask({ id: 'recent', createdAt: recent, impact: true, triageStatus: 'Done' }),
+        makeTask({ id: 'old', createdAt: oldDate, terminationDate: oldDate, impact: true, triageStatus: 'Done' }),
+        makeTask({ id: 'recent', createdAt: oldDate, terminationDate: recent, impact: true, triageStatus: 'Done' }),
       ];
 
       const result = getCompletedHighImpactTasks(tasks, 4);
@@ -85,8 +84,8 @@ describe('Metrics: Terminal Status Edge Cases', () => {
 
     it('excludes Done tasks without impact', () => {
       const tasks: Task[] = [
-        makeTask({ id: 'no-impact', createdAt: recent, impact: false, triageStatus: 'Done' }),
-        makeTask({ id: 'with-impact', createdAt: recent, impact: true, triageStatus: 'Done' }),
+        makeTask({ id: 'no-impact', createdAt: recent, terminationDate: recent, impact: false, triageStatus: 'Done' }),
+        makeTask({ id: 'with-impact', createdAt: recent, terminationDate: recent, impact: true, triageStatus: 'Done' }),
       ];
 
       const result = getCompletedHighImpactTasks(tasks, 4);
@@ -94,21 +93,22 @@ describe('Metrics: Terminal Status Edge Cases', () => {
       expect(result[0].id).toBe('with-impact');
     });
 
-    it('counts tasks with high-impact ancestor even if task itself is not high-impact', () => {
+    it('counts only the root when a high-impact parent and its Done child are both Done', () => {
       const tasks: Task[] = [
-        makeTask({ id: 'parent', createdAt: recent, impact: true, triageStatus: 'Done' }),
-        makeTask({ id: 'child', createdAt: recent, impact: false, parentId: 'parent', triageStatus: 'Done' }),
+        makeTask({ id: 'parent', createdAt: recent, terminationDate: recent, impact: true, triageStatus: 'Done' }),
+        makeTask({ id: 'child', createdAt: recent, terminationDate: recent, impact: false, parentId: 'parent', triageStatus: 'Done' }),
       ];
 
       const taskMap = createTaskMap(tasks);
       const highImpactMap = createHighImpactMap(tasks, taskMap);
       const result = getCompletedHighImpactTasks(tasks, 4, taskMap, highImpactMap);
-      expect(result).toHaveLength(2);
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('parent');
     });
 
     it('does not count Dropped high-impact child of high-impact parent', () => {
       const tasks: Task[] = [
-        makeTask({ id: 'parent', createdAt: recent, impact: true, triageStatus: 'Done' }),
+        makeTask({ id: 'parent', createdAt: recent, terminationDate: recent, impact: true, triageStatus: 'Done' }),
         makeTask({ id: 'dropped-child', createdAt: recent, impact: false, parentId: 'parent', triageStatus: 'Dropped' }),
       ];
 
@@ -122,7 +122,7 @@ describe('Metrics: Terminal Status Edge Cases', () => {
     it('does not count Archived high-impact tasks', () => {
       const tasks: Task[] = [
         makeTask({ id: 'archived-hi', createdAt: recent, impact: true, triageStatus: 'Archived' }),
-        makeTask({ id: 'done-hi', createdAt: recent, impact: true, triageStatus: 'Done' }),
+        makeTask({ id: 'done-hi', createdAt: recent, terminationDate: recent, impact: true, triageStatus: 'Done' }),
       ];
 
       const result = getCompletedHighImpactTasks(tasks, 4);
@@ -153,7 +153,7 @@ describe('Metrics: Terminal Status Edge Cases', () => {
   describe('calculateHighImpactTaskFrequencyPerEFT with mixed statuses', () => {
     it('Dropped high-impact tasks do not inflate the metric', () => {
       const tasks: Task[] = [
-        makeTask({ id: 'done', createdAt: recent, impact: true, userId: 'user-A', triageStatus: 'Done' }),
+        makeTask({ id: 'done', createdAt: recent, terminationDate: recent, impact: true, userId: 'user-A', triageStatus: 'Done' }),
         makeTask({ id: 'dropped', createdAt: recent, impact: true, userId: 'user-A', triageStatus: 'Dropped' }),
         makeTask({ id: 'archived', createdAt: recent, impact: true, userId: 'user-A', triageStatus: 'Archived' }),
       ];
@@ -171,7 +171,7 @@ describe('Metrics: Terminal Status Edge Cases', () => {
     it('Done task then reverted to WIP is not counted', () => {
       const tasks: Task[] = [
         makeTask({ id: 'reverted', createdAt: recent, impact: true, userId: 'user-A', triageStatus: 'WIP' }),
-        makeTask({ id: 'still-done', createdAt: recent, impact: true, userId: 'user-A', triageStatus: 'Done' }),
+        makeTask({ id: 'still-done', createdAt: recent, terminationDate: recent, impact: true, userId: 'user-A', triageStatus: 'Done' }),
       ];
 
       const taskMap = createTaskMap(tasks);
@@ -184,11 +184,11 @@ describe('Metrics: Terminal Status Edge Cases', () => {
       expect(result).toBeCloseTo(1 / totalEFT / 4, 4);
     });
 
-    it('parent auto-completed by children Done counts parent + children with inherited impact', () => {
+    it('parent auto-completed by children Done counts only the root (parent), not children', () => {
       const tasks: Task[] = [
-        makeTask({ id: 'parent', createdAt: recent, impact: true, userId: 'user-A', triageStatus: 'Done', children: ['child1', 'child2'] }),
-        makeTask({ id: 'child1', createdAt: recent, impact: false, userId: 'user-A', triageStatus: 'Done', parentId: 'parent' }),
-        makeTask({ id: 'child2', createdAt: recent, impact: false, userId: 'user-A', triageStatus: 'Done', parentId: 'parent' }),
+        makeTask({ id: 'parent', createdAt: recent, terminationDate: recent, impact: true, userId: 'user-A', triageStatus: 'Done', children: ['child1', 'child2'] }),
+        makeTask({ id: 'child1', createdAt: recent, terminationDate: recent, impact: false, userId: 'user-A', triageStatus: 'Done', parentId: 'parent' }),
+        makeTask({ id: 'child2', createdAt: recent, terminationDate: recent, impact: false, userId: 'user-A', triageStatus: 'Done', parentId: 'parent' }),
       ];
 
       const taskMap = createTaskMap(tasks);
@@ -198,8 +198,8 @@ describe('Metrics: Terminal Status Edge Cases', () => {
       const result = calculateHighImpactTaskFrequencyPerEFT(tasks, 4, userWorkloads, taskMap, highImpactMap);
 
       const totalEFT = 60 / 100;
-      // Parent + both children (which inherit impact from parent) = 3 counted
-      expect(result).toBeCloseTo(3 / totalEFT / 4, 4);
+      // Only the root parent counts — children are subtasks, not achieved units
+      expect(result).toBeCloseTo(1 / totalEFT / 4, 4);
     });
 
     it('parent auto-Dropped is NOT counted (only Done counts)', () => {
@@ -219,59 +219,57 @@ describe('Metrics: Terminal Status Edge Cases', () => {
   });
 
   describe('calculateFailureRate with terminal status tasks', () => {
-    it('counts major incidents regardless of task status', () => {
+    it('counts in-flight and Done-in-window incidents; excludes Dropped/Archived incidents', () => {
       const tasks: Task[] = [
-        makeTask({ id: 'major-done', createdAt: recent, majorIncident: true, triageStatus: 'Done' }),
+        makeTask({ id: 'major-done-in-window', createdAt: recent, terminationDate: recent, majorIncident: true, triageStatus: 'Done' }),
+        makeTask({ id: 'major-in-flight', createdAt: recent, majorIncident: true, triageStatus: 'WIP' }),
         makeTask({ id: 'major-dropped', createdAt: recent, majorIncident: true, triageStatus: 'Dropped' }),
         makeTask({ id: 'major-archived', createdAt: recent, majorIncident: true, triageStatus: 'Archived' }),
         makeTask({ id: 'normal', createdAt: recent, triageStatus: 'WIP' }),
+        makeTask({ id: 'delivery', createdAt: recent, terminationDate: recent, triageStatus: 'Done' }),
       ];
 
       const result = calculateFailureRate(tasks, 4);
-      expect(result).toBeCloseTo(75, 1);
+      // 2 incidents (Done in window + in-flight) / 2 deliveries in period
+      // (the Done incident itself is a delivery) = 100%
+      expect(result).toBeCloseTo(100, 1);
     });
 
-    it('counts all tasks in period for denominator regardless of status', () => {
-      const tasks: Task[] = [
-        makeTask({ id: 't1', createdAt: recent, triageStatus: 'Done' }),
-        makeTask({ id: 't2', createdAt: recent, triageStatus: 'Dropped' }),
-        makeTask({ id: 't3', createdAt: recent, triageStatus: 'Archived' }),
-        makeTask({ id: 't4', createdAt: recent, triageStatus: 'WIP' }),
-        makeTask({ id: 't5', createdAt: recent, majorIncident: true, triageStatus: 'Done' }),
-      ];
-
-      const result = calculateFailureRate(tasks, 4);
-      expect(result).toBeCloseTo(20, 1);
-    });
-
-    it('excludes tasks outside the time window from failure rate', () => {
+    it('does not count Done incidents achieved outside the window', () => {
       const oldDate = cutoffDate - DAY;
       const tasks: Task[] = [
-        makeTask({ id: 'old-incident', createdAt: oldDate, majorIncident: true }),
-        makeTask({ id: 'recent-normal', createdAt: recent }),
+        makeTask({ id: 'major-done-outside', createdAt: oldDate, terminationDate: oldDate, majorIncident: true, triageStatus: 'Done' }),
+        makeTask({ id: 'delivery', createdAt: recent, terminationDate: recent, triageStatus: 'Done' }),
       ];
 
       const result = calculateFailureRate(tasks, 4);
       expect(result).toBe(0);
     });
-  });
 
-  describe('calculateFailureRatePerEFT with terminal status tasks', () => {
-    it('excludes zero-workload users even if they have major incidents', () => {
+    it('counts in-flight incidents against Done deliveries in the period', () => {
       const tasks: Task[] = [
-        makeTask({ id: 'active-incident', createdAt: recent, userId: 'active', majorIncident: true }),
-        makeTask({ id: 'active-normal', createdAt: recent, userId: 'active' }),
-        makeTask({ id: 'zero-incident', createdAt: recent, userId: 'zero', majorIncident: true }),
-        makeTask({ id: 'zero-normal', createdAt: recent, userId: 'zero' }),
+        makeTask({ id: 't1', createdAt: recent, terminationDate: recent, triageStatus: 'Done' }),
+        makeTask({ id: 't2', createdAt: recent, triageStatus: 'Dropped' }),
+        makeTask({ id: 't3', createdAt: recent, triageStatus: 'Archived' }),
+        makeTask({ id: 't4', createdAt: recent, triageStatus: 'WIP', majorIncident: true }),
+        makeTask({ id: 't5', createdAt: recent, triageStatus: 'WIP' }),
       ];
 
-      const userWorkloads: UserWorkload[] = [
-        { userId: 'active', workload: 60 },
-        { userId: 'zero', workload: 0 },
+      const result = calculateFailureRate(tasks, 4);
+      // 1 in-flight incident / 1 Done delivery in period = 100%
+      expect(result).toBeCloseTo(100, 1);
+    });
+
+    it('excludes Done deliveries achieved outside the time window from the denominator', () => {
+      const oldDate = cutoffDate - DAY;
+      const tasks: Task[] = [
+        makeTask({ id: 'old-delivery', createdAt: oldDate, terminationDate: oldDate, triageStatus: 'Done' }),
+        makeTask({ id: 'in-flight-incident', createdAt: oldDate, triageStatus: 'WIP', majorIncident: true }),
       ];
 
-      const result = calculateFailureRatePerEFT(tasks, 4, userWorkloads);
-      expect(result).toBeCloseTo(50, 1);
+      const result = calculateFailureRate(tasks, 4);
+      // No deliveries in period → 0 (denominator empty)
+      expect(result).toBe(0);
     });
   });
 
@@ -318,7 +316,7 @@ describe('Metrics: Terminal Status Edge Cases', () => {
     it('Archived tasks with impact do not appear in any Done metric', () => {
       const tasks: Task[] = [
         makeTask({ id: 'archived', createdAt: recent, impact: true, triageStatus: 'Archived' }),
-        makeTask({ id: 'done', createdAt: recent, impact: true, triageStatus: 'Done' }),
+        makeTask({ id: 'done', createdAt: recent, terminationDate: recent, impact: true, triageStatus: 'Done' }),
       ];
 
       const completed = getCompletedHighImpactTasks(tasks, 4);
@@ -328,7 +326,7 @@ describe('Metrics: Terminal Status Edge Cases', () => {
 
     it('transition from Done to Archived removes task from completed metrics', () => {
       const doneTasks: Task[] = [
-        makeTask({ id: 't1', createdAt: recent, impact: true, triageStatus: 'Done' }),
+        makeTask({ id: 't1', createdAt: recent, terminationDate: recent, impact: true, triageStatus: 'Done' }),
       ];
       expect(getCompletedHighImpactTasks(doneTasks, 4)).toHaveLength(1);
 
@@ -347,17 +345,17 @@ describe('Metrics: Terminal Status Edge Cases', () => {
 
     it('transition from Dropped to Done adds task back to completed metrics', () => {
       const nowDoneTasks: Task[] = [
-        makeTask({ id: 't1', createdAt: recent, impact: true, triageStatus: 'Done' }),
+        makeTask({ id: 't1', createdAt: recent, terminationDate: recent, impact: true, triageStatus: 'Done' }),
       ];
       expect(getCompletedHighImpactTasks(nowDoneTasks, 4)).toHaveLength(1);
     });
   });
 
   describe('checkParentTaskCompletion behavioral contract', () => {
-    it('parent with all Done children is Done and counted in metrics (parent + child both done)', () => {
+    it('parent with all Done children is Done and counted once in metrics (root only)', () => {
       const tasks: Task[] = [
-        makeTask({ id: 'parent', createdAt: recent, impact: true, userId: 'user-A', triageStatus: 'Done', children: ['c1'] }),
-        makeTask({ id: 'c1', createdAt: recent, impact: false, userId: 'user-A', triageStatus: 'Done', parentId: 'parent' }),
+        makeTask({ id: 'parent', createdAt: recent, terminationDate: recent, impact: true, userId: 'user-A', triageStatus: 'Done', children: ['c1'] }),
+        makeTask({ id: 'c1', createdAt: recent, terminationDate: recent, impact: false, userId: 'user-A', triageStatus: 'Done', parentId: 'parent' }),
       ];
 
       const userWorkloads: UserWorkload[] = [{ userId: 'user-A', workload: 60 }];
@@ -367,8 +365,8 @@ describe('Metrics: Terminal Status Edge Cases', () => {
       const highImpactMap = createHighImpactMap(tasks, taskMap);
       const result = calculateHighImpactTaskFrequencyPerEFT(tasks, 4, userWorkloads, taskMap, highImpactMap);
 
-      // Both parent (impact=true) and child (inherits impact from parent) are counted
-      expect(result).toBeCloseTo(2 / totalEFT / 4, 4);
+      // Only the parent root is counted
+      expect(result).toBeCloseTo(1 / totalEFT / 4, 4);
     });
 
     it('parent with all Dropped children results in Dropped parent (not counted)', () => {
@@ -386,10 +384,10 @@ describe('Metrics: Terminal Status Edge Cases', () => {
       expect(result).toBe(0);
     });
 
-    it('parent with mixed Done and Dropped children: parent + Done child counted, Dropped child excluded', () => {
+    it('parent with mixed Done and Dropped children: only the Done parent counts', () => {
       const tasks: Task[] = [
-        makeTask({ id: 'parent', createdAt: recent, impact: true, userId: 'user-A', triageStatus: 'Done', children: ['c1', 'c2'] }),
-        makeTask({ id: 'c1', createdAt: recent, impact: false, userId: 'user-A', triageStatus: 'Done', parentId: 'parent' }),
+        makeTask({ id: 'parent', createdAt: recent, terminationDate: recent, impact: true, userId: 'user-A', triageStatus: 'Done', children: ['c1', 'c2'] }),
+        makeTask({ id: 'c1', createdAt: recent, terminationDate: recent, impact: false, userId: 'user-A', triageStatus: 'Done', parentId: 'parent' }),
         makeTask({ id: 'c2', createdAt: recent, impact: false, userId: 'user-A', triageStatus: 'Dropped', parentId: 'parent' }),
       ];
 
@@ -400,8 +398,8 @@ describe('Metrics: Terminal Status Edge Cases', () => {
       const highImpactMap = createHighImpactMap(tasks, taskMap);
       const result = calculateHighImpactTaskFrequencyPerEFT(tasks, 4, userWorkloads, taskMap, highImpactMap);
 
-      // Parent (impact=true) + c1 (inherits impact, Done) = 2 counted. c2 (Dropped) excluded.
-      expect(result).toBeCloseTo(2 / totalEFT / 4, 4);
+      // Only the parent root is counted. The Done child is a subtask.
+      expect(result).toBeCloseTo(1 / totalEFT / 4, 4);
     });
 
     it('parent reverted from Done to Ready when a child is un-Done is no longer counted', () => {
@@ -437,7 +435,7 @@ describe('Metrics: Terminal Status Edge Cases', () => {
     statusTransitions.forEach(({ from, to, counted }) => {
       it(`transition ${from} → ${to} results in ${counted ? 'counted' : 'not counted'} in metrics`, () => {
         const tasks: Task[] = [
-          makeTask({ id: 't1', createdAt: recent, impact: true, triageStatus: to }),
+          makeTask({ id: 't1', createdAt: recent, terminationDate: recent, impact: true, triageStatus: to }),
         ];
 
         const result = getCompletedHighImpactTasks(tasks, 4);

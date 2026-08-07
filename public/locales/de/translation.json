@@ -72,7 +72,7 @@
       "weeksComputationLabel": "Wochenberechnung",
       "weeksComputationHelp": "Anzahl Wochen zur Berechnung der Kennzahlen (Standard: 4 Wochen)",
       "highImpactTaskGoalLabel": "Ziel für High-Impact-Aufgaben",
-      "highImpactTaskGoalHelp": "Ziel für High-Impact-Aufgaben pro VZA (Standard: 3.63)",
+      "highImpactTaskGoalHelp": "Ziel für High-Impact-Aufgaben pro VZA pro Woche (Standard: 3.63)",
       "failureRateGoalLabel": "Fehlerraten-Ziel (Vorfall bei Lieferung)",
       "failureRateGoalHelp": "Ziel-Fehlerratenprozentsatz (Standard: 5%)",
       "qliGoalLabel": "Ziel für Lebensqualitätsindex",
@@ -215,10 +215,10 @@
     },
     "card": {
       "highImpactTitle": "High-Impact-Aufgaben erreicht / VZÄ / Woche",
-      "highImpactDescription": "Ziel: {{goal}} in {{weeks}} Wochen",
-      "failureRateTitle": "Fehlerrate / VZÄ (Incidents on Delivery)",
+      "highImpactDescription": "Ziel: ≥{{goal}} pro VZA pro Woche",
+      "failureRateTitle": "Fehlerrate (Incidents on Delivery)",
       "failureRateDescription": "Ziel ≤{{goal}}% in {{weeks}} Wochen",
-      "newCapabilitiesTitle": "Zeit für High-Impact-Arbeit / VZÄ",
+      "newCapabilitiesTitle": "Zeit für High-Impact-Arbeit",
       "newCapabilitiesDescription": "Ziel: {{goal}}% in {{weeks}} Wochen",
       "qliTitle": "Team-Lebensqualitätsindex",
       "qliLoading": "Wird geladen...",
@@ -307,11 +307,12 @@
       },
       "submit": "Antworten absenden",
       "clear": "Umfrage löschen",
-      "clearConfirm": "Sind Sie sicher, dass Sie Ihre Umfrageantworten löschen möchten?",
+      "clearConfirm": "Möchten Sie wirklich Ihre Umfrageantworten löschen?",
       "saved": "Umfrageantworten gespeichert!",
       "saveError": "Fehler: Umfrageantworten konnten nicht gespeichert werden.",
       "cleared": "Umfrageantworten gelöscht!",
-      "clearError": "Fehler: Umfrageantworten konnten nicht gelöscht werden."
+      "clearError": "Fehler: Umfrageantworten konnten nicht gelöscht werden.",
+      "requiredMessage": "Bitte beantworten Sie alle Fragen vor dem Absenden. \"Keine Antwort\" ist eine gültige Wahl, wenn eine Frage nicht zutrifft."
     }
   },
   "status": {
