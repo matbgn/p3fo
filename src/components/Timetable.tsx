@@ -66,6 +66,13 @@ const TimetableInner: React.FC<{
     }, {} as Record<string, typeof tasks[0]>);
   }, [tasks]);
 
+  // Top-level tasks (projects) available for filtering
+  const projectOptions = React.useMemo(() => {
+    return tasks
+      .filter((task) => !task.parentId)
+      .map((task) => ({ value: task.id, label: task.title }));
+  }, [tasks]);
+
   const [selectedCategories, setSelectedCategories] = useState<Category[]>([]);
   const [dateRange, setDateRange] = useState<{ start?: Date; end?: Date }>({}); // Date range is not part of Filters type, managed separately
   const [predefinedRange, setPredefinedRange] = useState<string | null>("today"); // Predefined range is not part of Filters type, managed separately
@@ -75,6 +82,7 @@ const TimetableInner: React.FC<{
   const [showSprintTarget, setShowSprintTarget] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedStatuses, setSelectedStatuses] = useState<TriageStatus[]>([]);
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
   const [initializing, setInitializing] = useState(true);
 
   // Load filters from storage on mount
@@ -89,6 +97,7 @@ const TimetableInner: React.FC<{
         if (filters.showSprintTarget) setShowSprintTarget(filters.showSprintTarget);
         if (filters.category) setSelectedCategories(filters.category);
         if (filters.status) setSelectedStatuses(filters.status);
+        if (filters.projectIds) setSelectedProjectIds(filters.projectIds);
       }
       setInitializing(false);
     };
@@ -108,11 +117,12 @@ const TimetableInner: React.FC<{
         showMajorIncident,
         showSprintTarget,
         category: selectedCategories,
-        status: selectedStatuses
+        status: selectedStatuses,
+        projectIds: selectedProjectIds
       });
     };
     save();
-  }, [selectedUserId, showUrgent, showImpact, showMajorIncident, showSprintTarget, selectedCategories, selectedStatuses]);
+  }, [selectedUserId, showUrgent, showImpact, showMajorIncident, showSprintTarget, selectedCategories, selectedStatuses, selectedProjectIds]);
 
   // Helper to calculate date range for a given preset
   const calculateDateRange = React.useCallback((rangeValue: string) => {
@@ -205,18 +215,20 @@ const TimetableInner: React.FC<{
         const startOfYear = todayZoned.with({
           month: 1, day: 1, hour: 0, minute: 0, second: 0, millisecond: 0, microsecond: 0, nanosecond: 0
         });
+        const endOfToday = todayZoned.add({ days: 1 }).subtract({ nanoseconds: 1 });
         return {
           start: new Date(startOfYear.epochMilliseconds),
-          end: new Date(todayZoned.epochMilliseconds)
+          end: new Date(endOfToday.epochMilliseconds)
         };
       }
       case "sinceXWeeks": {
         const start = todayZoned.subtract({ weeks: weeksComputation }).with({
           hour: 0, minute: 0, second: 0, millisecond: 0, microsecond: 0, nanosecond: 0
         });
+        const endOfToday = todayZoned.add({ days: 1 }).subtract({ nanoseconds: 1 });
         return {
           start: new Date(start.epochMilliseconds),
-          end: new Date(todayZoned.epochMilliseconds)
+          end: new Date(endOfToday.epochMilliseconds)
         };
       }
       default:
@@ -389,6 +401,17 @@ const TimetableInner: React.FC<{
       } else {
         if (task.userId !== selectedUserId) return false;
       }
+    }
+
+    // Project filter: keep tasks whose top-level ancestor is one of the selected projects
+    if (selectedProjectIds.length > 0) {
+      let currentTaskForProject: typeof task | undefined = task;
+      let topLevelId = task.id;
+      while (currentTaskForProject && currentTaskForProject.parentId) {
+        topLevelId = currentTaskForProject.parentId;
+        currentTaskForProject = taskMap[currentTaskForProject.parentId];
+      }
+      if (!selectedProjectIds.includes(topLevelId)) return false;
     }
 
     return true;
@@ -749,6 +772,17 @@ const TimetableInner: React.FC<{
         </div>
 
         <div className="flex flex-col space-y-2">
+          <label className="text-sm font-medium">{t('timetable.projects')}</label>
+          <MultiSelect
+            options={projectOptions}
+            selected={selectedProjectIds}
+            onChange={(selected) => setSelectedProjectIds(selected)}
+            placeholder={t('timetable.projectPlaceholder')}
+            className="w-48"
+          />
+        </div>
+
+        <div className="flex flex-col space-y-2">
           <label className="text-sm font-medium">{t('timetable.criticity')}</label>
           <div className="flex flex-wrap gap-2">
             <Checkbox
@@ -789,6 +823,7 @@ const TimetableInner: React.FC<{
             setPredefinedRange(null);
             setSelectedCategories([]);
             setSelectedStatuses([]);
+            setSelectedProjectIds([]);
             setShowUrgent(false);
             setShowImpact(false);
             setShowMajorIncident(false);

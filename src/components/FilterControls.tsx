@@ -22,6 +22,7 @@ export type Filters = {
   difficulty: number[];
   category: Category[];
   selectedUserId?: string | null; // For multi-user filtering
+  projectIds?: string[]; // Top-level task (project) filter, used by Timetable
 };
 
 interface FilterControlsProps {

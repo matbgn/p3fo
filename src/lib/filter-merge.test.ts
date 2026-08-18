@@ -20,7 +20,8 @@ describe('filter-merge', () => {
         searchText: '',
         difficulty: [],
         category: [],
-        selectedUserId: null
+        selectedUserId: null,
+        projectIds: []
       })
     })
 

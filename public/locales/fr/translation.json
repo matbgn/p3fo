@@ -174,8 +174,8 @@
         "description": "Mode focus pour le travail concentré sur les tâches"
       },
       "timetable": {
-        "label": "Calendrier horaire",
-        "description": "Vue basée sur le temps pour la planification horaire"
+        "label": "Tableau des heures",
+        "description": "Horaires de travail"
       },
       "metrics": {
         "label": "Métriques",
@@ -1292,9 +1292,9 @@
     "applyOrder": "Appliquer cet ordre"
   },
   "timetable": {
-    "loading": "Chargement du timetable...",
-    "title": "Timetable",
-    "timetableViewAria": "Vue Timetable",
+    "loading": "Chargement de la table des heures...",
+    "title": "Table des heures",
+    "timetableViewAria": "Vue horaire",
     "categorical": "Catégoriel",
     "categoricalAria": "Vue catégorielle",
     "chronological": "Chronologique",
@@ -1320,6 +1320,8 @@
     "categories": "Catégories",
     "categoryPlaceholder": "Sélectionner une catégorie...",
     "uncategorized": "Non catégorisé",
+    "projects": "Projets",
+    "projectPlaceholder": "Sélectionner un projet...",
     "criticity": "Criticité",
     "urgent": "Urgent",
     "highImpact": "Impact élevé",
@@ -1330,7 +1332,7 @@
     "category": "Catégorie",
     "totalTime": "Temps total",
     "total": "Total",
-    "detailedTimetable": "Timetable détaillé",
+    "detailedTimetable": "Tableau des heures détaillées",
     "noTimerData": "Aucune donnée de timer ne correspond aux filtres sélectionnés.",
     "task": "Tâche",
     "user": "Utilisateur",

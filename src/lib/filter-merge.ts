@@ -29,7 +29,8 @@ export function getDefaultFilters(): Filters {
     searchText: '',
     difficulty: [],
     category: [],
-    selectedUserId: null
+    selectedUserId: null,
+    projectIds: []
   }
 }
 
@@ -104,7 +105,10 @@ export function validateFilters(stored: unknown): Filters {
     selectedUserId:
       filters.selectedUserId === null || filters.selectedUserId === undefined || typeof filters.selectedUserId === 'string'
         ? (filters.selectedUserId ?? null) as string | null
-        : defaults.selectedUserId
+        : defaults.selectedUserId,
+    projectIds: Array.isArray(filters.projectIds)
+      ? filters.projectIds.filter((p) => typeof p === 'string')
+      : defaults.projectIds
   }
 
   return validated

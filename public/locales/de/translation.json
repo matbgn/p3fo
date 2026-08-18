@@ -1320,6 +1320,8 @@
     "categories": "Kategorien",
     "categoryPlaceholder": "Kategorie auswählen...",
     "uncategorized": "Nicht kategorisiert",
+    "projects": "Projekte",
+    "projectPlaceholder": "Projekt auswählen...",
     "criticity": "Kritikalität",
     "urgent": "Dringend",
     "highImpact": "Hoher Einfluss",
