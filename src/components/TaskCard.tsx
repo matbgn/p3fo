@@ -814,17 +814,26 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
       )}
       {/* Bottom controls - Status and extra buttons */}
       {/* 
-          Ultra Compact: Hide Status.
-          Compact: Hide Status ("takeaway the state column").
+          Ultra Compact: Status hidden until hover.
+          Compact: Status hidden until hover.
           Full: Show Status.
       */}
-      {(isFull || (!task.parentId && !isFull)) && (
-        <div className="mt-2 flex justify-between items-center">
-          {isFull && (
-            <div className="flex items-center gap-2">
-              <TaskStatusSelect value={task.triageStatus} onChange={(s) => updateStatus(task.id, s)} />
-            </div>
-          )}
+      <div className="mt-2 flex justify-between items-center">
+        {isFull ? (
+          <div className="flex items-center gap-2">
+            <TaskStatusSelect value={task.triageStatus} onChange={(s) => updateStatus(task.id, s)} />
+          </div>
+        ) : (
+          <div className={`flex items-center gap-2 transition-opacity duration-200 ${showHoverControls ? 'opacity-100' : 'opacity-0'}`}>
+            {showHoverControls && (
+              <TaskStatusSelect
+                value={task.triageStatus}
+                onChange={(s) => updateStatus(task.id, s)}
+                onOpenChange={handleDropdownOpenChange}
+              />
+            )}
+          </div>
+        )}
           {!task.parentId && (
             <div className={`flex gap-1 transition-opacity duration-200 ${showHoverControls ? 'opacity-100' : 'opacity-0'} ${isFull ? '' : 'ml-auto'}`}>
               {showHoverControls && (
@@ -949,7 +958,6 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
             </div>
           )}
         </div>
-      )}
       {/* Task Edit Modal - only mount when opened to save DOM */}
       {isEditModalOpen && (
         <TaskEditModal
