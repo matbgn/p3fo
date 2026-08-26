@@ -82,6 +82,8 @@ import {
   TrendingUp,
   PieChart,
   UserPlus,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import {
   computeSalary,
@@ -332,7 +334,12 @@ const DimensionEditor: React.FC<{
                   type="number"
                   min={0}
                   value={dim.maxLevel}
-                  onChange={e => updateDimension(dim.id, { maxLevel: Math.max(0, parseInt(e.target.value) || 0) })}
+                  onChange={e => {
+                    const nextMax = Math.max(0, parseInt(e.target.value) || 0);
+                    const descriptions = dim.levelDescriptions ?? [];
+                    const nextDescriptions = Array.from({ length: nextMax + 1 }, (_, i) => descriptions[i] ?? '');
+                    updateDimension(dim.id, { maxLevel: nextMax, levelDescriptions: nextDescriptions });
+                  }}
                 />
               </div>
               <div className="space-y-1">
@@ -368,15 +375,15 @@ const DimensionEditor: React.FC<{
                 <Trash2 className="w-4 h-4" />
               </Button>
             </div>
-            {dim.levelDescriptions && dim.levelDescriptions.length > 0 && (
+            {(dim.levelDescriptions ?? []).length > 0 && (
               <Accordion type="single" collapsible>
                 <AccordionItem value={`desc-${dim.id}`}>
                   <AccordionTrigger className="text-xs">
-                    {t('salary.dimension.levelDescriptions', { n: dim.levelDescriptions.length })}
+                    {t('salary.dimension.levelDescriptions', { n: (dim.levelDescriptions ?? []).length })}
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="space-y-2">
-                      {dim.levelDescriptions.slice(0, dim.maxLevel + 1).map((desc, i) => (
+                      {(dim.levelDescriptions ?? []).map((desc, i) => (
                         <div key={i} className="flex gap-2 items-start">
                           <span className="text-xs text-muted-foreground w-12 pt-2">N{i}</span>
                           <Input
@@ -757,6 +764,14 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
     };
     save({ ...board, employees: [...board.employees, copy] });
   };
+  const moveEmployee = (index: number, direction: -1 | 1) => {
+    if (!board) return;
+    const target = index + direction;
+    if (target < 0 || target >= board.employees.length) return;
+    const employees = [...board.employees];
+    [employees[index], employees[target]] = [employees[target], employees[index]];
+    save({ ...board, employees });
+  };
 
   const seedFromUsers = () => {
     if (!board) return;
@@ -912,7 +927,7 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
                   </TableCell>
                 </TableRow>
               )}
-              {rows.map(({ employee, computation }) => (
+              {rows.map(({ employee, computation }, index) => (
                 <TableRow key={employee.id} onDoubleClick={() => editEmployee(employee)} className="cursor-pointer">
                   <TableCell className="font-medium">
                     {employee.name || <span className="italic text-muted-foreground">{t('salary.employee.unnamed')}</span>}
@@ -948,6 +963,12 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
                   {!compactView && <TableCell className="text-right">{formatCurrency(computation.grossAnnualWithout13, currency)}{employee.workload !== 100 && <span className="text-xs text-muted-foreground ml-1">({employee.workload}%)</span>}</TableCell>}
                   {!compactView && <TableCell className="text-right">{formatCurrency(computation.netMonthlyWith13, currency)}</TableCell>}
                   <TableCell className="text-right whitespace-nowrap">
+                    <Button variant="ghost" size="sm" onClick={() => moveEmployee(index, -1)} disabled={index === 0} title={t('salary.action.moveUp')}>
+                      <ArrowUp className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => moveEmployee(index, 1)} disabled={index === rows.length - 1} title={t('salary.action.moveDown')}>
+                      <ArrowDown className="w-4 h-4" />
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => editEmployee(employee)}>
                       <Pencil className="w-4 h-4" />
                     </Button>

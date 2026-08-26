@@ -698,6 +698,8 @@
       "addEmployee": "Employé·e",
       "edit": "Modifier",
       "duplicate": "Dupliquer",
+      "moveUp": "Monter",
+      "moveDown": "Descendre",
       "include": "Inclure",
       "exclude": "Exclure de la simulation"
     },
