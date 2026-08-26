@@ -474,6 +474,8 @@ export interface SalaryEmployee {
   seniority: number;
   /** Per-dimension level picks. Missing entries default to level 0. */
   levels: SalaryEmployeeLevel[];
+  /** Optional row highlight color (light hex) used in the salary grid. */
+  color?: string;
   /** Optional employer-paid complements added on top of the formula salary
    *  (e.g. 13th salary top-up, bonus, transport, etc.). Each has a label and
    *  a monthly amount in CHF. */

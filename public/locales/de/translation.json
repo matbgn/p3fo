@@ -678,6 +678,9 @@
       "comment": "Kommentar",
       "determinants": "Determinanten",
       "levelN": "Stufe {{i}}",
+      "color": "Zeilenfarbe",
+      "colorPlaceholder": "#RRGGBB",
+      "colorPicker": "Farbe wählen",
       "unnamed": "unbenannt",
       "linkedUserComment": "Verknüpft mit Benutzer/in {{name}}"
     },

@@ -556,36 +556,75 @@ const EmployeeDialog: React.FC<{
               onChange={e => setDraft({ ...draft, comment: e.target.value })}
             />
           </div>
+          <div className="space-y-1">
+            <Label htmlFor="emp-color">{t('salary.employee.color')}</Label>
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                id="emp-color"
+                type="text"
+                value={draft.color ?? ''}
+                onChange={e => setDraft({ ...draft, color: e.target.value || undefined })}
+                placeholder={t('salary.employee.colorPlaceholder')}
+                className="w-36"
+              />
+              <Input
+                type="color"
+                value={/^#[0-9a-fA-F]{6}$/.test(draft.color ?? '') ? draft.color as string : '#FEF3C7'}
+                onChange={e => setDraft({ ...draft, color: e.target.value })}
+                className="w-10 h-9 p-1"
+                title={t('salary.employee.colorPicker')}
+              />
+              {EMPLOYEE_COLOR_PRESETS.map(c => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setDraft({ ...draft, color: c })}
+                  className={`w-7 h-7 rounded-full border-2 ${draft.color === c ? 'border-primary' : 'border-muted'}`}
+                  style={{ backgroundColor: c }}
+                  title={c}
+                  aria-label={c}
+                />
+              ))}
+              {(draft.color ?? '') !== '' && (
+                <Button variant="ghost" size="sm" onClick={() => setDraft({ ...draft, color: undefined })}>
+                  <X className="w-3 h-3" />
+                </Button>
+              )}
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label>{t('salary.employee.determinants')}</Label>
             <div className="space-y-2">
               {dimensions.map(dim => {
                 const level = draft.levels.find(l => l.dimensionId === dim.id)?.level ?? 0;
                 return (
-                  <div key={dim.id} className="flex flex-wrap items-center gap-3">
-                    <span
-                      className="text-sm font-medium w-40 truncate"
-                      style={{ color: dim.color }}
-                      title={dim.name}
-                    >
-                      {dim.name}
-                    </span>
+                  <div key={dim.id} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:items-center border rounded-md p-3">
+                    <div className="min-w-0">
+                      <span
+                        className="text-sm font-medium block truncate"
+                        style={{ color: dim.color }}
+                        title={dim.name}
+                      >
+                        {dim.name}
+                      </span>
+                      {dim.levelDescriptions?.[level] && (
+                        <span className="text-xs text-muted-foreground italic block truncate">
+                          {dim.levelDescriptions[level]}
+                        </span>
+                      )}
+                    </div>
                     <Select
                       value={String(level)}
                       onValueChange={v => setLevel(dim.id, parseInt(v, 10))}
                     >
-                      <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="w-full sm:w-32"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {Array.from({ length: dim.maxLevel + 1 }, (_, i) => (
                           <SelectItem key={i} value={String(i)}>{t('salary.employee.levelN', { i })}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    {dim.levelDescriptions?.[level] && (
-                      <span className="text-xs text-muted-foreground italic flex-1 min-w-0 truncate">
-                        {dim.levelDescriptions[level]}
-                      </span>
-                    )}
                   </div>
                 );
               })}
@@ -604,6 +643,8 @@ const EmployeeDialog: React.FC<{
     </Dialog>
   );
 };
+
+const EMPLOYEE_COLOR_PRESETS = ['#FEF3C7', '#DCFCE7', '#DBEAFE', '#FCE7F3', '#EDE9FE', '#FFEDD5'];
 
 const emptyEmployee = (adjustmentLabel: string): SalaryEmployee => ({
   id: newId(),
@@ -928,7 +969,12 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
                 </TableRow>
               )}
               {rows.map(({ employee, computation }, index) => (
-                <TableRow key={employee.id} onDoubleClick={() => editEmployee(employee)} className="cursor-pointer">
+                <TableRow
+                  key={employee.id}
+                  onDoubleClick={() => editEmployee(employee)}
+                  className="cursor-pointer"
+                  style={employee.color ? { backgroundColor: employee.color } : undefined}
+                >
                   <TableCell className="font-medium">
                     {employee.name || <span className="italic text-muted-foreground">{t('salary.employee.unnamed')}</span>}
                   </TableCell>

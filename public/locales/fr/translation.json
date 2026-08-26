@@ -678,6 +678,9 @@
       "comment": "Commentaire",
       "determinants": "Déterminants",
       "levelN": "Niveau {{i}}",
+      "color": "Couleur de ligne",
+      "colorPlaceholder": "#RRGGBB",
+      "colorPicker": "Choisir une couleur",
       "unnamed": "sans nom",
       "linkedUserComment": "Lié à l'utilisateur·rice {{name}}"
     },
