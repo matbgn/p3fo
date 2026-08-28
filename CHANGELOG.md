@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.34.1 (2026-08-28)
+
+### Bug Fixes
+
+- **common:** render properly module groups to bulk-disable views and timers (b7a8b46)
+- **common:** gate example data modal on full workspace scan (49c2b34)
+- **layout:** keep active view mounted (817a06c)
+
+---
+
 ## v0.34.0 (2026-08-26)
 
 ### Features
@@ -155,13 +165,5 @@
 ### Bug Fixes
 
 - address reported bugs and style issues across boards (57b6429)
-
----
-
-## v0.27.0 (2026-06-14)
-
-### Features
-
-- **boards:** add offline voters and per-board JSON import/export (3a20377)
 
 ---
