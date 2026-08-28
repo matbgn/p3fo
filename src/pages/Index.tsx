@@ -77,14 +77,16 @@ const Index: React.FC = () => {
   // Umbrella overlay open state
   const [umbrellaOpen, setUmbrellaOpen] = useState(false);
 
-  // Example-data onboarding modal: show once per browser, only when the user
-  // has not completed onboarding and the workspace holds no data at all
-  // (no tasks, no other users, no salaries, votes, circles, boards, …).
+  // Example-data onboarding modal: show only when the user has not completed
+  // onboarding and the workspace holds no data at all (no tasks, no other
+  // users, no salaries, votes, circles, boards, …). The "prompted" flag only
+  // suppresses the prompt for the CURRENT workspace generation: if the
+  // workspace has been emptied again (clear-all, DB reset), the empty
+  // data-check wins and the prompt is offered once more.
   const [exampleModalOpen, setExampleModalOpen] = useState(false);
   React.useEffect(() => {
     if (userSettingsLoading) return;
     if (userSettings.hasCompletedOnboarding) return;
-    if (localStorage.getItem(EXAMPLE_DATA_PROMPTED_KEY)) return;
     // Defer until tasks have been loaded so we don't flash the modal over
     // data that's still hydrating from persistence.
     if (tasks.length > 0) return;
@@ -92,7 +94,13 @@ const Index: React.FC = () => {
     import("@/lib/persistence-factory").then(async m => {
       const adapter = await m.getPersistenceAdapter();
       const hasData = await hasAnyWorkspaceData(adapter, userId || null);
-      if (!cancelled && !hasData) setExampleModalOpen(true);
+      if (cancelled) return;
+      if (hasData) {
+        // Mark as prompted so this real data set is not proposed over
+        localStorage.setItem(EXAMPLE_DATA_PROMPTED_KEY, 'true');
+        return;
+      }
+      setExampleModalOpen(true);
     }).catch(err => console.error('Example data gate check failed:', err));
     return () => { cancelled = true; };
   }, [userSettingsLoading, userSettings.hasCompletedOnboarding, userId, tasks.length]);
