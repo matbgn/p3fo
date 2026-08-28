@@ -88,7 +88,36 @@ export type ModuleId =
   | 'program.calendar'
   | 'program.resources'
   | 'dream.intentionalFramework'
-  | 'dream.collaborativeFramework';
+  | 'dream.collaborativeFramework'
+  | 'pomodoro'
+  | 'traveler'
+  | 'tools'
+  | 'timer';
+
+/**
+ * Group parents used to deactivate several modules at once.
+ * A parent (e.g. "tools") is not a view itself: disabling it disables
+ * every module mapped to it. Sub-view entries (dotted ids) keep their
+ * textual parent as group (e.g. "plan.circles" → "plan").
+ */
+export const MODULE_GROUP_PARENT: Partial<Record<ModuleId, ModuleId>> = {
+  timetable: 'tools',
+  metrics: 'tools',
+  voting: 'tools',
+  pomodoro: 'timer',
+  traveler: 'timer',
+};
+
+/**
+ * True when the module is disabled directly or through its group parent
+ * (single level: a child is off if it or its parent is in the list).
+ */
+export function isModuleEffectivelyDisabled(disabledModules: ModuleId[] | undefined, id: ModuleId): boolean {
+  if (!disabledModules || disabledModules.length === 0) return false;
+  if (disabledModules.includes(id)) return true;
+  const parent = MODULE_GROUP_PARENT[id];
+  return !!parent && disabledModules.includes(parent);
+}
 
 export interface AppSettingsEntity {
   splitTime: number;
@@ -474,6 +503,8 @@ export interface SalaryEmployee {
   seniority: number;
   /** Per-dimension level picks. Missing entries default to level 0. */
   levels: SalaryEmployeeLevel[];
+  /** Optional row highlight color (light hex) used in the salary grid. */
+  color?: string;
   /** Optional employer-paid complements added on top of the formula salary
    *  (e.g. 13th salary top-up, bonus, transport, etc.). Each has a label and
    *  a monthly amount in CHF. */

@@ -184,6 +184,22 @@
       "voting": {
         "label": "Voting",
         "description": "Run polls and formal decisions with your audience"
+      },
+      "pomodoro": {
+        "label": "Pomodoro technique",
+        "description": "QuickTimer pomodoro work/break timer in the header"
+      },
+      "traveler": {
+        "label": "Traveler timer",
+        "description": "Travel-based break timer in the header quick timer"
+      },
+      "tools": {
+        "label": "Tools",
+        "description": "Utility views: Timetable, Metrics and Voting"
+      },
+      "timer": {
+        "label": "Focus techniques",
+        "description": "Timer techniques (Pomodoro, Traveler) in the header quick timer"
       }
     }
   },
@@ -634,6 +650,15 @@
       "dialogDescription": "Salary calculation variables. Adapt them to the client."
     },
     "dimension": {
+      "defaultName": "New determinant",
+      "name": "Name",
+      "maxLevel": "Max level",
+      "stepValue": "Step value (CHF)",
+      "affectsSalary": "Affects salary",
+      "color": "Color",
+      "delete": "Delete determinant",
+      "levelDescriptions": "{{n}} level descriptions",
+      "add": "Add determinant",
       "expertise": {
         "name": "Expertise",
         "levelDescription": {
@@ -678,6 +703,9 @@
       "comment": "Comment",
       "determinants": "Determinants",
       "levelN": "Level {{i}}",
+      "color": "Row color",
+      "colorPlaceholder": "#RRGGBB",
+      "colorPicker": "Pick a color",
       "unnamed": "unnamed",
       "linkedUserComment": "Linked to user {{name}}"
     },
@@ -698,6 +726,8 @@
       "addEmployee": "Employee",
       "edit": "Edit",
       "duplicate": "Duplicate",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
       "include": "Include",
       "exclude": "Exclude from simulation"
     },

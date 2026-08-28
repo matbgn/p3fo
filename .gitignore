@@ -60,3 +60,5 @@ bundle-stats.html
 *.tsbuildinfo
 
 0 - Processus/
+
+.playwright-mcp

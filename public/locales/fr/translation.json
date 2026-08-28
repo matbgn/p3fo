@@ -184,6 +184,22 @@
       "voting": {
         "label": "Vote",
         "description": "Lancez des sondages et des décisions formelles avec votre audience"
+      },
+      "pomodoro": {
+        "label": "Technique Pomodoro",
+        "description": "Minuteur pomodoro travail/pause du QuickTimer dans l'en-tête"
+      },
+      "traveler": {
+        "label": "Minuteur Voyageur",
+        "description": "Minuteur de pause basé sur les voyages dans le QuickTimer de l'en-tête"
+      },
+      "tools": {
+        "label": "Outils",
+        "description": "Vues utilitaires : Tableau des heures, Métriques et Vote"
+      },
+      "timer": {
+        "label": "Techniques de focus",
+        "description": "Techniques de minuteur (Pomodoro, Voyageur) dans le QuickTimer de l'en-tête"
       }
     }
   },
@@ -634,6 +650,15 @@
       "dialogDescription": "Variables de calcul du salaire. Adaptez-les au client."
     },
     "dimension": {
+      "defaultName": "Nouveau déterminant",
+      "name": "Nom",
+      "maxLevel": "Niveau max",
+      "stepValue": "Valeur du pas (CHF)",
+      "affectsSalary": "Influence le salaire",
+      "color": "Couleur",
+      "delete": "Supprimer le déterminant",
+      "levelDescriptions": "{{n}} descriptions de niveau",
+      "add": "Ajouter un déterminant",
       "expertise": {
         "name": "Expertise",
         "levelDescription": {
@@ -678,6 +703,9 @@
       "comment": "Commentaire",
       "determinants": "Déterminants",
       "levelN": "Niveau {{i}}",
+      "color": "Couleur de ligne",
+      "colorPlaceholder": "#RRGGBB",
+      "colorPicker": "Choisir une couleur",
       "unnamed": "sans nom",
       "linkedUserComment": "Lié à l'utilisateur·rice {{name}}"
     },
@@ -698,6 +726,8 @@
       "addEmployee": "Employé·e",
       "edit": "Modifier",
       "duplicate": "Dupliquer",
+      "moveUp": "Monter",
+      "moveDown": "Descendre",
       "include": "Inclure",
       "exclude": "Exclure de la simulation"
     },
@@ -1220,7 +1250,7 @@
     "salarySystem": "Système de salaire",
     "project": "Projet",
     "focus": "Focus",
-    "timetable": "Timetable",
+    "timetable": "Tableau des heures",
     "voting": "Vote",
     "metrics": "Métriques",
     "settings": "Paramètres",

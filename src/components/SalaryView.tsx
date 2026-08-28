@@ -82,6 +82,8 @@ import {
   TrendingUp,
   PieChart,
   UserPlus,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import {
   computeSalary,
@@ -332,7 +334,12 @@ const DimensionEditor: React.FC<{
                   type="number"
                   min={0}
                   value={dim.maxLevel}
-                  onChange={e => updateDimension(dim.id, { maxLevel: Math.max(0, parseInt(e.target.value) || 0) })}
+                  onChange={e => {
+                    const nextMax = Math.max(0, parseInt(e.target.value) || 0);
+                    const descriptions = dim.levelDescriptions ?? [];
+                    const nextDescriptions = Array.from({ length: nextMax + 1 }, (_, i) => descriptions[i] ?? '');
+                    updateDimension(dim.id, { maxLevel: nextMax, levelDescriptions: nextDescriptions });
+                  }}
                 />
               </div>
               <div className="space-y-1">
@@ -368,15 +375,15 @@ const DimensionEditor: React.FC<{
                 <Trash2 className="w-4 h-4" />
               </Button>
             </div>
-            {dim.levelDescriptions && dim.levelDescriptions.length > 0 && (
+            {(dim.levelDescriptions ?? []).length > 0 && (
               <Accordion type="single" collapsible>
                 <AccordionItem value={`desc-${dim.id}`}>
                   <AccordionTrigger className="text-xs">
-                    {t('salary.dimension.levelDescriptions', { n: dim.levelDescriptions.length })}
+                    {t('salary.dimension.levelDescriptions', { n: (dim.levelDescriptions ?? []).length })}
                   </AccordionTrigger>
                   <AccordionContent>
                     <div className="space-y-2">
-                      {dim.levelDescriptions.slice(0, dim.maxLevel + 1).map((desc, i) => (
+                      {(dim.levelDescriptions ?? []).map((desc, i) => (
                         <div key={i} className="flex gap-2 items-start">
                           <span className="text-xs text-muted-foreground w-12 pt-2">N{i}</span>
                           <Input
@@ -549,36 +556,75 @@ const EmployeeDialog: React.FC<{
               onChange={e => setDraft({ ...draft, comment: e.target.value })}
             />
           </div>
+          <div className="space-y-1">
+            <Label htmlFor="emp-color">{t('salary.employee.color')}</Label>
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                id="emp-color"
+                type="text"
+                value={draft.color ?? ''}
+                onChange={e => setDraft({ ...draft, color: e.target.value || undefined })}
+                placeholder={t('salary.employee.colorPlaceholder')}
+                className="w-36"
+              />
+              <Input
+                type="color"
+                value={/^#[0-9a-fA-F]{6}$/.test(draft.color ?? '') ? draft.color as string : '#FEF3C7'}
+                onChange={e => setDraft({ ...draft, color: e.target.value })}
+                className="w-10 h-9 p-1"
+                title={t('salary.employee.colorPicker')}
+              />
+              {EMPLOYEE_COLOR_PRESETS.map(c => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setDraft({ ...draft, color: c })}
+                  className={`w-7 h-7 rounded-full border-2 ${draft.color === c ? 'border-primary' : 'border-muted'}`}
+                  style={{ backgroundColor: c }}
+                  title={c}
+                  aria-label={c}
+                />
+              ))}
+              {(draft.color ?? '') !== '' && (
+                <Button variant="ghost" size="sm" onClick={() => setDraft({ ...draft, color: undefined })}>
+                  <X className="w-3 h-3" />
+                </Button>
+              )}
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label>{t('salary.employee.determinants')}</Label>
             <div className="space-y-2">
               {dimensions.map(dim => {
                 const level = draft.levels.find(l => l.dimensionId === dim.id)?.level ?? 0;
                 return (
-                  <div key={dim.id} className="flex flex-wrap items-center gap-3">
-                    <span
-                      className="text-sm font-medium w-40 truncate"
-                      style={{ color: dim.color }}
-                      title={dim.name}
-                    >
-                      {dim.name}
-                    </span>
+                  <div key={dim.id} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:items-center border rounded-md p-3">
+                    <div className="min-w-0">
+                      <span
+                        className="text-sm font-medium block truncate"
+                        style={{ color: dim.color }}
+                        title={dim.name}
+                      >
+                        {dim.name}
+                      </span>
+                      {dim.levelDescriptions?.[level] && (
+                        <span className="text-xs text-muted-foreground italic block truncate">
+                          {dim.levelDescriptions[level]}
+                        </span>
+                      )}
+                    </div>
                     <Select
                       value={String(level)}
                       onValueChange={v => setLevel(dim.id, parseInt(v, 10))}
                     >
-                      <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="w-full sm:w-32"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {Array.from({ length: dim.maxLevel + 1 }, (_, i) => (
                           <SelectItem key={i} value={String(i)}>{t('salary.employee.levelN', { i })}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    {dim.levelDescriptions?.[level] && (
-                      <span className="text-xs text-muted-foreground italic flex-1 min-w-0 truncate">
-                        {dim.levelDescriptions[level]}
-                      </span>
-                    )}
                   </div>
                 );
               })}
@@ -597,6 +643,8 @@ const EmployeeDialog: React.FC<{
     </Dialog>
   );
 };
+
+const EMPLOYEE_COLOR_PRESETS = ['#FEF3C7', '#DCFCE7', '#DBEAFE', '#FCE7F3', '#EDE9FE', '#FFEDD5'];
 
 const emptyEmployee = (adjustmentLabel: string): SalaryEmployee => ({
   id: newId(),
@@ -757,6 +805,14 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
     };
     save({ ...board, employees: [...board.employees, copy] });
   };
+  const moveEmployee = (index: number, direction: -1 | 1) => {
+    if (!board) return;
+    const target = index + direction;
+    if (target < 0 || target >= board.employees.length) return;
+    const employees = [...board.employees];
+    [employees[index], employees[target]] = [employees[target], employees[index]];
+    save({ ...board, employees });
+  };
 
   const seedFromUsers = () => {
     if (!board) return;
@@ -912,8 +968,13 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
                   </TableCell>
                 </TableRow>
               )}
-              {rows.map(({ employee, computation }) => (
-                <TableRow key={employee.id} onDoubleClick={() => editEmployee(employee)} className="cursor-pointer">
+              {rows.map(({ employee, computation }, index) => (
+                <TableRow
+                  key={employee.id}
+                  onDoubleClick={() => editEmployee(employee)}
+                  className="cursor-pointer"
+                  style={employee.color ? { backgroundColor: employee.color } : undefined}
+                >
                   <TableCell className="font-medium">
                     {employee.name || <span className="italic text-muted-foreground">{t('salary.employee.unnamed')}</span>}
                   </TableCell>
@@ -948,6 +1009,12 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
                   {!compactView && <TableCell className="text-right">{formatCurrency(computation.grossAnnualWithout13, currency)}{employee.workload !== 100 && <span className="text-xs text-muted-foreground ml-1">({employee.workload}%)</span>}</TableCell>}
                   {!compactView && <TableCell className="text-right">{formatCurrency(computation.netMonthlyWith13, currency)}</TableCell>}
                   <TableCell className="text-right whitespace-nowrap">
+                    <Button variant="ghost" size="sm" onClick={() => moveEmployee(index, -1)} disabled={index === 0} title={t('salary.action.moveUp')}>
+                      <ArrowUp className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => moveEmployee(index, 1)} disabled={index === rows.length - 1} title={t('salary.action.moveDown')}>
+                      <ArrowDown className="w-4 h-4" />
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => editEmployee(employee)}>
                       <Pencil className="w-4 h-4" />
                     </Button>

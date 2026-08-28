@@ -19,6 +19,7 @@ import { TimePickerDialog } from '@/components/ui/time-picker-dialog';
 import { Switch } from '@/components/ui/switch';
 import { useState } from 'react';
 import type { ModuleId } from '@/lib/persistence-types';
+import { MODULE_GROUP_PARENT, isModuleEffectivelyDisabled } from '@/lib/persistence-types';
 import PomodoroSettings from '@/components/PomodoroSettings';
 import TravelerSettings from '@/components/TravelerSettings';
 import FocusModeSettings from '@/components/FocusModeSettings';
@@ -39,9 +40,13 @@ const ALL_MODULES: { id: ModuleId; isTopLevel: boolean }[] = [
   { id: 'program.resources', isTopLevel: false },
   { id: 'kanban', isTopLevel: true },
   { id: 'focus', isTopLevel: true },
-  { id: 'timetable', isTopLevel: true },
-  { id: 'metrics', isTopLevel: true },
-  { id: 'voting', isTopLevel: true },
+  { id: 'timetable', isTopLevel: false },
+  { id: 'metrics', isTopLevel: false },
+  { id: 'voting', isTopLevel: false },
+  { id: 'pomodoro', isTopLevel: false },
+  { id: 'traveler', isTopLevel: false },
+  { id: 'tools', isTopLevel: true },
+  { id: 'timer', isTopLevel: true },
 ];
 
 const moduleLabelKey = (id: ModuleId): string => `settings.module.${id}.label`;
@@ -277,13 +282,17 @@ const SettingsPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="pt-6 border-t">
-              <PomodoroSettings />
-            </div>
+            {!isModuleEffectivelyDisabled(settings.disabledModules, 'pomodoro') && (
+              <div className="pt-6 border-t">
+                <PomodoroSettings />
+              </div>
+            )}
 
-            <div className="pt-6 border-t">
-              <TravelerSettings />
-            </div>
+            {!isModuleEffectivelyDisabled(settings.disabledModules, 'traveler') && (
+              <div className="pt-6 border-t">
+                <TravelerSettings />
+              </div>
+            )}
 
             <div className="pt-6 border-t">
               <FocusModeSettings />
@@ -590,48 +599,81 @@ const SettingsPage: React.FC = () => {
                 {t('settings.moduleManagement.help')}
               </p>
               <div className="space-y-4 max-w-2xl">
-                {ALL_MODULES.filter(m => m.isTopLevel).map(module => (
-                  <div key={module.id}>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <Label className="text-sm font-medium">{t(moduleLabelKey(module.id))}</Label>
-                        <p className="text-xs text-muted-foreground">{t(moduleDescriptionKey(module.id))}</p>
+                {ALL_MODULES.filter(m => m.isTopLevel).map(module => {
+                  // Group members (e.g. timetable/metrics/voting under "tools")
+                  // and textual sub-modules (e.g. plan.circles) render nested.
+                  const groupChildren = ALL_MODULES.filter(m => MODULE_GROUP_PARENT[m.id] === module.id);
+                  const subChildren = ALL_MODULES.filter(m => !m.isTopLevel && m.id.startsWith(module.id + '.'));
+                  const moduleOff = settings.disabledModules?.includes(module.id);
+                  const groupAllOff = groupChildren.length > 0 && groupChildren.every(c => settings.disabledModules?.includes(c.id));
+                  const parentChecked = !(moduleOff || groupAllOff);
+                  const toggleParent = (checked: boolean) => {
+                    const current = settings.disabledModules ?? [];
+                    let updated = current.filter((id: ModuleId) => id !== module.id);
+                    if (!checked) {
+                      updated = [...updated, module.id, ...groupChildren.map(c => c.id)];
+                    } else {
+                      // Re-enable parent and its group children together
+                      updated = updated.filter((id: ModuleId) => !groupChildren.some(c => c.id === id));
+                    }
+                    handleSettingChange('disabledModules', updated as ModuleId[], 'global');
+                  };
+                  return (
+                    <div key={module.id}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label className="text-sm font-medium">{t(moduleLabelKey(module.id))}</Label>
+                          <p className="text-xs text-muted-foreground">{t(moduleDescriptionKey(module.id))}</p>
+                        </div>
+                        <Switch checked={parentChecked} onCheckedChange={toggleParent} />
                       </div>
-                      <Switch
-                        checked={!settings.disabledModules?.includes(module.id)}
-                        onCheckedChange={(checked) => {
-                          const current = settings.disabledModules ?? [];
-                          const updated = checked
-                            ? current.filter((id: ModuleId) => id !== module.id)
-                            : [...current, module.id];
-                          handleSettingChange('disabledModules', updated as ModuleId[], 'global');
-                        }}
-                      />
-                    </div>
-                    {ALL_MODULES.filter(m => !m.isTopLevel && m.id.startsWith(module.id + '.')).length > 0 && !settings.disabledModules?.includes(module.id) && (
-                      <div className="ml-6 mt-2 space-y-2">
-                        {ALL_MODULES.filter(m => !m.isTopLevel && m.id.startsWith(module.id + '.')).map(subModule => (
-                          <div key={subModule.id} className="flex items-center justify-between">
-                            <div>
-                              <Label className="text-sm font-medium">{t(moduleLabelKey(subModule.id))}</Label>
-                              <p className="text-xs text-muted-foreground">{t(moduleDescriptionKey(subModule.id))}</p>
+                      {groupChildren.length > 0 && parentChecked && (
+                        <div className="ml-6 mt-2 space-y-2">
+                          {groupChildren.map(subModule => (
+                            <div key={subModule.id} className="flex items-center justify-between">
+                              <div>
+                                <Label className="text-sm font-medium">{t(moduleLabelKey(subModule.id))}</Label>
+                                <p className="text-xs text-muted-foreground">{t(moduleDescriptionKey(subModule.id))}</p>
+                              </div>
+                              <Switch
+                                checked={!settings.disabledModules?.includes(subModule.id)}
+                                onCheckedChange={(checked) => {
+                                  const current = settings.disabledModules ?? [];
+                                  const updated = checked
+                                    ? current.filter((id: ModuleId) => id !== subModule.id)
+                                    : [...current, subModule.id];
+                                  handleSettingChange('disabledModules', updated as ModuleId[], 'global');
+                                }}
+                              />
                             </div>
-                            <Switch
-                              checked={!settings.disabledModules?.includes(subModule.id)}
-                              onCheckedChange={(checked) => {
-                                const current = settings.disabledModules ?? [];
-                                const updated = checked
-                                  ? current.filter((id: ModuleId) => id !== subModule.id)
-                                  : [...current, subModule.id];
-                                handleSettingChange('disabledModules', updated as ModuleId[], 'global');
-                              }}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                          ))}
+                        </div>
+                      )}
+                      {subChildren.length > 0 && !settings.disabledModules?.includes(module.id) && (
+                        <div className="ml-6 mt-2 space-y-2">
+                          {subChildren.map(subModule => (
+                            <div key={subModule.id} className="flex items-center justify-between">
+                              <div>
+                                <Label className="text-sm font-medium">{t(moduleLabelKey(subModule.id))}</Label>
+                                <p className="text-xs text-muted-foreground">{t(moduleDescriptionKey(subModule.id))}</p>
+                              </div>
+                              <Switch
+                                checked={!settings.disabledModules?.includes(subModule.id)}
+                                onCheckedChange={(checked) => {
+                                  const current = settings.disabledModules ?? [];
+                                  const updated = checked
+                                    ? current.filter((id: ModuleId) => id !== subModule.id)
+                                    : [...current, subModule.id];
+                                  handleSettingChange('disabledModules', updated as ModuleId[], 'global');
+                                }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 

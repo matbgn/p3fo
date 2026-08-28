@@ -8,6 +8,8 @@ import { useAllTasks } from '@/hooks/useAllTasks';
 import { useTasks } from '@/hooks/useTasks';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { useNonActionPeriod } from '@/hooks/useNonActionPeriod';
+import { useViewNavigation } from '@/hooks/useView';
+import { isModuleEffectivelyDisabled, type ModuleId } from '@/lib/persistence-types';
 import { adaptTaskToMood, type MoodLevel, type MoodAdaptationResult } from '@/utils/mood-adaptation';
 import { getDifficultyColor } from '@/components/SharedTaskControls';
 import { ConsistencySparkline } from '@/components/ConsistencySparkline';
@@ -29,6 +31,7 @@ export const NextTaskSpotlight: React.FC<NextTaskSpotlightProps> = ({ onFocusOnT
   const { tasks, loading } = useAllTasks();
   const { toggleTimer, createTask } = useTasks();
   const { userId: currentUserId } = useUserSettings();
+  const { disabledModules } = useViewNavigation();
   const { isNonAction, isDisabled: isMoodDisabled, updateInteraction } = useNonActionPeriod();
   const [dismissed, setDismissed] = useState(false);
   const [lastInteraction, setLastInteraction] = useState(Date.now());
@@ -102,7 +105,16 @@ export const NextTaskSpotlight: React.FC<NextTaskSpotlightProps> = ({ onFocusOnT
   // is dismissed — regardless of whether nextAction exists.
   const hasNoTasks = !loading && tasks.length === 0;
   const hasNoAssignedTasks = !loading && !nextAction && tasks.length > 0;
-  const isVisible = (!dismissed) && (!!nextAction || hasNoTasks || hasNoAssignedTasks);
+  // Task creation is physically impossible when every module that offers a
+  // create-task UI is disabled (Kanban, Focus board, Program calendar). A
+  // disabled top-level module also disables its sub-modules. In that case
+  // never invite the user to "create their first task".
+  const isModuleOff = (id: ModuleId) => isModuleEffectivelyDisabled(disabledModules, id);
+  const canCreateTasks = !isModuleOff('kanban')
+    || !isModuleOff('focus')
+    || (!isModuleOff('program') && !isModuleOff('program.calendar'));
+  const showEmptyStateInvite = canCreateTasks;
+  const isVisible = (!dismissed) && (!!nextAction || (hasNoTasks && showEmptyStateInvite) || hasNoAssignedTasks);
 
   useEffect(() => {
     eventBus.publish('spotlightVisibilityChange', isVisible);
@@ -160,6 +172,7 @@ export const NextTaskSpotlight: React.FC<NextTaskSpotlightProps> = ({ onFocusOnT
   // their first task instead of showing nothing. (hasNoTasks and
   // hasNoAssignedTasks are computed above for isVisible.)
   if (hasNoTasks || hasNoAssignedTasks) {
+    if (!showEmptyStateInvite) return null;
     return (
       <Card className="border-primary/30 bg-primary/5 shadow-md">
         <CardContent className="p-4">

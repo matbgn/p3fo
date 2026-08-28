@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.34.1 (2026-08-28)
+
+### Bug Fixes
+
+- **common:** render properly module groups to bulk-disable views and timers (b7a8b46)
+- **common:** gate example data modal on full workspace scan (49c2b34)
+- **layout:** keep active view mounted (817a06c)
+
+---
+
+## v0.34.0 (2026-08-26)
+
+### Features
+
+- **salary:** add employee row colors and mobile-friendly determinants (65186af)
+- **salary:** add employee row reordering and level description sync (e17de1d)
+- **timetable:** add project filter (2e50037)
+
+### Bug Fixes
+
+- **kanban:** show status select on hover in compact card sizes (b025339)
+- **metrics:** correct collaborative metric computations and labels (916343c)
+- **metrics:** count QoL index favorable answers with stored keys (23ebe82)
+- **metrics:** anchor grid to week start and end on current day for heatmap (14f9d33)
+- **salary system:** honor 13th-salary switch and derive hours/day (afc8fe9)
+- **quickTimer:** hide archived tasks from running task slot (bdd630c)
+
+---
+
 ## v0.33.1 (2026-07-25)
 
 ---
@@ -136,27 +165,5 @@
 ### Bug Fixes
 
 - address reported bugs and style issues across boards (57b6429)
-
----
-
-## v0.27.0 (2026-06-14)
-
-### Features
-
-- **boards:** add offline voters and per-board JSON import/export (3a20377)
-
----
-
-## v0.26.0 (2026-06-13)
-
-### Features
-
-- **pomodoro:** add traveler timer mode alongside pomodoro (fb8cfed)
-- **pomodoro:** add pomodoro technique integration (31a3fbb)
-
-### Bug Fixes
-
-- **pomodoro:** distinguish traveler from pomodoro sessions and improve robustness (2bf4b48)
-- **pomodoro:** fix config defaults and deduplicate chime logic (97677c4)
 
 ---

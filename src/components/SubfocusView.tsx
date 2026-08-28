@@ -4,6 +4,7 @@ import { Task, TriageStatus, Category } from '@/hooks/useTasks';
 import { StoryboardCard } from './StoryboardCard';
 import { QuickAddTask } from './QuickAddTask';
 import { sortTasks } from '@/utils/taskSorting';
+import { hasActivableContent } from '@/utils/taskActivable';
 import { renumberSiblings } from '@/utils/priorityEncoding';
 import type { Filters } from './FilterControls';
 
@@ -80,12 +81,16 @@ export const SubfocusView: React.FC<SubfocusViewProps> = ({
   const selectedParent = selectedParentId ? map[selectedParentId] : null;
 
   // Direct children of the selected parent, sorted by taskboard sort.
+  // Parents whose entire subtree is Done/Dropped/Archived are hidden:
+  // there is nothing left to activate, so a ghost card would be noise.
   const directChildren = useMemo(() => {
     if (!selectedParent) return [];
     const children = (selectedParent.children || [])
       .map(id => map[id])
       .filter(Boolean) as Task[];
-    return children.sort(sortTasks.taskboard);
+    return children
+      .filter(child => hasActivableContent(child, map))
+      .sort(sortTasks.taskboard);
   }, [selectedParent, map]);
 
   // Recursively gather all descendants for the collapsible nested groups.
@@ -298,7 +303,9 @@ export const SubfocusView: React.FC<SubfocusViewProps> = ({
                     <div className="text-xs font-medium text-muted-foreground px-1">
                       {t('taskboard.subtasksOfParent', { title: task.title })}
                     </div>
-                    {descendants.map(child => (
+                    {descendants
+                      .filter(child => hasActivableContent(child, map))
+                      .map(child => (
                       <StoryboardCard
                         key={child.id}
                         task={child}

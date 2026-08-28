@@ -581,10 +581,10 @@ async function updateStatus(taskId: string, status: TriageStatus): Promise<Updat
       const currentTask = taskMap[id];
       if (currentTask?.children) {
         currentTask.children.forEach(childId => {
-          // Only add child to update if it's not already "Dropped"
-          // This preserves "Dropped" status of children when parent is marked as "Done"
+          // Only add child to update if it's not already in an inactive state
+          // This preserves "Dropped"/"Archived" status of children when parent is marked as "Done"
           const childTask = taskMap[childId];
-          if (childTask && childTask.triageStatus !== "Dropped") {
+          if (childTask && !isTriageInactive(childTask.triageStatus)) {
             tasksToUpdate.add(childId);
             getAllChildren(childId);
           }
@@ -661,10 +661,10 @@ async function updateStatus(taskId: string, status: TriageStatus): Promise<Updat
 const toggleDone = (taskId: string) => {
   const task = tasks.find(t => t.id === taskId);
   if (task) {
-    // Toggle between Done/Dropped and Ready/WIP/Blocked/Backlog
+    // Toggle between inactive (Done/Dropped/Archived) and active (Ready)
     let newStatus: TriageStatus;
-    if (task.triageStatus === "Done" || task.triageStatus === "Dropped") {
-      // If the task is currently Done or Dropped, revert to Ready
+    if (isTriageInactive(task.triageStatus)) {
+      // If the task is currently Done, Dropped or Archived, revert to Ready
       newStatus = "Ready";
     } else {
       // If the task is in any other state, set it to Done
@@ -674,39 +674,49 @@ const toggleDone = (taskId: string) => {
   }
 };
 
-// Function to check if all subtasks of a parent are done/dropped and update parent status accordingly
+// Statuses that mean a task can no longer be activated/worked on
+const INACTIVE_STATUSES: TriageStatus[] = ["Done", "Dropped", "Archived"];
+
+const isTriageInactive = (status: TriageStatus | undefined): boolean =>
+  !!status && INACTIVE_STATUSES.includes(status);
+
+// Function to check if all subtasks of a parent are done/dropped/archived and update parent status accordingly
 function checkParentTaskCompletion(parentId: string) {
   const parentTask = tasks.find(t => t.id === parentId);
   if (!parentTask || !parentTask.children || parentTask.children.length === 0) {
     return; // No children to check
   }
 
-  // Check if all children are done or dropped (consider both as completed)
-  const allChildrenDoneOrDropped = parentTask.children.every(childId => {
+  // Check if all children are in an inactive state (Done, Dropped or Archived)
+  const allChildrenInactive = parentTask.children.every(childId => {
     const childTask = tasks.find(t => t.id === childId);
-    return childTask && (childTask.triageStatus === "Done" || childTask.triageStatus === "Dropped");
+    return childTask && isTriageInactive(childTask.triageStatus);
   });
 
-  if (allChildrenDoneOrDropped) {
+  if (allChildrenInactive) {
     // Determine the appropriate status for the parent based on children's status
-    // If all children are "Dropped", set parent to "Dropped", otherwise "Done"
+    // All "Dropped" → "Dropped", all "Archived" → "Archived", otherwise "Done"
     const allChildrenDropped = parentTask.children.every(childId => {
       const childTask = tasks.find(t => t.id === childId);
       return childTask && childTask.triageStatus === "Dropped";
     });
+    const allChildrenArchived = parentTask.children.every(childId => {
+      const childTask = tasks.find(t => t.id === childId);
+      return childTask && childTask.triageStatus === "Archived";
+    });
 
-    const desiredStatus = allChildrenDropped ? "Dropped" : "Done";
+    const desiredStatus: TriageStatus = allChildrenDropped ? "Dropped" : allChildrenArchived ? "Archived" : "Done";
 
-    // If all children are done/dropped and parent is not already in the desired status, update it
-    if (parentTask.triageStatus !== "Done" && parentTask.triageStatus !== "Dropped") {
+    // If all children are inactive and parent is not already in the desired status, update it
+    if (parentTask.triageStatus !== desiredStatus) {
       // Use the internal update function to avoid cascading
       isUpdatingDueToChildCompletion = true;
       updateStatus(parentId, desiredStatus);
       isUpdatingDueToChildCompletion = false;
     }
   }
-  // If not all children are done/dropped and parent is done/dropped, revert parent to Ready
-  else if (parentTask.triageStatus === "Done" || parentTask.triageStatus === "Dropped") {
+  // If not all children are inactive and parent is inactive, revert parent to Ready
+  else if (isTriageInactive(parentTask.triageStatus)) {
     // Use the internal update function to avoid cascading
     isUpdatingDueToChildCompletion = true;
     updateStatus(parentId, "Ready");

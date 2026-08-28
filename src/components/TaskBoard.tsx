@@ -21,6 +21,7 @@ import { TodolistView } from "./TodolistView";
 import { SubfocusView } from "./SubfocusView";
 
 import { byId } from "@/lib/utils";
+import { hasActivableContent } from "@/utils/taskActivable";
 import { useViewDisplay, useViewNavigation } from "@/hooks/useView";
 import { COMPACTNESS_ULTRA, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
 import { HOVER_ENTER_DELAY_MS } from "@/lib/hover-constants";
@@ -326,7 +327,8 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
       const searchResults = aStarTextSearch(displayFilters.searchText, allSearchableTasks);
       const matchingTaskIds = new Set(searchResults.filter(r => r.score >= 0.001).map(r => r.taskId));
 
-      const searchResultTasks = tasks.filter(task => matchingTaskIds.has(task.id));
+      const searchResultTasks = tasks.filter(task => matchingTaskIds.has(task.id))
+        .filter(task => hasActivableContent(task, byId(tasks)));
 
       cols.push({
         parentId: "search-results", // Unique ID for search results column
@@ -338,17 +340,25 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
     const rootItems = tasks.filter((t) => !t.parentId).sort(sortTasks.taskboard);
 
     // Apply Focus Mode: If a root task is selected (path[0]), only show that task
-    const filteredRootItems = path[0] ? rootItems.filter(t => t.id === path[0]) : rootItems;
+    // Parents whose entire subtree is Done/Dropped/Archived are hidden: there
+    // is nothing left to activate or show, so a ghost card would be noise.
+    const filteredRootItems = path[0]
+      ? rootItems.filter(t => t.id === path[0])
+      : rootItems.filter(t => hasActivableContent(t, byId(tasks)));
 
     cols.push({ parentId: null, items: filteredRootItems, activeId: path[0] });
 
     path.forEach((taskId, idx) => {
       const t = map[taskId];
       if (!t) return;
-      // Show all children to ensure tasks from other columns are visible
+      // Show children that still have activable content (self or any
+      // descendant Backlog/Ready/WIP/Blocked). Fully-completed subtrees are
+      // hidden instead of rendering ghost cards.
       let children = ((t.children || [])
         .map((id) => map[id])
-        .filter(Boolean) as Task[]).sort(sortTasks.taskboard);
+        .filter(Boolean) as Task[])
+        .filter(c => hasActivableContent(c, byId(tasks)))
+        .sort(sortTasks.taskboard);
 
       // Apply Focus Mode: If a child is selected in this column (path[idx + 1]), only show that child
       if (path[idx + 1]) {
