@@ -16,6 +16,7 @@ const CelebrationView = React.lazy(() => import("@/components/CelebrationView"))
 const DreamTopView = React.lazy(() => import("@/components/DreamTopView"));
 import { useViewNavigation } from "@/hooks/useView";
 import type { ModuleId } from "@/lib/persistence-types";
+import { hasAnyWorkspaceData } from "@/lib/has-workspace-data";
 
 import { CompactnessSelector } from "@/components/CompactnessSelector";
 import { NotificationCenter } from "@/components/NotificationCenter";
@@ -64,7 +65,7 @@ const Index: React.FC = () => {
     sessionStorage.setItem('p3fo_metrics_tab', 'pomodoro');
     setView('metrics');
   }, [setView]);
-  const { userSettings, loading: userSettingsLoading } = useUserSettingsContext();
+  const { userSettings, loading: userSettingsLoading, userId } = useUserSettingsContext();
   const { tasks } = useAllTasks();
 
   // Track which views have been mounted (lazy-mount on first visit, keep-alive after)
@@ -77,7 +78,8 @@ const Index: React.FC = () => {
   const [umbrellaOpen, setUmbrellaOpen] = useState(false);
 
   // Example-data onboarding modal: show once per browser, only when the user
-  // has not completed onboarding and there is no existing data to clobber.
+  // has not completed onboarding and the workspace holds no data at all
+  // (no tasks, no other users, no salaries, votes, circles, boards, …).
   const [exampleModalOpen, setExampleModalOpen] = useState(false);
   React.useEffect(() => {
     if (userSettingsLoading) return;
@@ -86,8 +88,14 @@ const Index: React.FC = () => {
     // Defer until tasks have been loaded so we don't flash the modal over
     // data that's still hydrating from persistence.
     if (tasks.length > 0) return;
-    setExampleModalOpen(true);
-  }, [userSettingsLoading, userSettings.hasCompletedOnboarding, tasks.length]);
+    let cancelled = false;
+    import("@/lib/persistence-factory").then(async m => {
+      const adapter = await m.getPersistenceAdapter();
+      const hasData = await hasAnyWorkspaceData(adapter, userId || null);
+      if (!cancelled && !hasData) setExampleModalOpen(true);
+    }).catch(err => console.error('Example data gate check failed:', err));
+    return () => { cancelled = true; };
+  }, [userSettingsLoading, userSettings.hasCompletedOnboarding, userId, tasks.length]);
 
   const toggleUmbrella = useCallback(() => {
     setUmbrellaOpen(prev => !prev);
