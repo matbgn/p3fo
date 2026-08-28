@@ -634,6 +634,15 @@
       "dialogDescription": "Lohnberechnungsvariablen. Passen Sie diese an den Kunden an."
     },
     "dimension": {
+      "defaultName": "Neuer Determinant",
+      "name": "Name",
+      "maxLevel": "Max-Stufe",
+      "stepValue": "Schrittweite (CHF)",
+      "affectsSalary": "Wirkt auf den Lohn",
+      "color": "Farbe",
+      "delete": "Determinant löschen",
+      "levelDescriptions": "{{n}} Stufenbeschreibungen",
+      "add": "Determinant hinzufügen",
       "expertise": {
         "name": "Expertise",
         "levelDescription": {

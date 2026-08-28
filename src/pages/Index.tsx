@@ -102,22 +102,26 @@ const Index: React.FC = () => {
     });
   }, [view]);
 
-  // Remove disabled modules from mounted views (unmount them)
+  // Remove disabled modules from mounted views (unmount them).
+  // Sub-module entries (e.g. "plan.circles") only toggle a sub-view inside the
+  // parent view, so they must NOT unmount the whole parent. Also never unmount
+  // the currently active view: settings can load/refresh after the user has
+  // already navigated, and removing it would blank the screen.
   React.useEffect(() => {
     if (disabledModules.length === 0) return;
     setMountedViews(prev => {
       const next = new Set(prev);
       let changed = false;
       for (const m of disabledModules) {
-        const viewKey = m.includes('.') ? m.split('.')[0] : m;
-        if (next.has(viewKey)) {
-          next.delete(viewKey);
+        if (m.includes('.')) continue;
+        if (next.has(m) && m !== view) {
+          next.delete(m);
           changed = true;
         }
       }
       return changed ? next : prev;
     });
-  }, [disabledModules]);
+  }, [disabledModules, view]);
 
   React.useEffect(() => {
     const onChange = (e: CustomEvent) => setIsGlobalFocusMode(e.detail.active);

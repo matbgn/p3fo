@@ -634,6 +634,15 @@
       "dialogDescription": "Salary calculation variables. Adapt them to the client."
     },
     "dimension": {
+      "defaultName": "New determinant",
+      "name": "Name",
+      "maxLevel": "Max level",
+      "stepValue": "Step value (CHF)",
+      "affectsSalary": "Affects salary",
+      "color": "Color",
+      "delete": "Delete determinant",
+      "levelDescriptions": "{{n}} level descriptions",
+      "add": "Add determinant",
       "expertise": {
         "name": "Expertise",
         "levelDescription": {

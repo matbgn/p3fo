@@ -634,6 +634,15 @@
       "dialogDescription": "Variables de calcul du salaire. Adaptez-les au client."
     },
     "dimension": {
+      "defaultName": "Nouveau déterminant",
+      "name": "Nom",
+      "maxLevel": "Niveau max",
+      "stepValue": "Valeur du pas (CHF)",
+      "affectsSalary": "Influence le salaire",
+      "color": "Couleur",
+      "delete": "Supprimer le déterminant",
+      "levelDescriptions": "{{n}} descriptions de niveau",
+      "add": "Ajouter un déterminant",
       "expertise": {
         "name": "Expertise",
         "levelDescription": {
