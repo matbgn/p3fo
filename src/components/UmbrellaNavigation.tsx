@@ -7,7 +7,7 @@ import { useUserSettings } from '@/hooks/useUserSettings';
 import { aStarTextSearch } from '@/lib/a-star-search';
 import { cn } from '@/lib/utils';
 import type { ViewType } from '@/context/ViewContextDefinition';
-import type { ModuleId } from '@/lib/persistence-types';
+import { isModuleEffectivelyDisabled, type ModuleId } from '@/lib/persistence-types';
 import {
   X,
   PartyPopper,
@@ -254,9 +254,9 @@ export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, on
   const isModuleDisabled = useCallback((view: string, subView?: string): boolean => {
     if (subView) {
       const moduleId = `${view}.${subView}` as ModuleId;
-      return disabledModules.includes(moduleId) || disabledModules.includes(view as ModuleId);
+      return isModuleEffectivelyDisabled(disabledModules, moduleId) || isModuleEffectivelyDisabled(disabledModules, view as ModuleId);
     }
-    return disabledModules.includes(view as ModuleId);
+    return isModuleEffectivelyDisabled(disabledModules, view as ModuleId);
   }, [disabledModules]);
 
   const filteredSections = useMemo(() =>

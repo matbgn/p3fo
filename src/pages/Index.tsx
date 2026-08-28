@@ -15,7 +15,7 @@ const PlanView = React.lazy(() => import("@/components/PlanView"));
 const CelebrationView = React.lazy(() => import("@/components/CelebrationView"));
 const DreamTopView = React.lazy(() => import("@/components/DreamTopView"));
 import { useViewNavigation } from "@/hooks/useView";
-import type { ModuleId } from "@/lib/persistence-types";
+import { isModuleEffectivelyDisabled, type ModuleId } from "@/lib/persistence-types";
 import { hasAnyWorkspaceData } from "@/lib/has-workspace-data";
 
 import { CompactnessSelector } from "@/components/CompactnessSelector";
@@ -114,14 +114,16 @@ const Index: React.FC = () => {
   // Sub-module entries (e.g. "plan.circles") only toggle a sub-view inside the
   // parent view, so they must NOT unmount the whole parent. Also never unmount
   // the currently active view: settings can load/refresh after the user has
-  // already navigated, and removing it would blank the screen.
+  // already navigated, and removing it would blank the screen. Group parents
+  // ("tools", "timer") are virtual and never unmount anything themselves;
+  // their children are unmounted through their own entries.
   React.useEffect(() => {
     if (disabledModules.length === 0) return;
     setMountedViews(prev => {
       const next = new Set(prev);
       let changed = false;
       for (const m of disabledModules) {
-        if (m.includes('.')) continue;
+        if (m.includes('.') || m === 'tools' || m === 'timer') continue;
         if (next.has(m) && m !== view) {
           next.delete(m);
           changed = true;
@@ -233,53 +235,53 @@ const Index: React.FC = () => {
         )}
         {/* Keep-alive: mount on first visit, hide with content-visibility:hidden, skip reconciliation via useMemo */}
         {/* content-visibility:hidden tells the browser to skip layout+paint entirely for hidden views */}
-        {/* Disabled modules are completely excluded from rendering */}
-        {!disabledModules.includes('focus' as ModuleId) && (
+        {/* Disabled modules (directly or via group parent) are completely excluded from rendering */}
+        {!isModuleEffectivelyDisabled(disabledModules, 'focus') && (
         <div style={view === "focus" ? activeStyle : hiddenStyle}>
           {mountedViews.has("focus") && focusView}
         </div>
         )}
-        {!disabledModules.includes('kanban' as ModuleId) && (
+        {!isModuleEffectivelyDisabled(disabledModules, 'kanban') && (
         <div style={view === "kanban" ? activeStyle : hiddenStyle}>
           {mountedViews.has("kanban") && kanbanView}
         </div>
         )}
-        {!disabledModules.includes('timetable' as ModuleId) && (
+        {!isModuleEffectivelyDisabled(disabledModules, 'timetable') && (
         <div style={view === "timetable" ? activeStyle : hiddenStyle}>
           {mountedViews.has("timetable") && timetableView}
         </div>
         )}
-        {!disabledModules.includes('program' as ModuleId) && (
+        {!isModuleEffectivelyDisabled(disabledModules, 'program') && (
         <div style={view === "program" ? activeStyle : hiddenStyle}>
           {mountedViews.has("program") && programView}
         </div>
         )}
-        {!disabledModules.includes('plan' as ModuleId) && (
+        {!isModuleEffectivelyDisabled(disabledModules, 'plan') && (
         <div style={view === "plan" ? activeStyle : hiddenStyle}>
           {mountedViews.has("plan") && planView}
         </div>
         )}
-        {!disabledModules.includes('celebration' as ModuleId) && (
+        {!isModuleEffectivelyDisabled(disabledModules, 'celebration') && (
         <div style={view === "celebration" ? activeStyle : hiddenStyle}>
           {mountedViews.has("celebration") && celebrationView}
         </div>
         )}
-        {!disabledModules.includes('dream' as ModuleId) && (
+        {!isModuleEffectivelyDisabled(disabledModules, 'dream') && (
         <div style={view === "dream" ? activeStyle : hiddenStyle}>
           {mountedViews.has("dream") && dreamView}
         </div>
         )}
-        {!disabledModules.includes('metrics' as ModuleId) && (
+        {!isModuleEffectivelyDisabled(disabledModules, 'metrics') && (
         <div style={view === "metrics" ? activeStyle : hiddenStyle}>
           {mountedViews.has("metrics") && metricsView}
         </div>
         )}
-        {!disabledModules.includes('voting' as ModuleId) && (
+        {!isModuleEffectivelyDisabled(disabledModules, 'voting') && (
         <div style={view === "voting" ? activeStyle : hiddenStyle}>
           {mountedViews.has("voting") && votingView}
         </div>
         )}
-        {!disabledModules.includes('settings' as ModuleId) && (
+        {!isModuleEffectivelyDisabled(disabledModules, 'settings') && (
         <div style={view === "settings" ? activeStyle : hiddenStyle}>
           {mountedViews.has("settings") && settingsView}
         </div>

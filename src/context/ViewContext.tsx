@@ -6,6 +6,7 @@ import {
 } from './ViewContextDefinition';
 
 import type { ModuleId } from '@/lib/persistence-types';
+import { isModuleEffectivelyDisabled } from '@/lib/persistence-types';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { useSettingsContext } from '@/context/SettingsContext';
 
@@ -58,11 +59,11 @@ export const ViewProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         updateSettings({ disabledModules: modules }, 'global');
     }, [updateSettings]);
 
-    // Auto-navigate away from disabled views
+    // Auto-navigate away from disabled views (disabled directly or via group parent)
     useEffect(() => {
-        if (disabledModules.includes(view as ModuleId)) {
+        if (isModuleEffectivelyDisabled(disabledModules, view as ModuleId)) {
             const ALL_VIEWS: ViewType[] = ['kanban', 'focus', 'timetable', 'celebration', 'dream', 'plan', 'program', 'metrics', 'voting', 'settings'];
-            const fallback = ALL_VIEWS.find(v => !disabledModules.includes(v as ModuleId)) || 'kanban';
+            const fallback = ALL_VIEWS.find(v => !isModuleEffectivelyDisabled(disabledModules, v as ModuleId)) || 'kanban';
             setView(fallback);
         }
     }, [disabledModules, view]);

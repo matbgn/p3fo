@@ -184,6 +184,22 @@
       "voting": {
         "label": "Voting",
         "description": "Run polls and formal decisions with your audience"
+      },
+      "pomodoro": {
+        "label": "Pomodoro technique",
+        "description": "QuickTimer pomodoro work/break timer in the header"
+      },
+      "traveler": {
+        "label": "Traveler timer",
+        "description": "Travel-based break timer in the header quick timer"
+      },
+      "tools": {
+        "label": "Tools",
+        "description": "Utility views: Timetable, Metrics and Voting"
+      },
+      "timer": {
+        "label": "Focus techniques",
+        "description": "Timer techniques (Pomodoro, Traveler) in the header quick timer"
       }
     }
   },

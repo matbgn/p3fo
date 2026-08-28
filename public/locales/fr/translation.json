@@ -184,6 +184,22 @@
       "voting": {
         "label": "Vote",
         "description": "Lancez des sondages et des décisions formelles avec votre audience"
+      },
+      "pomodoro": {
+        "label": "Technique Pomodoro",
+        "description": "Minuteur pomodoro travail/pause du QuickTimer dans l'en-tête"
+      },
+      "traveler": {
+        "label": "Minuteur Voyageur",
+        "description": "Minuteur de pause basé sur les voyages dans le QuickTimer de l'en-tête"
+      },
+      "tools": {
+        "label": "Outils",
+        "description": "Vues utilitaires : Tableau des heures, Métriques et Vote"
+      },
+      "timer": {
+        "label": "Techniques de focus",
+        "description": "Techniques de minuteur (Pomodoro, Voyageur) dans le QuickTimer de l'en-tête"
       }
     }
   },
@@ -1234,7 +1250,7 @@
     "salarySystem": "Système de salaire",
     "project": "Projet",
     "focus": "Focus",
-    "timetable": "Timetable",
+    "timetable": "Tableau des heures",
     "voting": "Vote",
     "metrics": "Métriques",
     "settings": "Paramètres",

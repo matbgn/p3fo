@@ -184,6 +184,22 @@
       "voting": {
         "label": "Abstimmung",
         "description": "Führen Sie Umfragen und formelle Entscheidungen mit Ihrem Publikum durch"
+      },
+      "pomodoro": {
+        "label": "Pomodoro-Technik",
+        "description": "Pomodoro Arbeits-/Pausen-Timer des QuickTimers in der Kopfzeile"
+      },
+      "traveler": {
+        "label": "Traveler-Timer",
+        "description": "Reisebasierter Pausen-Timer im QuickTimer der Kopfzeile"
+      },
+      "tools": {
+        "label": "Werkzeuge",
+        "description": "Hilfsansichten: Stundenplan, Kennzahlen und Abstimmung"
+      },
+      "timer": {
+        "label": "Fokus-Techniken",
+        "description": "Timer-Techniken (Pomodoro, Traveler) im QuickTimer der Kopfzeile"
       }
     }
   },

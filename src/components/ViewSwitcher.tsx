@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useCursors } from '@/hooks/useCursors';
 import { Badge } from './ui/badge';
+import { isModuleEffectivelyDisabled } from '@/lib/persistence-types';
 import { cn } from '@/lib/utils';
 import { assetUrl } from '@/lib/base-url';
 import {
@@ -117,7 +118,7 @@ export function ViewSwitcher({ value, onChange, disabledModules = [], utilityIte
   const [overflowOpen, setOverflowOpen] = useState(false);
 
   const enabledViews = useMemo(
-    () => allViews.filter(v => !disabledModules.includes(v.id as ModuleId)),
+    () => allViews.filter(v => !isModuleEffectivelyDisabled(disabledModules, v.id as ModuleId)),
     [disabledModules]
   );
 

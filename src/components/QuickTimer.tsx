@@ -18,6 +18,8 @@ import { CITIES, getCityByCode, TravelMode, TravelerConfig, DEFAULT_TRAVELER_CON
 import { fetchFlightDuration, getTrainDuration, computeBreakDuration, formatDuration } from "@/lib/traveler-api";
 import { eventBus } from "@/lib/events";
 import { useSettingsContext } from "@/context/SettingsContext";
+import { useViewNavigation } from "@/hooks/useView";
+import { isModuleEffectivelyDisabled, type ModuleId } from "@/lib/persistence-types";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -440,8 +442,20 @@ export const QuickTimer: React.FC<{
   const traveler = useTraveler();
   const { isSupported: pipSupported, isPiPActive, openPiP, closePiP } = useDocumentPiP();
   const { settings } = useSettingsContext();
+  const { disabledModules } = useViewNavigation();
+
+  // Workspace-level module gates: when 'pomodoro' or 'traveler' (or their
+  // group parent 'timer') is disabled the corresponding technique disappears
+  // from the QuickTimer entirely, regardless of the user-level preference.
+  const pomodoroModuleEnabled = !isModuleEffectivelyDisabled(disabledModules, 'pomodoro' as ModuleId);
+  const travelerModuleEnabled = !isModuleEffectivelyDisabled(disabledModules, 'traveler' as ModuleId);
 
   const [timerMode, setTimerMode] = useState<TimerMode>('pomodoro');
+  // Snap the preferred mode to an enabled technique when the workspace gates change
+  useEffect(() => {
+    if (timerMode === 'pomodoro' && !pomodoroModuleEnabled && travelerModuleEnabled) setTimerMode('traveler');
+    else if (timerMode === 'traveler' && !travelerModuleEnabled && pomodoroModuleEnabled) setTimerMode('pomodoro');
+  }, [pomodoroModuleEnabled, travelerModuleEnabled, timerMode]);
   const [departure, setDeparture] = useState(traveler.config.departure);
   const [destination, setDestination] = useState(traveler.config.destination);
   const [travelMode, setTravelMode] = useState<TravelMode>(traveler.config.travelMode);
@@ -450,11 +464,11 @@ export const QuickTimer: React.FC<{
   const [spotlightVisible, setSpotlightVisible] = useState(false);
 
   // Derived flags
-  const pomodoroActive = pomodoro.pomodoroEnabled && pomodoro.state.phase !== 'idle';
-  const travelerActive = traveler.travelerEnabled && traveler.state.phase !== 'idle';
+  const pomodoroActive = pomodoroModuleEnabled && pomodoro.pomodoroEnabled && pomodoro.state.phase !== 'idle';
+  const travelerActive = travelerModuleEnabled && traveler.travelerEnabled && traveler.state.phase !== 'idle';
   const showOverlay = pomodoro.focusConfig.showFocusOverlay;
   const activeMode: TimerMode = travelerActive ? 'traveler' : pomodoroActive ? 'pomodoro' : timerMode;
-  const anyTimerEnabled = pomodoro.pomodoroEnabled || traveler.travelerEnabled;
+  const anyTimerEnabled = (pomodoroModuleEnabled && pomodoro.pomodoroEnabled) || (travelerModuleEnabled && traveler.travelerEnabled);
 
   // ---- Task running state ----
   const { runningTask, lastStoppedTask } = useMemo(() => {
@@ -609,14 +623,18 @@ export const QuickTimer: React.FC<{
   useEffect(() => registerTravelerStartFn(handleStartTraveler), [handleStartTraveler]);
   useEffect(() => registerTravelerSearchFn(searchTravelDuration), [searchTravelDuration]);
   useEffect(() => registerTravelerResetFn(() => { traveler.reset(); setDeparture(''); setDestination(''); setDurationPreview(null); setSearchLoading(false); setTimerMode('pomodoro'); }), [traveler]);
-  useEffect(() => registerPomodoroStartFn(() => { pomodoro.startWork(); }), [pomodoro]);
+  useEffect(() => registerPomodoroStartFn(() => { if (pomodoroModuleEnabled) pomodoro.startWork(); }), [pomodoro, pomodoroModuleEnabled]);
 
   // ---- Render: two-zone layout ----
   // The technique zone is always visible when any timer technique is enabled,
   // even when idle — so the user can quick-start a pomodoro or configure the
-  // traveler. The zone only hides when no technique is enabled at all.
+  // traveler. When no technique is enabled and there is no task content
+  // either, the whole strip disappears instead of showing a dead placeholder.
   const techniqueHasContent = anyTimerEnabled;
   const taskHasContent = !!runningTask || !!lastStoppedTask;
+  const hasAnyContent = techniqueHasContent || taskHasContent;
+
+  if (!hasAnyContent) return null;
 
   return (
 <div className="flex flex-col items-center min-[512px]:flex-row gap-1 min-[512px]:gap-1.5 px-2 min-[512px]:px-3 py-1 min-[512px]:py-1 bg-gray-100 rounded-lg min-h-[36px] min-[512px]:min-h-[40px] w-full min-[630px]:w-auto">
@@ -646,10 +664,6 @@ export const QuickTimer: React.FC<{
             jumpLabel={t('quickTimer.jumpToTask')}
           />
         </div>
-      ) : !techniqueHasContent ? (
-        <div className="text-xs min-[512px]:text-sm text-muted-foreground italic flex items-center h-full order-1 min-[630px]:order-2">
-          {t('quickTimer.noActiveTimer')}
-        </div>
       ) : null}
 
       {/* ===== WHAT'S NEXT (only when no task is running) ===== */}
@@ -665,9 +679,9 @@ export const QuickTimer: React.FC<{
       {/* ===== TECHNIQUE ZONE (bottom on mobile, left on desktop) ===== */}
       {techniqueHasContent && (
         <div className="flex items-center gap-1 min-[512px]:gap-1.5 bg-muted/30 rounded px-1.5 min-[512px]:px-2 py-0.5 order-2 min-[630px]:order-1 w-auto min-[512px]:w-full min-[630px]:w-auto min-w-0">
-          {activeMode === 'pomodoro' ? (
+          {activeMode === 'pomodoro' && pomodoroModuleEnabled ? (
             <PomodoroControls pomodoro={pomodoro} t={t} />
-          ) : (
+          ) : travelerModuleEnabled ? (
             <TravelerControls
               traveler={traveler}
               t={t}
@@ -682,15 +696,17 @@ export const QuickTimer: React.FC<{
               onSearch={searchTravelDuration}
               onStart={handleStartTraveler}
             />
+          ) : null}
+          {pomodoroModuleEnabled && (
+            <PiPButton supported={pipSupported} isPiPActive={isPiPActive} showOverlay={showOverlay} onToggle={handleQuickPiP} label={isPiPActive ? t('quickTimer.closePip') : t('quickTimer.openPip')} />
           )}
-          <PiPButton supported={pipSupported} isPiPActive={isPiPActive} showOverlay={showOverlay} onToggle={handleQuickPiP} label={isPiPActive ? t('quickTimer.closePip') : t('quickTimer.openPip')} />
           <TechniqueSwitchChevron
             anyTimerEnabled={anyTimerEnabled}
-            pomodoroEnabled={pomodoro.pomodoroEnabled}
-            travelerEnabled={traveler.travelerEnabled}
+            pomodoroEnabled={pomodoroModuleEnabled && pomodoro.pomodoroEnabled}
+            travelerEnabled={travelerModuleEnabled && traveler.travelerEnabled}
             currentMode={activeMode}
-            onPomodoro={() => { setTimerMode('pomodoro'); if (traveler.state.phase !== 'idle') traveler.reset(); }}
-            onTraveler={() => { setTimerMode('traveler'); if (pomodoro.state.phase !== 'idle') pomodoro.reset(); }}
+            onPomodoro={() => { if (!pomodoroModuleEnabled) return; setTimerMode('pomodoro'); if (traveler.state.phase !== 'idle') traveler.reset(); }}
+            onTraveler={() => { if (!travelerModuleEnabled) return; setTimerMode('traveler'); if (pomodoro.state.phase !== 'idle') pomodoro.reset(); }}
             label={t('quickTimer.switchTechnique')}
           />
         </div>
