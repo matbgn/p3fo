@@ -1,5 +1,5 @@
 import * as React from "react";
-import { VoteEntity, VoteLoop } from "@/lib/persistence-types";
+import { VoteEntity, VoteProposal, VoteLoop } from "@/lib/persistence-types";
 import { VOTING_MODES_LABELS, MJ_SCALE } from "@/components/planView/constants";
 import { useVoteResults } from "@/hooks/useVotes";
 import { useVoteLoops } from "@/hooks/useVoteLoops";
@@ -7,7 +7,7 @@ import { tallyThumbsUp, tallyUDNeutral, tallyPoints, tallyMajorityJudgment, tall
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
-import { BarChart3, Users, MessageSquare, Trophy } from "lucide-react";
+import { BarChart3, Users, MessageSquare, Trophy, ArrowUpDown, ArrowDownWideNarrow } from "lucide-react";
 import { LoopRoundProposalTooltip } from "./LoopRoundProposalTooltip";
 import { ProposalContentDisplay } from "./ProposalContentDisplay";
 
@@ -188,6 +188,9 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
   const { responses, isLoading } = useVoteResults(vote.id);
   const isAnonymous = vote.config.isAnonymous ?? true;
 
+  const [resultsSortMetric, setResultsSortMetric] = React.useState<"original" | "median" | "average">("original");
+  const [resultsSortDir, setResultsSortDir] = React.useState<"asc" | "desc">("desc");
+
   const totalVoters = new Set(responses.map((r) => r.voterToken)).size;
   const commentsCount = responses.filter((r) => r.comment).length;
 
@@ -281,7 +284,65 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
         <p className="text-sm text-gray-400">{t.messages.noVotesYet}</p>
       ) : (
         <div className="space-y-3">
-          {vote.proposals.filter((p) => p.active).map((proposal) => {
+          {(() => {
+            const mode = vote.config.mode;
+            const active = vote.proposals.filter((p) => p.active);
+            const canSortResults = active.length > 1;
+            const metricFor = (p: VoteProposal): number => {
+              if (mode === "THUMBS_UP") return tallyThumbsUp(responses, p.id).count;
+              if (mode === "THUMBS_UD_NEUTRAL") {
+                const tally = tallyUDNeutral(responses, p.id);
+                return tally.up - tally.down;
+              }
+              if (mode === "POINTS") return tallyPoints(responses, p.id).total;
+              if (mode === "MAJORITY_JUDGMENT") {
+                const tally = tallyMajorityJudgment(responses, p.id);
+                if (resultsSortMetric === "average") {
+                  const total = MJ_SCALE.reduce((sum, g) => sum + (tally.distribution[g.value] || 0) * g.value, 0);
+                  const count = MJ_SCALE.reduce((sum, g) => sum + (tally.distribution[g.value] || 0), 0);
+                  return count > 0 ? total / count : 0;
+                }
+                return tally.median;
+              }
+              return 0;
+            };
+            let proposals: VoteProposal[] = active;
+            if (resultsSortMetric !== "original" && active.length > 1) {
+              const sorted = [...active].sort((a, b) => metricFor(a) - metricFor(b));
+              proposals = resultsSortDir === "desc" ? sorted.reverse() : sorted;
+            }
+            return (
+              <>
+                {canSortResults && (
+                  <div className="flex items-center gap-2 flex-wrap pb-3 border-b">
+                    <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                      <ArrowUpDown className="w-3.5 h-3.5" />
+                      <span>{t.labels.sortResults}:</span>
+                    </div>
+                    <select
+                      value={resultsSortMetric}
+                      onChange={(e) => setResultsSortMetric(e.target.value as typeof resultsSortMetric)}
+                      className="text-xs border rounded px-2 py-1 bg-white"
+                    >
+                      <option value="original">{t.labels.sortByOriginal}</option>
+                      {mode === "MAJORITY_JUDGMENT" && (
+                        <option value="median">{t.labels.sortByMedian}</option>
+                      )}
+                      <option value="average">{t.labels.sortByAverage}</option>
+                    </select>
+                    {resultsSortMetric !== "original" && (
+                      <button
+                        onClick={() => setResultsSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+                        className="text-xs border rounded px-2 py-1 bg-white hover:bg-gray-50 flex items-center gap-1"
+                        title={resultsSortDir === "asc" ? t.labels.sortAscending : t.labels.sortDescending}
+                      >
+                        <ArrowDownWideNarrow className={`w-3.5 h-3.5 transition-transform ${resultsSortDir === "asc" ? "rotate-180" : ""}`} />
+                        {resultsSortDir === "asc" ? t.labels.sortAscending : t.labels.sortDescending}
+                      </button>
+                    )}
+                  </div>
+                )}
+                {proposals.map((proposal) => {
             const isWinning = vote.outcome?.winningProposalId === proposal.id;
 
             return (
@@ -294,7 +355,7 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="text-sm font-medium text-gray-900">
                     {isWinning && <Trophy className="w-4 h-4 text-blue-600 inline mr-1" />}
-                    {tt("voting.proposalN", { n: proposal.position + 1 })}
+                    {proposal.description?.trim() || tt("voting.proposalN", { n: proposal.position + 1 })}
                   </h4>
                 </div>
                 {proposal.content && <ProposalContentDisplay content={proposal.content} className="mb-2" />}
@@ -387,7 +448,10 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
                 })()}
               </div>
             );
-          })}
+            })}
+          </>
+            );
+          })()}
         </div>
       )}
     </div>
