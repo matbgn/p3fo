@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.35.0 (2026-09-02)
+
+### Features
+
+- **MCP:** add task search and active filter (9170450)
+
+### Bug Fixes
+
+- **voting:** align results view with public vote page (018310a)
+- **common:** re-prompt example data after workspace wipe (4a7dd58)
+
+---
+
 ## v0.34.1 (2026-08-28)
 
 ### Bug Fixes
@@ -157,13 +170,5 @@
 - **focus sessions:** add pomodoro/focus sessions import/export (0aefb8e)
 - **voting tool:** add vote responses/moderators import endpoints and toast feedback (819b58a)
 - **focus sessions:** support configurable week start day in pomodoro heatmap (b657b89)
-
----
-
-## v0.27.1 (2026-06-15)
-
-### Bug Fixes
-
-- address reported bugs and style issues across boards (57b6429)
 
 ---
