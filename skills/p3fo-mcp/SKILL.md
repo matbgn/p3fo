@@ -1,11 +1,11 @@
 ---
 name: p3fo-mcp
-description: Drive P3FO (Plan/Program/Project/Focus) via the p3fo MCP server. Trigger when the user mentions P3FO, tasks, triage, votes, circles, frameworks, reminders, pomodoro sessions, fertilization board, dream board, QoL survey, or asks to manage productivity data through the P3FO REST API. Works with both local dev and remote deployments behind oauth2-proxy.
+description: Drive P3FO (Plan/Program/Project/Focus) via the local p3fo MCP server. Trigger when the user mentions P3FO, tasks, triage, votes, circles, frameworks, reminders, pomodoro sessions, fertilization board, dream board, QoL survey, or asks to manage productivity data through the P3FO REST API.
 ---
 
 # P3FO MCP
 
-Drive P3FO (Plan/Program/Project/Focus) via the `p3fo` MCP server (`mcp-server/`, TypeScript, stdio transport). The server wraps the P3FO Express REST API and exposes one tool per endpoint, scoped to: tasks, users & settings, app settings, QoL survey, filters, fertilization/dream boards, circles, frameworks, votes, reminders, and pomodoro sessions.
+Drive P3FO (Plan/Program/Project/Focus) via the local `p3fo` MCP server (`mcp-server/`, TypeScript, stdio transport). The server wraps the P3FO Express REST API (`server/index.ts`) and exposes one tool per endpoint, scoped to: tasks, users & settings, app settings, QoL survey, filters, fertilization/dream boards, circles, frameworks, votes, reminders, and pomodoro sessions.
 
 ## Setup
 
@@ -111,7 +111,7 @@ p3fo_list_tasks({ "userId": "u-123" })   // WRONG — will fail
 
 ## CRITICAL: call MCP tools directly, never delegate
 
-**Never** use a subagent/task tool to read or search MCP tool output. MCP tools are available directly in your session — call them inline. If a tool returns a large/truncated payload, **do not** spawn an agent to grep the output file. Instead:
+**Never** use the `task`/subagent tool to read or search MCP tool output. MCP tools are available directly in this session — call them inline. If a tool returns a large/truncated payload, **do not** spawn an explore agent to grep the output file. Instead:
 
 1. Re-call the tool with a tighter `limit` or a status/category filter to reduce the payload, OR
 2. Use `p3fo_get_task` with a specific `id` if you know it, OR
@@ -132,8 +132,9 @@ All tools return JSON (pretty-printed) as a single `text` content block. Errors 
 
 ### Tasks
 
-- **`p3fo_list_tasks`** — `params`: `userId?`, `limit?`, `offset?`, `excludeStatuses?` (string[]), `triageStatuses?` (string[]), `includeSubtasks?` (boolean, default `false` in the MCP tool to save context). Returns `{ data, total }`.
+- **`p3fo_list_tasks`** — `params`: `userId?`, `limit?`, `offset?`, `excludeStatuses?` (string[]), `triageStatuses?` (string[]), `includeSubtasks?` (boolean, default `false` in the MCP tool to save context), `search?` (case-insensitive substring on title), `active?` (boolean sugar = `triageStatuses:["WIP","Ready","Blocked"]`), `fields?` (string[] projection), `compact?` (boolean, default `true` — projects to the requested fields, default `id,title,triageStatus,priority,updatedAt`; set `false` for full objects incl. `comment` blobs). Returns `{ data, total }`.
 - **`p3fo_get_task`** — `params`: `id`.
+- **`p3fo_get_task_by_title`** — `params`: `title` (case-insensitive), `exact?` (default `false` = substring). Returns `{ data, total }` of matching tasks. Prefer this over listing when reconciling against external systems (issue trackers, CRMs, …).
 - **`p3fo_create_task`** — `params`: `task` (TaskEntity fields, e.g. `title`, `triageStatus`, `urgent`, `impact`, `difficulty`, `category`, `userId`, `parentId`).
 - **`p3fo_update_task`** — `params`: `id`, `patch` (partial TaskEntity).
 - **`p3fo_delete_task`** — `params`: `id`.
@@ -142,6 +143,12 @@ All tools return JSON (pretty-printed) as a single `text` content block. Errors 
 - **`p3fo_clear_tasks`** — no args.
 
 `TriageStatus` ∈ `Backlog | Ready | WIP | Blocked | Done | Dropped`. `Category` ∈ Marketing, Documentation, Consulting, Testing, Funerals, Negotiated overtime, Sickness, Finances, HR, Training, Support, UX/UI, Admin, Development, System Operations, Private.
+
+#### Listing gotchas — IMPORTANT
+
+- **`total` may exceed `data.length`** when `limit` is set. Never conclude a task doesn't exist from a single page: check `total` vs `data.length` and paginate or filter if `total > data.length`. Prefer `search` (title substring) or `p3fo_get_task_by_title` to locate a specific task in one call.
+- **Default ordering is `priority DESC`** — tasks with low/negative priority (e.g. WIP tasks being worked with priority −1) sort to the *end*, so an unfiltered `limit:100` listing can hide active tasks behind 100 archived ones. Use `active: true` (or explicit `triageStatuses`) to get the actionable set reliably.
+- **Compact default:** `p3fo_list_tasks` returns only `id,title,triageStatus,priority,updatedAt` per task by default (~76% smaller payload). Pass `compact:false` when you need `comment`, `timer`, `urgent`, etc. Pass `fields:[...]` to project custom fields.
 
 #### Filtering by triage status — IMPORTANT
 
@@ -157,10 +164,10 @@ Everything except Archived and Backlog:
 p3fo_list_tasks({ "params": { "excludeStatuses": ["Archived", "Backlog"] } })
 ```
 
-**Known limitation / verification gotcha:** The MCP server binary correctly serializes these to `triage_statuses=WIP` in the HTTP query string (verified via stdio + netcat inspection). However, some MCP clients may drop or ignore nested array values inside the `params` wrapper, causing the tool to return unfiltered results. If a `p3fo_list_tasks` call returns far more items than expected, **do NOT assume the filter is broken server-side** — verify by calling the REST API directly:
+**Known limitation / verification gotcha:** The MCP server binary correctly serializes these to `triage_statuses=WIP` in the HTTP query string (verified via stdio + netcat inspection). However, some MCP clients (including Kilo's tool-call layer at the time of writing) may drop or ignore nested array values inside the `params` wrapper, causing the tool to return unfiltered results. If a `p3fo_list_tasks` call returns far more items than expected, **do NOT assume the filter is broken server-side** — verify by calling the REST API directly:
 
 ```bash
-curl -s "https://your-p3fo-host.example.com/mcp/api/tasks?triage_statuses=WIP&limit=5" \
+curl -s "<your-p3fo-base-url>/mcp/api/tasks?triage_statuses=WIP&limit=5" \
   -H "X-API-Key: <key>" | python3 -c "import sys,json; d=json.load(sys.stdin); print('total:', d['total'])"
 ```
 
@@ -253,7 +260,27 @@ If curl returns the correct filtered `total` but the MCP tool does not, the issu
 ### List a user's active tasks
 
 ```
-p3fo_list_tasks({ "params": { "userId": "u-123", "excludeStatuses": ["Done", "Dropped"] } })
+p3fo_list_tasks({ "params": { "userId": "u-123", "active": true } })
+```
+
+### Find a task by a given chars (like an external issue number)
+
+```
+p3fo_list_tasks({ "params": { "search": "12345" } })
+```
+
+or exact title:
+
+```
+p3fo_get_task_by_title({ "params": { "title": "Some task title ISSUE-12345", "exact": true } })
+```
+
+### Check which external issues are tracked in P3FO (sync check)
+
+Adapt the pattern to your own convention (e.g. `ISSUE-`, `JIRA-`):
+
+```
+p3fo_list_tasks({ "params": { "search": "ISSUE-", "fields": ["title", "triageStatus"] } })
 ```
 
 ### Triage: move a task to WIP and set priority
@@ -282,10 +309,10 @@ p3fo_health({})   // { ok: true, mode: "sqlite", timestamp: "..." }
 
 ## Troubleshooting
 
-- **No `p3fo_*` tools available** → server not registered at session start, or not built. Run `npx tsc -p mcp-server/tsconfig.json` and **start a new chat**.
-- **`P3FO API error 500` / fetch failed** → backend not running or wrong `P3FO_API_URL`. Confirm with `p3fo_health`.
-- **`P3FO API error 401: Unauthorized: invalid or missing API key`** → remote deployment requires `P3FO_API_KEY`; set it to match the server's `P3FO_API_KEY` env.
-- **`P3FO API error 302: Redirected to ...`** → the MCP client hit oauth2-proxy's login redirect. You're likely using the wrong URL (missing `/mcp` prefix) or `OAUTH2_PROXY_SKIP_AUTH_ROUTES` isn't set. Use `P3FO_API_URL` with the `/mcp` suffix.
+- **No `p3fo_*` tools available** → server not registered at session start, or not built. Run `npx tsc -p <p3fo-repo>/mcp-server/tsconfig.json` and **start a new chat**. Check `/mcps` to see loaded servers.
+- **`P3FO API error 500` / fetch failed** → backend not running or wrong `P3FO_API_URL`. Start it with `just dev` (runs frontend + Express on :5172). Confirm with `p3fo_health`.
+- **`P3FO API error 401: Unauthorized: invalid or missing API key`** → remote deployment requires `P3FO_API_KEY`; set it in `kilo.jsonc` to match the server's `P3FO_API_KEY` env.
+- **`P3FO API error 302: Redirected to ...`** → the MCP client hit oauth2-proxy's login redirect. You're likely using `https://<your-host>/api/...` instead of the `/mcp` prefix, or `OAUTH2_PROXY_SKIP_AUTH_ROUTES` isn't set. Use `P3FO_API_URL=https://<your-p3fo-host>/mcp`.
 - **`Missing required argument` / `Unexpected keyword argument`** → you forgot the `params` wrapper. Wrap all args under `params`.
 - **`p3fo_list_tasks` ignores `triageStatuses`/`excludeStatuses`/`limit`** → the MCP server sends the correct query string (verified via stdio+netcat), but some MCP clients drop nested array params. Verify with curl against `/mcp/api/tasks?triage_statuses=WIP` — if curl works but the tool doesn't, the issue is client-side argument passing. See "Filtering by triage status" above.
 - **404 on a vote** → `p3fo_get_vote` accepts id OR slug; both are tried server-side. Confirm the value.
@@ -293,14 +320,14 @@ p3fo_health({})   // { ok: true, mode: "sqlite", timestamp: "..." }
 
 ## Security notes
 
-- `p3fo_clear_all_data`, `p3fo_clear_tasks/users/circles/reminders/pomodoro_sessions`, `p3fo_delete_*` are destructive — gate behind `ask`/`deny` in your MCP client's permission settings.
-- If `P3FO_API_KEY` is set, keep it out of version control (env block or git-ignored `.env`).
+- `p3fo_clear_all_data`, `p3fo_clear_tasks/users/circles/reminders/pomodoro_sessions`, `p3fo_delete_*` are destructive — gate behind `ask`/`deny` in `kilo.jsonc` `permission`.
+- If `P3FO_API_TOKEN` is set, keep it out of version control (env block or git-ignored `.env`).
 - Vote responses are anonymized server-side only when `config.isAnonymous` is true; otherwise `userId` is returned in results.
 
 ## Development
 
 ```bash
-# from the P3FO repo root
+# from the p3fo repo root
 npx tsc -p mcp-server/tsconfig.json          # build
 node mcp-server/dist/index.js                # run (needs P3FO backend up)
 P3FO_API_URL=http://localhost:5172 node mcp-server/dist/index.js

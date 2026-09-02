@@ -780,6 +780,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     excludeStatuses?: string[],
     triageStatuses?: string[],
     includeSubtasks?: boolean,
+    options?: { search?: string; active?: boolean },
   ): Promise<{ data: TaskEntity[]; total: number }> {
     const conditions: string[] = [];
     const params: (string | number | boolean | null)[] = [];
@@ -800,6 +801,15 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       const placeholders = triageStatuses.map(() => `$${paramIndex++}`).join(', ');
       conditions.push(`"triageStatus" IN (${placeholders})`);
       params.push(...triageStatuses);
+    }
+
+    if (options?.active) {
+      conditions.push(`"triageStatus" IN ('WIP', 'Ready', 'Blocked')`);
+    }
+
+    if (options?.search) {
+      conditions.push(`"title" ILIKE $${paramIndex++}`);
+      params.push(`%${options.search}%`);
     }
 
     if (includeSubtasks === false) {

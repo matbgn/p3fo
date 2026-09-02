@@ -26,6 +26,7 @@ export interface DbClient {
     excludeStatuses?: string[],
     triageStatuses?: string[],
     includeSubtasks?: boolean,
+    options?: { search?: string; active?: boolean },
   ): Promise<PaginatedResponse<TaskEntity>>;
   getTaskById(id: string): Promise<TaskEntity | null>;
   createTask(task: Partial<TaskEntity>): Promise<TaskEntity>;

@@ -56,6 +56,8 @@ export class P3foClient {
     excludeStatuses?: string[];
     triageStatuses?: string[];
     includeSubtasks?: boolean;
+    search?: string;
+    active?: boolean;
   }) {
     const q = new URLSearchParams();
     if (params?.userId) q.set('user_id', params.userId);
@@ -64,7 +66,9 @@ export class P3foClient {
     if (params?.excludeStatuses?.length) q.set('exclude_statuses', params.excludeStatuses.join(','));
     if (params?.triageStatuses?.length) q.set('triage_statuses', params.triageStatuses.join(','));
     if (params?.includeSubtasks !== undefined) q.set('include_subtasks', String(params.includeSubtasks));
-    return this.get(`/api/tasks${q.toString() ? `?${q}` : ''}`);
+    if (params?.search) q.set('search', params.search);
+    if (params?.active !== undefined) q.set('active', String(params.active));
+    return this.get<{ data: unknown[]; total: number }>(`/api/tasks${q.toString() ? `?${q}` : ''}`);
   }
 
   getTaskById(id: string) {

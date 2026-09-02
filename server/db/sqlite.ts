@@ -817,6 +817,7 @@ class SqliteClient implements DbClient {
     excludeStatuses?: string[],
     triageStatuses?: string[],
     includeSubtasks?: boolean,
+    options?: { search?: string; active?: boolean },
   ): Promise<{ data: TaskEntity[]; total: number }> {
     const conditions: string[] = [];
     const params: (string | number | null)[] = [];
@@ -836,6 +837,15 @@ class SqliteClient implements DbClient {
       const placeholders = triageStatuses.map(() => '?').join(', ');
       conditions.push(`"triageStatus" IN (${placeholders})`);
       params.push(...triageStatuses);
+    }
+
+    if (options?.active) {
+      conditions.push(`"triageStatus" IN ('WIP', 'Ready', 'Blocked')`);
+    }
+
+    if (options?.search) {
+      conditions.push(`"title" LIKE ?`);
+      params.push(`%${options.search}%`);
     }
 
     if (includeSubtasks === false) {

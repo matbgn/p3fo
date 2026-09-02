@@ -139,12 +139,32 @@ export function registerTools(server: McpServer, client: P3foClient) {
         excludeStatuses: z.array(z.string()).optional(),
         triageStatuses: z.array(z.string()).optional(),
         includeSubtasks: z.boolean().optional(),
+        /** Case-insensitive substring match on title. */
+        search: stringOrUndefined,
+        /** Sugar: restrict to actionable triage statuses (WIP, Ready, Blocked). */
+        active: z.boolean().optional(),
+        /** Compact projection to save context. Default: id,title,triageStatus,priority,updatedAt. */
+        fields: z.array(z.string()).optional(),
+        /** Set false to return full task objects (includes comment blobs). */
+        compact: z.boolean().optional(),
       }).optional(),
     },
     async (args) => {
       // Default: exclude subtasks (parentId != null) to avoid overcharging context.
       const params = { includeSubtasks: false, ...(args.params ?? {}) };
-      try { return asText(await client.getTasks(params)); } catch (e) { return errorText(e); }
+      try {
+        const result = (await client.getTasks(params)) as { data: Record<string, unknown>[]; total: number };
+        const compact = (args.params?.compact ?? true) as boolean;
+        if (!compact) return asText(result);
+        const defaultFields = ['id', 'title', 'triageStatus', 'priority', 'updatedAt'];
+        const fields = args.params?.fields ?? defaultFields;
+        const data = result.data.map((t) => {
+          const out: Record<string, unknown> = {};
+          for (const f of fields) out[f] = t[f];
+          return out;
+        });
+        return asText({ data, total: result.total });
+      } catch (e) { return errorText(e); }
     },
   );
 
@@ -153,6 +173,27 @@ export function registerTools(server: McpServer, client: P3foClient) {
     { params: z.object({ id: z.string() }) },
     async (args) => {
       try { return asText(await client.getTaskById(args.params.id)); } catch (e) { return errorText(e); }
+    },
+  );
+
+  server.tool(
+    'p3fo_get_task_by_title',
+    {
+      params: z.object({
+        title: z.string().describe('Exact (case-insensitive) or substring title to look up'),
+        exact: z.boolean().optional(),
+      }),
+    },
+    async (args) => {
+      try {
+        const result = (await client.getTasks({ search: args.params.title, limit: args.params.exact ? 200 : 20 })) as { data: { title?: string }[]; total: number };
+        let data = result.data;
+        if (args.params.exact) {
+          const wanted = args.params.title.trim().toLowerCase();
+          data = data.filter((t) => (t.title ?? '').trim().toLowerCase() === wanted);
+        }
+        return asText({ data, total: data.length });
+      } catch (e) { return errorText(e); }
     },
   );
 

@@ -156,11 +156,19 @@ app.get('/api/tasks', async (req: Request, res: Response) => {
       ? true
       : String(req.query.include_subtasks) === 'true' || String(req.query.include_subtasks) === '1';
 
+    // Optional text search on title (case-insensitive contains).
+    const search = typeof req.query.search === 'string' && req.query.search.trim() !== ''
+      ? req.query.search.trim()
+      : undefined;
+
+    // active=true sugar: restrict to actionable triage statuses only.
+    const active = String(req.query.active) === 'true' || req.query.active === '1';
+
     const pagination = (limit !== undefined || offset !== undefined)
       ? { limit, offset }
       : undefined;
 
-    const result = await db.getTasks(userId, pagination, excludeStatuses, triageStatuses, includeSubtasks);
+    const result = await db.getTasks(userId, pagination, excludeStatuses, triageStatuses, includeSubtasks, { search, active });
     res.json(result);
   } catch (error) {
     console.error('Error fetching tasks:', error);
