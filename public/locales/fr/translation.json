@@ -1698,6 +1698,15 @@
       "orange": "Quelque chose de plus simple",
       "red": "La plus petite étape possible"
     },
+    "reason": {
+      "currentlyWorkingOn": "En cours de travail",
+      "topPriority": "priorité haute",
+      "urgent": "urgent",
+      "highImpact": "fort impact",
+      "sprintTarget": "objectif de sprint",
+      "dueSoon": "échéance proche",
+      "firstInStoryboard": "premier de votre storyboard"
+    },
     "alternative": "Alternative : ",
     "alternativeChecked": "✓ Alternative : ",
     "viewConsistencyDetails": "Voir les détails de la régularité",

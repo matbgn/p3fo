@@ -4,9 +4,21 @@ import { useUserSettings } from './useUserSettings';
 import type { Task } from './useTasks';
 import { sortTasks } from '@/utils/taskSorting';
 
+// Reasons are i18n *keys* (locale-independent), translated at render time by
+// the consumer via t(key, { join }). Keeping raw English strings here made
+// the callout render English text under fr/de locales.
+export type NextActionReasonKey =
+  | 'spotlight.reason.currentlyWorkingOn'
+  | 'spotlight.reason.topPriority'
+  | 'spotlight.reason.urgent'
+  | 'spotlight.reason.highImpact'
+  | 'spotlight.reason.sprintTarget'
+  | 'spotlight.reason.dueSoon'
+  | 'spotlight.reason.firstInStoryboard';
+
 export interface NextAction {
   task: Task;
-  reason: string;
+  reasonKeys: NextActionReasonKey[];
 }
 
 export function useNextAction(): { nextAction: NextAction | null } {
@@ -24,7 +36,7 @@ export function useNextAction(): { nextAction: NextAction | null } {
     if (activeTimerTask) {
       return {
         task: activeTimerTask,
-        reason: 'Currently being worked on',
+        reasonKeys: ['spotlight.reason.currentlyWorkingOn'],
       };
     }
 
@@ -33,6 +45,10 @@ export function useNextAction(): { nextAction: NextAction | null } {
         if (t.parentId) return false;
         const status = t.triageStatus;
         if (status === 'Done' || status === 'Dropped' || status === 'Archived') return false;
+        // Blocked cards are not actionable — proposing one as "next task"
+        // would contradict the blocked escalation reminder. (Note: a task
+        // running with an active timer is surfaced above and wins regardless.)
+        if (status === 'Blocked') return false;
         if (currentUserId && t.userId && t.userId !== currentUserId) return false;
         return true;
       })
@@ -41,17 +57,17 @@ export function useNextAction(): { nextAction: NextAction | null } {
     if (candidates.length === 0) return null;
 
     const top = candidates[0];
-    const reasons: string[] = [];
-    if (top.priority !== undefined) reasons.push('top priority');
-    if (top.urgent) reasons.push('urgent');
-    if (top.impact) reasons.push('high impact');
-    if (top.sprintTarget) reasons.push('sprint target');
-    if (top.terminationDate && top.terminationDate > 0 && top.terminationDate <= now + 86400000) reasons.push('due soon');
-    if (reasons.length === 0) reasons.push('first in your storyboard');
+    const reasonKeys: NextActionReasonKey[] = [];
+    if (top.priority !== undefined) reasonKeys.push('spotlight.reason.topPriority');
+    if (top.urgent) reasonKeys.push('spotlight.reason.urgent');
+    if (top.impact) reasonKeys.push('spotlight.reason.highImpact');
+    if (top.sprintTarget) reasonKeys.push('spotlight.reason.sprintTarget');
+    if (top.terminationDate && top.terminationDate > 0 && top.terminationDate <= now + 86400000) reasonKeys.push('spotlight.reason.dueSoon');
+    if (reasonKeys.length === 0) reasonKeys.push('spotlight.reason.firstInStoryboard');
 
     return {
       task: top,
-      reason: reasons.join(', '),
+      reasonKeys,
     };
   }, [tasks, currentUserId]);
 

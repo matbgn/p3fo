@@ -7,10 +7,10 @@ import { useAllTasks } from '@/hooks/useAllTasks';
 import { useSettingsContext } from '@/context/SettingsContext';
 import { addReminder } from '@/utils/reminders';
 import type { Task } from '@/hooks/useTasks';
+import { blockedThresholdMs } from './NotificationManager.blockedThreshold';
 import { EXAMPLE_DATA_PROMPTED_KEY } from '@/components/ExampleDataModal';
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
-const BLOCKED_THRESHOLD_MS = 30 * 60 * 1000;
 const AGING_REMINDER_PREFIX = 'aging:';
 const BLOCKED_REMINDER_PREFIX = 'blocked:';
 // Stable i18n key identifying the onboarding welcome reminder. We match on
@@ -147,7 +147,7 @@ export const NotificationManager: React.FC = () => {
             // Blocked trigger
             if (task.triageStatus === 'Blocked' && task.blockedSince) {
                 const blockedDuration = now - task.blockedSince;
-                if (blockedDuration > BLOCKED_THRESHOLD_MS) {
+                if (blockedDuration > blockedThresholdMs(baseDays)) {
                     const reminderKey = `${BLOCKED_REMINDER_PREFIX}${task.id}`;
                     if (!isNotified(reminderKey)) {
                         const titleKey = 'notifications.blocked.title';

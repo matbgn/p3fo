@@ -1698,6 +1698,15 @@
       "orange": "Etwas Einfacheres",
       "red": "Kleinstmöglicher Schritt"
     },
+    "reason": {
+      "currentlyWorkingOn": "Wird gerade bearbeitet",
+      "topPriority": "höchste Priorität",
+      "urgent": "dringend",
+      "highImpact": "hoher Impact",
+      "sprintTarget": "Sprint-Ziel",
+      "dueSoon": "bald fällig",
+      "firstInStoryboard": "erster in Ihrem Storyboard"
+    },
     "alternative": "Alternative: ",
     "alternativeChecked": "✓ Alternative: ",
     "viewConsistencyDetails": "Konsistenz-Details anzeigen",

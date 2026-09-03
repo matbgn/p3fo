@@ -140,7 +140,7 @@ export const NextTaskSpotlight: React.FC<NextTaskSpotlightProps> = ({ onFocusOnT
       : selectedMood === 'orange'
         ? t('spotlight.moodReason.orange')
         : t('spotlight.moodReason.red'))
-    : nextAction?.reason ?? '';
+    : nextAction?.reasonKeys.map(k => t(k)).join(', ') ?? '';
 
   const handleStart = useCallback(async () => {
     if (!effectiveTask) return;
@@ -229,6 +229,53 @@ export const NextTaskSpotlight: React.FC<NextTaskSpotlightProps> = ({ onFocusOnT
     </button>
   );
 
+  // Mood-question state uses a distinct centered layout (stacked, no
+  // sparkline/actions column) so it reads clearly differently from the
+  // default next-task state — that difference is also why the consistency
+  // sparkline is absent here.
+  if (shouldAskMood) {
+    return (
+      <Card className="border-primary/30 bg-primary/5 shadow-md">
+        <CardContent className="p-4 relative">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={handleDismiss}
+            className="h-8 w-8 p-0 absolute top-2 right-2"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+          <div className="flex flex-col items-center justify-center text-center gap-2 py-2">
+            {showWelcomeBack && (
+              <div className="text-sm font-medium text-primary">
+                {t('spotlight.welcomeBackBanner')}
+              </div>
+            )}
+            <span className="text-xs font-medium text-primary uppercase tracking-wide">
+              {t('spotlight.moodQuestion')}
+            </span>
+            <p className="text-xs text-muted-foreground max-w-sm">
+              {t('spotlight.moodHelper')}
+            </p>
+            <div className="flex items-center justify-center gap-2 mt-1">
+              {moodButton('green', t('spotlight.mood.ready'), 'bg-green-500', 'border-green-500/30', 'hover:bg-green-500/10')}
+              {moodButton('orange', t('spotlight.mood.steady'), 'bg-orange-500', 'border-orange-500/30', 'hover:bg-orange-500/10')}
+              {moodButton('red', t('spotlight.mood.struggling'), 'bg-red-500', 'border-red-500/30', 'hover:bg-red-500/10')}
+            </div>
+            {previewAdaptation && (
+              <div className="flex items-center gap-2 mt-1 opacity-40 max-w-full">
+                {previewAdaptation.task.difficulty && (
+                  <div className={cn('w-2.5 h-2.5 rounded-full shrink-0', getDifficultyColor(previewAdaptation.task.difficulty))} />
+                )}
+                <span className="text-sm font-medium truncate">{previewAdaptation.task.title}</span>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="border-primary/30 bg-primary/5 shadow-md">
       <CardContent className="p-4">
@@ -239,108 +286,71 @@ export const NextTaskSpotlight: React.FC<NextTaskSpotlightProps> = ({ onFocusOnT
         )}
         <div className="flex items-center gap-3">
           <div className="flex-1 min-w-0">
-            {shouldAskMood ? (
-              <>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-medium text-primary uppercase tracking-wide">
-                    {t('spotlight.moodQuestion')}
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground mb-2">
-                  {t('spotlight.moodHelper')}
-                </p>
-                <div className="flex items-center gap-2">
-                  {moodButton('green', t('spotlight.mood.ready'), 'bg-green-500', 'border-green-500/30', 'hover:bg-green-500/10')}
-                  {moodButton('orange', t('spotlight.mood.steady'), 'bg-orange-500', 'border-orange-500/30', 'hover:bg-orange-500/10')}
-                  {moodButton('red', t('spotlight.mood.struggling'), 'bg-red-500', 'border-red-500/30', 'hover:bg-red-500/10')}
-                </div>
-                {previewAdaptation && (
-                  <div className="flex items-center gap-2 mt-2 opacity-40">
-                    {previewAdaptation.task.difficulty && (
-                      <div className={cn('w-2.5 h-2.5 rounded-full shrink-0', getDifficultyColor(previewAdaptation.task.difficulty))} />
-                    )}
-                    <span className="text-sm font-medium truncate">{previewAdaptation.task.title}</span>
-                  </div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs font-medium text-primary uppercase tracking-wide">
+                {greeting}
+              </span>
+              {!showWelcomeBack && (
+                <span className="text-xs text-muted-foreground">· {effectiveReason}</span>
+              )}
+            </div>
+            {effectiveTask && (
+              <div className="flex items-center gap-2">
+                {effectiveTask.difficulty && (
+                  <div className={cn('w-2.5 h-2.5 rounded-full shrink-0', getDifficultyColor(effectiveTask.difficulty))} />
                 )}
-              </>
-            ) : (
-              <>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-medium text-primary uppercase tracking-wide">
-                    {greeting}
-                  </span>
-                  {!showWelcomeBack && (
-                    <span className="text-xs text-muted-foreground">· {effectiveReason}</span>
-                  )}
-                </div>
-                {effectiveTask && (
-                  <div className="flex items-center gap-2">
-                    {effectiveTask.difficulty && (
-                      <div className={cn('w-2.5 h-2.5 rounded-full shrink-0', getDifficultyColor(effectiveTask.difficulty))} />
-                    )}
-                    <span className="text-sm font-medium truncate">{effectiveTask.title}</span>
-                    {hasRunningTimer && (
-                      <Clock className="w-3.5 h-3.5 text-blue-500 shrink-0 animate-pulse" />
-                    )}
-                  </div>
+                <span className="text-sm font-medium truncate">{effectiveTask.title}</span>
+                {hasRunningTimer && (
+                  <Clock className="w-3.5 h-3.5 text-blue-500 shrink-0 animate-pulse" />
                 )}
-                {moodAdaptation && moodAdaptation.alternatives.length > 0 && (
-                  <button
-                    onClick={() => setUseAlt(prev => !prev)}
-                    className={cn(
-                      'mt-1 text-xs flex items-center gap-1 transition-colors',
-                      useAlt ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground',
-                    )}
-                  >
-                    {useAlt ? t('spotlight.alternativeChecked') : t('spotlight.alternative')}
-                    {moodAdaptation.alternatives[0].title}
-                  </button>
-                )}
-                <p className="text-xs text-muted-foreground mt-3">
-                  {t('spotlight.moodUpdatePrompt')}
-                </p>
-                <div className="flex items-center gap-1.5 mt-2">
-                  {moodButton('green', t('spotlight.mood.ready'), 'bg-green-500', 'border-green-500/30', 'hover:bg-green-500/10')}
-                  {moodButton('orange', t('spotlight.mood.steady'), 'bg-orange-500', 'border-orange-500/30', 'hover:bg-orange-500/10')}
-                  {moodButton('red', t('spotlight.mood.struggling'), 'bg-red-500', 'border-red-500/30', 'hover:bg-red-500/10')}
-                </div>
-              </>
-            )}
-          </div>
-          {!shouldAskMood && (
-            <>
-              <button
-                onClick={onNavigateToFocusSessions}
-                className="shrink-0 hidden sm:block cursor-pointer hover:opacity-80 transition-opacity"
-                title={t('spotlight.viewConsistencyDetails')}
-              >
-                <ConsistencySparkline />
-              </button>
-              <div className="flex items-center gap-1 shrink-0">
-                <Button size="sm" onClick={handleStart} className="gap-1.5">
-                  {hasRunningTimer ? (
-                    <>
-                      <ArrowRight className="h-3.5 w-3.5" />
-                      {t('spotlight.jumpToTask')}
-                    </>
-                  ) : (
-                    <>
-                      <Play className="h-3.5 w-3.5" />
-                      {t('spotlight.startWorking')}
-                    </>
-                  )}
-                </Button>
-                <Button size="sm" variant="ghost" onClick={handleDismiss} className="h-8 w-8 p-0">
-                  <X className="h-4 w-4" />
-                </Button>
               </div>
-            </>
-          )}
-          {shouldAskMood && (
-            <Button size="sm" variant="ghost" onClick={handleDismiss} className="h-8 w-8 p-0 shrink-0">
+            )}
+            {moodAdaptation && moodAdaptation.alternatives.length > 0 && (
+              <button
+                onClick={() => setUseAlt(prev => !prev)}
+                className={cn(
+                  'mt-1 text-xs flex items-center gap-1 transition-colors',
+                  useAlt ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {useAlt ? t('spotlight.alternativeChecked') : t('spotlight.alternative')}
+                {moodAdaptation.alternatives[0].title}
+              </button>
+            )}
+            <p className="text-xs text-muted-foreground mt-3">
+              {t('spotlight.moodUpdatePrompt')}
+            </p>
+            <div className="flex items-center gap-1.5 mt-2">
+              {moodButton('green', t('spotlight.mood.ready'), 'bg-green-500', 'border-green-500/30', 'hover:bg-green-500/10')}
+              {moodButton('orange', t('spotlight.mood.steady'), 'bg-orange-500', 'border-orange-500/30', 'hover:bg-orange-500/10')}
+              {moodButton('red', t('spotlight.mood.struggling'), 'bg-red-500', 'border-red-500/30', 'hover:bg-red-500/10')}
+            </div>
+          </div>
+          <button
+            onClick={onNavigateToFocusSessions}
+            className="shrink-0 hidden sm:block cursor-pointer hover:opacity-80 transition-opacity"
+            title={t('spotlight.viewConsistencyDetails')}
+          >
+            <ConsistencySparkline />
+          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            <Button size="sm" onClick={handleStart} className="gap-1.5">
+              {hasRunningTimer ? (
+                <>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                  {t('spotlight.jumpToTask')}
+                </>
+              ) : (
+                <>
+                  <Play className="h-3.5 w-3.5" />
+                  {t('spotlight.startWorking')}
+                </>
+              )}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={handleDismiss} className="h-8 w-8 p-0">
               <X className="h-4 w-4" />
             </Button>
-          )}
+          </div>
         </div>
       </CardContent>
     </Card>

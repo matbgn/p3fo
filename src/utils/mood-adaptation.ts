@@ -37,6 +37,9 @@ export function adaptTaskToMood(
       if (t.parentId) return false;
       const status = t.triageStatus;
       if (status === 'Done' || status === 'Dropped' || status === 'Archived') return false;
+      // Blocked cards are not actionable — never propose them as the
+      // mood-adapted task.
+      if (status === 'Blocked') return false;
       if (currentUserId && t.userId && t.userId !== currentUserId) return false;
       return true;
     })
