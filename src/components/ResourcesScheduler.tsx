@@ -87,10 +87,16 @@ const ResourcesScheduler: React.FC<ResourcesSchedulerProps> = ({ onFocusOnTask, 
 
         const SCALE_HOURS_PER_POINT = 3; // 24 hours / 8 points. 1 point = 3 hours on the timeline.
 
-        resources.forEach(user => {
-            const userId = user.id;
-            const userTasks = tasksByUser[userId] || [];
-            const preferredDaysMap = normalizePreferredDays(user.preferredWorkingDays);
+            resources.forEach(user => {
+                const userId = user.id;
+                const userTasks = tasksByUser[userId] || [];
+                const preferredDaysMap = normalizePreferredDays(user.preferredWorkingDays);
+
+                // Users with no preferred working days cannot be scheduled
+                if (Object.values(preferredDaysMap).every(c => !c || c <= 0)) {
+                    data[userId] = [];
+                    return;
+                }
 
             // Helper to check working capacity for a day (0 to 1)
             const getDayCapacity = (date: moment.Moment) => preferredDaysMap[date.day()] || 0;

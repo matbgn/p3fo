@@ -22,8 +22,8 @@ describe('normalizePreferredDays', () => {
         expect(result).toEqual({ 1: 1, 2: 1, 3: 1, 4: 1, 5: 1 });
     });
 
-    it('should return default Mon-Fri when input is empty object', () => {
+    it('should preserve explicit empty object as intentional no-working-days state', () => {
         const result = normalizePreferredDays({});
-        expect(result).toEqual({ 1: 1, 2: 1, 3: 1, 4: 1, 5: 1 });
+        expect(result).toEqual({});
     });
 });

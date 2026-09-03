@@ -4,11 +4,15 @@ import moment from "moment";
 /**
  * Normalizes preferred working days to a map of day index (0-6) -> capacity (0-1).
  * Handles legacy number[] format.
+ *
+ * Empty input (undefined) means "not configured" and defaults to Mon-Fri.
+ * An explicitly empty object `{}` is preserved as the intentional
+ * "no preferred working days" state (callers must guard their divisions).
  */
 export const normalizePreferredDays = (input?: number[] | Record<string, number>): Record<number, number> => {
     const result: Record<number, number> = {};
 
-    if (!input) {
+    if (input === undefined) {
         // Default Mon-Fri full capacity
         [1, 2, 3, 4, 5].forEach(d => { result[d] = 1; });
         return result;
@@ -23,12 +27,8 @@ export const normalizePreferredDays = (input?: number[] | Record<string, number>
         }
         input.forEach(d => { result[d] = 1; });
     } else {
-        // New: map of day -> capacity
-        if (Object.keys(input).length === 0) {
-            // Empty object = same as undefined, default to Mon-Fri
-            [1, 2, 3, 4, 5].forEach(d => { result[d] = 1; });
-            return result;
-        }
+        // New: map of day -> capacity.
+        // Empty object is preserved: it is the explicit "no working days" state.
         Object.entries(input).forEach(([day, capacity]) => {
             result[parseInt(day, 10)] = capacity;
         });

@@ -315,6 +315,23 @@ describe('Vacation scenarios (50% workload, 40h vacation = 2 work weeks)', () =>
         // When vacation exceeds hours due, balance is positive (over-credited)
         expect(result.totalTimeExpandedInHours).toBeGreaterThan(0);
     });
+
+    it('handles zero preferred working days without NaN (empty map)', () => {
+        const settingsZeroDays: CombinedSettings = {
+            ...mockSettings,
+            preferredWorkingDays: {},
+        };
+        const tasks: Task[] = [];
+
+        const result = getProjectedHoursForActualMonth(2026, 4, tasks, settingsZeroDays, 0);
+
+        // pace falls back to Mon-Fri working days; no NaN should leak anywhere
+        expect(Number.isNaN(result.totalTimeExpandedInHours)).toBe(false);
+        expect(Number.isNaN(result.hoursDue)).toBe(false);
+        expect(Number.isNaN(result.actualHourlyBalance)).toBe(false);
+        expect(Number.isNaN(result.hourlyBalanceProjection)).toBe(false);
+        expect(result.preferredWorkingDays?.effectiveDays).toBe(0);
+    });
 });
 
 describe('getHistoricalHourlyBalances - selected user settings', () => {
