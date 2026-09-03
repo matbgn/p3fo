@@ -157,102 +157,110 @@ export const EditableTimeEntry: React.FC<{
   if (isEditing) {
     const startDisplayStr = startPdt ? plainDateTimeToDisplayString(startPdt) : '';
     const endDisplayStr = endPdt ? plainDateTimeToDisplayString(endPdt) : '';
-    const startAsDate = startPdt ? new Date(startPdt.year, startPdt.month - 1, startPdt.day) : undefined;
-    const endAsDate = endPdt ? new Date(endPdt.year, endPdt.month - 1, endPdt.day) : undefined;
+    const startAsDate = startPdt ? new Date(startPdt.year, startPdt.month - 1, startPdt.day, startPdt.hour, startPdt.minute, startPdt.second) : undefined;
+    const endAsDate = endPdt ? new Date(endPdt.year, endPdt.month - 1, endPdt.day, endPdt.hour, endPdt.minute, endPdt.second) : undefined;
 
     return (
       <TableRow>
-        <TableCell colSpan={6}>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-medium truncate max-w-[200px]" title={entry.taskTitle}>{entry.taskTitle}</span>
-            <Select onValueChange={(value) => setEditTaskCategory(value)} value={editTaskCategory}>
-              <SelectTrigger className="w-[140px] h-8">
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                {CATEGORIES.map((category) => (
-                  <SelectItem key={category} value={category}>{category}</SelectItem>
-                ))}
-                <SelectItem value="Uncategorized">Uncategorized</SelectItem>
-              </SelectContent>
-            </Select>
-            <UserSelector value={editUserId} onChange={setEditUserId} className="h-8 w-auto" />
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "h-8 justify-start text-left font-normal px-2",
-                    !startDisplayStr && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {startPdt ? format(startAsDate!, "PPP p") : <span>Pick a date</span>}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={startAsDate}
-                  onSelect={(date) => { if (date && startPdt) setStartPdt(dateDayToPlainDateTime(date, startPdt, timezone)); }}
-                  initialFocus
-                  weekStartsOn={weekStartsOn}
-                />
-                <div className="p-3 border-t border-border">
-                  <Button variant="outline" className="w-full justify-start" onClick={() => openTimePicker('start', startPdt ? plainDateTimeToTimestampS(startPdt, timezone) : Date.now())}>
-                    <Clock className="mr-2 h-4 w-4" />
-                    {startPdt ? `${String(startPdt.hour).padStart(2,'0')}:${String(startPdt.minute).padStart(2,'0')}:${String(startPdt.second).padStart(2,'0')}` : <span className="text-muted-foreground">Set time...</span>}
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "h-8 justify-start text-left font-normal px-2",
-                    !endPdt && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {endPdt ? format(endAsDate!, "PPP p") : <span>Running...</span>}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={endAsDate}
-                  onSelect={(date) => { if (date) setEndPdt(dateDayToPlainDateTime(date, endPdt || startPdt, timezone)); }}
-                  initialFocus
-                  weekStartsOn={weekStartsOn}
-                />
-                <div className="p-3 border-t border-border flex flex-col gap-2">
-                  <Button variant="outline" className="w-full justify-start" onClick={() => openTimePicker('end', endPdt ? plainDateTimeToTimestampS(endPdt, timezone) : (startPdt ? plainDateTimeToTimestampS(startPdt, timezone) : Date.now()))}>
-                    <Clock className="mr-2 h-4 w-4" />
-                    {endPdt ? `${String(endPdt.hour).padStart(2,'0')}:${String(endPdt.minute).padStart(2,'0')}:${String(endPdt.second).padStart(2,'0')}` : <span className="text-muted-foreground">Set time...</span>}
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setEndPdt(null)}>Set to Running</Button>
-                </div>
-              </PopoverContent>
-            </Popover>
-            <div className="flex gap-2">
-              <Button size="sm" onClick={handleSave}>Save</Button>
-              <Button size="sm" variant="outline" onClick={handleCancel}>Cancel</Button>
-            </div>
-            {timePickerConfig && (
-              <TimePickerDialog
-                isOpen={timePickerOpen}
-                onClose={() => setTimePickerOpen(false)}
-                initialTime={timePickerConfig.initialTime}
-                onTimeChange={(timestamp) => {
-                  const instant = Temporal.Instant.fromEpochMilliseconds(timestamp);
-                  const pdt = instant.toZonedDateTimeISO(timezone).toPlainDateTime();
-                  if (timePickerConfig.type === 'start') setStartPdt(pdt); else setEndPdt(pdt);
-                }}
+        <TableCell className="align-middle">
+          <span className="font-medium truncate block" title={entry.taskTitle}>{entry.taskTitle}</span>
+        </TableCell>
+        <TableCell className="whitespace-nowrap">
+          <Select onValueChange={(value) => setEditTaskCategory(value)} value={editTaskCategory}>
+            <SelectTrigger className="w-[140px] h-8">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent>
+              {CATEGORIES.map((category) => (
+                <SelectItem key={category} value={category}>{category}</SelectItem>
+              ))}
+              <SelectItem value="Uncategorized">Uncategorized</SelectItem>
+            </SelectContent>
+          </Select>
+        </TableCell>
+        <TableCell className="whitespace-nowrap">
+          <UserSelector value={editUserId} onChange={setEditUserId} className="h-8 w-auto" />
+        </TableCell>
+        <TableCell className="whitespace-nowrap">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "h-8 justify-start text-left font-normal px-2",
+                  !startDisplayStr && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {startPdt ? format(startAsDate!, "PPP p") : <span>Pick a date</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={startAsDate}
+                onSelect={(date) => { if (date && startPdt) setStartPdt(dateDayToPlainDateTime(date, startPdt, timezone)); }}
+                initialFocus
+                weekStartsOn={weekStartsOn}
               />
-            )}
+              <div className="p-3 border-t border-border">
+                <Button variant="outline" className="w-full justify-start" onClick={() => openTimePicker('start', startPdt ? plainDateTimeToTimestampS(startPdt, timezone) : Date.now())}>
+                  <Clock className="mr-2 h-4 w-4" />
+                  {startPdt ? `${String(startPdt.hour).padStart(2,'0')}:${String(startPdt.minute).padStart(2,'0')}:${String(startPdt.second).padStart(2,'0')}` : <span className="text-muted-foreground">Set time...</span>}
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </TableCell>
+        <TableCell className="whitespace-nowrap">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "h-8 justify-start text-left font-normal px-2",
+                  !endPdt && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {endPdt ? format(endAsDate!, "PPP p") : <span>Running...</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={endAsDate}
+                onSelect={(date) => { if (date) setEndPdt(dateDayToPlainDateTime(date, endPdt || startPdt, timezone)); }}
+                initialFocus
+                weekStartsOn={weekStartsOn}
+              />
+              <div className="p-3 border-t border-border flex flex-col gap-2">
+                <Button variant="outline" className="w-full justify-start" onClick={() => openTimePicker('end', endPdt ? plainDateTimeToTimestampS(endPdt, timezone) : (startPdt ? plainDateTimeToTimestampS(startPdt, timezone) : Date.now()))}>
+                  <Clock className="mr-2 h-4 w-4" />
+                  {endPdt ? `${String(endPdt.hour).padStart(2,'0')}:${String(endPdt.minute).padStart(2,'0')}:${String(endPdt.second).padStart(2,'0')}` : <span className="text-muted-foreground">Set time...</span>}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setEndPdt(null)}>Set to Running</Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </TableCell>
+        <TableCell className="whitespace-nowrap">
+          <div className="flex gap-2">
+            <Button size="sm" onClick={handleSave}>Save</Button>
+            <Button size="sm" variant="outline" onClick={handleCancel}>Cancel</Button>
           </div>
+          {timePickerConfig && (
+            <TimePickerDialog
+              isOpen={timePickerOpen}
+              onClose={() => setTimePickerOpen(false)}
+              initialTime={timePickerConfig.initialTime}
+              onTimeChange={(timestamp) => {
+                const instant = Temporal.Instant.fromEpochMilliseconds(timestamp);
+                const pdt = instant.toZonedDateTimeISO(timezone).toPlainDateTime();
+                if (timePickerConfig.type === 'start') setStartPdt(pdt); else setEndPdt(pdt);
+              }}
+            />
+          )}
         </TableCell>
       </TableRow>
     );
