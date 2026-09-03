@@ -109,6 +109,8 @@ NOT:
 p3fo_list_tasks({ "userId": "u-123" })   // WRONG — will fail
 ```
 
+Also pass `params` as a **native JSON object**, never as a stringified JSON blob. String payloads fail argument validation with `Expected object, received string` — this typically happens when a call with a large embedded payload (e.g. a full task `comment` document) is assembled inline. If you hit it, resend the call with `params` as an object literal, or split the work into two calls (create skeleton → patch the big field).
+
 ## CRITICAL: call MCP tools directly, never delegate
 
 **Never** use the `task`/subagent tool to read or search MCP tool output. MCP tools are available directly in this session — call them inline. If a tool returns a large/truncated payload, **do not** spawn an explore agent to grep the output file. Instead:
@@ -136,6 +138,10 @@ All tools return JSON (pretty-printed) as a single `text` content block. Errors 
 - **`p3fo_get_task`** — `params`: `id`.
 - **`p3fo_get_task_by_title`** — `params`: `title` (case-insensitive), `exact?` (default `false` = substring). Returns `{ data, total }` of matching tasks. Prefer this over listing when reconciling against external systems (issue trackers, CRMs, …).
 - **`p3fo_create_task`** — `params`: `task` (TaskEntity fields, e.g. `title`, `triageStatus`, `urgent`, `impact`, `difficulty`, `category`, `userId`, `parentId`).
+  - **IDs are UUID v4**: the server generates `crypto.randomUUID()` when `id` is omitted (`server/db/postgres.ts` / `sqlite.ts`). Omit `id` and let the server assign it; don't invent custom id formats.
+  - **Large `comment` payloads**: `comment` holds a TipTap/ProseMirror JSON document (array of nodes: `heading`, `paragraph`, `bulletListItem`, … each with `props.level` and `content[].text`). Creating a task with a full summary document inline can fail with `Expected object, received string` or produce a **silently truncated comment**. Reliable pattern: (1) `p3fo_create_task` with the small fields only (`title`, `triageStatus`, `category`, `difficulty`, `priority`, `createdAt`), then (2) `p3fo_update_task` with the returned `id` and `patch: { comment: <document> }`, then (3) verify with `p3fo_get_task` that the stored `comment` is complete.
+  - **`p3fo_update_task` can silently create**: passing an `id` that doesn't exist does not 404 — it can create a new task with that id. After any create/update pair, `p3fo_get_task` the intended id and `p3fo_delete_task` any stray duplicate (e.g. an empty auto-created card with a random UUID id) before continuing.
+  - **Assigning to a person**: `userId` on a task is the *user-settings* id from `p3fo_list_users`, not a login or name. Look the person up first and copy their `userId` verbatim.
 - **`p3fo_update_task`** — `params`: `id`, `patch` (partial TaskEntity).
 - **`p3fo_delete_task`** — `params`: `id`.
 - **`p3fo_bulk_update_priorities`** — `params`: `items` (`{ id, priority? }[]`).
@@ -175,7 +181,7 @@ If curl returns the correct filtered `total` but the MCP tool does not, the issu
 
 ### Users & user settings
 
-- **`p3fo_list_users`** — no args. Returns UserSettingsEntity[].
+- **`p3fo_list_users`** — no args. Returns UserSettingsEntity[]. Use it to map a person's name/trigram to their `userId` before assigning tasks.
 - **`p3fo_get_user_settings`** — `params`: `userId`.
 - **`p3fo_update_user_settings`** — `params`: `userId`, `patch` (partial: `username`, `logo`, `workload`, `monthlyBalances`, `timezone`, `weekStartDay`, …).
 - **`p3fo_migrate_user`** — `params`: `oldUserId`, `newUserId`.
@@ -277,11 +283,28 @@ p3fo_get_task_by_title({ "params": { "title": "Some task title ISSUE-12345", "ex
 
 ### Check which external issues are tracked in P3FO (sync check)
 
-Adapt the pattern to your own convention (e.g. `ISSUE-`, `JIRA-`):
+Adapt the pattern to your own convention (e.g. `ISSUE-`, `JIRA-`, `TICKET-`):
 
 ```
 p3fo_list_tasks({ "params": { "search": "ISSUE-", "fields": ["title", "triageStatus"] } })
 ```
+
+### Create a task with a full summary document (two-step, avoids large-payload failures)
+
+1. Create the card skeleton (server assigns a UUID v4 `id`):
+
+```
+p3fo_create_task({ "params": { "task": { "title": "Some task summary", "triageStatus": "Backlog", "category": "Support", "difficulty": 0.5, "createdAt": "2026-08-14T17:32:17Z" } } })
+```
+
+2. Attach the full summary document via patch using the returned `id`, then verify:
+
+```
+p3fo_update_task({ "params": { "id": "<returned-id>", "patch": { "comment": { /* TipTap nodes */ } } } })
+p3fo_get_task({ "params": { "id": "<returned-id>" } })   // confirm comment stored in full; delete any stray duplicate created by mistake
+```
+
+If step 2 errors with `Expected object, received string` or the stored `comment` comes back truncated, split the document into fewer nodes or shorten the text and retry.
 
 ### Triage: move a task to WIP and set priority
 
@@ -314,6 +337,8 @@ p3fo_health({})   // { ok: true, mode: "sqlite", timestamp: "..." }
 - **`P3FO API error 401: Unauthorized: invalid or missing API key`** → remote deployment requires `P3FO_API_KEY`; set it in `kilo.jsonc` to match the server's `P3FO_API_KEY` env.
 - **`P3FO API error 302: Redirected to ...`** → the MCP client hit oauth2-proxy's login redirect. You're likely using `https://<your-host>/api/...` instead of the `/mcp` prefix, or `OAUTH2_PROXY_SKIP_AUTH_ROUTES` isn't set. Use `P3FO_API_URL=https://<your-p3fo-host>/mcp`.
 - **`Missing required argument` / `Unexpected keyword argument`** → you forgot the `params` wrapper. Wrap all args under `params`.
+- **`Expected object, received string` on `params`** → the whole argument payload was sent as a JSON string instead of a native object (typical when assembling a large call inline). Resend with `params` as an object literal; for big task documents use the two-step create-then-patch workflow above.
+- **Task exists twice after creating a card** → `p3fo_update_task` can create the `id` you name if it doesn't exist. Verify with `p3fo_get_task` and delete the stray empty duplicate (`p3fo_delete_task`).
 - **`p3fo_list_tasks` ignores `triageStatuses`/`excludeStatuses`/`limit`** → the MCP server sends the correct query string (verified via stdio+netcat), but some MCP clients drop nested array params. Verify with curl against `/mcp/api/tasks?triage_statuses=WIP` — if curl works but the tool doesn't, the issue is client-side argument passing. See "Filtering by triage status" above.
 - **404 on a vote** → `p3fo_get_vote` accepts id OR slug; both are tried server-side. Confirm the value.
 - **Vote response rejected (400)** → vote not `OPEN`, or `value` out of range for the vote's `mode`. See value rules above.
