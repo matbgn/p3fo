@@ -197,6 +197,7 @@ interface PomodoroSessionDbRow {
   phase: string;
   duration: number;
   completed: number;
+  multiplier?: number | null;
 }
 
 // Default values
@@ -547,7 +548,8 @@ class SqliteClient implements DbClient {
         "endTime" INTEGER NOT NULL,
         "phase" TEXT NOT NULL,
         "duration" INTEGER NOT NULL,
-        "completed" INTEGER NOT NULL DEFAULT 0
+        "completed" INTEGER NOT NULL DEFAULT 0,
+        "multiplier" INTEGER NOT NULL DEFAULT 1
       )
     `);
 
@@ -728,6 +730,9 @@ class SqliteClient implements DbClient {
     addColumn('reminders', 'titleParams', 'TEXT');
     addColumn('reminders', 'descriptionKey', 'TEXT');
     addColumn('reminders', 'descriptionParams', 'TEXT');
+
+    // Pomodoro sessions boost multiplier (1 = normal, 2/3 = boosted round)
+    addColumn('pomodoroSessions', 'multiplier', 'INTEGER DEFAULT 1');
 
     this.tryFixVoteLoopsUniqueConstraint();
 
@@ -2681,6 +2686,7 @@ class SqliteClient implements DbClient {
       phase: row.phase as 'work' | 'short-break' | 'long-break',
       duration: row.duration,
       completed: row.completed === 1,
+      ...(row.multiplier != null && row.multiplier > 1 ? { multiplier: row.multiplier as 2 | 3 } : {}),
     }));
   }
 
@@ -2695,8 +2701,8 @@ class SqliteClient implements DbClient {
       }
     }
     this.db.prepare(`
-      INSERT INTO "pomodoroSessions"("id", "taskId", "userId", "startTime", "endTime", "phase", "duration", "completed")
-      VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO "pomodoroSessions"("id", "taskId", "userId", "startTime", "endTime", "phase", "duration", "completed", "multiplier")
+      VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       session.id,
       taskId,
@@ -2706,6 +2712,7 @@ class SqliteClient implements DbClient {
       session.phase,
       session.duration,
       session.completed ? 1 : 0,
+      session.multiplier ?? 1,
     );
     const result: PomodoroSession & { warnings?: string[] } = { ...session, taskId: taskId ?? undefined };
     if (warnings.length > 0) result.warnings = warnings;
@@ -2718,8 +2725,8 @@ class SqliteClient implements DbClient {
 
   async importPomodoroSessions(sessions: PomodoroSession[]): Promise<void> {
     const insertStmt = this.db.prepare(`
-      INSERT INTO "pomodoroSessions"("id", "taskId", "userId", "startTime", "endTime", "phase", "duration", "completed")
-      VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO "pomodoroSessions"("id", "taskId", "userId", "startTime", "endTime", "phase", "duration", "completed", "multiplier")
+      VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT("id") DO UPDATE SET
         "taskId" = excluded."taskId",
         "userId" = excluded."userId",
@@ -2727,7 +2734,8 @@ class SqliteClient implements DbClient {
         "endTime" = excluded."endTime",
         "phase" = excluded."phase",
         "duration" = excluded."duration",
-        "completed" = excluded."completed"
+        "completed" = excluded."completed",
+        "multiplier" = excluded."multiplier"
     `);
 
     this.db.exec('BEGIN');
@@ -2742,6 +2750,7 @@ class SqliteClient implements DbClient {
           session.phase,
           session.duration,
           session.completed ? 1 : 0,
+          session.multiplier ?? 1,
         );
       }
       this.db.exec('COMMIT');

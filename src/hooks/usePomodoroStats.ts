@@ -3,6 +3,10 @@ import { PomodoroSession, PomodoroPhase } from '@/lib/pomodoro-types';
 import { getPersistenceAdapter } from '@/lib/persistence-factory';
 import { eventBus } from '@/lib/events';
 
+/** Metrics weight: a boosted round counts as N pomodoros. */
+const sessionWeight = (s: PomodoroSession): number =>
+  s.phase === 'work' ? (s.multiplier ?? 1) : 1;
+
 export interface PomodoroStatsData {
   today: number;
   week: number;
@@ -105,31 +109,32 @@ export const usePomodoroStats = (userId: string) => {
     const weekly = new Map<number, number>();
 
     for (const s of workSessions) {
-      total++;
+      const w = sessionWeight(s);
+      total += w;
       totalMinutes += s.duration / 60000;
 
       const d = new Date(startOfDay(s.startTime));
       const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-      daily.set(dayKey, (daily.get(dayKey) || 0) + 1);
+      daily.set(dayKey, (daily.get(dayKey) || 0) + w);
       dailyMinutes.set(dayKey, (dailyMinutes.get(dayKey) || 0) + s.duration / 60000);
 
       const hour = new Date(s.startTime).getHours();
-      hourly.set(hour, (hourly.get(hour) || 0) + 1);
+      hourly.set(hour, (hourly.get(hour) || 0) + w);
 
       const dow = new Date(s.startTime).getDay();
-      weekly.set(dow, (weekly.get(dow) || 0) + 1);
+      weekly.set(dow, (weekly.get(dow) || 0) + w);
 
       if (s.startTime >= todayStart) {
-        today++;
+        today += w;
         todayMinutes += s.duration / 60000;
       }
       if (s.startTime >= weekStart) {
-        week++;
+        week += w;
         weekMinutes += s.duration / 60000;
       }
       if (s.startTime >= monthStart) {
-        month++;
+        month += w;
         monthMinutes += s.duration / 60000;
       }
     }

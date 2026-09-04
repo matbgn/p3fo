@@ -502,9 +502,12 @@ class PostgresClient implements DbClient {
         "endTime" BIGINT NOT NULL,
         "phase" TEXT NOT NULL,
         "duration" BIGINT NOT NULL,
-        "completed" BOOLEAN NOT NULL DEFAULT FALSE
+        "completed" BOOLEAN NOT NULL DEFAULT FALSE,
+        "multiplier" INTEGER NOT NULL DEFAULT 1
       )
     `);
+    // Add multiplier column for existing deployments (pomodoro boost feature)
+    await this.pool.query(`ALTER TABLE "pomodoroSessions" ADD COLUMN IF NOT EXISTS "multiplier" INTEGER NOT NULL DEFAULT 1`);
     // These indexes dramatically improve query performance when filtering by userId, parentId, or triageStatus
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId" ON "tasks"("userId")`);
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_tasks_parentId" ON "tasks"("parentId")`);
@@ -2376,6 +2379,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       phase: row.phase,
       duration: Number(row.duration),
       completed: row.completed === true || row.completed === 1,
+      ...(row.multiplier != null && Number(row.multiplier) > 1 ? { multiplier: Number(row.multiplier) as 2 | 3 } : {}),
     }));
   }
 
@@ -2390,8 +2394,8 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       }
     }
     await this.pool.query(`
-      INSERT INTO "pomodoroSessions" ("id", "taskId", "userId", "startTime", "endTime", "phase", "duration", "completed")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      INSERT INTO "pomodoroSessions" ("id", "taskId", "userId", "startTime", "endTime", "phase", "duration", "completed", "multiplier")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     `, [
       session.id,
       taskId,
@@ -2401,6 +2405,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       session.phase,
       session.duration,
       session.completed,
+      session.multiplier ?? 1,
     ]);
     const result: PomodoroSession & { warnings?: string[] } = { ...session, taskId: taskId ?? undefined };
     if (warnings.length > 0) result.warnings = warnings;
@@ -2417,8 +2422,8 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       await client.query('BEGIN');
       for (const session of sessions) {
         await client.query(`
-          INSERT INTO "pomodoroSessions" ("id", "taskId", "userId", "startTime", "endTime", "phase", "duration", "completed")
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          INSERT INTO "pomodoroSessions" ("id", "taskId", "userId", "startTime", "endTime", "phase", "duration", "completed", "multiplier")
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
           ON CONFLICT ("id") DO UPDATE SET
             "taskId" = EXCLUDED."taskId",
             "userId" = EXCLUDED."userId",
@@ -2426,7 +2431,8 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
             "endTime" = EXCLUDED."endTime",
             "phase" = EXCLUDED."phase",
             "duration" = EXCLUDED."duration",
-            "completed" = EXCLUDED."completed"
+            "completed" = EXCLUDED."completed",
+            "multiplier" = EXCLUDED."multiplier"
         `, [
           session.id,
           session.taskId ?? null,
@@ -2436,6 +2442,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
           session.phase,
           session.duration,
           session.completed,
+          session.multiplier ?? 1,
         ]);
       }
       await client.query('COMMIT');

@@ -1,18 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { PomodoroConfig, PomodoroPhase, PomodoroSession, PomodoroState, FocusModeConfig, DEFAULT_POMODORO_CONFIG, DEFAULT_FOCUS_MODE_CONFIG } from '@/lib/pomodoro-types';
+import { PomodoroConfig, PomodoroPhase, PomodoroSession, PomodoroState, PomodoroBoostMultiplier, FocusModeConfig, DEFAULT_POMODORO_CONFIG, DEFAULT_FOCUS_MODE_CONFIG, INITIAL_POMODORO_STATE } from '@/lib/pomodoro-types';
 import { useSettingsContext } from '@/context/SettingsContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { getPersistenceAdapter } from '@/lib/persistence-factory';
 import { eventBus } from '@/lib/events';
 import { playChime } from '@/lib/audio-chime';
 
-const INITIAL_STATE: PomodoroState = {
-  phase: 'idle',
-  startedAt: null,
-  cycleCount: 0,
-  pausedAt: null,
-  pausedElapsed: 0,
-};
+const INITIAL_STATE: PomodoroState = INITIAL_POMODORO_STATE;
 
 export const usePomodoroTimer = () => {
   const { settings } = useSettingsContext();
@@ -53,12 +47,16 @@ export const usePomodoroTimer = () => {
 
   const getPhaseDuration = useCallback((phase: PomodoroPhase): number => {
     const cfg = configRef.current;
-    switch (phase) {
-      case 'work': return cfg.workDuration;
-      case 'short-break': return cfg.breakDuration;
-      case 'long-break': return cfg.longBreakDuration;
-      default: return 0;
-    }
+    // Boost scales the phase that is actually running: work runs ×N and
+    // the break that follows a boosted work round also runs ×N.
+    const boost = phase === 'work' || phase === 'short-break' || phase === 'long-break'
+      ? stateRef.current.activeBoost
+      : 1;
+    const base = phase === 'work' ? cfg.workDuration
+      : phase === 'short-break' ? cfg.breakDuration
+      : phase === 'long-break' ? cfg.longBreakDuration
+      : 0;
+    return base * boost;
   }, []);
 
   const getRemaining = useCallback((): number => {
@@ -88,6 +86,7 @@ export const usePomodoroTimer = () => {
       duration: Date.now() - startedAt,
       completed,
       kind: 'pomodoro',
+      multiplier: phase === 'work' ? s.activeBoost : undefined,
     };
 
     try {
@@ -166,6 +165,7 @@ export const usePomodoroTimer = () => {
     setLastCompletedCycleIndex(newCycleCount - 1);
 
     const sessionStartedAt = s.startedAt;
+    const sessionBoost = s.activeBoost;
 
     if (focusConfigRef.current.autoStartBreak) {
       const breakState: PomodoroState = {
@@ -174,6 +174,8 @@ export const usePomodoroTimer = () => {
         cycleCount: newCycleCount,
         pausedAt: null,
         pausedElapsed: 0,
+        armedBoost: s.armedBoost,
+        activeBoost: sessionBoost,
       };
       setState(breakState);
       stateRef.current = breakState;
@@ -187,6 +189,8 @@ export const usePomodoroTimer = () => {
         cycleCount: newCycleCount,
         pausedAt: Date.now(),
         pausedElapsed: 0,
+        armedBoost: s.armedBoost,
+        activeBoost: sessionBoost,
       };
       setState(pausedBreakState);
       stateRef.current = pausedBreakState;
@@ -204,6 +208,9 @@ export const usePomodoroTimer = () => {
     const newCycleCount = justFinishedLongBreak ? 0 : s.cycleCount;
     const sessionPhase = s.phase;
     const sessionStartedAt = s.startedAt;
+    // A boosted round ends here: the next work phase consumes whatever
+    // boost was armed during the break; the current boost is cleared.
+    const nextBoost = s.armedBoost;
 
     if (focusConfigRef.current.autoStartWork) {
       const workState: PomodoroState = {
@@ -212,6 +219,8 @@ export const usePomodoroTimer = () => {
         cycleCount: newCycleCount,
         pausedAt: null,
         pausedElapsed: 0,
+        armedBoost: 1,
+        activeBoost: nextBoost,
       };
       setState(workState);
       stateRef.current = workState;
@@ -230,6 +239,8 @@ export const usePomodoroTimer = () => {
         pausedAt: Date.now(),
         pausedElapsed: 0,
         cycleCount: newCycleCount,
+        armedBoost: 1,
+        activeBoost: nextBoost,
       };
       setState(pausedWorkState);
       stateRef.current = pausedWorkState;
@@ -255,12 +266,16 @@ export const usePomodoroTimer = () => {
     // Preserve cycleCount across work sessions so the user can manually
     // start each new work phase and still reach the long break after
     // cyclesBeforeLongBreak cycles. Only a full `reset()` clears it.
+    // A boost armed beforehand is consumed here: it applies to this work
+    // round and to the break that follows it.
     const workState: PomodoroState = {
       phase: 'work',
       startedAt: Date.now(),
       cycleCount: stateRef.current.cycleCount,
       pausedAt: null,
       pausedElapsed: 0,
+      armedBoost: 1,
+      activeBoost: stateRef.current.armedBoost,
     };
     setState(workState);
     stateRef.current = workState;
@@ -285,6 +300,24 @@ export const usePomodoroTimer = () => {
     notifyPhaseChange(type);
     startTick(() => onBreakCompleteRef.current());
   }, [startTick, notifyPhaseChange]);
+
+  const armBoost = useCallback((multiplier: PomodoroBoostMultiplier) => {
+    // Boost can only be armed for the NEXT work round: while a boosted
+    // round is running the boost is already committed; during a break
+    // after an unboosted work round it applies to the upcoming work.
+    const s = stateRef.current;
+    if (s.phase === 'work' && s.activeBoost > 1) return;
+    const armed = s.phase === 'work'
+      ? s.activeBoost === multiplier ? 1 : multiplier
+      : s.armedBoost === multiplier ? 1 : multiplier;
+    setState(prev => ({ ...prev, armedBoost: armed }));
+    stateRef.current = { ...stateRef.current, armedBoost: armed };
+  }, []);
+
+  const clearBoost = useCallback(() => {
+    setState(prev => ({ ...prev, armedBoost: 1 }));
+    stateRef.current = { ...stateRef.current, armedBoost: 1 };
+  }, []);
 
   const pause = useCallback(() => {
     setState(prev => {
@@ -362,6 +395,7 @@ export const usePomodoroTimer = () => {
       recordSession('work', taskIdRef.current, false, sessionStartedAt);
     } else if (s.phase === 'short-break' || s.phase === 'long-break') {
       const newCycleCount = s.phase === 'long-break' ? 0 : s.cycleCount;
+      const nextBoost = s.armedBoost;
       if (focusConfigRef.current.autoStartWork) {
         const workState: PomodoroState = {
           ...s,
@@ -370,6 +404,8 @@ export const usePomodoroTimer = () => {
           pausedAt: null,
           pausedElapsed: 0,
           cycleCount: newCycleCount,
+          armedBoost: 1,
+          activeBoost: nextBoost,
         };
         setState(workState);
         stateRef.current = workState;
@@ -387,6 +423,8 @@ export const usePomodoroTimer = () => {
           pausedAt: Date.now(),
           pausedElapsed: 0,
           cycleCount: newCycleCount,
+          armedBoost: 1,
+          activeBoost: nextBoost,
         };
         setState(pausedWorkState);
         stateRef.current = pausedWorkState;
@@ -464,6 +502,8 @@ export const usePomodoroTimer = () => {
     displayCycleIndex,
     startWork,
     startBreak,
+    armBoost,
+    clearBoost,
     pause,
     resume,
     skip,

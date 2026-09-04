@@ -10,6 +10,13 @@ export type PomodoroPhase = 'idle' | 'work' | 'short-break' | 'long-break';
 
 export type PomodoroSessionKind = 'pomodoro' | 'traveler';
 
+/**
+ * Multiplier applied to a boosted round: the work phase runs ×N, the
+ * following break runs ×N, and metrics count the session as N pomodoros.
+ * 1 = no boost.
+ */
+export type PomodoroBoostMultiplier = 1 | 2 | 3;
+
 export interface PomodoroSession {
   id: string;
   taskId?: string;
@@ -20,6 +27,7 @@ export interface PomodoroSession {
   duration: number;
   completed: boolean;
   kind?: PomodoroSessionKind;
+  multiplier?: PomodoroBoostMultiplier;
 }
 
 export interface PomodoroState {
@@ -28,6 +36,10 @@ export interface PomodoroState {
   cycleCount: number;
   pausedAt: number | null;
   pausedElapsed: number;
+  /** Boost armed for the next work round (applied at work start). */
+  armedBoost: PomodoroBoostMultiplier;
+  /** Boost of the phase currently running (0 = idle / not boosted). */
+  activeBoost: PomodoroBoostMultiplier;
 }
 
 export interface FocusModeConfig {
@@ -48,6 +60,16 @@ export const DEFAULT_POMODORO_CONFIG: PomodoroConfig = {
   longBreakDuration: 15 * 60 * 1000,
   cyclesBeforeLongBreak: 4,
   pomodoroEnabled: true,
+};
+
+export const INITIAL_POMODORO_STATE: PomodoroState = {
+  phase: 'idle',
+  startedAt: null,
+  cycleCount: 0,
+  pausedAt: null,
+  pausedElapsed: 0,
+  armedBoost: 1,
+  activeBoost: 1,
 };
 
 export const DEFAULT_FOCUS_MODE_CONFIG: FocusModeConfig = {

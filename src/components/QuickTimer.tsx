@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useTranslation } from 'react-i18next';
 import { Button } from "@/components/ui/button";
-import { Pause, Square, ArrowRight, Play, SkipForward, Apple, RotateCcw, PictureInPicture2, PlaneTakeoff, Loader2, ChevronDown, Train, Coffee, ChartNoAxesGantt, Search } from "lucide-react";
+import { Pause, Square, ArrowRight, Play, SkipForward, Apple, RotateCcw, PictureInPicture2, PlaneTakeoff, Loader2, ChevronDown, Train, Coffee, ChartNoAxesGantt, Search, Zap } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import { usePomodoro } from "@/hooks/usePomodoro";
 import { useTraveler } from "@/hooks/useTraveler";
 import { setTravelerIdleState, registerTravelerStartFn, registerTravelerSearchFn, registerTravelerResetFn, registerPomodoroStartFn, setSearchLoading, subscribeTravelerIdle, readTravelerIdleSnapshot } from "@/lib/traveler-idle-state";
 import { useDocumentPiP } from "@/hooks/useDocumentPiP";
-import { PomodoroPhase } from "@/lib/pomodoro-types";
+import { PomodoroPhase, PomodoroBoostMultiplier } from "@/lib/pomodoro-types";
 import { CITIES, getCityByCode, TravelMode, TravelerConfig, DEFAULT_TRAVELER_CONFIG, getShortFlightDestinations, getFlightDurationMs, getFlightDurationColor } from "@/lib/traveler-types";
 import { fetchFlightDuration, getTrainDuration, computeBreakDuration, formatDuration } from "@/lib/traveler-api";
 import { eventBus } from "@/lib/events";
@@ -234,7 +234,10 @@ const PomodoroControls: React.FC<{
         </div>
       ) : (
         <div className="text-xs sm:text-sm font-mono shrink-0 text-muted-foreground font-semibold">
-          {pomodoro.config.workDuration > 0 ? formatPomodoroTime(pomodoro.config.workDuration) : '--:--'}
+          {(() => {
+            const boostedWork = pomodoro.config.workDuration * pomodoro.state.armedBoost;
+            return boostedWork > 0 ? formatPomodoroTime(boostedWork) : '--:--';
+          })()}
         </div>
       )}
       {/* Cycle progress dots */}
@@ -268,6 +271,37 @@ const PomodoroControls: React.FC<{
           <SkipForward className="h-3 w-3 sm:h-4 sm:w-4" />
         </Button>
       )}
+      {/* Boost: one cycling button — off → ×2 → ×3 → off. The armed boost
+          applies to the next work round (and its break). While a boosted
+          round is committed (work or its break) the button shows the active
+          multiplier and is disabled. */}
+      {(() => {
+        const armed = pomodoro.state.armedBoost;
+        const active = phase !== 'idle' ? pomodoro.state.activeBoost : 1;
+        const isCommitted = phase !== 'idle' && active > 1;
+        const shown = isCommitted ? active : armed;
+        const isArmed = !isCommitted && armed > 1;
+        const next: PomodoroBoostMultiplier = armed === 1 ? 2 : armed === 2 ? 3 : 1;
+        const labelKey = isCommitted ? 'quickTimer.boostActive' : isArmed ? 'quickTimer.boostArmed' : 'quickTimer.boost';
+        return (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => pomodoro.armBoost(next)}
+            disabled={isCommitted}
+            className={cn(
+              "h-7 sm:h-8 px-1.5 sm:px-2 text-xs font-semibold gap-0.5",
+              isArmed && "border-amber-500 text-amber-500 hover:text-amber-600",
+              isCommitted && "border-red-500 text-red-500",
+            )}
+            title={t(labelKey, { multiplier: shown })}
+            aria-label={t(labelKey, { multiplier: shown })}
+          >
+            <Zap className={cn("h-3 w-3 sm:h-3.5 sm:w-3.5", (isArmed || isCommitted) && "fill-current")} />
+            ×{shown}
+          </Button>
+        );
+      })()}
       {!isIdle && (
         <Button size="sm" variant="outline" onClick={() => pomodoro.reset()} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.reset')} aria-label={t('quickTimer.reset')}>
           <RotateCcw className="h-3 w-3 sm:h-4 sm:w-4" />

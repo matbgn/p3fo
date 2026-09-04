@@ -258,7 +258,8 @@ export function useConsistencyScore(
     const impactByDay = new Map<string, boolean>();
     for (const s of workSessions) {
       const key = dayKey(s.startTime);
-      pomodoroByDay.set(key, (pomodoroByDay.get(key) || 0) + 1);
+      // Boosted rounds count as multiple pomodoros (multiplier 2/3)
+      pomodoroByDay.set(key, (pomodoroByDay.get(key) || 0) + (s.multiplier ?? 1));
       if (s.taskId) {
         const linked = taskById.get(s.taskId);
         if (linked?.impact) impactByDay.set(key, true);

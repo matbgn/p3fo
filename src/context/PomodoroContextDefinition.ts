@@ -1,5 +1,5 @@
 import { createContext } from 'react';
-import { PomodoroConfig, PomodoroPhase, PomodoroSession, PomodoroState, FocusModeConfig } from '@/lib/pomodoro-types';
+import { PomodoroConfig, PomodoroPhase, PomodoroSession, PomodoroState, PomodoroBoostMultiplier, FocusModeConfig } from '@/lib/pomodoro-types';
 
 export interface PomodoroContextType {
   state: PomodoroState;
@@ -22,6 +22,9 @@ export interface PomodoroContextType {
   displayCycleIndex: number;
   startWork: (taskId?: string) => void;
   startBreak: (type?: 'short-break' | 'long-break') => void;
+  /** Arm ×2/×3 for the next work round (toggle off by passing it again). */
+  armBoost: (multiplier: PomodoroBoostMultiplier) => void;
+  clearBoost: () => void;
   pause: () => void;
   resume: () => void;
   skip: () => void;
