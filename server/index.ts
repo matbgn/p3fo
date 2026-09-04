@@ -1318,6 +1318,23 @@ app.use('*', async (req: Request, res: Response) => {
 
     // Only serve index.html for routes that match the base URL
     const baseUrl = process.env.VITE_BASE_URL || '/';
+
+    // Never fall back to index.html for files that must exist as real assets.
+    // After a redeploy, stale clients request old hashed chunks; serving HTML
+    // here makes dynamic imports fail with a cryptic module-load TypeError
+    // (and blank screen) instead of a clean 404 the SPA can recover from.
+    const isAssetPath =
+      req.originalUrl.startsWith('/assets/') ||
+      req.originalUrl.includes('/assets/') ||
+      /\.(js|mjs|css|json|map|wasm|woff2?|ttf|png|jpe?g|svg|gif|webp|ico|mp3|ogg|wav)$/.test(
+        req.originalUrl.split('?')[0]
+      );
+
+    if (isAssetPath) {
+      res.status(404).json({ error: 'Asset not found (stale build?)' });
+      return;
+    }
+
     if (req.originalUrl.startsWith(baseUrl)) {
       // Prevent stale index.html (and thus stale hashed chunk references) being cached
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');

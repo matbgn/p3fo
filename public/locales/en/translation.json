@@ -19,7 +19,12 @@
     "view": {
       "week": "Week",
       "month": "Month"
-    }
+    },
+    "retry": "Retry",
+    "reload": "Reload"
+  },
+  "errors": {
+    "staleChunk": "This view could not be loaded, possibly because a new version was deployed. Reload to get the latest version."
   },
   "notFound": {
     "title": "404",

@@ -28,15 +28,18 @@ import { GlobalFocusModeToggle } from "@/components/GlobalFocusModeToggle";
 import { NextTaskSpotlight } from "@/components/NextTaskSpotlight";
 import { ConfirmModalHost } from "@/components/ConfirmModalHost";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { LazyErrorBoundary } from "@/components/ui/lazy-error-boundary";
 import ExampleDataModal, { EXAMPLE_DATA_PROMPTED_KEY } from "@/components/ExampleDataModal";
 import { useAllTasks } from "@/hooks/useAllTasks";
 
 const LazyWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { t } = useTranslation();
   return (
-    <Suspense fallback={<LoadingSpinner label={t('common.loading')} />}>
-      {children}
-    </Suspense>
+    <LazyErrorBoundary>
+      <Suspense fallback={<LoadingSpinner label={t('common.loading')} />}>
+        {children}
+      </Suspense>
+    </LazyErrorBoundary>
   );
 };
 
