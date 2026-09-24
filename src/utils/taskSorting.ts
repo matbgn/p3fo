@@ -51,6 +51,27 @@ const sortByBlockedStatus = (a: Task, b: Task): number => {
   return 0;
 };
 
+// Statuses the user can actually pick up right now.
+const isActionableStatus = (status: TriageStatus): boolean =>
+  status === 'Ready' || status === 'WIP';
+
+// Storyboard/plan ordering: a card the user can pick up (Ready/WIP) always
+// outranks a card that is not actionable, so a Blocked card can never appear
+// before ready work. The non-actionable cards (Blocked, Backlog, ...) keep
+// their previous relative order, which is priority-driven — so a freshly
+// blocked card (priority set to min(backlog) - 1) lands right after the ready
+// cards and before the first backlog item.
+//
+// This must be a single binary key: comparing Blocked-vs-Backlog by priority
+// while also comparing Blocked-vs-Ready by status produces a non-transitive
+// comparator (Blocked < Backlog < Ready < Blocked), which makes Array.sort
+// return arbitrary order.
+const sortByActionability = (a: Task, b: Task): number => {
+  const aRank = isActionableStatus(a.triageStatus) ? 0 : 1;
+  const bRank = isActionableStatus(b.triageStatus) ? 0 : 1;
+  return aRank - bRank;
+};
+
 // Base sorting criteria for priorities
 const sortByPriority = (a: Task, b: Task): number => {
   if (a.priority !== undefined && b.priority !== undefined) {
@@ -75,6 +96,12 @@ const sortByDeadlines = (a: Task, b: Task): number => {
 // Plan View specific sorting (prioritizes explicit priorities)
 // This preserves the unique behavior of prioritizing explicit priorities over implicit ones
 const sortPlanTasks = (a: Task, b: Task): number => {
+  // Cards the user can pick up (Ready/WIP) always come before non-actionable
+  // cards. Everything else keeps its priority-driven order, so a freshly
+  // blocked card lands after the ready work and before the first backlog item.
+  const actionability = sortByActionability(a, b);
+  if (actionability !== 0) return actionability;
+
   // Always prioritize tasks with an explicit priority over those without
   if (a.priority !== undefined && b.priority === undefined) {
     return -1; // a comes before b
