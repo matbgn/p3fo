@@ -15,7 +15,7 @@ export const ConsistencySparkline: React.FC<ConsistencySparklineProps> = ({ heig
 
   const sparklineData = useMemo(() => {
     if (!data) return [];
-    return data.scoreHistory.slice(-30).map((e) => e.score);
+    return data.scoreHistory.slice(-14).map((e) => e.score);
   }, [data]);
 
   if (isLoading || !data || sparklineData.length < 2) return null;
@@ -23,8 +23,12 @@ export const ConsistencySparkline: React.FC<ConsistencySparklineProps> = ({ heig
   const trend = computeConsistencyTrend(data.scoreHistory);
   const { arrow: trendArrow, colorClass: trendColor } = getTrendDisplay(trend);
 
-  const max = 100;
-  const min = 0;
+  const dataMin = Math.min(...sparklineData);
+  const dataMax = Math.max(...sparklineData);
+  const spread = dataMax - dataMin;
+  const padding = spread === 0 ? 1 : spread * 0.30;
+  const min = Math.max(0, dataMin - padding);
+  const max = Math.min(100, dataMax + padding);
   const width = 80;
   const points = sparklineData
     .map((score, i) => {
