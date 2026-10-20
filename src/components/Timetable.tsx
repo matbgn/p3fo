@@ -18,6 +18,7 @@ import { formatTimeWithTemporal } from "@/lib/format-utils";
 import { useSettingsContext } from "@/context/SettingsContext";
 import { UserFilterSelector } from "@/components/UserFilterSelector";
 import { detectTimeOverlaps, getEntryKey } from "@/utils/timeOverlap";
+import { buildCategoricalRows } from "@/utils/timetableGrouping";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 import { loadFiltersFromSessionStorage, saveFiltersToSessionStorage } from "@/lib/filter-storage";
@@ -530,48 +531,10 @@ const TimetableInner: React.FC<{
   }, [overlapInfo]);
 
   // Flat rows for virtualized categorical view
-  type FlatRowKind =
-    | { type: 'group-header'; topParentId: string; topParentTask: typeof tasks[0] | undefined; groupTotal: number }
-    | { type: 'subtask-header'; parentId: string; parentTask: typeof tasks[0] | undefined; subtotal: number }
-    | { type: 'entry'; entry: (typeof timerEntries)[0]; entryKey: string };
-
-  const flatRows = React.useMemo(() => {
-    const rows: FlatRowKind[] = [];
-
-    for (const [topParentId, entries] of Object.entries(entriesByTopParentTask)) {
-      const groupTotal = entries.reduce(
-        (acc, entry) => acc + (entry.endTime > 0 ? entry.endTime - entry.startTime : Date.now() - entry.startTime),
-        0
-      );
-      const topParentTask = taskMap[topParentId];
-      rows.push({ type: 'group-header', topParentId, topParentTask, groupTotal });
-
-      const entriesByImmediateParent = entries.reduce((acc, entry) => {
-        const immediateParentId = entry.taskParentId || entry.taskId;
-        if (!acc[immediateParentId]) acc[immediateParentId] = [];
-        acc[immediateParentId].push(entry);
-        return acc;
-      }, {} as Record<string, typeof entries>);
-
-      for (const [parentId, parentEntries] of Object.entries(entriesByImmediateParent)) {
-        const parentTask = taskMap[parentId];
-        const isSubtaskGroup = parentId !== topParentId;
-
-        if (isSubtaskGroup && parentTask) {
-          const subtotal = parentEntries.reduce(
-            (acc, entry) => acc + (entry.endTime > 0 ? entry.endTime - entry.startTime : Date.now() - entry.startTime),
-            0
-          );
-          rows.push({ type: 'subtask-header', parentId, parentTask, subtotal });
-        }
-
-        for (const entry of parentEntries) {
-          rows.push({ type: 'entry', entry, entryKey: getEntryKey(entry.taskId, entry.index) });
-        }
-      }
-    }
-    return rows;
-  }, [entriesByTopParentTask, taskMap]);
+  const flatRows = React.useMemo(
+    () => buildCategoricalRows(entriesByTopParentTask, taskMap),
+    [entriesByTopParentTask, taskMap]
+  );
 
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
@@ -929,12 +892,24 @@ const TimetableInner: React.FC<{
                         );
                       }
                       if (row.type === 'subtask-header') {
+                        const isSubparent = row.kind === 'subparent';
+                        const headerShade = isSubparent
+                          ? row.depth <= 2
+                            ? 'bg-secondary/25'
+                            : 'bg-secondary/10'
+                          : 'bg-secondary/50';
+                        const headerTextShade = isSubparent
+                          ? 'font-normal text-muted-foreground'
+                          : 'font-medium';
                         return (
-                          <TableRow key={`sh-${row.parentId}`} className="bg-secondary/50">
+                          <TableRow key={`sh-${row.kind}-${row.parentId}-${row.depth}`} className={headerShade}>
                             <TableCell colSpan={5} className="overflow-hidden">
-                              <div className="flex items-center gap-2 min-w-0 pl-4">
+                              <div
+                                className="flex items-center gap-2 min-w-0"
+                                style={{ paddingLeft: `${Math.min(row.depth * 16, 48)}px` }}
+                              >
                                 <span className="text-muted-foreground shrink-0">↳ </span>
-                                <span className="font-medium truncate" title={row.parentTask?.title || ''}>{row.parentTask?.title}</span>
+                                <span className={cn("truncate", headerTextShade)} title={row.parentTask?.title || ''}>{row.parentTask?.title}</span>
                                 <TaskTag
                                   impact={row.parentTask?.impact}
                                   urgent={row.parentTask?.urgent}
