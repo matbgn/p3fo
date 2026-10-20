@@ -16,6 +16,7 @@ import { useUsersContext } from '@/context/UsersContext';
 import { useSettingsContext } from '@/context/SettingsContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -386,8 +387,10 @@ const DimensionEditor: React.FC<{
                       {(dim.levelDescriptions ?? []).map((desc, i) => (
                         <div key={i} className="flex gap-2 items-start">
                           <span className="text-xs text-muted-foreground w-12 pt-2">N{i}</span>
-                          <Input
+                          <Textarea
                             value={desc}
+                            rows={2}
+                            className="resize-y"
                             onChange={e => {
                               const next = [...(dim.levelDescriptions ?? [])];
                               next[i] = e.target.value;
@@ -602,14 +605,14 @@ const EmployeeDialog: React.FC<{
                   <div key={dim.id} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:items-center border rounded-md p-3">
                     <div className="min-w-0">
                       <span
-                        className="text-sm font-medium block truncate"
+                        className="text-sm font-medium block break-words whitespace-normal"
                         style={{ color: dim.color }}
                         title={dim.name}
                       >
                         {dim.name}
                       </span>
                       {dim.levelDescriptions?.[level] && (
-                        <span className="text-xs text-muted-foreground italic block truncate">
+                        <span className="text-xs text-muted-foreground italic block break-words whitespace-normal">
                           {dim.levelDescriptions[level]}
                         </span>
                       )}
@@ -944,7 +947,7 @@ export const SalaryView: React.FC<SalaryViewProps> = () => {
                 {!compactView && <TableHead className="text-right">{t('salary.table.age')}</TableHead>}
                 {!compactView && <TableHead className="text-right">{t('salary.table.seniority')}</TableHead>}
                 {board.dimensions.map(d => (
-                  <TableHead key={d.id} className="text-center" style={{ color: d.color }}>
+                  <TableHead key={d.id} className="text-center whitespace-normal break-words" style={{ color: d.color }} title={d.name}>
                     {d.name}
                   </TableHead>
                 ))}
@@ -1409,20 +1412,22 @@ const SimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) => {
             {board.dimensions.map(dim => {
               const level = levels.find(l => l.dimensionId === dim.id)?.level ?? 0;
               return (
-                <div key={dim.id} className="flex items-center gap-2">
-                  <span className="text-sm w-40 truncate" style={{ color: dim.color }}>{dim.name}</span>
-                  <Select value={String(level)} onValueChange={v => setLevel(dim.id, parseInt(v, 10))}>
-                    <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {Array.from({ length: dim.maxLevel + 1 }, (_, i) => (
-                        <SelectItem key={i} value={String(i)}>{t('salary.simulator.levelN', { i })}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div key={dim.id} className="space-y-1">
+                  <div className="flex flex-wrap items-start gap-2">
+                    <span className="text-sm font-medium min-w-0 break-words" style={{ color: dim.color }}>{dim.name}</span>
+                    <Select value={String(level)} onValueChange={v => setLevel(dim.id, parseInt(v, 10))}>
+                      <SelectTrigger className="w-32 shrink-0"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: dim.maxLevel + 1 }, (_, i) => (
+                          <SelectItem key={i} value={String(i)}>{t('salary.simulator.levelN', { i })}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   {dim.levelDescriptions?.[level] && (
-                    <span className="text-xs text-muted-foreground italic flex-1 min-w-0 truncate">
+                    <p className="text-xs text-muted-foreground italic break-words">
                       {dim.levelDescriptions[level]}
-                    </span>
+                    </p>
                   )}
                 </div>
               );
@@ -1718,8 +1723,8 @@ const TeamSimulatorPanel: React.FC<{ board: SalaryBoardEntity }> = ({ board }) =
           <Label className="text-xs font-medium">{t('salary.teamSimulator.dimensionSteps')}</Label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {simDimensions.map(dim => (
-              <div key={dim.id} className="flex items-center gap-2">
-                <span className="text-sm w-40 truncate" style={{ color: dim.color }}>{dim.name}</span>
+              <div key={dim.id} className="flex items-start gap-2">
+                <span className="text-sm w-40 shrink-0 break-words" style={{ color: dim.color }}>{dim.name}</span>
                 <Input
                   type="number"
                   step="1"
@@ -1960,20 +1965,22 @@ const HourlyRatePanel: React.FC<{ board: SalaryBoardEntity; onSave: (next: Salar
             {board.dimensions.map(dim => {
               const level = levels.find(l => l.dimensionId === dim.id)?.level ?? 0;
               return (
-                <div key={dim.id} className="flex items-center gap-2">
-                  <span className="text-sm w-40 truncate" style={{ color: dim.color }}>{dim.name}</span>
-                  <Select value={String(level)} onValueChange={v => setLevel(dim.id, parseInt(v, 10))}>
-                    <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {Array.from({ length: dim.maxLevel + 1 }, (_, i) => (
-                        <SelectItem key={i} value={String(i)}>{t('salary.hourlyRate.levelN', { i })}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div key={dim.id} className="space-y-1">
+                  <div className="flex flex-wrap items-start gap-2">
+                    <span className="text-sm font-medium min-w-0 break-words" style={{ color: dim.color }}>{dim.name}</span>
+                    <Select value={String(level)} onValueChange={v => setLevel(dim.id, parseInt(v, 10))}>
+                      <SelectTrigger className="w-32 shrink-0"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: dim.maxLevel + 1 }, (_, i) => (
+                          <SelectItem key={i} value={String(i)}>{t('salary.hourlyRate.levelN', { i })}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   {dim.levelDescriptions?.[level] && (
-                    <span className="text-xs text-muted-foreground italic flex-1 min-w-0 truncate">
+                    <p className="text-xs text-muted-foreground italic break-words">
                       {dim.levelDescriptions[level]}
-                    </span>
+                    </p>
                   )}
                 </div>
               );
