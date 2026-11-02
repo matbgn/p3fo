@@ -228,6 +228,126 @@ build:
 install:
   @echo "Installing dependencies..."
   pnpm install --config.minimumReleaseAge=168h
+  @echo "Installing mcp-server dependencies (standalone package, not a pnpm workspace member)..."
+  npm --prefix mcp-server ci --no-audit --no-fund
+
+# --- Agent tooling: P3FO MCP server + Kilo skill ---
+# Builds mcp-server and installs its Kilo skill into the global skills root so
+# the p3fo_* tools work in every workspace on this machine.
+# Usage: just mcp-setup [--force]   |   just mcp-check
+mcp-setup force="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    repo_root="$(cd "{{justfile_directory()}}" && pwd)"
+    cd "${repo_root}"
+
+    case "{{force}}" in
+        ""|"--force") ;;
+        *) echo "Usage: just mcp-setup [--force]" >&2; exit 1 ;;
+    esac
+
+    for cmd in node npm git; do
+        command -v "${cmd}" > /dev/null 2>&1 || { echo "Missing required tool: ${cmd}" >&2; exit 1; }
+    done
+
+    want_node="$(awk '/^nodejs/ {print $2; exit}' .tool-versions 2>/dev/null || true)"
+    have_node="$(node -v | sed 's/^v//')"
+    if [ -n "${want_node}" ] && [ "${want_node}" != "${have_node}" ]; then
+        echo "WARNING: node ${have_node} in PATH, .tool-versions pins ${want_node}"
+    fi
+
+    echo "[1/5] Installing mcp-server dependencies..."
+    if [ -f mcp-server/package-lock.json ]; then
+        npm --prefix mcp-server ci --no-audit --no-fund
+    else
+        npm --prefix mcp-server install --no-audit --no-fund
+    fi
+
+    echo "[2/5] Building mcp-server..."
+    npm --prefix mcp-server run build
+    if [ ! -f mcp-server/dist/index.js ]; then
+        echo "ERROR: build produced no mcp-server/dist/index.js" >&2
+        exit 1
+    fi
+
+    echo "[3/5] Smoke-testing the stdio handshake..."
+    init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"mcp-setup","version":"1"}}}'
+    inited='{"jsonrpc":"2.0","method":"notifications/initialized"}'
+    list='{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+    tool_count="$(
+        { printf '%s\n' "${init}" "${inited}" "${list}"; } \
+            | node mcp-server/dist/index.js 2> /dev/null \
+            | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{for(const l of d.split("\n")){if(!l.trim())continue;try{const m=JSON.parse(l);if(m.id===2&&m.result&&m.result.tools){console.log(m.result.tools.length);return}}catch{}}console.log(0)})'
+    )"
+    if [ "${tool_count:-0}" -lt 1 ]; then
+        echo "ERROR: MCP server returned no tools" >&2
+        exit 1
+    fi
+    echo "      ${tool_count} tools registered"
+
+    echo "[4/5] Checking the P3FO backend..."
+    api_url="${P3FO_API_URL:-https://p3fo.example.com/mcp}"
+    if [ -n "${P3FO_API_KEY:-}" ]; then
+        if curl -fsS -m 10 "${api_url%/}/api/health" -H "X-API-Key: ${P3FO_API_KEY}" > /dev/null 2>&1; then
+            echo "      OK ${api_url%/}/api/health"
+        else
+            echo "      WARNING: ${api_url%/}/api/health unreachable (local backend not running?)"
+        fi
+    else
+        echo "      WARNING: P3FO_API_KEY not set, skipped health check"
+    fi
+
+    echo "[5/5] Installing the Kilo skill..."
+    src="skills/p3fo-mcp/SKILL.md"
+    if [ ! -f "${src}" ]; then
+        echo "ERROR: missing ${src}" >&2
+        exit 1
+    fi
+    dest_dir="${XDG_CONFIG_HOME:-${HOME}/.config}/kilo/skills/p3fo-mcp"
+    dest="${dest_dir}/SKILL.md"
+    mkdir -p "${dest_dir}"
+    if [ -f "${dest}" ] && ! cmp -s "${src}" "${dest}" && [ ! -f "${dest_dir}/.installed-from" ] && [ "{{force}}" != "--force" ]; then
+        echo "ERROR: ${dest} differs and was not installed by this recipe." >&2
+        echo "       Re-run with: just mcp-setup --force" >&2
+        exit 1
+    fi
+    cp "${src}" "${dest}"
+    printf 'repo=%s\ncommit=%s\ninstalled_at=%s\n' \
+        "${repo_root}" \
+        "$(git -C "${repo_root}" rev-parse --short HEAD 2>/dev/null || echo unknown)" \
+        "$(date -Is)" > "${dest_dir}/.installed-from"
+
+    echo
+    echo "Done: ${tool_count} tools, skill at ${dest}"
+    echo "Start a new agent session (skills and MCP tools load at session start)."
+
+# Verifies the MCP build and that the installed skill matches this repo.
+mcp-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    repo_root="$(cd "{{justfile_directory()}}" && pwd)"
+    cd "${repo_root}"
+    rc=0
+
+    if [ -f mcp-server/dist/index.js ]; then
+        echo "OK   mcp-server/dist/index.js"
+    else
+        echo "FAIL mcp-server/dist/index.js missing (run: just mcp-setup)"; rc=1
+    fi
+
+    src="skills/p3fo-mcp/SKILL.md"
+    dest="${XDG_CONFIG_HOME:-${HOME}/.config}/kilo/skills/p3fo-mcp/SKILL.md"
+    if [ ! -f "${dest}" ]; then
+        echo "FAIL skill not installed at ${dest} (run: just mcp-setup)"; rc=1
+    elif cmp -s "${src}" "${dest}"; then
+        echo "OK   skill in sync"
+    else
+        echo "FAIL skill drift: ${dest} differs from ${src} (run: just mcp-setup)"; rc=1
+    fi
+
+    [ "${rc}" -eq 0 ] && echo "MCP setup OK" || echo "MCP setup incomplete"
+    exit "${rc}"
 
 # --- Completion Message ---
 finish:

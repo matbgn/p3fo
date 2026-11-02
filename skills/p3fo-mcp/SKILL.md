@@ -9,14 +9,29 @@ Drive P3FO (Plan/Program/Project/Focus) via the local `p3fo` MCP server (`mcp-se
 
 ## Setup
 
-### 1. Build the MCP server
+### 1. Run `just mcp-setup`
 
 ```bash
 # from the P3FO repo root
-npx tsc -p mcp-server/tsconfig.json
+just mcp-setup
 ```
 
-This produces `mcp-server/dist/index.js` — the stdio entry point your MCP client will spawn.
+This is the only supported setup path. It:
+
+1. installs `mcp-server` dependencies (it is a **standalone npm package**, not a
+   member of the pnpm workspace, so `pnpm install` at the root does not cover it);
+2. builds `mcp-server/dist/index.js` — the stdio entry point your MCP client spawns;
+3. smoke-tests the stdio handshake and tool registry;
+4. reports backend reachability when `P3FO_API_KEY` is set;
+5. installs this skill to `~/.config/kilo/skills/p3fo-mcp/SKILL.md` (the global
+   Kilo skills root, so it is available in every workspace) and stamps it with
+   `.installed-from`.
+
+Verify at any time with `just mcp-check` (fails on missing build or skill drift).
+Re-install over a hand-edited copy with `just mcp-setup --force`.
+
+This repo is the **owner** of the `p3fo-mcp` skill. Do not keep a second copy in
+another repository — other workspaces pick it up from the global root.
 
 ### 2. Configure your MCP client
 
@@ -332,7 +347,7 @@ p3fo_health({})   // { ok: true, mode: "sqlite", timestamp: "..." }
 
 ## Troubleshooting
 
-- **No `p3fo_*` tools available** → server not registered at session start, or not built. Run `npx tsc -p <p3fo-repo>/mcp-server/tsconfig.json` and **start a new chat**. Check `/mcps` to see loaded servers.
+- **No `p3fo_*` tools available** → server not registered at session start, or not built. Run `just mcp-setup` in the p3fo repo and **start a new chat**. Check `/mcps` to see loaded servers. `just mcp-check` reports a missing build or a stale installed skill.
 - **`P3FO API error 500` / fetch failed** → backend not running or wrong `P3FO_API_URL`. Start it with `just dev` (runs frontend + Express on :5172). Confirm with `p3fo_health`.
 - **`P3FO API error 401: Unauthorized: invalid or missing API key`** → remote deployment requires `P3FO_API_KEY`; set it in `kilo.jsonc` to match the server's `P3FO_API_KEY` env.
 - **`P3FO API error 302: Redirected to ...`** → the MCP client hit oauth2-proxy's login redirect. You're likely using `https://<your-host>/api/...` instead of the `/mcp` prefix, or `OAUTH2_PROXY_SKIP_AUTH_ROUTES` isn't set. Use `P3FO_API_URL=https://<your-p3fo-host>/mcp`.
@@ -353,7 +368,7 @@ p3fo_health({})   // { ok: true, mode: "sqlite", timestamp: "..." }
 
 ```bash
 # from the p3fo repo root
-npx tsc -p mcp-server/tsconfig.json          # build
+just mcp-setup                               # deps + build + skill + verify
 node mcp-server/dist/index.js                # run (needs P3FO backend up)
 P3FO_API_URL=http://localhost:5172 node mcp-server/dist/index.js
 ```
