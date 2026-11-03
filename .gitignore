@@ -60,3 +60,10 @@ bundle-stats.html
 0 - Processus/
 
 .playwright-mcp
+
+# Load bench artifacts
+bench/results/
+
+# Python
+__pycache__/
+*.pyc

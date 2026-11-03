@@ -36,8 +36,65 @@ dev-browser:
   @echo "[1/1] Starting frontend in browser-only mode..."
   VITE_P3FO_FORCE_BROWSER="true" VITE_BASE_URL="/p3fo" pnpm run dev
 
-tests:
+# Run all tests. Heavy suites are opt-OUT, mirroring omniticket's tests recipe:
+#
+#   just tests                - unit tests + load bench
+#   just tests --skip load    - unit tests only
+#
+# The load bench skips gracefully when locust or Chrome is unavailable so the
+# suite stays green on machines without the load-test prerequisites.
+tests *args="":
+  #!/usr/bin/env bash
+  set -euo pipefail
+
+  skip_set=""
+  set -- {{args}}
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --skip)
+        if [ "$#" -ge 2 ]; then
+          skip_set="$2"
+          shift 2
+        else
+          shift
+        fi
+        ;;
+      --skip=*)
+        skip_set="${1#--skip=}"
+        shift
+        ;;
+      *)
+        echo "Unknown argument: $1" >&2
+        echo "Usage: just tests [--skip load]" >&2
+        exit 2
+        ;;
+    esac
+  done
+
+  echo "▶ Unit tests..."
   pnpm test --run
+
+  chrome_bin="${CHROME_BIN:-google-chrome}"
+  if [[ ",${skip_set}," == *",load,"* ]]; then
+    echo "⏭  Load bench skipped (--skip load)"
+  elif ! command -v locust > /dev/null 2>&1; then
+    echo "⏭  Load bench skipped (locust not installed)"
+  elif ! command -v "${chrome_bin}" > /dev/null 2>&1; then
+    echo "⏭  Load bench skipped (${chrome_bin} not found)"
+  else
+    echo "▶ Load bench..."
+    just bench-check
+  fi
+
+# --- Load bench ---
+bench users="10" duration="30":
+  python3 bench/orchestrator.py --users {{users}} --duration {{duration}}
+
+bench-browser users="10" duration="30":
+  python3 bench/orchestrator.py --users {{users}} --duration {{duration}} --browser
+
+bench-check users="8" duration="20":
+  python3 bench/orchestrator.py --users {{users}} --duration {{duration}} --browser --enforce
 
 # --- Code Quality Checks ---
 check:
@@ -48,6 +105,14 @@ check:
   @echo "Running ESLint..."
   npx eslint --max-warnings 0
   just check-node-versions
+
+# --- Pre-commit checks ---
+# Mirrors omniticket's pre-commit: build, run the full test suite (including
+# the load bench), then typecheck/lint/node-version alignment via check.
+pre-commit: build tests check
+  @echo "✅ Pre-commit checks passed"
+
+alias pre := pre-commit
 
 # --- Version Management Tasks ---
 sync-versions version:
