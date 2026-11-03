@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.36.0 (2026-11-03)
+
+### Features
+
+- **timesheet:** add quick 1s time entry (853fef6)
+- **timetable:** add nested subproject headers (536889e)
+- **pomodoro:** add x2/x3 boost for work rounds (d0b9d90)
+
+### Bug Fixes
+
+- **storyboard:** sort blocked cards after ready work (02bf388)
+- **common:** recover from stale chunk load errors (58e399f)
+- **timetable:** align edit row with table columns (d083e30)
+- **resources:** allow empty preferred working days (1ae0cd8)
+- **mood spotlight:** exclude blocked cards from callout (7bb179e)
+
+---
+
 ## v0.35.0 (2026-09-02)
 
 ### Features
@@ -156,19 +174,5 @@
 ### Bug Fixes
 
 - **boards:** persist Yjs-synced BlockNote content to DB snapshot (4afff10)
-
----
-
-## v0.28.0 (2026-06-23)
-
-### Features
-
-- **traveler:** add Lisbon and Porto airport locations (a9fd84b)
-
-### Bug Fixes
-
-- **focus sessions:** add pomodoro/focus sessions import/export (0aefb8e)
-- **voting tool:** add vote responses/moderators import endpoints and toast feedback (819b58a)
-- **focus sessions:** support configurable week start day in pomodoro heatmap (b657b89)
 
 ---
