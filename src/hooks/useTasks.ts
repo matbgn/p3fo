@@ -1458,6 +1458,39 @@ export function useTasks() {
     eventBus.publish("tasksChanged");
   }, []);
 
+  const addTimeEntry = React.useCallback(async (taskId: string, newEntry?: { startTime: number; endTime: number }) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const startTime = newEntry?.startTime ?? Date.now();
+    const entry = {
+      startTime,
+      endTime: newEntry?.endTime ?? startTime + 1000,
+    };
+
+    // Update local state
+    updateTaskInTasks(taskId, (t) => ({
+      ...t,
+      timer: [...(t.timer || []), entry]
+    }));
+
+    // Persist to backend
+    try {
+      const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+      const adapter = await persistence;
+      const updatedTask = tasks.find(t => t.id === taskId);
+      if (updatedTask) {
+        const entity = taskToEntity(updatedTask);
+        await adapter.updateTask(taskId, entity);
+      }
+    } catch (error) {
+      console.error("Error adding time entry:", error);
+    }
+
+
+    eventBus.publish("tasksChanged");
+  }, []);
+
   const deleteTimeEntry = React.useCallback(async (taskId: string, entryIndex: number) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
@@ -1511,6 +1544,7 @@ export function useTasks() {
     calculateTotalDifficulty: (taskId: string) => calculateTotalDifficulty(taskId, tasks),
     toggleTimer,
     updateTimeEntry,
+    addTimeEntry,
     deleteTimeEntry,
     updateTerminationDate,
     updateComment: React.useCallback(async (taskId: string, comment: string) => {

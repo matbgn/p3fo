@@ -377,6 +377,7 @@
     "saveComment": "Enregistrer le commentaire",
     "timeSheetTitle": "Feuille de temps - {{title}}",
     "timeSheetDescription": "Visualiser et modifier les entrées de temps pour la tâche : {{title}}",
+    "addTimeEntry": "Ajouter une entrée",
     "editDetails": "Modifier les détails de la tâche",
     "descriptionLabel": "Description",
     "descriptionFieldLabel": "Description",

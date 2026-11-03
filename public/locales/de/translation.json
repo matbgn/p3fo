@@ -377,6 +377,7 @@
     "saveComment": "Kommentar speichern",
     "timeSheetTitle": "Stundenblatt - {{title}}",
     "timeSheetDescription": "Zeiteinträge für Aufgabe ansehen und bearbeiten: {{title}}",
+    "addTimeEntry": "Eintrag hinzufügen",
     "editDetails": "Aufgabendetails bearbeiten",
     "descriptionLabel": "Beschreibung",
     "descriptionFieldLabel": "Beschreibung",

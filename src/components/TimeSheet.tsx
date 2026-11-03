@@ -1,8 +1,9 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { useTasks } from '@/hooks/useTasks';
 import { useAllTasks } from '@/hooks/useAllTasks';
 import { Button } from './ui/button';
-import { Trash2, CalendarIcon, Clock } from 'lucide-react';
+import { Trash2, CalendarIcon, Clock, Plus } from 'lucide-react';
 import { Temporal } from '@js-temporal/polyfill';
 import './TimeSheet.css';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -36,13 +37,17 @@ interface TimeSheetProps {
 
 
 export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
+  const { t } = useTranslation();
   const { tasks } = useAllTasks();
-  const { updateTimeEntry, deleteTimeEntry } = useTasks();
+  const { updateTimeEntry, addTimeEntry, deleteTimeEntry } = useTasks();
   const { settings } = useSettingsContext();
   const timezone = settings.timezone || 'Europe/Zurich';
   const weekStartsOn = settings.weekStartDay as 0 | 1;
   const task = tasks.find(t => t.id === taskId);
   const entryRefs = React.useRef<HTMLDivElement[]>([]);
+
+  // Index of a newly added entry to scroll to once it is rendered
+  const [pendingScrollIndex, setPendingScrollIndex] = React.useState<number | null>(null);
 
   // State for time picker dialog
   const [timePickerOpen, setTimePickerOpen] = React.useState(false);
@@ -78,8 +83,23 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
     }
   }, [task?.timer]);
 
+  // Scroll to a newly added entry once it has been rendered
+  React.useEffect(() => {
+    if (pendingScrollIndex === null) return;
+    const element = entryRefs.current[pendingScrollIndex];
+    if (!element) return;
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    element.classList.add('timesheet-entry-highlight');
+    setPendingScrollIndex(null);
+  }, [task?.timer, pendingScrollIndex]);
+
   const handleUpdate = (index: number, entry: { startTime: number; endTime: number }) => {
     updateTimeEntry(taskId, index, entry);
+  };
+
+  const handleAddEntry = () => {
+    setPendingScrollIndex(task?.timer?.length ?? 0);
+    addTimeEntry(taskId);
   };
 
   const handleDelete = (index: number) => {
@@ -111,7 +131,7 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex min-h-full flex-col gap-4">
       {task.timer?.map((entry, index) => {
         const startInstant = timestampToInstant(entry.startTime);
         const startPlainDateTime = instantToPlainDateTime(startInstant, timezone);
@@ -266,6 +286,12 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ taskId }) => {
           </div>
         );
       })}
+      <div className="mt-auto flex justify-end pt-2">
+        <Button variant="outline" size="sm" onClick={handleAddEntry}>
+          <Plus className="h-4 w-4 mr-1" />
+          {t('task.addTimeEntry')}
+        </Button>
+      </div>
       {timePickerConfig && (
         <TimePickerDialog
           isOpen={timePickerOpen}

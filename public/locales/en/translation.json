@@ -377,6 +377,7 @@
     "saveComment": "Save Comment",
     "timeSheetTitle": "Time Sheet - {{title}}",
     "timeSheetDescription": "View and edit time entries for task: {{title}}",
+    "addTimeEntry": "Add a new entry",
     "editDetails": "Edit task details",
     "descriptionLabel": "Description",
     "descriptionFieldLabel": "Description",
