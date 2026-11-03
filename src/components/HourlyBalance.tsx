@@ -77,8 +77,20 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
         const prevMonth = prevDate.getMonth() + 1;
         const prevDescId = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
 
-        // Check if previous month exists in monthlyBalances
-        if (!monthlyBalances[prevDescId]) {
+        const previousBalance = monthlyBalances[prevDescId];
+
+        // Repair entries that were auto-persisted at rollover with a 0% workload
+        // while still containing tracked hours (the workload was lost on month switch).
+        const needsRepair =
+            previousBalance !== undefined &&
+            previousBalance.isManual !== true &&
+            previousBalance.workload === 0 &&
+            (previousBalance.hoursDone ?? 0) !== 0 &&
+            userWorkload > 0;
+
+        // Create the previous month snapshot, or repair one that lost its workload
+        // during a month rollover.
+        if (!previousBalance || needsRepair) {
             // Calculate it using the projection logic (which handles past months correctly)
             // We need to pass the correct settings and tasks
             // Use effective settings (user workload)
@@ -86,9 +98,6 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
                 ...settings,
                 userWorkloadPercentage: userWorkload
             };
-
-            // We need to get vacations taken for that month if any (from where? if record missing, it's 0)
-            const vacationsTaken = 0;
 
             const projected = getHistoricalHourlyBalances(filteredTasks, effectiveSettings, 0, monthlyBalances, userWorkload)
                 .find(d => d.descId === prevDescId);
@@ -99,9 +108,9 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
                     workload: projected.workload,
                     hourlyBalance: projected.hourlyBalance,
                     hoursDone: projected.hoursDone,
-                    vacationsHourlyTaken: projected.vacationsHourlyTaken,
-                    vacationsHourlyBalance: projected.vacationsHourlyBalance,
-                    isManual: false
+                    vacationsHourlyTaken: previousBalance?.vacationsHourlyTaken ?? projected.vacationsHourlyTaken,
+                    vacationsHourlyBalance: previousBalance?.vacationsHourlyBalance ?? projected.vacationsHourlyBalance,
+                    isManual: previousBalance?.isManual ?? false
                 };
 
                 const updatedMonthlyBalances = {
@@ -121,7 +130,7 @@ const HourlyBalance: React.FC<HourlyBalanceProps> = ({ userId }) => {
         }
 
         const currentBalance = monthlyBalances[descId] || {
-            workload: 0,
+            workload: userWorkload,
             hourlyBalance: 0,
             hoursDone: 0,
         };
