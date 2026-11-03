@@ -16,7 +16,7 @@ const STATUS_TRANSLATION_KEY: Record<TriageStatus, string> = {
   Archived: "status.archived",
 };
 
-export const TaskStatusSelect: React.FC<{
+const TaskStatusSelectInner: React.FC<{
   value: TriageStatus;
   onChange: (v: TriageStatus) => void;
   className?: string;
@@ -38,3 +38,5 @@ export const TaskStatusSelect: React.FC<{
     </Select>
   );
 };
+
+export const TaskStatusSelect = React.memo(TaskStatusSelectInner);

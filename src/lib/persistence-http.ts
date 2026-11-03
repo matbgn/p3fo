@@ -244,7 +244,16 @@ export class HttpApiPersistence implements PersistenceAdapter {
   }
 
   async getReminderById(id: string): Promise<ReminderEntity | null> {
-    return this.makeRequest(`/api/reminders/${id}`);
+    try {
+      return await this.makeRequest(`/api/reminders/${id}`);
+    } catch (error) {
+      // A missing reminder is expected before the first save; treat the 404
+      // as null so callers can create it instead of failing.
+      if (error instanceof Error && error.message.includes('404')) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   async createReminder(input: Partial<ReminderEntity>): Promise<ReminderEntity> {

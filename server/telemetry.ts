@@ -26,7 +26,7 @@ function findPackageJson(): { version: string } {
 const pkg = findPackageJson();
 
 const traceExporter = new OTLPTraceExporter({
-  url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://localhost:4318/v1/traces',
+  url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://localhost:14318/v1/traces',
 });
 
 const sdk = new NodeSDK({

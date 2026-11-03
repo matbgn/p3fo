@@ -114,44 +114,86 @@ if (!PERSISTENCE_CONFIG.FORCE_BROWSER) {
 
 // Observer for Yjs updates - only set up if collaboration is enabled
 if (isCollaborationEnabled()) {
-  yTasks.observe(() => {
+  yTasks.observe((event) => {
     // Skip Y.js sync when viewing filtered tasks to prevent showing all tasks.
-    // 
-    // When isFiltered is true, the 'tasks' array contains only a filtered subset
-    // (e.g., tasks for a specific user). If we let the Y.js observer replace it
-    // with all tasks from the collaborative document, the UI would show all tasks
-    // instead of the filtered subset.
-    //
-    // When a user creates a task while filtered:
-    // 1. createTask adds the new task to the local 'tasks' array (line 263)
-    // 2. syncTaskToYjs is called (line 264) to sync to the collaborative document
-    // 3. This observer would fire and replace 'tasks' with ALL tasks from Y.js
-    // 4. This would show all tasks in the UI - hence we skip when isFiltered
-    //
-    // Limitation: While filtered, this client won't see updates from other clients
-    // for the filtered user, only the local changes. The user would need to reload
-    // to see external changes. This is acceptable because:
-    // - The filter is typically used for personal task management
-    // - Reloading (unfilter + filter again) gets the latest data
-    // - Real-time sync is less critical when viewing a personal subset
+    // This preserves the existing filtered-view behavior.
     if (isFiltered) {
       return;
     }
-    const rawTasks = (Array.from(yTasks.values()) as Task[]).map(t => ({
-      ...t,
-      triageStatus: t.triageStatus || "Backlog",
-      children: t.children || [],
-    }));
 
-    // Recompute children from parentId — the authoritative source of truth.
-    // The `children` array stored in Yjs can become stale when tasks are
-    // created or reparented via external paths (REST API, MCP, another client).
-    const newTasks = recomputeChildrenFromParentId(rawTasks);
+    const changedKeys = event.keysChanged;
+    if (tasks.length === 0 || changedKeys.size > Math.max(50, tasks.length * 0.5)) {
+      const rawTasks = (Array.from(yTasks.values()) as Task[]).map(t => ({
+        ...t,
+        triageStatus: t.triageStatus || "Backlog",
+        children: t.children || [],
+      }));
 
-    // Always update, even if empty (e.g., all tasks deleted)
-    // This ensures deletions to empty state trigger UI updates
-    tasks = newTasks;
-    eventBus.publish("tasksChanged");
+      // Recompute children from parentId — the authoritative source of truth.
+      // The `children` array stored in Yjs can become stale when tasks are
+      // created or reparented via external paths (REST API, MCP, another client).
+      tasks = recomputeChildrenFromParentId(rawTasks);
+      eventBus.publish("tasksChanged");
+      return;
+    }
+
+    let nextTasks = tasks;
+    const byId = new Map(nextTasks.map(t => [t.id, t]));
+    const dirtyParents = new Set<string>();
+    let changed = false;
+
+    for (const id of changedKeys) {
+      const existing = byId.get(id);
+      const raw = yTasks.get(id) as Task | undefined;
+
+      if (!raw) {
+        if (!existing) continue;
+        byId.delete(id);
+        nextTasks = nextTasks.filter(t => t.id !== id);
+        if (existing.parentId) dirtyParents.add(existing.parentId);
+        changed = true;
+        continue;
+      }
+
+      const normalized: Task = {
+        ...raw,
+        triageStatus: raw.triageStatus || "Backlog",
+        children: existing?.children ?? [],
+      };
+
+      if (existing) {
+        if (existing.parentId !== normalized.parentId) {
+          if (existing.parentId) dirtyParents.add(existing.parentId);
+          if (normalized.parentId) dirtyParents.add(normalized.parentId);
+        }
+        nextTasks = nextTasks.map(t => (t.id === id ? normalized : t));
+        byId.set(id, normalized);
+      } else {
+        nextTasks = [...nextTasks, normalized];
+        byId.set(id, normalized);
+        if (normalized.parentId) dirtyParents.add(normalized.parentId);
+        dirtyParents.add(id);
+      }
+      changed = true;
+    }
+
+    for (const parentId of dirtyParents) {
+      const parent = byId.get(parentId);
+      if (!parent) continue;
+      const children = nextTasks.filter(t => t.parentId === parentId).map(t => t.id);
+      const current = parent.children || [];
+      if (current.length !== children.length || current.some((childId, i) => childId !== children[i])) {
+        const updatedParent = { ...parent, children };
+        nextTasks = nextTasks.map(t => (t.id === parentId ? updatedParent : t));
+        byId.set(parentId, updatedParent);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      tasks = nextTasks;
+      eventBus.publish("tasksChanged");
+    }
   });
 }
 
@@ -921,10 +963,40 @@ const updateTerminationDate = async (taskId: string, terminationDate: number | u
 
 };
 
-export function useTasks() {
+export function getAllTasksSnapshot(): Task[] {
+  return tasks;
+}
+
+export function areTasksFiltered(): boolean {
+  return isFiltered;
+}
+
+export function useHasTasks(): boolean {
+  const [hasTasks, setHasTasks] = React.useState(() => {
+    return isCollaborationEnabled() ? yTasks.size > 0 : getAllTasksSnapshot().length > 0;
+  });
+
+  React.useEffect(() => {
+    const update = () => {
+      const next = isCollaborationEnabled() ? yTasks.size > 0 : getAllTasksSnapshot().length > 0;
+      setHasTasks(prev => (prev === next ? prev : next));
+    };
+    update();
+    eventBus.subscribe("tasksChanged", update);
+    return () => {
+      eventBus.unsubscribe("tasksChanged", update);
+    };
+  }, []);
+
+  return hasTasks;
+}
+
+export function useTasks(options?: { subscribe?: boolean }) {
+  const shouldSubscribe = options?.subscribe ?? true;
   const [_, setForceRender] = React.useState({});
 
   React.useEffect(() => {
+    if (!shouldSubscribe) return;
     const onTasksChanged = () => {
       setForceRender({});
     };
@@ -932,7 +1004,7 @@ export function useTasks() {
     return () => {
       eventBus.unsubscribe("tasksChanged", onTasksChanged);
     };
-  }, []);
+  }, [shouldSubscribe]);
 
   const updateTitle = React.useCallback(async (id: string, title: string) => {
     let parentIdToReturn: string | null = null;
@@ -1082,7 +1154,7 @@ export function useTasks() {
     }
   }, []);
 
-  const duplicateTaskStructure = async (taskId: string): Promise<string | null> => {
+  const duplicateTaskStructure = React.useCallback(async (taskId: string): Promise<string | null> => {
     const map = byId(tasks);
     const originalTask = map[taskId];
     if (!originalTask) return null;
@@ -1172,7 +1244,7 @@ export function useTasks() {
     }
 
     return duplicatedTask.id;
-  };
+  }, []);
 
   const clearAllTasks = React.useCallback(async () => {
     tasks = [];

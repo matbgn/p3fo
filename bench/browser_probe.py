@@ -218,6 +218,7 @@ async def run(args):
             await cdp_send(ws, "Page.enable", {}, next_id)
             loaded = await wait_for_board(ws, next_id)
             filters = await clear_filters(ws, next_id)
+            await asyncio.sleep(2.5)
             if not loaded:
                 print("[probe] board did not load in time", file=sys.stderr)
             if args.ready_file:

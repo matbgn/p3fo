@@ -328,7 +328,18 @@ def render_report(context):
     ]
 
     long_tasks = otel.get("long_tasks") or []
-    if long_tasks and isinstance(long_tasks[0], dict):
+    if isinstance(long_tasks, dict):
+        if "error" in long_tasks:
+            lines += [
+                "## Long tasks (OTel)",
+                "",
+                f"_unavailable: {long_tasks['error']}_",
+                "",
+            ]
+            long_tasks = []
+        else:
+            long_tasks = [long_tasks]
+    if isinstance(long_tasks, list) and long_tasks and isinstance(long_tasks[0], dict):
         row = long_tasks[0]
         lines += [
             "## Long tasks (OTel)",
@@ -412,25 +423,45 @@ def evaluate_gates(args, locust, otel, browser):
             "PASS" if ok else "FAIL",
         ])
 
-    add("API p95", aggregate.get("p95_ms", 0), args.max_api_p95_ms, aggregate.get("p95_ms", 0) <= args.max_api_p95_ms, " ms")
-    add("Error rate", error_rate * 100, args.max_error_rate * 100, error_rate <= args.max_error_rate, "%")
+    if not aggregate or not requests:
+        gates.append(["API p95", "no locust data", f"{args.max_api_p95_ms} ms", "FAIL"])
+        gates.append(["Error rate", "no locust data", f"{args.max_error_rate * 100}%", "FAIL"])
+    else:
+        add("API p95", aggregate.get("p95_ms", 0), args.max_api_p95_ms, aggregate.get("p95_ms", 0) <= args.max_api_p95_ms, " ms")
+        add("Error rate", error_rate * 100, args.max_error_rate * 100, error_rate <= args.max_error_rate, "%")
+
+    otel_expected = not args.no_otel
 
     render_rows = [row for row in (otel.get("react_render") or []) if isinstance(row, dict) and "p95_ms" in row]
     if render_rows:
         worst = max(render_rows, key=lambda row: float(row["p95_ms"]))
         add("Worst render p95", float(worst["p95_ms"]), args.max_render_p95_ms, float(worst["p95_ms"]) <= args.max_render_p95_ms, " ms")
+    elif otel_expected:
+        # Missing OTel data is not a pass: without react.render spans the gate
+        # cannot be evaluated and the run must not be reported as green.
+        gates.append(["Worst render p95", "no OTel data", f"{args.max_render_p95_ms} ms", "FAIL"])
+    else:
+        gates.append(["Worst render p95", "skipped (--no-otel)", f"{args.max_render_p95_ms} ms", "SKIP"])
 
     frontend_http = [row for row in (otel.get("frontend_http") or []) if isinstance(row, dict) and "SpanName" in row]
     get_rows = [row for row in frontend_http if row["SpanName"] == "HTTP GET"]
     if get_rows:
         worst_get = max(float(row["p95_ms"]) for row in get_rows)
         add("Frontend GET p95", worst_get, args.max_frontend_get_p95_ms, worst_get <= args.max_frontend_get_p95_ms, " ms")
+    elif otel_expected:
+        gates.append(["Frontend GET p95", "no OTel data", f"{args.max_frontend_get_p95_ms} ms", "FAIL"])
+    else:
+        gates.append(["Frontend GET p95", "skipped (--no-otel)", f"{args.max_frontend_get_p95_ms} ms", "SKIP"])
 
     if browser:
-        add("Frame p99", float(browser.get("frameP99Ms", 0)), args.max_frame_p99_ms, float(browser.get("frameP99Ms", 0)) <= args.max_frame_p99_ms, " ms")
-        duration_min = float(browser.get("durationMs", 0)) / 60000.0
-        long_tasks_per_min = float(browser.get("longTaskCount", 0)) / (duration_min if duration_min > 0 else 1.0)
-        add("Long tasks/min", long_tasks_per_min, args.max_long_tasks_per_min, long_tasks_per_min <= args.max_long_tasks_per_min)
+        if not isinstance(browser, dict) or not browser.get("durationMs"):
+            gates.append(["Frame p99", "no browser data", f"{args.max_frame_p99_ms} ms", "FAIL"])
+            gates.append(["Long tasks/min", "no browser data", f"{args.max_long_tasks_per_min}", "FAIL"])
+        else:
+            add("Frame p99", float(browser.get("frameP99Ms", 0)), args.max_frame_p99_ms, float(browser.get("frameP99Ms", 0)) <= args.max_frame_p99_ms, " ms")
+            duration_min = float(browser.get("durationMs", 0)) / 60000.0
+            long_tasks_per_min = float(browser.get("longTaskCount", 0)) / (duration_min if duration_min > 0 else 1.0)
+            add("Long tasks/min", long_tasks_per_min, args.max_long_tasks_per_min, long_tasks_per_min <= args.max_long_tasks_per_min)
 
     return gates
 
@@ -470,8 +501,8 @@ def read_until_ready(process, marker, timeout=120):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--users", type=int, default=10)
-    parser.add_argument("--spawn-rate", type=float, default=2)
+    parser.add_argument("--users", type=int, default=25)
+    parser.add_argument("--spawn-rate", type=float, default=5)
     parser.add_argument("--duration", type=int, default=30)
     parser.add_argument("--host", default="")
     parser.add_argument("--db-source", default=str(REPO / "p3fo.db"))
@@ -480,17 +511,17 @@ def main():
     parser.add_argument("--frontend", action="store_true")
     parser.add_argument("--browser", action="store_true")
     parser.add_argument("--no-otel", action="store_true")
-    parser.add_argument("--clickhouse", default=os.environ.get("CLICKHOUSE_URL", "http://localhost:8123"))
+    parser.add_argument("--clickhouse", default=os.environ.get("CLICKHOUSE_URL", "http://localhost:18123"))
     parser.add_argument("--backend-service", default="")
     parser.add_argument("--frontend-service", default="")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--run-id", default="")
     parser.add_argument("--keep-db", action="store_true")
     parser.add_argument("--enforce", action="store_true")
-    parser.add_argument("--max-api-p95-ms", type=float, default=150.0)
+    parser.add_argument("--max-api-p95-ms", type=float, default=33.0)
     parser.add_argument("--max-error-rate", type=float, default=0.01)
     parser.add_argument("--max-render-p95-ms", type=float, default=33.0)
-    parser.add_argument("--max-frame-p99-ms", type=float, default=50.0)
+    parser.add_argument("--max-frame-p99-ms", type=float, default=33.0)
     parser.add_argument("--max-long-tasks-per-min", type=float, default=60.0)
     parser.add_argument("--max-frontend-get-p95-ms", type=float, default=50.0)
     args = parser.parse_args()
@@ -536,7 +567,7 @@ def main():
                     "P3FO_DB_CLIENT": "sqlite",
                     "P3FO_DB_SQLITE_FILE": str(temp_db),
                     "OTEL_EXPORTER_OTLP_ENDPOINT": env.get(
-                        "OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318/v1/traces"
+                        "OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:14318/v1/traces"
                     ),
                     "OTEL_SERVICE_NAME": backend_service,
                 }

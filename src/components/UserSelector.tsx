@@ -17,7 +17,7 @@ interface UserSelectorProps {
   className?: string;
 }
 
-export const UserSelector: React.FC<UserSelectorProps> = ({
+const UserSelectorInner: React.FC<UserSelectorProps> = ({
   value,
   onChange,
   className
@@ -109,3 +109,5 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
     </Select>
   );
 };
+
+export const UserSelector = React.memo(UserSelectorInner);

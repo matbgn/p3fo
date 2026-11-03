@@ -237,6 +237,8 @@ A **Node.js / Express** server providing:
       just dev-otel
       ```
       This runs the Vite dev server, Express backend, and OpenTelemetry tracing and metrics server.
+      The local OTel stack uses p3fo-specific host ports (OTLP HTTP `14318`, ClickHouse `18123`,
+      HyperDX UI http://localhost:18088) so it does not clash with other projects on the machine.
 
 3. **Check linting and type-checking:**
    ```bash

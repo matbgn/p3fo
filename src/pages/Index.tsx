@@ -30,7 +30,7 @@ import { ConfirmModalHost } from "@/components/ConfirmModalHost";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { LazyErrorBoundary } from "@/components/ui/lazy-error-boundary";
 import ExampleDataModal, { EXAMPLE_DATA_PROMPTED_KEY } from "@/components/ExampleDataModal";
-import { useAllTasks } from "@/hooks/useAllTasks";
+import { useHasTasks } from "@/hooks/useTasks";
 
 const LazyWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { t } = useTranslation();
@@ -69,7 +69,7 @@ const Index: React.FC = () => {
     setView('metrics');
   }, [setView]);
   const { userSettings, loading: userSettingsLoading, userId } = useUserSettingsContext();
-  const { tasks } = useAllTasks();
+  const hasTasks = useHasTasks();
 
   // Track which views have been mounted (lazy-mount on first visit, keep-alive after)
   const [mountedViews, setMountedViews] = React.useState<Set<string>>(() => new Set([view]));
@@ -92,7 +92,7 @@ const Index: React.FC = () => {
     if (userSettings.hasCompletedOnboarding) return;
     // Defer until tasks have been loaded so we don't flash the modal over
     // data that's still hydrating from persistence.
-    if (tasks.length > 0) return;
+    if (hasTasks) return;
     let cancelled = false;
     import("@/lib/persistence-factory").then(async m => {
       const adapter = await m.getPersistenceAdapter();
@@ -106,7 +106,7 @@ const Index: React.FC = () => {
       setExampleModalOpen(true);
     }).catch(err => console.error('Example data gate check failed:', err));
     return () => { cancelled = true; };
-  }, [userSettingsLoading, userSettings.hasCompletedOnboarding, userId, tasks.length]);
+  }, [userSettingsLoading, userSettings.hasCompletedOnboarding, userId, hasTasks]);
 
   const toggleUmbrella = useCallback(() => {
     setUmbrellaOpen(prev => !prev);

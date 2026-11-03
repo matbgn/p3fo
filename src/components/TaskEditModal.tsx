@@ -60,7 +60,7 @@ interface TaskEditModalProps {
 
 const DIFFICULTY_OPTIONS: Array<0.5 | 1 | 2 | 3 | 5 | 8> = [0.5, 1, 2, 3, 5, 8];
 
-export const TaskEditModal: React.FC<TaskEditModalProps> = ({
+const TaskEditModalInner: React.FC<TaskEditModalProps> = ({
     task,
     tasks,
     isOpen,
@@ -429,3 +429,5 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
         </Dialog>
     );
 };
+
+export const TaskEditModal = React.memo(TaskEditModalInner);

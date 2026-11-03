@@ -24,10 +24,28 @@ dev:
   pnpm run dev:all
 
 dev-otel:
-  @echo "--- Starting P3FO Development Environment with local OpenTelemetry ---"
-  @echo "[1/2] Starting development server..."
+  #!/usr/bin/env bash
+  set -euo pipefail
+  echo "--- Starting P3FO Development Environment with local OpenTelemetry ---"
+  echo "[1/3] Starting OTel stack..."
   docker compose -f docker-compose.hyperdx.yml up -d
-  VITE_OTEL_ENABLED=true OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318/v1/traces pnpm run dev:all
+  echo "[2/3] Waiting for the OTel collector on :14318..."
+  for _ in $(seq 1 60); do
+    if curl -s --max-time 1 -o /dev/null "http://localhost:14318/"; then
+      break
+    fi
+    sleep 0.5
+  done
+  if ! curl -s --max-time 1 -o /dev/null "http://localhost:14318/"; then
+    echo "OTel collector did not become ready on :14318" >&2
+    exit 1
+  fi
+  echo "HyperDX UI: http://localhost:18088"
+  echo "[3/3] Starting development server..."
+  VITE_OTEL_ENABLED=true \
+    OTEL_COLLECTOR_URL=http://localhost:14318 \
+    OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:14318/v1/traces \
+    pnpm run dev:all
 
 # --- Browser-Only Development Task ---
 # Reproduce the deployed browser-only mode locally for debugging
@@ -75,25 +93,28 @@ tests *args="":
   pnpm test --run
 
   chrome_bin="${CHROME_BIN:-google-chrome}"
+  clickhouse_url="${CLICKHOUSE_URL:-http://localhost:18123}"
   if [[ ",${skip_set}," == *",load,"* ]]; then
     echo "⏭  Load bench skipped (--skip load)"
   elif ! command -v locust > /dev/null 2>&1; then
     echo "⏭  Load bench skipped (locust not installed)"
   elif ! command -v "${chrome_bin}" > /dev/null 2>&1; then
     echo "⏭  Load bench skipped (${chrome_bin} not found)"
+  elif ! curl -sf --max-time 2 "${clickhouse_url%/}/ping" > /dev/null 2>&1; then
+    echo "⏭  Load bench skipped (ClickHouse/OTel not reachable; start 'just dev-otel' to enforce paint gates)"
   else
     echo "▶ Load bench..."
     just bench-check
   fi
 
 # --- Load bench ---
-bench users="10" duration="30":
+bench users="25" duration="30":
   python3 bench/orchestrator.py --users {{users}} --duration {{duration}}
 
-bench-browser users="10" duration="30":
+bench-browser users="25" duration="30":
   python3 bench/orchestrator.py --users {{users}} --duration {{duration}} --browser
 
-bench-check users="8" duration="20":
+bench-check users="25" duration="30":
   python3 bench/orchestrator.py --users {{users}} --duration {{duration}} --browser --enforce
 
 # --- Code Quality Checks ---

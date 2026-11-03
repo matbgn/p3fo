@@ -25,7 +25,7 @@ interface LinkedVoteButtonProps {
   onCreateLinkedVote: (taskId: string) => void;
 }
 
-export const LinkedVoteButton: React.FC<LinkedVoteButtonProps> = ({
+const LinkedVoteButtonInner: React.FC<LinkedVoteButtonProps> = ({
   taskId,
   taskTitle,
   linkedVoteIds = [],
@@ -171,3 +171,5 @@ export const LinkedVoteButton: React.FC<LinkedVoteButtonProps> = ({
     </TooltipProvider>
   );
 };
+
+export const LinkedVoteButton = React.memo(LinkedVoteButtonInner);

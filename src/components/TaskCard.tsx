@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { eventBus } from "@/lib/events";
 import { LinkedVoteButton } from "@/components/voting/LinkedVoteButton";
 import { CreateLinkedVoteDialog } from "@/components/voting/CreateLinkedVoteDialog";
-import { useVotes } from "@/hooks/useVotes";
+import { createVote, loadVotes, useLinkedVotes } from "@/hooks/useVotes";
 import {
   Dialog,
   DialogContent,
@@ -36,6 +36,7 @@ import { formatDuration } from '@/lib/format-utils';
 import { format } from "date-fns";
 import { addReminder } from "@/utils/reminders";
 import { useReminderStore } from "@/hooks/useReminders";
+import { useShallow } from "zustand/react/shallow";
 import { UserSelector } from "./UserSelector";
 import { RichTextField } from "./RichTextField";
 import { useUserSettings } from "@/hooks/useUserSettings";
@@ -52,7 +53,12 @@ import { SubtaskProgress } from "./SubtaskProgress";
 
 interface TaskCardProps {
   task: Task;
-  tasks: Task[];
+  tasks?: Task[];
+  subtaskTasks?: Task[];
+  tasksForModal?: Task[];
+  onEditModalOpenChange?: (taskId: string, open: boolean) => void;
+  columnIndex?: number;
+  isSearchResult?: boolean;
   updateStatus: (id: string, status: TriageStatus) => void;
   updateDifficulty: (id: string, difficulty: 0.5 | 1 | 2 | 3 | 5 | 8) => void;
   updateCategory: (id: string, category: Category) => void;
@@ -70,7 +76,7 @@ interface TaskCardProps {
   toggleDone: (task: Task) => void;
   toggleTimer: (id: string, currentUserId?: string) => void;
   reparent: (id: string, parentId: string | null) => void;
-  onActivate?: (id: string) => void;
+  onActivate?: (id: string, columnIndex?: number, isSearchResult?: boolean) => void;
   isActive?: boolean;
   isHighlighted?: boolean; // Added for search result highlighting
   isTriageBoard?: boolean;
@@ -81,10 +87,71 @@ interface TaskCardProps {
   hoverEnterDelayMs?: number; // Delay (ms) before hover controls appear on enter
 }
 
-export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProps>((
+const sameTaskList = (a?: Task[], b?: Task[]): boolean => {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+};
+
+const EMPTY_TASKS: Task[] = [];
+
+
+function areTaskCardPropsEqual(prev: TaskCardProps, next: TaskCardProps): boolean {
+  if (prev.task !== next.task) return false;
+  if (prev.isActive !== next.isActive) return false;
+  if (prev.isHighlighted !== next.isHighlighted) return false;
+  if (prev.isTriageBoard !== next.isTriageBoard) return false;
+  if (prev.open !== next.open) return false;
+  if (prev.disableReparenting !== next.disableReparenting) return false;
+  if (prev.hoverEnterDelayMs !== next.hoverEnterDelayMs) return false;
+  if (prev.columnIndex !== next.columnIndex) return false;
+  if (prev.isSearchResult !== next.isSearchResult) return false;
+  if (!sameTaskList(prev.subtaskTasks, next.subtaskTasks)) return false;
+  if (prev.tasksForModal !== next.tasksForModal) return false;
+  if (prev.onEditModalOpenChange !== next.onEditModalOpenChange) return false;
+  if (prev.subtaskTasks === undefined && next.subtaskTasks === undefined && !sameTaskList(prev.tasks, next.tasks)) return false;
+  if (prev.tasksForModal === undefined && next.tasksForModal === undefined && !sameTaskList(prev.tasks, next.tasks)) return false;
+
+  const functionKeys: (keyof TaskCardProps)[] = [
+    'updateStatus',
+    'updateDifficulty',
+    'updateCategory',
+    'updateTitle',
+    'updateComment',
+    'updateTerminationDate',
+    'updateDurationInMinutes',
+    'updateUser',
+    'deleteTask',
+    'duplicateTaskStructure',
+    'toggleUrgent',
+    'toggleImpact',
+    'toggleMajorIncident',
+    'toggleSprintTarget',
+    'toggleDone',
+    'toggleTimer',
+    'reparent',
+    'onActivate',
+    'onToggleOpen',
+    'onFocusOnTask',
+  ];
+  for (const key of functionKeys) {
+    if (prev[key] !== next[key]) return false;
+  }
+  return true;
+}
+
+const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
   {
     task,
     tasks,
+    subtaskTasks,
+    tasksForModal,
+    onEditModalOpenChange,
+    columnIndex,
+    isSearchResult,
     updateStatus,
     updateDifficulty,
     updateCategory,
@@ -193,10 +260,20 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
   const [timePickerOpen, setTimePickerOpen] = React.useState(false); // State for time picker dialog
   const [reminderStatus, setReminderStatus] = React.useState<'none' | 'scheduled' | 'triggered'>('none'); // Update state to enum
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false); // New state for full edit modal
-  const { scheduledReminders, reminders, updateScheduledReminderTriggerDate, dismissReminder } = useReminderStore();
+  React.useLayoutEffect(() => {
+    onEditModalOpenChange?.(task.id, isEditModalOpen);
+  }, [isEditModalOpen, task.id, onEditModalOpenChange]);
+  const scheduledReminders = useReminderStore(
+    useShallow(state => state.scheduledReminders.filter(r => r.taskId === task.id)),
+  );
+  const reminders = useReminderStore(
+    useShallow(state => state.reminders.filter(r => r.taskId === task.id)),
+  );
+  const updateScheduledReminderTriggerDate = useReminderStore(state => state.updateScheduledReminderTriggerDate);
+  const dismissReminder = useReminderStore(state => state.dismissReminder);
   const { userSettings, userId: currentUserId } = useUserSettings();
   const { settings } = useSettingsContext();
-  const { votes, createVote, loadVotes } = useVotes();
+  const votes = useLinkedVotes(task.linkedVoteIds);
 
   const [linkedVoteDialogOpen, setLinkedVoteDialogOpen] = React.useState(false);
 
@@ -204,7 +281,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
     if (task.linkedVoteIds && task.linkedVoteIds.length > 0) {
       loadVotes();
     }
-  }, [task.linkedVoteIds, loadVotes]);
+  }, [task.linkedVoteIds]);
   const weekStartsOn = settings.weekStartDay as 0 | 1;
   const { cardCompactness } = useViewDisplay();
   const aging = useCardAging(task);
@@ -268,8 +345,13 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
   //   setIsReminderActive(activeReminder);
   // }, [task.id, scheduledReminders]);
 
-  const { calculateTotalTime, calculateTotalDifficulty, updateLinkedVoteIds } = useTasks();
-  const hasSubtasks = task.children && task.children.length > 0;
+  const hasSubtasks = !!task.children && task.children.length > 0;
+  // Parent cards render aggregate time/difficulty over all descendants. The
+  // memo comparator only sees direct children, so keep the tasks subscription
+  // for parents to refresh aggregates when a deeper descendant changes.
+  const { calculateTotalTime, calculateTotalDifficulty, updateLinkedVoteIds } = useTasks({ subscribe: hasSubtasks });
+  const effectiveSubtaskTasks = subtaskTasks ?? tasks ?? EMPTY_TASKS;
+  const effectiveModalTasks = tasksForModal ?? tasks ?? EMPTY_TASKS;
   const canHaveTimer = !hasSubtasks; // Only tasks without children can have timers
 
   const taskTimerRunning = task.timer?.some(e => !e.endTime);
@@ -287,6 +369,33 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
     },
     [toggleDone],
   );
+
+  const handleUserChange = React.useCallback((selectedId: string | undefined) => {
+    updateUser(task.id, selectedId === 'current-user' ? currentUserId : selectedId);
+  }, [updateUser, task.id, currentUserId]);
+
+  const handleStatusChange = React.useCallback((status: TriageStatus) => {
+    updateStatus(task.id, status);
+  }, [updateStatus, task.id]);
+
+  const handleCategoryChange = React.useCallback((category: Category | "none" | undefined) => {
+    updateCategory(task.id, category === "none" ? undefined : category);
+  }, [updateCategory, task.id]);
+
+  const handleNavigateToVote = React.useCallback((voteId: string) => {
+    const vote = votes.find((v) => v.id === voteId);
+    if (vote?.slug) {
+      window.open(`${window.location.origin}/v/${vote.slug}`, "_blank");
+    }
+  }, [votes]);
+
+  const handleCreateLinkedVote = React.useCallback(() => {
+    setLinkedVoteDialogOpen(true);
+  }, []);
+
+  const handleCloseEditModal = React.useCallback(() => {
+    setIsEditModalOpen(false);
+  }, []);
 
   // Listen for openTimeSheet events from the timetable
   React.useEffect(() => {
@@ -320,7 +429,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
         isUltraCompact ? "p-2" : "p-3",
         aging.className
       )}
-      onClick={() => onActivate && onActivate(task.id)}
+      onClick={() => onActivate?.(task.id, columnIndex, isSearchResult)}
       onDoubleClick={handleCardDoubleClick}
       draggable={!disableReparenting}
       onDragStart={disableReparenting ? undefined : (e) => {
@@ -659,7 +768,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
           onUpdateTitle={(title) => updateTitle(task.id, title)}
         />
         {task.children && task.children.length > 0 && (
-          <SubtaskProgress task={task} tasks={tasks} />
+          <SubtaskProgress task={task} tasks={effectiveSubtaskTasks} />
         )}
         {/* Comment icon - show in Compact/Full always, Ultra Compact on hover */}
         {isUltraCompact ? (
@@ -706,7 +815,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
             >
                {open ? <ChevronDown className="h-4 w-4 mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
                {t('task.subtasks')}
-              <SubtaskProgress task={task} tasks={tasks} />
+              <SubtaskProgress task={task} tasks={effectiveSubtaskTasks} />
             </button>
             <div className="flex flex-wrap gap-1">
               {task.urgent && (
@@ -749,7 +858,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
           </div>
           <UserSelector
             value={task.userId || ''}
-            onChange={(selectedId) => updateUser(task.id, selectedId === 'current-user' ? currentUserId : selectedId)}
+            onChange={handleUserChange}
           />
         </div>
       )}
@@ -797,7 +906,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
           {/* UserSelector - always show? "shows only the card name and the user assigned to it" - Yes */}
           <UserSelector
             value={task.userId || ''}
-            onChange={(selectedId) => updateUser(task.id, selectedId === 'current-user' ? currentUserId : selectedId)}
+            onChange={handleUserChange}
           />
         </div>
       )}
@@ -806,7 +915,7 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
         <div className="flex flex-col gap-2 w-full">
           <CategorySelect
             value={task.category || "none"}
-            onChange={(category) => updateCategory(task.id, category === "none" ? undefined : category)}
+            onChange={handleCategoryChange}
             className="w-full"
             onOpenChange={handleDropdownOpenChange}
           />
@@ -821,14 +930,14 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
       <div className="mt-2 flex justify-between items-center">
         {isFull ? (
           <div className="flex items-center gap-2">
-            <TaskStatusSelect value={task.triageStatus} onChange={(s) => updateStatus(task.id, s)} />
+            <TaskStatusSelect value={task.triageStatus} onChange={handleStatusChange} />
           </div>
         ) : (
           <div className={`flex items-center gap-2 transition-opacity duration-200 ${showHoverControls ? 'opacity-100' : 'opacity-0'}`}>
             {showHoverControls && (
               <TaskStatusSelect
                 value={task.triageStatus}
-                onChange={(s) => updateStatus(task.id, s)}
+                onChange={handleStatusChange}
                 onOpenChange={handleDropdownOpenChange}
               />
             )}
@@ -886,14 +995,9 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
                     taskId={task.id}
                     taskTitle={task.title}
                     linkedVoteIds={task.linkedVoteIds}
-                    linkedVotes={votes.filter((v) => task.linkedVoteIds?.includes(v.id))}
-                    onNavigateToVote={(voteId) => {
-                      const vote = votes.find((v) => v.id === voteId);
-                      if (vote?.slug) {
-                        window.open(`${window.location.origin}/v/${vote.slug}`, "_blank");
-                      }
-                    }}
-                    onCreateLinkedVote={() => setLinkedVoteDialogOpen(true)}
+                    linkedVotes={votes}
+                    onNavigateToVote={handleNavigateToVote}
+                    onCreateLinkedVote={handleCreateLinkedVote}
                   />
                   <Button
                     size="sm"
@@ -962,9 +1066,9 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
       {isEditModalOpen && (
         <TaskEditModal
           task={task}
-          tasks={tasks}
+          tasks={effectiveModalTasks}
           isOpen={isEditModalOpen}
-          onClose={() => setIsEditModalOpen(false)}
+          onClose={handleCloseEditModal}
           updateTitle={updateTitle}
           updateComment={updateComment}
           updateStatus={updateStatus}
@@ -1063,4 +1167,6 @@ export const TaskCard = React.memo(React.forwardRef<HTMLDivElement, TaskCardProp
       />
     </Card>
   );
-}));
+});
+
+export const TaskCard = React.memo(TaskCardInner, areTaskCardPropsEqual);

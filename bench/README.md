@@ -33,16 +33,23 @@ a pass/fail report.
 - `sqlite3` (falls back to a file copy if missing)
 - `google-chrome` for `--browser` (override with `CHROME_BIN`)
 - The HyperDX stack for OTel collection (`just dev-otel`), or `--no-otel`
+- The stack binds p3fo-specific host ports: OTLP HTTP `14318`, ClickHouse `18123`, HyperDX UI `18088`
 - Python packages `websockets` and `requests` for the browser probe/Locust
+
+When the OTel stack is expected but unreachable, the OTel-dependent gates
+(`Worst render p95`, `Frontend GET p95`) fail instead of passing silently.
+`just tests` / `just pre` skip the load bench with a warning when ClickHouse
+is not reachable, so start `just dev-otel` first if you want the paint gates
+enforced.
 
 ## Usage
 
 ```bash
-# API only, 10 users for 30 seconds
-python3 bench/orchestrator.py --users 10 --duration 30
+# API only, 25 users for 30 seconds
+python3 bench/orchestrator.py --users 25 --duration 30
 
 # API + browser paint measurement
-python3 bench/orchestrator.py --users 10 --duration 30 --browser
+python3 bench/orchestrator.py --users 25 --duration 30 --browser
 
 # Quick smoke test
 python3 bench/orchestrator.py --users 3 --duration 15 --browser
@@ -51,7 +58,7 @@ python3 bench/orchestrator.py --users 3 --duration 15 --browser
 python3 bench/orchestrator.py --host http://localhost:5172 --users 5 --duration 20
 
 # Fail the command when a threshold is violated
-python3 bench/orchestrator.py --users 10 --duration 30 --browser --enforce
+python3 bench/orchestrator.py --users 25 --duration 30 --browser --enforce
 ```
 
 The recommended scientific comparisons use the same seed, the same snapshot,
@@ -64,7 +71,7 @@ any of them fails.
 
 | Gate | Default |
 |---|---|
-| API p95 | 150 ms |
+| API p95 | 33 ms |
 | Error rate | 1 % |
 | Worst React commit p95 | 33 ms |
 | Frontend GET p95 | 50 ms |
@@ -81,23 +88,24 @@ The bench is designed to be the failing test for performance work:
 
 ```bash
 # Red: current code fails the p9*/paint gates
-python3 bench/orchestrator.py --users 8 --duration 20 --browser --enforce
+python3 bench/orchestrator.py --users 25 --duration 30 --browser --enforce
 echo $?   # non-zero
 
 # Apply a fix, rerun the same command with the same seed and snapshot.
 # Green: every check in the report is PASS and the exit code is zero.
 ```
 
-The current code is red on the p9* gates: frame p99 (~117 ms vs 50 ms), long
-tasks (~159/min vs 60), frontend GET p95 (~135 ms vs 50 ms), and React commit
-p95 (~60 ms vs 33 ms). API p95 and error rate pass, which isolates the failure
-to the client.
+Before the fixes, the code was red on the p9* gates: frame p99 (~117 ms vs
+50 ms), long tasks (~159/min vs 60), frontend GET p95 (~135 ms vs 50 ms), and
+React commit p95 (~60 ms vs 33 ms). API p95 and error rate passed, which
+isolated the failure to the client. After the fixes, three consecutive 25-user
+runs pass all gates (API p95 13-14 ms, render p95 18-19 ms, frontend GET p95
+5.9-22.1 ms, frame p99 16.8 ms, 0 long tasks/min).
 
-The gate is load-aware but not load-only. A 1-user control still reports a high
-React commit p95 (50-55 ms) even though the board is mostly idle. The paint
-gates are noisier at low load: 1-user frame p99 ranged from 33 ms to 83 ms
-across runs. Use 8 users for the stable red and run the green check 2-3 times
-(or use a median) before declaring a paint fix done.
+The gate is load-aware. Paint gates are noisier at low load (1-user frame p99
+ranged from 33 ms to 83 ms across runs), so use 25 users for a stable signal and
+run the green check 2-3 times (or use a median) before declaring a paint fix
+done.
 
 Use the same `--run-id` only when you intend to replace the report. For a
 comparison, let each run create a new timestamped directory and diff the
@@ -109,19 +117,20 @@ Measured on this machine with the isolated snapshot and an unfiltered board:
 
 | Run | Users | API p95 | React commit p95 | Frame p99 | Long tasks/min |
 |---|---|---|---|---|---|
-| 4-user smoke | 4 | 14 ms | 57.9 ms | 116.6 ms | 140 |
-| 8-user assessment | 8 | 14 ms | 60.0 ms | 116.6 ms | 159 |
+| Pre-fix | 8 | 14 ms | ~60 ms | 116.6 ms | 159 |
+| Post-fix | 25 | 13-14 ms | 18-19 ms | 16.8 ms | 0 |
 
-The API stays flat while paint degrades with the number of concurrent editors.
-Use these numbers only as a same-machine baseline; rerun before and after each
-change instead of comparing to a different host.
+The API stayed flat while paint degraded with the number of concurrent editors,
+which confirmed the client-side diagnosis. Use these numbers only as a
+same-machine baseline; rerun before and after each change instead of comparing
+to a different host.
 
 ## Interpreting the results
 
 - **API p95 low, frame p99 high** → the server is fine and the jank is client
   rendering. Look at `react.render: Root-App` count/avg and the long-task list.
-  This is the current P3FO failure mode: every task update triggers a
-  `tasksChanged` event that re-renders the board and every mounted card.
+  This was the P3FO failure mode before the fixes: every task update triggered
+  a `tasksChanged` event that re-rendered the board and every mounted card.
 - **API p95 high, frame p99 low** → backend or database contention; compare
   `PATCH`/`GET` backend spans with Locust response times.
 - **Frontend HTTP p95 much higher than backend p95** → browser connection

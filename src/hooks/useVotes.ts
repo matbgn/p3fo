@@ -97,6 +97,7 @@ if (isCollaborationEnabled()) {
       .map(v => parseYjsValue(v))
       .filter((v): v is VoteEntity => v !== null);
     votes = newVotes;
+    invalidateVotesCache();
     eventBus.publish("votesChanged");
   });
 
@@ -105,16 +106,57 @@ if (isCollaborationEnabled()) {
   });
 }
 
-const loadVotes = async (opts?: { linkedTaskId?: string; ownerId?: string; kind?: VoteKind }): Promise<VoteEntity[]> => {
+type VotesLoadOptions = { linkedTaskId?: string; ownerId?: string; kind?: VoteKind };
+type VotesLoadResult = { ok: true; data: VoteEntity[] } | { ok: false };
+
+const inFlightVotes = new Map<string, Promise<VotesLoadResult>>();
+const votesCache = new Map<string, { data: VoteEntity[]; at: number }>();
+const VOTES_CACHE_TTL_MS = 30_000;
+
+const invalidateVotesCache = () => {
+  votesCache.clear();
+};
+
+const votesLoadKey = (opts?: VotesLoadOptions): string =>
+  `${opts?.linkedTaskId ?? ''}|${opts?.ownerId ?? ''}|${opts?.kind ?? ''}`;
+
+const loadVotesFromAdapter = async (opts?: VotesLoadOptions): Promise<VotesLoadResult> => {
   try {
     const adapter = await getPersistenceAdapter();
     votes = await adapter.listVotes(opts);
     eventBus.publish("votesChanged");
     syncVotesToYjs();
-    return votes;
+    return { ok: true, data: votes };
   } catch (error) {
     console.error("Error loading votes:", error);
-    return votes;
+    return { ok: false };
+  }
+};
+
+export const loadVotes = async (opts?: VotesLoadOptions): Promise<VoteEntity[]> => {
+  const key = votesLoadKey(opts);
+  const cached = votesCache.get(key);
+  if (cached && Date.now() - cached.at < VOTES_CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  const pending = inFlightVotes.get(key);
+  if (pending) {
+    const result = await pending;
+    return result.ok ? result.data : votes;
+  }
+
+  const request = loadVotesFromAdapter(opts);
+  inFlightVotes.set(key, request);
+  try {
+    const result = await request;
+    if (!result.ok) return votes;
+    votesCache.set(key, { data: result.data, at: Date.now() });
+    return result.data;
+  } finally {
+    if (inFlightVotes.get(key) === request) {
+      inFlightVotes.delete(key);
+    }
   }
 };
 
@@ -138,7 +180,8 @@ const loadVoteBySlug = async (slug: string): Promise<VoteEntity | null> => {
   }
 };
 
-const createVote = async (input: Partial<VoteEntity>): Promise<VoteEntity | null> => {
+export const createVote = async (input: Partial<VoteEntity>): Promise<VoteEntity | null> => {
+  invalidateVotesCache();
   try {
     const adapter = await getPersistenceAdapter();
     const vote = await adapter.createVote(input);
@@ -153,6 +196,7 @@ const createVote = async (input: Partial<VoteEntity>): Promise<VoteEntity | null
 };
 
 const updateVote = async (id: string, patch: Partial<VoteEntity>): Promise<VoteEntity | null> => {
+  invalidateVotesCache();
   try {
     const adapter = await getPersistenceAdapter();
     const updated = await adapter.updateVote(id, patch);
@@ -169,6 +213,7 @@ const updateVote = async (id: string, patch: Partial<VoteEntity>): Promise<VoteE
 };
 
 const finalizeVote = async (id: string, outcome: VoteEntity['outcome']): Promise<VoteEntity | null> => {
+  invalidateVotesCache();
   try {
     const adapter = await getPersistenceAdapter();
     const updated = await adapter.finalizeVote(id, outcome);
@@ -185,6 +230,7 @@ const finalizeVote = async (id: string, outcome: VoteEntity['outcome']): Promise
 };
 
 const deleteVote = async (id: string): Promise<void> => {
+  invalidateVotesCache();
   try {
     const adapter = await getPersistenceAdapter();
     await adapter.deleteVote(id);
@@ -199,6 +245,7 @@ const deleteVote = async (id: string): Promise<void> => {
 };
 
 const resetVote = async (id: string): Promise<VoteEntity | null> => {
+  invalidateVotesCache();
   try {
     const adapter = await getPersistenceAdapter();
     const updated = await adapter.resetVote(id);
@@ -218,6 +265,7 @@ const resetVote = async (id: string): Promise<VoteEntity | null> => {
 };
 
 const submitVoteResponse = async (voteIdOrSlug: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity | null> => {
+  invalidateVotesCache();
   try {
     const adapter = await getPersistenceAdapter();
     const vote = await adapter.getVoteById(voteIdOrSlug) || await adapter.getVoteBySlug(voteIdOrSlug);
@@ -227,6 +275,23 @@ const submitVoteResponse = async (voteIdOrSlug: string, response: Partial<VoteRe
     console.error("Error submitting vote response:", error);
     return null;
   }
+};
+
+const subscribeVotes = (listener: () => void) => {
+  const handler = () => listener();
+  eventBus.subscribe("votesChanged", handler);
+  return () => eventBus.unsubscribe("votesChanged", handler);
+};
+
+const getVotesSnapshot = () => votes;
+
+export const useLinkedVotes = (ids?: string[]): VoteEntity[] => {
+  const allVotes = React.useSyncExternalStore(subscribeVotes, getVotesSnapshot, getVotesSnapshot);
+  return React.useMemo(() => {
+    if (!ids || ids.length === 0) return [];
+    const wanted = new Set(ids);
+    return allVotes.filter(vote => wanted.has(vote.id));
+  }, [allVotes, ids]);
 };
 
 export const useVotes = (opts?: { linkedTaskId?: string; ownerId?: string; kind?: VoteKind }) => {

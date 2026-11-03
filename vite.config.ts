@@ -97,7 +97,7 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
         },
         '/v1/traces': {
-          target: process.env.OTEL_COLLECTOR_URL || 'http://localhost:4318',
+          target: process.env.OTEL_COLLECTOR_URL || 'http://localhost:14318',
           changeOrigin: true,
           rewrite: (path) => path,
         },
