@@ -149,27 +149,38 @@ All tools return JSON (pretty-printed) as a single `text` content block. Errors 
 
 ### Tasks
 
-- **`p3fo_list_tasks`** — `params`: `userId?`, `limit?`, `offset?`, `excludeStatuses?` (string[]), `triageStatuses?` (string[]), `includeSubtasks?` (boolean, default `false` in the MCP tool to save context), `search?` (case-insensitive substring on title), `active?` (boolean sugar = `triageStatuses:["WIP","Ready","Blocked"]`), `fields?` (string[] projection), `compact?` (boolean, default `true` — projects to the requested fields, default `id,title,triageStatus,priority,updatedAt`; set `false` for full objects incl. `comment` blobs). Returns `{ data, total }`.
-- **`p3fo_get_task`** — `params`: `id`.
-- **`p3fo_get_task_by_title`** — `params`: `title` (case-insensitive), `exact?` (default `false` = substring). Returns `{ data, total }` of matching tasks. Prefer this over listing when reconciling against external systems (issue trackers, CRMs, …).
+- **`p3fo_list_tasks`** — `params`: `userId?`, `limit?`, `offset?`, `excludeStatuses?`, `triageStatuses?`, `includeSubtasks?` (default `false`), `includeArchived?` (default `true`; pass `false` to hide Archived), `search?` (case-insensitive substring on title), `active?` (sugar = `triageStatuses:["WIP","Ready","Blocked"]`), `priorityIsNull?`, `priorityIsZero?`, `hasParent?`, `updatedSince?` (ISO or epoch ms), `sort?` (`default|board|plan|taskboard|kanban|priority`), `preset?` (`default|supportOps`), `fields?`, `compact?` (default `true`), `cursor?`, `includeCommentText?`. Returns `{ data, total, hasMore, nextCursor }`. `statuses`/`fields` accept an array or a comma-separated string.
+- **`p3fo_find_tasks`** — fuzzy/exact search without exporting tasks. `params`: `query`, `userId?`, `statuses?`, `includeArchived?` (default `true`), `includeSubtasks?` (default `true`), `limit?` (default 10, max 50), `minScore?` (default 0.55), `includeCommentText?`. Returns ranked candidates with `score`, `matchedBy` (`ticket|id|exact|substring|prefix|fuzzy`), and `ticketNumber`. Extracts `Ticket#NNNNNN` / `Ticket NNNNNN` from titles and `zammad-NNNNNN` ids.
+- **`p3fo_task_stats`** — aggregate counts only. `params`: `userId?`, `statuses?`, `includeArchived?` (default `false`), `includeSubtasks?` (default `true`), `category?`, `hasParent?`, `updatedSince?`, `staleDays?` (default 90), `includeTerminal?` (default `false`). Returns `byStatus`, `byCategory`, `byUser`, priority null/zero/negative/duplicate counts, General/unknown category counts, unassigned, and stale counts.
+- **`p3fo_audit_priorities`** — same filters plus `limitPerSection?` (default 25, max 200). Returns a `summary` plus capped lists: `nullPriority`, `zeroPriority`, `duplicates` (scoped by `userId` + `parentId` + priority), `generalCategory`, `unknownCategory`, `unassigned`, `staleTasks`, `orphanedChildren`, with `truncated` flags.
+- **`p3fo_get_task`** — `params`: `id`. Returns the task plus a derived plain-text `commentText` (the stored `comment` is unchanged).
+- **`p3fo_get_task_by_title`** — `params`: `title` (case-insensitive), `exact?` (default `false` = substring). Returns `{ data, total }` of matching tasks. Prefer `p3fo_find_tasks` when typos or ticket numbers are involved.
 - **`p3fo_create_task`** — `params`: `task` (TaskEntity fields, e.g. `title`, `triageStatus`, `urgent`, `impact`, `difficulty`, `category`, `userId`, `parentId`).
   - **IDs are UUID v4**: the server generates `crypto.randomUUID()` when `id` is omitted (`server/db/postgres.ts` / `sqlite.ts`). Omit `id` and let the server assign it; don't invent custom id formats.
-  - **Large `comment` payloads**: `comment` holds a TipTap/ProseMirror JSON document (array of nodes: `heading`, `paragraph`, `bulletListItem`, … each with `props.level` and `content[].text`). Creating a task with a full summary document inline can fail with `Expected object, received string` or produce a **silently truncated comment**. Reliable pattern: (1) `p3fo_create_task` with the small fields only (`title`, `triageStatus`, `category`, `difficulty`, `priority`, `createdAt`), then (2) `p3fo_update_task` with the returned `id` and `patch: { comment: <document> }`, then (3) verify with `p3fo_get_task` that the stored `comment` is complete.
+  - **Large `comment` payloads**: `comment` holds a TipTap/ProseMirror JSON document (array of nodes: `heading`, `paragraph`, `bulletListItem`, … each with `props.level` and `content[].text`). Creating a task with a full summary document inline can fail with `Expected object, received string` or produce a **silently truncated comment**. Reliable pattern: (1) `p3fo_create_task` with the small fields only (`title`, `triageStatus`, `category`, `difficulty`, `priority`, `createdAt`), then (2) `p3fo_update_task` with the returned `id` and `patch: { comment: <document> }`, then (3) verify with `p3fo_get_task` that the stored `comment` is complete and `commentText` is readable.
   - **`p3fo_update_task` can silently create**: passing an `id` that doesn't exist does not 404 — it can create a new task with that id. After any create/update pair, `p3fo_get_task` the intended id and `p3fo_delete_task` any stray duplicate (e.g. an empty auto-created card with a random UUID id) before continuing.
   - **Assigning to a person**: `userId` on a task is the *user-settings* id from `p3fo_list_users`, not a login or name. Look the person up first and copy their `userId` verbatim.
 - **`p3fo_update_task`** — `params`: `id`, `patch` (partial TaskEntity).
 - **`p3fo_delete_task`** — `params`: `id`.
-- **`p3fo_bulk_update_priorities`** — `params`: `items` (`{ id, priority? }[]`).
-- **`p3fo_import_tasks`** — `params`: `tasks` (TaskEntity[]).
+- **`p3fo_bulk_update_priorities`** — `params`: `items` (`{ id, priority? }[]`). Kept for backward compatibility.
+- **`p3fo_bulk_update_tasks`** — `params`: `items` (`{ id, patch: { priority?, triageStatus?, category?, urgent?, impact? } }[]`), `dryRun?` (default `true`), `stopOnError?` (default `true`). Duplicate item ids are rejected before any write. Previews before/after changes; pass `dryRun:false` to write. Priority-only rows use the bulk-priorities endpoint; mixed rows use sequential updates.
+- **`p3fo_import_tasks`** — `params`: `tasks` (import TaskEntity[]), `skipInvalid?` (default `false`). Validates statuses and categories; `General` is allowed with a warning; unknown categories are rejected. `priority: null` is valid, `0` warns, negatives/fractional values are allowed. Detects duplicate priorities, missing parents, and parent cycles. Import is an **upsert** by id: for existing ids, omitted fields are preserved from the stored task; only supplied fields are changed. Returns `{ ids, created, updated, rejected, warnings, errors }`.
 - **`p3fo_clear_tasks`** — no args.
 
-`TriageStatus` ∈ `Backlog | Ready | WIP | Blocked | Done | Dropped`. `Category` ∈ Marketing, Documentation, Consulting, Testing, Funerals, Negotiated overtime, Sickness, Finances, HR, Training, Support, UX/UI, Admin, Development, System Operations, Private.
+`TriageStatus` ∈ `Backlog | Ready | WIP | Blocked | Done | Dropped | Archived`. `Category` ∈ Marketing, Documentation, Consulting, Testing, Funerals, Negotiated overtime, Sickness, Finances, HR, Training, Support, UX/UI, Admin, Development, System Operations, Private (plus the server default `General`).
 
 #### Listing gotchas — IMPORTANT
 
-- **`total` may exceed `data.length`** when `limit` is set. Never conclude a task doesn't exist from a single page: check `total` vs `data.length` and paginate or filter if `total > data.length`. Prefer `search` (title substring) or `p3fo_get_task_by_title` to locate a specific task in one call.
-- **Default ordering is `priority DESC`** — tasks with low/negative priority (e.g. WIP tasks being worked with priority −1) sort to the *end*, so an unfiltered `limit:100` listing can hide active tasks behind 100 archived ones. Use `active: true` (or explicit `triageStatuses`) to get the actionable set reliably.
-- **Compact default:** `p3fo_list_tasks` returns only `id,title,triageStatus,priority,updatedAt` per task by default (~76% smaller payload). Pass `compact:false` when you need `comment`, `timer`, `urgent`, etc. Pass `fields:[...]` to project custom fields.
+- **`total` may exceed `data.length`** when `limit` is set. Never conclude a task doesn't exist from a single page: check `total` vs `data.length`, use `hasMore`/`nextCursor`, or filter. Prefer `p3fo_find_tasks` / `p3fo_get_task_by_title` to locate a specific task in one call.
+- **Default ordering is `priority DESC`** — tasks with low/negative priority (e.g. WIP tasks being worked with priority −1) sort to the *end*, so an unfiltered `limit:100` listing can hide active tasks behind 100 archived ones. Use `active: true`, `includeArchived: false`, or an explicit `sort` to get the actionable set reliably.
+- **Compact default:** `p3fo_list_tasks` returns only `id,title,triageStatus,priority,updatedAt` per task by default (~76% smaller payload). Pass `compact:false` when you need `comment`, `timer`, `urgent`, etc. Pass `preset:"supportOps"` or `fields:[...]` for a custom projection.
+- **Derived fields:** `ticketNumber` and `commentText` are computed on read and are never written back.
+
+#### Task audits — do not export all tasks
+
+Use `p3fo_find_tasks` for lookups and `p3fo_task_stats` / `p3fo_audit_priorities` for counts and issue lists. These tools page internally, apply filters, and return bounded results. Do not fetch the whole task table into the conversation to count or search.
+
+**Priority semantics:** `priority: null` means unprioritized and is common. Fractional values encode hierarchy (`1.01`, `9.03`), and negative values are used for active WIP work. Do not reject `null`; only warn on `0`.
 
 #### Filtering by triage status — IMPORTANT
 
@@ -185,18 +196,18 @@ Everything except Archived and Backlog:
 p3fo_list_tasks({ "params": { "excludeStatuses": ["Archived", "Backlog"] } })
 ```
 
-**Known limitation / verification gotcha:** The MCP server binary correctly serializes these to `triage_statuses=WIP` in the HTTP query string (verified via stdio + netcat inspection). However, some MCP clients (including Kilo's tool-call layer at the time of writing) may drop or ignore nested array values inside the `params` wrapper, causing the tool to return unfiltered results. If a `p3fo_list_tasks` call returns far more items than expected, **do NOT assume the filter is broken server-side** — verify by calling the REST API directly:
+Some MCP clients drop nested array values inside the `params` wrapper. The new task tools accept both forms, so use the comma-separated fallback if a filter appears ignored:
 
-```bash
-curl -s "<your-p3fo-base-url>/mcp/api/tasks?triage_statuses=WIP&limit=5" \
-  -H "X-API-Key: <key>" | python3 -c "import sys,json; d=json.load(sys.stdin); print('total:', d['total'])"
+```
+p3fo_list_tasks({ "params": { "triageStatuses": "WIP,Ready" } })
+p3fo_find_tasks({ "params": { "query": "Gutscheinkleber", "statuses": "Ready,Blocked" } })
 ```
 
-If curl returns the correct filtered `total` but the MCP tool does not, the issue is in the MCP client argument passing, not the server or API. Prefer filtering post-hoc on the returned `data` array in that case, or fix the tool schema to flatten the `params` wrapper.
+If a filtered result still looks wrong, call `p3fo_task_stats` with the same filter and compare its `scanned`/`byStatus` counts. Do not verify via curl.
 
 ### Users & user settings
 
-- **`p3fo_list_users`** — no args. Returns UserSettingsEntity[]. Use it to map a person's name/trigram to their `userId` before assigning tasks.
+- **`p3fo_list_users`** — `params` optional: `compact?` (default false; returns only `userId`, `username`, `trigram`), `fields?`. Returns UserSettingsEntity[]. Use it to map a person's name/trigram to their `userId` before assigning tasks; prefer `{ compact: true }` for assignment/reconciliation.
 - **`p3fo_get_user_settings`** — `params`: `userId`.
 - **`p3fo_update_user_settings`** — `params`: `userId`, `patch` (partial: `username`, `logo`, `workload`, `monthlyBalances`, `timezone`, `weekStartDay`, …).
 - **`p3fo_migrate_user`** — `params`: `oldUserId`, `newUserId`.
@@ -284,25 +295,46 @@ If curl returns the correct filtered `total` but the MCP tool does not, the issu
 p3fo_list_tasks({ "params": { "userId": "u-123", "active": true } })
 ```
 
-### Find a task by a given chars (like an external issue number)
+### Find a task by title, typo, or ticket number
 
 ```
-p3fo_list_tasks({ "params": { "search": "12345" } })
+p3fo_find_tasks({ "params": { "query": "Gutscheinkleber" } })
+p3fo_find_tasks({ "params": { "query": "616795" } })          // Ticket#616795
+p3fo_find_tasks({ "params": { "query": "zammad-6111200" } })  // id-based ticket
 ```
 
-or exact title:
-
-```
-p3fo_get_task_by_title({ "params": { "title": "Some task title ISSUE-12345", "exact": true } })
-```
+`p3fo_find_tasks` returns ranked candidates with `score`, `matchedBy`, and `ticketNumber`. Use `minScore` to tighten or loosen matching. For an exact title only, `p3fo_get_task_by_title({ "title": "...", "exact": true })` still works.
 
 ### Check which external issues are tracked in P3FO (sync check)
 
-Adapt the pattern to your own convention (e.g. `ISSUE-`, `JIRA-`, `TICKET-`):
+```
+p3fo_find_tasks({ "params": { "query": "ISSUE-", "includeArchived": true, "limit": 50 } })
+```
+
+### Audit task data without exporting it
 
 ```
-p3fo_list_tasks({ "params": { "search": "ISSUE-", "fields": ["title", "triageStatus"] } })
+p3fo_task_stats({ "params": { "includeArchived": false } })
+p3fo_audit_priorities({ "params": { "userId": "u-123", "includeArchived": false, "limitPerSection": 50 } })
 ```
+
+`p3fo_task_stats` returns counts only. `p3fo_audit_priorities` returns a `summary` plus capped lists of null/zero priorities, duplicate priority groups (scoped by user + parent), `General`/unknown categories, unassigned tasks, stale tasks, and orphaned children.
+
+### Bulk-fix tasks safely
+
+```
+p3fo_bulk_update_tasks({
+  "params": {
+    "items": [
+      { "id": "task-1", "patch": { "priority": 5, "triageStatus": "Ready" } },
+      { "id": "task-2", "patch": { "category": "Support" } }
+    ],
+    "dryRun": true
+  }
+})
+```
+
+`dryRun` defaults to `true`. Review the per-item `changes`, then repeat with `dryRun: false`. `priority: null` clears a priority; `0` is allowed but unusual.
 
 ### Create a task with a full summary document (two-step, avoids large-payload failures)
 
@@ -354,7 +386,7 @@ p3fo_health({})   // { ok: true, mode: "sqlite", timestamp: "..." }
 - **`Missing required argument` / `Unexpected keyword argument`** → you forgot the `params` wrapper. Wrap all args under `params`.
 - **`Expected object, received string` on `params`** → the whole argument payload was sent as a JSON string instead of a native object (typical when assembling a large call inline). Resend with `params` as an object literal; for big task documents use the two-step create-then-patch workflow above.
 - **Task exists twice after creating a card** → `p3fo_update_task` can create the `id` you name if it doesn't exist. Verify with `p3fo_get_task` and delete the stray empty duplicate (`p3fo_delete_task`).
-- **`p3fo_list_tasks` ignores `triageStatuses`/`excludeStatuses`/`limit`** → the MCP server sends the correct query string (verified via stdio+netcat), but some MCP clients drop nested array params. Verify with curl against `/mcp/api/tasks?triage_statuses=WIP` — if curl works but the tool doesn't, the issue is client-side argument passing. See "Filtering by triage status" above.
+- **`p3fo_list_tasks` ignores `triageStatuses`/`excludeStatuses`/`limit`** → some MCP clients drop nested array params. Use the comma-separated fallback (`"triageStatuses": "WIP,Ready"`) or call `p3fo_task_stats` with the same filter and compare `scanned`/`byStatus`. Do not verify with curl.
 - **404 on a vote** → `p3fo_get_vote` accepts id OR slug; both are tried server-side. Confirm the value.
 - **Vote response rejected (400)** → vote not `OPEN`, or `value` out of range for the vote's `mode`. See value rules above.
 
@@ -373,4 +405,4 @@ node mcp-server/dist/index.js                # run (needs P3FO backend up)
 P3FO_API_URL=http://localhost:5172 node mcp-server/dist/index.js
 ```
 
-Sources: `mcp-server/src/client.ts` (REST wrapper), `mcp-server/src/tools.ts` (tool registry), `mcp-server/src/index.ts` (stdio entry), `server/index.ts` (REST API being wrapped).
+Sources: `mcp-server/src/client.ts` (REST wrapper), `mcp-server/src/tools.ts` (tool registry), `mcp-server/src/task-fetch.ts` / `task-search.ts` / `task-audit.ts` / `task-sorting.ts` / `comment-text.ts` / `bulk-update.ts` / `import-tasks.ts` (MCP-side helpers), `mcp-server/src/index.ts` (stdio entry), `server/index.ts` (REST API being wrapped).

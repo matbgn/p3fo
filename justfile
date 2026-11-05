@@ -99,6 +99,9 @@ tests *args="":
   echo "▶ Unit tests..."
   pnpm test --run
 
+  echo "▶ MCP server tests..."
+  npm --prefix mcp-server test
+
   chrome_bin="${CHROME_BIN:-google-chrome}"
   clickhouse_url="${CLICKHOUSE_URL:-http://localhost:18123}"
   if [[ ",${skip_set}," == *",load,"* ]]; then

@@ -7,9 +7,40 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { P3foClient, P3foApiError } from './client.js';
+import type { TaskRecord } from './task-types.js';
+import { clearTaskCache, fetchAllTasks, fetchTasksByIds, filterTasks, normalizeStringList } from './task-fetch.js';
+import { extractTicketNumber, rankTasks } from './task-search.js';
+import { renderCommentText } from './comment-text.js';
+import { sortTasksByMode, type SortMode } from './task-sorting.js';
+import { buildPriorityAudit, buildTaskStats } from './task-audit.js';
+import { ALLOWED_TRIAGE_STATUSES, applyBulkUpdates, type BulkItem } from './bulk-update.js';
+import { prepareTaskImport, type ImportTaskInput } from './import-tasks.js';
 
 const stringOrUndefined = z.string().optional();
 const recordSchema = z.record(z.string(), z.unknown()).optional();
+
+/** Accept both a JSON array and a comma-separated string (some MCP clients drop nested arrays). */
+const stringListSchema = z.union([z.array(z.string()), z.string()]).optional();
+
+function toList(value: string[] | string | undefined): string[] | undefined {
+  return normalizeStringList(value);
+}
+
+const DEFAULT_FIELDS = ['id', 'title', 'triageStatus', 'priority', 'updatedAt'];
+const SUPPORT_OPS_FIELDS = [
+  'id',
+  'title',
+  'triageStatus',
+  'priority',
+  'category',
+  'urgent',
+  'impact',
+  'parentId',
+  'userId',
+  'updatedAt',
+  'ticketNumber',
+];
+
 
 function asText(value: unknown) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }] };
@@ -20,6 +51,58 @@ function errorText(err: unknown) {
     return { content: [{ type: 'text' as const, text: `P3FO API error ${err.status}: ${err.message}` }], isError: true };
   }
   return { content: [{ type: 'text' as const, text: `Error: ${(err as Error).message ?? String(err)}` }], isError: true };
+}
+
+function validationText(errors: string[], warnings: string[] = []) {
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify({ ok: false, errors, warnings }, null, 2),
+      },
+    ],
+    isError: true,
+  };
+}
+
+function projectTask(
+  task: TaskRecord | Record<string, unknown>,
+  fields: string[],
+  includeCommentText: boolean,
+): Record<string, unknown> {
+  const record = task as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  const selected = includeCommentText && !fields.includes('commentText')
+    ? [...fields, 'commentText']
+    : fields;
+
+  for (const field of selected) {
+    if (field === 'ticketNumber') {
+      out[field] = extractTicketNumber({
+        id: String(record.id ?? ''),
+        title: String(record.title ?? ''),
+      });
+    } else if (field === 'commentText') {
+      out[field] = renderCommentText(record.comment);
+    } else {
+      out[field] = record[field];
+    }
+  }
+  return out;
+}
+
+function parseCursor(cursor: string | undefined): number {
+  if (!cursor) return 0;
+  try {
+    const value = Number(Buffer.from(cursor, 'base64').toString('utf8'));
+    return Number.isFinite(value) && value >= 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function makeCursor(offset: number): string {
+  return Buffer.from(String(offset), 'utf8').toString('base64');
 }
 
 // Reusable param schemas ------------------------------------------------------
@@ -46,6 +129,13 @@ const taskSchema = z.object({
   linkedVoteIds: z.array(z.string()).optional(),
   blockedSince: z.string().nullable().optional(),
 }).passthrough();
+
+const importTaskSchema = taskSchema.extend({
+  createdAt: z.union([z.string(), z.number()]).optional(),
+  updatedAt: z.union([z.string(), z.number()]).nullable().optional(),
+  terminationDate: z.union([z.string(), z.number()]).nullable().optional(),
+  blockedSince: z.union([z.string(), z.number()]).nullable().optional(),
+});
 
 const reminderSchema = z.object({
   id: z.string().optional(),
@@ -125,7 +215,11 @@ export function registerTools(server: McpServer, client: P3foClient) {
   });
 
   server.tool('p3fo_clear_all_data', {}, async () => {
-    try { return asText(await client.clearAllData()); } catch (e) { return errorText(e); }
+    try {
+      const result = await client.clearAllData();
+      clearTaskCache();
+      return asText(result);
+    } catch (e) { return errorText(e); }
   });
 
   // ---- Tasks ----
@@ -134,36 +228,292 @@ export function registerTools(server: McpServer, client: P3foClient) {
     {
       params: z.object({
         userId: stringOrUndefined,
-        limit: z.number().optional(),
-        offset: z.number().optional(),
-        excludeStatuses: z.array(z.string()).optional(),
-        triageStatuses: z.array(z.string()).optional(),
+        limit: z.number().int().min(1).optional(),
+        offset: z.number().int().min(0).optional(),
+        excludeStatuses: stringListSchema,
+        triageStatuses: stringListSchema,
         includeSubtasks: z.boolean().optional(),
+        /** Include Archived tasks. Default true preserves the existing behavior. */
+        includeArchived: z.boolean().optional(),
         /** Case-insensitive substring match on title. */
         search: stringOrUndefined,
         /** Sugar: restrict to actionable triage statuses (WIP, Ready, Blocked). */
         active: z.boolean().optional(),
         /** Compact projection to save context. Default: id,title,triageStatus,priority,updatedAt. */
-        fields: z.array(z.string()).optional(),
+        fields: stringListSchema,
         /** Set false to return full task objects (includes comment blobs). */
         compact: z.boolean().optional(),
+        /** Local-only filters. They switch the tool to a fetch-all + filter path. */
+        priorityIsNull: z.boolean().optional(),
+        priorityIsZero: z.boolean().optional(),
+        hasParent: z.boolean().optional(),
+        updatedSince: z.union([z.string(), z.number()]).optional(),
+        /** Board ordering. "board" is an alias for the TaskBoard comparator. */
+        sort: z.enum(['default', 'board', 'plan', 'taskboard', 'kanban', 'priority']).optional(),
+        /** Field preset. "supportOps" includes category/urgent/impact/parent/user/ticket. */
+        preset: z.enum(['default', 'supportOps']).optional(),
+        /** Opaque pagination cursor returned as nextCursor. */
+        cursor: z.string().optional(),
+        /** Add a derived plain-text comment field without changing the stored comment. */
+        includeCommentText: z.boolean().optional(),
       }).optional(),
     },
     async (args) => {
-      // Default: exclude subtasks (parentId != null) to avoid overcharging context.
-      const params = { includeSubtasks: false, ...(args.params ?? {}) };
+      const p = args.params ?? {};
+      const compact = p.compact ?? true;
+      const includeSubtasks = p.includeSubtasks ?? false;
+      const effectiveIncludeSubtasks = p.hasParent === true ? true : includeSubtasks;
+      const includeArchived = p.includeArchived ?? true;
+      const includeCommentText = p.includeCommentText ?? false;
+      const preset = p.preset ?? 'default';
+      const fields = toList(p.fields) ?? (preset === 'supportOps' ? SUPPORT_OPS_FIELDS : DEFAULT_FIELDS);
+      const sort = (p.sort ?? 'default') as SortMode;
+
+      const needsLocalScan =
+        p.priorityIsNull !== undefined ||
+        p.priorityIsZero !== undefined ||
+        p.hasParent !== undefined ||
+        p.updatedSince !== undefined ||
+        sort !== 'default';
+
+      const requestedStatuses = toList(p.triageStatuses);
+      const requestedExcluded = toList(p.excludeStatuses) ?? [];
+      // Archived is expressible server-side, so keep the paginated path when
+      // it is the only filter. An explicit "Archived" status still wins.
+      const excludedStatuses =
+        includeArchived === false && !requestedStatuses?.includes('Archived')
+          ? [...new Set([...requestedExcluded, 'Archived'])]
+          : requestedExcluded;
+
       try {
-        const result = (await client.getTasks(params)) as { data: Record<string, unknown>[]; total: number };
-        const compact = (args.params?.compact ?? true) as boolean;
-        if (!compact) return asText(result);
-        const defaultFields = ['id', 'title', 'triageStatus', 'priority', 'updatedAt'];
-        const fields = args.params?.fields ?? defaultFields;
-        const data = result.data.map((t) => {
-          const out: Record<string, unknown> = {};
-          for (const f of fields) out[f] = t[f];
-          return out;
+        if (!needsLocalScan) {
+          // A cursor produced by this branch is a plain server offset. Continue
+          // it through the paginated endpoint instead of re-scanning locally.
+          const offset = p.cursor ? parseCursor(p.cursor) : p.offset;
+          const result = (await client.getTasks({
+            userId: p.userId,
+            limit: p.limit,
+            offset,
+            excludeStatuses: excludedStatuses.length > 0 ? excludedStatuses : undefined,
+            triageStatuses: requestedStatuses,
+            includeSubtasks,
+            search: p.search,
+            active: p.active,
+          })) as { data: Record<string, unknown>[]; total: number };
+
+          if (!compact) {
+            const data = includeCommentText
+              ? result.data.map((task) => ({
+                  ...task,
+                  commentText: renderCommentText((task as Record<string, unknown>).comment),
+                }))
+              : result.data;
+            const nextOffset = (offset ?? 0) + result.data.length;
+            const hasMore = p.limit !== undefined && result.data.length > 0 && nextOffset < result.total;
+            return asText({
+              data,
+              total: result.total,
+              hasMore,
+              nextCursor: hasMore ? makeCursor(nextOffset) : undefined,
+            });
+          }
+
+          const data = result.data.map((task) =>
+            projectTask(task, fields, includeCommentText),
+          );
+          const nextOffset = (offset ?? 0) + result.data.length;
+          const hasMore = p.limit !== undefined && result.data.length > 0 && nextOffset < result.total;
+          return asText({
+            data,
+            total: result.total,
+            hasMore,
+            nextCursor: hasMore ? makeCursor(nextOffset) : undefined,
+          });
+        }
+
+        const fetched = await fetchAllTasks(client, {
+          userId: p.userId,
+          statuses: p.triageStatuses,
+          excludeStatuses: p.excludeStatuses,
+          includeArchived,
+          includeSubtasks: effectiveIncludeSubtasks,
+          search: p.search,
+          active: p.active,
         });
-        return asText({ data, total: result.total });
+
+        let data = filterTasks(fetched.data, {
+          userId: p.userId,
+          statuses: p.triageStatuses,
+          excludeStatuses: p.excludeStatuses,
+          includeArchived,
+          includeSubtasks: effectiveIncludeSubtasks,
+          hasParent: p.hasParent,
+          priorityIsNull: p.priorityIsNull,
+          priorityIsZero: p.priorityIsZero,
+          updatedSince: p.updatedSince,
+          search: p.search,
+          active: p.active,
+        });
+
+        data = sortTasksByMode(data, sort);
+
+        const total = data.length;
+        const offset = p.cursor ? parseCursor(p.cursor) : Math.max(0, Math.trunc(p.offset ?? 0));
+        const limit = p.limit ?? total;
+        const page = data.slice(offset, offset + limit);
+        const hasMore = page.length > 0 && offset + page.length < total;
+        const projected = compact
+          ? page.map((task) => projectTask(task, fields, includeCommentText))
+          : includeCommentText
+            ? page.map((task) => ({
+                ...task,
+                commentText: renderCommentText(task.comment),
+              }))
+            : page;
+
+        return asText({
+          data: projected,
+          total,
+          hasMore,
+          nextCursor: hasMore ? makeCursor(offset + page.length) : undefined,
+        });
+      } catch (e) { return errorText(e); }
+    },
+  );
+
+  server.tool(
+    'p3fo_find_tasks',
+    {
+      params: z.object({
+        query: z.string(),
+        userId: stringOrUndefined,
+        statuses: stringListSchema,
+        /** Search archived tasks too. Default true. */
+        includeArchived: z.boolean().optional(),
+        /** Search subtasks too. Default true. */
+        includeSubtasks: z.boolean().optional(),
+        limit: z.number().optional(),
+        minScore: z.number().min(0).max(1).optional(),
+        includeCommentText: z.boolean().optional(),
+      }),
+    },
+    async (args) => {
+      const p = args.params;
+      const query = p.query.trim();
+      if (!query) return validationText(['query must not be empty']);
+
+      try {
+        const fetched = await fetchAllTasks(client, {
+          userId: p.userId,
+          statuses: p.statuses,
+          includeArchived: p.includeArchived ?? true,
+          includeSubtasks: p.includeSubtasks ?? true,
+        });
+
+        const { scored, matched } = rankTasks(fetched.data, query, {
+          minScore: p.minScore,
+          limit: p.limit,
+        });
+
+        const data = scored.map(({ task, score, matchedBy, ticketNumber }) => {
+          const row: Record<string, unknown> = {
+            id: task.id,
+            title: task.title ?? '',
+            triageStatus: task.triageStatus ?? null,
+            priority: task.priority ?? null,
+            category: task.category ?? null,
+            userId: task.userId ?? null,
+            parentId: task.parentId ?? null,
+            ticketNumber,
+            score: Number(score.toFixed(4)),
+            matchedBy,
+            updatedAt: task.updatedAt ?? task.createdAt ?? null,
+          };
+          if (p.includeCommentText) row.commentText = renderCommentText(task.comment);
+          return row;
+        });
+
+        return asText({
+          query,
+          scanned: fetched.data.length,
+          matched,
+          returned: data.length,
+          data,
+        });
+      } catch (e) { return errorText(e); }
+    },
+  );
+
+  const auditParams = z.object({
+    userId: stringOrUndefined,
+    statuses: stringListSchema,
+    includeArchived: z.boolean().optional(),
+    includeSubtasks: z.boolean().optional(),
+    category: stringOrUndefined,
+    hasParent: z.boolean().optional(),
+    updatedSince: z.union([z.string(), z.number()]).optional(),
+    staleDays: z.number().optional(),
+    includeTerminal: z.boolean().optional(),
+  });
+
+  server.tool(
+    'p3fo_task_stats',
+    { params: auditParams },
+    async (args) => {
+      const p = args.params;
+      const includeSubtasks = p.hasParent === true ? true : (p.includeSubtasks ?? true);
+      try {
+        const fetched = await fetchAllTasks(client, {
+          userId: p.userId,
+          statuses: p.statuses,
+          includeArchived: p.includeArchived ?? false,
+          includeSubtasks,
+        }, { fresh: true });
+        const tasks = filterTasks(fetched.data, {
+          userId: p.userId,
+          statuses: p.statuses,
+          includeArchived: p.includeArchived ?? false,
+          includeSubtasks,
+          category: p.category,
+          hasParent: p.hasParent,
+          updatedSince: p.updatedSince,
+        });
+        return asText(buildTaskStats(tasks, {
+          includeTerminal: p.includeTerminal,
+          staleDays: p.staleDays,
+        }));
+      } catch (e) { return errorText(e); }
+    },
+  );
+
+  server.tool(
+    'p3fo_audit_priorities',
+    { params: auditParams.extend({ limitPerSection: z.number().optional() }) },
+    async (args) => {
+      const p = args.params;
+      const includeSubtasks = p.hasParent === true ? true : (p.includeSubtasks ?? true);
+      try {
+        // Fetch the full snapshot so orphan detection can see parents outside
+        // the current user/status/archive filters; audit filters apply below.
+        const fetched = await fetchAllTasks(client, {
+          includeArchived: true,
+          includeSubtasks: true,
+        }, { fresh: true });
+        const tasks = filterTasks(fetched.data, {
+          userId: p.userId,
+          statuses: p.statuses,
+          includeArchived: p.includeArchived ?? false,
+          includeSubtasks,
+          category: p.category,
+          hasParent: p.hasParent,
+          updatedSince: p.updatedSince,
+        });
+        return asText(buildPriorityAudit(tasks, {
+          includeTerminal: p.includeTerminal,
+          staleDays: p.staleDays,
+          limitPerSection: p.limitPerSection,
+          knownTaskIds: fetched.data.map((task) => task.id),
+        }));
       } catch (e) { return errorText(e); }
     },
   );
@@ -172,7 +522,11 @@ export function registerTools(server: McpServer, client: P3foClient) {
     'p3fo_get_task',
     { params: z.object({ id: z.string() }) },
     async (args) => {
-      try { return asText(await client.getTaskById(args.params.id)); } catch (e) { return errorText(e); }
+      try {
+        const task = (await client.getTaskById(args.params.id)) as Record<string, unknown> | null;
+        if (!task) return asText(task);
+        return asText({ ...task, commentText: renderCommentText((task as Record<string, unknown>).comment) });
+      } catch (e) { return errorText(e); }
     },
   );
 
@@ -201,7 +555,11 @@ export function registerTools(server: McpServer, client: P3foClient) {
     'p3fo_create_task',
     { params: z.object({ task: taskSchema }) },
     async (args) => {
-      try { return asText(await client.createTask(args.params.task)); } catch (e) { return errorText(e); }
+      try {
+        const result = await client.createTask(args.params.task);
+        clearTaskCache();
+        return asText(result);
+      } catch (e) { return errorText(e); }
     },
   );
 
@@ -209,7 +567,11 @@ export function registerTools(server: McpServer, client: P3foClient) {
     'p3fo_update_task',
     { params: z.object({ id: z.string(), patch: taskSchema.partial() }) },
     async (args) => {
-      try { return asText(await client.updateTask(args.params.id, args.params.patch)); } catch (e) { return errorText(e); }
+      try {
+        const result = await client.updateTask(args.params.id, args.params.patch);
+        clearTaskCache();
+        return asText(result);
+      } catch (e) { return errorText(e); }
     },
   );
 
@@ -217,7 +579,11 @@ export function registerTools(server: McpServer, client: P3foClient) {
     'p3fo_delete_task',
     { params: z.object({ id: z.string() }) },
     async (args) => {
-      try { return asText(await client.deleteTask(args.params.id)); } catch (e) { return errorText(e); }
+      try {
+        const result = await client.deleteTask(args.params.id);
+        clearTaskCache();
+        return asText(result);
+      } catch (e) { return errorText(e); }
     },
   );
 
@@ -226,26 +592,148 @@ export function registerTools(server: McpServer, client: P3foClient) {
     { params: z.object({ items: z.array(z.object({ id: z.string(), priority: z.number().optional() })) }) },
     async (args) => {
       const items = args.params.items.map((i) => ({ id: i.id, priority: i.priority }));
-      try { return asText(await client.bulkUpdateTaskPriorities(items)); } catch (e) { return errorText(e); }
+      try {
+        const result = await client.bulkUpdateTaskPriorities(items);
+        clearTaskCache();
+        return asText(result);
+      } catch (e) { return errorText(e); }
+    },
+  );
+
+  server.tool(
+    'p3fo_bulk_update_tasks',
+    {
+      params: z.object({
+        items: z.array(z.object({
+          id: z.string(),
+          patch: z.object({
+            priority: z.number().nullable().optional(),
+            triageStatus: z.enum(ALLOWED_TRIAGE_STATUSES).optional(),
+            category: z.string().optional(),
+            urgent: z.boolean().optional(),
+            impact: z.boolean().optional(),
+          }).strict(),
+        })),
+        dryRun: z.boolean().optional(),
+        stopOnError: z.boolean().optional(),
+      }),
+    },
+    async (args) => {
+      if (args.params.items.length === 0) {
+        return validationText(['items must not be empty']);
+      }
+      const ids = args.params.items.map((item) => item.id);
+      const duplicateIds = [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
+      if (duplicateIds.length > 0) {
+        return validationText([`items contains duplicate ids: ${duplicateIds.join(', ')}`]);
+      }
+      try {
+        const existing = await fetchTasksByIds(client, ids);
+        const result = await applyBulkUpdates(
+          client,
+          existing,
+          args.params.items as BulkItem[],
+          {
+            dryRun: args.params.dryRun ?? true,
+            stopOnError: args.params.stopOnError ?? true,
+          },
+        );
+        clearTaskCache();
+        return asText(result);
+      } catch (e) { return errorText(e); }
     },
   );
 
   server.tool(
     'p3fo_import_tasks',
-    { params: z.object({ tasks: z.array(z.unknown()) }) },
+    {
+      params: z.object({
+        tasks: z.array(importTaskSchema),
+        /** Import valid rows and report rejected rows instead of all-or-nothing. */
+        skipInvalid: z.boolean().optional(),
+      }),
+    },
     async (args) => {
-      try { return asText(await client.importTasks(args.params.tasks)); } catch (e) { return errorText(e); }
+      const inputs = args.params.tasks as unknown as ImportTaskInput[];
+      const skipInvalid = args.params.skipInvalid ?? false;
+
+      try {
+        // Fetch both the imported ids and any parent target they reference, so
+        // a new task or a reparented task can point at an existing parent that
+        // is not part of the batch.
+        const lookupIds = inputs
+          .flatMap((input) => [input.id, input.parentId])
+          .filter((id): id is string => typeof id === 'string' && id.trim().length > 0);
+        const existing = await fetchTasksByIds(client, lookupIds, {
+          followParents: true,
+        });
+        const prepared = prepareTaskImport(inputs, existing);
+
+        if (prepared.errors.length > 0 && !skipInvalid) {
+          return validationText(prepared.errors, prepared.warnings);
+        }
+
+        if (prepared.normalized.length === 0) {
+          return validationText(
+            prepared.errors.length > 0 ? prepared.errors : ['no valid tasks to import'],
+            prepared.warnings,
+          );
+        }
+
+        await client.importTasks(prepared.normalized);
+        clearTaskCache();
+
+        return asText({
+          ok: true,
+          imported: prepared.normalized.length,
+          created: prepared.created,
+          updated: prepared.updated,
+          rejected: prepared.rejected,
+          ids: prepared.normalized.map((task) => task.id),
+          warnings: prepared.warnings,
+          errors: prepared.errors,
+        });
+      } catch (e) { return errorText(e); }
     },
   );
 
   server.tool('p3fo_clear_tasks', {}, async () => {
-    try { return asText(await client.clearAllTasks()); } catch (e) { return errorText(e); }
+    try {
+      const result = await client.clearAllTasks();
+      clearTaskCache();
+      return asText(result);
+    } catch (e) { return errorText(e); }
   });
 
   // ---- Users & user settings ----
-  server.tool('p3fo_list_users', {}, async () => {
-    try { return asText(await client.listUsers()); } catch (e) { return errorText(e); }
-  });
+  server.tool(
+    'p3fo_list_users',
+    {
+      params: z.object({
+        /** Project only userId, username, and trigram. */
+        compact: z.boolean().optional(),
+        fields: stringListSchema,
+      }).optional(),
+    },
+    async (args) => {
+      try {
+        const users = (await client.listUsers()) as Record<string, unknown>[];
+        const p = args?.params ?? {};
+        if (p.compact) {
+          return asText(users.map((user) => ({
+            userId: user.userId,
+            username: user.username,
+            trigram: user.trigram,
+          })));
+        }
+        const fields = toList(p.fields);
+        if (fields && fields.length > 0) {
+          return asText(users.map((user) => projectTask(user, fields, false)));
+        }
+        return asText(users);
+      } catch (e) { return errorText(e); }
+    },
+  );
 
   server.tool(
     'p3fo_get_user_settings',
@@ -267,7 +755,11 @@ export function registerTools(server: McpServer, client: P3foClient) {
     'p3fo_migrate_user',
     { params: z.object({ oldUserId: z.string(), newUserId: z.string() }) },
     async (args) => {
-      try { return asText(await client.migrateUser(args.params.oldUserId, args.params.newUserId)); } catch (e) { return errorText(e); }
+      try {
+        const result = await client.migrateUser(args.params.oldUserId, args.params.newUserId);
+        clearTaskCache();
+        return asText(result);
+      } catch (e) { return errorText(e); }
     },
   );
 
@@ -377,7 +869,11 @@ export function registerTools(server: McpServer, client: P3foClient) {
     'p3fo_close_sprint',
     { params: z.object({ sprintId: z.string(), outcomes: recordSchema.optional() }) },
     async (args) => {
-      try { return asText(await client.closeSprint(args.params.sprintId, (args.params.outcomes ?? {}) as Record<string, string>)); } catch (e) { return errorText(e); }
+      try {
+        const result = await client.closeSprint(args.params.sprintId, (args.params.outcomes ?? {}) as Record<string, string>);
+        clearTaskCache();
+        return asText(result);
+      } catch (e) { return errorText(e); }
     },
   );
 
@@ -385,7 +881,11 @@ export function registerTools(server: McpServer, client: P3foClient) {
     'p3fo_start_sprint',
     { params: z.object({ sprintId: z.string(), taskIds: z.array(z.string()).optional() }) },
     async (args) => {
-      try { return asText(await client.startSprint(args.params.sprintId, args.params.taskIds)); } catch (e) { return errorText(e); }
+      try {
+        const result = await client.startSprint(args.params.sprintId, args.params.taskIds);
+        clearTaskCache();
+        return asText(result);
+      } catch (e) { return errorText(e); }
     },
   );
 

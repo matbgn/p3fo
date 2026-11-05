@@ -90,7 +90,7 @@ export class P3foClient {
     return this.post(`/api/tasks/${id}/delete`, {});
   }
 
-  bulkUpdateTaskPriorities(items: { id: string; priority: number | undefined }[]) {
+  bulkUpdateTaskPriorities(items: { id: string; priority: number | null | undefined }[]) {
     return this.post('/api/tasks/bulk-priorities', { items });
   }
 
