@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.38.0 (2026-11-06)
+
+### Features
+
+- **MCP:** add task search, audit and bulk tools (345d9c5)
+
+### Bug Fixes
+
+- **justfile:** load IaC ansible.cfg for deploy commands (cba139b)
+- **common:** prevent narrow-screen page overflow (0dcc486)
+- **common:** keep rich text modal actions visible (d1a3dbe)
+
+---
+
 ## v0.37.0 (2026-11-05)
 
 ### Features
@@ -166,18 +180,5 @@
 ### Features
 
 - **devtools:** add MCP server wrapping P3Fo REST API (02b7bff)
-
----
-
-## v0.29.0 (2026-06-25)
-
-### Features
-
-- **comparative tool:** add Plackett-Luce + InfoGain ranking engine (6067496)
-- **comparative tool:** add diff-based batch task import with similarity matching (fa8fd9b)
-
-### Bug Fixes
-
-- **tasks:** keep card controls mounted while dropdown open (3bebbce)
 
 ---
