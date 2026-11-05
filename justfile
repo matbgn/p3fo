@@ -3,6 +3,12 @@
 set dotenv-filename := ".env.local" # Look for .env.local in the project root
 set dotenv-load := true
 
+# Load the IaC ansible.cfg (1h SSH ControlPersist + pipelining) even though the
+# playbook is invoked from this repository instead of the ansible directory.
+# Plain string (no env_var() parentheses) so shellcheck can parse it; Ansible
+# expands $HOME itself.
+export ANSIBLE_CONFIG := "$HOME/Dev/itpark/infrastructure-as-code/ansible/ansible.cfg"
+
 # Variables for the p3fo project
 PROJECT_NAME := "p3fo"
 DOCKER_IMAGE_NAME := "git.at-it.ch/advance-ticket/p3fo"
