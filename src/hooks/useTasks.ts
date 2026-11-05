@@ -96,6 +96,28 @@ const syncTaskToYjs = (taskId: string, task: Task) => {
   }
 };
 
+const toEpochMillis = (value: unknown): number | undefined => {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  }
+  return undefined;
+};
+
+// Yjs is fed both by client Task objects and by server-broadcast persistence
+// entities (ISO timestamps). Normalise every incoming task so consumers always
+// receive the frontend shape and never crash on string timestamps.
+const normalizeYjsTask = (raw: Task): Task => ({
+  ...raw,
+  createdAt: toEpochMillis(raw.createdAt) ?? Date.now(),
+  updatedAt: toEpochMillis(raw.updatedAt) ?? Date.now(),
+  terminationDate: toEpochMillis(raw.terminationDate),
+  blockedSince: toEpochMillis(raw.blockedSince),
+  triageStatus: raw.triageStatus || 'Backlog',
+  children: raw.children || [],
+});
+
 const updateTaskInTasks = (taskId: string, updater: (task: Task) => Task) => {
   tasks = tasks.map(t => {
     if (t.id === taskId) {
@@ -123,11 +145,7 @@ if (isCollaborationEnabled()) {
 
     const changedKeys = event.keysChanged;
     if (tasks.length === 0 || changedKeys.size > Math.max(50, tasks.length * 0.5)) {
-      const rawTasks = (Array.from(yTasks.values()) as Task[]).map(t => ({
-        ...t,
-        triageStatus: t.triageStatus || "Backlog",
-        children: t.children || [],
-      }));
+      const rawTasks = (Array.from(yTasks.values()) as Task[]).map(normalizeYjsTask);
 
       // Recompute children from parentId — the authoritative source of truth.
       // The `children` array stored in Yjs can become stale when tasks are
@@ -156,8 +174,7 @@ if (isCollaborationEnabled()) {
       }
 
       const normalized: Task = {
-        ...raw,
-        triageStatus: raw.triageStatus || "Backlog",
+        ...normalizeYjsTask(raw),
         children: existing?.children ?? [],
       };
 
@@ -223,7 +240,7 @@ const loadTasksByUser = async (userId?: string | null): Promise<Task[]> => {
   }
 };
 
-async function loadTasks() {
+export async function loadTasks() {
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;

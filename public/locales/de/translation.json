@@ -213,6 +213,10 @@
     "loadingFocusStats": "Fokus-Sitzungsstatistiken werden geladen...",
     "collaborativeTitle": "Kollaborative Kennzahlen",
     "individualTitle": "Individuelle Kennzahlen",
+    "subview": {
+      "collaborative": "Kollaborativ",
+      "individual": "Individuell"
+    },
     "selectUser": "Benutzer auswählen",
     "selectUserQol": "Bitte wählen Sie einen Benutzer aus, um die Umfrage anzuzeigen",
     "selectUserFocus": "Bitte wählen Sie einen Benutzer aus, um die Fokus-Sitzungsstatistiken anzuzeigen",
@@ -1554,7 +1558,7 @@
     "done": "Erledigt",
     "undo": "Rückgängig",
     "task": "Aufgabe",
-    "emptyHint": "Noch keine Aufgaben — fügen Sie eine hinzu, um sie auf Ihrer \u201eQuittung\u201c zu drucken."
+    "emptyHint": "Noch keine Aufgaben — fügen Sie eine hinzu, um sie auf Ihrer „Quittung“ zu drucken."
   },
   "circles": {
     "viewTitle": "Kreisansicht",
@@ -1587,10 +1591,10 @@
     "editNode": "Knoten bearbeiten",
     "addNodeDesc": "Einen neuen Kreis oder eine Rolle hinzufügen.",
     "editNodeDesc": "Den ausgewählten Kreis oder die Rolle bearbeiten.",
-    "moveNode": "\u201e{{name}}\u201c verschieben",
+    "moveNode": "„{{name}}“ verschieben",
     "moveNodeDesc": "Den ausgewählten Knoten zu einem neuen übergeordneten Element verschieben.",
     "deleteConfirmTitle": "Sind Sie sicher?",
-    "deleteConfirmDesc": "Dadurch wird \u201e{{name}}\u201c und alle untergeordneten Kreise/Rollen dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.",
+    "deleteConfirmDesc": "Dadurch wird „{{name}}“ und alle untergeordneten Kreise/Rollen dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.",
     "nodeType": {
       "organization": "Organisation",
       "circle": "Kreis",
@@ -1871,6 +1875,173 @@
       "name": "Vorstellungsvorbereitung",
       "parentTitle": "Premiere",
       "childAnnounce": "Markquee & Ankündigungen finalisieren"
+    }
+  },
+  "sprint": {
+    "ceremony": "Sprint-Zeremonie",
+    "newSprint": "Neuer Sprint",
+    "noSprint": "Noch kein Sprint",
+    "noSprintHelp": "Erstelle einen Entwurf, wähle den Umfang und starte ihn.",
+    "createDraft": "Entwurf erstellen",
+    "scope": "Umfang",
+    "scopeEmpty": "Noch kein Umfang gewählt.",
+    "back": "Zurück",
+    "next": "Weiter",
+    "stepOf": "Schritt {{current}} von {{total}}",
+    "step": {
+      "review": "Rückblick",
+      "close": "Abschluss",
+      "retro": "Retro",
+      "open": "Start"
+    },
+    "kpi": {
+      "committed": "Zugesagt",
+      "tasks": "{{count}} Aufgaben",
+      "scopeDone": "Umfang erledigt",
+      "open": "Zu übertragen",
+      "openHint": "wenn jetzt geschlossen",
+      "velocity": "Letzte Velocity",
+      "velocityHint": "High Impact, Admin ausgeschlossen",
+      "velocityTarget": "Ziel {{target}} Pkt.",
+      "goal": "Sprintziel",
+      "goalHint": "{{count}} Zielpunkte",
+      "goalDone": "Ziel erreicht",
+      "impactDone": "Impact erledigt",
+      "impactHint": "alle Impact-Aufgaben erledigt, Admin ausgeschlossen",
+      "remaining": "Verbleibend bis Ziel",
+      "remainingHint": "Ziel {{target}} Pkt."
+    },
+    "capacity": {
+      "theoretical": "Theoretische Punkte",
+      "practice": "Praxis %",
+      "practiceHint": "Team-Planungseingabe",
+      "target": "Ziel",
+      "workingDays": "Arbeitstage",
+      "costPerDay": "Kosten pro Hindernistag",
+      "impediments": "Hindernisse in Tagen",
+      "impedimentLabel": "Bezeichnung",
+      "people": "Personen % (EFT-Vertrag)",
+      "practiceHelp": "Der Praxisprozentsatz ist der real erreichbare Prozentsatz aufgrund nicht nachvollziehbarer Mikroaufgaben. Er liegt normalerweise unter der theoretischen / vertraglichen Arbeitslast."
+    },
+    "outcome": {
+      "carried": "Übertragen",
+      "backlog": "Backlog",
+      "dropped": "Verwerfen"
+    },
+    "close": {
+      "openTasks": "Offene Aufgaben",
+      "nothingOpen": "Alles erledigt.",
+      "allCarry": "Alle → nächster Sprint",
+      "allBacklog": "Alle → Backlog",
+      "whatHappens": "Was der Abschluss schreibt",
+      "bullet1": "Der Sprintstatus wird auf geschlossen gesetzt.",
+      "bullet2": "Jedes offene Element erhält ein Ergebnis.",
+      "bullet3": "Übertragene Ziele behalten sprintTarget; die übrigen werden entfernt.",
+      "bullet4": "Die Velocity wird aus erledigten High-Impact-Aufgaben berechnet, Admin ausgeschlossen.",
+      "close": "Sprint abschließen",
+      "openGoals": "Offene Ziele"
+    },
+    "retro": {
+      "title": "Retrospektive",
+      "worked": "Gut",
+      "failed": "Nicht gut",
+      "impediments": "Hindernisse",
+      "decisions": "Entscheidungen",
+      "checklist": "Kurations-Checkliste",
+      "gladSadMad": "Glad–Sad–Mad & Interaktionen zwischen Menschen",
+      "gladSadMadHint": "Unterstützung durch Kollegen, Autonomie bei der Arbeit, Arbeitslast.",
+      "deviations": "Punkte, die zu Termin- oder Zielabweichungen geführt haben, und Lösungen",
+      "improvements": "Wege zur Verbesserung von Komfort und Effizienz, Tools und Prozessen",
+      "appreciated": "Besonders geschätzte Situationen",
+      "todos": "Folgeaufgaben (TODOs)",
+      "who5Scale": "Letzte vier Wochen · 0 nie, 5 die ganze Zeit",
+      "who5Recorded": "Deine Antwort wurde anonym gespeichert. Sie kann nicht geändert werden.",
+      "who5Submit": "Anonym senden",
+      "who5Aggregate": "{{count}} Antworten · nur Team-Aggregat",
+      "who5None": "Noch keine Antworten",
+      "who5Privacy": "Eine Antwort pro Person und Sprint. Nur das Team-Aggregat ist sichtbar; individuelle Antworten werden nie angezeigt.",
+      "who5Title": "WHO-5-Wohlbefindensindex"
+    },
+    "open": {
+      "closeFirst": "Schließe den aktiven Sprint, bevor du den nächsten öffnest.",
+      "noDraft": "Kein Entwurf bereit.",
+      "goClose": "Zum Abschluss",
+      "goRetro": "Zur Retro",
+      "name": "Name",
+      "goal": "Sprintziel",
+      "end": "Ende",
+      "committed": "Zugesagter Umfang",
+      "search": "Kandidaten filtern",
+      "topN": "Top N",
+      "saveDraft": "Entwurf speichern",
+      "startDate": "Start",
+      "startSprint": "Sprint starten",
+      "candidates": "Kandidaten für das Sprintziel",
+      "candidatesHelp": "Wähle die 2–3 Ergebnisse, zu denen sich das Team verpflichtet.",
+      "goalCommitment": "Verpflichtung zum Sprintziel",
+      "teamTarget": "Teamziel",
+      "goalVsBurndown": "Das Ziel ist die Verpflichtung. Der Burndown zählt jede Impact-Aufgabe, die erledigt wird.",
+      "top3": "Top 3 Ziele",
+      "length": "Dauer (Wochen)"
+    },
+    "chip": {
+      "draft": "Entwurf",
+      "sprint": "Sprint",
+      "daysLeft": "{{count}}T übrig"
+    },
+    "actions": {
+      "close": "Sprint abschließen",
+      "plan": "Sprint-Planung"
+    },
+    "autoClose": {
+      "title": "Automatischer Abschluss",
+      "help": "Schließt den Sprint, wenn es niemand vor der Frist getan hat, und bereitet optional den nächsten Entwurf vor.",
+      "armed": "Aktiv",
+      "off": "Aus",
+      "grace": "Nachfrist (Stunden)",
+      "dueAt": "Schließt am {{date}}",
+      "policy": "Richtlinie",
+      "policyHelp": {
+        "preselected": "Die vorbereiteten Entscheidungen (übertragen/Backlog/verwerfen) für die Sprintziele anwenden.",
+        "storyboard": "Offene Ziele in Storyboard-Reihenfolge übertragen.",
+        "carry-all": "Jedes offene Ziel kommt in den nächsten Entwurf.",
+        "backlog-all": "Jedes offene Ziel geht zurück ins Backlog."
+      },
+      "createDraft": "Nächsten Entwurf erstellen",
+      "notify": "Team benachrichtigen",
+      "preview": "Vorschau",
+      "previewCarry": "{{count}} Ziele übertragen",
+      "previewBacklog": "{{points}} Pkt. ins Backlog",
+      "previewNext": "Nächstes Ziel: {{points}} Pkt.",
+      "disarm": "Deaktivieren",
+      "arm": "Automatischen Abschluss aktivieren",
+      "update": "Automatischen Abschluss aktualisieren"
+    },
+    "goal": {
+      "title": "Sprintziel",
+      "items": "{{count}} Elemente · {{points}} Pkt."
+    },
+    "burndown": {
+      "title": "Impact-Burndown",
+      "hint": "Alle erledigten Impact-Aufgaben · Ziel {{target}} Pkt.",
+      "actual": "Ist",
+      "ideal": "Ideal",
+      "projected": "Prognose"
+    },
+    "who5": {
+      "q1": "Ich habe mich freudig und guter Dinge gefühlt",
+      "q2": "Ich habe mich ruhig und entspannt gefühlt",
+      "q3": "Ich habe mich aktiv und voller Energie gefühlt",
+      "q4": "Ich bin frisch und erholt aufgewacht",
+      "q5": "Mein Alltag war voller Dinge, die mich interessieren",
+      "option": {
+        "0": "Zu keinem Zeitpunkt",
+        "1": "Ab und zu",
+        "2": "Weniger als die Hälfte der Zeit",
+        "3": "Mehr als die Hälfte der Zeit",
+        "4": "Meistens",
+        "5": "Die ganze Zeit"
+      }
     }
   }
 }

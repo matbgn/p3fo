@@ -1,5 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
-import { DbClient } from './index.js';
+import { DbClient, SprintWellbeingRecord } from './index.js';
+import type { SprintStateEntity } from '../../src/lib/sprint-types.js';
 import type {
   TaskEntity,
   UserSettingsEntity,
@@ -402,6 +403,25 @@ class SqliteClient implements DbClient {
       CREATE TABLE IF NOT EXISTS "salaryBoard" (
           "id" INTEGER PRIMARY KEY,
           "data" TEXT NOT NULL -- JSON string
+        )
+        `);
+
+    // Sprint ceremony state
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS "sprintState" (
+          "id" INTEGER PRIMARY KEY,
+          "data" TEXT NOT NULL -- JSON string
+        )
+        `);
+
+    // Anonymous WHO-5 responses: one row per user per sprint, never exposed raw.
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS "sprintWellbeing" (
+          "sprintId" TEXT NOT NULL,
+          "userId" TEXT NOT NULL,
+          "answers" TEXT NOT NULL, -- JSON number[5]
+          "submittedAt" TEXT NOT NULL,
+          PRIMARY KEY ("sprintId", "userId")
         )
         `);
 
@@ -1067,6 +1087,22 @@ class SqliteClient implements DbClient {
     }
   }
 
+  async bulkUpdateSprintTargets(items: { id: string; sprintTarget: boolean }[]): Promise<void> {
+    this.db.exec('BEGIN');
+    try {
+      const updateStmt = this.db.prepare(
+        'UPDATE "tasks" SET "sprintTarget" = @sprintTarget WHERE "id" = @id',
+      );
+      for (const item of items) {
+        updateStmt.run({ sprintTarget: item.sprintTarget ? 1 : 0, id: item.id });
+      }
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
   async clearAllTasks(): Promise<void> {
     this.db.prepare('DELETE FROM "tasks"').run();
   }
@@ -1450,6 +1486,69 @@ class SqliteClient implements DbClient {
       VALUES(1, @data)
       ON CONFLICT("id") DO UPDATE SET "data" = excluded."data"
         `).run({ data: JSON.stringify(state) });
+  }
+
+  // Sprint ceremony
+  async getSprintState(): Promise<SprintStateEntity | null> {
+    const row = this.db.prepare('SELECT data FROM "sprintState" WHERE "id" = 1').get() as { data?: string } | undefined;
+    return row?.data ? JSON.parse(row.data) : null;
+  }
+
+  async updateSprintState(state: SprintStateEntity): Promise<void> {
+    this.db.prepare(`
+      INSERT INTO "sprintState"("id", "data")
+      VALUES(1, @data)
+      ON CONFLICT("id") DO UPDATE SET "data" = excluded."data"
+        `).run({ data: JSON.stringify(state) });
+  }
+
+  async compareAndUpdateSprintState(
+    state: SprintStateEntity,
+    expectedUpdatedAt: string | null,
+  ): Promise<boolean> {
+    // IMMEDIATE takes the write lock before the read so another server process
+    // sharing this file cannot commit between our compare and our write.
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const row = this.db.prepare('SELECT data FROM "sprintState" WHERE "id" = 1').get() as
+        | { data?: string }
+        | undefined;
+      const current = row?.data ? (JSON.parse(row.data) as SprintStateEntity) : null;
+      if ((current?.updatedAt ?? null) !== expectedUpdatedAt) {
+        this.db.exec('ROLLBACK');
+        return false;
+      }
+
+      this.db.prepare(`
+        INSERT INTO "sprintState"("id", "data")
+        VALUES(1, @data)
+        ON CONFLICT("id") DO UPDATE SET "data" = excluded."data"
+          `).run({ data: JSON.stringify(state) });
+      this.db.exec('COMMIT');
+      return true;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  async getSprintWellbeing(sprintId: string): Promise<SprintWellbeingRecord[]> {
+    const rows = this.db.prepare(
+      'SELECT "userId", "answers", "submittedAt" FROM "sprintWellbeing" WHERE "sprintId" = ?',
+    ).all(sprintId) as { userId: string; answers: string; submittedAt: string }[];
+    return rows.map((row) => ({
+      userId: row.userId,
+      answers: JSON.parse(row.answers) as number[],
+      submittedAt: row.submittedAt,
+    }));
+  }
+
+  async submitSprintWellbeing(sprintId: string, userId: string, answers: number[]): Promise<void> {
+    this.db.prepare(`
+      INSERT INTO "sprintWellbeing"("sprintId", "userId", "answers", "submittedAt")
+      VALUES(?, ?, ?, ?)
+      ON CONFLICT("sprintId", "userId") DO NOTHING
+        `).run(sprintId, userId, JSON.stringify(answers), new Date().toISOString());
   }
 
   // Circles (EasyCIRCLE)
@@ -2780,6 +2879,8 @@ class SqliteClient implements DbClient {
       this.db.exec('DROP TABLE IF EXISTS "fertilizationBoard"');
       this.db.exec('DROP TABLE IF EXISTS "dreamBoard"');
       this.db.exec('DROP TABLE IF EXISTS "salaryBoard"');
+      this.db.exec('DROP TABLE IF EXISTS "sprintState"');
+      this.db.exec('DROP TABLE IF EXISTS "sprintWellbeing"');
       this.db.exec('DROP TABLE IF EXISTS "circles"');
       this.db.exec('DROP TABLE IF EXISTS "reminders"');
       this.db.exec('DROP TABLE IF EXISTS "frameworks"');

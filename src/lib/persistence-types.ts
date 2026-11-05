@@ -3,6 +3,13 @@
 
 import { PomodoroConfig, FocusModeConfig, PomodoroSession } from './pomodoro-types';
 import { TravelerConfig } from './traveler-types';
+import type { SprintStateEntity, SprintWellbeingAggregate, SprintOutcome } from './sprint-types';
+export type { SprintStateEntity } from './sprint-types';
+
+export interface SprintWellbeingStatus {
+  answered: boolean;
+  aggregate: SprintWellbeingAggregate | null;
+}
 export type { PomodoroConfig, FocusModeConfig, PomodoroSession } from './pomodoro-types';
 export { DEFAULT_POMODORO_CONFIG, DEFAULT_FOCUS_MODE_CONFIG } from './pomodoro-types';
 export type { TravelerConfig } from './traveler-types';
@@ -186,6 +193,8 @@ export interface StorageMetadata {
 }
 
 export interface PersistenceAdapter {
+  /** Which storage backend this adapter talks to. Server mode is authoritative for sprints. */
+  readonly mode: 'browser' | 'http';
   // Tasks
   listTasks(userId?: string, excludeStatuses?: string[]): Promise<TaskEntity[]>;
   getTaskById(id: string): Promise<TaskEntity | null>;
@@ -193,6 +202,7 @@ export interface PersistenceAdapter {
   updateTask(id: string, patch: Partial<TaskEntity>): Promise<TaskEntity>;
   deleteTask(id: string): Promise<void>;
   bulkUpdateTaskPriorities(items: { id: string; priority: number | undefined }[]): Promise<void>;
+  bulkUpdateSprintTargets(items: { id: string; sprintTarget: boolean }[]): Promise<void>;
   clearAllTasks(): Promise<void>;
   importTasks(tasks: TaskEntity[]): Promise<void>;
 
@@ -232,6 +242,19 @@ export interface PersistenceAdapter {
   // Salary Board (transparent salary system)
   getSalaryBoardState(): Promise<SalaryBoardEntity | null>;
   updateSalaryBoardState(state: SalaryBoardEntity): Promise<void>;
+
+  // Sprint ceremony
+  getSprintState(): Promise<SprintStateEntity | null>;
+  updateSprintState(
+    state: SprintStateEntity,
+    options?: { baseUpdatedAt?: string; force?: boolean },
+  ): Promise<void>;
+  closeSprint(sprintId: string, outcomes: Record<string, SprintOutcome>, timeZone?: string): Promise<SprintStateEntity>;
+  startSprint(sprintId: string, taskIds?: string[], timeZone?: string): Promise<SprintStateEntity>;
+
+  // Sprint well-being (anonymous, one response per user per sprint)
+  getSprintWellbeing(sprintId: string, userId: string): Promise<SprintWellbeingStatus>;
+  submitSprintWellbeing(sprintId: string, userId: string, answers: number[]): Promise<SprintWellbeingStatus>;
 
   // Reminders
   listReminders(userId?: string): Promise<ReminderEntity[]>;

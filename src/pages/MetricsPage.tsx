@@ -20,6 +20,7 @@ import { usePomodoroStats } from "@/hooks/usePomodoroStats";
 
 import { useUsersContext } from "@/context/UsersContext";
 import { useUserSettings } from "@/hooks/useUserSettings";
+import { SprintCeremonyOverlay } from "@/components/sprint/SprintCeremonyOverlay";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { loadFiltersFromSessionStorage, saveFiltersToSessionStorage } from "@/lib/filter-storage";
 import { getDefaultFilters } from "@/lib/filter-merge";
@@ -119,6 +120,9 @@ const MetricsPageInner: React.FC<{ activeView?: string }> = ({ activeView }) => 
   const { users, loading: usersLoading } = useUsersContext();
   const { userSettings } = useUserSettings();
 
+  type MetricsSubView = 'collaborative' | 'individual';
+  const [activeSubView, setActiveSubView] = React.useState<MetricsSubView>('collaborative');
+
   React.useEffect(() => {
     if (activeView === 'metrics') {
       const pending = sessionStorage.getItem('p3fo_metrics_tab');
@@ -168,7 +172,24 @@ const MetricsPageInner: React.FC<{ activeView?: string }> = ({ activeView }) => 
   }
 
   return (
-    <div className="flex flex-col gap-6 h-full">
+    <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto pr-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant={activeSubView === 'collaborative' ? 'default' : 'outline'}
+          onClick={() => setActiveSubView('collaborative')}
+        >
+          {t('metrics.subview.collaborative', 'Collaborative')}
+        </Button>
+        <Button
+          variant={activeSubView === 'individual' ? 'default' : 'outline'}
+          onClick={() => setActiveSubView('individual')}
+        >
+          {t('metrics.subview.individual', 'Individual')}
+        </Button>
+      </div>
+
+      {activeSubView === 'collaborative' ? (
+        <>
       {/* Top pane for collaborative metrics cards */}
       <section className="rounded-lg p-2">
         <h2 className="text-xl font-semibold mb-4">{t('metrics.collaborativeTitle')}</h2>
@@ -187,7 +208,9 @@ const MetricsPageInner: React.FC<{ activeView?: string }> = ({ activeView }) => 
         </div>
       </section>
 
-      {/* Bottom pane for graphics in subtab separated view */}
+      <SprintCeremonyOverlay embedded />
+        </>
+      ) : (
       <section className="flex-1 border rounded-lg p-4 sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold">{t('metrics.individualTitle')}</h2>
@@ -261,6 +284,7 @@ const MetricsPageInner: React.FC<{ activeView?: string }> = ({ activeView }) => 
           </div>
         </div>
       </section>
+      )}
     </div>
   );
 };

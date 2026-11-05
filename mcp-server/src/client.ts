@@ -180,6 +180,24 @@ export class P3foClient {
     return this.put('/api/dream-board', state);
   }
 
+  // ---- Sprint ceremony ----
+  getSprintState() {
+    return this.get('/api/sprint-state');
+  }
+
+  updateSprintState(state: Record<string, unknown>) {
+    const baseUpdatedAt = typeof state.updatedAt === 'string' ? state.updatedAt : undefined;
+    return this.put('/api/sprint-state', baseUpdatedAt ? { ...state, baseUpdatedAt } : state);
+  }
+
+  closeSprint(sprintId: string, outcomes: Record<string, string>) {
+    return this.post('/api/sprint-state/close', { sprintId, outcomes });
+  }
+
+  startSprint(sprintId: string, taskIds?: string[]) {
+    return this.post('/api/sprint-state/start', { sprintId, taskIds });
+  }
+
   // ---- Circles ----
   listCircles() {
     return this.get('/api/circles');

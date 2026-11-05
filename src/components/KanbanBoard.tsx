@@ -307,9 +307,10 @@ const Column: React.FC<{
                (() => {
                  const m = /^p-(.+)$/.exec(blk.key);
                  const taskId = m ? m[1] : undefined;
+                 const previewTask = taskId ? tasksById.get(taskId) : undefined;
                  return taskId ? (
                    <DraggableCard key={blk.key} id={taskId}>
-                     <LazyCard>
+                     <LazyCard preview={previewTask ? <div className="truncate">{previewTask.title}</div> : undefined}>
                        {blk.node}
                      </LazyCard>
                    </DraggableCard>

@@ -30,7 +30,7 @@ dev-otel:
   echo "[1/3] Starting OTel stack..."
   docker compose -f docker-compose.hyperdx.yml up -d
   echo "[2/3] Waiting for the OTel collector on :14318..."
-  for _ in $(seq 1 60); do
+  for _ in $(seq 1 240); do
     if curl -s --max-time 1 -o /dev/null "http://localhost:14318/"; then
       break
     fi
@@ -38,6 +38,7 @@ dev-otel:
   done
   if ! curl -s --max-time 1 -o /dev/null "http://localhost:14318/"; then
     echo "OTel collector did not become ready on :14318" >&2
+    echo "Hint: docker compose -f docker-compose.hyperdx.yml logs --tail=40 otel-collector" >&2
     exit 1
   fi
   echo "HyperDX UI: http://localhost:18088"

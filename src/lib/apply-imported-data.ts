@@ -20,7 +20,7 @@ import { useReminderStore } from '@/hooks/useReminders';
 import { tasksToEntities, convertEntitiesToTasks } from '@/lib/task-conversions';
 import type { Task } from '@/hooks/useTasks';
 
-export const CURRENT_SCHEMA_VERSION = 4;
+export const CURRENT_SCHEMA_VERSION = 5;
 
 export function extractImportErrorMessage(
   error: unknown,
@@ -351,6 +351,11 @@ export async function applyImportedData(
       .filter(t => t && t.id && t.scope === 'user');
     if (workspaceTemplates.length > 0) saveTemplates('workspace', workspaceTemplates);
     if (userTemplates.length > 0) saveTemplates('user', userTemplates);
+  }
+
+  // ---- Sprint ceremony (restore replaces server state) ----
+  if (importedData.sprintState) {
+    await adapter.updateSprintState(importedData.sprintState, { force: true });
   }
 
   // ---- Restore active user identity ----

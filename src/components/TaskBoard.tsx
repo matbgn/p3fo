@@ -873,6 +873,7 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
                       fullyFilteredItems.map((t) => (
                         <LazyCard
                           key={t.id}
+                          preview={<div className="truncate">{t.title}</div>}
                           draggable
                           onDragStart={(e) => {
                             e.dataTransfer.setData("text/task-id", t.id);

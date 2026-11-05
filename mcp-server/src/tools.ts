@@ -360,6 +360,35 @@ export function registerTools(server: McpServer, client: P3foClient) {
     },
   );
 
+  // ---- Sprint ceremony ----
+  server.tool('p3fo_get_sprint_state', {}, async () => {
+    try { return asText(await client.getSprintState()); } catch (e) { return errorText(e); }
+  });
+
+  server.tool(
+    'p3fo_update_sprint_state',
+    { params: z.object({ state: recordSchema }) },
+    async (args) => {
+      try { return asText(await client.updateSprintState(args.params.state ?? {})); } catch (e) { return errorText(e); }
+    },
+  );
+
+  server.tool(
+    'p3fo_close_sprint',
+    { params: z.object({ sprintId: z.string(), outcomes: recordSchema.optional() }) },
+    async (args) => {
+      try { return asText(await client.closeSprint(args.params.sprintId, (args.params.outcomes ?? {}) as Record<string, string>)); } catch (e) { return errorText(e); }
+    },
+  );
+
+  server.tool(
+    'p3fo_start_sprint',
+    { params: z.object({ sprintId: z.string(), taskIds: z.array(z.string()).optional() }) },
+    async (args) => {
+      try { return asText(await client.startSprint(args.params.sprintId, args.params.taskIds)); } catch (e) { return errorText(e); }
+    },
+  );
+
   // ---- Circles ----
   server.tool('p3fo_list_circles', {}, async () => {
     try { return asText(await client.listCircles()); } catch (e) { return errorText(e); }

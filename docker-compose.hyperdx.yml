@@ -43,7 +43,7 @@ services:
       - hyperdx-network
     depends_on:
       clickhouse:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
 
   hyperdx:

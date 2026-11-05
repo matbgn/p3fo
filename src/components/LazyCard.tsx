@@ -2,13 +2,10 @@ import React from "react";
 
 interface LazyCardProps {
   children: React.ReactNode;
+  /** Cheap content shown while the card is off-screen (usually the title). */
+  preview?: React.ReactNode;
   className?: string;
   style?: React.CSSProperties;
-  // Drag & Drop passthrough — applied **only** to the placeholder so cards
-  // remain draggable even before the heavy child subtree mounts.  When the
-  // child becomes visible its own draggable surface takes over and these
-  // props are intentionally omitted from the wrapper to avoid nested-drag
-  // conflicts.
   draggable?: boolean;
   onDragStart?: React.DragEventHandler<HTMLDivElement>;
   onDragOver?: React.DragEventHandler<HTMLDivElement>;
@@ -16,16 +13,17 @@ interface LazyCardProps {
 }
 
 /**
- * LazyCard: Only renders children when the element is near the viewport.
- * Uses IntersectionObserver with a 200px rootMargin to pre-render before scrolling into view.
- * Once visible, the card stays rendered (no unmount on scroll-out) to avoid flickering.
+ * LazyCard: mounts the heavy card subtree only when the placeholder is near
+ * the viewport, but always renders a cheap `preview` (the task title) so a card
+ * moved by Yjs is visible in its new column immediately.
  *
- * Drag props are forwarded to the **placeholder only** so that drag & drop works even
- * when the real card hasn't mounted yet.  When the child mounts its own
- * draggable surface takes over; the placeholder props are then irrelevant.
+ * The previous version rendered an empty placeholder, which made moved cards
+ * look missing until a reload. Mounting every card unconditionally fixed that
+ * but pushed the render benchmark over its p95 budget.
  */
 const LazyCard: React.FC<LazyCardProps> = React.memo(({
   children,
+  preview,
   className,
   style,
   draggable,
@@ -58,13 +56,17 @@ const LazyCard: React.FC<LazyCardProps> = React.memo(({
     return (
       <div
         ref={ref}
-        className={className}
+        className={
+          className ?? "rounded-md border bg-card px-2 py-1.5 text-sm text-muted-foreground"
+        }
         style={{ minHeight: "60px", ...style }}
         draggable={draggable}
         onDragStart={onDragStart}
         onDragOver={onDragOver}
         onDrop={onDrop}
-      />
+      >
+        {preview}
+      </div>
     );
   }
 

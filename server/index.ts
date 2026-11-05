@@ -5,6 +5,21 @@ import crypto from 'node:crypto';
 import { createDbClient } from './db/index.js';
 import { DbClient } from './db/index.js';
 import { VoteKind, VoteLoop, VoteModerator, VoteResponseEntity, PomodoroSession } from '../src/lib/persistence-types.js';
+import type { TaskEntity } from '../src/lib/persistence-types.js';
+import type { SprintStateEntity } from '../src/lib/sprint-types.js';
+import {
+  WHO5_QUESTIONS,
+  applyClose,
+  buildScopeSnapshot,
+  buildWellbeingAggregate,
+  createEmptySprintState,
+  isTerminalTask,
+  previousClosedTargetPoints,
+  startSprint,
+} from '../src/lib/sprint-types.js';
+import { startSprintScheduler, toSprintTasks } from './sprint-scheduler.js';
+import { withSprintStateLock } from './sprint-state-lock.js';
+import { z } from 'zod';
 import QRCode from 'qrcode';
 import { WebSocketServer } from 'ws';
 import { setupWSConnection, getYDoc } from 'y-websocket/bin/utils';
@@ -12,13 +27,38 @@ import * as Y from 'yjs';
 
 const YJS_ROOM = 'p3fo-room';
 
+function entityToClientTask(entity: TaskEntity): Record<string, unknown> {
+  const toMillis = (value: unknown): number | undefined => {
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const parsed = Date.parse(value);
+      return Number.isNaN(parsed) ? undefined : parsed;
+    }
+    return undefined;
+  };
+  const blockedSince = (entity as TaskEntity & { blockedSince?: string | null }).blockedSince;
+  return {
+    ...entity,
+    createdAt: toMillis(entity.createdAt) ?? Date.now(),
+    updatedAt: toMillis(entity.updatedAt) ?? Date.now(),
+    terminationDate: toMillis(entity.terminationDate),
+    blockedSince: toMillis(blockedSince),
+    children: [],
+  };
+}
+
 // Push a task update into the Yjs doc so connected clients receive it
 // in real-time via WebSocket, without needing to reload the browser.
 function broadcastTaskToYjs(task: unknown) {
   try {
     const doc = getYDoc(YJS_ROOM) as Y.Doc;
     const yTasks = doc.getMap('tasks');
-    yTasks.set((task as Record<string, unknown>).id as string, task);
+    // Persistence entities store timestamps as ISO strings, while the client
+    // Task shape uses epoch milliseconds. Broadcasting the raw entity made
+    // consumers crash (e.g. TimePickerDialog) and could drop live updates.
+    const clientTask = entityToClientTask(task as TaskEntity);
+    yTasks.set(clientTask.id as string, clientTask);
   } catch {
     // Yjs doc may not exist yet (no connected clients) — safe to skip
   }
@@ -272,6 +312,31 @@ app.post('/api/tasks/bulk-priorities', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error bulk updating task priorities:', error);
     res.status(500).json({ error: 'Failed to bulk update task priorities' });
+  }
+});
+
+app.post('/api/tasks/bulk-sprint-targets', async (req: Request, res: Response) => {
+  try {
+    const items = req.body?.items;
+    const valid =
+      Array.isArray(items) &&
+      items.every((item: unknown) => {
+        const candidate = item as { id?: unknown; sprintTarget?: unknown };
+        return typeof candidate.id === 'string' && typeof candidate.sprintTarget === 'boolean';
+      });
+    if (!valid) {
+      res.status(400).json({ error: 'items must be an array of { id, sprintTarget }' });
+      return;
+    }
+    await db.bulkUpdateSprintTargets(items);
+    for (const item of items) {
+      const task = await db.getTaskById(item.id);
+      if (task) broadcastTaskToYjs(task);
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error bulk updating sprint targets:', error);
+    res.status(500).json({ error: 'Failed to bulk update sprint targets' });
   }
 });
 
@@ -553,6 +618,329 @@ app.put('/api/salary-board', async (req: Request, res: Response) => {
     console.error('Error updating salary board state:', error);
     const message = error instanceof Error ? error.message : String(error);
     res.status(500).json({ error: 'Failed to update salary board state', details: message });
+  }
+});
+
+// Sprint ceremony routes
+app.get('/api/sprint-state', async (_req: Request, res: Response) => {
+  try {
+    const state = await db.getSprintState();
+    res.json(state);
+  } catch (error: unknown) {
+    console.error('Error fetching sprint state:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to fetch sprint state', details: message });
+  }
+});
+
+const sprintStateBodySchema = z
+  .object({
+    activeSprintId: z.string().nullable(),
+    draftSprintId: z.string().nullable(),
+    sprints: z.array(
+      z
+        .object({
+          id: z.string(),
+          name: z.string(),
+          goal: z.string(),
+          status: z.enum(['draft', 'active', 'closed']),
+          scope: z.array(z.unknown()),
+          startDate: z.string(),
+          endDate: z.string(),
+          capacity: z
+            .object({
+              theoreticalPoints: z.number(),
+              practicePct: z.number(),
+              eftCount: z.number(),
+              workingDays: z.number(),
+              impediments: z.array(z.unknown()),
+            })
+            .passthrough(),
+          metrics: z
+            .object({
+              committedPoints: z.number(),
+              scopeDonePoints: z.number(),
+              openPoints: z.number(),
+              carriedPoints: z.number(),
+              unplannedDonePoints: z.number(),
+              achievedPoints: z.number(),
+              lastTheoreticalPoints: z.number(),
+              errorPct: z.number(),
+              velocity: z.number(),
+              completionPct: z.number(),
+              remainingToTarget: z.number(),
+            })
+            .passthrough(),
+        })
+        .passthrough(),
+    ),
+  })
+  .passthrough();
+
+app.put('/api/sprint-state', async (req: Request, res: Response) => {
+  try {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const force = body.force === true;
+    const baseUpdatedAt = typeof body.baseUpdatedAt === 'string' ? body.baseUpdatedAt : undefined;
+    const stateBody = { ...body };
+    delete stateBody.force;
+    delete stateBody.baseUpdatedAt;
+
+    const parsed = sprintStateBodySchema.safeParse(stateBody);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid sprint state', details: parsed.error.flatten() });
+      return;
+    }
+    const incoming = parsed.data as unknown as SprintStateEntity;
+
+    await withSprintStateLock(async () => {
+      const current = await db.getSprintState();
+      if (current && !force) {
+        if (current.updatedAt && baseUpdatedAt !== current.updatedAt) {
+          res.status(409).json({ error: 'Sprint state changed since it was loaded' });
+          return;
+        }
+
+        const currentIds = new Set(current.sprints.map((sprint) => sprint.id));
+        const incomingById = new Map(incoming.sprints.map((sprint) => [sprint.id, sprint]));
+
+        // Never let a stale client erase a sprint the scheduler just created.
+        const missing = current.sprints.find((sprint) => !incomingById.has(sprint.id));
+        if (missing) {
+          res.status(409).json({ error: `Sprint ${missing.id} is missing from the incoming state` });
+          return;
+        }
+
+        for (const sprint of incoming.sprints) {
+          if (!currentIds.has(sprint.id) && sprint.status !== 'draft') {
+            res.status(409).json({ error: `Sprint ${sprint.id} must be created as a draft` });
+            return;
+          }
+        }
+
+        for (const stored of current.sprints) {
+          const next = incomingById.get(stored.id);
+          if (!next) continue;
+          if (next.status !== stored.status) {
+            res.status(409).json({
+              error: `Sprint ${stored.id} status can only change through the start/close endpoints`,
+            });
+            return;
+          }
+        }
+
+        const activeSprints = incoming.sprints.filter((sprint) => sprint.status === 'active');
+        if (activeSprints.length > 1) {
+          res.status(409).json({ error: 'Only one sprint can be active at a time' });
+          return;
+        }
+        if (incoming.activeSprintId && activeSprints[0]?.id !== incoming.activeSprintId) {
+          res.status(409).json({ error: 'activeSprintId must reference the active sprint' });
+          return;
+        }
+        if (!incoming.activeSprintId && activeSprints.length > 0) {
+          res.status(409).json({ error: 'An active sprint must be referenced by activeSprintId' });
+          return;
+        }
+        if (incoming.draftSprintId) {
+          const draft = incoming.sprints.find((sprint) => sprint.id === incoming.draftSprintId);
+          if (!draft || draft.status !== 'draft') {
+            res.status(409).json({ error: 'draftSprintId must reference a draft sprint' });
+            return;
+          }
+        }
+      }
+
+      await db.updateSprintState(incoming);
+      res.json({ success: true });
+    });
+  } catch (error: unknown) {
+    console.error('Error updating sprint state:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to update sprint state', details: message });
+  }
+});
+
+app.post('/api/sprint-state/close', async (req: Request, res: Response) => {
+  try {
+    await withSprintStateLock(async () => {
+      const state: SprintStateEntity = (await db.getSprintState()) ?? createEmptySprintState();
+      const { sprintId, outcomes = {} } = req.body as {
+        sprintId?: string;
+        outcomes?: Record<string, 'done' | 'carried' | 'backlog' | 'dropped'>;
+      };
+      const sprint = state.sprints.find((candidate) => candidate.id === sprintId);
+      if (!sprint) {
+        res.status(404).json({ error: 'Sprint not found' });
+        return;
+      }
+      if (sprint.status !== 'active') {
+        res.status(409).json({ error: 'Only an active sprint can be closed' });
+        return;
+      }
+      const entities = (await db.getTasks()).data;
+      const tasks = toSprintTasks(entities);
+      const appSettings = await db.getAppSettings();
+      const timeZone = appSettings?.timezone ?? 'Europe/Zurich';
+      const closed = applyClose(
+        sprint,
+        tasks,
+        outcomes,
+        previousClosedTargetPoints(state, sprint),
+        'manual',
+        new Date().toISOString(),
+        timeZone,
+      );
+      const next: SprintStateEntity = {
+        ...state,
+        sprints: state.sprints.map((candidate) => (candidate.id === sprint.id ? closed : candidate)),
+        activeSprintId: state.activeSprintId === sprint.id ? null : state.activeSprintId,
+        updatedAt: new Date().toISOString(),
+      };
+      const byId = new Map(entities.map((entity) => [entity.id, entity]));
+      const updates = closed.scope
+        .map((item) => ({
+          id: item.taskId,
+          sprintTarget: item.outcome === 'carried',
+        }))
+        .filter((update) => Boolean(byId.get(update.id)?.sprintTarget) !== update.sprintTarget);
+      if (updates.length > 0) {
+        await db.bulkUpdateSprintTargets(updates);
+        for (const update of updates) {
+          const entity = byId.get(update.id);
+          if (entity) broadcastTaskToYjs({ ...entity, sprintTarget: update.sprintTarget });
+        }
+      }
+      await db.updateSprintState(next);
+      res.json(next);
+    });
+  } catch (error: unknown) {
+    console.error('Error closing sprint:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to close sprint', details: message });
+  }
+});
+
+app.get('/api/sprint-wellbeing/:sprintId', async (req: Request, res: Response) => {
+  try {
+    const { sprintId } = req.params;
+    const userId = typeof req.query.userId === 'string' ? req.query.userId : '';
+    if (!userId) {
+      res.status(400).json({ error: 'userId is required' });
+      return;
+    }
+    const state = await db.getSprintState();
+    if (!state?.sprints.some((sprint) => sprint.id === sprintId)) {
+      res.status(404).json({ error: 'Sprint not found' });
+      return;
+    }
+    const answers = await db.getSprintWellbeing(sprintId);
+    const answered = answers.some((entry) => entry.userId === userId);
+    res.json({
+      answered,
+      // Small samples stay hidden so nobody can derive an individual score.
+      aggregate: buildWellbeingAggregate(answers.map((entry) => entry.answers)),
+    });
+  } catch (error: unknown) {
+    console.error('Error reading sprint well-being:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to read sprint well-being', details: message });
+  }
+});
+
+app.post('/api/sprint-wellbeing/:sprintId', async (req: Request, res: Response) => {
+  try {
+    const { sprintId } = req.params;
+    const { userId, answers } = req.body as { userId?: string; answers?: unknown };
+    const resolvedUserId = typeof userId === 'string' ? userId : '';
+    const valid =
+      Boolean(resolvedUserId) &&
+      Array.isArray(answers) &&
+      answers.length === WHO5_QUESTIONS.length &&
+      answers.every((value) => Number.isInteger(value) && value >= 0 && value <= 5);
+    if (!valid) {
+      res.status(400).json({ error: 'A userId and five integer answers between 0 and 5 are required' });
+      return;
+    }
+    const state = await db.getSprintState();
+    if (!state?.sprints.some((sprint) => sprint.id === sprintId)) {
+      res.status(404).json({ error: 'Sprint not found' });
+      return;
+    }
+    await db.submitSprintWellbeing(sprintId, resolvedUserId, answers as number[]);
+    const stored = await db.getSprintWellbeing(sprintId);
+    res.json({
+      answered: true,
+      aggregate: buildWellbeingAggregate(stored.map((entry) => entry.answers)),
+    });
+  } catch (error: unknown) {
+    console.error('Error submitting sprint well-being:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to submit sprint well-being', details: message });
+  }
+});
+
+app.post('/api/sprint-state/start', async (req: Request, res: Response) => {
+  try {
+    await withSprintStateLock(async () => {
+      const state: SprintStateEntity = (await db.getSprintState()) ?? createEmptySprintState();
+      const { sprintId, taskIds } = req.body as { sprintId?: string; taskIds?: string[] };
+      const sprint = state.sprints.find((candidate) => candidate.id === sprintId);
+      if (!sprint) {
+        res.status(404).json({ error: 'Sprint not found' });
+        return;
+      }
+      if (sprint.status !== 'draft') {
+        res.status(409).json({ error: 'Only a draft sprint can be started' });
+        return;
+      }
+      if (state.activeSprintId && state.activeSprintId !== sprint.id) {
+        res.status(409).json({ error: 'Another sprint is already active' });
+        return;
+      }
+      const entities = (await db.getTasks()).data;
+      const tasks = toSprintTasks(entities);
+      const sprintTasksById = new Map(tasks.map((task) => [task.id, task]));
+      const candidateIds = (taskIds ?? sprint.scope.map((item) => item.taskId)).filter(
+        (taskId) => !isTerminalTask(sprintTasksById.get(taskId)),
+      );
+      const scope = buildScopeSnapshot(candidateIds, tasks);
+      const appSettings = await db.getAppSettings();
+      const timeZone = appSettings?.timezone ?? 'Europe/Zurich';
+      const started = startSprint(
+        sprint,
+        scope,
+        tasks,
+        previousClosedTargetPoints(state, sprint),
+        new Date().toISOString(),
+        timeZone,
+      );
+      const next: SprintStateEntity = {
+        ...state,
+        sprints: state.sprints.map((candidate) => (candidate.id === sprint.id ? started : candidate)),
+        activeSprintId: started.id,
+        draftSprintId: null,
+        updatedAt: new Date().toISOString(),
+      };
+      const scopeIds = new Set(scope.map((item) => item.taskId));
+      const updates = entities
+        .filter((entity) => Boolean(entity.sprintTarget) !== scopeIds.has(entity.id))
+        .map((entity) => ({ id: entity.id, sprintTarget: scopeIds.has(entity.id) }));
+      if (updates.length > 0) {
+        await db.bulkUpdateSprintTargets(updates);
+        const byId = new Map(entities.map((entity) => [entity.id, entity]));
+        for (const update of updates) {
+          const entity = byId.get(update.id);
+          if (entity) broadcastTaskToYjs({ ...entity, sprintTarget: update.sprintTarget });
+        }
+      }
+      await db.updateSprintState(next);
+      res.json(next);
+    });
+  } catch (error: unknown) {
+    console.error('Error starting sprint:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to start sprint', details: message });
   }
 });
 
@@ -1352,6 +1740,7 @@ app.use('*', async (req: Request, res: Response) => {
 async function startServer() {
   try {
     await initializeDb();
+    startSprintScheduler(db, broadcastTaskToYjs);
 
     // Check if tasks exist, if not, the frontend will call the init-defaults endpoint
     const tasksResult = await db.getTasks();

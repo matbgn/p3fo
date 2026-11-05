@@ -213,6 +213,10 @@
     "loadingFocusStats": "Loading focus session stats...",
     "collaborativeTitle": "Collaborative Metrics",
     "individualTitle": "Individual Metrics",
+    "subview": {
+      "collaborative": "Collaborative",
+      "individual": "Individual"
+    },
     "selectUser": "Select user",
     "selectUserQol": "Please select a user to view survey",
     "selectUserFocus": "Please select a user to view focus session stats",
@@ -897,8 +901,8 @@
     "proposalNColon": "Proposal {{n}}:",
     "editableBeforeRound": "Editable before starting round",
     "clear": "Clear",
-    "createLinkedDescription": "Create a consultation vote linked to \u201c{{title}}\u201d",
-    "createLinkedAutoTitle": "Task \u2013 {{title}} \u2013 vote",
+    "createLinkedDescription": "Create a consultation vote linked to “{{title}}”",
+    "createLinkedAutoTitle": "Task – {{title}} – vote",
     "createLinkedDefaultProposal": "<p>Proposal 1</p>",
     "openModerationView": "Open moderation view",
     "finalizeSummaryProposal": "Proposal {{n}} selected as the decision.",
@@ -1554,7 +1558,7 @@
     "done": "Done",
     "undo": "Undo",
     "task": "Task",
-    "emptyHint": "No tasks yet — add one to print it on your \u201creceipt\u201d."
+    "emptyHint": "No tasks yet — add one to print it on your “receipt”."
   },
   "circles": {
     "viewTitle": "Circles View",
@@ -1587,10 +1591,10 @@
     "editNode": "Edit Node",
     "addNodeDesc": "Add a new circle or role.",
     "editNodeDesc": "Edit the selected circle or role.",
-    "moveNode": "Move \u201c{{name}}\u201d",
+    "moveNode": "Move “{{name}}”",
     "moveNodeDesc": "Move the selected node to a new parent.",
     "deleteConfirmTitle": "Are you sure?",
-    "deleteConfirmDesc": "This will permanently delete \u201c{{name}}\u201d and all its child circles/roles. This action cannot be undone.",
+    "deleteConfirmDesc": "This will permanently delete “{{name}}” and all its child circles/roles. This action cannot be undone.",
     "nodeType": {
       "organization": "Organization",
       "circle": "Circle",
@@ -1871,6 +1875,173 @@
       "name": "Screening prep",
       "parentTitle": "Premiere",
       "childAnnounce": "Finalize marquee & announcements"
+    }
+  },
+  "sprint": {
+    "ceremony": "Sprint ceremony",
+    "newSprint": "New sprint",
+    "noSprint": "No sprint yet",
+    "noSprintHelp": "Create a draft, pick the scope, then start it.",
+    "createDraft": "Create draft",
+    "scope": "Scope",
+    "scopeEmpty": "No scope selected yet.",
+    "back": "Back",
+    "next": "Next",
+    "stepOf": "Step {{current}} of {{total}}",
+    "step": {
+      "review": "Review",
+      "close": "Close",
+      "retro": "Retro",
+      "open": "Open"
+    },
+    "kpi": {
+      "committed": "Committed",
+      "tasks": "{{count}} tasks",
+      "scopeDone": "Scope done",
+      "open": "To carry",
+      "openHint": "if closed now",
+      "velocity": "Last velocity",
+      "velocityHint": "High Impact, Admin excluded",
+      "velocityTarget": "target {{target}} pts",
+      "goal": "Sprint goal",
+      "goalHint": "{{count}} goal items",
+      "goalDone": "Goal done",
+      "impactDone": "Impact done",
+      "impactHint": "all Impact Done, Admin excluded",
+      "remaining": "Remaining to target",
+      "remainingHint": "target {{target}} pts"
+    },
+    "capacity": {
+      "theoretical": "Theoretical points",
+      "practice": "Practice %",
+      "practiceHint": "team planning input",
+      "target": "Target",
+      "workingDays": "Working days",
+      "costPerDay": "Cost per impediment day",
+      "impediments": "Impediments in days",
+      "impedimentLabel": "Label",
+      "people": "People % (EFT Contract)",
+      "practiceHelp": "Practice % is the pourcentage achievable in reality due to untraceable microtasks. It's usually lower than theory / contract workload."
+    },
+    "outcome": {
+      "carried": "Carry",
+      "backlog": "Backlog",
+      "dropped": "Drop"
+    },
+    "close": {
+      "openTasks": "Open tasks",
+      "nothingOpen": "Everything is done.",
+      "allCarry": "All → next sprint",
+      "allBacklog": "All → backlog",
+      "whatHappens": "What closing writes",
+      "bullet1": "Sprint status becomes closed.",
+      "bullet2": "Each open item receives an outcome.",
+      "bullet3": "Carried items keep sprintTarget; the rest are cleared.",
+      "bullet4": "Velocity is computed from High Impact Done tasks, Admin excluded.",
+      "close": "Close sprint",
+      "openGoals": "Open goals"
+    },
+    "retro": {
+      "title": "Retrospective",
+      "worked": "Worked",
+      "failed": "Didn't",
+      "impediments": "Impediments",
+      "decisions": "Decisions",
+      "checklist": "Curation checklist",
+      "gladSadMad": "Glad–Sad–Mad & interactions between people",
+      "gladSadMadHint": "Support from colleagues, autonomy at work, workload.",
+      "deviations": "Points that led to schedule or goal deviations, and solutions found",
+      "improvements": "Ways to improve comfort and efficiency, tools and processes",
+      "appreciated": "Particularly appreciated situations",
+      "todos": "Follow-up actions (TODOs)",
+      "who5Scale": "Last four weeks · 0 at no time, 5 all of the time",
+      "who5Recorded": "Your response is recorded anonymously. It cannot be changed.",
+      "who5Submit": "Submit anonymously",
+      "who5Aggregate": "{{count}} responses · team aggregate only",
+      "who5None": "No responses yet",
+      "who5Privacy": "One response per person per sprint. Only the team aggregate is visible; individual answers are never shown.",
+      "who5Title": "WHO-5 well-being index"
+    },
+    "open": {
+      "closeFirst": "Close the active sprint before opening the next one.",
+      "noDraft": "No draft is ready.",
+      "goClose": "Go to Close",
+      "goRetro": "Go to Retro",
+      "name": "Name",
+      "goal": "Sprint goal",
+      "end": "End",
+      "committed": "Committed scope",
+      "search": "Filter candidates",
+      "topN": "Top N",
+      "saveDraft": "Save draft",
+      "startDate": "Start",
+      "startSprint": "Start sprint",
+      "candidates": "Sprint goal candidates",
+      "candidatesHelp": "Pick the 2–3 outcomes the team commits to.",
+      "goalCommitment": "Sprint goal commitment",
+      "teamTarget": "Team target",
+      "goalVsBurndown": "The goal is the commitment. The burndown counts every Impact task that reaches Done.",
+      "top3": "Top 3 goals",
+      "length": "Length (weeks)"
+    },
+    "chip": {
+      "draft": "Draft",
+      "sprint": "Sprint",
+      "daysLeft": "{{count}}d left"
+    },
+    "actions": {
+      "close": "Close sprint",
+      "plan": "Sprint planning"
+    },
+    "autoClose": {
+      "title": "Auto-close",
+      "help": "Closes the sprint if nobody did it before the deadline, then optionally prepares the next draft.",
+      "armed": "Armed",
+      "off": "Off",
+      "grace": "Grace period (hours)",
+      "dueAt": "Closes at {{date}}",
+      "policy": "Policy",
+      "policyHelp": {
+        "preselected": "Use the carry, backlog and drop decisions prepared for the sprint goals.",
+        "storyboard": "Carry open goals in Storyboard order.",
+        "carry-all": "Every open goal goes to the next draft.",
+        "backlog-all": "Every open goal goes back to the backlog."
+      },
+      "createDraft": "Create the next draft",
+      "notify": "Notify the team",
+      "preview": "Preview",
+      "previewCarry": "{{count}} goals carried",
+      "previewBacklog": "{{points}} pts to backlog",
+      "previewNext": "Next goal: {{points}} pts",
+      "disarm": "Disarm",
+      "arm": "Arm auto-close",
+      "update": "Update auto-close"
+    },
+    "goal": {
+      "title": "Sprint goal",
+      "items": "{{count}} items · {{points}} pts"
+    },
+    "burndown": {
+      "title": "Impact burndown",
+      "hint": "All Impact Done tasks · target {{target}} pts",
+      "actual": "Actual",
+      "ideal": "Ideal",
+      "projected": "Projected"
+    },
+    "who5": {
+      "q1": "I have felt cheerful and in good spirits",
+      "q2": "I have felt calm and relaxed",
+      "q3": "I have felt active and vigorous",
+      "q4": "I woke up feeling fresh and rested",
+      "q5": "My daily life has been filled with things that interest me",
+      "option": {
+        "0": "At no time",
+        "1": "Some of the time",
+        "2": "Less than half of the time",
+        "3": "More than half of the time",
+        "4": "Most of the time",
+        "5": "All of the time"
+      }
     }
   }
 }

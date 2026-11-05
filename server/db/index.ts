@@ -1,5 +1,12 @@
 // Database client interface and factory
 import { TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, FertilizationBoardEntity, DreamBoardEntity, SalaryBoardEntity, CircleEntity, ReminderEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from '../../src/lib/persistence-types.js';
+import type { SprintStateEntity } from '../../src/lib/sprint-types.js';
+
+export interface SprintWellbeingRecord {
+  userId: string;
+  answers: number[];
+  submittedAt: string;
+}
 
 // Pagination options for queries
 export interface PaginationOptions {
@@ -33,6 +40,7 @@ export interface DbClient {
   updateTask(id: string, data: Partial<TaskEntity>): Promise<TaskEntity | null>;
   deleteTask(id: string): Promise<void>;
   bulkUpdateTaskPriorities(items: { id: string; priority: number | undefined }[]): Promise<void>;
+  bulkUpdateSprintTargets(items: { id: string; sprintTarget: boolean }[]): Promise<void>;
   clearAllTasks(): Promise<void>;
   importTasks(tasks: TaskEntity[]): Promise<void>;
 
@@ -69,6 +77,23 @@ export interface DbClient {
   // Salary Board
   getSalaryBoardState(): Promise<SalaryBoardEntity | null>;
   updateSalaryBoardState(state: SalaryBoardEntity): Promise<void>;
+
+  // Sprint ceremony
+  getSprintState(): Promise<SprintStateEntity | null>;
+  updateSprintState(state: SprintStateEntity): Promise<void>;
+  /**
+   * Write only when the persisted `updatedAt` still matches the expected value
+   * (`null` means "no stored updatedAt yet"). Returns false when another writer
+   * won the race; callers must not touch derived task flags in that case.
+   */
+  compareAndUpdateSprintState(
+    state: SprintStateEntity,
+    expectedUpdatedAt: string | null,
+  ): Promise<boolean>;
+
+  // Sprint well-being (raw answers stay on the server; only aggregates leave)
+  getSprintWellbeing(sprintId: string): Promise<SprintWellbeingRecord[]>;
+  submitSprintWellbeing(sprintId: string, userId: string, answers: number[]): Promise<void>;
 
   // Reminders
   listReminders(userId?: string): Promise<ReminderEntity[]>;

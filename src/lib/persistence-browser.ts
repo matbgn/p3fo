@@ -1,4 +1,15 @@
 import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, SalaryBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from './persistence-types';
+import type { SprintStateEntity, SprintOutcome, SprintWellbeingAggregate } from './sprint-types';
+import {
+  applyClose,
+  buildScopeSnapshot,
+  buildSprintTasks,
+  buildWellbeingAggregate,
+  createEmptySprintState,
+  isTerminalTask,
+  previousClosedTargetPoints,
+  startSprint as startSprintEntity,
+} from './sprint-types';
 import { DEFAULT_POMODORO_CONFIG, DEFAULT_FOCUS_MODE_CONFIG } from './pomodoro-types';
 import { DEFAULT_TRAVELER_CONFIG } from './traveler-types';
 
@@ -11,6 +22,8 @@ const FILTERS_STORAGE_KEY = 'taskFilters';
 const FERTILIZATION_BOARD_STORAGE_KEY = 'fertilizationBoard';
 const DREAM_BOARD_STORAGE_KEY = 'dreamBoard';
 const SALARY_BOARD_STORAGE_KEY = 'salaryBoard';
+const SPRINT_STATE_STORAGE_KEY = 'sprintState';
+const SPRINT_WELLBEING_STORAGE_KEY = 'p3fo_sprint_wellbeing_v1';
 const CIRCLES_STORAGE_KEY = 'p3fo_circles_v1';
 const REMINDERS_STORAGE_KEY = 'p3fo_reminders_v1';
 const FRAMEWORKS_STORAGE_KEY = 'p3fo_frameworks_v1';
@@ -51,6 +64,8 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
 };
 
 export class BrowserJsonPersistence implements PersistenceAdapter {
+  readonly mode = 'browser' as const;
+
   async listTasks(userId?: string, excludeStatuses?: string[]): Promise<TaskEntity[]> {
     if (typeof window === 'undefined') {
       return [];
@@ -546,6 +561,177 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
   }
 
+  // Sprint ceremony
+  async getSprintState(): Promise<SprintStateEntity | null> {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    try {
+      const stored = localStorage.getItem(SPRINT_STATE_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : null;
+    } catch (error) {
+      console.error('Error reading sprint state from localStorage:', error);
+      return null;
+    }
+  }
+
+  async updateSprintState(
+    state: SprintStateEntity,
+    _options?: { baseUpdatedAt?: string; force?: boolean },
+  ): Promise<void> {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      localStorage.setItem(SPRINT_STATE_STORAGE_KEY, JSON.stringify(state));
+    } catch (error) {
+      console.error('Error updating sprint state in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async bulkUpdateSprintTargets(items: { id: string; sprintTarget: boolean }[]): Promise<void> {
+    if (typeof window === 'undefined' || items.length === 0) {
+      return;
+    }
+
+    try {
+      const tasks = await this.listTasks();
+      const updates = new Map(items.map((item) => [item.id, item.sprintTarget]));
+      for (const task of tasks) {
+        const next = updates.get(task.id);
+        if (next !== undefined) task.sprintTarget = next;
+      }
+      localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
+    } catch (error) {
+      console.error('Error bulk updating sprint targets in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async closeSprint(
+    sprintId: string,
+    outcomes: Record<string, SprintOutcome>,
+    timeZone = 'Europe/Zurich',
+  ): Promise<SprintStateEntity> {
+    const state = (await this.getSprintState()) ?? createEmptySprintState();
+    const sprint = state.sprints.find((candidate) => candidate.id === sprintId);
+    if (!sprint) throw new Error('Sprint not found');
+    if (sprint.status !== 'active') throw new Error('Only an active sprint can be closed');
+
+    const tasks = buildSprintTasks(await this.listTasks());
+    const closed = applyClose(
+      sprint,
+      tasks,
+      outcomes,
+      previousClosedTargetPoints(state, sprint),
+      'manual',
+      new Date().toISOString(),
+      timeZone,
+    );
+    const next: SprintStateEntity = {
+      ...state,
+      sprints: state.sprints.map((candidate) =>
+        candidate.id === sprint.id ? closed : candidate,
+      ),
+      activeSprintId: state.activeSprintId === sprint.id ? null : state.activeSprintId,
+      updatedAt: new Date().toISOString(),
+    };
+    const taskById = new Map(tasks.map((task) => [task.id, task]));
+    await this.bulkUpdateSprintTargets(
+      closed.scope
+        .map((item) => ({
+          id: item.taskId,
+          sprintTarget: item.outcome === 'carried',
+        }))
+        .filter(
+          (update) => Boolean(taskById.get(update.id)?.sprintTarget) !== update.sprintTarget,
+        ),
+    );
+    await this.updateSprintState(next);
+    return next;
+  }
+
+  async startSprint(
+    sprintId: string,
+    taskIds?: string[],
+    timeZone = 'Europe/Zurich',
+  ): Promise<SprintStateEntity> {
+    const state = (await this.getSprintState()) ?? createEmptySprintState();
+    const sprint = state.sprints.find((candidate) => candidate.id === sprintId);
+    if (!sprint) throw new Error('Sprint not found');
+    if (sprint.status !== 'draft') throw new Error('Only a draft sprint can be started');
+    if (state.activeSprintId && state.activeSprintId !== sprint.id) {
+      throw new Error('Another sprint is already active');
+    }
+
+    const entities = await this.listTasks();
+    const tasks = buildSprintTasks(entities);
+    const taskById = new Map(tasks.map((task) => [task.id, task]));
+    const scope = buildScopeSnapshot(
+      (taskIds ?? sprint.scope.map((item) => item.taskId)).filter(
+        (taskId) => !isTerminalTask(taskById.get(taskId)),
+      ),
+      tasks,
+    );
+    const started = startSprintEntity(
+      sprint,
+      scope,
+      tasks,
+      previousClosedTargetPoints(state, sprint),
+      new Date().toISOString(),
+      timeZone,
+    );
+    const next: SprintStateEntity = {
+      ...state,
+      sprints: state.sprints.map((candidate) =>
+        candidate.id === sprint.id ? started : candidate,
+      ),
+      activeSprintId: started.id,
+      draftSprintId: null,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const scopeIds = new Set(scope.map((item) => item.taskId));
+    const updates = entities
+      .filter((entity) => Boolean(entity.sprintTarget) !== scopeIds.has(entity.id))
+      .map((entity) => ({ id: entity.id, sprintTarget: scopeIds.has(entity.id) }));
+    await this.bulkUpdateSprintTargets(updates);
+    await this.updateSprintState(next);
+    return next;
+  }
+
+  private readWellbeingStore(): Record<string, Record<string, { answers: number[]; submittedAt: string }>> {
+    if (typeof window === 'undefined') return {};
+    try {
+      const raw = localStorage.getItem(SPRINT_WELLBEING_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  async getSprintWellbeing(sprintId: string, userId: string): Promise<{ answered: boolean; aggregate: SprintWellbeingAggregate | null }> {
+    const sprint = this.readWellbeingStore()[sprintId] ?? {};
+    const responses = Object.values(sprint);
+    return {
+      answered: Boolean(sprint[userId]),
+      aggregate: buildWellbeingAggregate(responses.map((entry) => entry.answers)),
+    };
+  }
+
+  async submitSprintWellbeing(sprintId: string, userId: string, answers: number[]): Promise<{ answered: boolean; aggregate: SprintWellbeingAggregate | null }> {
+    const store = this.readWellbeingStore();
+    store[sprintId] = store[sprintId] ?? {};
+    if (!store[sprintId][userId]) {
+      store[sprintId][userId] = { answers, submittedAt: new Date().toISOString() };
+      localStorage.setItem(SPRINT_WELLBEING_STORAGE_KEY, JSON.stringify(store));
+    }
+    return this.getSprintWellbeing(sprintId, userId);
+  }
+
   // Reminders
   async listReminders(userId?: string): Promise<ReminderEntity[]> {
     if (typeof window === 'undefined') {
@@ -697,6 +883,8 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       localStorage.removeItem(FERTILIZATION_BOARD_STORAGE_KEY);
       localStorage.removeItem(DREAM_BOARD_STORAGE_KEY);
       localStorage.removeItem(SALARY_BOARD_STORAGE_KEY);
+      localStorage.removeItem(SPRINT_STATE_STORAGE_KEY);
+      localStorage.removeItem(SPRINT_WELLBEING_STORAGE_KEY);
       localStorage.removeItem(REMINDERS_STORAGE_KEY);
       localStorage.removeItem(CIRCLES_STORAGE_KEY);
       localStorage.removeItem(FRAMEWORKS_STORAGE_KEY);

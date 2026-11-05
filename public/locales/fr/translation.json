@@ -213,6 +213,10 @@
     "loadingFocusStats": "Chargement des statistiques de session de focus...",
     "collaborativeTitle": "Métriques collaboratives",
     "individualTitle": "Métriques individuelles",
+    "subview": {
+      "collaborative": "Collaboratif",
+      "individual": "Individuel"
+    },
     "selectUser": "Sélectionner un·e utilisateur·rice",
     "selectUserQol": "Veuillez sélectionner un·e utilisateur·rice pour voir le sondage",
     "selectUserFocus": "Veuillez sélectionner un·e utilisateur·rice pour voir les statistiques de session de focus",
@@ -1871,6 +1875,173 @@
       "name": "Préparation de séance",
       "parentTitle": "Première",
       "childAnnounce": "Finaliser l'affichage et les annonces"
+    }
+  },
+  "sprint": {
+    "ceremony": "Cérémonie de sprint",
+    "newSprint": "Nouveau sprint",
+    "noSprint": "Pas encore de sprint",
+    "noSprintHelp": "Créez un brouillon, choisissez le périmètre, puis démarrez-le.",
+    "createDraft": "Créer un brouillon",
+    "scope": "Périmètre",
+    "scopeEmpty": "Aucun périmètre sélectionné.",
+    "back": "Retour",
+    "next": "Suivant",
+    "stepOf": "Étape {{current}} sur {{total}}",
+    "step": {
+      "review": "Revue",
+      "close": "Clôture",
+      "retro": "Rétro",
+      "open": "Ouverture"
+    },
+    "kpi": {
+      "committed": "Engagé",
+      "tasks": "{{count}} tâches",
+      "scopeDone": "Périmètre terminé",
+      "open": "À reporter",
+      "openHint": "si clôturé maintenant",
+      "velocity": "Dernière vélocité",
+      "velocityHint": "High Impact, Admin exclu",
+      "velocityTarget": "cible {{target}} pts",
+      "goal": "Objectif du sprint",
+      "goalHint": "{{count}} objectifs",
+      "goalDone": "Objectif atteint",
+      "impactDone": "Impact réalisé",
+      "impactHint": "tous les Impacts terminés, Admin exclu",
+      "remaining": "Restant jusqu'à la cible",
+      "remainingHint": "cible {{target}} pts"
+    },
+    "capacity": {
+      "theoretical": "Points théoriques",
+      "practice": "% pratique",
+      "practiceHint": "saisie de planification d'équipe",
+      "target": "Cible",
+      "workingDays": "Jours ouvrés",
+      "costPerDay": "Coût par jour d'impediment",
+      "impediments": "Impediments en jours",
+      "impedimentLabel": "Libellé",
+      "people": "Personnes % (ETP contrat)",
+      "practiceHelp": "Le % pratique est le pourcentage réellement atteignable en raison des microtâches non traçables. Il est généralement inférieur à la charge théorique / contractuelle."
+    },
+    "outcome": {
+      "carried": "Reporter",
+      "backlog": "Backlog",
+      "dropped": "Abandonner"
+    },
+    "close": {
+      "openTasks": "Tâches ouvertes",
+      "nothingOpen": "Tout est terminé.",
+      "allCarry": "Tout → prochain sprint",
+      "allBacklog": "Tout → backlog",
+      "whatHappens": "Ce que la clôture enregistre",
+      "bullet1": "Le sprint passe au statut clôturé.",
+      "bullet2": "Chaque élément ouvert reçoit une issue.",
+      "bullet3": "Les éléments reportés conservent sprintTarget ; les autres sont effacés.",
+      "bullet4": "La vélocité est calculée à partir des tâches High Impact terminées, Admin exclu.",
+      "close": "Clôturer le sprint",
+      "openGoals": "Objectifs ouverts"
+    },
+    "retro": {
+      "title": "Rétrospective",
+      "worked": "A marché",
+      "failed": "N'a pas marché",
+      "impediments": "Impediments",
+      "decisions": "Décisions",
+      "checklist": "Checklist de curation",
+      "gladSadMad": "Glad–Sad–Mad et interactions entre les personnes",
+      "gladSadMadHint": "Soutien des collègues, autonomie au travail, charge de travail.",
+      "deviations": "Points ayant entraîné des écarts de planning ou d'objectif, et solutions trouvées",
+      "improvements": "Façons d'améliorer le confort et l'efficacité, outils et processus",
+      "appreciated": "Situations particulièrement appréciées",
+      "todos": "Actions de suivi (TODOs)",
+      "who5Scale": "Quatre dernières semaines · 0 jamais, 5 tout le temps",
+      "who5Recorded": "Votre réponse est enregistrée anonymement. Elle ne peut pas être modifiée.",
+      "who5Submit": "Envoyer anonymement",
+      "who5Aggregate": "{{count}} réponses · agrégat d'équipe uniquement",
+      "who5None": "Aucune réponse pour l'instant",
+      "who5Privacy": "Une réponse par personne et par sprint. Seul l'agrégat d'équipe est visible ; les réponses individuelles ne sont jamais affichées.",
+      "who5Title": "Indice de bien-être WHO-5"
+    },
+    "open": {
+      "closeFirst": "Clôturez le sprint actif avant d'ouvrir le suivant.",
+      "noDraft": "Aucun brouillon n'est prêt.",
+      "goClose": "Aller à la clôture",
+      "goRetro": "Aller à la rétro",
+      "name": "Nom",
+      "goal": "Objectif du sprint",
+      "end": "Fin",
+      "committed": "Périmètre engagé",
+      "search": "Filtrer les candidats",
+      "topN": "Top N",
+      "saveDraft": "Enregistrer le brouillon",
+      "startDate": "Début",
+      "startSprint": "Démarrer le sprint",
+      "candidates": "Candidats à l'objectif du sprint",
+      "candidatesHelp": "Choisissez les 2–3 résultats auxquels l'équipe s'engage.",
+      "goalCommitment": "Engagement sur l'objectif du sprint",
+      "teamTarget": "Cible de l'équipe",
+      "goalVsBurndown": "L'objectif est l'engagement. Le burndown compte chaque tâche Impact qui passe à Terminé.",
+      "top3": "Top 3 objectifs",
+      "length": "Durée (semaines)"
+    },
+    "chip": {
+      "draft": "Brouillon",
+      "sprint": "Sprint",
+      "daysLeft": "{{count}}j restants"
+    },
+    "actions": {
+      "close": "Clôturer le sprint",
+      "plan": "Planification du sprint"
+    },
+    "autoClose": {
+      "title": "Clôture automatique",
+      "help": "Clôture le sprint si personne ne l'a fait avant l'échéance, puis prépare éventuellement le prochain brouillon.",
+      "armed": "Armée",
+      "off": "Désactivée",
+      "grace": "Délai de grâce (heures)",
+      "dueAt": "Clôture le {{date}}",
+      "policy": "Politique",
+      "policyHelp": {
+        "preselected": "Utiliser les décisions reporter/backlog/abandon préparées pour les objectifs du sprint.",
+        "storyboard": "Reporter les objectifs ouverts dans l'ordre du Storyboard.",
+        "carry-all": "Chaque objectif ouvert passe au prochain brouillon.",
+        "backlog-all": "Chaque objectif ouvert retourne au backlog."
+      },
+      "createDraft": "Créer le prochain brouillon",
+      "notify": "Notifier l'équipe",
+      "preview": "Aperçu",
+      "previewCarry": "{{count}} objectifs reportés",
+      "previewBacklog": "{{points}} pts vers le backlog",
+      "previewNext": "Prochain objectif : {{points}} pts",
+      "disarm": "Désarmer",
+      "arm": "Armer la clôture automatique",
+      "update": "Mettre à jour la clôture automatique"
+    },
+    "goal": {
+      "title": "Objectif du sprint",
+      "items": "{{count}} éléments · {{points}} pts"
+    },
+    "burndown": {
+      "title": "Burndown des Impacts",
+      "hint": "Toutes les tâches Impact terminées · cible {{target}} pts",
+      "actual": "Réel",
+      "ideal": "Idéal",
+      "projected": "Projeté"
+    },
+    "who5": {
+      "q1": "Je me suis senti(e) joyeux(se) et de bonne humeur",
+      "q2": "Je me suis senti(e) calme et détendu(e)",
+      "q3": "Je me suis senti(e) actif(ve) et vigoureux(se)",
+      "q4": "Je me suis réveillé(e) en me sentant frais(se) et reposé(e)",
+      "q5": "Ma vie quotidienne a été remplie de choses qui m'intéressent",
+      "option": {
+        "0": "Jamais",
+        "1": "De temps en temps",
+        "2": "Moins de la moitié du temps",
+        "3": "Plus de la moitié du temps",
+        "4": "La plupart du temps",
+        "5": "Tout le temps"
+      }
     }
   }
 }

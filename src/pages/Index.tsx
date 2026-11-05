@@ -31,6 +31,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { LazyErrorBoundary } from "@/components/ui/lazy-error-boundary";
 import ExampleDataModal, { EXAMPLE_DATA_PROMPTED_KEY } from "@/components/ExampleDataModal";
 import { useHasTasks } from "@/hooks/useTasks";
+import { useSprintAutoCloseSweep } from "@/hooks/useSprints";
 
 const LazyWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { t } = useTranslation();
@@ -62,6 +63,7 @@ const activeStyle: React.CSSProperties = {
 };
 
 const Index: React.FC = () => {
+  useSprintAutoCloseSweep();
   const { view, setView, focusedTaskId, handleFocusOnTask, disabledModules } = useViewNavigation();
 
   const handleNavigateToFocusSessions = useCallback(() => {
