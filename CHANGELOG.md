@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.37.0 (2026-11-05)
+
+### Features
+
+- **sprint:** add sprint ceremony with burndown chart and auto-close (a24a225)
+- **timetable:** add manual time entry creation (e2a8946)
+
+### Bug Fixes
+
+- **metrics:** keep workload on month rollover (06dddbb)
+
+---
+
 ## v0.36.0 (2026-11-03)
 
 ### Features
@@ -166,13 +179,5 @@
 ### Bug Fixes
 
 - **tasks:** keep card controls mounted while dropdown open (3bebbce)
-
----
-
-## v0.28.1 (2026-06-23)
-
-### Bug Fixes
-
-- **boards:** persist Yjs-synced BlockNote content to DB snapshot (4afff10)
 
 ---
