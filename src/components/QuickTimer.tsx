@@ -196,7 +196,7 @@ const LastStoppedTaskBlock: React.FC<{
     <>
       <button
         onClick={() => onJumpToTask && taskId && onJumpToTask(taskId)}
-        className="text-xs sm:text-sm text-muted-foreground/60 hover:text-muted-foreground cursor-pointer hover:underline transition-colors truncate"
+        className="text-xs sm:text-sm text-muted-foreground/60 hover:text-muted-foreground cursor-pointer hover:underline transition-colors truncate min-w-0"
         title={title}
       >
         {truncateTitle(title)}
@@ -695,10 +695,10 @@ export const QuickTimer: React.FC<{
   if (!hasAnyContent) return null;
 
   return (
-<div className="flex flex-col items-center min-[512px]:flex-row gap-1 min-[512px]:gap-1.5 px-2 min-[512px]:px-3 py-1 min-[512px]:py-1 bg-gray-100 rounded-lg min-h-[36px] min-[512px]:min-h-[40px] w-full min-[630px]:w-auto">
+<div className="flex flex-col items-center min-[512px]:flex-row gap-1 min-[512px]:gap-1.5 px-2 min-[512px]:px-3 py-1 min-[512px]:py-1 bg-gray-100 rounded-lg min-h-[36px] min-[512px]:min-h-[40px] w-full min-[630px]:w-auto min-w-0">
       {/* ===== TASK ZONE (top on mobile, right on desktop) ===== */}
       {runningTask ? (
-        <div className="flex items-center gap-1 min-[512px]:gap-1.5 order-1 min-[630px]:order-2 w-auto min-[512px]:w-full min-[630px]:w-auto">
+        <div className="flex items-center gap-1 min-[512px]:gap-1.5 order-1 min-[630px]:order-2 w-auto min-[512px]:w-full min-[630px]:w-auto min-w-0">
           <TaskRunningBlock
             title={runningTask.task.title}
             elapsed={elapsedTime}
@@ -712,7 +712,7 @@ export const QuickTimer: React.FC<{
           />
         </div>
       ) : lastStoppedTask ? (
-        <div className="flex items-center gap-1 min-[512px]:gap-1.5 order-1 min-[630px]:order-2 w-auto min-[512px]:w-full min-[630px]:w-auto">
+        <div className="flex items-center gap-1 min-[512px]:gap-1.5 order-1 min-[630px]:order-2 w-auto min-[512px]:w-full min-[630px]:w-auto min-w-0">
           <LastStoppedTaskBlock
             title={lastStoppedTask.task.title}
             onResume={() => toggleTimer(lastStoppedTask.task.id, currentUserId)}
