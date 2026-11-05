@@ -171,10 +171,16 @@ changelog:
 
 docker-build version="$(git-sv cv)":
   #!/usr/bin/env bash
-  @echo "Using version: {{version}}"
+  echo "Using version: {{version}}"
   set -e
+  set -o pipefail
   echo "Creating tar files for deployment..."
   mkdir -p ~/Dev/itpark/infrastructure-as-code/ansible/dist/
+
+  if ! command -v zstd >/dev/null 2>&1; then
+    echo "Error: zstd is required to compress the deployment archive (brew install zstd / apt install zstd)." >&2
+    exit 1
+  fi
 
   echo "Building p3fo docker image with version {{version}}..."
 
@@ -196,11 +202,23 @@ docker-build version="$(git-sv cv)":
     echo "Tagging p3fo docker image with version {{version}}..."
     # docker tag is already done above, but ensuring latest is updated
     docker tag p3fo:latest p3fo:latest
-    echo "Saving p3fo docker image to tar file..."
-    docker save -o ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar "{{DOCKER_IMAGE_NAME}}":"{{version}}"
-    echo "Tar file created successfully: ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar"
+    echo "Saving p3fo docker image to compressed tar file (zstd)..."
+    docker save "{{DOCKER_IMAGE_NAME}}":"{{version}}" \
+      | zstd -T0 -3 -q -f -o ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar.zst
+    rm -f ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar
+    echo "Compressed tar file created: ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar.zst ($(du -h --apparent-size ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar.zst | cut -f1))"
   else
     echo "p3fo docker image has not changed"
+    # Migrate an existing uncompressed archive once, so repeated deploys also
+    # benefit from the smaller upload.
+    if [ ! -f ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar.zst ] \
+       && [ -f ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar ]; then
+      echo "Compressing existing p3fo.tar (one-off migration)..."
+      zstd -T0 -3 -q -f -o ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar.zst \
+        ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar
+      rm -f ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar
+      echo "Compressed tar file created: ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar.zst ($(du -h --apparent-size ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar.zst | cut -f1))"
+    fi
   fi
 
 # --- Docker Compose Run Task (with build) ---
