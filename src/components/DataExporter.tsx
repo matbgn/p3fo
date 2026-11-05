@@ -65,6 +65,9 @@ const DataExporter: React.FC = () => {
       // Fetch Salary Board state
       const salaryBoardState = await adapter.getSalaryBoardState();
 
+      // Fetch sprint ceremony state
+      const sprintState = await adapter.getSprintState();
+
       // Fetch ALL reminders
       const allReminders = await adapter.listReminders();
 
@@ -97,13 +100,14 @@ const DataExporter: React.FC = () => {
       const taskTemplates = getAllTemplates();
 
       const exportData = {
-        schemaVersion: 4,
+        schemaVersion: 5,
         tasks: allTasks,
         scheduledReminders: allReminders,
         qolSurveyResponses: allQolSurveyResponses,
 fertilizationBoard: fertilizationBoardState,
 dreamBoard: dreamBoardState,
 salaryBoard: salaryBoardState,
+        sprintState,
         circles: allCircles,
         frameworks: allFrameworks,
         settings: settingsToExport,

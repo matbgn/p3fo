@@ -26,7 +26,7 @@ function findPackageJson(): { version: string } {
 const pkg = findPackageJson();
 
 const traceExporter = new OTLPTraceExporter({
-  url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://localhost:4318/v1/traces',
+  url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://localhost:14318/v1/traces',
 });
 
 const sdk = new NodeSDK({
@@ -38,7 +38,7 @@ const sdk = new NodeSDK({
     }),
   ],
   resource: resourceFromAttributes({
-    [SemanticResourceAttributes.SERVICE_NAME]: 'p3fo-backend',
+    [SemanticResourceAttributes.SERVICE_NAME]: process.env.OTEL_SERVICE_NAME || 'p3fo-backend',
     [SemanticResourceAttributes.SERVICE_VERSION]: pkg.version,
   }),
 });

@@ -57,6 +57,8 @@ export function useAllTasks() {
 
     return {
         tasks,
-        loading
+        loading,
+        // True when `tasks` is the complete workspace list, not a filtered subset.
+        isFullList: !isFiltered || Boolean(fetchedTasks),
     };
 }

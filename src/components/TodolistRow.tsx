@@ -48,13 +48,14 @@ import { formatDuration } from "@/lib/format-utils";
 import { format } from "date-fns";
 import { addReminder } from "@/utils/reminders";
 import { useReminderStore } from "@/hooks/useReminders";
+import { useShallow } from "zustand/react/shallow";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { useSettingsContext } from "@/context/SettingsContext";
 import { Calendar } from "@/components/ui/calendar";
 import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
 import { TaskEditModal } from "./TaskEditModal";
 import { QuickAddTask } from "./QuickAddTask";
-import { TimeSheet } from "./TimeSheet";
+import { TimeSheetDialog } from "./TimeSheetDialog";
 import { Badge } from "@/components/ui/badge";
 import {
   LiveTimeBadge,
@@ -74,6 +75,9 @@ export type TodolistRowData = {
 interface TodolistRowProps {
   row: TodolistRowData;
   tasks: Task[];
+  subtasks?: Task[];
+  tasksForModal?: Task[];
+  onEditModalOpenChange?: (taskId: string, open: boolean) => void;
   onToggleExpand: (taskId: string) => void;
   updateStatus: (id: string, status: TriageStatus) => void;
   updateDifficulty: (id: string, difficulty: 0.5 | 1 | 2 | 3 | 5 | 8) => void;
@@ -98,9 +102,60 @@ interface TodolistRowProps {
   scrollTodolistRowRef?: React.MutableRefObject<Map<string, HTMLElement>>;
 }
 
+const sameTaskList = (a?: Task[], b?: Task[]): boolean => {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+};
+
+function areTodolistRowPropsEqual(prev: TodolistRowProps, next: TodolistRowProps): boolean {
+  if (prev.row.task !== next.row.task) return false;
+  if (prev.row.depth !== next.row.depth) return false;
+  if (prev.row.hasChildren !== next.row.hasChildren) return false;
+  if (prev.row.isExpanded !== next.row.isExpanded) return false;
+  if (prev.isHighlighted !== next.isHighlighted) return false;
+  if (prev.scrollTodolistRowRef !== next.scrollTodolistRowRef) return false;
+  if (!sameTaskList(prev.subtasks, next.subtasks)) return false;
+  if (prev.tasksForModal !== next.tasksForModal) return false;
+  if (prev.onEditModalOpenChange !== next.onEditModalOpenChange) return false;
+
+  const functionKeys: (keyof TodolistRowProps)[] = [
+    'onToggleExpand',
+    'updateStatus',
+    'updateDifficulty',
+    'updateCategory',
+    'updateTitle',
+    'updateComment',
+    'updateTerminationDate',
+    'updateDurationInMinutes',
+    'updateUser',
+    'deleteTask',
+    'duplicateTaskStructure',
+    'toggleUrgent',
+    'toggleImpact',
+    'toggleMajorIncident',
+    'toggleSprintTarget',
+    'toggleDone',
+    'toggleTimer',
+    'createTask',
+    'onFocusOnTask',
+    'onRowClick',
+  ];
+  for (const key of functionKeys) {
+    if (prev[key] !== next[key]) return false;
+  }
+  return true;
+}
+
 export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
   row,
   tasks,
+  subtasks,
+  tasksForModal,
+  onEditModalOpenChange,
   onToggleExpand,
   updateStatus,
   updateDifficulty,
@@ -138,20 +193,33 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
   const [durationValue, setDurationValue] = React.useState(task.durationInMinutes || "");
   const [offsetMinutes, setOffsetMinutes] = React.useState(-1);
   const [timePickerOpen, setTimePickerOpen] = React.useState(false);
-  const { scheduledReminders, reminders, updateScheduledReminderTriggerDate, dismissReminder } = useReminderStore();
+  const scheduledReminders = useReminderStore(
+    useShallow(state => state.scheduledReminders.filter(r => r.taskId === task.id)),
+  );
+  const reminders = useReminderStore(
+    useShallow(state => state.reminders.filter(r => r.taskId === task.id)),
+  );
+  const updateScheduledReminderTriggerDate = useReminderStore(state => state.updateScheduledReminderTriggerDate);
+  const dismissReminder = useReminderStore(state => state.dismissReminder);
   const { userId: currentUserId } = useUserSettings();
   const { settings } = useSettingsContext();
   const weekStartsOn = settings.weekStartDay as 0 | 1;
 
   const canHaveTimer = !hasChildren;
   const isDone = task.triageStatus === "Done" || task.triageStatus === "Dropped";
+  const effectiveSubtasks = subtasks ?? tasks;
+  const effectiveModalTasks = tasksForModal ?? tasks;
 
   const totalDifficulty = hasChildren
     ? (task.children || []).reduce((sum, childId) => {
-        const child = tasks.find(t => t.id === childId);
+        const child = effectiveSubtasks.find(t => t.id === childId);
         return sum + (child?.difficulty || 0);
       }, 0)
     : task.difficulty || 0;
+
+  React.useLayoutEffect(() => {
+    onEditModalOpenChange?.(task.id, isEditModalOpen);
+  }, [isEditModalOpen, task.id, onEditModalOpenChange]);
 
   React.useEffect(() => {
     setCommentText(task.comment || "");
@@ -552,7 +620,7 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
       {isEditModalOpen && (
         <TaskEditModal
           task={task}
-          tasks={tasks}
+          tasks={effectiveModalTasks}
           isOpen={isEditModalOpen}
           onClose={() => setIsEditModalOpen(false)}
           updateTitle={updateTitle}
@@ -574,14 +642,14 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
 
       {isCommentModalOpen && (
         <Dialog open={isCommentModalOpen} onOpenChange={setIsCommentModalOpen}>
-          <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col" aria-describedby={undefined}>
+          <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden" aria-describedby={undefined}>
             <DialogHeader>
               <DialogTitle>{t('task.editCommentTitle', { title: task.title })}</DialogTitle>
               <DialogDescription className="sr-only">
                 {t('task.editCommentDescription', { title: task.title })}
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
+            <div className="grid gap-4 py-4 flex-1 min-h-0 overflow-y-auto">
               <div className="grid gap-2">
                 <label htmlFor="todolist-comment" className="sr-only">{t('task.commentLabel')}</label>
                 <RichTextField
@@ -593,7 +661,7 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
                 />
               </div>
             </div>
-            <div className="flex justify-end">
+            <div className="flex justify-end shrink-0">
               <Button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -608,20 +676,13 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
         </Dialog>
       )}
 
-      {canHaveTimer && isTimeSheetOpen && (
-        <Dialog open={isTimeSheetOpen} onOpenChange={setIsTimeSheetOpen}>
-          <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col p-0" aria-describedby={undefined}>
-            <DialogHeader className="p-6 pb-4">
-              <DialogTitle>{t('task.timeSheetTitle', { title: task.title })}</DialogTitle>
-              <DialogDescription className="sr-only">
-                {t('task.timeSheetDescription', { title: task.title })}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex-grow overflow-y-auto px-6 pb-6">
-              <TimeSheet taskId={task.id} />
-            </div>
-          </DialogContent>
-        </Dialog>
+      {canHaveTimer && (
+        <TimeSheetDialog
+          taskId={task.id}
+          taskTitle={task.title}
+          open={isTimeSheetOpen}
+          onOpenChange={setIsTimeSheetOpen}
+        />
       )}
 
       <TimePickerDialog
@@ -635,4 +696,4 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
       />
     </div>
   );
-});
+}, areTodolistRowPropsEqual);

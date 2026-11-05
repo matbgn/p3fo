@@ -36,7 +36,11 @@ interface TodolistViewProps {
   scrollTodolistRowRef: React.MutableRefObject<Map<string, HTMLElement>>;
   expandedParents: Set<string>;
   onToggleExpand: (taskId: string) => void;
+  editTaskId?: string | null;
+  onEditModalOpenChange?: (taskId: string, open: boolean) => void;
 }
+
+const EMPTY_TASKS: Task[] = [];
 
 const TodolistView: React.FC<TodolistViewProps> = ({
   tasks,
@@ -66,6 +70,8 @@ const TodolistView: React.FC<TodolistViewProps> = ({
   scrollTodolistRowRef,
   expandedParents,
   onToggleExpand,
+  editTaskId,
+  onEditModalOpenChange,
 }) => {
   const { t } = useTranslation();
   const map = useMemo(() => {
@@ -173,11 +179,18 @@ const TodolistView: React.FC<TodolistViewProps> = ({
           {flattenedRows.length === 0 ? (
             <div className="text-xs text-muted-foreground px-4 py-8">{t('todolist.noTasksMatch')}</div>
           ) : (
-            flattenedRows.map(row => (
+            flattenedRows.map(row => {
+              const subtasks = (row.task.children || [])
+                .map(id => map.get(id))
+                .filter((child): child is Task => !!child);
+              return (
               <LazyRow key={row.task.id}>
                 <TodolistRow
                   row={row}
                   tasks={tasks}
+                  subtasks={subtasks}
+                  tasksForModal={editTaskId === row.task.id ? tasks : EMPTY_TASKS}
+                  onEditModalOpenChange={onEditModalOpenChange}
                   onToggleExpand={onToggleExpand}
                   updateStatus={updateStatus}
                   updateDifficulty={updateDifficulty}
@@ -202,7 +215,8 @@ const TodolistView: React.FC<TodolistViewProps> = ({
                   scrollTodolistRowRef={scrollTodolistRowRef}
                 />
               </LazyRow>
-            ))
+              );
+            })
           )}
           <div className="h-[50px] shrink-0" aria-hidden="true" />
         </div>

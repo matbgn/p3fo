@@ -1,4 +1,5 @@
 import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, SalaryBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from './persistence-types';
+import type { SprintStateEntity, SprintOutcome } from './sprint-types';
 import { DEFAULT_TASKS_INITIALIZED_KEY } from '@/hooks/useTasks';
 
 let authRedirectPending = false;
@@ -9,6 +10,7 @@ function handleAuthRedirect() {
 }
 
 export class HttpApiPersistence implements PersistenceAdapter {
+  readonly mode = 'http' as const;
   private baseUrl: string;
 
   constructor(apiUrl: string) {
@@ -82,6 +84,13 @@ export class HttpApiPersistence implements PersistenceAdapter {
 
   async bulkUpdateTaskPriorities(items: { id: string; priority: number | undefined }[]): Promise<void> {
     await this.makeRequest('/api/tasks/bulk-priorities', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    });
+  }
+
+  async bulkUpdateSprintTargets(items: { id: string; sprintTarget: boolean }[]): Promise<void> {
+    await this.makeRequest('/api/tasks/bulk-sprint-targets', {
       method: 'POST',
       body: JSON.stringify({ items }),
     });
@@ -237,6 +246,59 @@ export class HttpApiPersistence implements PersistenceAdapter {
     });
   }
 
+  // Sprint ceremony
+  async getSprintState(): Promise<SprintStateEntity | null> {
+    return this.makeRequest('/api/sprint-state');
+  }
+
+  async updateSprintState(
+    state: SprintStateEntity,
+    options: { baseUpdatedAt?: string; force?: boolean } = {},
+  ): Promise<void> {
+    const body: Record<string, unknown> = { ...state };
+    if (options.baseUpdatedAt) body.baseUpdatedAt = options.baseUpdatedAt;
+    if (options.force) body.force = true;
+    await this.makeRequest('/api/sprint-state', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async closeSprint(
+    sprintId: string,
+    outcomes: Record<string, SprintOutcome>,
+    _timeZone?: string,
+  ): Promise<SprintStateEntity> {
+    return this.makeRequest('/api/sprint-state/close', {
+      method: 'POST',
+      body: JSON.stringify({ sprintId, outcomes }),
+    });
+  }
+
+  async startSprint(
+    sprintId: string,
+    taskIds?: string[],
+    _timeZone?: string,
+  ): Promise<SprintStateEntity> {
+    return this.makeRequest('/api/sprint-state/start', {
+      method: 'POST',
+      body: JSON.stringify({ sprintId, taskIds }),
+    });
+  }
+
+  async getSprintWellbeing(sprintId: string, userId: string) {
+    return this.makeRequest(
+      `/api/sprint-wellbeing/${encodeURIComponent(sprintId)}?userId=${encodeURIComponent(userId)}`,
+    );
+  }
+
+  async submitSprintWellbeing(sprintId: string, userId: string, answers: number[]) {
+    return this.makeRequest(`/api/sprint-wellbeing/${encodeURIComponent(sprintId)}`, {
+      method: 'POST',
+      body: JSON.stringify({ userId, answers }),
+    });
+  }
+
   // Reminders
   async listReminders(userId?: string): Promise<ReminderEntity[]> {
     const endpoint = userId ? `/api/reminders?user_id=${encodeURIComponent(userId)}` : '/api/reminders';
@@ -244,7 +306,16 @@ export class HttpApiPersistence implements PersistenceAdapter {
   }
 
   async getReminderById(id: string): Promise<ReminderEntity | null> {
-    return this.makeRequest(`/api/reminders/${id}`);
+    try {
+      return await this.makeRequest(`/api/reminders/${id}`);
+    } catch (error) {
+      // A missing reminder is expected before the first save; treat the 404
+      // as null so callers can create it instead of failing.
+      if (error instanceof Error && error.message.includes('404')) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   async createReminder(input: Partial<ReminderEntity>): Promise<ReminderEntity> {

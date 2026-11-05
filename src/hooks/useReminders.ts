@@ -414,19 +414,72 @@ export const useReminderStore = create<ReminderStore>((set, get) => ({
 
 export const useReminders = () => useReminderStore();
 
-// Auto-persist: save all reminders to storage whenever they change
+// Auto-persist: save only reminders whose object identity changed.
 let persistenceTimer: ReturnType<typeof setTimeout> | null = null;
+let suppressPersistence = false;
+let pendingUserId: string | null = null;
+const pendingReminderIds = new Set<string>();
+
+const scheduleReminderPersistence = () => {
+  if (suppressPersistence) return;
+  if (persistenceTimer) clearTimeout(persistenceTimer);
+  persistenceTimer = setTimeout(() => {
+    void flushPendingReminders();
+  }, 500);
+};
+
+export async function flushPendingReminders(): Promise<void> {
+  if (persistenceTimer) {
+    clearTimeout(persistenceTimer);
+    persistenceTimer = null;
+  }
+  const userId = pendingUserId;
+  if (!userId || pendingReminderIds.size === 0) return;
+
+  const ids = Array.from(pendingReminderIds);
+  pendingReminderIds.clear();
+  const state = useReminderStore.getState();
+  const byId = new Map(
+    [...state.reminders, ...state.scheduledReminders].map((reminder) => [reminder.id, reminder]),
+  );
+
+  for (const id of ids) {
+    const reminder = byId.get(id);
+    // Removed reminders keep the existing behavior: they are not deleted here.
+    if (reminder) await saveReminderToPersistence(reminder, userId);
+  }
+}
+
 useReminderStore.subscribe((state, prevState) => {
+  if (suppressPersistence) return;
   if (state.reminders === prevState.reminders && state.scheduledReminders === prevState.scheduledReminders) return;
   const userId = state.currentUserId;
   if (!userId) return;
-  // Debounce to avoid hammering storage on rapid updates
-  if (persistenceTimer) clearTimeout(persistenceTimer);
-  persistenceTimer = setTimeout(() => {
-    const all = [...state.reminders, ...state.scheduledReminders];
-    saveAllRemindersToPersistence(all, userId);
-  }, 500);
+
+  if (pendingUserId && pendingUserId !== userId) {
+    pendingReminderIds.clear();
+  }
+  pendingUserId = userId;
+
+  const previousById = new Map(
+    [...prevState.reminders, ...prevState.scheduledReminders].map((reminder) => [reminder.id, reminder]),
+  );
+  for (const reminder of [...state.reminders, ...state.scheduledReminders]) {
+    if (previousById.get(reminder.id) !== reminder) {
+      pendingReminderIds.add(reminder.id);
+    }
+  }
+
+  if (pendingReminderIds.size > 0) scheduleReminderPersistence();
 });
+
+if (typeof window !== 'undefined') {
+  const flush = () => { void flushPendingReminders(); };
+  window.addEventListener('pagehide', flush);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flush();
+  });
+}
 
 // Helper function to convert Reminder to ReminderEntity for persistence
 const reminderToEntity = (reminder: Reminder, userId: string): ReminderEntity => ({
@@ -489,11 +542,16 @@ export async function loadRemindersFromPersistence(userId?: string): Promise<voi
       // 'dismissed' reminders are not loaded
     }
     
-    useReminderStore.setState({
-      reminders: activeReminders,
-      scheduledReminders: scheduledReminders,
-      unreadCount: activeReminders.filter(r => !r.read).length,
-    });
+    suppressPersistence = true;
+    try {
+      useReminderStore.setState({
+        reminders: activeReminders,
+        scheduledReminders: scheduledReminders,
+        unreadCount: activeReminders.filter(r => !r.read).length,
+      });
+    } finally {
+      suppressPersistence = false;
+    }
   } catch (error) {
     console.error('Error loading reminders from persistence:', error);
   }
@@ -513,29 +571,6 @@ export async function saveReminderToPersistence(reminder: Reminder, userId: stri
     }
   } catch (error) {
     console.error('Error saving reminder to persistence:', error);
-  }
-}
-
-// Save all reminders to persistence
-export async function saveAllRemindersToPersistence(reminders: Reminder[], userId: string): Promise<void> {
-  try {
-    const adapter = await getPersistenceAdapter();
-    
-    // Get existing reminders to determine what to update vs create
-    const existingEntities = await adapter.listReminders(userId);
-    const existingIds = new Set(existingEntities.map(e => e.id));
-    
-    for (const reminder of reminders) {
-      const entity = reminderToEntity(reminder, userId);
-      
-      if (existingIds.has(reminder.id)) {
-        await adapter.updateReminder(reminder.id, entity);
-      } else {
-        await adapter.createReminder(entity);
-      }
-    }
-  } catch (error) {
-    console.error('Error saving reminders to persistence:', error);
   }
 }
 

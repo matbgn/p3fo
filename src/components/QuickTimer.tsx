@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useTranslation } from 'react-i18next';
 import { Button } from "@/components/ui/button";
-import { Pause, Square, ArrowRight, Play, SkipForward, Apple, RotateCcw, PictureInPicture2, PlaneTakeoff, Loader2, ChevronDown, Train, Coffee, ChartNoAxesGantt, Search, Zap } from "lucide-react";
+import { Pause, Square, ArrowRight, Play, SkipForward, Apple, RotateCcw, PictureInPicture2, PlaneTakeoff, Loader2, ChevronDown, Train, Coffee, ChartNoAxesGantt, Search, Zap, Clock } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { TimeSheetDialog } from "@/components/TimeSheetDialog";
 import { useTasks } from "@/hooks/useTasks";
 import { useAllTasks } from "@/hooks/useAllTasks";
 import { useUserSettings } from "@/hooks/useUserSettings";
@@ -188,12 +189,14 @@ const LastStoppedTaskBlock: React.FC<{
   taskId?: string;
   resumeLabel: string;
   jumpLabel: string;
-}> = ({ title, onResume, onJumpToTask, taskId, resumeLabel, jumpLabel }) => {
+  editTimeEntryLabel: string;
+}> = ({ title, onResume, onJumpToTask, taskId, resumeLabel, jumpLabel, editTimeEntryLabel }) => {
+  const [isTimeSheetOpen, setIsTimeSheetOpen] = useState(false);
   return (
     <>
       <button
         onClick={() => onJumpToTask && taskId && onJumpToTask(taskId)}
-        className="text-xs sm:text-sm text-muted-foreground/60 hover:text-muted-foreground cursor-pointer hover:underline transition-colors truncate"
+        className="text-xs sm:text-sm text-muted-foreground/60 hover:text-muted-foreground cursor-pointer hover:underline transition-colors truncate min-w-0"
         title={title}
       >
         {truncateTitle(title)}
@@ -201,6 +204,27 @@ const LastStoppedTaskBlock: React.FC<{
       <Button size="sm" variant="ghost" onClick={onResume} className="h-7 w-7 sm:h-8 sm:w-8 p-0 text-muted-foreground/60 hover:text-foreground" title={resumeLabel} aria-label={resumeLabel}>
         <Play className="h-3 w-3 sm:h-4 sm:w-4" />
       </Button>
+      {taskId && (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => setIsTimeSheetOpen(true)}
+          className="h-7 w-7 sm:h-8 sm:w-8 p-0 text-muted-foreground/60 hover:text-foreground"
+          title={editTimeEntryLabel}
+          aria-label={editTimeEntryLabel}
+        >
+          <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
+        </Button>
+      )}
+      <JumpToTaskArrow visible={!!onJumpToTask} taskId={taskId} onJump={onJumpToTask!} label={jumpLabel} />
+      {taskId && (
+        <TimeSheetDialog
+          taskId={taskId}
+          taskTitle={title}
+          open={isTimeSheetOpen}
+          onOpenChange={setIsTimeSheetOpen}
+        />
+      )}
     </>
   );
 };
@@ -671,10 +695,10 @@ export const QuickTimer: React.FC<{
   if (!hasAnyContent) return null;
 
   return (
-<div className="flex flex-col items-center min-[512px]:flex-row gap-1 min-[512px]:gap-1.5 px-2 min-[512px]:px-3 py-1 min-[512px]:py-1 bg-gray-100 rounded-lg min-h-[36px] min-[512px]:min-h-[40px] w-full min-[630px]:w-auto">
+<div className="flex flex-col items-center min-[512px]:flex-row gap-1 min-[512px]:gap-1.5 px-2 min-[512px]:px-3 py-1 min-[512px]:py-1 bg-gray-100 rounded-lg min-h-[36px] min-[512px]:min-h-[40px] w-full min-[630px]:w-auto min-w-0">
       {/* ===== TASK ZONE (top on mobile, right on desktop) ===== */}
       {runningTask ? (
-        <div className="flex items-center gap-1 min-[512px]:gap-1.5 order-1 min-[630px]:order-2 w-auto min-[512px]:w-full min-[630px]:w-auto">
+        <div className="flex items-center gap-1 min-[512px]:gap-1.5 order-1 min-[630px]:order-2 w-auto min-[512px]:w-full min-[630px]:w-auto min-w-0">
           <TaskRunningBlock
             title={runningTask.task.title}
             elapsed={elapsedTime}
@@ -688,7 +712,7 @@ export const QuickTimer: React.FC<{
           />
         </div>
       ) : lastStoppedTask ? (
-        <div className="flex items-center gap-1 min-[512px]:gap-1.5 order-1 min-[630px]:order-2 w-auto min-[512px]:w-full min-[630px]:w-auto">
+        <div className="flex items-center gap-1 min-[512px]:gap-1.5 order-1 min-[630px]:order-2 w-auto min-[512px]:w-full min-[630px]:w-auto min-w-0">
           <LastStoppedTaskBlock
             title={lastStoppedTask.task.title}
             onResume={() => toggleTimer(lastStoppedTask.task.id, currentUserId)}
@@ -696,6 +720,7 @@ export const QuickTimer: React.FC<{
             taskId={lastStoppedTask.task.id}
             resumeLabel={t('quickTimer.resumeTimer')}
             jumpLabel={t('quickTimer.jumpToTask')}
+            editTimeEntryLabel={t('quickTimer.editTimeEntry')}
           />
         </div>
       ) : null}

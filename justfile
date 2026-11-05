@@ -3,6 +3,12 @@
 set dotenv-filename := ".env.local" # Look for .env.local in the project root
 set dotenv-load := true
 
+# Load the IaC ansible.cfg (1h SSH ControlPersist + pipelining) even though the
+# playbook is invoked from this repository instead of the ansible directory.
+# Plain string (no env_var() parentheses) so shellcheck can parse it; Ansible
+# expands $HOME itself.
+export ANSIBLE_CONFIG := "$HOME/Dev/itpark/infrastructure-as-code/ansible/ansible.cfg"
+
 # Variables for the p3fo project
 PROJECT_NAME := "p3fo"
 DOCKER_IMAGE_NAME := "git.at-it.ch/advance-ticket/p3fo"
@@ -24,10 +30,29 @@ dev:
   pnpm run dev:all
 
 dev-otel:
-  @echo "--- Starting P3FO Development Environment with local OpenTelemetry ---"
-  @echo "[1/2] Starting development server..."
+  #!/usr/bin/env bash
+  set -euo pipefail
+  echo "--- Starting P3FO Development Environment with local OpenTelemetry ---"
+  echo "[1/3] Starting OTel stack..."
   docker compose -f docker-compose.hyperdx.yml up -d
-  VITE_OTEL_ENABLED=true OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318/v1/traces pnpm run dev:all
+  echo "[2/3] Waiting for the OTel collector on :14318..."
+  for _ in $(seq 1 240); do
+    if curl -s --max-time 1 -o /dev/null "http://localhost:14318/"; then
+      break
+    fi
+    sleep 0.5
+  done
+  if ! curl -s --max-time 1 -o /dev/null "http://localhost:14318/"; then
+    echo "OTel collector did not become ready on :14318" >&2
+    echo "Hint: docker compose -f docker-compose.hyperdx.yml logs --tail=40 otel-collector" >&2
+    exit 1
+  fi
+  echo "HyperDX UI: http://localhost:18088"
+  echo "[3/3] Starting development server..."
+  VITE_OTEL_ENABLED=true \
+    OTEL_COLLECTOR_URL=http://localhost:14318 \
+    OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:14318/v1/traces \
+    pnpm run dev:all
 
 # --- Browser-Only Development Task ---
 # Reproduce the deployed browser-only mode locally for debugging
@@ -36,8 +61,68 @@ dev-browser:
   @echo "[1/1] Starting frontend in browser-only mode..."
   VITE_P3FO_FORCE_BROWSER="true" VITE_BASE_URL="/p3fo" pnpm run dev
 
-tests:
+# Run all tests. Heavy suites are opt-OUT, mirroring omniticket's tests recipe:
+#
+#   just tests                - unit tests + load bench
+#   just tests --skip load    - unit tests only
+#
+# The load bench skips gracefully when locust or Chrome is unavailable so the
+# suite stays green on machines without the load-test prerequisites.
+tests *args="":
+  #!/usr/bin/env bash
+  set -euo pipefail
+
+  skip_set=""
+  set -- {{args}}
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --skip)
+        if [ "$#" -ge 2 ]; then
+          skip_set="$2"
+          shift 2
+        else
+          shift
+        fi
+        ;;
+      --skip=*)
+        skip_set="${1#--skip=}"
+        shift
+        ;;
+      *)
+        echo "Unknown argument: $1" >&2
+        echo "Usage: just tests [--skip load]" >&2
+        exit 2
+        ;;
+    esac
+  done
+
+  echo "▶ Unit tests..."
   pnpm test --run
+
+  chrome_bin="${CHROME_BIN:-google-chrome}"
+  clickhouse_url="${CLICKHOUSE_URL:-http://localhost:18123}"
+  if [[ ",${skip_set}," == *",load,"* ]]; then
+    echo "⏭  Load bench skipped (--skip load)"
+  elif ! command -v locust > /dev/null 2>&1; then
+    echo "⏭  Load bench skipped (locust not installed)"
+  elif ! command -v "${chrome_bin}" > /dev/null 2>&1; then
+    echo "⏭  Load bench skipped (${chrome_bin} not found)"
+  elif ! curl -sf --max-time 2 "${clickhouse_url%/}/ping" > /dev/null 2>&1; then
+    echo "⏭  Load bench skipped (ClickHouse/OTel not reachable; start 'just dev-otel' to enforce paint gates)"
+  else
+    echo "▶ Load bench..."
+    just bench-check
+  fi
+
+# --- Load bench ---
+bench users="25" duration="30":
+  python3 bench/orchestrator.py --users {{users}} --duration {{duration}}
+
+bench-browser users="25" duration="30":
+  python3 bench/orchestrator.py --users {{users}} --duration {{duration}} --browser
+
+bench-check users="25" duration="30":
+  python3 bench/orchestrator.py --users {{users}} --duration {{duration}} --browser --enforce
 
 # --- Code Quality Checks ---
 check:
@@ -48,6 +133,14 @@ check:
   @echo "Running ESLint..."
   npx eslint --max-warnings 0
   just check-node-versions
+
+# --- Pre-commit checks ---
+# Mirrors omniticket's pre-commit: build, run the full test suite (including
+# the load bench), then typecheck/lint/node-version alignment via check.
+pre-commit: build tests check
+  @echo "✅ Pre-commit checks passed"
+
+alias pre := pre-commit
 
 # --- Version Management Tasks ---
 sync-versions version:
@@ -84,10 +177,16 @@ changelog:
 
 docker-build version="$(git-sv cv)":
   #!/usr/bin/env bash
-  @echo "Using version: {{version}}"
+  echo "Using version: {{version}}"
   set -e
+  set -o pipefail
   echo "Creating tar files for deployment..."
   mkdir -p ~/Dev/itpark/infrastructure-as-code/ansible/dist/
+
+  if ! command -v zstd >/dev/null 2>&1; then
+    echo "Error: zstd is required to compress the deployment archive (brew install zstd / apt install zstd)." >&2
+    exit 1
+  fi
 
   echo "Building p3fo docker image with version {{version}}..."
 
@@ -109,11 +208,23 @@ docker-build version="$(git-sv cv)":
     echo "Tagging p3fo docker image with version {{version}}..."
     # docker tag is already done above, but ensuring latest is updated
     docker tag p3fo:latest p3fo:latest
-    echo "Saving p3fo docker image to tar file..."
-    docker save -o ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar "{{DOCKER_IMAGE_NAME}}":"{{version}}"
-    echo "Tar file created successfully: ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar"
+    echo "Saving p3fo docker image to compressed tar file (zstd)..."
+    docker save "{{DOCKER_IMAGE_NAME}}":"{{version}}" \
+      | zstd -T0 -3 -q -f -o ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar.zst
+    rm -f ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar
+    echo "Compressed tar file created: ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar.zst ($(du -h --apparent-size ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar.zst | cut -f1))"
   else
     echo "p3fo docker image has not changed"
+    # Migrate an existing uncompressed archive once, so repeated deploys also
+    # benefit from the smaller upload.
+    if [ ! -f ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar.zst ] \
+       && [ -f ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar ]; then
+      echo "Compressing existing p3fo.tar (one-off migration)..."
+      zstd -T0 -3 -q -f -o ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar.zst \
+        ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar
+      rm -f ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar
+      echo "Compressed tar file created: ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar.zst ($(du -h --apparent-size ~/Dev/itpark/infrastructure-as-code/ansible/dist/p3fo.tar.zst | cut -f1))"
+    fi
   fi
 
 # --- Docker Compose Run Task (with build) ---

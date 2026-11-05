@@ -41,7 +41,7 @@ const queryClient = new QueryClient();
 import { CursorOverlay } from "@/components/CursorOverlay";
 
 const App = () => {
-  const { checkAndTriggerReminders } = useReminderStore();
+  const checkAndTriggerReminders = useReminderStore(state => state.checkAndTriggerReminders);
 
   useEffect(() => {
     import('@/lib/collaboration').then(({ yTasks, yUserSettings, yFertilizationState, yFertilizationCards, yFertilizationColumns, yDreamState, yDreamCards, yDreamColumns, yCircles, ySystemState, doc }) => {

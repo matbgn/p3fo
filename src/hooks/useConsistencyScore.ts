@@ -7,7 +7,7 @@ import { useSettingsContext } from '@/context/SettingsContext';
 import { useUsersContext } from '@/context/UsersContext';
 import { normalizePreferredDays } from '@/utils/scheduler-utils';
 import { yTasks, isCollaborationEnabled } from '@/lib/collaboration';
-import type { Task } from './useTasks';
+import { areTasksFiltered, getAllTasksSnapshot, type Task } from './useTasks';
 
 const MS_PER_DAY = 86400000;
 
@@ -116,6 +116,19 @@ function getTasksFromAllSources(): Task[] {
   return recomputeChildrenFromParentId(Array.from(taskMap.values()));
 }
 
+/**
+ * Returns the in-memory task set only when it is known to be complete.
+ * `loadTasksByUser` replaces the module-level task array with a single user's
+ * subset (and Yjs may only hold locally synced tasks in that mode), so memory
+ * cannot be used as an authoritative all-user set while a filter is active.
+ */
+function getCompleteTasksFromMemory(): Task[] | null {
+  if (areTasksFiltered()) return null;
+  const yjsTasks = getTasksFromAllSources();
+  if (yjsTasks.length > 0) return yjsTasks;
+  return getAllTasksSnapshot();
+}
+
 export function useConsistencyScore(
   userId: string,
   opts?: { sessions?: PomodoroSession[] },
@@ -154,89 +167,98 @@ export function useConsistencyScore(
       return;
     }
 
-    // If sessions are provided, adopt them directly (no fetch needed); we still
-    // need to fetch tasks. The pomodoro subscription is skipped in this mode
-    // because the caller (which owns the session lifecycle) will re-render with
-    // fresh sessions and this effect re-runs via the [userId, providedSessions]
-    // dependency.
-    if (hasProvidedSessions) {
-      let mounted = true;
-      const load = async () => {
-        try {
+    // Bound the pomodoro fetch to the score window (365 days) to avoid
+    // pulling the user's entire history when we only look back a year.
+    const since = startOfDay(Date.now()) - (365 - 1) * MS_PER_DAY;
+    let mounted = true;
+    let hydrated = false;
+
+    const loadInitial = async () => {
+      try {
+        if (hasProvidedSessions) {
           setSessions(Array.isArray(providedSessions) ? providedSessions : []);
+          const memoryTasks = getCompleteTasksFromMemory();
+          if (memoryTasks && memoryTasks.length > 0) {
+            setAllTasks(memoryTasks);
+            return;
+          }
           const adapter = await getPersistenceAdapter();
           const taskEntities = await adapter.listTasks(userId);
           if (!mounted) return;
-
-          let tasks = convertEntitiesToTasks(taskEntities);
-          const yjsTasks = getTasksFromAllSources();
-          if (yjsTasks.length > tasks.length) tasks = yjsTasks;
-
-          const merged = new Map<string, Task>();
-          for (const t of tasks) merged.set(t.id, t);
-          for (const t of yjsTasks) merged.set(t.id, t);
-
-          setAllTasks(recomputeChildrenFromParentId(Array.from(merged.values())));
-        } catch {
-          if (mounted) {
-            const yjsTasks = getTasksFromAllSources();
-            setAllTasks(yjsTasks);
-          }
-        } finally {
-          if (mounted) setIsLoading(false);
+          setAllTasks(convertEntitiesToTasks(taskEntities));
+          return;
         }
-      };
-      load();
-      return () => {
-        mounted = false;
-      };
-    }
 
-    let mounted = true;
-    const load = async () => {
-      try {
         const adapter = await getPersistenceAdapter();
-
-        // Bound the pomodoro fetch to the score window (365 days) to avoid
-        // pulling the user's entire history when we only look back a year.
-        const since = startOfDay(Date.now()) - (365 - 1) * MS_PER_DAY;
         const [sessionResult, taskEntities] = await Promise.all([
           adapter.listPomodoroSessions(userId, since),
           adapter.listTasks(userId),
         ]);
         if (!mounted) return;
 
-        let tasks = convertEntitiesToTasks(taskEntities);
-
-        const yjsTasks = getTasksFromAllSources();
-        if (yjsTasks.length > tasks.length) {
-          tasks = yjsTasks;
-        }
-
-        const merged = new Map<string, Task>();
-        for (const t of tasks) merged.set(t.id, t);
-        for (const t of yjsTasks) merged.set(t.id, t);
-
         setSessions(Array.isArray(sessionResult) ? sessionResult : []);
-        setAllTasks(recomputeChildrenFromParentId(Array.from(merged.values())));
+        const memoryTasks = getCompleteTasksFromMemory();
+        setAllTasks(memoryTasks && memoryTasks.length > 0 ? memoryTasks : convertEntitiesToTasks(taskEntities));
       } catch {
-        if (mounted) {
-          setSessions([]);
-          const yjsTasks = getTasksFromAllSources();
-          setAllTasks(yjsTasks);
-        }
+        if (!mounted) return;
+        if (!hasProvidedSessions) setSessions([]);
+        const memoryTasks = getCompleteTasksFromMemory();
+        if (memoryTasks && memoryTasks.length > 0) setAllTasks(memoryTasks);
       } finally {
-        if (mounted) setIsLoading(false);
+        if (mounted) {
+          hydrated = true;
+          setIsLoading(false);
+        }
       }
     };
-    load();
-    const onCompleted = () => load();
-    eventBus.subscribe('pomodoroSessionCompleted', onCompleted);
-    eventBus.subscribe('tasksChanged', onCompleted);
+
+    // Fallback for a filtered, non-Yjs task store: the in-memory snapshot is
+    // only one user's subset, so refresh the target user's tasks instead.
+    const refreshTasksFromPersistence = async () => {
+      try {
+        const adapter = await getPersistenceAdapter();
+        const taskEntities = await adapter.listTasks(userId);
+        if (mounted) setAllTasks(convertEntitiesToTasks(taskEntities));
+      } catch {
+        // Keep the existing tasks on failure.
+      }
+    };
+
+    // Task changes are already in memory (Yjs or the local task snapshot).
+    // Recompute from that snapshot instead of refetching tasks and sessions.
+    // Once hydrated, an empty complete snapshot means the tasks were deleted.
+    const syncTasksFromMemory = () => {
+      if (!mounted || !hydrated) return;
+      const memoryTasks = getCompleteTasksFromMemory();
+      if (memoryTasks !== null) {
+        setAllTasks(memoryTasks);
+        return;
+      }
+      void refreshTasksFromPersistence();
+    };
+
+    // Only completed pomodoro sessions need a server refresh; task changes do
+    // not invalidate the session window.
+    const refreshSessionsOnly = async () => {
+      if (!mounted || hasProvidedSessions) return;
+      try {
+        const adapter = await getPersistenceAdapter();
+        const result = await adapter.listPomodoroSessions(userId, since);
+        if (mounted) setSessions(Array.isArray(result) ? result : []);
+      } catch {
+        // Keep the existing sessions on failure.
+      }
+    };
+
+    loadInitial();
+    const onPomodoroCompleted = () => { void refreshSessionsOnly(); };
+    const onTasksChanged = () => { syncTasksFromMemory(); };
+    eventBus.subscribe('pomodoroSessionCompleted', onPomodoroCompleted);
+    eventBus.subscribe('tasksChanged', onTasksChanged);
     return () => {
       mounted = false;
-      eventBus.unsubscribe('pomodoroSessionCompleted', onCompleted);
-      eventBus.unsubscribe('tasksChanged', onCompleted);
+      eventBus.unsubscribe('pomodoroSessionCompleted', onPomodoroCompleted);
+      eventBus.unsubscribe('tasksChanged', onTasksChanged);
     };
   }, [userId, hasProvidedSessions, providedSessions]);
 

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import { calculateProjection, getProjectedHoursForActualMonth, getHistoricalHourlyBalances, getVacationsBalances } from './projectedHours';
+import { getWorkingDays } from './workingdays';
 import type { CombinedSettings } from '@/context/SettingsContext';
 import type { Task } from '@/hooks/useTasks';
 import { DEFAULT_POMODORO_CONFIG, DEFAULT_FOCUS_MODE_CONFIG } from '@/lib/pomodoro-types';
@@ -416,6 +417,139 @@ describe('getHistoricalHourlyBalances - selected user settings', () => {
         // March 2026 has ~22 working days in CH/BE
         // with workload 50%, hoursDue should be around 88
         expect(pastMonth!.workload).toBe(50);
+    });
+});
+
+describe('month rollover - past month without a persisted workload', () => {
+    beforeEach(() => {
+        vi.setSystemTime(new Date(2026, 3, 8)); // April 8, 2026
+    });
+
+    afterAll(() => {
+        vi.useRealTimers();
+    });
+
+    const settings: CombinedSettings = {
+        ...mockSettings,
+        userWorkloadPercentage: 40,
+        hoursToBeDoneByDay: 8,
+    };
+
+    it('uses the user workload for a past month that was never persisted', () => {
+        const monthlyBalances = {
+            '2026-02': { workload: 40, hourlyBalance: 0, hoursDone: 70 },
+        };
+
+        const data = getHistoricalHourlyBalances([], settings, 0, monthlyBalances, 40);
+        const march = data.find(d => d.descId === '2026-03');
+
+        const workingDays = getWorkingDays(2026, 3, 1, undefined, settings.country, settings.region);
+        const expectedHoursDue = Number((workingDays * 8 * 0.4).toFixed(1));
+
+        expect(march).toBeDefined();
+        expect(march!.workload).toBe(40);
+        expect(march!.hoursDue).toBe(expectedHoursDue);
+        expect(march!.hoursDone).toBe(0);
+        expect(march!.hourlyBalance).toBe(Number((-expectedHoursDue).toFixed(1)));
+    });
+
+    it('repairs an auto-generated past balance that was stored with a zero workload', () => {
+        const monthlyBalances = {
+            '2026-02': { workload: 40, hourlyBalance: 0, hoursDone: 70 },
+            // Legacy auto-persisted entry, as found in existing exports: no isManual flag.
+            '2026-03': { workload: 0, hourlyBalance: 92.1, hoursDone: 92.1 },
+        };
+
+        const data = getHistoricalHourlyBalances([], settings, 0, monthlyBalances, 40);
+        const march = data.find(d => d.descId === '2026-03');
+
+        const workingDays = getWorkingDays(2026, 3, 1, undefined, settings.country, settings.region);
+        const expectedHoursDue = Number((workingDays * 8 * 0.4).toFixed(1));
+
+        expect(march).toBeDefined();
+        expect(march!.workload).toBe(40);
+        expect(march!.hoursDone).toBe(92.1);
+        expect(march!.hourlyBalance).toBe(Number((92.1 - expectedHoursDue).toFixed(1)));
+    });
+
+    it('keeps a manually stored zero workload', () => {
+        const monthlyBalances = {
+            '2026-02': { workload: 40, hourlyBalance: 0, hoursDone: 70 },
+            '2026-03': { workload: 0, hourlyBalance: 0, hoursDone: 0, isManual: true },
+        };
+
+        const data = getHistoricalHourlyBalances([], settings, 0, monthlyBalances, 40);
+        const march = data.find(d => d.descId === '2026-03');
+
+        expect(march).toBeDefined();
+        expect(march!.workload).toBe(0);
+    });
+
+    it('keeps older missing past months at zero and only fixes the rollover month', () => {
+        const monthlyBalances = {
+            '2025-12': { workload: 40, hourlyBalance: 0, hoursDone: 70 },
+        };
+
+        const data = getHistoricalHourlyBalances([], settings, 0, monthlyBalances, 40);
+
+        const january = data.find(d => d.descId === '2026-01');
+        const february = data.find(d => d.descId === '2026-02');
+        const march = data.find(d => d.descId === '2026-03');
+
+        expect(january).toBeDefined();
+        expect(january!.workload).toBe(0);
+        expect(january!.hoursDue).toBe(0);
+        expect(february).toBeDefined();
+        expect(february!.workload).toBe(0);
+        expect(february!.hoursDue).toBe(0);
+        expect(march).toBeDefined();
+        expect(march!.workload).toBe(40);
+    });
+
+    it('does not rewrite an older stored auto-generated zero workload', () => {
+        const monthlyBalances = {
+            '2025-12': { workload: 40, hourlyBalance: 0, hoursDone: 70 },
+            '2026-02': { workload: 0, hourlyBalance: 10, hoursDone: 10 },
+        };
+
+        const data = getHistoricalHourlyBalances([], settings, 0, monthlyBalances, 40);
+        const february = data.find(d => d.descId === '2026-02');
+
+        expect(february).toBeDefined();
+        expect(february!.workload).toBe(0);
+    });
+
+    it('uses the user workload for a past month without persisted vacation data', () => {
+        const monthlyBalances = {
+            '2026-02': { workload: 40, hourlyBalance: 0, hoursDone: 70 },
+        };
+
+        const data = getVacationsBalances(settings, 0, 0, monthlyBalances, 40);
+        const march = data.find(d => d.descId === '2026-03');
+
+        expect(march).toBeDefined();
+        expect(march!.workload).toBe(40);
+        expect(march!.vacationsDue).toBeGreaterThan(0);
+    });
+
+    it('keeps older missing past months at zero in vacation balances', () => {
+        const monthlyBalances = {
+            '2025-12': { workload: 40, hourlyBalance: 0, hoursDone: 70 },
+        };
+
+        const data = getVacationsBalances(settings, 0, 0, monthlyBalances, 40);
+        const january = data.find(d => d.descId === '2026-01');
+        const february = data.find(d => d.descId === '2026-02');
+        const march = data.find(d => d.descId === '2026-03');
+
+        expect(january).toBeDefined();
+        expect(january!.workload).toBe(0);
+        expect(january!.vacationsDue).toBe(0);
+        expect(february).toBeDefined();
+        expect(february!.workload).toBe(0);
+        expect(february!.vacationsDue).toBe(0);
+        expect(march).toBeDefined();
+        expect(march!.workload).toBe(40);
     });
 });
 

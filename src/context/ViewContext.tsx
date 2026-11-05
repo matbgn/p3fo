@@ -30,6 +30,9 @@ export const ViewProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const handleFocusOnTask = React.useCallback((taskId: string) => {
         setView("focus");
         setFocusedTaskId(taskId);
+        // Jump actions land on the Flow sub-view instead of whatever
+        // Focus sub-view was last used (e.g. Todolist).
+        setPendingSubView("flow");
     }, []);
 
     const pendingSubViewRef = useRef<string | null>(null);

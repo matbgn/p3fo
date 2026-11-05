@@ -39,6 +39,7 @@ type BoardCard =
 import { LazyCard } from "./LazyCard";
 
 const STATUSES: TriageStatus[] = ["Backlog", "Ready", "WIP", "Blocked", "Done", "Dropped", "Archived"];
+const EMPTY_TASKS: Task[] = [];
 
 interface DraggableCardProps {
   id: string;
@@ -57,12 +58,79 @@ const DraggableCard: React.FC<DraggableCardProps> = ({ id, children }) => {
   );
 };
 
+function sameColumnCards(
+  prevCards: BoardCard[],
+  nextCards: BoardCard[],
+  prevTasksById: Map<string, Task>,
+  nextTasksById: Map<string, Task>,
+): boolean {
+  if (prevCards === nextCards) return true;
+  if (prevCards.length !== nextCards.length) return false;
+  for (let i = 0; i < prevCards.length; i += 1) {
+    const prev = prevCards[i];
+    const next = nextCards[i];
+    if (prev.kind !== next.kind || prev.task !== next.task) return false;
+    if (prev.kind === "child" && next.kind === "child" && prev.parent !== next.parent) return false;
+    const prevChildren = prev.task.children || [];
+    const nextChildren = next.task.children || [];
+    if (prevChildren.length !== nextChildren.length) return false;
+    for (let j = 0; j < prevChildren.length; j += 1) {
+      if (prevChildren[j] !== nextChildren[j]) return false;
+      if (prevTasksById.get(prevChildren[j]) !== nextTasksById.get(nextChildren[j])) return false;
+    }
+  }
+  return true;
+}
+
+
+function areColumnPropsEqual(
+  prev: React.ComponentProps<typeof Column>,
+  next: React.ComponentProps<typeof Column>,
+): boolean {
+  if (prev.title !== next.title) return false;
+  if (prev.isOver !== next.isOver) return false;
+  if (prev.openParents !== next.openParents) return false;
+  if (prev.highlightedTaskId !== next.highlightedTaskId) return false;
+  if (prev.highlightedCardRef !== next.highlightedCardRef) return false;
+  if (prev.wipLimit !== next.wipLimit) return false;
+  if (prev.editTaskId !== next.editTaskId) return false;
+  if (!sameColumnCards(prev.cards, next.cards, prev.tasksById, next.tasksById)) return false;
+
+  const keys: (keyof React.ComponentProps<typeof Column>)[] = [
+    "onChangeStatus",
+    "onUpdateCategory",
+    "onUpdateUser",
+    "onToggleUrgent",
+    "onToggleImpact",
+    "onToggleMajorIncident",
+    "onToggleSprintTarget",
+    "onToggleDone",
+    "onUpdateDifficulty",
+    "onUpdateTitle",
+    "onDelete",
+    "duplicateTaskStructure",
+    "onToggleParent",
+    "onReparent",
+    "onFocusOnTask",
+    "updateTerminationDate",
+    "updateDurationInMinutes",
+    "updateComment",
+    "onToggleTimer",
+    "onArchive",
+    "onEditModalOpenChange",
+  ];
+  for (const key of keys) {
+    if (prev[key] !== next[key]) return false;
+  }
+  return true;
+}
+
 // Column renders a mixture of single cards and grouped children for expanded parents
 // Wrapped in React.memo to only re-render when its specific cards/props change
 const Column: React.FC<{
   title: TriageStatus;
   cards: BoardCard[];
-  tasks: Task[];
+  tasksById: Map<string, Task>;
   isOver?: boolean;
   onChangeStatus: (id: string, s: TriageStatus) => void;
   onUpdateCategory: (id: string, category: Category) => void;
@@ -88,8 +156,11 @@ const Column: React.FC<{
   highlightedCardRef?: React.RefObject<HTMLDivElement | null>;
   onArchive?: (title: TriageStatus) => void;
   wipLimit?: number;
-}> = React.memo(({ title, cards, tasks, isOver, onChangeStatus, onUpdateCategory, onUpdateUser, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onToggleSprintTarget, onToggleDone, onUpdateDifficulty, onUpdateTitle, onDelete, duplicateTaskStructure, openParents, onToggleParent, onReparent, onFocusOnTask, updateTerminationDate, updateDurationInMinutes, updateComment, onToggleTimer, highlightedTaskId, highlightedCardRef, onArchive, wipLimit = 5 }) => {
+  editTaskId?: string | null;
+  onEditModalOpenChange?: (taskId: string, open: boolean) => void;
+}> = React.memo(({ title, cards, tasksById, isOver, onChangeStatus, onUpdateCategory, onUpdateUser, onToggleUrgent, onToggleImpact, onToggleMajorIncident, onToggleSprintTarget, onToggleDone, onUpdateDifficulty, onUpdateTitle, onDelete, duplicateTaskStructure, openParents, onToggleParent, onReparent, onFocusOnTask, updateTerminationDate, updateDurationInMinutes, updateComment, onToggleTimer, highlightedTaskId, highlightedCardRef, onArchive, wipLimit = 5, editTaskId, onEditModalOpenChange }) => {
   const { t } = useTranslation();
+  const handleToggleParent = React.useCallback((id: string) => onToggleParent(id, true), [onToggleParent]);
   // Calculate total difficulty points for this column
   // Only count leaf tasks (tasks with no children) to avoid double-counting
   // Parent tasks and intermediate parents should not be counted
@@ -114,6 +185,10 @@ const Column: React.FC<{
   for (const c of cards) {
     if (c.kind === "parent") {
       const isHighlighted = highlightedTaskId === c.task.id;
+      const subtaskTasks = (c.task.children || [])
+        .map(id => tasksById.get(id))
+        .filter((child): child is Task => !!child);
+      const tasksForModal = editTaskId === c.task.id ? Array.from(tasksById.values()) : EMPTY_TASKS;
       blocks.push({
         type: "single",
         key: `p-${c.task.id}`,
@@ -122,12 +197,14 @@ const Column: React.FC<{
             <TaskCard
               key={`p-${c.task.id}`}
               task={c.task}
-              tasks={tasks}
+              subtaskTasks={subtaskTasks}
+              tasksForModal={tasksForModal}
+              onEditModalOpenChange={onEditModalOpenChange}
               updateStatus={onChangeStatus}
               updateCategory={onUpdateCategory}
               updateUser={onUpdateUser}
               open={!!openParents[c.task.id]}
-              onToggleOpen={(id) => onToggleParent(id, true)}
+              onToggleOpen={handleToggleParent}
               toggleUrgent={onToggleUrgent}
               toggleImpact={onToggleImpact}
               toggleMajorIncident={onToggleMajorIncident}
@@ -136,7 +213,7 @@ const Column: React.FC<{
               updateTitle={onUpdateTitle}
               deleteTask={onDelete}
               duplicateTaskStructure={duplicateTaskStructure}
-              toggleDone={() => onToggleDone(c.task)}
+              toggleDone={onToggleDone}
               toggleTimer={onToggleTimer}
               isTriageBoard={true}
               reparent={onReparent}
@@ -230,9 +307,10 @@ const Column: React.FC<{
                (() => {
                  const m = /^p-(.+)$/.exec(blk.key);
                  const taskId = m ? m[1] : undefined;
+                 const previewTask = taskId ? tasksById.get(taskId) : undefined;
                  return taskId ? (
                    <DraggableCard key={blk.key} id={taskId}>
-                     <LazyCard>
+                     <LazyCard preview={previewTask ? <div className="truncate">{previewTask.title}</div> : undefined}>
                        {blk.node}
                      </LazyCard>
                    </DraggableCard>
@@ -250,11 +328,18 @@ const Column: React.FC<{
                 <div className="text-xs font-medium text-blue-700 dark:text-blue-300 px-1">
                   {t('kanban.subtasksOf', { title: blk.parent.title })}
                 </div>
-                {blk.children.map(({ task, parent }) => (
+                {blk.children.map(({ task, parent }) => {
+                  const subtaskTasks = (task.children || [])
+                    .map(id => tasksById.get(id))
+                    .filter((child): child is Task => !!child);
+                  const tasksForModal = editTaskId === task.id ? Array.from(tasksById.values()) : EMPTY_TASKS;
+                  return (
                   <TaskCard
                     key={`gc-${task.id}`}
                     task={task}
-                    tasks={tasks}
+                    subtaskTasks={subtaskTasks}
+                    tasksForModal={tasksForModal}
+                    onEditModalOpenChange={onEditModalOpenChange}
                     updateStatus={onChangeStatus}
                     updateCategory={onUpdateCategory}
                     updateUser={onUpdateUser}
@@ -266,7 +351,7 @@ const Column: React.FC<{
                     updateTitle={onUpdateTitle}
                     deleteTask={onDelete}
                     duplicateTaskStructure={duplicateTaskStructure}
-                    toggleDone={() => onToggleDone(task)}
+                    toggleDone={onToggleDone}
                     toggleTimer={onToggleTimer}
                     isTriageBoard={true}
                     reparent={onReparent}
@@ -277,7 +362,8 @@ const Column: React.FC<{
                     updateComment={updateComment}
                     hoverEnterDelayMs={HOVER_ENTER_DELAY_MS}
                   />
-                ))}
+                  );
+                })}
               </LazyCard>
             ),
           )
@@ -285,7 +371,7 @@ const Column: React.FC<{
       </div>
     </Card>
   );
-});
+}, areColumnPropsEqual);
 
 const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highlightedTaskId?: string | null }> = ({ onFocusOnTask, highlightedTaskId }) => {
   return (
@@ -299,6 +385,13 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
   const { t } = useTranslation();
   const { isFocusMode } = useFocusMode();
   const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, toggleSprintTarget, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, reparent, toggleDone, toggleTimer, updateTerminationDate, updateDurationInMinutes, updateComment, loadTasksByUser, reloadTasks } = useTasks();
+  const tasksById = React.useMemo(() => new Map(tasks.map(t => [t.id, t])), [tasks]);
+  const tasksRef = React.useRef(tasks);
+  tasksRef.current = tasks;
+  const [editTaskId, setEditTaskId] = React.useState<string | null>(null);
+  const handleEditModalOpenChange = React.useCallback((taskId: string, open: boolean) => {
+    setEditTaskId(prev => (open ? taskId : prev === taskId ? null : prev));
+  }, []);
   const { userId: currentUserId } = useUserSettings();
   const { setFocusedTaskId } = useViewNavigation();
   const { settings } = useSettingsContext();
@@ -522,14 +615,15 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
 
   // Track which parents are expanded; default: collapsed (no children shown)
   const [openParents, setOpenParents] = React.useState<Record<string, boolean>>({});
-  const toggleParent = (id: string, toggleAll = false) => {
+  const toggleParent = React.useCallback((id: string, toggleAll = false) => {
     setOpenParents((p) => {
       const isOpen = !p[id];
       const newOpen = { ...p, [id]: isOpen };
 
       if (toggleAll) {
+        const taskMap = new Map(tasksRef.current.map(t => [t.id, t]));
         const traverse = (taskId: string) => {
-          const task = map[taskId];
+          const task = taskMap.get(taskId);
           if (task && task.children) {
             task.children.forEach((childId) => {
               newOpen[childId] = isOpen;
@@ -542,7 +636,7 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
 
       return newOpen;
     });
-  };
+  }, []);
 
   // Force re-render when timer updates
   // Note: tasksChanged is already handled by useTasks() hook — no duplicate listener needed
@@ -626,11 +720,11 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
   }, [topTasks, map]); // Removed tasks as dependency as topTasks and map are derived from it
 
   // Archive handlers
-  const handleArchiveClick = (columnTitle: TriageStatus) => {
+  const handleArchiveClick = React.useCallback((columnTitle: TriageStatus) => {
     setArchiveColumnTitle(columnTitle);
     setArchiveOnlyOldCards(false);
     setArchiveDialogOpen(true);
-  };
+  }, []);
 
   const handleConfirmArchive = () => {
     if (!archiveColumnTitle) return;
@@ -763,7 +857,9 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
                   key={s}
                   title={s}
                   cards={grouped[s]}
-                  tasks={tasks}
+                  tasksById={tasksById}
+                  editTaskId={editTaskId}
+                  onEditModalOpenChange={handleEditModalOpenChange}
                   onChangeStatus={handleChangeStatus}
                   onUpdateCategory={handleUpdateCategory}
                   onUpdateUser={handleUpdateUser}

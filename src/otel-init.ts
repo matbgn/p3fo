@@ -20,7 +20,9 @@ const exporter = new OTLPTraceExporter({
 const provider = new WebTracerProvider({
   spanProcessors: [new BatchSpanProcessor(exporter)],
   resource: resourceFromAttributes({
-    [SemanticResourceAttributes.SERVICE_NAME]: 'p3fo-frontend',
+    [SemanticResourceAttributes.SERVICE_NAME]:
+      (import.meta.env as Record<string, string | undefined>).VITE_OTEL_SERVICE_NAME ||
+      'p3fo-frontend',
     [SemanticResourceAttributes.SERVICE_VERSION]:
       typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0',
   }),

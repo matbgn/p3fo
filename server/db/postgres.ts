@@ -1,5 +1,6 @@
 import { Pool, PoolClient } from 'pg';
-import { DbClient } from './index.js';
+import { DbClient, SprintWellbeingRecord } from './index.js';
+import type { SprintStateEntity } from '../../src/lib/sprint-types.js';
 import type {
   TaskEntity,
   UserSettingsEntity,
@@ -339,6 +340,25 @@ class PostgresClient implements DbClient {
       CREATE TABLE IF NOT EXISTS "salaryBoard" (
         "id" INTEGER PRIMARY KEY DEFAULT 1,
         "data" JSONB
+      )
+    `);
+
+    // Sprint ceremony state
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS "sprintState" (
+        "id" INTEGER PRIMARY KEY DEFAULT 1,
+        "data" JSONB
+      )
+    `);
+
+    // Anonymous WHO-5 responses: one row per user per sprint, never exposed raw.
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS "sprintWellbeing" (
+        "sprintId" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "answers" JSONB NOT NULL,
+        "submittedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY ("sprintId", "userId")
       )
     `);
 
@@ -993,6 +1013,29 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     }
   }
 
+  async bulkUpdateSprintTargets(items: { id: string; sprintTarget: boolean }[]): Promise<void> {
+    if (items.length === 0) return;
+    const client: PoolClient = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      await client.query(
+        `UPDATE "tasks" AS t
+         SET "sprintTarget" = v."sprintTarget"
+         FROM unnest($1::text[], $2::boolean[]) AS v("id", "sprintTarget")
+         WHERE t."id" = v."id"`,
+        [items.map((item) => item.id), items.map((item) => item.sprintTarget)],
+      );
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
   async clearAllTasks(): Promise<void> {
     await this.pool.query('DELETE FROM "tasks"');
   }
@@ -1320,6 +1363,67 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
         VALUES (1, $1)
         ON CONFLICT ("id") DO UPDATE SET "data" = EXCLUDED."data"
       `, [JSON.stringify(state)]);
+  }
+
+  // Sprint ceremony
+  async getSprintState(): Promise<SprintStateEntity | null> {
+    const result = await this.pool.query('SELECT "data" FROM "sprintState" WHERE "id" = 1');
+    if (result.rows.length > 0 && result.rows[0].data) {
+      return result.rows[0].data;
+    }
+    return null;
+  }
+
+  async updateSprintState(state: SprintStateEntity): Promise<void> {
+    await this.pool.query(`
+        INSERT INTO "sprintState" ("id", "data")
+        VALUES (1, $1)
+        ON CONFLICT ("id") DO UPDATE SET "data" = EXCLUDED."data"
+      `, [JSON.stringify(state)]);
+  }
+
+  async compareAndUpdateSprintState(
+    state: SprintStateEntity,
+    expectedUpdatedAt: string | null,
+  ): Promise<boolean> {
+    if (expectedUpdatedAt === null) {
+      const result = await this.pool.query(
+        `INSERT INTO "sprintState" ("id", "data")
+         VALUES (1, $1)
+         ON CONFLICT ("id") DO UPDATE SET "data" = EXCLUDED."data"
+         WHERE ("sprintState"."data"->>'updatedAt') IS NULL`,
+        [JSON.stringify(state)],
+      );
+      return (result.rowCount ?? 0) > 0;
+    }
+
+    const result = await this.pool.query(
+      `UPDATE "sprintState"
+       SET "data" = $1
+       WHERE "id" = 1 AND ("data"->>'updatedAt') = $2`,
+      [JSON.stringify(state), expectedUpdatedAt],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async getSprintWellbeing(sprintId: string): Promise<SprintWellbeingRecord[]> {
+    const result = await this.pool.query(
+      'SELECT "userId", "answers", "submittedAt" FROM "sprintWellbeing" WHERE "sprintId" = $1',
+      [sprintId],
+    );
+    return result.rows.map((row) => ({
+      userId: row.userId,
+      answers: row.answers as number[],
+      submittedAt: row.submittedAt?.toISOString?.() ?? String(row.submittedAt),
+    }));
+  }
+
+  async submitSprintWellbeing(sprintId: string, userId: string, answers: number[]): Promise<void> {
+    await this.pool.query(`
+        INSERT INTO "sprintWellbeing" ("sprintId", "userId", "answers")
+        VALUES ($1, $2, $3)
+        ON CONFLICT ("sprintId", "userId") DO NOTHING
+      `, [sprintId, userId, JSON.stringify(answers)]);
   }
 
   // Circles (EasyCIRCLE)
@@ -2476,6 +2580,8 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       await client.query('DROP TABLE IF EXISTS "fertilizationBoard" CASCADE');
       await client.query('DROP TABLE IF EXISTS "dreamBoard" CASCADE');
       await client.query('DROP TABLE IF EXISTS "salaryBoard" CASCADE');
+      await client.query('DROP TABLE IF EXISTS "sprintState" CASCADE');
+      await client.query('DROP TABLE IF EXISTS "sprintWellbeing" CASCADE');
       await client.query('DROP TABLE IF EXISTS "circles" CASCADE');
       await client.query('DROP TABLE IF EXISTS "reminders" CASCADE');
       await client.query('DROP TABLE IF EXISTS "frameworks" CASCADE');

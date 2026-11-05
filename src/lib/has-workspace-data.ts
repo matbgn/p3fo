@@ -20,7 +20,7 @@ export async function hasAnyWorkspaceData(
     const users = await adapter.listUsers();
     if (users.some(u => u.userId !== currentUserId || u.hasCompletedOnboarding)) return true;
 
-    const [tasks, votes, circles, frameworks, reminders, qolResponses, salaryBoard, dreamBoard, fertilizationBoard, pomodoroSessions] = await Promise.all([
+    const [tasks, votes, circles, frameworks, reminders, qolResponses, salaryBoard, sprintState, dreamBoard, fertilizationBoard, pomodoroSessions] = await Promise.all([
       adapter.listTasks(),
       adapter.listVotes(),
       adapter.listCircles(),
@@ -28,6 +28,7 @@ export async function hasAnyWorkspaceData(
       adapter.listReminders(),
       adapter.getAllQolSurveyResponses(),
       adapter.getSalaryBoardState(),
+      adapter.getSprintState(),
       adapter.getDreamBoardState(),
       adapter.getFertilizationBoardState(),
       adapter.listPomodoroSessions(),
@@ -43,6 +44,9 @@ export async function hasAnyWorkspaceData(
 
     // Salary board: ignore the auto-persisted default (no employees, no scenarios)
     if (salaryBoard && isSalaryBoardTouched(salaryBoard)) return true;
+
+    // Sprint ceremony: any sprint record means real use
+    if (sprintState && sprintState.sprints.length > 0) return true;
 
     // Boards: any card or active session means real use
     if (dreamBoard && ((dreamBoard.cards?.length ?? 0) > 0 || dreamBoard.isSessionActive)) return true;

@@ -58,14 +58,25 @@ type Column = {
   activeId?: string;
 };
 
+const EMPTY_TASKS: Task[] = [];
+
 const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: (taskId: string) => void }> = ({ focusedTaskId, onFocusOnTask }) => {
   const { t } = useTranslation();
   const { isFocusMode } = useFocusMode();
-  const { view } = useViewNavigation();
+  const { view, pendingSubView, clearPendingSubView } = useViewNavigation();
   const [focusView, setFocusView] = React.useState<FocusBoardView>(loadViewPreference);
   // Track the previous view to detect cross-view jumps (instant scroll) vs
   // in-board clicks (smooth scroll).
   const prevViewRef = React.useRef<string>(view);
+
+  // Apply a requested Focus sub-view (e.g. jump actions force "flow").
+  React.useEffect(() => {
+    if (pendingSubView === "subfocus" || pendingSubView === "flow" || pendingSubView === "todolist") {
+      setFocusView(pendingSubView);
+      saveViewPreference(pendingSubView);
+      clearPendingSubView();
+    }
+  }, [pendingSubView, clearPendingSubView]);
 
   const handleFocusViewChange = React.useCallback((view: string) => {
     if (view === "subfocus" || view === "flow" || view === "todolist") {
@@ -84,12 +95,12 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
   // Focus restoration
   const [focusTargetId, setFocusTargetId] = React.useState<string | null>(null);
 
-  const handleToggleTimer = async (id: string) => {
+  const handleToggleTimer = React.useCallback(async (id: string) => {
     await toggleTimer(id, currentUserId);
     setFocusTargetId(id);
 
     // If starting the timer (currently not running), highlight and activate the task
-    const task = map[id];
+    const task = mapRef.current[id];
     const isRunning = task?.timer?.some(t => t.endTime === 0);
 
     if (task && !isRunning) {
@@ -99,11 +110,11 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
       let current: Task | undefined = task;
       while (current) {
         newPath.unshift(current.id);
-        current = current.parentId ? map[current.parentId] : undefined;
+        current = current.parentId ? mapRef.current[current.parentId] : undefined;
       }
       setPath(newPath);
     }
-  };
+  }, [toggleTimer, currentUserId]);
 
   React.useEffect(() => {
     if (focusTargetId && cardRefs.current[focusTargetId]) {
@@ -113,8 +124,11 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
   }, [tasks, focusTargetId]);
 
   const [path, setPath] = React.useState<string[]>([]);
+  const pathRef = React.useRef(path);
+  pathRef.current = path;
 
   const [highlightedTaskId, setHighlightedTaskId] = React.useState<string | null>(null);
+  const [editTaskId, setEditTaskId] = React.useState<string | null>(null);
 
   const scrollTodolistRowRef = React.useRef<Map<string, HTMLElement>>(new Map());
   const lastHandledFocusIdRef = React.useRef<string | null>(null);
@@ -125,13 +139,13 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
   const handleFocusOnTaskInternal = React.useCallback((taskId: string) => {
     setHighlightedTaskId(taskId);
 
-    const task = map[taskId];
+    const task = mapRef.current[taskId];
     if (task) {
       const ancestorIds: string[] = [];
       let current: Task | undefined = task;
       while (current) {
         ancestorIds.unshift(current.id);
-        current = current.parentId ? map[current.parentId] : undefined;
+        current = current.parentId ? mapRef.current[current.parentId] : undefined;
       }
       if (focusView === "todolist") {
         setExpandedParents(prev => {
@@ -166,7 +180,7 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
     requestAnimationFrame(tryScroll);
 
     if (onFocusOnTask) onFocusOnTask(taskId);
-  }, [map, focusView, onFocusOnTask]);
+  }, [focusView, onFocusOnTask]);
 
   const defaultTaskBoardFilters: Filters = {
     showUrgent: false,
@@ -374,21 +388,94 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
     return cols;
   }, [tasks, map, path, displayFilters]);
 
-  const handleActivate = (colIndex: number, id: string) => {
+  const handleActivate = React.useCallback((colIndex: number, id: string) => {
+    const currentPath = pathRef.current;
     // Implement Toggle Off:
     // If clicking the currently active task in this column, deselect it (and all consecutive paths)
-    if (path[colIndex] === id) {
-      const newPath = path.slice(0, colIndex);
-      setPath(newPath);
+    if (currentPath[colIndex] === id) {
+      setPath(currentPath.slice(0, colIndex));
       setHighlightedTaskId(null);
       return;
     }
 
-    const newPath = path.slice(0, colIndex);
+    const newPath = currentPath.slice(0, colIndex);
     newPath[colIndex] = id;
     setPath(newPath);
     setHighlightedTaskId(null); // Clear highlighted task on normal activation
-  };
+  }, []);
+
+  const handleCardActivate = React.useCallback((id: string, columnIndex?: number, isSearchResult?: boolean) => {
+    if (isSearchResult) {
+      setStoredFilters(prev => ({ ...prev, searchText: "" }));
+      const task = mapRef.current[id];
+      if (task) {
+        const newPath: string[] = [];
+        let current: Task | undefined = task;
+        while (current) {
+          newPath.unshift(current.id);
+          current = current.parentId ? mapRef.current[current.parentId] : undefined;
+        }
+        setPath(newPath);
+        setHighlightedTaskId(id);
+      }
+      return;
+    }
+    if (columnIndex !== undefined) {
+      handleActivate(columnIndex, id);
+    }
+  }, [handleActivate]);
+
+  const handleCardUpdateTitle = React.useCallback(async (id: string, title: string) => {
+    const parentId = await updateTitle(id, title);
+    if (!parentId) return;
+    const parentTask = mapRef.current[parentId];
+    if (!parentTask) return;
+    const newPath: string[] = [];
+    let current: Task | undefined = parentTask;
+    while (current) {
+      newPath.unshift(current.id);
+      current = current.parentId ? mapRef.current[current.parentId] : undefined;
+    }
+    setPath(newPath);
+  }, [updateTitle]);
+
+  const handleCardToggleOpen = React.useCallback((taskId: string) => {
+    const task = mapRef.current[taskId];
+    if (!task || !task.children || task.children.length === 0) return;
+    const firstChildId = task.children[0];
+    const newPath: string[] = [];
+    let current: Task | undefined = task;
+    while (current) {
+      newPath.unshift(current.id);
+      current = current.parentId ? mapRef.current[current.parentId] : undefined;
+    }
+    newPath.push(firstChildId);
+    setPath(newPath);
+    setHighlightedTaskId(firstChildId);
+    setTimeout(() => {
+      cardRefs.current[firstChildId]?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 100);
+  }, []);
+
+  const handleRowClick = React.useCallback((taskId: string) => {
+    setHighlightedTaskId(prev => (prev === taskId ? null : taskId));
+  }, []);
+
+  const handleToggleExpand = React.useCallback((taskId: string) => {
+    setExpandedParents(prev => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+  }, []);
+
+  const handleEditModalOpenChange = React.useCallback((taskId: string, open: boolean) => {
+    setEditTaskId(prev => (open ? taskId : prev === taskId ? null : prev));
+  }, []);
 
   const handleAdd = async (colIndex: number, title: string) => {
     const parentId = colIndex === 0 ? null : columns[colIndex].parentId!;
@@ -600,7 +687,7 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
           updateStatus={handleChangeStatus}
           updateDifficulty={updateDifficulty}
           updateCategory={updateCategory}
-          updateTitle={(id, title) => updateTitle(id, title)}
+          updateTitle={updateTitle}
           updateComment={updateComment}
           updateTerminationDate={updateTerminationDate}
           updateDurationInMinutes={updateDurationInMinutes}
@@ -612,23 +699,16 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
           toggleMajorIncident={toggleMajorIncident}
           toggleSprintTarget={toggleSprintTarget}
           toggleDone={handleToggleDone}
-          toggleTimer={(id, userId) => toggleTimer(id, userId || currentUserId)}
+          toggleTimer={handleToggleTimer}
           createTask={createTask}
           onFocusOnTask={handleFocusOnTaskInternal}
-          onRowClick={(taskId: string) =>
-            setHighlightedTaskId(prev => (prev === taskId ? null : taskId))
-          }
+          onRowClick={handleRowClick}
           highlightedTaskId={highlightedTaskId}
           scrollTodolistRowRef={scrollTodolistRowRef}
           expandedParents={expandedParents}
-          onToggleExpand={(taskId: string) => {
-            setExpandedParents(prev => {
-              const next = new Set(prev);
-              if (next.has(taskId)) next.delete(taskId);
-              else next.add(taskId);
-              return next;
-            });
-          }}
+          onToggleExpand={handleToggleExpand}
+          editTaskId={editTaskId}
+          onEditModalOpenChange={handleEditModalOpenChange}
         />
       )}
 
@@ -793,6 +873,7 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
                       fullyFilteredItems.map((t) => (
                         <LazyCard
                           key={t.id}
+                          preview={<div className="truncate">{t.title}</div>}
                           draggable
                           onDragStart={(e) => {
                             e.dataTransfer.setData("text/task-id", t.id);
@@ -812,45 +893,19 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
                           <TaskCard
                             ref={(el) => (cardRefs.current[t.id] = el)}
                             task={t}
-                            tasks={tasks}
-                            onActivate={() => {
-                              if (col.parentId === "search-results") {
-                                // Clear search, set path to reveal ancestry, and highlight
-                                setStoredFilters(prev => ({ ...prev, searchText: "" }));
-                                const newPath: string[] = [];
-                                let current: Task | undefined = t;
-                                while (current) {
-                                  newPath.unshift(current.id);
-                                  current = current.parentId ? map[current.parentId] : undefined;
-                                }
-                                setPath(newPath);
-                                setHighlightedTaskId(t.id); // Highlight the clicked task
-                              } else {
-                                handleActivate(i, t.id);
-                              }
-                            }}
+                            subtaskTasks={(t.children || []).map(id => map[id]).filter((child): child is Task => !!child)}
+                            tasksForModal={editTaskId === t.id ? tasks : EMPTY_TASKS}
+                            onEditModalOpenChange={handleEditModalOpenChange}
+                            columnIndex={i}
+                            isSearchResult={col.parentId === "search-results"}
+                            onActivate={handleCardActivate}
                             isActive={t.id === col.activeId}
                             isHighlighted={t.id === highlightedTaskId || t.id === col.activeId}
                             isTriageBoard={true}
                             updateStatus={handleChangeStatus}
                             updateDifficulty={updateDifficulty}
                             updateCategory={updateCategory}
-                            updateTitle={async (id, title) => {
-                              const parentId = await updateTitle(id, title); // Call useTasks' updateTitle
-                              if (parentId) {
-                                // If the updated task had a parent, re-activate the parent's path
-                                const parentTask = map[parentId];
-                                if (parentTask) {
-                                  const newPath: string[] = [];
-                                  let current: Task | undefined = parentTask;
-                                  while (current) {
-                                    newPath.unshift(current.id);
-                                    current = current.parentId ? map[current.parentId] : undefined;
-                                  }
-                                  setPath(newPath); // Set path to parent's path
-                                }
-                              }
-                            }}
+                            updateTitle={handleCardUpdateTitle}
                             updateUser={handleUpdateUser}
                             deleteTask={deleteTask}
                             duplicateTaskStructure={duplicateTaskStructure}
@@ -861,34 +916,7 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
                             toggleTimer={handleToggleTimer}
                             toggleDone={handleToggleDone}
                             reparent={reparent}
-                            onToggleOpen={(taskId, toggleAll) => {
-                              const task = map[taskId];
-                              if (task && task.children && task.children.length > 0) {
-                                // Jump to the first child and highlight it
-                                const firstChildId = task.children[0];
-
-                                // Build full path to parent and then to first child
-                                const newPath: string[] = [];
-                                let current: Task | undefined = task;
-                                while (current) {
-                                  newPath.unshift(current.id);
-                                  current = current.parentId ? map[current.parentId] : undefined;
-                                }
-                                // Add first child to the end
-                                newPath.push(firstChildId);
-
-                                setPath(newPath);
-                                setHighlightedTaskId(firstChildId); // Highlight the first child
-
-                                // Scroll to the highlighted child after a short delay
-                                setTimeout(() => {
-                                  cardRefs.current[firstChildId]?.scrollIntoView({
-                                    behavior: "smooth",
-                                    block: "center",
-                                  });
-                                }, 100);
-                              }
-                            }}
+                            onToggleOpen={handleCardToggleOpen}
                             updateComment={updateComment}
                             updateTerminationDate={updateTerminationDate}
                             updateDurationInMinutes={updateDurationInMinutes}

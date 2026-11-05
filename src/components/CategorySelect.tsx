@@ -3,7 +3,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Category } from "@/hooks/useTasks";
 import { CATEGORIES } from "@/data/categories";
 
-export const CategorySelect: React.FC<{
+const CategorySelectInner: React.FC<{
   value?: Category | "none";
   onChange: (v: Category | "none" | undefined) => void;
   className?: string;
@@ -29,3 +29,5 @@ export const CategorySelect: React.FC<{
     </Select>
   );
 };
+
+export const CategorySelect = React.memo(CategorySelectInner);
