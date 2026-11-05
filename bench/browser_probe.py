@@ -26,6 +26,35 @@ from pathlib import Path
 import websockets
 
 
+NETWORK_PROFILES = {
+    "none": None,
+    "fast-3g": {
+        "latency": 150,
+        "download_kbps": 1600,
+        "upload_kbps": 750,
+        "connection_type": "cellular3g",
+    },
+    "slow-3g": {
+        "latency": 400,
+        "download_kbps": 500,
+        "upload_kbps": 500,
+        "connection_type": "cellular3g",
+    },
+    "3g": {
+        "latency": 300,
+        "download_kbps": 750,
+        "upload_kbps": 250,
+        "connection_type": "cellular3g",
+    },
+    "4g": {
+        "latency": 50,
+        "download_kbps": 4000,
+        "upload_kbps": 3000,
+        "connection_type": "cellular4g",
+    },
+}
+
+
 def free_port():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
@@ -79,8 +108,158 @@ async def wait_for_board(ws, next_id, timeout_s=120):
                     return True
         except Exception:
             pass
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.1)
     return False
+
+
+INIT_JS = r"""
+(() => {
+  const boot = { startedAt: performance.now(), paint: [], longTasks: [], loaf: [] };
+  window.__p3foBoot = boot;
+
+  // Record the exact moment the board DOM appears instead of relying on the
+  // probe's polling interval (which can add up to 100 ms to boardReadyMs).
+  const markBoardReady = () => {
+    if (window.__p3foBoardReadyAt) return;
+    const body = document.body;
+    if (!body) return;
+    const text = body.textContent || '';
+    if (text.includes('Backlog') || text.includes('Start working')) {
+      window.__p3foBoardReadyAt = performance.now();
+    }
+  };
+  const scheduleBoardCheck = () => {
+    if (window.__p3foBoardReadyAt) return;
+    requestAnimationFrame(markBoardReady);
+  };
+  new MutationObserver(scheduleBoardCheck).observe(document, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+  });
+  requestAnimationFrame(markBoardReady);
+
+  try {
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        boot.paint.push({ name: entry.name, startTime: entry.startTime });
+      }
+    }).observe({ type: 'paint', buffered: true });
+  } catch (error) {}
+  try {
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        boot.longTasks.push({ startTime: entry.startTime, duration: entry.duration });
+      }
+    }).observe({ type: 'longtask', buffered: true });
+  } catch (error) {}
+  try {
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        boot.loaf.push({
+          startTime: entry.startTime,
+          duration: entry.duration,
+          blockingDuration: entry.blockingDuration,
+        });
+      }
+    }).observe({ type: 'long-animation-frame', buffered: true });
+  } catch (error) {}
+})();
+"""
+
+LOAD_METRICS_JS = r"""
+() => {
+  const round = (value) => Math.round((value || 0) * 10) / 10;
+  const nav = performance.getEntriesByType('navigation')[0] || {};
+  const paints = {};
+  for (const entry of performance.getEntriesByType('paint')) {
+    paints[entry.name] = round(entry.startTime);
+  }
+  const resources = performance.getEntriesByType('resource').map((entry) => ({
+    name: entry.name,
+    initiatorType: entry.initiatorType,
+    transferSize: entry.transferSize || 0,
+    encodedBodySize: entry.encodedBodySize || 0,
+    decodedBodySize: entry.decodedBodySize || 0,
+    durationMs: round(entry.duration),
+    startTimeMs: round(entry.startTime),
+  }));
+  const sum = (key) => resources.reduce((total, entry) => total + entry[key], 0);
+  const isKind = (entry, extension) => entry.name.split('?')[0].endsWith('.' + extension);
+  const js = resources.filter((entry) => isKind(entry, 'js'));
+  const css = resources.filter((entry) => isKind(entry, 'css'));
+  const main = resources.find((entry) => entry.name.split('?')[0].match(/\/assets\/index-[^/]+\.js$/));
+  const boot = window.__p3foBoot || {};
+  const longTasks = boot.longTasks || [];
+  return {
+    ttfbMs: round(nav.responseStart),
+    domContentLoadedMs: round(nav.domContentLoadedEventEnd),
+    loadEventMs: round(nav.loadEventEnd),
+    firstPaintMs: paints['first-paint'] ?? null,
+    firstContentfulPaintMs: paints['first-contentful-paint'] ?? null,
+    resourceCount: resources.length,
+    navigationTransferBytes: nav.transferSize || 0,
+    resourceTransferBytes: sum('transferSize'),
+    resourceEncodedBytes: sum('encodedBodySize'),
+    resourceDecodedBytes: sum('decodedBodySize'),
+    totalTransferBytes: (nav.transferSize || 0) + sum('transferSize'),
+    jsTransferBytes: js.reduce((total, entry) => total + entry.transferSize, 0),
+    cssTransferBytes: css.reduce((total, entry) => total + entry.transferSize, 0),
+    longTasksBeforeBoard: longTasks.length,
+    longTaskTotalBeforeBoardMs: Math.round(longTasks.reduce((total, entry) => total + entry.duration, 0)),
+    loafBeforeBoard: (boot.loaf || []).length,
+    mainBundle: main ? {
+      name: main.name,
+      transferSize: main.transferSize,
+      encodedBodySize: main.encodedBodySize,
+      decodedBodySize: main.decodedBodySize,
+      durationMs: main.durationMs,
+    } : null,
+    topResources: [...resources].sort((a, b) => b.transferSize - a.transferSize).slice(0, 12),
+  };
+}
+"""
+
+
+async def select_view(ws, next_id, view):
+    if not view or view == "board":
+        return {"view": "board", "clicked": True, "title": True}
+    expression = r"""
+    async () => {
+      const clickElement = (el) => {
+        if (!el) return false;
+        el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+        return true;
+      };
+      const findTimetable = () => {
+        const clock = document.querySelector('svg.lucide-clock');
+        if (clock) return clock.closest('button, [role="button"]');
+        const candidates = [...document.querySelectorAll('button, [role="button"]')];
+        return candidates.find((el) => (el.getAttribute('aria-label') || '').toLowerCase().includes('timetable')) ||
+          candidates.find((el) => (el.textContent || '').trim().toLowerCase() === 'timetable');
+      };
+      let button = findTimetable();
+      if (!button) {
+        const more = [...document.querySelectorAll('button')].find((el) =>
+          /more|overflow/i.test(el.getAttribute('aria-label') || '') ||
+          el.querySelector('svg.lucide-ellipsis')
+        );
+        if (more) {
+          clickElement(more);
+          await new Promise((resolve) => setTimeout(resolve, 350));
+          button = findTimetable();
+        }
+      }
+      const clicked = clickElement(button);
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      return {
+        view: 'timetable',
+        clicked,
+        title: (document.body.innerText || '').includes('Timetable'),
+      };
+    }
+    """
+    return await evaluate(ws, next_id, f"({expression})()", await_promise=True)
 
 
 async def clear_filters(ws, next_id):
@@ -207,7 +386,7 @@ async def run(args):
             raise RuntimeError("Chrome DevTools did not start")
 
         target = http_json(
-            f"http://127.0.0.1:{port}/json/new?{urllib.parse.quote(args.url, safe='')}",
+            f"http://127.0.0.1:{port}/json/new?{urllib.parse.quote('about:blank', safe='')}",
             method="PUT",
         )
         ws_url = target["webSocketDebuggerUrl"]
@@ -216,8 +395,48 @@ async def run(args):
             next_id = [0]
             await cdp_send(ws, "Runtime.enable", {}, next_id)
             await cdp_send(ws, "Page.enable", {}, next_id)
+            network_profile = NETWORK_PROFILES.get(args.network)
+            if network_profile:
+                await cdp_send(ws, "Network.enable", {}, next_id)
+                await cdp_send(
+                    ws,
+                    "Network.setCacheDisabled",
+                    {"cacheDisabled": True},
+                    next_id,
+                )
+                await cdp_send(
+                    ws,
+                    "Network.emulateNetworkConditions",
+                    {
+                        "offline": False,
+                        "latency": network_profile["latency"],
+                        "downloadThroughput": int(
+                            network_profile["download_kbps"] * 1024 / 8
+                        ),
+                        "uploadThroughput": int(
+                            network_profile["upload_kbps"] * 1024 / 8
+                        ),
+                        "connectionType": network_profile["connection_type"],
+                    },
+                    next_id,
+                )
+            await cdp_send(
+                ws,
+                "Page.addScriptToEvaluateOnNewDocument",
+                {"source": INIT_JS},
+                next_id,
+            )
+            await cdp_send(ws, "Page.navigate", {"url": args.url}, next_id)
             loaded = await wait_for_board(ws, next_id)
-            filters = await clear_filters(ws, next_id)
+            board_ready_ms = await evaluate(
+                ws,
+                next_id,
+                "window.__p3foBoardReadyAt || performance.now()",
+            ) or 0
+            initial_load = await evaluate(ws, next_id, f"({LOAD_METRICS_JS})()") or {}
+            initial_load["boardReadyMs"] = round(board_ready_ms, 1)
+            view = await select_view(ws, next_id, args.view) or {"view": args.view}
+            filters = await clear_filters(ws, next_id) or {}
             await asyncio.sleep(2.5)
             if not loaded:
                 print("[probe] board did not load in time", file=sys.stderr)
@@ -234,6 +453,9 @@ async def run(args):
                 ws, next_id, f"({MEASURE_JS})({args.duration_ms})", await_promise=True
             )
             result["url"] = args.url
+            result["network"] = args.network
+            result["initialLoad"] = initial_load
+            result["view"] = view
             result["filters"] = filters
             result["boardLoaded"] = loaded
             result["headed"] = args.headed
@@ -256,6 +478,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", default="http://localhost:5173/")
     parser.add_argument("--duration-ms", type=int, default=30000)
+    parser.add_argument("--view", default="board", choices=["board", "timetable"])
+    parser.add_argument(
+        "--network",
+        default="none",
+        choices=sorted(NETWORK_PROFILES),
+    )
     parser.add_argument("--gate", default="")
     parser.add_argument("--ready-file", default="")
     parser.add_argument("--out", default="")

@@ -17,6 +17,7 @@ import os
 import shutil
 import signal
 import socket
+import sqlite3
 import subprocess
 import sys
 import time
@@ -58,15 +59,45 @@ def snapshot_db(source, destination):
     source = Path(source).resolve()
     if not source.exists():
         raise FileNotFoundError(source)
-    sqlite3 = shutil.which("sqlite3")
-    if sqlite3:
-        subprocess.run(
-            [sqlite3, str(source), f".backup '{destination}'"],
-            check=True,
+
+    # Use the SQLite backup API first: it is safe against a live server and
+    # honors the busy timeout, unlike a plain file copy or a non-retrying CLI
+    # invocation.
+    try:
+        src = sqlite3.connect(f"file:{source}?mode=ro", uri=True, timeout=30)
+        dst = sqlite3.connect(str(destination), timeout=30)
+        try:
+            src.backup(dst)
+        finally:
+            dst.close()
+            src.close()
+        return
+    except sqlite3.Error:
+        Path(destination).unlink(missing_ok=True)
+
+    sqlite3_bin = shutil.which("sqlite3")
+    if not sqlite3_bin:
+        raise RuntimeError("SQLite backup failed and the sqlite3 CLI is unavailable")
+
+    last_error = None
+    for _ in range(5):
+        result = subprocess.run(
+            [
+                sqlite3_bin,
+                "-cmd",
+                ".timeout 30000",
+                str(source),
+                f".backup '{destination}'",
+            ],
             stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
         )
-    else:
-        shutil.copy2(source, destination)
+        if result.returncode == 0:
+            return
+        last_error = result.stderr.strip()
+        time.sleep(1)
+    raise RuntimeError(f"SQLite snapshot failed: {last_error}")
 
 
 def clickhouse_query(url, sql):
@@ -237,43 +268,60 @@ def render_report(context):
         f"# P3FO load bench — {context['run_id']}",
         "",
         f"- Started: `{context['started_at']}`",
-        f"- Duration: `{context['duration']}s` with `{context['users']}` users (spawn rate `{context['spawn_rate']}/s`)",
+        (
+            "- Probe-only run (Locust not started)"
+            if context.get("mode") == "first-paint"
+            else f"- Duration: `{context['duration']}s` with `{context['users']}` users (spawn rate `{context['spawn_rate']}/s`)"
+        ),
         f"- Target: `{context['target']}`",
+        f"- Scenario: `{context.get('scenario', 'mixed')}`",
+        f"- Mode: `{context.get('mode', 'dev')}`",
+        *(
+            [f"- Network: `{context.get('network')}`"]
+            if context.get("network") and context.get("network") != "none"
+            else []
+        ),
         f"- Isolated DB: `{context['db_path']}`",
         f"- Seed: `{context['seed']}`",
         "",
         "## Locust",
         "",
-        table(
-            ["Metric", "Value"],
-            [
-                ["Requests", requests],
-                ["Failures", failures],
-                ["Error rate", f"{error_rate * 100:.2f}%"],
-                ["Median", f"{aggregate.get('median_ms', 0):.1f} ms"],
-                ["p95", f"{aggregate.get('p95_ms', 0):.1f} ms"],
-                ["p99", f"{aggregate.get('p99_ms', 0):.1f} ms"],
-                ["Max", f"{aggregate.get('max_ms', 0):.1f} ms"],
-                ["Throughput", f"{aggregate.get('rps', 0):.1f} req/s"],
-            ],
-        ),
-        "",
-        "### Endpoints",
-        "",
-        table(
-            ["Endpoint", "Count", "Fail", "p50", "p95", "p99", "Max"],
-            [
-                [
-                    row["name"],
-                    row["requests"],
-                    row["failures"],
-                    f"{row['median_ms']:.1f}",
-                    f"{row['p95_ms']:.1f}",
-                    f"{row['p99_ms']:.1f}",
-                    f"{row['max_ms']:.1f}",
-                ]
-                for row in locust.get("endpoints", [])
-            ],
+        *(
+            ["_Not started (--first-paint-only)._", ""]
+            if context.get("mode") == "first-paint"
+            else [
+                table(
+                    ["Metric", "Value"],
+                    [
+                        ["Requests", requests],
+                        ["Failures", failures],
+                        ["Error rate", f"{error_rate * 100:.2f}%"],
+                        ["Median", f"{aggregate.get('median_ms', 0):.1f} ms"],
+                        ["p95", f"{aggregate.get('p95_ms', 0):.1f} ms"],
+                        ["p99", f"{aggregate.get('p99_ms', 0):.1f} ms"],
+                        ["Max", f"{aggregate.get('max_ms', 0):.1f} ms"],
+                        ["Throughput", f"{aggregate.get('rps', 0):.1f} req/s"],
+                    ],
+                ),
+                "",
+                "### Endpoints",
+                "",
+                table(
+                    ["Endpoint", "Count", "Fail", "p50", "p95", "p99", "Max"],
+                    [
+                        [
+                            row["name"],
+                            row["requests"],
+                            row["failures"],
+                            f"{row['median_ms']:.1f}",
+                            f"{row['p95_ms']:.1f}",
+                            f"{row['p99_ms']:.1f}",
+                            f"{row['max_ms']:.1f}",
+                        ]
+                        for row in locust.get("endpoints", [])
+                    ],
+                ),
+            ]
         ),
         "## Backend HTTP spans",
         "",
@@ -375,6 +423,64 @@ def render_report(context):
             ),
         ]
 
+        initial = browser.get("initialLoad") or {}
+        if initial:
+            main_bundle = initial.get("mainBundle") or {}
+            decoded = main_bundle.get("decodedBodySize") or 0
+            transfer = main_bundle.get("transferSize") or 0
+            compression = (transfer / decoded) if decoded else None
+            lines += [
+                "## Cold first load",
+                "",
+                table(
+                    ["Metric", "Value"],
+                    [
+                        ["TTFB", f"{initial.get('ttfbMs')} ms"],
+                        ["First paint", f"{initial.get('firstPaintMs')} ms"],
+                        ["First contentful paint", f"{initial.get('firstContentfulPaintMs')} ms"],
+                        ["Board ready", f"{initial.get('boardReadyMs')} ms"],
+                        ["DOMContentLoaded", f"{initial.get('domContentLoadedMs')} ms"],
+                        ["Load event", f"{initial.get('loadEventMs')} ms"],
+                        ["Resources", initial.get("resourceCount")],
+                        ["Initial transfer", f"{(initial.get('totalTransferBytes') or 0) / 1_000_000:.2f} MB"],
+                        ["JS transfer", f"{(initial.get('jsTransferBytes') or 0) / 1_000_000:.2f} MB"],
+                        ["CSS transfer", f"{(initial.get('cssTransferBytes') or 0) / 1_000_000:.2f} MB"],
+                        [
+                            "Main bundle transfer",
+                            f"{transfer / 1_000_000:.2f} MB / {decoded / 1_000_000:.2f} MB decoded",
+                        ],
+                        [
+                            "Main bundle compression ratio",
+                            f"{compression:.2f}" if compression is not None else "n/a",
+                        ],
+                        ["Long tasks before board", initial.get("longTasksBeforeBoard")],
+                        [
+                            "Long task time before board",
+                            f"{initial.get('longTaskTotalBeforeBoardMs')} ms",
+                        ],
+                    ],
+                ),
+            ]
+            top_resources = initial.get("topResources") or []
+            if top_resources:
+                lines += [
+                    "### Largest first-load resources",
+                    "",
+                    table(
+                        ["Resource", "Transfer", "Decoded", "Duration", "Start"],
+                        [
+                            [
+                                Path(row.get("name", "")).name,
+                                f"{(row.get('transferSize') or 0) / 1024:.0f} KiB",
+                                f"{(row.get('decodedBodySize') or 0) / 1024:.0f} KiB",
+                                f"{row.get('durationMs')} ms",
+                                f"{row.get('startTimeMs')} ms",
+                            ]
+                            for row in top_resources
+                        ],
+                    ),
+                ]
+
     if yjs:
         lines += [
             "## Yjs fan-out",
@@ -389,6 +495,31 @@ def render_report(context):
                     ["Doc updates", yjs.get("docUpdates")],
                     ["Update bytes", yjs.get("docUpdateBytes")],
                     ["Max event gap", f"{yjs.get('maxEventGapMs', 0)} ms"],
+                ],
+            ),
+        ]
+
+    integrity = context.get("timetable_integrity") or {}
+    if integrity:
+        lines += [
+            "## Timetable concurrency integrity",
+            "",
+            table(
+                ["Metric", "Value"],
+                [
+                    ["Hot tasks", integrity.get("hotTasks")],
+                    ["Seed entries", integrity.get("seedEntries")],
+                    ["Expected entries after starts", integrity.get("expectedEntries")],
+                    ["Final entries in DB", integrity.get("finalEntries")],
+                    ["Lost timer entries", integrity.get("lostTimerEntries")],
+                    [
+                        "Lost timer entry rate",
+                        f"{(integrity.get('lostTimerEntryRate') or 0) * 100:.1f}% of starts",
+                    ],
+                    ["Successful edits", integrity.get("successfulEdits")],
+                    ["Successful starts", integrity.get("successfulStarts")],
+                    ["Successful stops", integrity.get("successfulStops")],
+                    ["Entries still open", integrity.get("openTimerEntries")],
                 ],
             ),
         ]
@@ -408,7 +539,7 @@ def render_report(context):
     return "\n".join(lines)
 
 
-def evaluate_gates(args, locust, otel, browser):
+def evaluate_gates(args, locust, otel, browser, integrity=None, first_paint_only=False, scenario="mixed"):
     aggregate = locust.get("aggregate", {})
     requests = aggregate.get("requests", 0)
     failures = aggregate.get("failures", 0)
@@ -423,35 +554,81 @@ def evaluate_gates(args, locust, otel, browser):
             "PASS" if ok else "FAIL",
         ])
 
-    if not aggregate or not requests:
+    if first_paint_only:
+        # Probe-only runs do not execute Locust; omit these gates instead of
+        # reporting them as skipped.
+        pass
+    elif not aggregate or not requests:
         gates.append(["API p95", "no locust data", f"{args.max_api_p95_ms} ms", "FAIL"])
         gates.append(["Error rate", "no locust data", f"{args.max_error_rate * 100}%", "FAIL"])
     else:
         add("API p95", aggregate.get("p95_ms", 0), args.max_api_p95_ms, aggregate.get("p95_ms", 0) <= args.max_api_p95_ms, " ms")
         add("Error rate", error_rate * 100, args.max_error_rate * 100, error_rate <= args.max_error_rate, "%")
 
-    otel_expected = not args.no_otel
+    otel_expected = not args.no_otel and not first_paint_only
 
+    frontend_http = [row for row in (otel.get("frontend_http") or []) if isinstance(row, dict) and "SpanName" in row]
     render_rows = [row for row in (otel.get("react_render") or []) if isinstance(row, dict) and "p95_ms" in row]
     if render_rows:
         worst = max(render_rows, key=lambda row: float(row["p95_ms"]))
         add("Worst render p95", float(worst["p95_ms"]), args.max_render_p95_ms, float(worst["p95_ms"]) <= args.max_render_p95_ms, " ms")
+    elif otel_expected and frontend_http:
+        # The profiler only emits spans for commits >= 16 ms. Frontend HTTP
+        # spans prove the SDK is alive, so an empty render list means every
+        # commit was faster than the profiler threshold, not that telemetry
+        # is missing.
+        gates.append([
+            "Worst render p95",
+            "no commit >= 16 ms",
+            f"{args.max_render_p95_ms} ms",
+            "PASS",
+        ])
     elif otel_expected:
-        # Missing OTel data is not a pass: without react.render spans the gate
-        # cannot be evaluated and the run must not be reported as green.
+        # No frontend spans at all: the SDK did not load, so this is a real
+        # telemetry failure rather than a fast run.
         gates.append(["Worst render p95", "no OTel data", f"{args.max_render_p95_ms} ms", "FAIL"])
-    else:
-        gates.append(["Worst render p95", "skipped (--no-otel)", f"{args.max_render_p95_ms} ms", "SKIP"])
+    # --no-otel and probe-only runs omit the OTel gates entirely rather than
+    # reporting a SKIP that could be mistaken for a pass.
 
-    frontend_http = [row for row in (otel.get("frontend_http") or []) if isinstance(row, dict) and "SpanName" in row]
     get_rows = [row for row in frontend_http if row["SpanName"] == "HTTP GET"]
     if get_rows:
         worst_get = max(float(row["p95_ms"]) for row in get_rows)
         add("Frontend GET p95", worst_get, args.max_frontend_get_p95_ms, worst_get <= args.max_frontend_get_p95_ms, " ms")
     elif otel_expected:
         gates.append(["Frontend GET p95", "no OTel data", f"{args.max_frontend_get_p95_ms} ms", "FAIL"])
-    else:
-        gates.append(["Frontend GET p95", "skipped (--no-otel)", f"{args.max_frontend_get_p95_ms} ms", "SKIP"])
+    # --no-otel and probe-only runs omit this gate instead of reporting SKIP.
+
+    if scenario == "timetable" and not first_paint_only:
+        timetable_rows = [
+            row for row in locust.get("endpoints", [])
+            if "timetable" in (row.get("name") or "")
+        ]
+        if timetable_rows:
+            worst_timetable = max(float(row.get("p95_ms", 0)) for row in timetable_rows)
+            add(
+                "Timetable edit/start/stop p95",
+                worst_timetable,
+                args.max_timetable_p95_ms,
+                worst_timetable <= args.max_timetable_p95_ms,
+                " ms",
+            )
+        else:
+            gates.append([
+                "Timetable edit/start/stop p95",
+                "no timetable requests",
+                f"{args.max_timetable_p95_ms} ms",
+                "FAIL",
+            ])
+
+    if scenario == "timetable" and integrity and integrity.get("successfulStarts"):
+        lost_rate = float(integrity.get("lostTimerEntryRate", 0))
+        add(
+            "Lost timer entry rate",
+            lost_rate * 100,
+            args.max_lost_timer_entry_rate * 100,
+            lost_rate <= args.max_lost_timer_entry_rate,
+            "%",
+        )
 
     if browser:
         if not isinstance(browser, dict) or not browser.get("durationMs"):
@@ -462,6 +639,51 @@ def evaluate_gates(args, locust, otel, browser):
             duration_min = float(browser.get("durationMs", 0)) / 60000.0
             long_tasks_per_min = float(browser.get("longTaskCount", 0)) / (duration_min if duration_min > 0 else 1.0)
             add("Long tasks/min", long_tasks_per_min, args.max_long_tasks_per_min, long_tasks_per_min <= args.max_long_tasks_per_min)
+
+        initial = browser.get("initialLoad") if isinstance(browser, dict) else None
+        if initial:
+            main_bundle = initial.get("mainBundle") or {}
+            decoded = main_bundle.get("decodedBodySize") or 0
+            transfer = main_bundle.get("transferSize")
+            production_load = bool(decoded) or args.production or bool(args.probe_url)
+
+            # Dev-server probes do not expose the production chunk graph, so
+            # first-paint/resource gates are only meaningful for production or
+            # deployed runs. Do not report them as skipped; they are simply
+            # evaluated by the dedicated first-paint target instead.
+            if production_load:
+                fcp = initial.get("firstContentfulPaintMs")
+                if fcp is None:
+                    gates.append(["First contentful paint", "no paint data", f"{args.max_fcp_ms} ms", "FAIL"])
+                else:
+                    add("First contentful paint", float(fcp), args.max_fcp_ms, float(fcp) <= args.max_fcp_ms, " ms")
+
+                board_ready = initial.get("boardReadyMs")
+                if board_ready is None:
+                    gates.append(["Board ready", "no data", f"{args.max_board_ready_ms} ms", "FAIL"])
+                else:
+                    add("Board ready", float(board_ready), args.max_board_ready_ms, float(board_ready) <= args.max_board_ready_ms, " ms")
+
+            if decoded and transfer is not None:
+                total_transfer = float(initial.get("totalTransferBytes") or 0) / 1_000_000
+                add(
+                    "Initial transfer",
+                    total_transfer,
+                    args.max_initial_transfer_mb,
+                    total_transfer <= args.max_initial_transfer_mb,
+                    " MB",
+                )
+                ratio = float(transfer) / float(decoded)
+                add(
+                    "Main bundle compression",
+                    ratio * 100,
+                    args.max_bundle_compression_ratio * 100,
+                    ratio <= args.max_bundle_compression_ratio,
+                    "%",
+                )
+        else:
+            gates.append(["First contentful paint", "no first-load data", f"{args.max_fcp_ms} ms", "FAIL"])
+            gates.append(["Board ready", "no first-load data", f"{args.max_board_ready_ms} ms", "FAIL"])
 
     return gates
 
@@ -505,11 +727,25 @@ def main():
     parser.add_argument("--spawn-rate", type=float, default=5)
     parser.add_argument("--duration", type=int, default=30)
     parser.add_argument("--host", default="")
+    parser.add_argument("--probe-url", default="")
+    parser.add_argument("--first-paint-only", action="store_true")
     parser.add_argument("--db-source", default=str(REPO / "p3fo.db"))
     parser.add_argument("--api-port", type=int, default=0)
     parser.add_argument("--frontend-port", type=int, default=0)
     parser.add_argument("--frontend", action="store_true")
     parser.add_argument("--browser", action="store_true")
+    parser.add_argument("--production", action="store_true")
+    parser.add_argument("--skip-build", action="store_true")
+    parser.add_argument("--probe-view", default="", choices=["", "board", "timetable"])
+    parser.add_argument(
+        "--network",
+        default="none",
+        choices=["none", "fast-3g", "slow-3g", "3g", "4g"],
+    )
+    parser.add_argument("--scenario", default="mixed", choices=["mixed", "timetable"])
+    parser.add_argument("--timetable-tasks", type=int, default=2)
+    parser.add_argument("--timetable-entries", type=int, default=24)
+    parser.add_argument("--timetable-sync", action="store_true")
     parser.add_argument("--no-otel", action="store_true")
     parser.add_argument("--clickhouse", default=os.environ.get("CLICKHOUSE_URL", "http://localhost:18123"))
     parser.add_argument("--backend-service", default="")
@@ -521,28 +757,77 @@ def main():
     parser.add_argument("--max-api-p95-ms", type=float, default=33.0)
     parser.add_argument("--max-error-rate", type=float, default=0.01)
     parser.add_argument("--max-render-p95-ms", type=float, default=33.0)
-    parser.add_argument("--max-frame-p99-ms", type=float, default=33.0)
-    parser.add_argument("--max-long-tasks-per-min", type=float, default=60.0)
+    parser.add_argument("--max-frame-p99-ms", type=float, default=25.0)
+    parser.add_argument("--max-long-tasks-per-min", type=float, default=10.0)
     parser.add_argument("--max-frontend-get-p95-ms", type=float, default=50.0)
+    parser.add_argument("--max-timetable-p95-ms", type=float, default=50.0)
+    parser.add_argument("--max-lost-timer-entry-rate", type=float, default=0.01)
+    parser.add_argument("--max-fcp-ms", type=float, default=50.0)
+    parser.add_argument("--max-board-ready-ms", type=float, default=500.0)
+    parser.add_argument("--max-initial-transfer-mb", type=float, default=2.0)
+    parser.add_argument("--max-bundle-compression-ratio", type=float, default=0.5)
     args = parser.parse_args()
 
+    first_paint_only = args.first_paint_only or bool(args.probe_url and not args.host)
+    if args.probe_url or first_paint_only:
+        args.browser = True
     if args.browser:
         args.frontend = True
+    if args.production:
+        args.frontend = True
+
     run_id = args.run_id or time.strftime("%Y%m%d-%H%M%S")
     run_dir = RESULTS / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
-    for stale in ("probe.go", "probe.ready", "yjs.go", "browser_probe.json", "yjs_observer.json"):
+    for stale in (
+        "probe.go",
+        "probe.ready",
+        "yjs.go",
+        "browser_probe.json",
+        "yjs_observer.json",
+        "timetable_integrity.json",
+    ):
         (run_dir / stale).unlink(missing_ok=True)
+
     api_port = args.api_port or free_port()
     frontend_port = args.frontend_port or free_port()
-    isolated = not args.host
-    target = args.host or f"http://127.0.0.1:{api_port}"
+    isolated = not args.host and (not first_paint_only or args.production)
+    if first_paint_only and not isolated:
+        target = args.probe_url or args.host
+        if not target:
+            parser.error(
+                "--first-paint-only requires --probe-url, --host, or --production"
+            )
+    else:
+        target = args.host or f"http://127.0.0.1:{api_port}"
+
     backend_service = args.backend_service or (
         f"p3fo-bench-{run_id}" if isolated else "p3fo-backend"
     )
     frontend_service = args.frontend_service or (
         f"p3fo-bench-{run_id}-frontend" if args.frontend else "p3fo-frontend"
     )
+    mode = "first-paint" if first_paint_only else ("production" if args.production else "dev")
+    integrity_out = run_dir / "timetable_integrity.json"
+
+    if args.production and isolated and not args.skip_build:
+        build_env = os.environ.copy()
+        build_env.update(
+            {
+                "VITE_BASE_URL": "/",
+                "VITE_OTEL_ENABLED": "false" if args.no_otel else "true",
+                "VITE_OTEL_SERVICE_NAME": frontend_service,
+            }
+        )
+        print("[bench] building production frontend and server...")
+        subprocess.run(["pnpm", "run", "build"], cwd=REPO, env=build_env, check=True)
+        subprocess.run(
+            ["pnpm", "exec", "tsc", "--project", "tsconfig.server.json"],
+            cwd=REPO,
+            env=build_env,
+            check=True,
+        )
+
     temp_db = None
     server_log = (run_dir / "server.log").open("w", encoding="utf-8")
     frontend_log = (run_dir / "frontend.log").open("w", encoding="utf-8")
@@ -572,18 +857,32 @@ def main():
                     "OTEL_SERVICE_NAME": backend_service,
                 }
             )
-            server = subprocess.Popen(
-                ["pnpm", "exec", "tsx", "server/index.ts"],
-                cwd=REPO,
-                env=env,
-                stdout=server_log,
-                stderr=subprocess.STDOUT,
-                start_new_session=True,
-            )
-            wait_http(f"{target}/api/health", timeout=90, process=server)
-            print(f"[bench] isolated backend on {target} (db {temp_db})")
+            if args.production:
+                env.update({"NODE_ENV": "production", "VITE_BASE_URL": "/"})
+                server = subprocess.Popen(
+                    ["node", "dist/server/server/index.js"],
+                    cwd=REPO,
+                    env=env,
+                    stdout=server_log,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
+                frontend_port = api_port
+                wait_http(f"{target}/api/health", timeout=90, process=server)
+                print(f"[bench] production server on {target} (db {temp_db})")
+            else:
+                server = subprocess.Popen(
+                    ["pnpm", "exec", "tsx", "server/index.ts"],
+                    cwd=REPO,
+                    env=env,
+                    stdout=server_log,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
+                wait_http(f"{target}/api/health", timeout=90, process=server)
+                print(f"[bench] isolated backend on {target} (db {temp_db})")
 
-        if args.frontend:
+        if args.frontend and not args.production and not first_paint_only:
             env = os.environ.copy()
             env.update(
                 {
@@ -617,26 +916,40 @@ def main():
         yjs_gate = run_dir / "yjs.go"
         probe_out = run_dir / "browser_probe.json"
         yjs_out = run_dir / "yjs_observer.json"
-
         probe_ready = run_dir / "probe.ready"
+        probe_url = args.probe_url or (
+            target if first_paint_only else f"http://127.0.0.1:{frontend_port}/"
+        )
+        probe_view = args.probe_view or (
+            "timetable" if args.scenario == "timetable" else "board"
+        )
+
         probe_log = (run_dir / "probe.log").open("w", encoding="utf-8")
         if args.browser:
             probe_env = os.environ.copy()
-            probe = subprocess.Popen(
-                [
-                    sys.executable,
-                    str(BENCH / "browser_probe.py"),
-                    "--url",
-                    f"http://127.0.0.1:{frontend_port}/",
-                    "--duration-ms",
-                    str((args.duration + 3) * 1000),
+            probe_cmd = [
+                sys.executable,
+                str(BENCH / "browser_probe.py"),
+                "--url",
+                probe_url,
+                "--view",
+                probe_view,
+                "--network",
+                args.network,
+                "--duration-ms",
+                str(5000 if first_paint_only else (args.duration + 3) * 1000),
+                "--out",
+                str(probe_out),
+            ]
+            if not first_paint_only:
+                probe_cmd += [
                     "--gate",
                     str(probe_gate),
                     "--ready-file",
                     str(probe_ready),
-                    "--out",
-                    str(probe_out),
-                ],
+                ]
+            probe = subprocess.Popen(
+                probe_cmd,
                 cwd=REPO,
                 env=probe_env,
                 stdout=probe_log,
@@ -644,17 +957,20 @@ def main():
                 text=True,
                 start_new_session=True,
             )
-            deadline = time.time() + 180
-            while time.time() < deadline and not probe_ready.exists():
-                if probe.poll() is not None:
-                    break
-                time.sleep(0.25)
-            if probe_ready.exists():
-                print("[bench] browser probe ready")
+            if first_paint_only:
+                print(f"[bench] first-paint probe on {probe_url} ({probe_view})")
             else:
-                print("[bench] browser probe did not become ready", file=sys.stderr)
+                deadline = time.time() + 180
+                while time.time() < deadline and not probe_ready.exists():
+                    if probe.poll() is not None:
+                        break
+                    time.sleep(0.25)
+                if probe_ready.exists():
+                    print("[bench] browser probe ready")
+                else:
+                    print("[bench] browser probe did not become ready", file=sys.stderr)
 
-        if isolated and not args.no_otel:
+        if isolated and not args.no_otel and not first_paint_only:
             observer_env = os.environ.copy()
             observer_env.update(
                 {
@@ -678,59 +994,69 @@ def main():
             if not read_until_ready(observer, "YJS_READY", timeout=30):
                 print("[bench] Yjs observer did not connect", file=sys.stderr)
 
-        locust_env = os.environ.copy()
-        locust_env.update(
-            {
-                "BENCH_RUN_ID": run_id,
-                "BENCH_TITLE_PREFIX": "bench:",
-                "BENCH_SEED": str(args.seed),
-                "BENCH_CLEANUP": "0" if isolated else "1",
-            }
-        )
-        locust_cmd = [
-            shutil.which("locust") or "locust",
-            "-f",
-            str(BENCH / "locustfile.py"),
-            "--headless",
-            "-u",
-            str(args.users),
-            "-r",
-            str(args.spawn_rate),
-            "-t",
-            f"{args.duration}s",
-            "--host",
-            target,
-            "--csv",
-            str(run_dir / "locust"),
-            "--html",
-            str(run_dir / "locust.html"),
-            "--loglevel",
-            "WARNING",
-        ]
+        locust_proc = None
         measure_start = now_utc()
-        print(f"[bench] locust: {args.users} users, {args.duration}s")
-        locust_proc = subprocess.Popen(
-            locust_cmd,
-            cwd=REPO,
-            env=locust_env,
-            stdout=locust_log,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
-        probe_gate.write_text("go", encoding="utf-8")
-        yjs_gate.write_text("go", encoding="utf-8")
-        try:
-            locust_proc.wait(timeout=args.duration + 180)
-        except subprocess.TimeoutExpired:
-            stop_process(locust_proc, "locust")
-        measure_end = now_utc()
-
-        if locust_proc.returncode not in (0, None):
-            print(f"[bench] locust exited with {locust_proc.returncode}", file=sys.stderr)
+        measure_end = measure_start
+        if not first_paint_only:
+            locust_env = os.environ.copy()
+            locust_env.update(
+                {
+                    "BENCH_RUN_ID": run_id,
+                    "BENCH_TITLE_PREFIX": "bench:",
+                    "BENCH_SEED": str(args.seed),
+                    "BENCH_CLEANUP": "0" if isolated else "1",
+                    "BENCH_SCENARIO": args.scenario,
+                    "BENCH_TIMETABLE_TASKS": str(args.timetable_tasks),
+                    "BENCH_TIMETABLE_ENTRIES": str(args.timetable_entries),
+                    "BENCH_TIMETABLE_SYNC": "1" if args.timetable_sync else "0",
+                    "BENCH_INTEGRITY_OUT": (
+                        str(integrity_out) if args.scenario == "timetable" else ""
+                    ),
+                }
+            )
+            locust_cmd = [
+                shutil.which("locust") or "locust",
+                "-f",
+                str(BENCH / "locustfile.py"),
+                "--headless",
+                "-u",
+                str(args.users),
+                "-r",
+                str(args.spawn_rate),
+                "-t",
+                f"{args.duration}s",
+                "--host",
+                target,
+                "--csv",
+                str(run_dir / "locust"),
+                "--html",
+                str(run_dir / "locust.html"),
+                "--loglevel",
+                "WARNING",
+            ]
+            print(f"[bench] locust: {args.users} users, {args.duration}s, scenario {args.scenario}")
+            locust_proc = subprocess.Popen(
+                locust_cmd,
+                cwd=REPO,
+                env=locust_env,
+                stdout=locust_log,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+            probe_gate.write_text("go", encoding="utf-8")
+            yjs_gate.write_text("go", encoding="utf-8")
+            try:
+                locust_proc.wait(timeout=args.duration + 180)
+            except subprocess.TimeoutExpired:
+                stop_process(locust_proc, "locust")
+            measure_end = now_utc()
+            if locust_proc.returncode not in (0, None):
+                print(f"[bench] locust exited with {locust_proc.returncode}", file=sys.stderr)
 
         if probe is not None:
+            timeout = 300 if first_paint_only else args.duration + 120
             try:
-                probe.wait(timeout=args.duration + 120)
+                probe.wait(timeout=timeout)
             except subprocess.TimeoutExpired:
                 stop_process(probe, "browser probe")
         if observer is not None:
@@ -740,13 +1066,22 @@ def main():
                 stop_process(observer, "yjs observer")
 
         time.sleep(6)
-        locust = read_locust_csv(run_dir / "locust_stats.csv")
+        locust = read_locust_csv(run_dir / "locust_stats.csv") if not first_paint_only else {}
         browser = load_json(probe_out)
         yjs = load_json(yjs_out)
-        otel = {} if args.no_otel else collect_otel(
+        integrity = load_json(integrity_out) if args.scenario == "timetable" else {}
+        otel = {} if args.no_otel or first_paint_only else collect_otel(
             args.clickhouse, measure_start, measure_end, backend_service, frontend_service
         )
-        gates = evaluate_gates(args, locust, otel, browser)
+        gates = evaluate_gates(
+            args,
+            locust,
+            otel,
+            browser,
+            integrity=integrity,
+            first_paint_only=first_paint_only,
+            scenario=args.scenario,
+        )
         context = {
             "run_id": run_id,
             "started_at": started_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -754,12 +1089,19 @@ def main():
             "users": args.users,
             "spawn_rate": args.spawn_rate,
             "target": target,
-            "db_path": str(temp_db) if temp_db else args.db_source,
+            "probe_url": probe_url if args.browser else "",
+            "scenario": args.scenario,
+            "mode": mode,
+            "network": args.network,
+            "db_path": "not used (probe-only)" if first_paint_only else (
+                str(temp_db) if temp_db else args.db_source
+            ),
             "seed": args.seed,
             "locust": locust,
             "otel": otel,
             "browser": browser,
             "yjs": yjs,
+            "timetable_integrity": integrity,
             "gates": gates,
             "artifacts": {
                 "report": str(run_dir / "report.md"),
@@ -769,6 +1111,7 @@ def main():
                 "frontend log": str(run_dir / "frontend.log"),
                 "browser probe": str(probe_out),
                 "yjs observer": str(yjs_out),
+                "timetable integrity": str(integrity_out),
             },
         }
         (run_dir / "summary.json").write_text(json.dumps(context, indent=2), encoding="utf-8")
@@ -791,6 +1134,7 @@ def main():
             probe_log.close()
         if temp_db is not None and not args.keep_db:
             shutil.rmtree(temp_db.parent, ignore_errors=True)
+
 
 
 if __name__ == "__main__":

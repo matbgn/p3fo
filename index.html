@@ -5,10 +5,65 @@
     <link rel="icon" type="image/png" href="/P3Fo_Logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>P3Fo (“P-Fo”)</title>
+    <style>
+      /* Paint a real app shell before the JS bundle is parsed. This is the
+         first contentful paint the user sees, and it keeps the screen from
+         staying blank while React mounts. */
+      #boot-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        display: grid;
+        place-items: center;
+        background: #f8fafc;
+        color: #0f172a;
+        pointer-events: none;
+      }
+      .boot-splash__mark {
+        font: 600 20px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif;
+        letter-spacing: 0.04em;
+        text-align: center;
+      }
+      .boot-splash__track {
+        width: 112px;
+        height: 2px;
+        margin: 14px auto 0;
+        overflow: hidden;
+        background: #e2e8f0;
+        border-radius: 999px;
+      }
+      .boot-splash__bar {
+        width: 40%;
+        height: 100%;
+        background: #0f172a;
+        border-radius: inherit;
+        animation: boot-slide 900ms ease-in-out infinite;
+      }
+      @keyframes boot-slide {
+        from { transform: translateX(-110%); }
+        to { transform: translateX(310%); }
+      }
+      #root:not(:empty) ~ #boot-splash {
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 120ms ease-out, visibility 0s linear 120ms;
+      }
+      @media (prefers-color-scheme: dark) {
+        #boot-splash { background: #0b1120; color: #f8fafc; }
+        .boot-splash__track { background: #1e293b; }
+        .boot-splash__bar { background: #f8fafc; }
+      }
+    </style>
   </head>
 
   <body>
     <div id="root"></div>
+    <div id="boot-splash" role="status" aria-label="Loading P3Fo">
+      <div>
+        <div class="boot-splash__mark">P3Fo</div>
+        <div class="boot-splash__track"><div class="boot-splash__bar"></div></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

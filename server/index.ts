@@ -1,5 +1,6 @@
 import './telemetry.js';
 import express, { Request, Response, NextFunction } from 'express';
+import compression from 'compression';
 import cors from 'cors';
 import crypto from 'node:crypto';
 import { createDbClient } from './db/index.js';
@@ -85,6 +86,10 @@ const DB_URL = process.env.P3FO_DB_URL;
 const DB_SQLITE_FILE = process.env.P3FO_DB_SQLITE_FILE || './p3fo.db';
 
 // Middleware
+// Compress responses above 1 KiB. This is critical for the production SPA:
+// without it the main index chunk ships ~2.8 MiB uncompressed on every cold
+// load, which dominates first paint on slow links.
+app.use(compression({ threshold: 1024 }));
 app.use(cors({
   origin: true,
   allowedHeaders: ['Content-Type', 'traceparent', 'tracestate', 'X-API-Key', 'Authorization'],
@@ -138,7 +143,24 @@ if (process.env.NODE_ENV === 'production') {
   const baseUrl = process.env.VITE_BASE_URL || '/';
   console.log(`Mounting static files at: ${baseUrl}`);
 
-  app.use(baseUrl, express.static(staticPath, { index: false }));
+  const assetsDir = `${path.sep}assets${path.sep}`;
+  // Vite content-hashed filenames look like `index-Cc2a6xB8.js` or
+  // `calendar-vendor-DEpV2Nr3.css`. Only those may be immutable: the hash is
+  // the cache key, so a new build produces a new URL and the old entry is
+  // simply never requested again. Anything else under /assets falls back to
+  // ETag revalidation so it cannot go stale for a year.
+  const hashedAsset = /-[A-Za-z0-9_-]{8,}\.[A-Za-z0-9]+$/;
+  app.use(baseUrl, express.static(staticPath, {
+    index: false,
+    setHeaders: (res, filePath) => {
+      if (!filePath.includes(assetsDir)) return;
+      if (hashedAsset.test(filePath)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      } else {
+        res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+      }
+    },
+  }));
 }
 
 // Initialize database client

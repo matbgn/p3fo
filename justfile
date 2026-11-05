@@ -63,8 +63,9 @@ dev-browser:
 
 # Run all tests. Heavy suites are opt-OUT, mirroring omniticket's tests recipe:
 #
-#   just tests                - unit tests + load bench
-#   just tests --skip load    - unit tests only
+#   just tests                - unit tests + load bench + local first-paint
+#   just tests --skip load    - unit tests + local first-paint
+#   just tests --skip load,first-paint - unit tests only
 #
 # The load bench skips gracefully when locust or Chrome is unavailable so the
 # suite stays green on machines without the load-test prerequisites.
@@ -117,6 +118,17 @@ tests *args="":
     just bench-check
   fi
 
+  if [[ ",${skip_set}," == *",first-paint,"* ]]; then
+    echo "⏭  First-paint bench skipped (--skip first-paint)"
+  elif [[ ! -f dist/index.html || ! -f dist/server/server/index.js ]]; then
+    echo "⏭  First-paint bench skipped (run 'just build' first)"
+  elif ! command -v "${chrome_bin}" > /dev/null 2>&1; then
+    echo "⏭  First-paint bench skipped (${chrome_bin} not found)"
+  else
+    echo "▶ First-paint bench (localhost production build)..."
+    CHROME_BIN="${chrome_bin}" just bench-first-paint-local
+  fi
+
 # --- Load bench ---
 bench users="25" duration="30":
   python3 bench/orchestrator.py --users {{users}} --duration {{duration}}
@@ -126,6 +138,32 @@ bench-browser users="25" duration="30":
 
 bench-check users="25" duration="30":
   python3 bench/orchestrator.py --users {{users}} --duration {{duration}} --browser --enforce
+
+# Standard cohort: 25 people on the same timetable view, editing entries and
+# starting/stopping timers. The lost-entry gate is intentionally strict.
+bench-timetable users="25" duration="30":
+  python3 bench/orchestrator.py --users {{users}} --duration {{duration}} --scenario timetable --browser --enforce
+
+# Build and serve the real production bundle, then run the same cohort while
+# enforcing cold first-paint, transfer-size and compression gates.
+bench-production users="25" duration="30":
+  python3 bench/orchestrator.py --users {{users}} --duration {{duration}} --production --scenario timetable --browser --no-otel --enforce
+
+# Probe an already-deployed URL's cold first paint without generating load.
+bench-first-paint url="http://localhost:5173/":
+  python3 bench/orchestrator.py --probe-url {{url}} --first-paint-only --enforce
+
+# Cold first paint of the local production build (unthrottled, strict budgets).
+# Reuses the existing dist/ (run 'just build' first).
+bench-first-paint-local:
+  @test -f dist/index.html -a -f dist/server/server/index.js || (echo "Run 'just build' first" >&2; exit 1)
+  python3 bench/orchestrator.py --production --skip-build --first-paint-only --no-otel --enforce
+
+# Cold first paint of the local production build under a throttled 3G profile.
+# Reuses the existing dist/ (run 'just build' first).
+bench-first-paint-3g network="fast-3g":
+  @test -f dist/index.html -a -f dist/server/server/index.js || (echo "Run 'just build' first" >&2; exit 1)
+  python3 bench/orchestrator.py --production --skip-build --first-paint-only --network {{network}} --no-otel --enforce
 
 # --- Code Quality Checks ---
 check:
@@ -140,7 +178,55 @@ check:
 # --- Pre-commit checks ---
 # Mirrors omniticket's pre-commit: build, run the full test suite (including
 # the load bench), then typecheck/lint/node-version alignment via check.
-pre-commit: build tests check
+# The load bench is a required gate here: start the OTel stack if needed and
+# fail instead of silently skipping when its prerequisites are missing.
+_require-bench:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  missing=0
+  chrome_bin="${CHROME_BIN:-google-chrome}"
+  if ! command -v locust > /dev/null 2>&1; then
+    echo "pre-commit: locust is not installed" >&2
+    missing=1
+  fi
+  if ! command -v "${chrome_bin}" > /dev/null 2>&1; then
+    echo "pre-commit: ${chrome_bin} not found (set CHROME_BIN)" >&2
+    missing=1
+  fi
+  if [ "$missing" -ne 0 ]; then
+    exit 1
+  fi
+
+  clickhouse_url="${CLICKHOUSE_URL:-http://localhost:18123}"
+  collector_url="${OTEL_COLLECTOR_URL:-http://localhost:14318}"
+  clickhouse_ok() {
+    curl -sf --max-time 2 "${clickhouse_url%/}/ping" > /dev/null 2>&1
+  }
+  collector_ok() {
+    curl -s --max-time 2 -o /dev/null "${collector_url%/}/" > /dev/null 2>&1
+  }
+
+  if ! clickhouse_ok || ! collector_ok; then
+    if ! command -v docker > /dev/null 2>&1; then
+      echo "pre-commit: Docker is required to start the OTel stack" >&2
+      exit 1
+    fi
+    echo "▶ Starting ClickHouse/OTel stack..."
+    docker compose -f docker-compose.hyperdx.yml up -d
+    for _ in $(seq 1 240); do
+      if clickhouse_ok && collector_ok; then
+        break
+      fi
+      sleep 0.5
+    done
+    if ! clickhouse_ok || ! collector_ok; then
+      echo "pre-commit: OTel stack did not become ready" >&2
+      echo "Hint: docker compose -f docker-compose.hyperdx.yml logs --tail=40" >&2
+      exit 1
+    fi
+  fi
+
+pre-commit: _require-bench build tests check
   @echo "✅ Pre-commit checks passed"
 
 alias pre := pre-commit
