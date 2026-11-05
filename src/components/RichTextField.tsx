@@ -181,7 +181,7 @@ const EditorModal: React.FC<EditorModalProps> = ({
           Edit the {label} field using the rich text editor below.
         </DialogDescription>
       </DialogHeader>
-      <div className="flex-1 min-h-[300px] py-4">
+      <div className="flex-1 min-h-[200px] py-4 overflow-y-auto">
         <BlockNoteView
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           editor={editor as any}
@@ -189,7 +189,7 @@ const EditorModal: React.FC<EditorModalProps> = ({
           className="w-full h-full"
         />
       </div>
-      <DialogFooter>
+      <DialogFooter className="shrink-0">
         <Button variant="outline" onClick={onCancel}>
           Cancel
         </Button>
@@ -261,7 +261,7 @@ export const RichTextField: React.FC<RichTextFieldProps> = ({
       {/* Modal: fresh EditorModal on every open */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent
-          className="max-w-2xl max-h-[85vh] flex flex-col"
+          className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
           aria-describedby="__bn_editor_desc__"
         >
           <DialogDescription id="__bn_editor_desc__" className="sr-only">

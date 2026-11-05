@@ -1106,14 +1106,14 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
       {/* Comment Modal */}
       {isCommentModalOpen && (
         <Dialog open={isCommentModalOpen} onOpenChange={setIsCommentModalOpen}>
-          <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col" aria-describedby={undefined}>
+          <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden" aria-describedby={undefined}>
             <DialogHeader>
               <DialogTitle>{t('task.editCommentTitle', { title: task.title })}</DialogTitle>
               <DialogDescription className="sr-only">
                 {t('task.editCommentDescription', { title: task.title })}
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
+            <div className="grid gap-4 py-4 flex-1 min-h-0 overflow-y-auto">
               <div className="grid gap-2">
                 <label htmlFor="comment" className="sr-only">{t('task.commentLabel')}</label>
                 <RichTextField
@@ -1125,7 +1125,7 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
                 />
               </div>
             </div>
-            <div className="flex justify-end">
+            <div className="flex justify-end shrink-0">
               <Button
                 onClick={(e) => {
                   e.stopPropagation();
