@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useTranslation } from 'react-i18next';
 import { Button } from "@/components/ui/button";
-import { Pause, Square, ArrowRight, Play, SkipForward, Apple, RotateCcw, PictureInPicture2, PlaneTakeoff, Loader2, ChevronDown, Train, Coffee, ChartNoAxesGantt, Search, Zap } from "lucide-react";
+import { Pause, Square, ArrowRight, Play, SkipForward, Apple, RotateCcw, PictureInPicture2, PlaneTakeoff, Loader2, ChevronDown, Train, Coffee, ChartNoAxesGantt, Search, Zap, Clock } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { TimeSheetDialog } from "@/components/TimeSheetDialog";
 import { useTasks } from "@/hooks/useTasks";
 import { useAllTasks } from "@/hooks/useAllTasks";
 import { useUserSettings } from "@/hooks/useUserSettings";
@@ -188,7 +189,9 @@ const LastStoppedTaskBlock: React.FC<{
   taskId?: string;
   resumeLabel: string;
   jumpLabel: string;
-}> = ({ title, onResume, onJumpToTask, taskId, resumeLabel, jumpLabel }) => {
+  editTimeEntryLabel: string;
+}> = ({ title, onResume, onJumpToTask, taskId, resumeLabel, jumpLabel, editTimeEntryLabel }) => {
+  const [isTimeSheetOpen, setIsTimeSheetOpen] = useState(false);
   return (
     <>
       <button
@@ -201,6 +204,27 @@ const LastStoppedTaskBlock: React.FC<{
       <Button size="sm" variant="ghost" onClick={onResume} className="h-7 w-7 sm:h-8 sm:w-8 p-0 text-muted-foreground/60 hover:text-foreground" title={resumeLabel} aria-label={resumeLabel}>
         <Play className="h-3 w-3 sm:h-4 sm:w-4" />
       </Button>
+      {taskId && (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => setIsTimeSheetOpen(true)}
+          className="h-7 w-7 sm:h-8 sm:w-8 p-0 text-muted-foreground/60 hover:text-foreground"
+          title={editTimeEntryLabel}
+          aria-label={editTimeEntryLabel}
+        >
+          <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
+        </Button>
+      )}
+      <JumpToTaskArrow visible={!!onJumpToTask} taskId={taskId} onJump={onJumpToTask!} label={jumpLabel} />
+      {taskId && (
+        <TimeSheetDialog
+          taskId={taskId}
+          taskTitle={title}
+          open={isTimeSheetOpen}
+          onOpenChange={setIsTimeSheetOpen}
+        />
+      )}
     </>
   );
 };
@@ -696,6 +720,7 @@ export const QuickTimer: React.FC<{
             taskId={lastStoppedTask.task.id}
             resumeLabel={t('quickTimer.resumeTimer')}
             jumpLabel={t('quickTimer.jumpToTask')}
+            editTimeEntryLabel={t('quickTimer.editTimeEntry')}
           />
         </div>
       ) : null}

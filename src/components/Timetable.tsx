@@ -4,6 +4,8 @@ import { useTasks, Category, TriageStatus } from "@/hooks/useTasks";
 import { useAllTasks } from "@/hooks/useAllTasks";
 import { CATEGORIES } from "@/data/categories";
 import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
+import { AddTimeEntryDialog } from "./AddTimeEntryDialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -39,7 +41,7 @@ const TimetableInner: React.FC<{
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { tasks: allTasks, loading: tasksLoading } = useAllTasks();
-  const { updateTimeEntry, deleteTimeEntry, updateCategory, updateUser, toggleTimer } = useTasks();
+  const { updateTimeEntry, deleteTimeEntry, updateCategory, updateUser, toggleTimer, addTimeEntry } = useTasks();
   // We use allTasks for the list, but we need to ensure we don't conflict with useTasks
   const tasks = allTasks;
   const { settings } = useSettingsContext();
@@ -292,6 +294,40 @@ const TimetableInner: React.FC<{
     }
   }, [isSingleDayRange, timeChunk]);
 
+  // Manual time entry creation: pick a task, then create a 1-second entry
+  const [isAddEntryOpen, setIsAddEntryOpen] = useState(false);
+  const [manualEntryStart, setManualEntryStart] = useState(() => Date.now());
+
+  const computeManualEntryStart = React.useCallback(() => {
+    const timezone = settings.timezone || 'Europe/Zurich';
+    const now = Date.now();
+    if (!dateRange.start) return now;
+
+    const rangeStart = dateRange.start.getTime();
+    const rangeEnd = dateRange.end ? dateRange.end.getTime() : Number.POSITIVE_INFINITY;
+    const isSingleDay = isSingleDayRange();
+    const [splitHour] = settings.splitTime.split(':').map(Number);
+    const nowZdt = Temporal.Instant.fromEpochMilliseconds(now).toZonedDateTimeISO(timezone);
+    const nowInChunk =
+      !isSingleDay ||
+      timeChunk === 'all' ||
+      (timeChunk === 'am' ? nowZdt.hour < splitHour : nowZdt.hour >= splitHour);
+
+    if (now >= rangeStart && now <= rangeEnd && nowInChunk) return now;
+
+    // The visible range is in the past (or future): create the entry on its
+    // first day so it shows up in the current view and can be edited there.
+    const startDate = Temporal.Instant.fromEpochMilliseconds(rangeStart)
+      .toZonedDateTimeISO(timezone)
+      .toPlainDate();
+    const hour = isSingleDay && timeChunk === 'am' ? 9 : isSingleDay && timeChunk === 'pm' ? 14 : 12;
+    return startDate.toPlainDateTime({ hour, minute: 0, second: 0 }).toZonedDateTime(timezone).epochMilliseconds;
+  }, [dateRange, isSingleDayRange, settings.splitTime, settings.timezone, timeChunk]);
+
+  const handleCreateManualEntry = (taskId: string) => {
+    addTimeEntry(taskId, { startTime: manualEntryStart, endTime: manualEntryStart + 1000 });
+  };
+
   // Filter tasks by category, urgency, impact, and major incident
   const filteredTasks = tasks.filter((task) => {
     // Category filter: if categories are selected, show tasks that either have no category
@@ -458,6 +494,21 @@ const TimetableInner: React.FC<{
 
       return true;
     });
+
+  // Tasks that can receive a manual entry. Search all non-archived tasks
+  // rather than the filtered timetable list so filters never hide a task from
+  // the picker. Most recently edited tasks come first, since they are the most
+  // likely to be edited again.
+  const addableTasks = React.useMemo(
+    () => tasks
+      .filter((task) => task.triageStatus !== 'Archived')
+      .sort((a, b) => {
+        const updatedDiff = (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+        if (updatedDiff !== 0) return updatedDiff;
+        return a.title.localeCompare(b.title);
+      }),
+    [tasks]
+  );
 
   // Calculate total time spent
   const totalTime = timerEntries.reduce((acc, entry) => acc + (entry.endTime > 0 ? entry.endTime - entry.startTime : Date.now() - entry.startTime), 0);
@@ -643,14 +694,27 @@ const TimetableInner: React.FC<{
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">{t('timetable.title')}</h1>
-        <ToggleGroup type="single" value={view} onValueChange={(value) => setView(value as TimetableView)} aria-label={t('timetable.timetableViewAria')}>
-          <ToggleGroupItem value="categorical" aria-label={t('timetable.categoricalAria')}>
-            {t('timetable.categorical')}
-          </ToggleGroupItem>
-          <ToggleGroupItem value="chronological" aria-label={t('timetable.chronologicalAria')}>
-            {t('timetable.chronological')}
-          </ToggleGroupItem>
-        </ToggleGroup>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setManualEntryStart(computeManualEntryStart());
+              setIsAddEntryOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            {t('timetable.addTimeEntry')}
+          </Button>
+          <ToggleGroup type="single" value={view} onValueChange={(value) => setView(value as TimetableView)} aria-label={t('timetable.timetableViewAria')}>
+            <ToggleGroupItem value="categorical" aria-label={t('timetable.categoricalAria')}>
+              {t('timetable.categorical')}
+            </ToggleGroupItem>
+            <ToggleGroupItem value="chronological" aria-label={t('timetable.chronologicalAria')}>
+              {t('timetable.chronological')}
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
       </div>
 
       {/* Filters */}
@@ -957,6 +1021,14 @@ const TimetableInner: React.FC<{
         />
       )}
     </div>
+
+      <AddTimeEntryDialog
+        open={isAddEntryOpen}
+        onOpenChange={setIsAddEntryOpen}
+        tasks={addableTasks}
+        entryTimeLabel={t('timetable.addTimeEntryAt', { time: formatTimeWithTemporal(manualEntryStart, settings.timezone || 'Europe/Zurich') })}
+        onCreate={handleCreateManualEntry}
+      />
     </div>
   );
 };

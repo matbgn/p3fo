@@ -20,7 +20,7 @@ import {
   DialogTrigger,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { TimeSheet } from "./TimeSheet";
+import { TimeSheetDialog } from "./TimeSheetDialog";
 import { Timer } from "@/features/timer/components/Timer";
 import {
   Select,
@@ -1140,20 +1140,13 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
         </Dialog>
       )}
       {/* TimeSheet Dialog */}
-      {!hasSubtasks && isTimeSheetOpen && (
-        <Dialog open={isTimeSheetOpen} onOpenChange={setIsTimeSheetOpen}>
-          <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col p-0" aria-describedby={undefined}>
-            <DialogHeader className="p-6 pb-4">
-              <DialogTitle>{t('task.timeSheetTitle', { title: task.title })}</DialogTitle>
-              <DialogDescription className="sr-only">
-                {t('task.timeSheetDescription', { title: task.title })}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex-grow overflow-y-auto px-6 pb-6">
-              <TimeSheet taskId={task.id} />
-            </div>
-          </DialogContent>
-        </Dialog>
+      {!hasSubtasks && (
+        <TimeSheetDialog
+          taskId={task.id}
+          taskTitle={task.title}
+          open={isTimeSheetOpen}
+          onOpenChange={setIsTimeSheetOpen}
+        />
       )}
       {/* Time Picker Dialog for termination date time */}
       <TimePickerDialog

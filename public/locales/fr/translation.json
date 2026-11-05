@@ -1376,7 +1376,14 @@
     "endTime": "Heure de fin",
     "duration": "Durée",
     "unknownTask": "Tâche inconnue",
-    "grandTotal": "Total général"
+    "grandTotal": "Total général",
+    "addTimeEntry": "Ajouter une entrée",
+    "addTimeEntryTitle": "Ajouter une entrée de temps",
+    "addTimeEntryDescription": "Choisissez une tâche, puis ajoutez une entrée de 1 seconde à modifier dans le tableau.",
+    "selectTaskPlaceholder": "Sélectionner une tâche...",
+    "searchTaskPlaceholder": "Rechercher des tâches...",
+    "noTasksFound": "Aucune tâche trouvée.",
+    "addTimeEntryAt": "Une entrée de 1 seconde sera créée à {{time}}."
   },
   "quickTimer": {
     "phaseFocus": "Focus",
@@ -1407,6 +1414,7 @@
     "pauseTask": "Pause tâche",
     "resumeTask": "Reprendre tâche",
     "resumeTimer": "Reprendre le timer",
+    "editTimeEntry": "Modifier l'entrée de temps",
     "noActiveTimer": "Aucun timer actif",
     "reopenSpotlight": "Rouvrir le spotlight What's Next",
     "whatsNext": "Quelle est la suite ?",

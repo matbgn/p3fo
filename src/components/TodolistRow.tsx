@@ -55,7 +55,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
 import { TaskEditModal } from "./TaskEditModal";
 import { QuickAddTask } from "./QuickAddTask";
-import { TimeSheet } from "./TimeSheet";
+import { TimeSheetDialog } from "./TimeSheetDialog";
 import { Badge } from "@/components/ui/badge";
 import {
   LiveTimeBadge,
@@ -676,20 +676,13 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
         </Dialog>
       )}
 
-      {canHaveTimer && isTimeSheetOpen && (
-        <Dialog open={isTimeSheetOpen} onOpenChange={setIsTimeSheetOpen}>
-          <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col p-0" aria-describedby={undefined}>
-            <DialogHeader className="p-6 pb-4">
-              <DialogTitle>{t('task.timeSheetTitle', { title: task.title })}</DialogTitle>
-              <DialogDescription className="sr-only">
-                {t('task.timeSheetDescription', { title: task.title })}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex-grow overflow-y-auto px-6 pb-6">
-              <TimeSheet taskId={task.id} />
-            </div>
-          </DialogContent>
-        </Dialog>
+      {canHaveTimer && (
+        <TimeSheetDialog
+          taskId={task.id}
+          taskTitle={task.title}
+          open={isTimeSheetOpen}
+          onOpenChange={setIsTimeSheetOpen}
+        />
       )}
 
       <TimePickerDialog

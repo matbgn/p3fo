@@ -7,7 +7,6 @@ import {
     DialogTitle,
     DialogDescription,
     DialogClose,
-    DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,7 +30,7 @@ import { cn } from "@/lib/utils";
 import { useSettingsContext } from "@/context/SettingsContext";
 import { CategorySelect } from "./CategorySelect";
 import { TaskStatusSelect } from "./TaskStatusSelect";
-import { TimeSheet } from "./TimeSheet";
+import { TimeSheetDialog } from "./TimeSheetDialog";
 import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
 import { LinkedVotePicker } from "@/components/voting/LinkedVotePicker";
 import { SubtaskProgress } from "@/components/SubtaskProgress";
@@ -93,6 +92,7 @@ const TaskEditModalInner: React.FC<TaskEditModalProps> = ({
     const [comment, setComment] = React.useState(activeTask.comment || "");
     const [duration, setDuration] = React.useState(activeTask.durationInMinutes?.toString() || "");
     const [timePickerOpen, setTimePickerOpen] = React.useState(false);
+    const [isTimeSheetOpen, setIsTimeSheetOpen] = React.useState(false);
 
     // Reset active task when the prop task changes (e.g. if modal is reopened for a different task)
     React.useEffect(() => {
@@ -147,29 +147,17 @@ const TaskEditModalInner: React.FC<TaskEditModalProps> = ({
                                 </Button>
                             )}
 
-                            <Dialog>
-                                <DialogTrigger asChild>
-                                    <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        className="h-8 w-8 p-0"
-                                        onClick={(e) => e.stopPropagation()}
-                                    >
-                                        <Clock2 className="h-5 w-5 text-muted-foreground hover:text-primary" />
-                                    </Button>
-                                </DialogTrigger>
-                                <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col p-0">
-                                    <DialogHeader className="p-6 pb-4">
-                                        <DialogTitle>{t('task.timeSheetTitle', { title: activeTask.title })}</DialogTitle>
-                                        <DialogDescription className="sr-only">
-                                            {t('task.timeSheetDescription', { title: activeTask.title })}
-                                        </DialogDescription>
-                                    </DialogHeader>
-                                    <div className="flex-grow overflow-y-auto px-6 pb-6">
-                                        <TimeSheet taskId={activeTask.id} />
-                                    </div>
-                                </DialogContent>
-                            </Dialog>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 w-8 p-0"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setIsTimeSheetOpen(true);
+                                }}
+                            >
+                                <Clock2 className="h-5 w-5 text-muted-foreground hover:text-primary" />
+                            </Button>
 
                             <DialogClose asChild>
                                 <Button
@@ -416,6 +404,13 @@ const TaskEditModalInner: React.FC<TaskEditModalProps> = ({
                     <Button onClick={handleSave}>{t('task.saveAndClose')}</Button>
                 </div>
             </DialogContent>
+
+            <TimeSheetDialog
+                taskId={activeTask.id}
+                taskTitle={activeTask.title}
+                open={isTimeSheetOpen}
+                onOpenChange={setIsTimeSheetOpen}
+            />
 
             {/* Time Picker Dialog for termination date */}
             <TimePickerDialog

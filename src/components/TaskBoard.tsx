@@ -63,11 +63,20 @@ const EMPTY_TASKS: Task[] = [];
 const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: (taskId: string) => void }> = ({ focusedTaskId, onFocusOnTask }) => {
   const { t } = useTranslation();
   const { isFocusMode } = useFocusMode();
-  const { view } = useViewNavigation();
+  const { view, pendingSubView, clearPendingSubView } = useViewNavigation();
   const [focusView, setFocusView] = React.useState<FocusBoardView>(loadViewPreference);
   // Track the previous view to detect cross-view jumps (instant scroll) vs
   // in-board clicks (smooth scroll).
   const prevViewRef = React.useRef<string>(view);
+
+  // Apply a requested Focus sub-view (e.g. jump actions force "flow").
+  React.useEffect(() => {
+    if (pendingSubView === "subfocus" || pendingSubView === "flow" || pendingSubView === "todolist") {
+      setFocusView(pendingSubView);
+      saveViewPreference(pendingSubView);
+      clearPendingSubView();
+    }
+  }, [pendingSubView, clearPendingSubView]);
 
   const handleFocusViewChange = React.useCallback((view: string) => {
     if (view === "subfocus" || view === "flow" || view === "todolist") {

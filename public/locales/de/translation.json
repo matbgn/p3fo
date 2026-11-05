@@ -1376,7 +1376,14 @@
     "endTime": "Endzeit",
     "duration": "Dauer",
     "unknownTask": "Unbekannte Aufgabe",
-    "grandTotal": "Gesamttotal"
+    "grandTotal": "Gesamttotal",
+    "addTimeEntry": "Eintrag hinzufügen",
+    "addTimeEntryTitle": "Zeiteintrag hinzufügen",
+    "addTimeEntryDescription": "Wählen Sie eine Aufgabe und fügen Sie einen 1-Sekunden-Eintrag hinzu, den Sie anschließend in der Tabelle bearbeiten können.",
+    "selectTaskPlaceholder": "Aufgabe auswählen...",
+    "searchTaskPlaceholder": "Aufgaben suchen...",
+    "noTasksFound": "Keine Aufgaben gefunden.",
+    "addTimeEntryAt": "Ein 1-Sekunden-Eintrag wird um {{time}} erstellt."
   },
   "quickTimer": {
     "phaseFocus": "Fokus",
@@ -1407,6 +1414,7 @@
     "pauseTask": "Aufgabe pausieren",
     "resumeTask": "Aufgabe fortsetzen",
     "resumeTimer": "Timer fortsetzen",
+    "editTimeEntry": "Zeiteintrag bearbeiten",
     "noActiveTimer": "Kein aktiver Timer",
     "reopenSpotlight": "What's Next Spotlight erneut öffnen",
     "whatsNext": "Was ist next?",

@@ -1376,7 +1376,14 @@
     "endTime": "End Time",
     "duration": "Duration",
     "unknownTask": "Unknown Task",
-    "grandTotal": "Grand Total"
+    "grandTotal": "Grand Total",
+    "addTimeEntry": "Add entry",
+    "addTimeEntryTitle": "Add a time entry",
+    "addTimeEntryDescription": "Pick a task, then add a 1-second entry you can edit in the timetable.",
+    "selectTaskPlaceholder": "Select a task...",
+    "searchTaskPlaceholder": "Search tasks...",
+    "noTasksFound": "No tasks found.",
+    "addTimeEntryAt": "A 1-second entry will be created at {{time}}."
   },
   "quickTimer": {
     "phaseFocus": "Focus",
@@ -1407,6 +1414,7 @@
     "pauseTask": "Pause task",
     "resumeTask": "Resume task",
     "resumeTimer": "Resume timer",
+    "editTimeEntry": "Edit time entry",
     "noActiveTimer": "No active timer",
     "reopenSpotlight": "Reopen the What's Next spotlight",
     "whatsNext": "What's next?",
