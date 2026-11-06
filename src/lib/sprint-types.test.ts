@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   MIN_WELLBEING_RESPONDENTS,
+  SPRINT_CHECKLIST,
   aggregateWellbeing,
   applyClose,
   buildBurndown,
@@ -11,6 +12,7 @@ import {
   computeSprintMetrics,
   createEmptyMetrics,
   planAutoClose,
+  reconcileChecklist,
   resolveAutoCloseDueAt,
   type SprintEntity,
   type SprintTaskLike,
@@ -449,5 +451,32 @@ describe('auto-close sweep', () => {
     expect(result.closedSprintIds).toEqual([]);
     expect(result.state.sprints[0].status).toBe('active');
     expect(result.state.sprints[0].autoClose?.status).toBe('skipped');
+  });
+});
+
+describe('sprint checklist migration', () => {
+  it('maps an unambiguous legacy key to the renamed item', () => {
+    const currentIds = SPRINT_CHECKLIST.map((item) => item.id);
+    const checklist: Record<string, boolean> = Object.fromEntries(
+      currentIds
+        .filter((id) => id !== 'curation.externalIssues')
+        .map((id) => [id, true]),
+    );
+    checklist['curation.legacy'] = true;
+
+    const migrated = reconcileChecklist(checklist);
+
+    expect(migrated['curation.externalIssues']).toBe(true);
+    expect(migrated['curation.legacy']).toBeUndefined();
+    for (const id of currentIds.filter((id) => id !== 'curation.externalIssues')) {
+      expect(migrated[id]).toBe(true);
+    }
+  });
+
+  it('does not guess when legacy and missing counts differ', () => {
+    const migrated = reconcileChecklist({ 'curation.legacy': true });
+
+    expect(migrated['curation.externalIssues']).toBeUndefined();
+    expect(migrated['curation.legacy']).toBe(true);
   });
 });

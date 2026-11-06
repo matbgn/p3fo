@@ -884,7 +884,10 @@ class SqliteClient implements DbClient {
     const total = countResult.count;
 
     let sql = `SELECT * FROM "tasks"${whereClause}`;
-    sql += ' ORDER BY "priority" DESC NULLS LAST, "createdAt" ASC';
+    // Priority is ascending (1 = highest). Unprioritized tasks sort last so a
+    // default listing starts with actionable work instead of archived/legacy
+    // low-value rows.
+    sql += ' ORDER BY "priority" ASC NULLS LAST, "createdAt" ASC';
 
     if (pagination?.limit !== undefined) {
       sql += ' LIMIT ?';
@@ -935,7 +938,7 @@ class SqliteClient implements DbClient {
       id: input.id || crypto.randomUUID(),
       title: input.title || 'New Task',
       createdAt: input.createdAt || new Date().toISOString(),
-      updatedAt: input.updatedAt ?? null,
+      updatedAt: input.updatedAt ?? new Date().toISOString(),
       triageStatus: input.triageStatus || 'Backlog',
       urgent: input.urgent || false,
       impact: input.impact || false,
@@ -947,7 +950,7 @@ class SqliteClient implements DbClient {
       terminationDate: input.terminationDate || null,
       comment: input.comment || null,
       durationInMinutes: input.durationInMinutes || null,
-      priority: input.priority || null,
+      priority: input.priority ?? null,
       userId: input.userId || null,
       parentId: input.parentId || null,
       children: input.children || [],

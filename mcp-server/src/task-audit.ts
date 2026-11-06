@@ -1,7 +1,7 @@
 import type { TaskRecord } from './task-types.js';
 import { hasFinitePriority, toMillis } from './task-types.js';
 import { isGeneralCategory, isKnownCategory } from './categories.js';
-import { extractTicketNumber } from './task-search.js';
+import { extractReferenceNumber } from './task-search.js';
 
 export interface AuditOptions {
   includeTerminal?: boolean;
@@ -25,7 +25,7 @@ export interface AuditRow {
   userId: string | null;
   parentId: string | null;
   updatedAt: string | number | null;
-  ticketNumber: string | null;
+  referenceNumber: string | null;
 }
 
 export interface TaskStats {
@@ -107,7 +107,7 @@ function toRow(task: TaskRecord): AuditRow {
     userId: task.userId ?? null,
     parentId: task.parentId ?? null,
     updatedAt: task.updatedAt ?? task.createdAt ?? null,
-    ticketNumber: extractTicketNumber(task),
+    referenceNumber: extractReferenceNumber(task),
   };
 }
 

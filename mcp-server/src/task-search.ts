@@ -82,58 +82,105 @@ export function aStarTextSearch(
   return results.sort((a, b) => b.score - a.score);
 }
 
-export type MatchKind = 'ticket' | 'id' | 'exact' | 'substring' | 'prefix' | 'fuzzy';
+export type MatchKind = 'reference' | 'id' | 'exact' | 'substring' | 'prefix' | 'fuzzy';
 
 export interface ScoredTask {
   task: TaskRecord;
   score: number;
   matchedBy: MatchKind;
-  ticketNumber: string | null;
+  referenceNumber: string | null;
 }
 
-export function extractTicketNumber(task: Pick<TaskRecord, 'id' | 'title'>): string | null {
-  const titleMatch = /\bTicket\s*#?\s*(\d{4,})\b/i.exec(task.title ?? '');
-  if (titleMatch) return titleMatch[1];
+// External references are deliberately purpose-agnostic: a prefixed or
+// hash-marked number in the title ("REF-123456", "#123456") or a prefixed id
+// ("ext-123456"). Bare 5+ digit numbers also count as references.
+const REFERENCE_TITLE_PREFIXED_RE = /(?:#|[a-z][a-z0-9_-]*[#-])\s*(\d{4,})\b/gi;
+const REFERENCE_TITLE_BARE_RE = /\b(\d{5,})\b/g;
+const REFERENCE_ID_RE = /^[a-z][a-z0-9_-]*-(\d{4,})$/i;
+const REFERENCE_QUERY_RE = /^(?:(?:[a-z][a-z0-9_-]*[#-]|#)\s*\d{4,}|\d{5,})$/i;
+const REFERENCE_QUERY_PREFIX_RE = /^(?:[a-z][a-z0-9_-]*[#-]|#)\s*/i;
 
-  const idMatch = /^zammad-(\d+)$/i.exec(task.id ?? '');
-  if (idMatch) return idMatch[1];
+export function extractReferenceNumber(task: Pick<TaskRecord, 'id' | 'title'>): string | null {
+  const title = task.title ?? '';
+  const candidates: string[] = [];
 
-  return null;
+  for (const match of title.matchAll(REFERENCE_TITLE_PREFIXED_RE)) candidates.push(match[1]);
+  for (const match of title.matchAll(REFERENCE_TITLE_BARE_RE)) candidates.push(match[1]);
+
+  const idMatch = REFERENCE_ID_RE.exec(task.id ?? '');
+  if (idMatch) candidates.push(idMatch[1]);
+
+  if (candidates.length === 0) return null;
+
+  // Prefer the most specific (longest) number; ties keep title matches first.
+  return candidates.sort((a, b) => b.length - a.length)[0];
 }
 
-export function looksLikeTicket(query: string): boolean {
-  return /^(?:ticket\s*#?\s*|zammad-|#)?(\d{4,})$/i.test(query.trim());
+export function looksLikeReference(query: string): boolean {
+  // A bare 5+ digit query is treated as a reference number; 4-digit searches
+  // (years, amounts) stay textual. A prefix (REF-, #, ext-) disambiguates
+  // shorter reference numbers.
+  return REFERENCE_QUERY_RE.test(query.trim());
 }
 
-function normalizeTicketQuery(query: string): string | null {
-  if (!looksLikeTicket(query)) return null;
-  return query.trim().replace(/^(?:ticket\s*#?\s*|zammad-|#)/i, '');
+function normalizeReferenceQuery(query: string): string | null {
+  if (!looksLikeReference(query)) return null;
+  return query.trim().replace(REFERENCE_QUERY_PREFIX_RE, '');
 }
 
-export function scoreTask(query: string, task: TaskRecord): ScoredTask | null {
+export interface ScoreTaskOptions {
+  /** Allow reference-number queries to fall through to fuzzy title matching. Default true. */
+  allowFuzzySearch?: boolean;
+}
+
+export function scoreTask(
+  query: string,
+  task: TaskRecord,
+  options: ScoreTaskOptions = {},
+): ScoredTask | null {
   const q = query.trim().toLowerCase();
   if (!q) return null;
 
   const title = (task.title ?? '').trim();
   const titleLower = title.toLowerCase();
-  const ticket = extractTicketNumber(task);
-  const ticketQuery = normalizeTicketQuery(query);
+  const reference = extractReferenceNumber(task);
+  const referenceQuery = normalizeReferenceQuery(query);
 
-  if (ticketQuery && ticket === ticketQuery) {
-    return { task, score: 1, matchedBy: 'ticket', ticketNumber: ticket };
+  if (referenceQuery && reference === referenceQuery) {
+    return { task, score: 1, matchedBy: 'reference', referenceNumber: reference };
   }
 
   if ((task.id ?? '').toLowerCase() === q) {
-    return { task, score: 1, matchedBy: 'id', ticketNumber: ticket };
+    return { task, score: 1, matchedBy: 'id', referenceNumber: reference };
   }
 
   if (titleLower === q) {
-    return { task, score: 1, matchedBy: 'exact', ticketNumber: ticket };
+    return { task, score: 1, matchedBy: 'exact', referenceNumber: reference };
   }
 
+  // Fuzzy matching is the default so search behaves like a normal ranked
+  // search. Strict reference lookups pass `allowFuzzySearch: false` (the
+  // `exact` mode) so an exact lookup cannot be fooled by a card whose title
+  // merely resembles the number.
+  const allowFuzzySearch = options.allowFuzzySearch ?? true;
+  if (referenceQuery && !allowFuzzySearch) return null;
+
+  // Fuzzy reference lookup: compare the numeric query against the card's
+  // extracted reference number before falling back to title similarity. This
+  // ranks a mistyped number (…201) above unrelated cards with vaguely similar
+  // digits.
+  const referenceSimilarity =
+    referenceQuery && reference ? similarityRatio(referenceQuery, reference) : 0;
+
   if (titleLower.includes(q)) {
-    const score = 0.75 + 0.25 * Math.min(1, q.length / Math.max(1, titleLower.length));
-    return { task, score, matchedBy: 'substring', ticketNumber: ticket };
+    const substringScore = 0.75 + 0.25 * Math.min(1, q.length / Math.max(1, titleLower.length));
+    const score = Math.max(substringScore, referenceSimilarity);
+    return {
+      task,
+      score,
+      matchedBy: referenceSimilarity > substringScore ? 'fuzzy' : 'substring',
+      referenceNumber: reference,
+    };
   }
 
   const astar = aStarTextSearch(q, [{ id: task.id, title }])[0]?.score ?? 0;
@@ -149,46 +196,68 @@ export function scoreTask(query: string, task: TaskRecord): ScoredTask | null {
   }
 
   const titleSimilarity = similarityRatio(q, titleLower) * 0.9;
-  const fuzzy = Math.max(astar, bestWord, titleSimilarity);
+  const fuzzy = Math.max(astar, bestWord, titleSimilarity, referenceSimilarity);
 
   if (fuzzy <= 0) return null;
 
-  const matchedBy: MatchKind = astar >= Math.max(bestWord, titleSimilarity) ? 'prefix' : 'fuzzy';
+  const matchedBy: MatchKind =
+    referenceSimilarity >= Math.max(astar, bestWord, titleSimilarity)
+      ? 'fuzzy'
+      : astar >= Math.max(bestWord, titleSimilarity)
+        ? 'prefix'
+        : 'fuzzy';
 
   return {
     task,
     score: Math.min(0.999, fuzzy),
     matchedBy,
-    ticketNumber: ticket,
+    referenceNumber: reference,
   };
 }
+
+export type SearchMode = 'exact' | 'fuzzy';
 
 export function rankTasks(
   tasks: TaskRecord[],
   query: string,
-  options: { minScore?: number; limit?: number } = {},
-): { scored: ScoredTask[]; matched: number } {
+  options: { minScore?: number; limit?: number; mode?: SearchMode } = {},
+): { scored: ScoredTask[]; matched: number; referenceQuery: boolean; mode: SearchMode } {
   const minScore = options.minScore ?? 0.55;
   const limit = Math.max(1, Math.min(options.limit ?? 10, 50));
-  const ticketQuery = looksLikeTicket(query);
+  const mode = options.mode ?? 'fuzzy';
+  const referenceQuery = looksLikeReference(query);
+  const allowFuzzySearch = mode === 'fuzzy';
 
   const scored = tasks
-    .map((task) => scoreTask(query, task))
+    .map((task) => scoreTask(query, task, { allowFuzzySearch }))
     .filter((entry): entry is ScoredTask => entry !== null && entry.score >= minScore)
     .sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
+
+      // For reference searches, prefer the numerically closest reference
+      // before priority/title. This keeps a one-digit typo on the intended
+      // card ahead of other equally-similar reference numbers.
+      if (referenceQuery) {
+        const queryNumber = Number(referenceQuery);
+        const aReference = a.referenceNumber ? Number(a.referenceNumber) : Number.POSITIVE_INFINITY;
+        const bReference = b.referenceNumber ? Number(b.referenceNumber) : Number.POSITIVE_INFINITY;
+        const aDistance = Math.abs(queryNumber - aReference);
+        const bDistance = Math.abs(queryNumber - bReference);
+        if (aDistance !== bDistance) return aDistance - bDistance;
+      }
+
       const ap = typeof a.task.priority === 'number' ? a.task.priority : Number.POSITIVE_INFINITY;
       const bp = typeof b.task.priority === 'number' ? b.task.priority : Number.POSITIVE_INFINITY;
       if (ap !== bp) return ap - bp;
       return (a.task.title ?? '').localeCompare(b.task.title ?? '');
     });
 
-  // A ticket query should not be diluted by fuzzy title matches when the
-  // ticket itself exists. Fall back to fuzzy only when no ticket matches.
-  const exactTickets = ticketQuery
-    ? scored.filter((entry) => entry.matchedBy === 'ticket' || entry.matchedBy === 'id')
-    : [];
-  const ranked = exactTickets.length > 0 ? exactTickets : scored;
+  // `exact` never returns substring/fuzzy hits. `fuzzy` returns everything,
+  // with exact hits ranked first by score.
+  const exactOnly = mode === 'exact';
+  const ranked = exactOnly
+    ? scored.filter((entry) => entry.matchedBy === 'reference' || entry.matchedBy === 'id' || entry.matchedBy === 'exact')
+    : scored;
 
-  return { scored: ranked.slice(0, limit), matched: ranked.length };
+  return { scored: ranked.slice(0, limit), matched: ranked.length, referenceQuery, mode };
 }

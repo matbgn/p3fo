@@ -223,7 +223,7 @@ export const SPRINT_CHECKLIST: ChecklistItem[] = [
   { id: 'curation.retro', group: 'curation', label: 'Introduce retro tasks in kanban' },
   { id: 'curation.archive', group: 'curation', label: 'Archive Done cards without orphan sub-tasks' },
   { id: 'curation.count', group: 'curation', label: 'Count tasks done in P3fo' },
-  { id: 'curation.zammad', group: 'curation', label: 'Import Zammad issues via diff import' },
+  { id: 'curation.externalIssues', group: 'curation', label: 'Import external issues via diff import' },
   { id: 'curation.prs', group: 'curation', label: 'Cure stuck pull requests' },
   { id: 'curation.stale', group: 'curation', label: 'Cure stoned, cobwebbed and stuck cards' },
   { id: 'curation.backlog', group: 'curation', label: 'Cure or postpone Backlog and Stuck' },
@@ -241,6 +241,50 @@ export const SPRINT_CHECKLIST: ChecklistItem[] = [
   { id: 'tip.comparative', group: 'tip', label: 'P3fo comparative tool improvements' },
   { id: 'tip.timapi', group: 'tip', label: 'Upgrade EFT TimAPI PR#258' },
 ];
+
+/**
+ * Keep persisted sprint checklists stable when item ids change. Unknown
+ * legacy keys are mapped to missing items in the same group only when the
+ * counts match, so an ambiguous migration is skipped rather than guessed.
+ */
+export function reconcileChecklist(
+  checklist: Record<string, boolean> | undefined,
+): Record<string, boolean> {
+  if (!checklist) return {};
+
+  const known = new Set(SPRINT_CHECKLIST.map((item) => item.id));
+  const legacyByGroup = new Map<string, string[]>();
+  const missingByGroup = new Map<string, string[]>();
+
+  for (const id of Object.keys(checklist)) {
+    if (known.has(id)) continue;
+    const group = id.split('.')[0];
+    const queue = legacyByGroup.get(group) ?? [];
+    queue.push(id);
+    legacyByGroup.set(group, queue);
+  }
+
+  for (const item of SPRINT_CHECKLIST) {
+    if (item.id in checklist) continue;
+    const queue = missingByGroup.get(item.group) ?? [];
+    queue.push(item.id);
+    missingByGroup.set(item.group, queue);
+  }
+
+  const next = { ...checklist };
+  for (const [group, legacyIds] of legacyByGroup) {
+    const missing = missingByGroup.get(group) ?? [];
+    if (legacyIds.length !== missing.length) continue;
+    legacyIds.forEach((legacyId, index) => {
+      const target = missing[index];
+      if (!target || target in next) return;
+      next[target] = next[legacyId];
+      delete next[legacyId];
+    });
+  }
+
+  return next;
+}
 
 export function sprintNameFor(startDate: string, endDate: string): string {
   return `Sprint ${startDate} → ${endDate}`;

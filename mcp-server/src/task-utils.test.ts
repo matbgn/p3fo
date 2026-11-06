@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { TaskRecord } from './task-types.js';
 import { renderCommentText } from './comment-text.js';
-import { extractTicketNumber, rankTasks, scoreTask, similarityRatio } from './task-search.js';
+import { extractReferenceNumber, rankTasks, scoreTask, similarityRatio } from './task-search.js';
 import { sortTasksByMode } from './task-sorting.js';
 import { buildPriorityAudit, buildTaskStats } from './task-audit.js';
 import { applyBulkUpdates } from './bulk-update.js';
@@ -81,36 +81,41 @@ describe('comment rendering', () => {
 });
 
 describe('task search', () => {
-  it('matches exact tickets from titles and zammad ids', () => {
-    const titleTicket = makeTask({ id: 'a', title: 'Fix cash balance TaB Ticket#616795' });
-    const idTicket = makeTask({ id: 'zammad-6111200', title: 'Anpassungen Preiskategorien' });
+  it('matches exact references from titles and external ids', () => {
+    const titleRef = makeTask({ id: 'a', title: 'Fix cash balance TaB #616795' });
+    const idRef = makeTask({ id: 'ext-6111200', title: 'Anpassungen Preiskategorien' });
 
-    assert.equal(extractTicketNumber(titleTicket), '616795');
-    assert.equal(extractTicketNumber(idTicket), '6111200');
+    assert.equal(extractReferenceNumber(titleRef), '616795');
+    assert.equal(extractReferenceNumber(idRef), '6111200');
 
-    const titleMatch = scoreTask('616795', titleTicket);
+    const titleMatch = scoreTask('616795', titleRef);
     assert.equal(titleMatch?.score, 1);
-    assert.equal(titleMatch?.matchedBy, 'ticket');
+    assert.equal(titleMatch?.matchedBy, 'reference');
 
-    const idMatch = scoreTask('zammad-6111200', idTicket);
+    const idMatch = scoreTask('ext-6111200', idRef);
     assert.equal(idMatch?.score, 1);
-    assert.equal(idMatch?.matchedBy, 'ticket');
+    assert.equal(idMatch?.matchedBy, 'reference');
   });
 
-  it('extracts space-separated ticket numbers', () => {
-    const spaced = makeTask({ id: 'spaced', title: 'Ticket  617103' });
-    assert.equal(extractTicketNumber(spaced), '617103');
+  it('extracts space-separated reference numbers', () => {
+    const spaced = makeTask({ id: 'spaced', title: 'REF  617103' });
+    assert.equal(extractReferenceNumber(spaced), '617103');
 
     const scored = scoreTask(
       '617425',
-      makeTask({ id: 'space-ticket', title: 'Changer date expiration abo annuel Ticket 617425' }),
+      makeTask({ id: 'space-ref', title: 'Changer date expiration abo annuel REF 617425' }),
     );
-    assert.equal(scored?.matchedBy, 'ticket');
-    assert.equal(scored?.ticketNumber, '617425');
+    assert.equal(scored?.matchedBy, 'reference');
+    assert.equal(scored?.referenceNumber, '617425');
+  });
+
+  it('prefers the longest reference number in a title', () => {
+    const task = makeTask({ id: 'mixed', title: 'AB-2026 Order 616795' });
+    assert.equal(extractReferenceNumber(task), '616795');
   });
 
   it('finds a typo through similarity matching', () => {
-    const task = makeTask({ id: 'a', title: 'Bestellung Gutscheinkleber - Drucker Ticket#615792' });
+    const task = makeTask({ id: 'a', title: 'Bestellung Gutscheinkleber - Drucker #615792' });
     const match = scoreTask('Gutscheinklebber', task);
     assert.ok(match);
     assert.ok(match!.score >= 0.55);
@@ -132,14 +137,89 @@ describe('task search', () => {
     assert.ok(similarityRatio('Gutscheinkleber', 'Gutscheinklebber') > 0.8);
   });
 
-  it('does not dilute exact ticket matches with fuzzy title matches', () => {
+  it('does not dilute exact reference matches with fuzzy title matches', () => {
     const tasks = [
-      makeTask({ id: 'zammad-6111200', title: 'Anpassungen Preiskategorien Ticket#6111200' }),
-      makeTask({ id: 'other', title: 'Ticket  617103' }),
+      makeTask({ id: 'ext-6111200', title: 'Anpassungen Preiskategorien #6111200' }),
+      makeTask({ id: 'other', title: 'REF  617103' }),
     ];
-    const { scored, matched } = rankTasks(tasks, '6111200');
+    const { scored, matched, referenceQuery } = rankTasks(tasks, '6111200', { mode: 'exact' });
+    assert.equal(referenceQuery, true);
     assert.equal(matched, 1);
-    assert.equal(scored[0].task.id, 'zammad-6111200');
+    assert.equal(scored[0].task.id, 'ext-6111200');
+  });
+
+  it('returns no match for an untracked reference instead of a fuzzy card', () => {
+    const tasks = [
+      makeTask({ id: 'ext-6111200', title: 'Anpassungen Preiskategorien #6111200' }),
+      makeTask({ id: 'other', title: 'REF  617103' }),
+    ];
+    const strict = rankTasks(tasks, '6111532', { mode: 'exact' });
+    assert.equal(strict.referenceQuery, true);
+    assert.equal(strict.matched, 0);
+    assert.deepEqual(strict.scored, []);
+
+    // Fuzzy is the default: a near-match is expected unless the caller opts
+    // into the strict reference lookup above.
+    const fuzzyDefault = rankTasks(tasks, '6111532');
+    assert.equal(fuzzyDefault.mode, 'fuzzy');
+    assert.ok(fuzzyDefault.matched >= 1);
+  });
+
+  it('keeps 4-digit searches on the fuzzy path', () => {
+    const tasks = [makeTask({ id: 'year', title: 'Tarif 2026 Bio' })];
+    const { scored, matched, referenceQuery } = rankTasks(tasks, '2026');
+    assert.equal(referenceQuery, false);
+    assert.equal(matched, 1);
+    assert.equal(scored[0].task.id, 'year');
+  });
+
+  it('supports fuzzy-by-default and exact mode for reference numbers', () => {
+    const tasks = [
+      makeTask({ id: 'exact', title: 'REF-6111200' }),
+      makeTask({ id: 'near', title: 'REF-6111201' }),
+      makeTask({ id: 'unrelated', title: 'REF-617103' }),
+    ];
+
+    const fuzzyDefault = rankTasks(tasks, '6111200');
+    assert.equal(fuzzyDefault.mode, 'fuzzy');
+    assert.equal(fuzzyDefault.scored[0].task.id, 'exact');
+    assert.ok(fuzzyDefault.scored.some((entry) => entry.task.id === 'near'));
+
+    const exact = rankTasks(tasks, '6111200', { mode: 'exact' });
+    assert.equal(exact.mode, 'exact');
+    assert.equal(exact.matched, 1);
+    assert.equal(exact.scored[0].task.id, 'exact');
+
+    const fuzzy = rankTasks(tasks, '6111200', { mode: 'fuzzy' });
+    assert.equal(fuzzy.mode, 'fuzzy');
+    assert.equal(fuzzy.scored[0].task.id, 'exact');
+    assert.ok(fuzzy.scored.some((entry) => entry.task.id === 'near'));
+  });
+
+  it('supports exact-only and fuzzy text search', () => {
+    const tasks = [
+      makeTask({ id: 'exact', title: 'Gutscheinkleber' }),
+      makeTask({ id: 'partial', title: 'Bestellung Gutscheinkleber - Drucker' }),
+    ];
+
+    const exact = rankTasks(tasks, 'Gutscheinkleber', { mode: 'exact' });
+    assert.equal(exact.mode, 'exact');
+    assert.equal(exact.matched, 1);
+    assert.equal(exact.scored[0].task.id, 'exact');
+
+    const fuzzy = rankTasks(tasks, 'Gutscheinkleber');
+    assert.equal(fuzzy.mode, 'fuzzy');
+    assert.equal(fuzzy.matched, 2);
+  });
+
+  it('ranks the numerically closest fuzzy reference first', () => {
+    const tasks = [
+      makeTask({ id: 'far', title: 'REF-6111501', priority: 1 }),
+      makeTask({ id: 'near', title: 'REF-6111200', priority: 100 }),
+    ];
+
+    const { scored } = rankTasks(tasks, '6111201');
+    assert.equal(scored[0].task.id, 'near');
   });
 });
 

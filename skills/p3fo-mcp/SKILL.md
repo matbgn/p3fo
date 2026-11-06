@@ -149,13 +149,17 @@ All tools return JSON (pretty-printed) as a single `text` content block. Errors 
 
 ### Tasks
 
-- **`p3fo_list_tasks`** — `params`: `userId?`, `limit?`, `offset?`, `excludeStatuses?`, `triageStatuses?`, `includeSubtasks?` (default `false`), `includeArchived?` (default `true`; pass `false` to hide Archived), `search?` (case-insensitive substring on title), `active?` (sugar = `triageStatuses:["WIP","Ready","Blocked"]`), `priorityIsNull?`, `priorityIsZero?`, `hasParent?`, `updatedSince?` (ISO or epoch ms), `sort?` (`default|board|plan|taskboard|kanban|priority`), `preset?` (`default|supportOps`), `fields?`, `compact?` (default `true`), `cursor?`, `includeCommentText?`. Returns `{ data, total, hasMore, nextCursor }`. `statuses`/`fields` accept an array or a comma-separated string.
-- **`p3fo_find_tasks`** — fuzzy/exact search without exporting tasks. `params`: `query`, `userId?`, `statuses?`, `includeArchived?` (default `true`), `includeSubtasks?` (default `true`), `limit?` (default 10, max 50), `minScore?` (default 0.55), `includeCommentText?`. Returns ranked candidates with `score`, `matchedBy` (`ticket|id|exact|substring|prefix|fuzzy`), and `ticketNumber`. Extracts `Ticket#NNNNNN` / `Ticket NNNNNN` from titles and `zammad-NNNNNN` ids.
+- **`p3fo_list_tasks`** — `params`: `userId?`, `limit?`, `offset?`, `excludeStatuses?`, `triageStatuses?`, `includeSubtasks?` (default `false`), `includeArchived?` (default `false`; pass `true` to include Archived), `search?` (case-insensitive substring on title), `active?` (sugar = `triageStatuses:["WIP","Ready","Blocked"]`), `priorityIsNull?`, `priorityIsZero?`, `hasParent?`, `updatedSince?` (ISO or epoch ms), `sort?` (`default|board|plan|taskboard|kanban|priority`, default `plan` = storyboard order), `preset?` (`default|supportOps`), `fields?`, `compact?` (default `true`), `cursor?`, `includeCommentText?`. Returns `{ data, total, hasMore, nextCursor }`. `statuses`/`fields` accept an array or a comma-separated string. Raw server ordering (`sort: "default"`) is priority ascending (`1` first, `null` last); the default `plan` sort is storyboard order.
+- **`p3fo_find_tasks`** — fuzzy title search plus exact reference lookup, without exporting tasks. `params`: `query`, `userId?`, `statuses?`, `includeArchived?` (default `true`), `includeSubtasks?` (default `true`), `limit?` (default 10, max 50), `minScore?` (default 0.55), `mode?` (`exact|fuzzy`, default `fuzzy`), `includeCommentText?`. Returns `{ query, mode, referenceQuery, scanned, matched, returned, data }`; rows include `score`, `matchedBy` (`reference|id|exact|substring|prefix|fuzzy`), and `referenceNumber`. Extracts reference numbers from titles (`#NNNNNN`, `REF-NNNNNN`, or bare 5+ digits) and prefixed external ids such as `ext-NNNNNN`.
+  - `fuzzy` (default): near matches are returned for all queries; exact hits still rank first. This preserves normal ranked-search behavior.
+  - `exact`: only exact reference/id/title matches, for any query.
+  - **For sync/tracking checks ("is this reference already tracked?"), use `mode: "exact"`.** The default `fuzzy` can return near matches, so `matched > 0` does not by itself prove the reference is tracked.
 - **`p3fo_task_stats`** — aggregate counts only. `params`: `userId?`, `statuses?`, `includeArchived?` (default `false`), `includeSubtasks?` (default `true`), `category?`, `hasParent?`, `updatedSince?`, `staleDays?` (default 90), `includeTerminal?` (default `false`). Returns `byStatus`, `byCategory`, `byUser`, priority null/zero/negative/duplicate counts, General/unknown category counts, unassigned, and stale counts.
 - **`p3fo_audit_priorities`** — same filters plus `limitPerSection?` (default 25, max 200). Returns a `summary` plus capped lists: `nullPriority`, `zeroPriority`, `duplicates` (scoped by `userId` + `parentId` + priority), `generalCategory`, `unknownCategory`, `unassigned`, `staleTasks`, `orphanedChildren`, with `truncated` flags.
 - **`p3fo_get_task`** — `params`: `id`. Returns the task plus a derived plain-text `commentText` (the stored `comment` is unchanged).
-- **`p3fo_get_task_by_title`** — `params`: `title` (case-insensitive), `exact?` (default `false` = substring). Returns `{ data, total }` of matching tasks. Prefer `p3fo_find_tasks` when typos or ticket numbers are involved.
+- **`p3fo_get_task_by_title`** — `params`: `title` (case-insensitive), `exact?` (default `false` = substring). Returns `{ data, total }` of matching tasks. Prefer `p3fo_find_tasks` when typos or reference numbers are involved.
 - **`p3fo_create_task`** — `params`: `task` (TaskEntity fields, e.g. `title`, `triageStatus`, `urgent`, `impact`, `difficulty`, `category`, `userId`, `parentId`).
+  - **Server defaults**: `createdAt` and `updatedAt` are set to the current time when omitted; `priority: 0` is preserved (not converted to `null`).
   - **IDs are UUID v4**: the server generates `crypto.randomUUID()` when `id` is omitted (`server/db/postgres.ts` / `sqlite.ts`). Omit `id` and let the server assign it; don't invent custom id formats.
   - **Large `comment` payloads**: `comment` holds a TipTap/ProseMirror JSON document (array of nodes: `heading`, `paragraph`, `bulletListItem`, … each with `props.level` and `content[].text`). Creating a task with a full summary document inline can fail with `Expected object, received string` or produce a **silently truncated comment**. Reliable pattern: (1) `p3fo_create_task` with the small fields only (`title`, `triageStatus`, `category`, `difficulty`, `priority`, `createdAt`), then (2) `p3fo_update_task` with the returned `id` and `patch: { comment: <document> }`, then (3) verify with `p3fo_get_task` that the stored `comment` is complete and `commentText` is readable.
   - **`p3fo_update_task` can silently create**: passing an `id` that doesn't exist does not 404 — it can create a new task with that id. After any create/update pair, `p3fo_get_task` the intended id and `p3fo_delete_task` any stray duplicate (e.g. an empty auto-created card with a random UUID id) before continuing.
@@ -172,9 +176,9 @@ All tools return JSON (pretty-printed) as a single `text` content block. Errors 
 #### Listing gotchas — IMPORTANT
 
 - **`total` may exceed `data.length`** when `limit` is set. Never conclude a task doesn't exist from a single page: check `total` vs `data.length`, use `hasMore`/`nextCursor`, or filter. Prefer `p3fo_find_tasks` / `p3fo_get_task_by_title` to locate a specific task in one call.
-- **Default ordering is `priority DESC`** — tasks with low/negative priority (e.g. WIP tasks being worked with priority −1) sort to the *end*, so an unfiltered `limit:100` listing can hide active tasks behind 100 archived ones. Use `active: true`, `includeArchived: false`, or an explicit `sort` to get the actionable set reliably.
+- **Default ordering is priority ascending** — `1` is highest; `null` is unprioritized and sorts last in raw server order. `p3fo_list_tasks` defaults to `sort: "plan"` (storyboard order) and `includeArchived: false`, so a plain call returns Ready/WIP work first instead of archived/legacy rows. The storyboard comparator mirrors the app and treats a null priority as `0`, so an unprioritized WIP can lead the list; use `sort: "default"` for strict `priority ASC NULLS LAST`.
 - **Compact default:** `p3fo_list_tasks` returns only `id,title,triageStatus,priority,updatedAt` per task by default (~76% smaller payload). Pass `compact:false` when you need `comment`, `timer`, `urgent`, etc. Pass `preset:"supportOps"` or `fields:[...]` for a custom projection.
-- **Derived fields:** `ticketNumber` and `commentText` are computed on read and are never written back.
+- **Derived fields:** `referenceNumber` and `commentText` are computed on read and are never written back.
 
 #### Task audits — do not export all tasks
 
@@ -295,21 +299,28 @@ If a filtered result still looks wrong, call `p3fo_task_stats` with the same fil
 p3fo_list_tasks({ "params": { "userId": "u-123", "active": true } })
 ```
 
-### Find a task by title, typo, or ticket number
+### Find a task by title, typo, or reference number
 
 ```
-p3fo_find_tasks({ "params": { "query": "Gutscheinkleber" } })
-p3fo_find_tasks({ "params": { "query": "616795" } })          // Ticket#616795
-p3fo_find_tasks({ "params": { "query": "zammad-6111200" } })  // id-based ticket
+p3fo_find_tasks({ "params": { "query": "Gutscheinkleber" } })                     // fuzzy (default)
+p3fo_find_tasks({ "params": { "query": "Gutscheinkleber", "mode": "exact" } })    // exact title only
+p3fo_find_tasks({ "params": { "query": "616795" } })                              // fuzzy ranked search
+p3fo_find_tasks({ "params": { "query": "616795", "mode": "exact" } })             // exact reference lookup
+p3fo_find_tasks({ "params": { "query": "ext-6111200", "mode": "exact" } })        // exact external id
+p3fo_find_tasks({ "params": { "query": "6111200", "mode": "fuzzy" } })            // explicit fuzzy
 ```
 
-`p3fo_find_tasks` returns ranked candidates with `score`, `matchedBy`, and `ticketNumber`. Use `minScore` to tighten or loosen matching. For an exact title only, `p3fo_get_task_by_title({ "title": "...", "exact": true })` still works.
+`p3fo_find_tasks` returns ranked candidates with `score`, `matchedBy`, `referenceNumber`, `referenceQuery`, and `mode`. The default `fuzzy` ranks exact hits first but also returns near matches; use `"exact"` when a near match must not be mistaken for the target. `matched: 0` with empty `data` in `exact` mode means nothing matches exactly. For title searches, use `minScore` to tighten or loosen matching. For an exact title only, `p3fo_get_task_by_title({ "title": "...", "exact": true })` still works.
 
 ### Check which external issues are tracked in P3FO (sync check)
 
 ```
 p3fo_find_tasks({ "params": { "query": "ISSUE-", "includeArchived": true, "limit": 50 } })
+p3fo_find_tasks({ "params": { "query": "6111532", "mode": "exact", "includeArchived": true } })
+// matched: 0 = not tracked; matched: 1 with matchedBy:"reference" = tracked
 ```
+
+Use `mode: "exact"` for tracked/not-tracked checks. The default `fuzzy` can return near matches and would make an untracked reference look tracked.
 
 ### Audit task data without exporting it
 
@@ -385,6 +396,8 @@ p3fo_health({})   // { ok: true, mode: "sqlite", timestamp: "..." }
 - **`P3FO API error 302: Redirected to ...`** → the MCP client hit oauth2-proxy's login redirect. You're likely using `https://<your-host>/api/...` instead of the `/mcp` prefix, or `OAUTH2_PROXY_SKIP_AUTH_ROUTES` isn't set. Use `P3FO_API_URL=https://<your-p3fo-host>/mcp`.
 - **`Missing required argument` / `Unexpected keyword argument`** → you forgot the `params` wrapper. Wrap all args under `params`.
 - **`Expected object, received string` on `params`** → the whole argument payload was sent as a JSON string instead of a native object (typical when assembling a large call inline). Resend with `params` as an object literal; for big task documents use the two-step create-then-patch workflow above.
+- **`p3fo_find_tasks` returns 0 for a reference number** → you passed `mode: "exact"`, so the lookup is intentionally strict. `matched: 0` means no P3FO card carries that reference. Use the default `mode: "fuzzy"` to see near matches, or search a distinctive title fragment.
+- **`p3fo_find_tasks` returns fuzzy near matches for a reference number** → default `mode: "fuzzy"` is a ranked search. For a strict tracked/not-tracked check, pass `mode: "exact"`; `matched: 0` then means no card carries that reference.
 - **Task exists twice after creating a card** → `p3fo_update_task` can create the `id` you name if it doesn't exist. Verify with `p3fo_get_task` and delete the stray empty duplicate (`p3fo_delete_task`).
 - **`p3fo_list_tasks` ignores `triageStatuses`/`excludeStatuses`/`limit`** → some MCP clients drop nested array params. Use the comma-separated fallback (`"triageStatuses": "WIP,Ready"`) or call `p3fo_task_stats` with the same filter and compare `scanned`/`byStatus`. Do not verify with curl.
 - **404 on a vote** → `p3fo_get_vote` accepts id OR slug; both are tried server-side. Confirm the value.

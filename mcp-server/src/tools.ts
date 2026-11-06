@@ -2,14 +2,14 @@
  * P3FO MCP tool registry.
  *
  * Every tool mirrors a P3FO REST endpoint. Each handler receives a single
- * `params` object (matching the Zammad-MCP convention) and returns JSON.
+ * `params` object and returns JSON.
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { P3foClient, P3foApiError } from './client.js';
 import type { TaskRecord } from './task-types.js';
 import { clearTaskCache, fetchAllTasks, fetchTasksByIds, filterTasks, normalizeStringList } from './task-fetch.js';
-import { extractTicketNumber, rankTasks } from './task-search.js';
+import { extractReferenceNumber, rankTasks } from './task-search.js';
 import { renderCommentText } from './comment-text.js';
 import { sortTasksByMode, type SortMode } from './task-sorting.js';
 import { buildPriorityAudit, buildTaskStats } from './task-audit.js';
@@ -38,7 +38,7 @@ const SUPPORT_OPS_FIELDS = [
   'parentId',
   'userId',
   'updatedAt',
-  'ticketNumber',
+  'referenceNumber',
 ];
 
 
@@ -77,8 +77,8 @@ function projectTask(
     : fields;
 
   for (const field of selected) {
-    if (field === 'ticketNumber') {
-      out[field] = extractTicketNumber({
+    if (field === 'referenceNumber') {
+      out[field] = extractReferenceNumber({
         id: String(record.id ?? ''),
         title: String(record.title ?? ''),
       });
@@ -233,7 +233,7 @@ export function registerTools(server: McpServer, client: P3foClient) {
         excludeStatuses: stringListSchema,
         triageStatuses: stringListSchema,
         includeSubtasks: z.boolean().optional(),
-        /** Include Archived tasks. Default true preserves the existing behavior. */
+        /** Include Archived tasks. Default false keeps the working list focused. */
         includeArchived: z.boolean().optional(),
         /** Case-insensitive substring match on title. */
         search: stringOrUndefined,
@@ -248,9 +248,9 @@ export function registerTools(server: McpServer, client: P3foClient) {
         priorityIsZero: z.boolean().optional(),
         hasParent: z.boolean().optional(),
         updatedSince: z.union([z.string(), z.number()]).optional(),
-        /** Board ordering. "board" is an alias for the TaskBoard comparator. */
+        /** Board ordering. "board" is an alias for the TaskBoard comparator. Default: "plan" (storyboard order). */
         sort: z.enum(['default', 'board', 'plan', 'taskboard', 'kanban', 'priority']).optional(),
-        /** Field preset. "supportOps" includes category/urgent/impact/parent/user/ticket. */
+        /** Field preset. "supportOps" includes category/urgent/impact/parent/user/reference. */
         preset: z.enum(['default', 'supportOps']).optional(),
         /** Opaque pagination cursor returned as nextCursor. */
         cursor: z.string().optional(),
@@ -263,11 +263,11 @@ export function registerTools(server: McpServer, client: P3foClient) {
       const compact = p.compact ?? true;
       const includeSubtasks = p.includeSubtasks ?? false;
       const effectiveIncludeSubtasks = p.hasParent === true ? true : includeSubtasks;
-      const includeArchived = p.includeArchived ?? true;
+      const includeArchived = p.includeArchived ?? false;
       const includeCommentText = p.includeCommentText ?? false;
       const preset = p.preset ?? 'default';
       const fields = toList(p.fields) ?? (preset === 'supportOps' ? SUPPORT_OPS_FIELDS : DEFAULT_FIELDS);
-      const sort = (p.sort ?? 'default') as SortMode;
+      const sort = (p.sort ?? 'plan') as SortMode;
 
       const needsLocalScan =
         p.priorityIsNull !== undefined ||
@@ -394,6 +394,8 @@ export function registerTools(server: McpServer, client: P3foClient) {
         includeSubtasks: z.boolean().optional(),
         limit: z.number().optional(),
         minScore: z.number().min(0).max(1).optional(),
+        /** fuzzy = near matches for all queries (default); exact = exact reference/id/title only. */
+        mode: z.enum(['exact', 'fuzzy']).optional(),
         includeCommentText: z.boolean().optional(),
       }),
     },
@@ -410,12 +412,13 @@ export function registerTools(server: McpServer, client: P3foClient) {
           includeSubtasks: p.includeSubtasks ?? true,
         });
 
-        const { scored, matched } = rankTasks(fetched.data, query, {
+        const { scored, matched, referenceQuery, mode } = rankTasks(fetched.data, query, {
           minScore: p.minScore,
           limit: p.limit,
+          mode: p.mode,
         });
 
-        const data = scored.map(({ task, score, matchedBy, ticketNumber }) => {
+        const data = scored.map(({ task, score, matchedBy, referenceNumber }) => {
           const row: Record<string, unknown> = {
             id: task.id,
             title: task.title ?? '',
@@ -424,7 +427,7 @@ export function registerTools(server: McpServer, client: P3foClient) {
             category: task.category ?? null,
             userId: task.userId ?? null,
             parentId: task.parentId ?? null,
-            ticketNumber,
+            referenceNumber,
             score: Number(score.toFixed(4)),
             matchedBy,
             updatedAt: task.updatedAt ?? task.createdAt ?? null,
@@ -435,6 +438,8 @@ export function registerTools(server: McpServer, client: P3foClient) {
 
         return asText({
           query,
+          mode,
+          referenceQuery,
           scanned: fetched.data.length,
           matched,
           returned: data.length,

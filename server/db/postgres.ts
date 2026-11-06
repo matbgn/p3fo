@@ -846,7 +846,10 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     const total = parseInt(countResult.rows[0].count);
 
     let sql = `SELECT * FROM "tasks"${whereClause}`;
-    sql += ' ORDER BY "priority" DESC NULLS LAST, "createdAt" ASC';
+    // Priority is ascending (1 = highest). Unprioritized tasks sort last so a
+    // default listing starts with actionable work instead of archived/legacy
+    // low-value rows.
+    sql += ' ORDER BY "priority" ASC NULLS LAST, "createdAt" ASC';
 
     if (pagination?.limit !== undefined) {
       sql += ` LIMIT $${paramIndex++}`;
@@ -875,7 +878,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       id: input.id || crypto.randomUUID(),
       title: input.title || 'New Task',
       createdAt: input.createdAt || new Date().toISOString(),
-      updatedAt: input.updatedAt ?? undefined,
+      updatedAt: input.updatedAt ?? new Date().toISOString(),
       triageStatus: input.triageStatus || 'Backlog',
       urgent: input.urgent || false,
       impact: input.impact || false,
@@ -887,7 +890,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       terminationDate: input.terminationDate || null,
       comment: input.comment || null,
       durationInMinutes: input.durationInMinutes || null,
-      priority: input.priority || null,
+      priority: input.priority ?? null,
       userId: input.userId || null,
       parentId: input.parentId || null,
       children: input.children || [],

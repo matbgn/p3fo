@@ -16,6 +16,7 @@ import { AutoClosePanel } from './AutoClosePanel';
 import { sortTasks } from '@/utils/taskSorting';
 import {
   SPRINT_CHECKLIST,
+  reconcileChecklist,
   WHO5_OPTIONS,
   WHO5_QUESTIONS,
   SprintEntity,
@@ -244,7 +245,7 @@ export function SprintCeremonyOverlay({ initialStep = 0, onClose, embedded = fal
       appreciated: sprint.retro?.appreciated ?? '',
       todos: sprint.retro?.todos ?? '',
     });
-    setChecklist(sprint.retro?.checklist ?? {});
+    setChecklist(reconcileChecklist(sprint.retro?.checklist));
     setWellbeing(null);
     setWho5([null, null, null, null, null]);
     // Form state is initialised once per sprint; user edits must not be reset.
