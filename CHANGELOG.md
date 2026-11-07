@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.39.0 (2026-11-07)
+
+### Features
+
+- **planner:** add weekly planner with recurrence (3ca0a65)
+
+---
+
 ## v0.38.0 (2026-11-06)
 
 ### Features
@@ -172,13 +180,5 @@
 - **tasks:** correct timer transfer and parent sync (8f6d434)
 - **tasks:** inherit parent metadata in subtasks (c9bc394)
 - **boards:** align kanban hover delay with storyboard (2b38d72)
-
----
-
-## v0.30.0 (2026-06-25)
-
-### Features
-
-- **devtools:** add MCP server wrapping P3Fo REST API (02b7bff)
 
 ---
