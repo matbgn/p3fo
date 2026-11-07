@@ -3,27 +3,34 @@
  *
  * ## Architecture
  *
- * This component provides the UI for the Plackett-Luce + Swiss InfoGain
- * adaptive prioritization engine (see `@/lib/pl-prioritization`). The user
- * selects tasks, chooses a batch size K (2-5), and the engine adaptively
- * selects which K tasks to compare per batch based on current score
- * uncertainty (maximum information gain).
+ * This component provides the UI for three comparison modes:
+ *
+ * - **Pure Condorcet (K=2 reference)**: every unordered pair is compared
+ *   exactly once and ranked by Copeland wins. This is the exhaustive
+ *   reference; it costs n(n-1)/2 comparisons.
+ * - **BT K=2**: adaptive Bradley-Terry pairwise comparisons.
+ * - **BT K=4**: adaptive Bradley-Terry batches of 4 (pick best, then worst).
+ *
+ * The BT modes use the Plackett-Luce + Swiss InfoGain engine (see
+ * `@/lib/pl-prioritization`). K=3 and K=5 were removed after the harness
+ * showed they were dominated by K=4 on decisions and convergence.
  *
  * ## Batch UI flow
  *
- * - **K=2 (pairwise)**: Two task buttons side by side. One click picks the
- *   highest; the other is implicitly the lowest. One click per batch.
+ * - **Condorcet / BT K=2 (pairwise)**: Two task buttons side by side. One
+ *   click picks the highest; the other is implicitly the lowest.
  *
- * - **K>2 (batch)**: Two-step flow. First, "Pick the highest priority task"
- *   — all K buttons enabled. Then, "Now pick the lowest priority task" —
- *   the previously-chosen highest is disabled, remaining K-1 are enabled.
- *   Two clicks per batch, but each batch yields 2K-3 implicit pairwise wins.
+ * - **BT K=4 (batch)**: Two-step flow. First, "Pick the highest priority
+ *   task" — all four buttons enabled. Then, "Now pick the lowest priority
+ *   task" — the previously-chosen highest is disabled, remaining three are
+ *   enabled. Two clicks per batch, five implicit pairwise wins.
  *
  * ## Stop conditions
  *
- * The engine stops when confident (all pairs resolved at BT p >= 0.75), or
- * when the ranking stabilizes, or when no informative batch remains. Results
- * are then shown and can be applied via `updatePrioritiesBulk`.
+ * BT modes stop when confident, when the ranking stabilizes, or when no
+ * informative batch remains. The Condorcet reference runs every pair; only
+ * "Finalize now" can stop it early. Results can then be applied via
+ * `updatePrioritiesBulk`.
  *
  * ## Key interactions
  *
@@ -59,6 +66,17 @@ import {
   type PLTask,
   type RankedTask,
 } from '@/lib/pl-prioritization';
+import {
+  condorcetProgress,
+  expectedCondorcetComparisons,
+  initCondorcetState,
+  rankCondorcetResults,
+  recordCondorcetComparison,
+  selectNextCondorcetPair,
+  type CondorcetState,
+} from '@/lib/condorcet-prioritization';
+
+type ComparisonMode = 'condorcet' | 'bt-k2' | 'bt-k4';
 
 interface ComparativePrioritizationViewProps {
   tasks: Task[];
@@ -97,8 +115,9 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
   const [filterImpact, setFilterImpact] = useState<boolean | null>(null); // null = all, true = only impact, false = exclude impact
   const [filterIncident, setFilterIncident] = useState<boolean | null>(null); // null = all, true = only incident, false = exclude incident
   const [filterSprintTarget, setFilterSprintTarget] = useState<boolean | null>(null); // null = all, true = only sprint target, false = exclude sprint target
-  const [batchSize, setBatchSize] = useState(2);
-  const [prioritizationState, setPrioritizationState] = useState<PrioritizationState | null>(null);
+  const [comparisonMode, setComparisonMode] = useState<ComparisonMode>('bt-k2');
+  const [btState, setBtState] = useState<PrioritizationState | null>(null);
+  const [condorcetState, setCondorcetState] = useState<CondorcetState | null>(null);
   const [currentBatch, setCurrentBatch] = useState<ComparisonBatch | null>(null);
   const [batchPhase, setBatchPhase] = useState<'highest' | 'lowest'>('highest');
   const [selectedHighestId, setSelectedHighestId] = useState<string | null>(null);
@@ -120,6 +139,33 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
   }, []);
   const [initialTaskPriorities, setInitialTaskPriorities] = useState<Record<string, number | undefined>>({});
   const topLevelTasks = useMemo(() => tasks.filter(task => !task.parentId), [tasks]);
+
+  const isCondorcet = comparisonMode === 'condorcet';
+  const btBatchSize = comparisonMode === 'bt-k4' ? 4 : 2;
+  const activeState = isCondorcet ? condorcetState : btState;
+  const isDone = activeState?.done ?? false;
+  const comparisonCount = isCondorcet
+    ? (condorcetState?.comparedPairs ?? 0)
+    : (btState?.totalBatches ?? 0);
+  const progress = isCondorcet && condorcetState
+    ? condorcetProgress(condorcetState)
+    : btState
+      ? confidencePercent(btState)
+      : 0;
+  const modeHelpKey = isCondorcet
+    ? 'prioritization.modeHelpCondorcet'
+    : comparisonMode === 'bt-k4'
+      ? 'prioritization.modeHelpBtK4'
+      : 'prioritization.modeHelpBtK2';
+  const startComparisonLabel = isCondorcet
+    ? t('prioritization.startComparisonCondorcet', {
+        count: selectedTasks.length,
+        pairs: expectedCondorcetComparisons(selectedTasks.length),
+      })
+    : t('prioritization.startComparison', {
+        count: selectedTasks.length,
+        batches: expectedComparisons(selectedTasks.length, btBatchSize),
+      });
 
   // Effect to update session storage when filters change
   useEffect(() => {
@@ -154,6 +200,12 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
     setSelectedTasks(topLevelTasks.filter(task => task.triageStatus !== "Done" && task.triageStatus !== "Dropped"));
     setInitialTaskPriorities(Object.fromEntries(tasks.map(task => [task.id, task.priority])));
   }, [tasks, topLevelTasks]);
+
+  useEffect(() => {
+    if (comparisonMode === 'bt-k4' && selectedTasks.length < 4) {
+      setComparisonMode('bt-k2');
+    }
+  }, [comparisonMode, selectedTasks.length]);
 
   // Filter tasks based on urgency, impact, and incident state
   const filterTasks = (tasks: Task[]): Task[] => {
@@ -193,7 +245,8 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
     }
     // Reset prioritization if selection changes
     setPrioritizedResults(null);
-    setPrioritizationState(null);
+    setBtState(null);
+    setCondorcetState(null);
     setCurrentBatch(null);
     setBatchPhase('highest');
     setSelectedHighestId(null);
@@ -206,18 +259,26 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
     }
 
     const plTasks: PLTask[] = selectedTasks.map((t) => ({ id: t.id, title: t.title }));
-    const state = initState(plTasks, batchSize);
-    setPrioritizationState(state);
     setPrioritizedResults(null);
     setBatchPhase('highest');
     setSelectedHighestId(null);
 
-    const firstBatch = selectNextBatch(state);
-    setCurrentBatch(firstBatch);
+    if (comparisonMode === 'condorcet') {
+      const state = initCondorcetState(plTasks);
+      setCondorcetState(state);
+      setBtState(null);
+      setCurrentBatch(selectNextCondorcetPair(state));
+    } else {
+      const state = initState(plTasks, btBatchSize);
+      setBtState(state);
+      setCondorcetState(null);
+      setCurrentBatch(selectNextBatch(state));
+    }
   };
 
   const resetComparison = () => {
-    setPrioritizationState(null);
+    setBtState(null);
+    setCondorcetState(null);
     setCurrentBatch(null);
     setBatchPhase('highest');
     setSelectedHighestId(null);
@@ -225,14 +286,39 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
     setFinalizePreview(null);
   };
 
+  const handleModeChange = (mode: ComparisonMode) => {
+    if (mode === comparisonMode) return;
+    if (currentBatch && !isDone) {
+      if (!window.confirm(t('prioritization.resetConfirm'))) return;
+    }
+    setComparisonMode(mode);
+    resetComparison();
+  };
+
   const handleBatchHighest = (highestId: string) => {
-    if (!prioritizationState || !currentBatch) return;
+    if (!currentBatch) return;
+
+    if (comparisonMode === 'condorcet') {
+      if (!condorcetState) return;
+      const next = recordCondorcetComparison(condorcetState, highestId);
+      setCondorcetState(next);
+      if (next.done && next.results) {
+        setPrioritizedResults(next.results);
+        setCurrentBatch(null);
+      } else {
+        setCurrentBatch(selectNextCondorcetPair(next));
+        setBatchPhase('highest');
+        setSelectedHighestId(null);
+      }
+      return;
+    }
+
+    if (!btState) return;
     const k = currentBatch.k;
     if (k === 2) {
       const batchIds = currentBatch.tasks.map((t) => t.id);
-      const lowestId = batchIds.find((id) => id !== highestId);
-      const next = recordBatch(prioritizationState, highestId, undefined, batchIds);
-      setPrioritizationState(next);
+      const next = recordBatch(btState, highestId, undefined, batchIds);
+      setBtState(next);
       if (next.done && next.results) {
         setPrioritizedResults(next.results);
         setCurrentBatch(null);
@@ -249,10 +335,10 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
   };
 
   const handleBatchLowest = (lowestId: string) => {
-    if (!prioritizationState || !currentBatch || !selectedHighestId) return;
+    if (!btState || !currentBatch || !selectedHighestId) return;
     const batchIds = currentBatch.tasks.map((t) => t.id);
-    const next = recordBatch(prioritizationState, selectedHighestId, lowestId, batchIds);
-    setPrioritizationState(next);
+    const next = recordBatch(btState, selectedHighestId, lowestId, batchIds);
+    setBtState(next);
     if (next.done && next.results) {
       setPrioritizedResults(next.results);
       setCurrentBatch(null);
@@ -270,8 +356,13 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
   };
 
   const handleFinalizeNow = () => {
-    if (!prioritizationState || prioritizationState.totalBatches < 1) return;
-    setFinalizePreview(rankResults(prioritizationState));
+    if (comparisonMode === 'condorcet') {
+      if (!condorcetState || condorcetState.comparedPairs < 1) return;
+      setFinalizePreview(rankCondorcetResults(condorcetState));
+      return;
+    }
+    if (!btState || btState.totalBatches < 1) return;
+    setFinalizePreview(rankResults(btState));
   };
 
   const handleConfirmFinalize = () => {
@@ -341,15 +432,13 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
     if (!window.confirm(t('prioritization.deleteConfirm', { count: selectedTasks.length, s: selectedTasks.length > 1 ? 's' : '' }))) return;
     selectedTasks.forEach((task) => deleteTask(task.id));
     setSelectedTasks([]);
-    setPrioritizationState(null);
+    setBtState(null);
+    setCondorcetState(null);
     setCurrentBatch(null);
     setBatchPhase('highest');
     setSelectedHighestId(null);
     setPrioritizedResults(null);
   };
-
-  const progress = prioritizationState ? confidencePercent(prioritizationState) : 0;
-  const comparisonCount = prioritizationState?.totalBatches ?? 0;
 
   return (
     <Card className="h-full flex flex-col border-0">
@@ -555,34 +644,49 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                 ))}
               </div>
               <div className="mt-4 flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">{t('prioritization.itemsPerBatch')}</span>
-                  <div className="flex gap-1">
-                    {[2, 3, 4, 5].map((k) => (
-                      <Button
-                        key={k}
-                        size="sm"
-                        variant={batchSize === k ? "default" : "outline"}
-                        onClick={() => setBatchSize(k)}
-                        disabled={k > selectedTasks.length}
-                        className="text-xs w-9"
-                      >
-                        {k}
-                      </Button>
-                    ))}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-medium">{t('prioritization.comparisonMode')}</span>
+                  <div className="flex flex-wrap gap-1">
+                    <Button
+                      size="sm"
+                      variant={comparisonMode === 'condorcet' ? "default" : "outline"}
+                      onClick={() => handleModeChange('condorcet')}
+                      disabled={selectedTasks.length < 2}
+                      className="text-xs"
+                    >
+                      {t('prioritization.modeCondorcet')}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={comparisonMode === 'bt-k2' ? "default" : "outline"}
+                      onClick={() => handleModeChange('bt-k2')}
+                      disabled={selectedTasks.length < 2}
+                      className="text-xs"
+                    >
+                      {t('prioritization.modeBtK2')}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={comparisonMode === 'bt-k4' ? "default" : "outline"}
+                      onClick={() => handleModeChange('bt-k4')}
+                      disabled={selectedTasks.length < 4}
+                      className="text-xs"
+                    >
+                      {t('prioritization.modeBtK4')}
+                    </Button>
                   </div>
                   <span className="text-xs text-muted-foreground">
-                    {t('prioritization.batchSizeHelp')}
+                    {t(modeHelpKey)}
                   </span>
                 </div>
                 <div className="flex space-x-2">
-                  {currentBatch && !prioritizationState?.done ? (
+                  {currentBatch && !isDone ? (
                     <>
                       <Button
                         variant="secondary"
                         onClick={handleFinalizeNow}
-                        disabled={!prioritizationState || prioritizationState.totalBatches < 1}
-                        title={!prioritizationState || prioritizationState.totalBatches < 1 ? t('prioritization.finalizeTooltipDisabled') : t('prioritization.finalizeTooltipEnabled')}
+                        disabled={comparisonCount < 1}
+                        title={comparisonCount < 1 ? t('prioritization.finalizeTooltipDisabled') : t('prioritization.finalizeTooltipEnabled')}
                       >
                         {t('prioritization.finalizeNow')}
                       </Button>
@@ -595,8 +699,8 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                       </Button>
                     </>
                   ) : (
-                    <Button onClick={startComparison} disabled={selectedTasks.length < 2}>
-                      {t('prioritization.startComparison', { count: selectedTasks.length, batches: expectedComparisons(selectedTasks.length, batchSize) })}
+                    <Button onClick={startComparison} disabled={selectedTasks.length < 2 || (comparisonMode === 'bt-k4' && selectedTasks.length < 4)}>
+                      {startComparisonLabel}
                     </Button>
                   )}
                   <Button variant="outline" onClick={handleCopyTitlesToClipboard} disabled={selectedTasks.length === 0}>
@@ -641,12 +745,21 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
                   <div className="bg-blue-600 h-2.5 rounded-full transition-all" style={{ width: `${progress}%` }}></div>
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 text-center">
-                  {t('prioritization.batchProgress', { n: comparisonCount + 1, percent: progress })}
+                  {isCondorcet
+                    ? t('prioritization.condorcetProgress', {
+                        n: comparisonCount + 1,
+                        total: condorcetState?.totalPairs ?? 0,
+                        percent: Math.round(progress),
+                      })
+                    : t('prioritization.batchProgress', {
+                        n: comparisonCount + 1,
+                        percent: Math.round(progress),
+                      })}
                 </p>
                 <div className={`flex justify-around items-center gap-4 ${currentBatch.k > 2 ? 'flex-col' : ''}`}>
                   {currentBatch.tasks.map((task) => {
                     const isHighestSelected = batchPhase === 'lowest' && task.id === selectedHighestId;
-                    const isDisabled = prioritizationState?.done ?? false;
+                    const isDisabled = isDone;
                     const isHighlighted = isHighestSelected;
                     return (
                       <Button
@@ -688,8 +801,16 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
             <DialogHeader>
               <DialogTitle>{t('prioritization.finalizeDialogTitle')}</DialogTitle>
               <DialogDescription>
-                {prioritizationState
-                  ? t('prioritization.finalizeDialogDesc', { n: prioritizationState.totalBatches, es: prioritizationState.totalBatches === 1 ? '' : 'es' })
+                {comparisonCount > 0
+                  ? isCondorcet
+                    ? t('prioritization.finalizeDialogDescCondorcet', {
+                        n: comparisonCount,
+                        es: comparisonCount === 1 ? '' : 's',
+                      })
+                    : t('prioritization.finalizeDialogDesc', {
+                        n: comparisonCount,
+                        es: comparisonCount === 1 ? '' : 'es',
+                      })
                   : t('prioritization.finalizeDialogDescSimple')}
               </DialogDescription>
             </DialogHeader>

@@ -41,28 +41,32 @@
  *
  * ## Stop conditions (confidence-based)
  *
- * The engine stops when ANY of the following is true:
- *   - **Confident**: all pairs have BT win-probability >= 0.75 (configurable)
- *     in one direction (no ambiguous pairs remain).
+ * The engine stops when ANY of the following is true, but only after the
+ * warm-up gate is satisfied (at least one batch per task AND direct evidence
+ * for every adjacent pair in the current ranking):
+ *   - **Confident**: all adjacent pairs have BT win-probability >= 0.75
+ *     (configurable) in one direction.
  *   - **No informative batch**: the highest-entropy pair is below an entropy
  *     floor (diminishing returns — further comparisons add ~no information).
  *   - **Ranking stable**: the ranking hasn't changed for STABILITY_WINDOW+1
- *     consecutive batches AND every pair with non-trivial entropy has been
- *     compared at least once (coverage-aware stability).
- *   - **Batch cap**: MAX_BATCHES_CAP reached (safety valve).
+ *     consecutive batches AND every uncertain adjacent pair has been compared.
+ *   - **Stall**: confidencePercent has not increased for STALL_WINDOW batches.
+ *   - **Batch cap**: MAX_BATCHES_CAP reached (safety valve, ungated).
  *
  * ## Phases
  *
- * - **Exploration**: every pair is compared at least once before relying on
- *   InfoGain. This prevents the model from getting stuck on a wrong belief
- *   about an unqueried pair (InfoGain trusts current scores, which may be
- *   wrong for pairs never compared). Unqueried pairs are picked Swiss-style
- *   (closest current scores first).
+ * - **Adjacent coverage**: before any stop is allowed, every adjacent pair in
+ *   the current ranking must have a direct comparison. This prevents a sparse
+ *   or transitive-only ranking from being finalized as if it were verified.
  *
- * - **Exploitation**: once all pairs have been compared, the engine uses
- *   InfoGain to select the most informative batch. The seed pair is the one
- *   with the highest batch entropy; additional tasks are added greedily by
- *   maximizing the batch entropy of the growing set.
+ * - **Exploration**: every uncertain pair is compared at least once before
+ *   relying on InfoGain. Unqueried pairs are picked Swiss-style (closest
+ *   current scores first).
+ *
+ * - **Exploitation**: once no uncertain pair remains, the engine uses InfoGain
+ *   to select the most informative batch. The seed pair is the one with the
+ *   highest batch entropy; additional tasks are added greedily by maximizing
+ *   the batch entropy of the growing set.
  */
 
 import type { Task } from '@/hooks/useTasks';
@@ -82,6 +86,14 @@ export interface RankedTask {
   score: number;
 }
 
+export type StopReason =
+  | 'confident'
+  | 'floor'
+  | 'stability'
+  | 'stall'
+  | 'cap'
+  | null;
+
 export interface PrioritizationState {
   k: number;
   tasks: PLTask[];
@@ -92,6 +104,8 @@ export interface PrioritizationState {
   results: RankedTask[] | null;
   rankingHistory: string[][];
   stallCount: number;
+  /** Why the engine finalized, when `done` is true. */
+  stopReason?: StopReason;
 }
 
 /** Clamp log-strength scores to [-20, 20] to avoid exp() overflow. */
@@ -130,13 +144,23 @@ const INFO_GAIN_FLOOR = 0.01;
 const STABILITY_WINDOW = 5;
 /**
  * Number of consecutive batches with no `confidencePercent` increase before
- * the stall stop fires. This is the backup escape when the ranking
- * oscillates on near-equal adjacent pairs and the stability stop never
- * locks. The counter resets on any confidence increase.
+ * the stall stop fires, counted only after the warm-up/coverage gate. This is
+ * the backup escape when the ranking oscillates on near-equal adjacent pairs
+ * and the stability stop never locks. 20 batches (rather than 10) gives noisy
+ * users enough repeated evidence; the harness showed 10 was unstable under
+ * response noise. The counter resets on any confidence increase.
  */
-const STALL_WINDOW = 10;
+const STALL_WINDOW = 20;
 /** Safety-valve cap on total batches to prevent infinite loops. */
 const MAX_BATCHES_CAP = 500;
+/**
+ * Minimum number of batches before any stop rule may fire, expressed per task.
+ * One batch per task prevents confidence/stall/stability from finalizing on a
+ * sparse win graph during early exploration. This is the main stabilization
+ * guard for small n and for K=2, where the stall stop previously fired after
+ * ~16 batches for n=20 with a largely unqueried matrix.
+ */
+const MIN_BATCHES_PER_TASK = 1;
 
 /**
  * Initialize the prioritization state for a set of tasks.
@@ -157,6 +181,7 @@ export function initState(tasks: PLTask[], k: number): PrioritizationState {
     results: null,
     rankingHistory: [],
     stallCount: 0,
+    stopReason: null,
   };
 }
 
@@ -196,19 +221,25 @@ export function estimateScores(
   for (let iter = 0; iter < MLE_ITERATIONS; iter++) {
     const next: Record<string, number> = {};
     for (const i of taskIds) {
-      const winsI = winMatrix[i] || {};
-      let numerator = PRIOR_WEIGHT;
+      // Standard Zermelo / Bradley-Terry MM update:
+      //   pi_i = W_i / sum_j (n_ij / (pi_i + pi_j))
+      // where W_i is total wins and n_ij is total games between i and j.
+      // The MAP prior adds PRIOR_WEIGHT wins and PRIOR_WEIGHT losses against
+      // an average opponent (strength 1), which keeps disconnected graphs
+      // finite and well-conditioned.
+      let wins = PRIOR_WEIGHT;
       let denominator = (2 * PRIOR_WEIGHT) / (pi[i] + 1);
       for (const j of taskIds) {
         if (i === j) continue;
-        const winsIJ = winsI[j] || 0;
-        const winsJI = (winMatrix[j] || {})[i] || 0;
+        const winsIJ = winMatrix[i]?.[j] || 0;
+        const winsJI = winMatrix[j]?.[i] || 0;
+        wins += winsIJ;
+        const games = winsIJ + winsJI;
+        if (games === 0) continue;
         const denom = pi[i] + pi[j];
-        if (denom === 0) continue;
-        numerator += winsIJ * (pi[j] / denom);
-        denominator += winsJI / denom;
+        if (denom > 0) denominator += games / denom;
       }
-      next[i] = denominator > 0 ? numerator / denominator : 1;
+      next[i] = denominator > 0 ? wins / denominator : 1;
       if (!isFinite(next[i]) || next[i] <= 0) next[i] = 1e-6;
     }
     // normalize by geometric mean
@@ -257,6 +288,44 @@ export function isConfident(
     if (closer > 1 - threshold) return false;
   }
   return true;
+}
+
+/**
+ * Minimum batches the engine must record before any stop rule may fire.
+ * One batch per task is a conservative, scale-invariant warm-up: it prevents
+ * the stall/confidence/stability stops from finalizing on an early, sparse win
+ * graph (the main instability found by the harness at K=2 and large n).
+ */
+function minimumBatches(state: PrioritizationState): number {
+  return Math.max(2, Math.ceil(state.tasks.length * MIN_BATCHES_PER_TASK));
+}
+
+/**
+ * Adjacent pairs in the current ranking that have never been directly
+ * compared. Requiring direct evidence for every adjacent pair is the second
+ * stabilization guard: it stops the engine from trusting a ranking whose
+ * consecutive orderings are only supported by transitive wins.
+ */
+function adjacentUncoveredPairs(state: PrioritizationState): [string, string][] {
+  const ranked = rankResults(state).map((result) => result.taskId);
+  const uncovered: [string, string][] = [];
+  for (let i = 0; i < ranked.length - 1; i++) {
+    const a = ranked[i];
+    const b = ranked[i + 1];
+    const compared =
+      (state.winMatrix[a]?.[b] || 0) + (state.winMatrix[b]?.[a] || 0);
+    if (compared === 0) uncovered.push([a, b]);
+  }
+  return uncovered;
+}
+
+/**
+ * Whether the engine is allowed to stop. Requires both the warm-up batch
+ * minimum and direct coverage of every adjacent pair in the current ranking.
+ */
+function canStop(state: PrioritizationState): boolean {
+  if (state.totalBatches < minimumBatches(state)) return false;
+  return adjacentUncoveredPairs(state).length === 0;
 }
 
 function addWin(
@@ -325,12 +394,31 @@ export function recordBatch(
 
   const prevConf = confidencePercent(state);
   const newConf = confidencePercent(next);
-  next.stallCount = newConf > prevConf ? 0 : state.stallCount + 1;
+  const stoppable = canStop(next);
+  next.stallCount =
+    stoppable && newConf <= prevConf ? state.stallCount + 1 : 0;
+  next.stopReason = null;
 
-  if (isConfident(next) || selectNextBatch(next) === null || isRankingStable(next) || next.totalBatches >= MAX_BATCHES_CAP || next.stallCount >= STALL_WINDOW) {
+  if (next.totalBatches >= MAX_BATCHES_CAP) {
     next.done = true;
-    next.results = rankResults(next);
+    next.stopReason = 'cap';
+  } else if (stoppable) {
+    if (isConfident(next)) {
+      next.done = true;
+      next.stopReason = 'confident';
+    } else if (selectNextBatch(next) === null) {
+      next.done = true;
+      next.stopReason = 'floor';
+    } else if (isRankingStable(next)) {
+      next.done = true;
+      next.stopReason = 'stability';
+    } else if (next.stallCount >= STALL_WINDOW) {
+      next.done = true;
+      next.stopReason = 'stall';
+    }
   }
+
+  if (next.done) next.results = rankResults(next);
   return next;
 }
 
@@ -468,7 +556,7 @@ export function selectNextBatch(
   state: PrioritizationState,
   k?: number,
 ): ComparisonBatch | null {
-  if (isConfident(state)) return null;
+  if (isConfident(state) && canStop(state)) return null;
 
   const effectiveK = Math.min(k ?? state.k, state.tasks.length);
   if (effectiveK < 2) return null;
@@ -477,6 +565,66 @@ export function selectNextBatch(
 
   function pairCompared(a: string, b: string): number {
     return (state.winMatrix[a]?.[b] || 0) + (state.winMatrix[b]?.[a] || 0);
+  }
+
+  function toBatch(selectedIds: string[]): ComparisonBatch | null {
+    const batchTasks = selectedIds
+      .map((id) => state.tasks.find((t) => t.id === id))
+      .filter((t): t is PLTask => t !== undefined);
+    if (batchTasks.length < 2) return null;
+    return { tasks: batchTasks, k: effectiveK };
+  }
+
+  // Phase 0 — Adjacent coverage: the ranking must not be finalized while any
+  // adjacent pair in it is supported only by transitive wins. Pick the
+  // closest-score uncovered adjacent pair, then extend the batch toward other
+  // uncovered adjacent pairs.
+  const uncoveredAdjacent = adjacentUncoveredPairs(state);
+  if (uncoveredAdjacent.length > 0) {
+    uncoveredAdjacent.sort((p1, p2) => {
+      const d1 = Math.abs((state.scores[p1[0]] ?? 0) - (state.scores[p1[1]] ?? 0));
+      const d2 = Math.abs((state.scores[p2[0]] ?? 0) - (state.scores[p2[1]] ?? 0));
+      return d1 - d2;
+    });
+
+    const selected = [...uncoveredAdjacent[0]];
+    while (selected.length < effectiveK) {
+      let bestCandidate: string | null = null;
+      let bestNewAdjacent = -1;
+      let bestNewPairs = -1;
+      for (const id of ids) {
+        if (selected.includes(id)) continue;
+        let newAdjacent = 0;
+        for (const [a, b] of uncoveredAdjacent) {
+          if (
+            (a === id && selected.includes(b)) ||
+            (b === id && selected.includes(a))
+          ) {
+            newAdjacent++;
+          }
+        }
+        let newPairs = 0;
+        for (const selectedId of selected) {
+          if (pairCompared(id, selectedId) === 0) newPairs++;
+        }
+        if (
+          newAdjacent > bestNewAdjacent ||
+          (newAdjacent === bestNewAdjacent && newPairs > bestNewPairs)
+        ) {
+          bestNewAdjacent = newAdjacent;
+          bestNewPairs = newPairs;
+          bestCandidate = id;
+        }
+      }
+      if (
+        bestCandidate === null ||
+        (bestNewAdjacent <= 0 && bestNewPairs <= 0)
+      ) {
+        break;
+      }
+      selected.push(bestCandidate);
+    }
+    return toBatch(selected);
   }
 
   // Phase 1 — Exploration: ensure every uncertain pair is compared at
@@ -536,7 +684,7 @@ export function selectNextBatch(
       }
     }
     if (!bestPair) return null;
-    if (bestPairH < INFO_GAIN_FLOOR) return null;
+    if (bestPairH < INFO_GAIN_FLOOR && canStop(state)) return null;
 
     selected = [bestPair[0], bestPair[1]];
     while (selected.length < effectiveK) {
@@ -556,11 +704,7 @@ export function selectNextBatch(
     }
   }
 
-  const batchTasks = selected
-    .map((id) => state.tasks.find((t) => t.id === id))
-    .filter((t): t is PLTask => t !== undefined);
-  if (batchTasks.length < 2) return null;
-  return { tasks: batchTasks, k: effectiveK };
+  return toBatch(selected);
 }
 
 /**
