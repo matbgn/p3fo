@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { DbClient, SprintWellbeingRecord } from './index.js';
+import { DbClient, SprintWellbeingRecord, applyTaskTemporalMirror } from './index.js';
 import type { SprintStateEntity } from '../../src/lib/sprint-types.js';
 import type {
   TaskEntity,
@@ -40,12 +40,22 @@ interface TaskDbRow {
   timer: string | null;
   category: string;
   terminationDate: string | null;
+  dueDate: string | null;
+  completedAt: string | null;
   comment: string | null;
   durationInMinutes: number | null;
   priority: number | null;
   userId: string | null;
   linkedVoteIds: string | null;
   blockedSince: string | null;
+  plannedDate: string | null;
+  plannedTime: string | null;
+  plannedPosition: string | null;
+  color: string | null;
+  recurrence: string | null;
+  seriesId: string | null;
+  occurrenceDate: string | null;
+  deletedAt: string | null;
 }
 
 interface UserSettingsDbRow {
@@ -60,6 +70,7 @@ interface UserSettingsDbRow {
   timezone: string | null;
   weekStartDay: number | null;
   defaultPlanView: string | null;
+  plannerDefault: number | null;
   preferredWorkingDays: string | null;
   trigram: string | null;
   pomodoroConfig: string | null;
@@ -288,12 +299,22 @@ class SqliteClient implements DbClient {
         "timer" TEXT, -- JSON string
         "category" TEXT DEFAULT 'General',
         "terminationDate" TEXT,
+        "dueDate" TEXT,
+        "completedAt" TEXT,
         "comment" TEXT,
         "durationInMinutes" INTEGER,
         "priority" REAL,
         "updatedAt" TEXT,
         "userId" TEXT,
         "linkedVoteIds" TEXT,
+        "plannedDate" TEXT,
+        "plannedTime" TEXT,
+        "plannedPosition" TEXT,
+        "color" TEXT DEFAULT 'none',
+        "recurrence" TEXT,
+        "seriesId" TEXT,
+        "occurrenceDate" TEXT,
+        "deletedAt" TEXT,
         FOREIGN KEY("parentId") REFERENCES "tasks"("id")
       )
     `);
@@ -312,6 +333,7 @@ class SqliteClient implements DbClient {
         "timezone" TEXT,
         "weekStartDay" INTEGER,
         "defaultPlanView" TEXT,
+        "plannerDefault" INTEGER,
         "preferredWorkingDays" TEXT, -- JSON string
         "trigram" TEXT
       )
@@ -704,6 +726,7 @@ class SqliteClient implements DbClient {
     // Add new columns for UserSettings
     addColumn('userSettings', 'weekStartDay', 'INTEGER');
     addColumn('userSettings', 'defaultPlanView', 'TEXT');
+    addColumn('userSettings', 'plannerDefault', 'INTEGER');
     addColumn('userSettings', 'preferredWorkingDays', 'TEXT');
     addColumn('userSettings', 'trigram', 'TEXT');
     addColumn('userSettings', 'pomodoroConfig', 'TEXT');
@@ -739,6 +762,79 @@ class SqliteClient implements DbClient {
 
     // Tasks blockedSince column (EF prosthetic: tracks when task entered Blocked status)
     addColumn('tasks', 'blockedSince', 'TEXT');
+
+    // Temporal split columns + one-time backfill. A migration marker (rather
+    // than a pre-DDL column probe) keeps the backfill retryable: if the process
+    // dies after the columns are added but before the backfill commits, the
+    // next boot runs it again instead of skipping it forever.
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS "_migrations" (
+        "id" TEXT PRIMARY KEY,
+        "appliedAt" TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    addColumn('tasks', 'dueDate', 'TEXT');
+    addColumn('tasks', 'completedAt', 'TEXT');
+
+    // Planner columns
+    addColumn('tasks', 'plannedDate', 'TEXT');
+    addColumn('tasks', 'plannedTime', 'TEXT');
+    addColumn('tasks', 'plannedPosition', 'TEXT');
+    addColumn('tasks', 'color', "TEXT DEFAULT 'none'");
+    addColumn('tasks', 'recurrence', 'TEXT');
+    addColumn('tasks', 'seriesId', 'TEXT');
+    addColumn('tasks', 'occurrenceDate', 'TEXT');
+    addColumn('tasks', 'deletedAt', 'TEXT');
+
+    // Lazy backfill: before the temporal split, terminationDate was both the
+    // deadline and the completion timestamp. Preserve both meanings for rows
+    // touched since the deploy window. The marker is written in the same
+    // transaction as the updates, so a crash or failed migration retries on
+    // the next start. Older rows are not rewritten: readers fall back to
+    // terminationDate for historical data, and touching the full history at
+    // boot would block startup on large databases.
+    const TEMPORAL_BACKFILL_WINDOW_DAYS = 2;
+    const temporalBackfillCutoff = new Date(
+      Date.now() - TEMPORAL_BACKFILL_WINDOW_DAYS * 86_400_000,
+    ).toISOString();
+    const temporalSplitMigrationId = 'tasks.temporal-split-backfill';
+    try {
+      this.db.exec('BEGIN');
+      const marker = this.db
+        .prepare('SELECT 1 FROM "_migrations" WHERE "id" = ?')
+        .get(temporalSplitMigrationId);
+      if (!marker) {
+        this.db.prepare(`
+          UPDATE "tasks"
+          SET "dueDate" = "terminationDate"
+          WHERE "dueDate" IS NULL
+            AND "completedAt" IS NULL
+            AND "terminationDate" IS NOT NULL
+            AND "triageStatus" <> 'Done'
+            AND datetime("updatedAt") >= datetime(?)
+        `).run(temporalBackfillCutoff);
+        this.db.prepare(`
+          UPDATE "tasks"
+          SET "completedAt" = "terminationDate"
+          WHERE "completedAt" IS NULL
+            AND "terminationDate" IS NOT NULL
+            AND "triageStatus" = 'Done'
+            AND datetime("updatedAt") >= datetime(?)
+        `).run(temporalBackfillCutoff);
+        this.db
+          .prepare('INSERT OR IGNORE INTO "_migrations" ("id") VALUES (?)')
+          .run(temporalSplitMigrationId);
+      }
+      this.db.exec('COMMIT');
+    } catch (error) {
+      try {
+        this.db.exec('ROLLBACK');
+      } catch {
+        // The transaction may already be closed; the marker is only written on success.
+      }
+      console.error('Task temporal split backfill failed; it will retry on next start:', error);
+    }
 
     // VoteLoops proposalId column (per-proposal loops)
     addColumn('voteLoops', 'proposalId', 'TEXT NOT NULL DEFAULT \'\'');
@@ -802,6 +898,8 @@ class SqliteClient implements DbClient {
               "timer" TEXT,
               "category" TEXT DEFAULT 'General',
               "terminationDate" TEXT,
+              "dueDate" TEXT,
+              "completedAt" TEXT,
               "comment" TEXT,
               "durationInMinutes" INTEGER,
               "priority" REAL,
@@ -809,10 +907,35 @@ class SqliteClient implements DbClient {
               "userId" TEXT,
               "linkedVoteIds" TEXT,
               "blockedSince" TEXT,
+              "plannedDate" TEXT,
+              "plannedTime" TEXT,
+              "plannedPosition" TEXT,
+              "color" TEXT DEFAULT 'none',
+              "recurrence" TEXT,
+              "seriesId" TEXT,
+              "occurrenceDate" TEXT,
+              "deletedAt" TEXT,
               FOREIGN KEY("parentId") REFERENCES "tasks"("id")
             );
           `);
-          this.db.exec(`INSERT INTO "tasks_new" SELECT * FROM "tasks";`);
+          // Copy by explicit column name. `ALTER TABLE ... ADD COLUMN` appends
+          // new columns at the end of an existing table, so a positional
+          // `SELECT *` copy would shift every column added after the original
+          // schema into the wrong destination column.
+          this.db.exec(`
+            INSERT INTO "tasks_new" (
+              "id", "parentId", "title", "createdAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget",
+              "difficulty", "timer", "category", "terminationDate", "dueDate", "completedAt", "comment", "durationInMinutes",
+              "priority", "updatedAt", "userId", "linkedVoteIds", "blockedSince", "plannedDate", "plannedTime",
+              "plannedPosition", "color", "recurrence", "seriesId", "occurrenceDate", "deletedAt"
+            )
+            SELECT
+              "id", "parentId", "title", "createdAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget",
+              "difficulty", "timer", "category", "terminationDate", "dueDate", "completedAt", "comment", "durationInMinutes",
+              "priority", "updatedAt", "userId", "linkedVoteIds", "blockedSince", "plannedDate", "plannedTime",
+              "plannedPosition", "color", "recurrence", "seriesId", "occurrenceDate", "deletedAt"
+            FROM "tasks";
+          `);
           this.db.exec(`DROP TABLE "tasks";`);
           this.db.exec(`ALTER TABLE "tasks_new" RENAME TO "tasks";`);
           // Recreate index dropped with the table.
@@ -842,7 +965,7 @@ class SqliteClient implements DbClient {
     excludeStatuses?: string[],
     triageStatuses?: string[],
     includeSubtasks?: boolean,
-    options?: { search?: string; active?: boolean },
+    options?: { search?: string; active?: boolean; includeDeleted?: boolean },
   ): Promise<{ data: TaskEntity[]; total: number }> {
     const conditions: string[] = [];
     const params: (string | number | null)[] = [];
@@ -875,6 +998,13 @@ class SqliteClient implements DbClient {
 
     if (includeSubtasks === false) {
       conditions.push('"parentId" IS NULL');
+    }
+
+    // Soft-deleted tombstone rows stay in the table so recurrence expansion can
+    // suppress deleted occurrences. Callers that render tasks must opt in to
+    // receive them; MCP listings and audits use the default and exclude them.
+    if (!options?.includeDeleted) {
+      conditions.push('"deletedAt" IS NULL');
     }
 
     const whereClause = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
@@ -948,6 +1078,8 @@ class SqliteClient implements DbClient {
       timer: input.timer || [],
       category: input.category || 'General',
       terminationDate: input.terminationDate || null,
+      dueDate: input.dueDate || null,
+      completedAt: input.completedAt || null,
       comment: input.comment || null,
       durationInMinutes: input.durationInMinutes || null,
       priority: input.priority ?? null,
@@ -956,7 +1088,17 @@ class SqliteClient implements DbClient {
       children: input.children || [],
       linkedVoteIds: input.linkedVoteIds || undefined,
       blockedSince: input.blockedSince || null,
+      plannedDate: input.plannedDate ?? null,
+      plannedTime: input.plannedTime ?? null,
+      plannedPosition: input.plannedPosition ?? null,
+      color: input.color ?? 'none',
+      recurrence: input.recurrence ?? null,
+      seriesId: input.seriesId ?? null,
+      occurrenceDate: input.occurrenceDate ?? null,
+      deletedAt: input.deletedAt ?? null,
     };
+
+    applyTaskTemporalMirror(newTask, input);
 
     const params = {
       id: newTask.id,
@@ -973,17 +1115,27 @@ class SqliteClient implements DbClient {
       timer: JSON.stringify(newTask.timer),
       category: newTask.category,
       terminationDate: newTask.terminationDate,
+      dueDate: newTask.dueDate,
+      completedAt: newTask.completedAt,
       comment: newTask.comment,
       durationInMinutes: newTask.durationInMinutes,
       priority: newTask.priority,
       userId: newTask.userId,
       linkedVoteIds: newTask.linkedVoteIds ? JSON.stringify(newTask.linkedVoteIds) : null,
       blockedSince: newTask.blockedSince,
+      plannedDate: newTask.plannedDate,
+      plannedTime: newTask.plannedTime,
+      plannedPosition: newTask.plannedPosition,
+      color: newTask.color,
+      recurrence: newTask.recurrence ?? null,
+      seriesId: newTask.seriesId ?? null,
+      occurrenceDate: newTask.occurrenceDate ?? null,
+      deletedAt: newTask.deletedAt ?? null,
     };
 
     this.db.prepare(`
-      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget", "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId", "linkedVoteIds", "blockedSince")
-      VALUES(@id, @parentId, @title, @createdAt, @updatedAt, @triageStatus, @urgent, @impact, @majorIncident, @sprintTarget, @difficulty, @timer, @category, @terminationDate, @comment, @durationInMinutes, @priority, @userId, @linkedVoteIds, @blockedSince)
+      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget", "difficulty", "timer", "category", "terminationDate", "dueDate", "completedAt", "comment", "durationInMinutes", "priority", "userId", "linkedVoteIds", "blockedSince", "plannedDate", "plannedTime", "plannedPosition", "color", "recurrence", "seriesId", "occurrenceDate", "deletedAt")
+      VALUES(@id, @parentId, @title, @createdAt, @updatedAt, @triageStatus, @urgent, @impact, @majorIncident, @sprintTarget, @difficulty, @timer, @category, @terminationDate, @dueDate, @completedAt, @comment, @durationInMinutes, @priority, @userId, @linkedVoteIds, @blockedSince, @plannedDate, @plannedTime, @plannedPosition, @color, @recurrence, @seriesId, @occurrenceDate, @deletedAt)
     `).run(params);
 
     return newTask;
@@ -995,7 +1147,7 @@ class SqliteClient implements DbClient {
       return null;
     }
 
-    const updated = { ...current, ...patch };
+    const updated = applyTaskTemporalMirror({ ...current, ...patch }, patch, current.triageStatus) as TaskEntity;
 
     const params = {
       id: updated.id,
@@ -1011,12 +1163,22 @@ class SqliteClient implements DbClient {
       timer: JSON.stringify(updated.timer),
       category: updated.category,
       terminationDate: updated.terminationDate,
+      dueDate: updated.dueDate ?? null,
+      completedAt: updated.completedAt ?? null,
       comment: updated.comment,
       durationInMinutes: updated.durationInMinutes,
       priority: updated.priority,
       userId: updated.userId,
       linkedVoteIds: updated.linkedVoteIds ? JSON.stringify(updated.linkedVoteIds) : null,
       blockedSince: updated.blockedSince ?? null,
+      plannedDate: updated.plannedDate ?? null,
+      plannedTime: updated.plannedTime ?? null,
+      plannedPosition: updated.plannedPosition ?? null,
+      color: updated.color ?? 'none',
+      recurrence: updated.recurrence ?? null,
+      seriesId: updated.seriesId ?? null,
+      occurrenceDate: updated.occurrenceDate ?? null,
+      deletedAt: updated.deletedAt ?? null,
     };
 
     this.db.prepare(`
@@ -1033,12 +1195,22 @@ class SqliteClient implements DbClient {
         "timer" = @timer,
         "category" = @category,
         "terminationDate" = @terminationDate,
+        "dueDate" = @dueDate,
+        "completedAt" = @completedAt,
         "comment" = @comment,
         "durationInMinutes" = @durationInMinutes,
         "priority" = @priority,
         "userId" = @userId,
         "linkedVoteIds" = @linkedVoteIds,
-        "blockedSince" = @blockedSince
+        "blockedSince" = @blockedSince,
+        "plannedDate" = @plannedDate,
+        "plannedTime" = @plannedTime,
+        "plannedPosition" = @plannedPosition,
+        "color" = @color,
+        "recurrence" = @recurrence,
+        "seriesId" = @seriesId,
+        "occurrenceDate" = @occurrenceDate,
+        "deletedAt" = @deletedAt
       WHERE "id" = @id
         `).run(params);
 
@@ -1121,8 +1293,8 @@ class SqliteClient implements DbClient {
     }
 
     const insertStmt = this.db.prepare(`
-      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget", "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId", "blockedSince")
-      VALUES(@id, @parentId, @title, @createdAt, @updatedAt, @triageStatus, @urgent, @impact, @majorIncident, @sprintTarget, @difficulty, @timer, @category, @terminationDate, @comment, @durationInMinutes, @priority, @userId, @blockedSince)
+      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget", "difficulty", "timer", "category", "terminationDate", "dueDate", "completedAt", "comment", "durationInMinutes", "priority", "userId", "linkedVoteIds", "blockedSince", "plannedDate", "plannedTime", "plannedPosition", "color", "recurrence", "seriesId", "occurrenceDate", "deletedAt")
+      VALUES(@id, @parentId, @title, @createdAt, @updatedAt, @triageStatus, @urgent, @impact, @majorIncident, @sprintTarget, @difficulty, @timer, @category, @terminationDate, @dueDate, @completedAt, @comment, @durationInMinutes, @priority, @userId, @linkedVoteIds, @blockedSince, @plannedDate, @plannedTime, @plannedPosition, @color, @recurrence, @seriesId, @occurrenceDate, @deletedAt)
       ON CONFLICT("id") DO UPDATE SET
       "parentId" = excluded."parentId",
         "title" = excluded."title",
@@ -1136,11 +1308,22 @@ class SqliteClient implements DbClient {
         "timer" = excluded."timer",
         "category" = excluded."category",
         "terminationDate" = excluded."terminationDate",
+        "dueDate" = excluded."dueDate",
+        "completedAt" = excluded."completedAt",
         "comment" = excluded."comment",
         "durationInMinutes" = excluded."durationInMinutes",
         "priority" = excluded."priority",
         "userId" = excluded."userId",
-        "blockedSince" = excluded."blockedSince"
+        "linkedVoteIds" = excluded."linkedVoteIds",
+        "blockedSince" = excluded."blockedSince",
+        "plannedDate" = excluded."plannedDate",
+        "plannedTime" = excluded."plannedTime",
+        "plannedPosition" = excluded."plannedPosition",
+        "color" = excluded."color",
+        "recurrence" = excluded."recurrence",
+        "seriesId" = excluded."seriesId",
+        "occurrenceDate" = excluded."occurrenceDate",
+        "deletedAt" = excluded."deletedAt"
           `);
 
     const checkFk = this.db.prepare('PRAGMA foreign_key_check');
@@ -1149,6 +1332,7 @@ class SqliteClient implements DbClient {
     this.db.exec('BEGIN');
     try {
       for (const task of tasks) {
+        applyTaskTemporalMirror(task, task, task.triageStatus);
         insertStmt.run({
           id: task.id,
           parentId: task.parentId,
@@ -1163,12 +1347,23 @@ class SqliteClient implements DbClient {
           difficulty: task.difficulty,
           timer: JSON.stringify(task.timer),
           category: task.category,
-          terminationDate: task.terminationDate,
+          terminationDate: task.terminationDate ?? null,
+          dueDate: task.dueDate ?? null,
+          completedAt: task.completedAt ?? null,
           comment: task.comment,
           durationInMinutes: task.durationInMinutes,
           priority: task.priority,
           userId: task.userId,
+          linkedVoteIds: task.linkedVoteIds ? JSON.stringify(task.linkedVoteIds) : null,
           blockedSince: task.blockedSince ?? null,
+          plannedDate: task.plannedDate ?? null,
+          plannedTime: task.plannedTime ?? null,
+          plannedPosition: task.plannedPosition ?? null,
+          color: task.color ?? 'none',
+          recurrence: task.recurrence ?? null,
+          seriesId: task.seriesId ?? null,
+          occurrenceDate: task.occurrenceDate ?? null,
+          deletedAt: task.deletedAt ?? null,
         });
       }
 
@@ -1219,6 +1414,7 @@ class SqliteClient implements DbClient {
       monthlyBalances: row.monthlyBalances ? JSON.parse(row.monthlyBalances) : {},
       weekStartDay: row.weekStartDay as 0 | 1 | undefined,
       defaultPlanView: row.defaultPlanView as 'week' | 'month' | undefined,
+      plannerDefault: Boolean(row.plannerDefault),
       preferredWorkingDays: row.preferredWorkingDays ? JSON.parse(row.preferredWorkingDays) : undefined,
       trigram: row.trigram || undefined,
       pomodoroConfig: row.pomodoroConfig ? JSON.parse(row.pomodoroConfig) : undefined,
@@ -1243,6 +1439,7 @@ class SqliteClient implements DbClient {
       cardCompactness: updated.cardCompactness ?? 0,
       weekStartDay: updated.weekStartDay ?? null,
       defaultPlanView: updated.defaultPlanView ?? null,
+      plannerDefault: updated.plannerDefault ? 1 : 0,
       preferredWorkingDays: updated.preferredWorkingDays ? JSON.stringify(updated.preferredWorkingDays) : null,
       trigram: updated.trigram ?? null,
       pomodoroConfig: updated.pomodoroConfig ? JSON.stringify(updated.pomodoroConfig) : null,
@@ -1251,8 +1448,8 @@ class SqliteClient implements DbClient {
     };
 
     this.db.prepare(`
-      INSERT INTO "userSettings"("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness", "weekStartDay", "defaultPlanView", "preferredWorkingDays", "trigram", "pomodoroConfig", "focusModeConfig", "travelerConfig")
-      VALUES(@userId, @username, @logo, @hasCompletedOnboarding, @workload, @splitTime, @monthlyBalances, @timezone, @cardCompactness, @weekStartDay, @defaultPlanView, @preferredWorkingDays, @trigram, @pomodoroConfig, @focusModeConfig, @travelerConfig)
+      INSERT INTO "userSettings"("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness", "weekStartDay", "defaultPlanView", "plannerDefault", "preferredWorkingDays", "trigram", "pomodoroConfig", "focusModeConfig", "travelerConfig")
+      VALUES(@userId, @username, @logo, @hasCompletedOnboarding, @workload, @splitTime, @monthlyBalances, @timezone, @cardCompactness, @weekStartDay, @defaultPlanView, @plannerDefault, @preferredWorkingDays, @trigram, @pomodoroConfig, @focusModeConfig, @travelerConfig)
       ON CONFLICT("userId") DO UPDATE SET
       "username" = excluded."username",
         "logo" = excluded."logo",
@@ -1264,6 +1461,7 @@ class SqliteClient implements DbClient {
         "cardCompactness" = excluded."cardCompactness",
         "weekStartDay" = excluded."weekStartDay",
         "defaultPlanView" = excluded."defaultPlanView",
+        "plannerDefault" = excluded."plannerDefault",
         "preferredWorkingDays" = excluded."preferredWorkingDays",
         "trigram" = excluded."trigram",
         "pomodoroConfig" = excluded."pomodoroConfig",
@@ -1282,6 +1480,7 @@ class SqliteClient implements DbClient {
       monthlyBalances: row.monthlyBalances ? JSON.parse(row.monthlyBalances) : {},
       weekStartDay: row.weekStartDay as 0 | 1 | undefined,
       defaultPlanView: row.defaultPlanView as 'week' | 'month' | undefined,
+      plannerDefault: Boolean(row.plannerDefault),
       preferredWorkingDays: row.preferredWorkingDays ? JSON.parse(row.preferredWorkingDays) : undefined,
       trigram: row.trigram || undefined,
       pomodoroConfig: row.pomodoroConfig ? JSON.parse(row.pomodoroConfig) : undefined,

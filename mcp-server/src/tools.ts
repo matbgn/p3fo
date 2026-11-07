@@ -15,6 +15,7 @@ import { sortTasksByMode, type SortMode } from './task-sorting.js';
 import { buildPriorityAudit, buildTaskStats } from './task-audit.js';
 import { ALLOWED_TRIAGE_STATUSES, applyBulkUpdates, type BulkItem } from './bulk-update.js';
 import { prepareTaskImport, type ImportTaskInput } from './import-tasks.js';
+import { adjustRecurrenceForAnchorMove, validateRecurrenceAnchor } from './task-recurrence.js';
 
 const stringOrUndefined = z.string().optional();
 const recordSchema = z.record(z.string(), z.unknown()).optional();
@@ -106,6 +107,59 @@ function makeCursor(offset: number): string {
 }
 
 // Reusable param schemas ------------------------------------------------------
+const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_OF_DAY_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+// Fractional-index keys start with an A-Z/a-z head and use base-62 digits.
+// The planner additionally tolerates legacy malformed keys at read time.
+const FRACTIONAL_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9]*$/;
+const TASK_COLOR_VALUES = [
+  'none', 'pink', 'yellow', 'black', 'grey', 'cornflower', 'mango', 'green', 'lilac',
+] as const;
+const MAX_RECURRENCE_EVERY_DAYS = 365;
+const recurrenceSchema = z.string().refine((value) => {
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown> | null;
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+
+    const until = parsed.until;
+    if (until !== undefined && until !== null) {
+      if (typeof until !== 'string' || !DATE_KEY_PATTERN.test(until)) return false;
+    }
+
+    // Keep these constraints in lockstep with normalizeRecurrence in
+    // src/lib/recurrence/engine.ts; a rule the app rejects must not be stored.
+    if (parsed.type === 'daily') {
+      const every = parsed.every;
+      return (
+        typeof every === 'number' &&
+        Number.isInteger(every) &&
+        every >= 1 &&
+        every <= MAX_RECURRENCE_EVERY_DAYS
+      );
+    }
+
+    if (parsed.type === 'weekly') {
+      const weekdays = parsed.weekdays;
+      return (
+        Array.isArray(weekdays) &&
+        weekdays.length > 0 &&
+        weekdays.every(
+          (day) => typeof day === 'number' && Number.isInteger(day) && day >= 1 && day <= 7,
+        )
+      );
+    }
+
+    if (parsed.type === 'monthly') {
+      const day = parsed.day;
+      return typeof day === 'number' && Number.isInteger(day) && day >= 1 && day <= 31;
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+}, 'Expected a valid JSON recurrence rule');
+
 const taskSchema = z.object({
   id: z.string().optional(),
   title: z.string().optional(),
@@ -119,6 +173,8 @@ const taskSchema = z.object({
   timer: z.array(z.unknown()).optional(),
   category: z.string().optional(),
   terminationDate: z.string().nullable().optional(),
+  dueDate: z.string().nullable().optional(),
+  completedAt: z.string().nullable().optional(),
   comment: z.string().nullable().optional(),
   durationInMinutes: z.number().nullable().optional(),
   priority: z.number().nullable().optional(),
@@ -128,13 +184,24 @@ const taskSchema = z.object({
   updatedAt: z.string().nullable().optional(),
   linkedVoteIds: z.array(z.string()).optional(),
   blockedSince: z.string().nullable().optional(),
+  plannedDate: z.string().regex(DATE_KEY_PATTERN, 'Expected YYYY-MM-DD').nullable().optional(),
+  plannedTime: z.string().regex(TIME_OF_DAY_PATTERN, 'Expected HH:MM').nullable().optional(),
+  plannedPosition: z.string().regex(FRACTIONAL_KEY_PATTERN, 'Expected a fractional index key').nullable().optional(),
+  color: z.enum(TASK_COLOR_VALUES).nullable().optional(),
+  recurrence: recurrenceSchema.nullable().optional(),
+  seriesId: z.string().nullable().optional(),
+  occurrenceDate: z.string().nullable().optional(),
+  deletedAt: z.string().nullable().optional(),
 }).passthrough();
 
 const importTaskSchema = taskSchema.extend({
   createdAt: z.union([z.string(), z.number()]).optional(),
   updatedAt: z.union([z.string(), z.number()]).nullable().optional(),
   terminationDate: z.union([z.string(), z.number()]).nullable().optional(),
+  dueDate: z.union([z.string(), z.number()]).nullable().optional(),
+  completedAt: z.union([z.string(), z.number()]).nullable().optional(),
   blockedSince: z.union([z.string(), z.number()]).nullable().optional(),
+  deletedAt: z.union([z.string(), z.number()]).nullable().optional(),
 });
 
 const reminderSchema = z.object({
@@ -561,6 +628,12 @@ export function registerTools(server: McpServer, client: P3foClient) {
     { params: z.object({ task: taskSchema }) },
     async (args) => {
       try {
+        const recurrenceError = validateRecurrenceAnchor(
+          args.params.task.plannedDate,
+          args.params.task.recurrence,
+        );
+        if (recurrenceError) return validationText([recurrenceError]);
+
         const result = await client.createTask(args.params.task);
         clearTaskCache();
         return asText(result);
@@ -573,7 +646,38 @@ export function registerTools(server: McpServer, client: P3foClient) {
     { params: z.object({ id: z.string(), patch: taskSchema.partial() }) },
     async (args) => {
       try {
-        const result = await client.updateTask(args.params.id, args.params.patch);
+        const { id, patch } = args.params;
+
+        // A recurrence patch may rely on the stored plannedDate (and vice
+        // versa), so merge with the current task before validating the rule.
+        if (patch.recurrence !== undefined || patch.plannedDate !== undefined) {
+          let existing: TaskRecord | null = null;
+          if (patch.recurrence === undefined || patch.plannedDate === undefined) {
+            existing = await client.getTaskById(id) as TaskRecord | null;
+          }
+
+          // If one side is a patch and the other must come from storage, only
+          // validate when the task (and therefore the merged value) exists.
+          if (existing || (patch.recurrence !== undefined && patch.plannedDate !== undefined)) {
+            // Mirror the planner: moving/clearing a series' anchor adjusts (or
+            // clears) the stored rule instead of rejecting a valid reschedule.
+            if (patch.plannedDate !== undefined && patch.recurrence === undefined && existing) {
+              patch.recurrence = adjustRecurrenceForAnchorMove(
+                existing.recurrence ?? null,
+                existing.plannedDate ?? null,
+                patch.plannedDate ?? null,
+              ) as typeof patch.recurrence;
+            }
+
+            const recurrenceError = validateRecurrenceAnchor(
+              patch.plannedDate !== undefined ? patch.plannedDate : existing?.plannedDate ?? null,
+              patch.recurrence !== undefined ? patch.recurrence : existing?.recurrence ?? null,
+            );
+            if (recurrenceError) return validationText([recurrenceError]);
+          }
+        }
+
+        const result = await client.updateTask(id, patch);
         clearTaskCache();
         return asText(result);
       } catch (e) { return errorText(e); }

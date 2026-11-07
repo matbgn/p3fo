@@ -18,7 +18,8 @@
     },
     "view": {
       "week": "Week",
-      "month": "Month"
+      "month": "Month",
+      "planner": "Day planner"
     },
     "retry": "Retry",
     "reload": "Reload"
@@ -164,6 +165,10 @@
         "calendar": {
           "label": "Calendar",
           "description": "Calendar sub-view within Program"
+        },
+        "planner": {
+          "label": "Day planner",
+          "description": "Day planner sub-view within Program"
         },
         "resources": {
           "label": "Resources",
@@ -398,7 +403,7 @@
     "categoryLabel": "Category",
     "difficultyLabel": "Difficulty",
     "selectDifficulty": "Select difficulty",
-    "terminationDateLabel": "Termination Date",
+    "terminationDateLabel": "Due date",
     "plannedDurationLabel": "Planned Duration (min)",
     "urgentLabel": "Urgent",
     "highImpactLabel": "High Impact",
@@ -1275,13 +1280,17 @@
     "inProgressNoDate": "In Progress (No Termination Date)",
     "quickAddTask": "Quick add task...",
     "filtersAndControls": "Filters & Controls",
-    "newTask": "New Task",
-    "titleLabel": "Title",
-    "taskTitlePlaceholder": "Task title...",
+    "newTask": "New Card",
+    "titleLabel": "Card title",
+    "taskTitlePlaceholder": "Card title...",
     "scheduledFor": "Scheduled for: {{date}}",
     "create": "Create",
     "dragStartTime": "Drag to change start time",
-    "dragEndTime": "Drag to change end time"
+    "dragEndTime": "Drag to change end time",
+    "dueDates": "Due dates",
+    "planned": "Planned",
+    "allDay": "All day",
+    "moreEvents": "+{{count}} more"
   },
   "prioritization": {
     "title": "Comparative Prioritization",
@@ -1301,14 +1310,20 @@
     "badgeHighImpact": "High Impact",
     "badgeIncident": "Incident",
     "badgeSprintTarget": "Sprint Target",
-    "itemsPerBatch": "Items per batch:",
-    "batchSizeHelp": "Compare 2 at a time (take longer) or more at once (pick best then worst, faster as it uses Plackett-Luce algorithm).",
+    "comparisonMode": "Comparison mode:",
+    "modeCondorcet": "Pure Condorcet (K=2 reference)",
+    "modeBtK2": "BT K=2",
+    "modeBtK4": "BT K=4",
+    "modeHelpCondorcet": "Compares every pair once and ranks by head-to-head wins. Exact reference, but needs n(n−1)/2 comparisons.",
+    "modeHelpBtK2": "Adaptive Bradley-Terry with 2 items per comparison.",
+    "modeHelpBtK4": "Adaptive Bradley-Terry with 4 items per comparison (pick best then worst).",
     "finalizeNow": "Finalize now",
     "finalizeTooltipDisabled": "Compare at least one batch first.",
     "finalizeTooltipEnabled": "Apply the current partial ranking now.",
     "resetComparison": "Reset Comparison",
     "resetConfirm": "Interrupt and reset the current comparison? All progress will be lost.",
     "startComparison": "Start Comparative Prioritization ({{count}} tasks, ~{{batches}} batches)",
+    "startComparisonCondorcet": "Start Comparative Prioritization ({{count}} tasks, {{pairs}} pairs)",
     "copyList": "Copy List to Clipboard",
     "deselectAll": "Deselect All",
     "selectAll": "Select All",
@@ -1323,11 +1338,13 @@
     "pickHighest": "Pick the highest priority task:",
     "pickLowest": "Now pick the lowest priority task:",
     "batchProgress": "Batch {{n}} · {{percent}}% confident",
+    "condorcetProgress": "Pair {{n}} of {{total}} · {{percent}}%",
     "pairwiseHint": "Click the highest priority task — the other is automatically lowest.",
     "batchLowestHint": "Pick the lowest among the remaining — or click the highlighted highest again to undo and re-pick.",
     "finalizeDialogTitle": "Finalize with current order?",
     "finalizeDialogDesc": "This is the ranking computed so far from {{n}} batch{{es}}. You can apply it now or keep comparing to refine.",
     "finalizeDialogDescSimple": "This is the ranking computed so far.",
+    "finalizeDialogDescCondorcet": "This ranking is based on {{n}} pair comparison{{es}}. You can apply it now or keep comparing.",
     "keepComparing": "Keep comparing",
     "applyOrder": "Apply this order"
   },
@@ -2043,5 +2060,44 @@
         "5": "All of the time"
       }
     }
+  },
+  "planner": {
+    "today": "Today",
+    "previousWeek": "Previous week",
+    "nextWeek": "Next week",
+    "unscheduled": "Unscheduled",
+    "unscheduledEmpty": "Drop a task here to leave it unplanned.",
+    "addChecklistItem": "Add an item",
+    "plannedDate": "Planned date",
+    "time": "Time",
+    "colour": "Colour",
+    "duplicate": "Duplicate",
+    "delete": "Delete",
+    "moveTomorrow": "Move to tomorrow",
+    "moveNextWeek": "Move to next week",
+    "moveUnscheduled": "Move to Unscheduled",
+    "carryOverTitle": "Moved {{count}} unfinished task to today",
+    "carryOverTitle_other": "Moved {{count}} unfinished tasks to today",
+    "deleted": "Deleted “{{title}}”",
+    "duplicated": "Duplicated “{{title}}”",
+    "dragTask": "Drag task",
+    "markDone": "Mark as done",
+    "markNotDone": "Mark as not done",
+    "dueDate": "Due date",
+    "recurring": "Recurring",
+    "urgent": "Urgent",
+    "impact": "Impact",
+    "nextOccurrence": "Next",
+    "stopRepeating": "Stop repeating",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
+    "unscheduledNoPlanDate": "Unscheduled (No plan date)",
+    "unscheduledNoDueDate": "Unscheduled (No due date)",
+    "length": "Length (min)",
+    "dueTime": "Due time",
+    "selectTime": "Select time",
+    "cardTab": "Card",
+    "detailsTab": "Details",
+    "flags": "Flags"
   }
 }

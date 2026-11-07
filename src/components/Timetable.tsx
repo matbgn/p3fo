@@ -31,6 +31,8 @@ import { DateRange } from "react-day-picker";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { FocusModeProvider } from "@/components/FocusModeProvider";
 import { FocusModeOverlay } from "@/components/FocusModeOverlay";
+import { FocusModeBar } from "@/components/planView/FocusModeBar";
+import { useFocusMode } from "@/hooks/useFocusMode";
 
 type TimetableView = "categorical" | "chronological";
 type TimeChunk = "all" | "am" | "pm";
@@ -45,6 +47,7 @@ const TimetableInner: React.FC<{
   // We use allTasks for the list, but we need to ensure we don't conflict with useTasks
   const tasks = allTasks;
   const { settings } = useSettingsContext();
+  const { isFocusMode } = useFocusMode();
   const weekStartsOn = settings.weekStartDay as 0 | 1;
   const weeksComputation = settings.weeksComputation || 4;
   const [view, setView] = useState<TimetableView>("chronological");
@@ -690,32 +693,42 @@ const TimetableInner: React.FC<{
     return <LoadingSpinner label={t('timetable.loading')} className="h-full" />;
   }
 
+  const headerActions = (
+    <div className="flex flex-wrap items-center gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          setManualEntryStart(computeManualEntryStart());
+          setIsAddEntryOpen(true);
+        }}
+      >
+        <Plus className="h-4 w-4 mr-1" />
+        {t('timetable.addTimeEntry')}
+      </Button>
+      <ToggleGroup type="single" value={view} onValueChange={(value) => setView(value as TimetableView)} aria-label={t('timetable.timetableViewAria')}>
+        <ToggleGroupItem value="categorical" aria-label={t('timetable.categoricalAria')}>
+          {t('timetable.categorical')}
+        </ToggleGroupItem>
+        <ToggleGroupItem value="chronological" aria-label={t('timetable.chronologicalAria')}>
+          {t('timetable.chronological')}
+        </ToggleGroupItem>
+      </ToggleGroup>
+    </div>
+  );
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap justify-between items-center gap-2">
-        <h1 className="text-2xl font-bold">{t('timetable.title')}</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setManualEntryStart(computeManualEntryStart());
-              setIsAddEntryOpen(true);
-            }}
-          >
-            <Plus className="h-4 w-4 mr-1" />
-            {t('timetable.addTimeEntry')}
-          </Button>
-          <ToggleGroup type="single" value={view} onValueChange={(value) => setView(value as TimetableView)} aria-label={t('timetable.timetableViewAria')}>
-            <ToggleGroupItem value="categorical" aria-label={t('timetable.categoricalAria')}>
-              {t('timetable.categorical')}
-            </ToggleGroupItem>
-            <ToggleGroupItem value="chronological" aria-label={t('timetable.chronologicalAria')}>
-              {t('timetable.chronological')}
-            </ToggleGroupItem>
-          </ToggleGroup>
+    <div className={isFocusMode ? "h-full flex flex-col" : undefined}>
+      {isFocusMode && (
+        <FocusModeBar title={t('timetable.title')} rightContent={headerActions} />
+      )}
+      <div className={isFocusMode ? "min-h-0 flex-1 overflow-y-auto space-y-4 p-4" : "space-y-4"}>
+      {!isFocusMode && (
+        <div className="flex flex-wrap justify-between items-center gap-2">
+          <h1 className="text-2xl font-bold">{t('timetable.title')}</h1>
+          {headerActions}
         </div>
-      </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-4 items-end">
@@ -1029,6 +1042,7 @@ const TimetableInner: React.FC<{
         entryTimeLabel={t('timetable.addTimeEntryAt', { time: formatTimeWithTemporal(manualEntryStart, settings.timezone || 'Europe/Zurich') })}
         onCreate={handleCreateManualEntry}
       />
+      </div>
     </div>
   );
 };

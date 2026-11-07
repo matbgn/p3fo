@@ -6,7 +6,7 @@ import { Task, TriageStatus } from "@/hooks/useTasks";
 // created-vs-achieved flaw this windowing fixes. A Done task without a
 // terminationDate carries no achievement time and is excluded from windowed
 // metrics.
-const getAchievedTime = (task: Task): number => task.terminationDate ?? 0;
+const getAchievedTime = (task: Task): number => task.completedAt ?? task.terminationDate ?? 0;
 
 // A task is "in flight" when it has not reached a terminal status
 // (Done/Dropped/Archived). Such tasks were never shipped.

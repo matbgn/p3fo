@@ -33,6 +33,7 @@ interface TodolistViewProps {
   onFocusOnTask?: (taskId: string) => void;
   onRowClick?: (taskId: string) => void;
   highlightedTaskId: string | null;
+  forcedTaskIds?: ReadonlySet<string>;
   scrollTodolistRowRef: React.MutableRefObject<Map<string, HTMLElement>>;
   expandedParents: Set<string>;
   onToggleExpand: (taskId: string) => void;
@@ -67,6 +68,7 @@ const TodolistView: React.FC<TodolistViewProps> = ({
   onFocusOnTask,
   onRowClick,
   highlightedTaskId,
+  forcedTaskIds,
   scrollTodolistRowRef,
   expandedParents,
   onToggleExpand,
@@ -74,6 +76,7 @@ const TodolistView: React.FC<TodolistViewProps> = ({
   onEditModalOpenChange,
 }) => {
   const { t } = useTranslation();
+  const [activeSubtaskEditorId, setActiveSubtaskEditorId] = useState<string | null>(null);
   const map = useMemo(() => {
     const m = new Map<string, Task>();
     tasks.forEach(t => m.set(t.id, t));
@@ -116,8 +119,20 @@ const TodolistView: React.FC<TodolistViewProps> = ({
       }
     }
 
+    // A forced jump must remain visible even when the active filters hide it.
+    // Only the jumped-to chain gets this exemption; everyone else is filtered.
+    if (forcedTaskIds && forcedTaskIds.size > 0) {
+      const visibleIds = new Set(topTasks.map(t => t.id));
+      const forcedTopTasks = tasks.filter(
+        t => !t.parentId && forcedTaskIds.has(t.id) && !visibleIds.has(t.id)
+      );
+      if (forcedTopTasks.length > 0) {
+        topTasks = [...topTasks, ...forcedTopTasks].sort(sortTasks.taskboard);
+      }
+    }
+
     return topTasks;
-  }, [tasks, displayFilters, storedFilters.selectedUserId]);
+  }, [tasks, displayFilters, storedFilters.selectedUserId, forcedTaskIds]);
 
   const flattenedRows = useMemo(() => {
     const rows: TodolistRowData[] = [];
@@ -140,6 +155,11 @@ const TodolistView: React.FC<TodolistViewProps> = ({
           .sort(sortTasks.taskboard);
 
         const filteredChildren = children.filter(child => {
+          // The forced-focus chain bypasses the status filter so a jump to a
+          // filtered-out task can still open and reveal it.
+          if (forcedTaskIds?.has(child.id)) {
+            return true;
+          }
           if (displayFilters.status?.length > 0 && !displayFilters.status.includes(child.triageStatus)) {
             return false;
           }
@@ -157,7 +177,7 @@ const TodolistView: React.FC<TodolistViewProps> = ({
     }
 
     return rows;
-  }, [filteredTopTasks, expandedParents, map, displayFilters.status]);
+  }, [filteredTopTasks, expandedParents, map, displayFilters.status, forcedTaskIds]);
 
   if (loadingFilters) {
     return <div className="text-xs text-muted-foreground px-4 py-8">{t('todolist.loadingFilters')}</div>;
@@ -184,7 +204,7 @@ const TodolistView: React.FC<TodolistViewProps> = ({
                 .map(id => map.get(id))
                 .filter((child): child is Task => !!child);
               return (
-              <LazyRow key={row.task.id}>
+              <LazyRow key={row.task.id} forceMount={forcedTaskIds?.has(row.task.id)}>
                 <TodolistRow
                   row={row}
                   tasks={tasks}
@@ -212,6 +232,8 @@ const TodolistView: React.FC<TodolistViewProps> = ({
                   onFocusOnTask={onFocusOnTask}
                   onRowClick={onRowClick}
                   isHighlighted={row.task.id === highlightedTaskId}
+                  activeSubtaskEditorId={activeSubtaskEditorId}
+                  onSubtaskEditorActiveChange={setActiveSubtaskEditorId}
                   scrollTodolistRowRef={scrollTodolistRowRef}
                 />
               </LazyRow>

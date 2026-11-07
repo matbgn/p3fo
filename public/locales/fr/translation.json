@@ -18,7 +18,8 @@
     },
     "view": {
       "week": "Semaine",
-      "month": "Mois"
+      "month": "Mois",
+      "planner": "Planificateur de jour"
     },
     "retry": "Réessayer",
     "reload": "Recharger"
@@ -164,6 +165,10 @@
         "calendar": {
           "label": "Calendrier",
           "description": "Sous-vue Calendrier dans Programme"
+        },
+        "planner": {
+          "label": "Planificateur de jour",
+          "description": "Sous-vue planificateur de jour dans Programme"
         },
         "resources": {
           "label": "Ressources",
@@ -398,7 +403,7 @@
     "categoryLabel": "Catégorie",
     "difficultyLabel": "Difficulté",
     "selectDifficulty": "Sélectionner la difficulté",
-    "terminationDateLabel": "Date de fin",
+    "terminationDateLabel": "Date d'échéance",
     "plannedDurationLabel": "Durée planifiée (min)",
     "urgentLabel": "Urgent",
     "highImpactLabel": "Impact élevé",
@@ -1275,13 +1280,17 @@
     "inProgressNoDate": "En cours (sans date de fin)",
     "quickAddTask": "Ajout rapide de tâche...",
     "filtersAndControls": "Filtres & Contrôles",
-    "newTask": "Nouvelle Tâche",
-    "titleLabel": "Titre",
-    "taskTitlePlaceholder": "Titre de la tâche...",
+    "newTask": "Nouvelle carte",
+    "titleLabel": "Titre de la carte",
+    "taskTitlePlaceholder": "Titre de la carte...",
     "scheduledFor": "Planifié pour : {{date}}",
     "create": "Créer",
     "dragStartTime": "Glisser pour changer l'heure de début",
-    "dragEndTime": "Glisser pour changer l'heure de fin"
+    "dragEndTime": "Glisser pour changer l'heure de fin",
+    "dueDates": "Dates d'échéance",
+    "planned": "Planifié",
+    "allDay": "Toute la journée",
+    "moreEvents": "+{{count}} de plus"
   },
   "prioritization": {
     "title": "Priorisation comparative",
@@ -1301,14 +1310,20 @@
     "badgeHighImpact": "Impact élevé",
     "badgeIncident": "Incident",
     "badgeSprintTarget": "Sprint Target",
-    "itemsPerBatch": "Éléments par lot :",
-    "batchSizeHelp": "Comparez 2 à la fois (plus lent) ou plus d'un coup (choisissez le meilleur puis le pire, plus rapide car utilise l'algorithme Plackett-Luce).",
+    "comparisonMode": "Mode de comparaison :",
+    "modeCondorcet": "Condorcet pur (référence K=2)",
+    "modeBtK2": "BT K=2",
+    "modeBtK4": "BT K=4",
+    "modeHelpCondorcet": "Compare chaque paire une fois et classe par nombre de victoires. Référence exacte, mais nécessite n(n−1)/2 comparaisons.",
+    "modeHelpBtK2": "Bradley-Terry adaptatif avec 2 éléments par comparaison.",
+    "modeHelpBtK4": "Bradley-Terry adaptatif avec 4 éléments par comparaison (meilleur puis pire).",
     "finalizeNow": "Finaliser maintenant",
     "finalizeTooltipDisabled": "Comparez au moins un lot d'abord.",
     "finalizeTooltipEnabled": "Appliquer le classement partiel actuel maintenant.",
     "resetComparison": "Réinitialiser la comparaison",
     "resetConfirm": "Interrompre et réinitialiser la comparaison actuelle ? Toute progression sera perdue.",
     "startComparison": "Commencer la priorisation comparative ({{count}} tâches, ~{{batches}} lots)",
+    "startComparisonCondorcet": "Commencer la priorisation comparative ({{count}} tâches, {{pairs}} paires)",
     "copyList": "Copier la liste",
     "deselectAll": "Tout désélectionner",
     "selectAll": "Tout sélectionner",
@@ -1323,11 +1338,13 @@
     "pickHighest": "Choisissez la tâche la plus prioritaire :",
     "pickLowest": "Maintenant choisissez la tâche la moins prioritaire :",
     "batchProgress": "Lot {{n}} · {{percent}}% confiant",
+    "condorcetProgress": "Paire {{n}} sur {{total}} · {{percent}} %",
     "pairwiseHint": "Cliquez sur la tâche la plus prioritaire — l'autre est automatiquement la moins prioritaire.",
     "batchLowestHint": "Choisissez la moins prioritaire parmi les restantes — ou cliquez sur la plus prioritaire surlignée pour annuler et recommencer.",
     "finalizeDialogTitle": "Finaliser avec l'ordre actuel ?",
     "finalizeDialogDesc": "Ceci est le classement calculé jusqu'à présent à partir de {{n}} lot{{es}}. Vous pouvez l'appliquer maintenant ou continuer à comparer pour affiner.",
     "finalizeDialogDescSimple": "Ceci est le classement calculé jusqu'à présent.",
+    "finalizeDialogDescCondorcet": "Ce classement est basé sur {{n}} comparaison{{es}} de paires. Vous pouvez l'appliquer maintenant ou continuer à comparer.",
     "keepComparing": "Continuer à comparer",
     "applyOrder": "Appliquer cet ordre"
   },
@@ -2043,5 +2060,44 @@
         "5": "Tout le temps"
       }
     }
+  },
+  "planner": {
+    "today": "Aujourd'hui",
+    "previousWeek": "Semaine précédente",
+    "nextWeek": "Semaine suivante",
+    "unscheduled": "Non planifié",
+    "unscheduledEmpty": "Déposez une tâche ici pour la laisser non planifiée.",
+    "addChecklistItem": "Ajouter un élément",
+    "plannedDate": "Date planifiée",
+    "time": "Heure",
+    "colour": "Couleur",
+    "duplicate": "Dupliquer",
+    "delete": "Supprimer",
+    "moveTomorrow": "Déplacer à demain",
+    "moveNextWeek": "Déplacer à la semaine prochaine",
+    "moveUnscheduled": "Déplacer vers non planifié",
+    "carryOverTitle": "{{count}} tâche inachevée déplacée à aujourd'hui",
+    "carryOverTitle_other": "{{count}} tâches inachevées déplacées à aujourd'hui",
+    "deleted": "« {{title}} » supprimée",
+    "duplicated": "« {{title}} » dupliquée",
+    "dragTask": "Déplacer la tâche",
+    "markDone": "Marquer comme terminée",
+    "markNotDone": "Marquer comme non terminée",
+    "dueDate": "Date d'échéance",
+    "recurring": "Récurrente",
+    "urgent": "Urgent",
+    "impact": "Impact",
+    "nextOccurrence": "Prochaine",
+    "stopRepeating": "Arrêter la répétition",
+    "previousMonth": "Mois précédent",
+    "nextMonth": "Mois suivant",
+    "unscheduledNoPlanDate": "Non planifié (pas de date planifiée)",
+    "unscheduledNoDueDate": "Non planifié (pas de date d'échéance)",
+    "length": "Durée (min)",
+    "dueTime": "Heure d'échéance",
+    "selectTime": "Choisir l'heure",
+    "cardTab": "Carte",
+    "detailsTab": "Détails",
+    "flags": "Indicateurs"
   }
 }

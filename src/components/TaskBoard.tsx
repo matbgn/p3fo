@@ -113,6 +113,7 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
         current = current.parentId ? mapRef.current[current.parentId] : undefined;
       }
       setPath(newPath);
+      setForcedFocusPath(newPath);
     }
   }, [toggleTimer, currentUserId]);
 
@@ -128,6 +129,7 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
   pathRef.current = path;
 
   const [highlightedTaskId, setHighlightedTaskId] = React.useState<string | null>(null);
+  const [forcedFocusPath, setForcedFocusPath] = React.useState<string[] | null>(null);
   const [editTaskId, setEditTaskId] = React.useState<string | null>(null);
 
   const scrollTodolistRowRef = React.useRef<Map<string, HTMLElement>>(new Map());
@@ -136,51 +138,53 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
   // vs. an in-board click. Cross-view jumps use instant scroll; same-view uses smooth.
   const crossViewJumpRef = React.useRef(false);
 
-  const handleFocusOnTaskInternal = React.useCallback((taskId: string) => {
-    setHighlightedTaskId(taskId);
-
+  const revealTaskInView = React.useCallback((taskId: string, behavior: ScrollBehavior = "smooth") => {
     const task = mapRef.current[taskId];
-    if (task) {
-      const ancestorIds: string[] = [];
-      let current: Task | undefined = task;
-      while (current) {
-        ancestorIds.unshift(current.id);
-        current = current.parentId ? mapRef.current[current.parentId] : undefined;
-      }
-      if (focusView === "todolist") {
-        setExpandedParents(prev => {
-          const next = new Set(prev);
-          for (let i = 0; i < ancestorIds.length - 1; i++) {
-            next.add(ancestorIds[i]);
-          }
-          return next;
-        });
-      } else {
-        setPath(ancestorIds);
-      }
+    if (!task) return;
+
+    const ancestorIds: string[] = [];
+    let current: Task | undefined = task;
+    while (current) {
+      ancestorIds.unshift(current.id);
+      current = current.parentId ? mapRef.current[current.parentId] : undefined;
     }
 
-    // Poll for the element instead of a fixed timeout. The row may not be
-    // registered yet if parents need to expand or the view just mounted.
-    const useSmooth = !crossViewJumpRef.current;
-    const scrollBehavior: ScrollBehavior = useSmooth ? "smooth" : "auto";
+    // Prepare both sub-view navigation states. A cross-view jump or sub-view
+    // switch may still be applying when this runs, so relying on the current
+    // focusView would leave the newly rendered view without a path/expansion.
+    setForcedFocusPath(ancestorIds);
+    setExpandedParents(prev => {
+      const next = new Set(prev);
+      for (let i = 0; i < ancestorIds.length - 1; i++) {
+        next.add(ancestorIds[i]);
+      }
+      return next;
+    });
+    setPath(ancestorIds);
+
+    // Poll for the element instead of a fixed timeout. The row/card may not
+    // be registered yet if parents need to expand, a lazy row has to mount,
+    // or the sub-view just switched.
     let attempts = 0;
     const MAX_ATTEMPTS = 60; // ~1s at 60fps
     const tryScroll = () => {
-      const el = scrollTodolistRowRef.current.get(taskId);
+      const el = scrollTodolistRowRef.current.get(taskId) ?? cardRefs.current[taskId];
       if (el) {
-        el.scrollIntoView({ behavior: scrollBehavior, block: "center" });
+        el.scrollIntoView({ behavior, block: "center" });
         return;
       }
       if (attempts++ < MAX_ATTEMPTS) {
         requestAnimationFrame(tryScroll);
       }
     };
-    // Start on next frame so state updates (parent expansion) can flush first.
     requestAnimationFrame(tryScroll);
+  }, []);
 
+  const handleFocusOnTaskInternal = React.useCallback((taskId: string) => {
+    setHighlightedTaskId(taskId);
+    revealTaskInView(taskId, crossViewJumpRef.current ? "auto" : "smooth");
     if (onFocusOnTask) onFocusOnTask(taskId);
-  }, [focusView, onFocusOnTask]);
+  }, [onFocusOnTask, revealTaskInView]);
 
   const defaultTaskBoardFilters: Filters = {
     showUrgent: false,
@@ -213,11 +217,38 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
   const collapseAllParents = () => setExpandedParents(new Set());
 
   const displayFilters = React.useMemo(() => {
-    // TaskBoard excludes Done/Dropped/Archived from the stored status filter
+    // Hide inactive statuses by default without turning an empty "all
+    // statuses" filter into an accidental archived leak. An explicit status
+    // selection (including Archived) is preserved so users can still inspect
+    // them on purpose.
     return mergeViewFilters(storedFilters, {
-      excludeStatuses: ["Done", "Dropped", "Archived"]
+      defaultActiveStatuses: true
     });
   }, [storedFilters]);
+
+  // A forced jump must never become a silent no-op: keep the jumped-to task
+  // and its ancestor chain visible even if the active filters would hide
+  // them. Every other card still obeys the filters. The exemption ends when
+  // the filters change or the user leaves the Focus view, not when a click
+  // toggles the yellow highlight (otherwise the card would vanish mid-click).
+  const forcedFocusIds = React.useMemo(
+    () => new Set(forcedFocusPath ?? []),
+    [forcedFocusPath],
+  );
+
+  const handleFiltersChange = React.useCallback<React.Dispatch<React.SetStateAction<Filters>>>(
+    (value) => {
+      setStoredFilters(value);
+      setForcedFocusPath(null);
+    },
+    [],
+  );
+
+  React.useEffect(() => {
+    if (view !== "focus") {
+      setForcedFocusPath(null);
+    }
+  }, [view]);
 
   // Auto-collapse filters when switching to Ultra Compact mode
   // Auto-expand filters when switching to Full mode
@@ -242,6 +273,26 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
       lastHandledFocusIdRef.current = null;
     }
   }, [focusedTaskId, map, handleFocusOnTaskInternal]);
+
+  // Keep Flow and Todolist in sync. When the Focus sub-view changes, reveal
+  // and scroll to the task that is currently highlighted in the other view.
+  // Flow card activation only sets the active path (and clears the yellow
+  // highlight), so when entering Todolist promote that active task to the
+  // shared highlight; otherwise the row would have nothing to show.
+  const prevFocusViewRef = React.useRef(focusView);
+  React.useEffect(() => {
+    if (prevFocusViewRef.current === focusView) return;
+    prevFocusViewRef.current = focusView;
+
+    const targetId = highlightedTaskId
+      ?? (focusView === "todolist" && path.length > 0 ? path[path.length - 1] : null);
+    if (!targetId) return;
+
+    if (!highlightedTaskId) {
+      setHighlightedTaskId(targetId);
+    }
+    revealTaskInView(targetId);
+  }, [focusView, highlightedTaskId, path, revealTaskInView]);
 
   // Keep prevViewRef in sync after each render
   React.useEffect(() => {
@@ -358,7 +409,7 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
     // is nothing left to activate or show, so a ghost card would be noise.
     const filteredRootItems = path[0]
       ? rootItems.filter(t => t.id === path[0])
-      : rootItems.filter(t => hasActivableContent(t, byId(tasks)));
+      : rootItems.filter(t => forcedFocusIds.has(t.id) || hasActivableContent(t, byId(tasks)));
 
     cols.push({ parentId: null, items: filteredRootItems, activeId: path[0] });
 
@@ -367,11 +418,12 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
       if (!t) return;
       // Show children that still have activable content (self or any
       // descendant Backlog/Ready/WIP/Blocked). Fully-completed subtrees are
-      // hidden instead of rendering ghost cards.
+      // hidden instead of rendering ghost cards. The forced focus chain is
+      // kept so a jump to a filtered-out task can still render it.
       let children = ((t.children || [])
         .map((id) => map[id])
         .filter(Boolean) as Task[])
-        .filter(c => hasActivableContent(c, byId(tasks)))
+        .filter(c => forcedFocusIds.has(c.id) || hasActivableContent(c, byId(tasks)))
         .sort(sortTasks.taskboard);
 
       // Apply Focus Mode: If a child is selected in this column (path[idx + 1]), only show that child
@@ -386,7 +438,7 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
       });
     });
     return cols;
-  }, [tasks, map, path, displayFilters]);
+  }, [tasks, map, path, displayFilters, forcedFocusIds]);
 
   const handleActivate = React.useCallback((colIndex: number, id: string) => {
     const currentPath = pathRef.current;
@@ -407,6 +459,7 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
   const handleCardActivate = React.useCallback((id: string, columnIndex?: number, isSearchResult?: boolean) => {
     if (isSearchResult) {
       setStoredFilters(prev => ({ ...prev, searchText: "" }));
+      setForcedFocusPath(null);
       const task = mapRef.current[id];
       if (task) {
         const newPath: string[] = [];
@@ -595,7 +648,7 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
           filterDropdownContent={
             <FilterControls
               filters={storedFilters}
-              setFilters={setStoredFilters}
+              setFilters={handleFiltersChange}
               defaultFilters={defaultTaskBoardFilters}
             />
           }
@@ -634,7 +687,7 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
           <div className="flex flex-wrap items-center gap-4 border rounded-lg p-3">
             <FilterControls
               filters={storedFilters}
-              setFilters={setStoredFilters}
+              setFilters={handleFiltersChange}
               defaultFilters={defaultTaskBoardFilters}
             />
           </div>
@@ -704,6 +757,7 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
           onFocusOnTask={handleFocusOnTaskInternal}
           onRowClick={handleRowClick}
           highlightedTaskId={highlightedTaskId}
+          forcedTaskIds={forcedFocusIds}
           scrollTodolistRowRef={scrollTodolistRowRef}
           expandedParents={expandedParents}
           onToggleExpand={handleToggleExpand}
@@ -796,12 +850,19 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
                       // No need to re-apply aStarTextSearch here, just use the items as is.
                     } else if (col.parentId !== "search-results" && displayFilters.searchText?.trim()) {
                       // If it's not the search results column, and there's a search text,
-                      // we should not show any items in the regular columns.
-                      filteredItems = [];
+                      // we should not show any items in the regular columns — except the
+                      // forced-focus chain, which must remain visible after a jump.
+                      filteredItems = filteredItems.filter(t => forcedFocusIds.has(t.id));
                     }
 
                     // Apply all other filters
                     const fullyFilteredItems = filteredItems.filter(task => {
+                      // A forced jump must never be silent: keep the target and its
+                      // ancestor chain visible even when filters would hide them.
+                      if (forcedFocusIds.has(task.id)) {
+                        return true;
+                      }
+
                       // Apply user filter first
                       if (storedFilters.selectedUserId) {
                         if (storedFilters.selectedUserId === 'UNASSIGNED') {
@@ -874,6 +935,7 @@ const TaskBoardInner: React.FC<{ focusedTaskId?: string | null; onFocusOnTask?: 
                         <LazyCard
                           key={t.id}
                           preview={<div className="truncate">{t.title}</div>}
+                          forceMount={forcedFocusIds.has(t.id)}
                           draggable
                           onDragStart={(e) => {
                             e.dataTransfer.setData("text/task-id", t.id);

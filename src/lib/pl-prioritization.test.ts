@@ -415,34 +415,35 @@ describe('Adjacent-pairs confidence', () => {
   });
 });
 
-describe('Stall stop', () => {
-  it('fires when confidencePercent does not increase for STALL_WINDOW batches', () => {
-    // Construct a scenario where the user keeps comparing the same pair
-    // with the same outcome — confidence stops increasing because the
-    // other pairs never get compared. After STALL_WINDOW stagnant batches,
-    // the engine should finalize.
+describe('Stabilization gate', () => {
+  it('does not finalize before adjacent coverage and minimum batches', () => {
     const tasks = makeTasks(4);
     let state = initState(tasks, 2);
-
-    // Do a few batches to build initial confidence.
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 30; i++) {
       state = recordBatch(state, 't0', undefined, ['t0', 't1']);
     }
-    // Capture the batch count and confidence at this point.
-    const confBefore = confidencePercent(state);
-    const batchesBefore = state.totalBatches;
-    if (state.done) return; // already done, skip
+    expect(state.done).toBe(false);
+    expect(state.totalBatches).toBe(30);
+  });
 
-    // Keep comparing the same pair (t0 beats t1) — confidence on adjacent
-    // pairs won't increase because t1-t2 and t2-t3 are never separated.
-    let stalled = 0;
-    while (!state.done && stalled < 30) {
-      state = recordBatch(state, 't0', undefined, ['t0', 't1']);
-      stalled++;
+  it('finalizes once adjacent coverage and minimum batches are satisfied', () => {
+    const tasks = makeTasks(4);
+    let state = initState(tasks, 2);
+    const pairs: [string, string][] = [
+      ['t0', 't1'],
+      ['t1', 't2'],
+      ['t2', 't3'],
+      ['t0', 't2'],
+      ['t0', 't3'],
+      ['t1', 't3'],
+    ];
+    for (const [winner, loser] of pairs) {
+      state = recordBatch(state, winner, undefined, [winner, loser]);
     }
-
-    // The stall stop should have fired (or another stop fired) — either
-    // way, the engine must terminate.
+    for (let i = 0; i < 50 && !state.done; i++) {
+      state = recordBatch(state, 't0', undefined, ['t0', 't1']);
+    }
     expect(state.done).toBe(true);
+    expect(state.stopReason).not.toBeNull();
   });
 });

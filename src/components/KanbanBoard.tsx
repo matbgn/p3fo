@@ -18,12 +18,16 @@ import { useUserSettings } from "@/hooks/useUserSettings";
 import { useViewNavigation, useViewDisplay } from "@/hooks/useView";
 import { COMPACTNESS_ULTRA, COMPACTNESS_FULL } from "@/context/ViewContextDefinition";
 import { HOVER_ENTER_DELAY_MS } from "@/lib/hover-constants";
-import { ChevronDown, ChevronRight, Archive } from "lucide-react";
+import { ChevronDown, ChevronRight, Archive, Repeat, StopCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { useSettingsContext } from "@/context/SettingsContext";
+import { useAllTasks } from "@/hooks/useAllTasks";
+import { isSeriesTemplate, nextOccurrenceDate, ruleSummary } from "@/lib/recurrence/engine";
+import { useToday } from "@/hooks/useToday";
+import { TaskEditorDialog } from "@/components/planner/TaskEditorDialog";
 
 import { FocusModeBar } from "./planView/FocusModeBar";
 import { FocusModeProvider } from "./FocusModeProvider";
@@ -384,7 +388,7 @@ const KanbanBoard: React.FC<{ onFocusOnTask?: (taskId: string) => void; highligh
 const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; highlightedTaskId?: string | null }> = ({ onFocusOnTask, highlightedTaskId }) => {
   const { t } = useTranslation();
   const { isFocusMode } = useFocusMode();
-  const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, toggleSprintTarget, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, reparent, toggleDone, toggleTimer, updateTerminationDate, updateDurationInMinutes, updateComment, loadTasksByUser, reloadTasks } = useTasks();
+  const { tasks, updateStatus, createTask, toggleUrgent, toggleImpact, toggleMajorIncident, toggleSprintTarget, updateDifficulty, updateCategory, updateTitle, updateUser, deleteTask, duplicateTaskStructure, reparent, toggleDone, toggleTimer, updateTerminationDate, updateDurationInMinutes, updateComment, loadTasksByUser, reloadTasks, stopRecurrence } = useTasks();
   const tasksById = React.useMemo(() => new Map(tasks.map(t => [t.id, t])), [tasks]);
   const tasksRef = React.useRef(tasks);
   tasksRef.current = tasks;
@@ -410,6 +414,21 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
   );
 
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const { tasks: rawTasks } = useAllTasks({ includeRecurring: true });
+  const today = useToday();
+  const recurringSeries = React.useMemo(
+    () => rawTasks.filter((task) =>
+      isSeriesTemplate(task) &&
+      !task.deletedAt &&
+      task.triageStatus !== 'Dropped' &&
+      task.triageStatus !== 'Archived',
+    ),
+    [rawTasks],
+  );
+  const [recurringEditTaskId, setRecurringEditTaskId] = React.useState<string | null>(null);
+  const recurringEditTask = recurringEditTaskId
+    ? rawTasks.find((task) => task.id === recurringEditTaskId) ?? null
+    : null;
 
   const handleDragStart = React.useCallback((event: DragStartEvent) => {
     setActiveTaskId(String(event.active.id));
@@ -886,6 +905,50 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
                   wipLimit={settings.wipLimitPerUser}
                 />
               ))}
+              {recurringSeries.length > 0 && (
+                <section className="flex w-64 shrink-0 flex-col rounded-lg border bg-muted/20 p-2" aria-label={t('planner.recurring')}>
+                  <div className="mb-2 flex items-center justify-between">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {t('planner.recurring')}
+                    </h3>
+                    <Badge variant="secondary">{recurringSeries.length}</Badge>
+                  </div>
+                  <div className="space-y-1.5 overflow-y-auto">
+                    {recurringSeries.map((series) => (
+                      <div
+                        key={series.id}
+                        className="cursor-pointer rounded-md border bg-card p-2 text-sm"
+                        onDoubleClick={() => setRecurringEditTaskId(series.id)}
+                        title="Double-click to edit"
+                      >
+                        <div className="flex items-start gap-1.5">
+                          <Repeat className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-medium">{series.title}</p>
+                            <p className="truncate text-[10px] text-muted-foreground">
+                              {ruleSummary(series.recurrence)}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {t('planner.nextOccurrence')}: {nextOccurrenceDate(series, today) ?? '—'}
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="mt-1 h-6 w-full gap-1 text-[10px]"
+                          onClick={() => {
+                            void stopRecurrence(series.id).then(() => toast.success(t('planner.stopRepeating')));
+                          }}
+                        >
+                          <StopCircle className="h-3 w-3" />
+                          {t('planner.stopRepeating')}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
             </div>
             <DragOverlay dropAnimation={null}>
               {activeTaskId ? (
@@ -939,6 +1002,23 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <TaskEditorDialog
+          task={recurringEditTask}
+          open={Boolean(recurringEditTask)}
+          onOpenChange={(open) => {
+            if (!open) setRecurringEditTaskId(null);
+          }}
+          defaultTab="card"
+          onDelete={(task) => {
+            setRecurringEditTaskId(null);
+            void stopRecurrence(task.id);
+          }}
+          onDuplicate={(task) => {
+            setRecurringEditTaskId(null);
+            void duplicateTaskStructure(task.id);
+          }}
+        />
       </div>
     </FocusModeOverlay>
   );

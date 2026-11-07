@@ -10,6 +10,8 @@
 
 import type { Task, TriageStatus, Category } from '@/hooks/useTasks';
 import type { TaskEntity } from './persistence-types';
+import { parseStoredRecurrence } from './recurrence/engine';
+import { isTaskColor } from './planner/colors';
 
 /**
  * Converts a TaskEntity to a Task object for frontend use.
@@ -37,6 +39,16 @@ export const convertEntitiesToTasks = (entities: TaskEntity[]): Task[] => {
             timer: entity.timer,
             category: entity.category as Category,
             terminationDate: entity.terminationDate ? new Date(entity.terminationDate).getTime() : undefined,
+            dueDate: entity.dueDate
+                ? new Date(entity.dueDate).getTime()
+                : entity.triageStatus !== 'Done' && entity.terminationDate
+                    ? new Date(entity.terminationDate).getTime()
+                    : undefined,
+            completedAt: entity.completedAt
+                ? new Date(entity.completedAt).getTime()
+                : entity.triageStatus === 'Done' && entity.terminationDate
+                    ? new Date(entity.terminationDate).getTime()
+                    : undefined,
             comment: entity.comment || undefined,
             durationInMinutes: entity.durationInMinutes || undefined,
             priority: entity.priority || 0,
@@ -44,6 +56,14 @@ export const convertEntitiesToTasks = (entities: TaskEntity[]): Task[] => {
             updatedAt: entity.updatedAt ? new Date(entity.updatedAt).getTime() : undefined,
             linkedVoteIds: entity.linkedVoteIds || undefined,
             blockedSince: entity.blockedSince ? new Date(entity.blockedSince).getTime() : undefined,
+            plannedDate: entity.plannedDate ?? null,
+            plannedTime: entity.plannedTime ?? null,
+            plannedPosition: entity.plannedPosition ?? null,
+            color: isTaskColor(entity.color) ? entity.color : 'none',
+            recurrence: parseStoredRecurrence(entity.recurrence),
+            seriesId: entity.seriesId ?? null,
+            occurrenceDate: entity.occurrenceDate ?? null,
+            deletedAt: entity.deletedAt ? new Date(entity.deletedAt).getTime() : undefined,
         };
         taskMap[task.id] = task;
     });
@@ -57,6 +77,17 @@ export const convertEntitiesToTasks = (entities: TaskEntity[]): Task[] => {
 
     return Object.values(taskMap);
 };
+
+/**
+ * Due date used for display and sorting. A legacy Done task stored its
+ * completion time in `terminationDate`; `convertEntitiesToTasks` maps that to
+ * `completedAt` and leaves `dueDate` empty, so the completion timestamp must
+ * not be surfaced as a deadline on Done tasks.
+ */
+export const effectiveDueDate = (
+    task: Pick<Task, 'dueDate' | 'terminationDate' | 'triageStatus'>,
+): number | undefined =>
+    task.dueDate ?? (task.triageStatus !== 'Done' ? task.terminationDate : undefined);
 
 /**
  * Converts a Task object to a TaskEntity for persistence.
@@ -78,6 +109,8 @@ export const taskToEntity = (task: Task): TaskEntity => ({
     timer: task.timer || [],
     category: task.category || 'General',
     terminationDate: task.terminationDate ? new Date(task.terminationDate).toISOString() : null,
+    dueDate: task.dueDate ? new Date(task.dueDate).toISOString() : null,
+    completedAt: task.completedAt ? new Date(task.completedAt).toISOString() : null,
     comment: task.comment || null,
     durationInMinutes: task.durationInMinutes || null,
     priority: task.priority || null,
@@ -87,6 +120,14 @@ export const taskToEntity = (task: Task): TaskEntity => ({
     updatedAt: task.updatedAt ? new Date(task.updatedAt).toISOString() : null,
     linkedVoteIds: task.linkedVoteIds || undefined,
     blockedSince: task.blockedSince ? new Date(task.blockedSince).toISOString() : null,
+    plannedDate: task.plannedDate ?? null,
+    plannedTime: task.plannedTime ?? null,
+    plannedPosition: task.plannedPosition ?? null,
+    color: task.color ?? 'none',
+    recurrence: task.recurrence ? JSON.stringify(task.recurrence) : null,
+    seriesId: task.seriesId ?? null,
+    occurrenceDate: task.occurrenceDate ?? null,
+    deletedAt: task.deletedAt ? new Date(task.deletedAt).toISOString() : null,
 });
 
 /**
@@ -169,6 +210,16 @@ export const taskPatchToEntity = (
             ? new Date(patch.terminationDate).toISOString()
             : null;
     }
+    if (patch.dueDate !== undefined) {
+        entity.dueDate = patch.dueDate
+            ? new Date(patch.dueDate).toISOString()
+            : null;
+    }
+    if (patch.completedAt !== undefined) {
+        entity.completedAt = patch.completedAt
+            ? new Date(patch.completedAt).toISOString()
+            : null;
+    }
     if (patch.comment !== undefined) entity.comment = patch.comment;
     if (patch.durationInMinutes !== undefined) entity.durationInMinutes = patch.durationInMinutes;
     if (patch.priority !== undefined) entity.priority = patch.priority;
@@ -185,6 +236,18 @@ export const taskPatchToEntity = (
         entity.blockedSince = patch.blockedSince
             ? new Date(patch.blockedSince).toISOString()
             : null;
+    }
+    if (patch.plannedDate !== undefined) entity.plannedDate = patch.plannedDate;
+    if (patch.plannedTime !== undefined) entity.plannedTime = patch.plannedTime;
+    if (patch.plannedPosition !== undefined) entity.plannedPosition = patch.plannedPosition;
+    if (patch.color !== undefined) entity.color = patch.color;
+    if (patch.recurrence !== undefined) {
+        entity.recurrence = patch.recurrence ? JSON.stringify(patch.recurrence) : null;
+    }
+    if (patch.seriesId !== undefined) entity.seriesId = patch.seriesId;
+    if (patch.occurrenceDate !== undefined) entity.occurrenceDate = patch.occurrenceDate;
+    if (patch.deletedAt !== undefined) {
+        entity.deletedAt = patch.deletedAt ? new Date(patch.deletedAt).toISOString() : null;
     }
 
     return entity;

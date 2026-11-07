@@ -1,7 +1,7 @@
 {
   "name": "vite_react_shadcn_ts",
   "private": true,
-  "version": "0.38.0",
+  "version": "0.39.1",
   "packageManager": "pnpm@11.9.0",
   "type": "module",
   "scripts": {
@@ -14,7 +14,8 @@
     "dev:server": "cross-env PORT=5172 tsx watch server/index.ts",
     "dev:all": "concurrently \"pnpm dev:server\" \"pnpm dev\"",
     "start:server": "node dist/server/index.js",
-    "test": "vitest"
+    "test": "vitest",
+    "bench:pl": "tsx bench/pl-harness/run.ts"
   },
   "dependencies": {
     "@blocknote/core": "^0.49.0",
@@ -91,6 +92,7 @@
     "date-holidays": "^3.26.5",
     "embla-carousel-react": "^8.3.0",
     "express": "^4.19.2",
+    "fractional-indexing": "^4.0.0",
     "i18next": "^26.3.6",
     "i18next-browser-languagedetector": "^8.2.1",
     "i18next-http-backend": "^4.0.0",

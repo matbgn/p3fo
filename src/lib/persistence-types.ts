@@ -54,6 +54,8 @@ export interface TaskEntity {
   timer: { startTime: number; endTime: number }[];
   category: Category | string;
   terminationDate: string | null;
+  dueDate?: string | null;
+  completedAt?: string | null;
   comment: string | null;
   durationInMinutes: number | null;
   priority: number | null;
@@ -63,6 +65,14 @@ export interface TaskEntity {
   updatedAt?: string | null;
   linkedVoteIds?: string[];
   blockedSince?: string | null;
+  plannedDate?: string | null;
+  plannedTime?: string | null;
+  plannedPosition?: string | null;
+  color?: string | null;
+  recurrence?: string | null;
+  seriesId?: string | null;
+  occurrenceDate?: string | null;
+  deletedAt?: string | null;
 }
 
 export interface MonthlyBalanceData {
@@ -93,6 +103,7 @@ export type ModuleId =
   | 'plan.roles'
   | 'plan.salary'
   | 'program.calendar'
+  | 'program.planner'
   | 'program.resources'
   | 'dream.intentionalFramework'
   | 'dream.collaborativeFramework'
@@ -161,6 +172,9 @@ export interface UserSettingsEntity {
   timezone?: string;
   weekStartDay?: 0 | 1;
   defaultPlanView?: 'week' | 'month';
+  /** When true the new planner is the default Program layout. Kept separate
+   *  from defaultPlanView so older bundles never receive an unknown view. */
+  plannerDefault?: boolean;
   preferredWorkingDays?: number[] | Record<string, number>;
   trigram?: string;
   pomodoroConfig?: PomodoroConfig;
@@ -199,6 +213,10 @@ export interface PersistenceAdapter {
   listTasks(userId?: string, excludeStatuses?: string[]): Promise<TaskEntity[]>;
   getTaskById(id: string): Promise<TaskEntity | null>;
   createTask(input: Partial<TaskEntity>): Promise<TaskEntity>;
+  /** Create several tasks in one persistence round-trip where the backend supports it. */
+  createTasks(tasks: TaskEntity[]): Promise<TaskEntity[]>;
+  /** Update several complete tasks in one persistence round-trip where the backend supports it. */
+  bulkUpdateTasks(tasks: TaskEntity[]): Promise<void>;
   updateTask(id: string, patch: Partial<TaskEntity>): Promise<TaskEntity>;
   deleteTask(id: string): Promise<void>;
   bulkUpdateTaskPriorities(items: { id: string; priority: number | undefined }[]): Promise<void>;

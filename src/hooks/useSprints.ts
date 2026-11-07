@@ -145,6 +145,7 @@ export function toSprintTask(task: Task): SprintTaskLike {
     difficulty: task.difficulty,
     sprintTarget: task.sprintTarget,
     terminationDate: task.terminationDate ?? null,
+    completedAt: task.completedAt ?? null,
     userId: task.userId ?? null,
     parentId: task.parentId ?? null,
     children: task.children,

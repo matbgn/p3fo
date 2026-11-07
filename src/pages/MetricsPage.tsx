@@ -20,6 +20,7 @@ import { usePomodoroStats } from "@/hooks/usePomodoroStats";
 
 import { useUsersContext } from "@/context/UsersContext";
 import { useUserSettings } from "@/hooks/useUserSettings";
+import { useViewNavigation } from "@/hooks/useView";
 import { SprintCeremonyOverlay } from "@/components/sprint/SprintCeremonyOverlay";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { loadFiltersFromSessionStorage, saveFiltersToSessionStorage } from "@/lib/filter-storage";
@@ -33,6 +34,8 @@ import { getPersistenceAdapter } from "@/lib/persistence-factory";
 import { eventBus } from "@/lib/events";
 import { FocusModeProvider } from "@/components/FocusModeProvider";
 import { FocusModeOverlay } from "@/components/FocusModeOverlay";
+import { FocusModeBar } from "@/components/planView/FocusModeBar";
+import { useFocusMode } from "@/hooks/useFocusMode";
 
 const PomodoroStatsTab: React.FC<{ userId: string; weekStartDay: 0 | 1 }> = ({ userId, weekStartDay }) => {
   const { t } = useTranslation();
@@ -119,19 +122,19 @@ const MetricsPageInner: React.FC<{ activeView?: string }> = ({ activeView }) => 
   const { userId: currentUserId } = useCurrentUser();
   const { users, loading: usersLoading } = useUsersContext();
   const { userSettings } = useUserSettings();
+  const { isFocusMode } = useFocusMode();
+  const { pendingSubView, clearPendingSubView } = useViewNavigation();
 
   type MetricsSubView = 'collaborative' | 'individual';
   const [activeSubView, setActiveSubView] = React.useState<MetricsSubView>('collaborative');
 
   React.useEffect(() => {
-    if (activeView === 'metrics') {
-      const pending = sessionStorage.getItem('p3fo_metrics_tab');
-      if (pending) {
-        sessionStorage.removeItem('p3fo_metrics_tab');
-        setActiveTab(pending);
-      }
+    if (activeView === 'metrics' && pendingSubView === 'focus-sessions') {
+      setActiveSubView('individual');
+      setActiveTab('pomodoro');
+      clearPendingSubView();
     }
-  }, [activeView]);
+  }, [activeView, pendingSubView, clearPendingSubView]);
 
   const [selectedUserId, setSelectedUserId] = React.useState<string>("");
   const [initializing, setInitializing] = React.useState(true);
@@ -171,28 +174,69 @@ const MetricsPageInner: React.FC<{ activeView?: string }> = ({ activeView }) => 
     return <LoadingSpinner label={t('metrics.loading')} className="h-full" />;
   }
 
-  return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto pr-1">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          variant={activeSubView === 'collaborative' ? 'default' : 'outline'}
-          onClick={() => setActiveSubView('collaborative')}
-        >
-          {t('metrics.subview.collaborative', 'Collaborative')}
-        </Button>
-        <Button
-          variant={activeSubView === 'individual' ? 'default' : 'outline'}
-          onClick={() => setActiveSubView('individual')}
-        >
-          {t('metrics.subview.individual', 'Individual')}
-        </Button>
-      </div>
+  const userSelect = (
+    <Select value={selectedUserId} onValueChange={handleUserChange}>
+      <SelectTrigger className="w-[180px]">
+        <SelectValue placeholder={t('metrics.selectUser')} />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="unassigned">{t('common.unassigned')}</SelectItem>
+        {users.map((user) => (
+          <SelectItem key={user.userId} value={user.userId}>
+            {user.username}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
 
-      {activeSubView === 'collaborative' ? (
+  const subviewToggle = (
+    <div className="flex flex-wrap items-center gap-2">
+      <Button
+        variant={activeSubView === 'collaborative' ? 'default' : 'outline'}
+        onClick={() => setActiveSubView('collaborative')}
+      >
+        {t('metrics.subview.collaborative', 'Collaborative')}
+      </Button>
+      <Button
+        variant={activeSubView === 'individual' ? 'default' : 'outline'}
+        onClick={() => setActiveSubView('individual')}
+      >
+        {t('metrics.subview.individual', 'Individual')}
+      </Button>
+    </div>
+  );
+
+  const headerActions = (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      {activeSubView === 'individual' && userSelect}
+      {subviewToggle}
+    </div>
+  );
+
+  return (
+    <div className={`h-full flex flex-col ${isFocusMode ? 'relative' : ''}`}>
+      {isFocusMode && (
+        <FocusModeBar
+          title={t('nav.metrics')}
+          rightContent={headerActions}
+        />
+      )}
+
+      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto pr-1">
+        {!isFocusMode && (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-xl font-semibold">
+              {activeSubView === 'collaborative' ? t('metrics.collaborativeTitle') : t('metrics.individualTitle')}
+            </h2>
+            {headerActions}
+          </div>
+        )}
+
+        {activeSubView === 'collaborative' ? (
         <>
       {/* Top pane for collaborative metrics cards */}
       <section className="rounded-lg p-2">
-        <h2 className="text-xl font-semibold mb-4">{t('metrics.collaborativeTitle')}</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* High Impact Task Achievement Frequency Metric */}
           <HighImpactTaskMetric />
@@ -212,22 +256,6 @@ const MetricsPageInner: React.FC<{ activeView?: string }> = ({ activeView }) => 
         </>
       ) : (
       <section className="flex-1 border rounded-lg p-4 sm:p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">{t('metrics.individualTitle')}</h2>
-          <Select value={selectedUserId} onValueChange={handleUserChange}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder={t('metrics.selectUser')} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="unassigned">{t('common.unassigned')}</SelectItem>
-              {users.map((user) => (
-                <SelectItem key={user.userId} value={user.userId}>
-                  {user.username}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
         <div className="flex flex-col h-full">
           {/* Subtab navigation */}
           <div className="flex border-b mb-4">
@@ -285,6 +313,7 @@ const MetricsPageInner: React.FC<{ activeView?: string }> = ({ activeView }) => 
         </div>
       </section>
       )}
+      </div>
     </div>
   );
 };

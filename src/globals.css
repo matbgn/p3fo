@@ -49,6 +49,16 @@
     --sidebar-border: 220 13% 91%;
 
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Task colour accents (kept in sync with TASK_COLOR_STYLES) */
+    --task-color-pink: #f9a8d4;
+    --task-color-yellow: #fde047;
+    --task-color-black: hsl(var(--foreground));
+    --task-color-grey: hsl(var(--muted-foreground) / 0.5);
+    --task-color-cornflower: #93c5fd;
+    --task-color-mango: #fdba74;
+    --task-color-green: #86efac;
+    --task-color-lilac: #d8b4fe;
   }
 
   .dark {
@@ -87,6 +97,16 @@
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Task colour accents (kept in sync with TASK_COLOR_STYLES) */
+    --task-color-pink: #be185d;
+    --task-color-yellow: #a16207;
+    --task-color-black: hsl(var(--foreground));
+    --task-color-grey: hsl(var(--muted-foreground) / 0.5);
+    --task-color-cornflower: #1d4ed8;
+    --task-color-mango: #c2410c;
+    --task-color-green: #15803d;
+    --task-color-lilac: #7e22ce;
   }
 }
 

@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.39.1 (2026-11-07)
+
+### Bug Fixes
+
+- **prioritization:** gate Bradley-Terry stop rule + improve Zermelo convergence (fa51346)
+
+---
+
+## v0.39.0 (2026-11-07)
+
+### Features
+
+- **planner:** add weekly planner with recurrence (3ca0a65)
+
+---
+
 ## v0.38.0 (2026-11-06)
 
 ### Features
@@ -153,32 +169,5 @@
 - **mcp:** live-sync task mutations via Yjs (bfe34b4)
 - **mcp:** use POST aliases for MCP task mutations (ffa9d8d)
 - **consistency:** base trend on today vs prior 7-day avg (ad26ec0)
-
----
-
-## v0.31.0 (2026-07-17)
-
-### Features
-
-- **common:** add executive-function tooling (9867a45)
-- **comparative tool:** add early finalize and convergence (e08281a)
-- **auth:** add shared API key for MCP access behind oauth2-proxy (8caaa2a)
-
-### Bug Fixes
-
-- **common:** add focus mode to timetable and metrics pages (283828d)
-- **focus board:** add focus mode UI to task board (7554cfe)
-- **data storage:** add wip limit and non-action period settings (87f7b50)
-- **tasks:** correct timer transfer and parent sync (8f6d434)
-- **tasks:** inherit parent metadata in subtasks (c9bc394)
-- **boards:** align kanban hover delay with storyboard (2b38d72)
-
----
-
-## v0.30.0 (2026-06-25)
-
-### Features
-
-- **devtools:** add MCP server wrapping P3Fo REST API (02b7bff)
 
 ---

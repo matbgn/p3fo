@@ -22,18 +22,20 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Task, Category, TriageStatus } from "@/hooks/useTasks";
 import { UserSelector } from "./UserSelector";
-import { format } from "date-fns";
-import { CalendarIcon, Play, Pause, Clock2, X } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
+import { Play, Pause, Clock2, X, Plus, AlertTriangle, CircleDot, Flame, Crosshair } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useSettingsContext } from "@/context/SettingsContext";
 import { CategorySelect } from "./CategorySelect";
 import { TaskStatusSelect } from "./TaskStatusSelect";
 import { TimeSheetDialog } from "./TimeSheetDialog";
-import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
 import { LinkedVotePicker } from "@/components/voting/LinkedVotePicker";
 import { SubtaskProgress } from "@/components/SubtaskProgress";
+import { useTasks } from "@/hooks/useTasks";
+import { CardScheduleFields } from "./planner/CardScheduleFields";
+import { RepeatPicker } from "./planner/RepeatPicker";
+import { TaskColorPicker } from "./planner/TaskColorPicker";
+import { combineDateKeyAndTime, timeFromTimestamp, toDateKey } from "@/lib/planner/dates";
+import { effectiveDueDate } from "@/lib/task-conversions";
+import { useToday } from "@/hooks/useToday";
 
 interface TaskEditModalProps {
     task: Task;
@@ -55,6 +57,9 @@ interface TaskEditModalProps {
     currentUserId: string | undefined;
     onToggleTimer?: (id: string, currentUserId?: string) => void;
     updateLinkedVoteIds?: (id: string, linkedVoteIds: string[]) => void;
+    defaultTab?: 'card' | 'details';
+    onDelete?: (task: Task) => void;
+    onDuplicate?: (task: Task) => void;
 }
 
 const DIFFICULTY_OPTIONS: Array<0.5 | 1 | 2 | 3 | 5 | 8> = [0.5, 1, 2, 3, 5, 8];
@@ -79,10 +84,12 @@ const TaskEditModalInner: React.FC<TaskEditModalProps> = ({
     currentUserId,
     onToggleTimer,
     updateLinkedVoteIds: updateLinkedVoteIdsProp,
+    defaultTab = 'details',
+    onDelete,
+    onDuplicate,
 }) => {
-    const { settings } = useSettingsContext();
     const { t } = useTranslation();
-    const weekStartsOn = settings.weekStartDay as 0 | 1;
+    const { updatePlannedDate, updatePlannedTime, updateColor, setRecurrence, createTask, toggleDone } = useTasks();
 
     // Internal state to track which task is currently being edited
     // This allows "jumping" to other tasks without closing the modal
@@ -90,9 +97,12 @@ const TaskEditModalInner: React.FC<TaskEditModalProps> = ({
 
     const [title, setTitle] = React.useState(activeTask.title);
     const [comment, setComment] = React.useState(activeTask.comment || "");
-    const [duration, setDuration] = React.useState(activeTask.durationInMinutes?.toString() || "");
-    const [timePickerOpen, setTimePickerOpen] = React.useState(false);
     const [isTimeSheetOpen, setIsTimeSheetOpen] = React.useState(false);
+    const [activeTab, setActiveTab] = React.useState<'card' | 'details'>(defaultTab);
+    const [checklistTitle, setChecklistTitle] = React.useState('');
+    const [durationDraft, setDurationDraft] = React.useState(
+        activeTask.durationInMinutes ? String(activeTask.durationInMinutes) : '',
+    );
 
     // Reset active task when the prop task changes (e.g. if modal is reopened for a different task)
     React.useEffect(() => {
@@ -103,18 +113,33 @@ const TaskEditModalInner: React.FC<TaskEditModalProps> = ({
     React.useEffect(() => {
         setTitle(activeTask.title);
         setComment(activeTask.comment || "");
-        setDuration(activeTask.durationInMinutes?.toString() || "");
+        setChecklistTitle('');
+        setDurationDraft(activeTask.durationInMinutes ? String(activeTask.durationInMinutes) : '');
     }, [activeTask]);
+
+    React.useEffect(() => {
+        if (isOpen) setActiveTab(defaultTab);
+    }, [defaultTab, isOpen, task.id]);
 
     const handleSave = () => {
         if (title !== activeTask.title) updateTitle(activeTask.id, title);
         if (comment !== (activeTask.comment || "")) updateComment(activeTask.id, comment);
-
-        const parsedDuration = parseInt(duration);
-        const finalDuration = isNaN(parsedDuration) ? undefined : parsedDuration;
-        if (finalDuration !== activeTask.durationInMinutes) updateDurationInMinutes(activeTask.id, finalDuration);
-
         onClose();
+    };
+
+    const effectiveDue = effectiveDueDate(activeTask);
+    const dueDateValue = effectiveDue ? toDateKey(new Date(effectiveDue)) : '';
+    const dueTimeValue = effectiveDue ? timeFromTimestamp(effectiveDue) : '';
+    const durationValue = durationDraft;
+    const todayKey = useToday();
+
+    const commitDuration = () => {
+        const trimmed = durationDraft.trim();
+        const parsed = trimmed === '' ? undefined : Number(trimmed);
+        const next = parsed === undefined || Number.isNaN(parsed) ? undefined : parsed;
+        if (next !== activeTask.durationInMinutes) {
+            void updateDurationInMinutes(activeTask.id, next);
+        }
     };
 
     return (
@@ -129,6 +154,10 @@ const TaskEditModalInner: React.FC<TaskEditModalProps> = ({
                             placeholder={t('task.titlePlaceholder')}
                         />
                         <div className="flex items-center gap-1">
+                            <UserSelector
+                                value={activeTask.userId || ''}
+                                onChange={(selectedId) => updateUser(activeTask.id, selectedId === 'current-user' ? currentUserId : selectedId)}
+                            />
                             {onToggleTimer && (
                                 <Button
                                     size="sm"
@@ -179,20 +208,159 @@ const TaskEditModalInner: React.FC<TaskEditModalProps> = ({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-4 flex-1">
-                    {/* Main Column */}
-                    <div className="md:col-span-2 flex flex-col gap-4">
-                        <div className="flex flex-col gap-2 flex-1">
+                <div className="flex items-center gap-1 self-start rounded-md border bg-card p-1">
+                    <Button
+                        variant={activeTab === 'card' ? 'secondary' : 'ghost'}
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => setActiveTab('card')}
+                    >
+                        {t('planner.cardTab')}
+                    </Button>
+                    <Button
+                        variant={activeTab === 'details' ? 'secondary' : 'ghost'}
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => setActiveTab('details')}
+                    >
+                        {t('planner.detailsTab')}
+                    </Button>
+                </div>
+
+                {activeTab === 'card' && (
+                    <div className="space-y-4 py-4 flex-1">
+                        <CardScheduleFields
+                            plannedDate={activeTask.plannedDate ?? ''}
+                            plannedTime={activeTask.plannedTime ?? ''}
+                            dueDate={dueDateValue}
+                            dueTime={dueTimeValue}
+                            duration={durationValue}
+                            onPlannedDateChange={(value) => void updatePlannedDate(activeTask.id, value || null)}
+                            onPlannedTimeChange={(value) => void updatePlannedTime(activeTask.id, value || null)}
+                            onDueDateChange={(value) => updateTerminationDate(activeTask.id, value ? combineDateKeyAndTime(value, dueTimeValue) : undefined)}
+                            onDueTimeChange={(value) => updateTerminationDate(activeTask.id, dueDateValue ? combineDateKeyAndTime(dueDateValue, value) : undefined)}
+                            onDurationChange={setDurationDraft}
+                            onDurationCommit={commitDuration}
+                        />
+
+                        {activeTask.seriesId ? (
+                            <p className="text-xs text-muted-foreground">
+                                This occurrence belongs to a recurring series. Edit the series in the Recurring lane.
+                            </p>
+                        ) : !activeTask.parentId ? (
+                            <RepeatPicker
+                                anchorDate={activeTask.plannedDate ?? todayKey}
+                                recurrence={activeTask.recurrence ?? null}
+                                onApply={(recurrence) => {
+                                    if (recurrence && !activeTask.plannedDate) {
+                                        void updatePlannedDate(activeTask.id, todayKey);
+                                    }
+                                    void setRecurrence(activeTask.id, recurrence);
+                                }}
+                            />
+                        ) : null}
+
+                        <TaskColorPicker
+                            value={activeTask.color ?? 'none'}
+                            onChange={(value) => void updateColor(activeTask.id, value)}
+                        />
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1 text-xs font-medium text-muted-foreground">
+                                <span>{t('task.statusLabel')}</span>
+                                <TaskStatusSelect value={activeTask.triageStatus} onChange={(status) => updateStatus(activeTask.id, status)} />
+                            </div>
+                            <div className="space-y-1 text-xs font-medium text-muted-foreground">
+                                <span>{t('task.categoryLabel')}</span>
+                                <CategorySelect
+                                    value={activeTask.category || 'none'}
+                                    onChange={(category) => updateCategory(activeTask.id, category === 'none' ? undefined : category)}
+                                />
+                            </div>
+                            <div className="space-y-1 text-xs font-medium text-muted-foreground">
+                                <span>{t('task.difficultyLabel')}</span>
+                                <Select
+                                    value={activeTask.difficulty?.toString() || '1'}
+                                    onValueChange={(value) => updateDifficulty(activeTask.id, parseFloat(value) as 0.5 | 1 | 2 | 3 | 5 | 8)}
+                                >
+                                    <SelectTrigger className="h-8">
+                                        <SelectValue placeholder={t('task.selectDifficulty')} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {DIFFICULTY_OPTIONS.map((diff) => (
+                                            <SelectItem key={diff} value={diff.toString()}>
+                                                {diff}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-1 text-xs font-medium text-muted-foreground">
+                                <span>{t('planner.flags')}</span>
+                                <div className="flex items-center gap-1">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className={cn('h-8 w-8', activeTask.urgent && 'bg-accent')}
+                                        onClick={() => toggleUrgent(activeTask.id)}
+                                        aria-label={t('task.urgentLabel')}
+                                        title={t('task.urgentLabel')}
+                                    >
+                                        <AlertTriangle className={cn('h-4 w-4', activeTask.urgent ? 'text-red-500' : 'text-muted-foreground')} />
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className={cn('h-8 w-8', activeTask.impact && 'bg-accent')}
+                                        onClick={() => toggleImpact(activeTask.id)}
+                                        aria-label={t('task.highImpactLabel')}
+                                        title={t('task.highImpactLabel')}
+                                    >
+                                        <CircleDot className={cn('h-4 w-4', activeTask.impact ? 'text-yellow-500' : 'text-muted-foreground')} />
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className={cn('h-8 w-8', activeTask.majorIncident && 'bg-accent')}
+                                        onClick={() => toggleMajorIncident(activeTask.id)}
+                                        aria-label={t('task.incidentLabel')}
+                                        title={t('task.incidentLabel')}
+                                    >
+                                        <Flame className={cn('h-4 w-4', activeTask.majorIncident ? 'text-red-700' : 'text-muted-foreground')} />
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className={cn('h-8 w-8', activeTask.sprintTarget && 'bg-accent')}
+                                        onClick={() => toggleSprintTarget(activeTask.id)}
+                                        aria-label={t('task.sprintTargetLabel')}
+                                        title={t('task.sprintTargetLabel')}
+                                    >
+                                        <Crosshair className={cn('h-4 w-4', activeTask.sprintTarget ? 'text-violet-500' : 'text-muted-foreground')} />
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                )}
+
+                {activeTab === 'details' && (
+                    <div className="flex flex-col gap-4 py-4 flex-1">
+                        <div className="flex flex-col gap-2">
                             <Label htmlFor="description" className="text-base font-semibold">{t('task.descriptionLabel')}</Label>
                             <RichTextField
                                 value={comment}
                                 onChange={(text) => setComment(text)}
                                 label={t('task.descriptionFieldLabel')}
                                 placeholder={t('task.descriptionPlaceholder')}
-                                className="flex-1 min-h-[300px]"
+                                className="min-h-[160px]"
                             />
                         </div>
-
 
                         <div className="flex flex-col gap-2 pt-4 border-t">
                             <div className="flex items-center justify-between">
@@ -201,207 +369,109 @@ const TaskEditModalInner: React.FC<TaskEditModalProps> = ({
                                     <SubtaskProgress task={activeTask} tasks={tasks} />
                                 )}
                             </div>
-                            <div className="flex flex-col gap-2 p-4 bg-muted/30 rounded-md">
-                                {/* Parent */}
+                            <div className="flex flex-col gap-2 rounded-md bg-muted/30 p-4">
                                 {activeTask.parentId ? (
                                     <div
-                                        className="flex items-center gap-2 cursor-pointer hover:bg-accent/50 p-1 rounded transition-colors"
+                                        className="flex items-center gap-2 rounded p-1 transition-colors cursor-pointer hover:bg-accent/50"
                                         onClick={() => {
-                                            const parent = tasks.find(t => t.id === activeTask.parentId);
+                                            const parent = tasks.find((candidate) => candidate.id === activeTask.parentId);
                                             if (parent) setActiveTask(parent);
                                         }}
                                     >
                                         <span className="text-sm text-muted-foreground">{t('task.parentLabel')}</span>
                                         <span className="text-sm font-medium text-blue-600 hover:underline">
-                                            {tasks.find((tt) => tt.id === activeTask.parentId)?.title || t('task.unknownParent')}
+                                            {tasks.find((candidate) => candidate.id === activeTask.parentId)?.title || t('task.unknownParent')}
                                         </span>
                                     </div>
                                 ) : (
-                                    <div className="text-sm text-muted-foreground italic">{t('task.noParent')}</div>
+                                    <div className="text-sm italic text-muted-foreground">{t('task.noParent')}</div>
                                 )}
 
-                                {/* Current Task */}
-                                <div className="flex items-center gap-2 pl-4 border-l-2 border-primary">
+                                <div className="flex items-center gap-2 border-l-2 border-primary pl-4">
                                     <span className="text-sm font-bold">{activeTask.title}</span>
                                     <span className="text-xs text-muted-foreground">{t('task.current')}</span>
                                 </div>
 
-                                {/* Children */}
                                 {activeTask.children && activeTask.children.length > 0 ? (
-                                    <div className="flex flex-col gap-1 pl-8 border-l-2 border-muted">
+                                    <div className="flex flex-col gap-1 border-l-2 border-muted pl-8">
                                         {activeTask.children.map((childId) => {
-                                            const child = tasks.find((t) => t.id === childId);
-                                            const isDone = child && (child.triageStatus === "Done" || child.triageStatus === "Dropped");
+                                            const child = tasks.find((candidate) => candidate.id === childId);
+                                            const isDone = child && (child.triageStatus === 'Done' || child.triageStatus === 'Dropped');
                                             return (
                                                 <div
                                                     key={childId}
-                                                    className="flex items-center gap-2 text-sm cursor-pointer hover:bg-accent/50 p-1 rounded transition-colors"
-                                                    onClick={() => {
-                                                        if (child) setActiveTask(child);
-                                                    }}
+                                                    className="flex items-center gap-2 rounded p-1 text-sm transition-colors hover:bg-accent/50"
                                                 >
                                                     <input
                                                         type="checkbox"
-                                                        className="h-3.5 w-3.5 accent-orange-500 shrink-0"
+                                                        className="h-3.5 w-3.5 shrink-0 accent-orange-500"
                                                         checked={!!isDone}
-                                                        readOnly
+                                                        onChange={() => child && void toggleDone(child.id)}
                                                     />
-                                                    <span className={isDone ? "line-through text-muted-foreground text-blue-600" : "text-blue-600 hover:underline"}>
+                                                    <button
+                                                        type="button"
+                                                        className={isDone ? 'text-left text-muted-foreground line-through' : 'text-left text-blue-600 hover:underline'}
+                                                        onClick={() => {
+                                                            if (child) setActiveTask(child);
+                                                        }}
+                                                    >
                                                         {child?.title || t('task.unknownChild')}
-                                                    </span>
+                                                    </button>
                                                 </div>
                                             );
                                         })}
                                     </div>
                                 ) : (
-                                    <div className="text-sm text-muted-foreground italic pl-8">{t('task.noSubtasks')}</div>
+                                    <div className="pl-8 text-sm italic text-muted-foreground">{t('task.noSubtasks')}</div>
                                 )}
-                            </div>
-                        </div>
-                    </div>
 
-                    {/* Sidebar Column */}
-                    <div className="flex flex-col gap-6">
-                        <div className="flex flex-col gap-2">
-                            <Label>{t('task.statusLabel')}</Label>
-                            <TaskStatusSelect value={activeTask.triageStatus} onChange={(s) => updateStatus(activeTask.id, s)} />
-                        </div>
-
-                        <div className="flex flex-col gap-2">
-                            <Label>{t('task.assignedToLabel')}</Label>
-                            <UserSelector
-                                value={activeTask.userId || ''}
-                                onChange={(selectedId) => updateUser(activeTask.id, selectedId === 'current-user' ? currentUserId : selectedId)}
-                            />
-                        </div>
-
-                        <div className="flex flex-col gap-2">
-                            <Label>{t('task.categoryLabel')}</Label>
-                            <CategorySelect
-                                value={activeTask.category || "none"}
-                                onChange={(category) => updateCategory(activeTask.id, category === "none" ? undefined : category)}
-                            />
-                        </div>
-
-                        <div className="flex flex-col gap-2">
-                            <Label>{t('task.difficultyLabel')}</Label>
-                            <Select value={activeTask.difficulty?.toString() || "1"} onValueChange={(v) => updateDifficulty(activeTask.id, parseFloat(v) as 0.5 | 1 | 2 | 3 | 5 | 8)}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder={t('task.selectDifficulty')} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {DIFFICULTY_OPTIONS.map((diff) => (
-                                        <SelectItem key={diff} value={diff.toString()}>
-                                            {diff}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="flex flex-col gap-2">
-                            <Label>{t('task.terminationDateLabel')}</Label>
-                            <div className="flex gap-2">
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            variant={"outline"}
-                                            className={cn(
-                                                "w-full justify-start text-left font-normal flex-1",
-                                                !activeTask.terminationDate && "text-muted-foreground"
-                                            )}
-                                        >
-                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {activeTask.terminationDate ? format(new Date(activeTask.terminationDate), "PPP") : <span>{t('task.pickDate')}</span>}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0">
-                                        <Calendar
-                                            mode="single"
-                                            selected={activeTask.terminationDate ? new Date(activeTask.terminationDate) : undefined}
-                                            onSelect={(date) => {
-                                                if (date) {
-                                                    const current = activeTask.terminationDate ? new Date(activeTask.terminationDate) : new Date();
-                                                    date.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
-                                                    updateTerminationDate(activeTask.id, date.getTime());
-                                                } else {
-                                                    updateTerminationDate(activeTask.id, undefined);
-                                                }
-                                            }}
-                                            initialFocus
-                                            weekStartsOn={weekStartsOn}
-                                        />
-                                    </PopoverContent>
-                                </Popover>
-                                <Button
-                                    variant="outline"
-                                    className={cn(
-                                        "px-3",
-                                        activeTask.terminationDate && "text-blue-500"
-                                    )}
-                                    onClick={() => setTimePickerOpen(true)}
-                                    title={t('task.setTime')}
-                                >
-                                    <Clock2 className="h-4 w-4" />
-                                </Button>
-                            </div>
-                            {activeTask.terminationDate && (
-                                <div className="text-sm text-muted-foreground">
-                                    {format(new Date(activeTask.terminationDate), "p")}
+                                <div className="flex items-center gap-1.5 border-l-2 border-muted pt-1 pl-8">
+                                    <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <Input
+                                        value={checklistTitle}
+                                        onChange={(event) => setChecklistTitle(event.target.value)}
+                                        onKeyDown={(event) => {
+                                            if (event.key === 'Enter' && checklistTitle.trim()) {
+                                                event.preventDefault();
+                                                void createTask(checklistTitle.trim(), activeTask.id);
+                                                setChecklistTitle('');
+                                            }
+                                        }}
+                                        placeholder={t('planner.addChecklistItem')}
+                                        className="h-7 border-0 px-0 text-sm shadow-none focus-visible:ring-0"
+                                    />
                                 </div>
-                            )}
+                            </div>
                         </div>
 
-                        <div className="flex flex-col gap-2">
-                            <Label>{t('task.plannedDurationLabel')}</Label>
-                            <Input
-                                type="number"
-                                min="0"
-                                value={duration}
-                                onChange={(e) => setDuration(e.target.value)}
-                                onBlur={() => {
-                                    const parsed = parseInt(duration);
-                                    if (!isNaN(parsed) && parsed !== activeTask.durationInMinutes) {
-                                        updateDurationInMinutes(activeTask.id, parsed);
-                                    } else if (duration === "" && activeTask.durationInMinutes !== undefined) {
-                                        updateDurationInMinutes(activeTask.id, undefined);
-                                    }
-                                }}
-                            />
-                        </div>
-
-                        <div className="flex flex-col gap-4 pt-2 border-t">
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="urgent" className="cursor-pointer">{t('task.urgentLabel')}</Label>
-                                <Switch id="urgent" checked={activeTask.urgent} onCheckedChange={() => toggleUrgent(activeTask.id)} />
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="impact" className="cursor-pointer">{t('task.highImpactLabel')}</Label>
-                                <Switch id="impact" checked={activeTask.impact} onCheckedChange={() => toggleImpact(activeTask.id)} />
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="incident" className="cursor-pointer">{t('task.incidentLabel')}</Label>
-                                <Switch id="incident" checked={activeTask.majorIncident} onCheckedChange={() => toggleMajorIncident(activeTask.id)} />
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="sprintTarget" className="cursor-pointer">{t('task.sprintTargetLabel')}</Label>
-                                <Switch id="sprintTarget" checked={activeTask.sprintTarget} onCheckedChange={() => toggleSprintTarget(activeTask.id)} />
-                            </div>
-                        </div>
-                        </div>
                         {updateLinkedVoteIdsProp && (
-                          <div className="flex flex-col gap-2 pt-2 border-t">
-                            <LinkedVotePicker
-                              linkedVoteIds={activeTask.linkedVoteIds || []}
-                              onChange={(ids) => updateLinkedVoteIdsProp(activeTask.id, ids)}
-                            />
-                          </div>
+                            <div className="flex flex-col gap-2 border-t pt-2">
+                                <LinkedVotePicker
+                                    linkedVoteIds={activeTask.linkedVoteIds || []}
+                                    onChange={(ids) => updateLinkedVoteIdsProp(activeTask.id, ids)}
+                                />
+                            </div>
                         )}
                     </div>
+                )}
 
-                <div className="flex justify-end gap-2 pt-4 border-t mt-auto">
-                    <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
-                    <Button onClick={handleSave}>{t('task.saveAndClose')}</Button>
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-4 border-t mt-auto">
+                    <div className="flex gap-1">
+                        {onDuplicate && (
+                            <Button variant="ghost" size="sm" onClick={() => onDuplicate(activeTask)}>
+                                {t('planner.duplicate')}
+                            </Button>
+                        )}
+                        {onDelete && (
+                            <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => onDelete(activeTask)}>
+                                {t('planner.delete')}
+                            </Button>
+                        )}
+                    </div>
+                    <div className="flex gap-2">
+                        <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
+                        <Button onClick={handleSave}>{t('task.saveAndClose')}</Button>
+                    </div>
                 </div>
             </DialogContent>
 
@@ -412,15 +482,6 @@ const TaskEditModalInner: React.FC<TaskEditModalProps> = ({
                 onOpenChange={setIsTimeSheetOpen}
             />
 
-            {/* Time Picker Dialog for termination date */}
-            <TimePickerDialog
-                isOpen={timePickerOpen}
-                onClose={() => setTimePickerOpen(false)}
-                initialTime={activeTask.terminationDate || Date.now()}
-                onTimeChange={(timestamp) => {
-                    updateTerminationDate(activeTask.id, timestamp);
-                }}
-            />
         </Dialog>
     );
 };

@@ -20,6 +20,8 @@ export interface TaskRecord {
   timer?: { startTime?: number | null; endTime?: number | null }[] | null;
   category?: string | null;
   terminationDate?: Timestamp;
+  dueDate?: Timestamp;
+  completedAt?: Timestamp;
   comment?: string | null;
   durationInMinutes?: number | null;
   priority?: number | null;
@@ -28,6 +30,14 @@ export interface TaskRecord {
   children?: string[];
   linkedVoteIds?: string[];
   blockedSince?: Timestamp;
+  plannedDate?: string | null;
+  plannedTime?: string | null;
+  plannedPosition?: string | null;
+  color?: string | null;
+  recurrence?: string | null;
+  seriesId?: string | null;
+  occurrenceDate?: string | null;
+  deletedAt?: Timestamp;
 }
 
 export function toMillis(value: Timestamp): number | null {

@@ -27,9 +27,9 @@ describe('useTasks mutations - updatedAt injection', () => {
       const funcStart = lines.findIndex(l => l.includes('async function updateStatus(taskId: string, status: TriageStatus)'))
       expect(funcStart).toBeGreaterThanOrEqual(0)
       
-      const funcBody = lines.slice(funcStart, funcStart + 60).join('\n')
+      const funcBody = lines.slice(funcStart, funcStart + 70).join('\n')
       
-      expect(funcBody).toMatch(/updatedAt\s*:\s*Date\.now\(\)/)
+      expect(funcBody).toMatch(/updatedAt\s*:\s*(Date\.now\(\)|now)/)
     })
   })
 
@@ -156,5 +156,34 @@ describe('deleteTask - parent children sync', () => {
 
     // Must call syncTaskToYjs for the parent after updating its children
     expect(funcBody).toMatch(/syncTaskToYjs.*updatedParent/)
+  })
+})
+describe('planner recurrence integrity', () => {
+  it('should clear recurrence when duplicating a task structure', async () => {
+    const source = fs.readFileSync(USE_TASKS_PATH, 'utf-8')
+    const lines = source.split('\n')
+
+    const funcStart = lines.findIndex(l => l.includes('const duplicateTaskStructure = React.useCallback'))
+    expect(funcStart).toBeGreaterThanOrEqual(0)
+
+    const funcBody = lines.slice(funcStart, funcStart + 45).join('\n')
+
+    // A duplicated series must not keep expanding alongside the original.
+    expect(funcBody).toMatch(/recurrence:\s*null/)
+  })
+
+  it('should keep a series anchor move coherent through adjustSeriesForAnchorMove', async () => {
+    const source = fs.readFileSync(USE_TASKS_PATH, 'utf-8')
+    const lines = source.split('\n')
+
+    const funcStart = lines.findIndex(l => l.includes('const updatePlannerFields = React.useCallback'))
+    expect(funcStart).toBeGreaterThanOrEqual(0)
+
+    const funcBody = lines.slice(funcStart, funcStart + 80).join('\n')
+
+    // Anchor moves must shift the rule end/deadline and never drop the anchor
+    // while keeping the rule.
+    expect(funcBody).toMatch(/adjustSeriesForAnchorMove/)
+    expect(funcBody).toMatch(/updated\.recurrence = adjusted\.recurrence/)
   })
 })

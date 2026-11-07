@@ -145,6 +145,29 @@ describe('filter-merge', () => {
       expect(result.status).toEqual([])
     })
 
+    it('defaultActiveStatuses: an empty status filter must not leak Archived tasks', () => {
+      const storedFilters: Filters = {
+        ...getDefaultFilters(),
+        status: []
+      }
+
+      const result = mergeViewFilters(storedFilters, { defaultActiveStatuses: true })
+
+      expect(result.status).toEqual(['Backlog', 'Ready', 'WIP', 'Blocked'])
+      expect(result.status).not.toContain('Archived')
+    })
+
+    it('defaultActiveStatuses: an explicit Archived selection is preserved', () => {
+      const storedFilters: Filters = {
+        ...getDefaultFilters(),
+        status: ['Archived'] as TriageStatus[]
+      }
+
+      const result = mergeViewFilters(storedFilters, { defaultActiveStatuses: true })
+
+      expect(result.status).toEqual(['Archived'])
+    })
+
     it('should handle undefined stored filters by returning defaults', () => {
       const overrides: ViewFilterOverrides = {
         excludeStatuses: ['Done', 'Dropped']

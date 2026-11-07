@@ -594,8 +594,19 @@ def evaluate_gates(args, locust, otel, browser, integrity=None, first_paint_only
     if get_rows:
         worst_get = max(float(row["p95_ms"]) for row in get_rows)
         add("Frontend GET p95", worst_get, args.max_frontend_get_p95_ms, worst_get <= args.max_frontend_get_p95_ms, " ms")
-    elif otel_expected:
+    elif otel_expected and not (frontend_http or render_rows):
         gates.append(["Frontend GET p95", "no OTel data", f"{args.max_frontend_get_p95_ms} ms", "FAIL"])
+    elif otel_expected:
+        # The probe loads and warms the board before the measurement window
+        # opens, and steady-state board updates arrive over Yjs, so a measured
+        # run can legitimately issue no frontend GETs. Frontend spans still
+        # prove the SDK is alive; only fail when there is no telemetry at all.
+        gates.append([
+            "Frontend GET p95",
+            "no GET traffic",
+            f"{args.max_frontend_get_p95_ms} ms",
+            "PASS",
+        ])
     # --no-otel and probe-only runs omit this gate instead of reporting SKIP.
 
     if scenario == "timetable" and not first_paint_only:

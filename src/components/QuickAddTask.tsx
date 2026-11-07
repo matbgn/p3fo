@@ -22,6 +22,7 @@ interface QuickAddTaskProps {
   onBatchImport?: () => void;
   onDiffImport?: () => void;
   onDropdownOpenChange?: (open: boolean) => void;
+  onValueChange?: (value: string) => void;
   className?: string;
   showPlusIcon?: boolean;
   autoFocus?: boolean;
@@ -36,6 +37,7 @@ export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
   onBatchImport,
   onDiffImport,
   onDropdownOpenChange,
+  onValueChange,
   className,
   showPlusIcon = false,
   autoFocus = false,
@@ -70,8 +72,9 @@ export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
     if (!v) return;
     const id = await createTask(v, parentId, userId);
     setInput('');
+    onValueChange?.('');
     onAdd?.(id, v);
-  }, [input, createTask, parentId, userId, onAdd]);
+  }, [input, createTask, parentId, userId, onAdd, onValueChange]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -161,7 +164,10 @@ export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
         <Input
           placeholder={resolvedPlaceholder}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            setInput(e.target.value);
+            onValueChange?.(e.target.value);
+          }}
           onKeyDown={handleKeyDown}
           autoFocus={autoFocus}
           className="flex-1"

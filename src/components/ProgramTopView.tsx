@@ -4,21 +4,15 @@ import ProgramView from './ProgramView';
 import ResourcesScheduler from './ResourcesScheduler';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-
-import { TaskEditModal } from './TaskEditModal';
-import { useTasks, Task } from '@/hooks/useTasks';
 import { useAllTasks } from '@/hooks/useAllTasks';
-import { useUserSettings } from '@/hooks/useUserSettings';
+import { TaskEditorDialog } from './planner/TaskEditorDialog';
+
 import { useViewNavigation } from '@/hooks/useView';
 import { FocusModeProvider } from '@/components/FocusModeProvider';
 import { FocusModeOverlay } from '@/components/FocusModeOverlay';
 import { FocusModeBar } from '@/components/planView/FocusModeBar';
 import { useFocusMode } from '@/hooks/useFocusMode';
 import type { ModuleId } from '@/lib/persistence-types';
-
-interface ProgramTopViewProps {
-    onFocusOnTask: (taskId: string) => void;
-}
 
 type ActiveView = 'calendar' | 'resources';
 
@@ -46,12 +40,17 @@ const ViewToggleButtons: React.FC<{ activeView: ActiveView; setActiveView: (v: A
     );
 });
 
-const ProgramTopViewInner: React.FC<ProgramTopViewProps> = ({ onFocusOnTask }) => {
+const ProgramTopViewInner: React.FC = () => {
     const { t } = useTranslation();
     const [activeView, setActiveView] = useState<ActiveView>('calendar');
     const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
     const { pendingSubView, clearPendingSubView, disabledModules } = useViewNavigation();
     const { isFocusMode } = useFocusMode();
+    const { tasks } = useAllTasks({ includeRecurring: true });
+
+    const selectedTask = selectedTaskId
+        ? tasks.find((task) => task.id === selectedTaskId) ?? null
+        : null;
 
     const enabledSubViews: ActiveView[] = ['calendar', 'resources'].filter(
         v => !disabledModules.includes(`program.${v}` as ModuleId)
@@ -72,36 +71,8 @@ const ProgramTopViewInner: React.FC<ProgramTopViewProps> = ({ onFocusOnTask }) =
         }
     }, [pendingSubView, clearPendingSubView]);
 
-    const {
-        updateStatus,
-        updateDifficulty,
-        updateCategory,
-        updateTitle,
-        updateUser,
-        deleteTask,
-        duplicateTaskStructure,
-        toggleUrgent,
-        toggleImpact,
-        toggleMajorIncident,
-        toggleSprintTarget,
-        toggleDone,
-        toggleTimer,
-        reparent,
-        updateTerminationDate,
-        updateComment,
-        updateDurationInMinutes,
-    } = useTasks();
-    const { tasks } = useAllTasks();
-    const { userId: currentUserId } = useUserSettings();
-
-    const selectedTask = React.useMemo(() => {
-        if (!selectedTaskId) return null;
-        return tasks.find(t => t.id === selectedTaskId) || null;
-    }, [selectedTaskId, tasks]);
-
     const viewTitle = activeView === 'calendar' ? t('programTop.programCalendar') : t('programTop.resources');
 
-    const editTaskHandler = (task: Task) => setSelectedTaskId(task.id);
 
     if (activeView === 'resources' && enabledSubViews.includes('resources')) {
         return (
@@ -124,32 +95,19 @@ const ProgramTopViewInner: React.FC<ProgramTopViewProps> = ({ onFocusOnTask }) =
                         </CardHeader>
                     )}
                     <CardContent className="flex-1 min-h-0 overflow-y-auto p-0 program-view-scroll-container">
-                        <ResourcesScheduler onFocusOnTask={onFocusOnTask} onEditTask={editTaskHandler} />
+                        <ResourcesScheduler onOpenTask={(task) => setSelectedTaskId(task.id)} />
                     </CardContent>
                 </Card>
 
-                {selectedTask && (
-                    <TaskEditModal
-                        task={selectedTask}
-                        tasks={tasks}
-                        isOpen={!!selectedTask}
-                        onClose={() => setSelectedTaskId(null)}
-                        updateStatus={updateStatus}
-                        updateDifficulty={updateDifficulty}
-                        updateCategory={updateCategory}
-                        updateTitle={updateTitle}
-                        updateUser={(id, userId) => updateUser(id, userId === 'current-user' ? currentUserId : userId)}
-                        toggleUrgent={toggleUrgent}
-                        toggleImpact={toggleImpact}
-                        toggleMajorIncident={toggleMajorIncident}
-                        toggleSprintTarget={toggleSprintTarget}
-                        onToggleTimer={toggleTimer}
-                        updateTerminationDate={updateTerminationDate}
-                        updateComment={updateComment}
-                        updateDurationInMinutes={updateDurationInMinutes}
-                        currentUserId={currentUserId}
-                    />
-                )}
+                <TaskEditorDialog
+                    task={selectedTask}
+                    open={Boolean(selectedTask)}
+                    onOpenChange={(open) => {
+                        if (!open) setSelectedTaskId(null);
+                    }}
+                    defaultTab="card"
+                />
+
             </div>
         );
     }
@@ -174,41 +132,19 @@ const ProgramTopViewInner: React.FC<ProgramTopViewProps> = ({ onFocusOnTask }) =
                     </CardHeader>
                 )}
                 <CardContent className="flex-1 min-h-0 overflow-y-auto p-0 program-view-scroll-container">
-                    <ProgramView onFocusOnTask={onFocusOnTask} onEditTask={editTaskHandler} />
+                    <ProgramView />
                 </CardContent>
             </Card>
 
-            {selectedTask && (
-                <TaskEditModal
-                    task={selectedTask}
-                    tasks={tasks}
-                    isOpen={!!selectedTask}
-                    onClose={() => setSelectedTaskId(null)}
-                    updateStatus={updateStatus}
-                    updateDifficulty={updateDifficulty}
-                    updateCategory={updateCategory}
-                    updateTitle={updateTitle}
-                    updateUser={(id, userId) => updateUser(id, userId === 'current-user' ? currentUserId : userId)}
-                    toggleUrgent={toggleUrgent}
-                    toggleImpact={toggleImpact}
-                    toggleMajorIncident={toggleMajorIncident}
-                    toggleSprintTarget={toggleSprintTarget}
-                    onToggleTimer={toggleTimer}
-                    updateTerminationDate={updateTerminationDate}
-                    updateComment={updateComment}
-                    updateDurationInMinutes={updateDurationInMinutes}
-                    currentUserId={currentUserId}
-                />
-            )}
         </div>
     );
 };
 
-const ProgramTopView: React.FC<ProgramTopViewProps> = ({ onFocusOnTask }) => {
+const ProgramTopView: React.FC = () => {
     return (
         <FocusModeProvider viewId="program">
             <FocusModeOverlay>
-                <ProgramTopViewInner onFocusOnTask={onFocusOnTask} />
+                <ProgramTopViewInner />
             </FocusModeOverlay>
         </FocusModeProvider>
     );
