@@ -18,7 +18,8 @@
     },
     "view": {
       "week": "Woche",
-      "month": "Monat"
+      "month": "Monat",
+      "planner": "Tagesplaner"
     },
     "retry": "Erneut versuchen",
     "reload": "Neu laden"
@@ -164,6 +165,10 @@
         "calendar": {
           "label": "Kalender",
           "description": "Kalender-Unteransicht innerhalb von Programm"
+        },
+        "planner": {
+          "label": "Tagesplaner",
+          "description": "Tagesplaner-Unteransicht in Programm"
         },
         "resources": {
           "label": "Ressourcen",
@@ -398,7 +403,7 @@
     "categoryLabel": "Kategorie",
     "difficultyLabel": "Schwierigkeit",
     "selectDifficulty": "Schwierigkeit auswählen",
-    "terminationDateLabel": "Enddatum",
+    "terminationDateLabel": "Fälligkeitsdatum",
     "plannedDurationLabel": "Geplante Dauer (Min.)",
     "urgentLabel": "Dringend",
     "highImpactLabel": "Hoher Impact",
@@ -1275,13 +1280,17 @@
     "inProgressNoDate": "In Bearbeitung (kein Enddatum)",
     "quickAddTask": "Schnellaufgabe hinzufügen...",
     "filtersAndControls": "Filter & Steuerung",
-    "newTask": "Neue Aufgabe",
-    "titleLabel": "Titel",
-    "taskTitlePlaceholder": "Aufgabentitel...",
+    "newTask": "Neue Karte",
+    "titleLabel": "Kartentitel",
+    "taskTitlePlaceholder": "Kartentitel...",
     "scheduledFor": "Geplant für: {{date}}",
     "create": "Erstellen",
     "dragStartTime": "Ziehen, um Startzeit zu ändern",
-    "dragEndTime": "Ziehen, um Endzeit zu ändern"
+    "dragEndTime": "Ziehen, um Endzeit zu ändern",
+    "dueDates": "Fälligkeiten",
+    "planned": "Geplant",
+    "allDay": "Ganztägig",
+    "moreEvents": "+{{count}} weitere"
   },
   "prioritization": {
     "title": "Vergleichende Priorisierung",
@@ -2043,5 +2052,44 @@
         "5": "Die ganze Zeit"
       }
     }
+  },
+  "planner": {
+    "today": "Heute",
+    "previousWeek": "Vorherige Woche",
+    "nextWeek": "Nächste Woche",
+    "unscheduled": "Ungeplant",
+    "unscheduledEmpty": "Ziehe eine Aufgabe hierher, um sie ungeplant zu lassen.",
+    "addChecklistItem": "Eintrag hinzufügen",
+    "plannedDate": "Geplantes Datum",
+    "time": "Uhrzeit",
+    "colour": "Farbe",
+    "duplicate": "Duplizieren",
+    "delete": "Löschen",
+    "moveTomorrow": "Auf morgen verschieben",
+    "moveNextWeek": "Auf nächste Woche verschieben",
+    "moveUnscheduled": "Zu ungeplant verschieben",
+    "carryOverTitle": "{{count}} unerledigte Aufgabe auf heute verschoben",
+    "carryOverTitle_other": "{{count}} unerledigte Aufgaben auf heute verschoben",
+    "deleted": "„{{title}}“ gelöscht",
+    "duplicated": "„{{title}}“ dupliziert",
+    "dragTask": "Aufgabe ziehen",
+    "markDone": "Als erledigt markieren",
+    "markNotDone": "Als nicht erledigt markieren",
+    "dueDate": "Fälligkeitsdatum",
+    "recurring": "Wiederkehrend",
+    "urgent": "Dringend",
+    "impact": "Wirkung",
+    "nextOccurrence": "Nächste",
+    "stopRepeating": "Wiederholung beenden",
+    "previousMonth": "Vorheriger Monat",
+    "nextMonth": "Nächster Monat",
+    "unscheduledNoPlanDate": "Ungeplant (kein geplantes Datum)",
+    "unscheduledNoDueDate": "Ungeplant (kein Fälligkeitsdatum)",
+    "length": "Dauer (min)",
+    "dueTime": "Fälligkeitszeit",
+    "selectTime": "Uhrzeit wählen",
+    "cardTab": "Karte",
+    "detailsTab": "Details",
+    "flags": "Markierungen"
   }
 }

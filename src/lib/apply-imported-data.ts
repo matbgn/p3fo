@@ -57,6 +57,7 @@ export interface ImportedUserSettings {
   timezone?: string;
   weekStartDay?: 0 | 1;
   defaultPlanView?: 'week' | 'month';
+  plannerDefault?: boolean;
   preferredWorkingDays?: number[];
   trigram?: string;
   nonActionPeriodHours?: number;
@@ -196,6 +197,7 @@ export async function applyImportedData(
         timezone: settings.timezone,
         weekStartDay: settings.weekStartDay,
         defaultPlanView: settings.defaultPlanView,
+        plannerDefault: settings.plannerDefault,
         preferredWorkingDays: settings.preferredWorkingDays,
         trigram: settings.trigram,
         nonActionPeriodHours: settings.nonActionPeriodHours,
@@ -214,6 +216,7 @@ export async function applyImportedData(
           timezone: normalizedSettings.timezone,
           weekStartDay: normalizedSettings.weekStartDay,
           defaultPlanView: normalizedSettings.defaultPlanView,
+          plannerDefault: normalizedSettings.plannerDefault,
           preferredWorkingDays: normalizedSettings.preferredWorkingDays,
           trigram: normalizedSettings.trigram,
           nonActionPeriodHours: normalizedSettings.nonActionPeriodHours,

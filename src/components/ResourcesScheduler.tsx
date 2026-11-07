@@ -20,8 +20,7 @@ import { UserAvatar } from '@/components/UserAvatar';
 import { DaySelector } from '@/components/ui/day-selector';
 
 interface ResourcesSchedulerProps {
-    onFocusOnTask: (taskId: string) => void;
-    onEditTask?: (task: Task) => void;
+    onOpenTask: (task: Task) => void;
 }
 
 interface ScheduledBlock {
@@ -37,7 +36,7 @@ const HEADER_HEIGHT = 40;
 const ROW_HEIGHT = 80; // Increased height to fit bubbles
 const SIDEBAR_WIDTH = 250;
 
-const ResourcesScheduler: React.FC<ResourcesSchedulerProps> = ({ onFocusOnTask, onEditTask }) => {
+const ResourcesScheduler: React.FC<ResourcesSchedulerProps> = ({ onOpenTask }) => {
     const { t } = useTranslation();
     const { tasks } = useAllTasks();
     const { users, updateUser } = useUsersContext();
@@ -377,7 +376,7 @@ const ResourcesScheduler: React.FC<ResourcesSchedulerProps> = ({ onFocusOnTask, 
                                                                 width: Math.max(5, width),
                                                                 zIndex: 1
                                                             }}
-                                                            onClick={() => onEditTask ? onEditTask(block.task) : onFocusOnTask(block.task.id)}
+                                                            onClick={() => onOpenTask(block.task)}
                                                         >
                                                             <div className="font-semibold truncate">{block.task.title}</div>
                                                             <div className="opacity-75">{t('programTop.points', { count: block.totalDifficulty })}</div>

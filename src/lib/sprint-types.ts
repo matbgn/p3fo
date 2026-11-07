@@ -23,6 +23,7 @@ export interface SprintTaskSource {
   difficulty?: number;
   sprintTarget?: boolean;
   terminationDate?: number | string | null;
+  completedAt?: number | string | null;
   userId?: string | null;
   parentId?: string | null;
   priority?: number | null;
@@ -37,6 +38,7 @@ export interface SprintTaskLike {
   difficulty?: number;
   sprintTarget?: boolean;
   terminationDate?: number | string | null;
+  completedAt?: number | string | null;
   userId?: string | null;
   parentId?: string | null;
   children?: string[];
@@ -342,6 +344,10 @@ export function buildSprintTasks(entities: SprintTaskSource[]): SprintTaskLike[]
       typeof entity.terminationDate === 'string'
         ? Date.parse(entity.terminationDate)
         : entity.terminationDate ?? null,
+    completedAt:
+      typeof entity.completedAt === 'string'
+        ? Date.parse(entity.completedAt)
+        : entity.completedAt ?? null,
     userId: entity.userId ?? null,
     parentId: entity.parentId ?? null,
     children: childrenByParent.get(entity.id) ?? [],
@@ -505,7 +511,7 @@ export function isDoneInRange(
   endMs: number,
 ): boolean {
   if (task.triageStatus !== 'Done') return false;
-  const doneAt = toMillis(task.terminationDate);
+  const doneAt = toMillis(task.completedAt ?? task.terminationDate);
   if (doneAt === null) return false;
   return doneAt >= startMs && doneAt <= endMs;
 }
@@ -651,7 +657,7 @@ export function buildBurndown(
     );
     const done = impactTasks.reduce((acc, task) => {
       if (task.triageStatus !== 'Done') return acc;
-      const doneAt = toMillis(task.terminationDate);
+      const doneAt = toMillis(task.completedAt ?? task.terminationDate);
       if (doneAt === null || doneAt < startMs || doneAt >= cutoff) return acc;
       return acc + totalPoints(task.id, byId);
     }, 0);

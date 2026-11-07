@@ -1,6 +1,6 @@
 import React from "react";
 
-const LazyRow: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className }) => {
+const LazyRow: React.FC<{ children: React.ReactNode; className?: string; forceMount?: boolean }> = ({ children, className, forceMount }) => {
   const ref = React.useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = React.useState(false);
 
@@ -22,7 +22,7 @@ const LazyRow: React.FC<{ children: React.ReactNode; className?: string }> = ({ 
     return () => observer.disconnect();
   }, []);
 
-  if (!isVisible) {
+  if (!isVisible && !forceMount) {
     return <div ref={ref} className={className} style={{ height: "64px" }} />;
   }
 

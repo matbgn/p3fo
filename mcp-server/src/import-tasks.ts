@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { TaskRecord } from './task-types.js';
 import { ALLOWED_TRIAGE_STATUSES } from './bulk-update.js';
 import { GENERAL_CATEGORY, isGeneralCategory, isKnownCategory } from './categories.js';
+import { applyTemporalMirror, type TemporalTaskFields } from './task-temporal.js';
+import { validateRecurrenceAnchor } from './task-recurrence.js';
 
 export interface ImportTaskInput {
   id?: string;
@@ -17,6 +19,9 @@ export interface ImportTaskInput {
   timer?: unknown[];
   category?: string;
   terminationDate?: string | number | null;
+  dueDate?: string | number | null;
+  completedAt?: string | number | null;
+  deletedAt?: string | number | null;
   comment?: string | null;
   durationInMinutes?: number | null;
   priority?: number | null;
@@ -144,7 +149,7 @@ export function prepareTaskImport(
       taskErrors.push(`${label}.parentId cannot reference the task itself`);
     }
 
-    const task = {
+    const task: Record<string, unknown> & { id: string; parentId: string | null } = {
       ...(existing ?? {}),
       ...input,
       id,
@@ -161,9 +166,6 @@ export function prepareTaskImport(
       difficulty,
       timer: input.timer ?? existing?.timer ?? [],
       category,
-      terminationDate: input.terminationDate !== undefined
-        ? toOptionalIso(input.terminationDate)
-        : toOptionalIso(existing?.terminationDate),
       comment: input.comment !== undefined ? input.comment : (existing?.comment ?? null),
       durationInMinutes: input.durationInMinutes !== undefined
         ? input.durationInMinutes
@@ -176,6 +178,48 @@ export function prepareTaskImport(
         ? toOptionalIso(input.blockedSince)
         : toOptionalIso(existing?.blockedSince),
     };
+
+    // Temporal fields need the same merge + mirror behavior as REST writes:
+    // only fields the caller actually provides may change, and a provided
+    // dueDate/completedAt must update its legacy terminationDate counterpart.
+    // The shared helper keeps this in lockstep with server writes and detects
+    // status transitions (e.g. reopening DONE clears its completion marker).
+    const providedTermination = input.terminationDate !== undefined
+      ? toOptionalIso(input.terminationDate)
+      : undefined;
+    const providedDue = input.dueDate !== undefined ? toOptionalIso(input.dueDate) : undefined;
+    const providedCompleted = input.completedAt !== undefined ? toOptionalIso(input.completedAt) : undefined;
+    const storedValue = (value: unknown) =>
+      value !== undefined && value !== null ? toOptionalIso(value) : undefined;
+
+    task.terminationDate = providedTermination !== undefined
+      ? providedTermination
+      : storedValue(existing?.terminationDate) ?? null;
+    task.dueDate = providedDue !== undefined ? providedDue : storedValue(existing?.dueDate) ?? null;
+    task.completedAt = providedCompleted !== undefined
+      ? providedCompleted
+      : storedValue(existing?.completedAt) ?? null;
+
+    const providedTemporal: Partial<TemporalTaskFields> = {};
+    if (input.triageStatus !== undefined) providedTemporal.triageStatus = input.triageStatus;
+    if (providedTermination !== undefined) providedTemporal.terminationDate = providedTermination;
+    if (providedDue !== undefined) providedTemporal.dueDate = providedDue;
+    if (providedCompleted !== undefined) providedTemporal.completedAt = providedCompleted;
+
+    applyTemporalMirror(task as TemporalTaskFields, providedTemporal, existing?.triageStatus ?? null);
+
+    // Keep the keys present even when there is no value. The import endpoint
+    // binds every column and node:sqlite rejects undefined parameters (a
+    // deleted key binds as undefined); `null` is the "no value" marker.
+    task.terminationDate = task.terminationDate ?? null;
+    task.dueDate = task.dueDate ?? null;
+    task.completedAt = task.completedAt ?? null;
+    task.deletedAt = input.deletedAt !== undefined
+      ? toOptionalIso(input.deletedAt) ?? null
+      : storedValue(existing?.deletedAt) ?? null;
+
+    const recurrenceError = validateRecurrenceAnchor(task.plannedDate, task.recurrence);
+    if (recurrenceError) taskErrors.push(`${label}.${recurrenceError}`);
 
     parentById.set(id, parentId);
 

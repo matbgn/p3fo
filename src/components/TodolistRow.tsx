@@ -51,6 +51,7 @@ import { useReminderStore } from "@/hooks/useReminders";
 import { useShallow } from "zustand/react/shallow";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { useSettingsContext } from "@/context/SettingsContext";
+import { effectiveDueDate } from "@/lib/task-conversions";
 import { Calendar } from "@/components/ui/calendar";
 import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
 import { TaskEditModal } from "./TaskEditModal";
@@ -99,6 +100,8 @@ interface TodolistRowProps {
   onFocusOnTask?: (taskId: string) => void;
   onRowClick?: (taskId: string) => void;
   isHighlighted?: boolean;
+  activeSubtaskEditorId?: string | null;
+  onSubtaskEditorActiveChange?: (taskId: string | null) => void;
   scrollTodolistRowRef?: React.MutableRefObject<Map<string, HTMLElement>>;
 }
 
@@ -117,6 +120,7 @@ function areTodolistRowPropsEqual(prev: TodolistRowProps, next: TodolistRowProps
   if (prev.row.hasChildren !== next.row.hasChildren) return false;
   if (prev.row.isExpanded !== next.row.isExpanded) return false;
   if (prev.isHighlighted !== next.isHighlighted) return false;
+  if (prev.activeSubtaskEditorId !== next.activeSubtaskEditorId) return false;
   if (prev.scrollTodolistRowRef !== next.scrollTodolistRowRef) return false;
   if (!sameTaskList(prev.subtasks, next.subtasks)) return false;
   if (prev.tasksForModal !== next.tasksForModal) return false;
@@ -143,6 +147,7 @@ function areTodolistRowPropsEqual(prev: TodolistRowProps, next: TodolistRowProps
     'createTask',
     'onFocusOnTask',
     'onRowClick',
+    'onSubtaskEditorActiveChange',
   ];
   for (const key of functionKeys) {
     if (prev[key] !== next[key]) return false;
@@ -177,12 +182,15 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
   onFocusOnTask,
   onRowClick,
   isHighlighted,
+  activeSubtaskEditorId,
+  onSubtaskEditorActiveChange,
   scrollTodolistRowRef,
 }) => {
   const { t } = useTranslation();
   const { task, depth, hasChildren, isExpanded } = row;
   const [isHovered, setIsHovered] = React.useState(false);
   const [subtaskDropdownOpen, setSubtaskDropdownOpen] = React.useState(false);
+  const [subtaskDraft, setSubtaskDraft] = React.useState('');
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
   const [isTimeSheetOpen, setIsTimeSheetOpen] = React.useState(false);
   const [isCommentModalOpen, setIsCommentModalOpen] = React.useState(false);
@@ -210,6 +218,26 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
   const effectiveSubtasks = subtasks ?? tasks;
   const effectiveModalTasks = tasksForModal ?? tasks;
 
+  // Keep the inline subtask editor mounted while it is focused or holds a
+  // draft, so moving the pointer away cannot unmount the input mid-typing.
+  // While one row's editor is active, other rows do not open theirs on hover.
+  const isSubtaskEditorActive = activeSubtaskEditorId === task.id;
+  const anotherSubtaskEditorActive = activeSubtaskEditorId != null && !isSubtaskEditorActive;
+  const hasSubtaskDraft = subtaskDraft.trim().length > 0;
+  const showSubtaskQuickAdd =
+    isSubtaskEditorActive ||
+    subtaskDropdownOpen ||
+    hasSubtaskDraft ||
+    (isHovered && !anotherSubtaskEditorActive);
+
+  const isSubtaskEditorActiveRef = React.useRef(isSubtaskEditorActive);
+  React.useEffect(() => {
+    isSubtaskEditorActiveRef.current = isSubtaskEditorActive;
+  }, [isSubtaskEditorActive]);
+  React.useEffect(() => () => {
+    if (isSubtaskEditorActiveRef.current) onSubtaskEditorActiveChange?.(null);
+  }, [onSubtaskEditorActiveChange]);
+
   const totalDifficulty = hasChildren
     ? (task.children || []).reduce((sum, childId) => {
         const child = effectiveSubtasks.find(t => t.id === childId);
@@ -229,16 +257,18 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
     setDurationValue(task.durationInMinutes ?? "");
   }, [task.durationInMinutes]);
 
+  const effectiveDue = effectiveDueDate(task);
+
   React.useEffect(() => {
     const existingReminder = scheduledReminders.find(
-      (r) => r.taskId === task.id && r.originalTriggerDate === new Date(task.terminationDate || 0).toISOString()
+      (r) => r.taskId === task.id && r.originalTriggerDate === new Date(effectiveDue || 0).toISOString()
     );
     if (existingReminder?.offsetMinutes !== undefined) {
       setOffsetMinutes(existingReminder.offsetMinutes);
     } else {
       setOffsetMinutes(-1);
     }
-  }, [task.id, task.terminationDate, scheduledReminders]);
+  }, [task.id, effectiveDue, scheduledReminders]);
 
   const handleDoubleClick = (e: React.MouseEvent) => {
     if (e.defaultPrevented) return;
@@ -531,16 +561,16 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
                       <PopoverTrigger asChild>
                         <button className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-md hover:bg-accent w-full">
                           <CalendarIcon className="h-3.5 w-3.5 text-gray-400" />
-                          <span>{task.terminationDate ? format(new Date(task.terminationDate), "PP") : t('todolist.setDeadline')}</span>
+                          <span>{effectiveDue ? format(new Date(effectiveDue), "PP") : t('todolist.setDeadline')}</span>
                         </button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
                           mode="single"
-                          selected={task.terminationDate ? new Date(task.terminationDate) : undefined}
+                          selected={effectiveDue ? new Date(effectiveDue) : undefined}
                           onSelect={(date) => {
                             if (date) {
-                              const current = task.terminationDate ? new Date(task.terminationDate) : new Date();
+                              const current = effectiveDue ? new Date(effectiveDue) : new Date();
                               date.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
                               updateTerminationDate(task.id, date.getTime());
                             } else {
@@ -601,17 +631,24 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
       </div>
 
       {/* Quick-add subtask on hover */}
-      {(isHovered || subtaskDropdownOpen) && (
+      {showSubtaskQuickAdd && (
         <div
           className="px-2 py-1 border-b border-border bg-accent/10"
           style={{ paddingLeft: `${(depth + 1) * 20 + 8}px` }}
           onClick={(e) => e.stopPropagation()}
+          onFocusCapture={() => onSubtaskEditorActiveChange?.(task.id)}
+          onBlurCapture={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+              onSubtaskEditorActiveChange?.(null);
+            }
+          }}
         >
           <QuickAddTask
             placeholder={t('todolist.subtaskPlaceholder')}
             parentId={task.id}
             showPlusIcon
             onDropdownOpenChange={setSubtaskDropdownOpen}
+            onValueChange={setSubtaskDraft}
           />
         </div>
       )}
@@ -688,7 +725,7 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
       <TimePickerDialog
         isOpen={timePickerOpen}
         onClose={() => setTimePickerOpen(false)}
-        initialTime={task.terminationDate || Date.now()}
+        initialTime={effectiveDue || Date.now()}
         onTimeChange={(timestamp) => {
           updateTerminationDate(task.id, timestamp);
           updateScheduledReminderTriggerDate(task.id, new Date(timestamp).toISOString(), offsetMinutes);

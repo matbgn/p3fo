@@ -143,8 +143,10 @@ describe('BEAD-004: Filter State Preservation', () => {
       // Get function body
       const createTaskBody = lines.slice(createTaskStart, createTaskStart + 90).join('\n')
       
-      // Verify createTask uses [...tasks, t] to append to current tasks
-      expect(createTaskBody).toMatch(/tasks\s*=\s*\[\s*\.\.\.tasks\s*,\s*t\s*\]/)
+      // Verify createTask adds the task to the current list, merging when a
+      // server/Yjs broadcast already inserted the same id.
+      expect(createTaskBody).toMatch(/tasks\s*=\s*tasks\.some\(/)
+      expect(createTaskBody).toMatch(/\[\s*\.\.\.tasks\s*,\s*t\s*\]/)
     })
   })
 

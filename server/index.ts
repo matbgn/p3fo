@@ -39,11 +39,21 @@ function entityToClientTask(entity: TaskEntity): Record<string, unknown> {
     return undefined;
   };
   const blockedSince = (entity as TaskEntity & { blockedSince?: string | null }).blockedSince;
+  const terminationDate = toMillis(entity.terminationDate);
+  const triageStatus = entity.triageStatus;
   return {
     ...entity,
     createdAt: toMillis(entity.createdAt) ?? Date.now(),
     updatedAt: toMillis(entity.updatedAt) ?? Date.now(),
-    terminationDate: toMillis(entity.terminationDate),
+    terminationDate,
+    // Legacy rows stored the deadline for active tasks and the completion time
+    // for Done tasks in terminationDate only; mirror convertEntitiesToTasks so
+    // a live Yjs broadcast does not clear the derived value.
+    dueDate: toMillis(entity.dueDate)
+      ?? (triageStatus !== 'Done' ? terminationDate : undefined),
+    completedAt: toMillis(entity.completedAt)
+      ?? (triageStatus === 'Done' ? terminationDate : undefined),
+    deletedAt: toMillis(entity.deletedAt),
     blockedSince: toMillis(blockedSince),
     children: [],
   };
@@ -226,11 +236,16 @@ app.get('/api/tasks', async (req: Request, res: Response) => {
     // active=true sugar: restrict to actionable triage statuses only.
     const active = String(req.query.active) === 'true' || req.query.active === '1';
 
+    // Soft-deleted tombstones are hidden by default. The app client opts in via
+    // include_deleted=true because recurrence expansion needs them to suppress
+    // deleted occurrences; MCP and other consumers get the live task list.
+    const includeDeleted = String(req.query.include_deleted) === 'true' || String(req.query.include_deleted) === '1';
+
     const pagination = (limit !== undefined || offset !== undefined)
       ? { limit, offset }
       : undefined;
 
-    const result = await db.getTasks(userId, pagination, excludeStatuses, triageStatuses, includeSubtasks, { search, active });
+    const result = await db.getTasks(userId, pagination, excludeStatuses, triageStatuses, includeSubtasks, { search, active, includeDeleted });
     res.json(result);
   } catch (error) {
     console.error('Error fetching tasks:', error);

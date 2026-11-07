@@ -50,6 +50,8 @@ import { useCardAging } from "@/hooks/useCardAging";
 import { AgingDecorations } from "@/components/AgingOverlays";
 import { LiveTimeBadge, EditableTitle, DIFFICULTY_OPTIONS, getDifficultyColor, DifficultyBadge } from "./SharedTaskControls";
 import { SubtaskProgress } from "./SubtaskProgress";
+import { taskColorBar } from "@/lib/planner/colors";
+import { effectiveDueDate } from "@/lib/task-conversions";
 
 interface TaskCardProps {
   task: Task;
@@ -182,8 +184,13 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
   ref
 ) => {
   const { t } = useTranslation();
+  // Done tasks may carry their completion time in the legacy terminationDate;
+  // convertEntitiesToTasks maps that to completedAt, so do not show it as due.
+  const effectiveDue = effectiveDueDate(task);
   const [isHovered, setIsHovered] = React.useState(false);
+  const [isHoverPinned, setIsHoverPinned] = React.useState(false);
   const hoverTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
 
   // Track open dropdowns so hover-gated controls stay mounted while a
   // portaled Select/Popover is open (prevents the card from collapsing
@@ -289,10 +296,30 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
   const isUltraCompact = cardCompactness === COMPACTNESS_ULTRA;
   const isCompact = cardCompactness === COMPACTNESS_COMPACT;
   const isFull = cardCompactness === COMPACTNESS_FULL;
+  const colorBar = taskColorBar(task.color);
 
   // Keep hover-gated controls mounted while any portaled dropdown is open
   // so the card does not collapse when the pointer moves into the dropdown.
-  const showHoverControls = isHovered || isAnyDropdownOpen;
+  const showHoverControls = isHovered || isAnyDropdownOpen || isHoverPinned;
+
+  React.useEffect(() => {
+    if (!isHoverPinned || isAnyDropdownOpen) return;
+    const handlePointerDownOutside = (event: PointerEvent) => {
+      if (rootRef.current?.contains(event.target as Node)) return;
+      setIsHoverPinned(false);
+    };
+    document.addEventListener("pointerdown", handlePointerDownOutside);
+    return () => document.removeEventListener("pointerdown", handlePointerDownOutside);
+  }, [isHoverPinned, isAnyDropdownOpen]);
+
+  const setCardRef = React.useCallback((node: HTMLDivElement | null) => {
+    rootRef.current = node;
+    if (typeof ref === "function") {
+      ref(node);
+    } else if (ref) {
+      ref.current = node;
+    }
+  }, [ref]);
 
   React.useEffect(() => {
     setCommentText(task.comment || "");
@@ -305,7 +332,7 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
   // Effect to update the local offsetMinutes state based on existing scheduled reminder
   React.useEffect(() => {
     const existingReminder = scheduledReminders.find(
-      (r) => r.taskId === task.id && r.originalTriggerDate === new Date(task.terminationDate || 0).toISOString(),
+      (r) => r.taskId === task.id && r.originalTriggerDate === new Date(effectiveDue || 0).toISOString(),
     );
     if (existingReminder?.offsetMinutes !== undefined) {
       setOffsetMinutes(existingReminder.offsetMinutes);
@@ -314,7 +341,7 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
       setOffsetMinutes(-1); // "No reminder"
       // Don't reset status here, main effect will handle it
     }
-  }, [task.id, task.terminationDate, scheduledReminders]);
+  }, [task.id, effectiveDue, scheduledReminders]);
 
   React.useEffect(() => {
     // Check if there's any active reminder for the current task
@@ -341,6 +368,16 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
 
     setIsEditModalOpen(true);
   };
+
+  const handleCardClick = React.useCallback(() => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    setIsHoverPinned(true);
+    setIsHovered(true);
+    onActivate?.(task.id, columnIndex, isSearchResult);
+  }, [onActivate, task.id, columnIndex, isSearchResult]);
   // The line below was a duplicate and has been removed.
   //   setIsReminderActive(activeReminder);
   // }, [task.id, scheduledReminders]);
@@ -423,13 +460,13 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
     <Card
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      ref={ref}
+      ref={setCardRef}
       className={cn(
-        `mb-2 transition-all duration-200 hover:shadow-md ${isActive ? "ring-2 ring-primary" : ""} ${isHighlighted ? "ring-2 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20" : ""}`,
+        `relative overflow-hidden mb-2 transition-all duration-200 hover:shadow-md ${isActive ? "ring-2 ring-primary" : ""} ${isHighlighted ? "ring-2 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20" : ""}`,
         isUltraCompact ? "p-2" : "p-3",
         aging.className
       )}
-      onClick={() => onActivate?.(task.id, columnIndex, isSearchResult)}
+      onClick={handleCardClick}
       onDoubleClick={handleCardDoubleClick}
       draggable={!disableReparenting}
       onDragStart={disableReparenting ? undefined : (e) => {
@@ -451,6 +488,13 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
       }}
       data-active-card={isActive ? "true" : undefined}
     >
+      {colorBar && (
+        <span
+          className="absolute inset-y-0 left-0 w-1"
+          style={{ backgroundColor: colorBar }}
+          aria-hidden
+        />
+      )}
       <AgingDecorations level={aging.level} />
       <div
         className="flex justify-between items-center mb-2"
@@ -575,7 +619,7 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
                      setIsDateTimeBlockOpen(!isDateTimeBlockOpen);
                    }}
                  >
-                   <CalendarIcon className={`h-4 w-4 ${((!hasSubtasks && (task.terminationDate || task.durationInMinutes)) || isDateTimeBlockOpen) ? "text-blue-500" : "text-gray-400"}`} />
+                   <CalendarIcon className={`h-4 w-4 ${((!hasSubtasks && (effectiveDue || task.durationInMinutes)) || isDateTimeBlockOpen) ? "text-blue-500" : "text-gray-400"}`} />
                  </Button>
                )}
              </div>
@@ -590,7 +634,7 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
                    setIsDateTimeBlockOpen(!isDateTimeBlockOpen);
                  }}
                >
-                 <CalendarIcon className={`h-4 w-4 ${((!hasSubtasks && (task.terminationDate || task.durationInMinutes)) || isDateTimeBlockOpen) ? "text-blue-500" : "text-gray-400"}`} />
+                 <CalendarIcon className={`h-4 w-4 ${((!hasSubtasks && (effectiveDue || task.durationInMinutes)) || isDateTimeBlockOpen) ? "text-blue-500" : "text-gray-400"}`} />
                </Button>
              </div>
            )
@@ -605,13 +649,13 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
                    variant={"outline"}
                    className={cn(
                      "flex-1 h-7 px-2 py-1 text-xs justify-start text-left font-normal",
-                     !task.terminationDate && "text-muted-foreground"
+                     !effectiveDue && "text-muted-foreground"
                    )}
                    onClick={(e) => e.stopPropagation()}
                  >
                   <CalendarIcon className="mr-2 h-3 w-3" />
-                   {task.terminationDate ? (
-                     format(new Date(task.terminationDate), "PPP p")
+                   {effectiveDue ? (
+                     format(new Date(effectiveDue), "PPP p")
                    ) : (
                      <span>{t('task.pickDate')}</span>
                    )}
@@ -620,10 +664,10 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
               <PopoverContent className="w-auto p-0" align="start" onClick={(e) => e.stopPropagation()}>
                 <Calendar
                   mode="single"
-                  selected={task.terminationDate ? new Date(task.terminationDate) : undefined}
+                  selected={effectiveDue ? new Date(effectiveDue) : undefined}
                   onSelect={(date) => {
                     if (date) {
-                      const current = task.terminationDate ? new Date(task.terminationDate) : new Date();
+                      const current = effectiveDue ? new Date(effectiveDue) : new Date();
                       // Preserve time from current selection or default to current time
                       date.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
 
@@ -645,8 +689,8 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
                     onClick={() => setTimePickerOpen(true)}
                   >
                     <Clock className="mr-2 h-4 w-4" />
-                     {task.terminationDate ? (
-                       format(new Date(task.terminationDate), "HH:mm")
+                     {effectiveDue ? (
+                       format(new Date(effectiveDue), "HH:mm")
                      ) : (
                        <span className="text-muted-foreground">{t('task.setTime')}</span>
                      )}
@@ -693,18 +737,18 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
                      if (newOffset === -1) { // "No reminder" selected
                        dismissReminder(task.id); // Dismiss any existing reminder for this task
                        // let effect update status
-                     } else if (task.terminationDate) {
+                     } else if (effectiveDue) {
                        // Check if a reminder with the same taskId and originalTriggerDate already exists
                        const existingReminder = scheduledReminders.find(
                          r => r.taskId === task.id &&
-                           r.originalTriggerDate === new Date(task.terminationDate || 0).toISOString()
+                           r.originalTriggerDate === new Date(effectiveDue || 0).toISOString()
                        );
 
                         if (existingReminder) {
                           // If it exists, update it instead of creating a new one
-                          updateScheduledReminderTriggerDate(task.id, new Date(task.terminationDate).toISOString(), newOffset);
+                          updateScheduledReminderTriggerDate(task.id, new Date(effectiveDue).toISOString(), newOffset);
                         } else {
-                          const dueDateIso = new Date(task.terminationDate).toISOString();
+                          const dueDateIso = new Date(effectiveDue).toISOString();
                           const titleKey = 'notifications.taskReminder.title';
                           const titleParams = { title: task.title };
                           const descriptionKey = 'notifications.taskReminder.description';
@@ -1152,7 +1196,7 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
       <TimePickerDialog
         isOpen={timePickerOpen}
         onClose={() => setTimePickerOpen(false)}
-        initialTime={task.terminationDate || Date.now()}
+        initialTime={effectiveDue ?? Date.now()}
         onTimeChange={(timestamp) => {
           updateTerminationDate(task.id, timestamp);
           updateScheduledReminderTriggerDate(task.id, new Date(timestamp).toISOString(), offsetMinutes);

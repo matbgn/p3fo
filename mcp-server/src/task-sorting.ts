@@ -42,8 +42,10 @@ function sortByDoneStatus(a: SortableTask, b: SortableTask): number {
   if (aDone && !bDone) return 1;
   if (!aDone && bDone) return -1;
   if (aDone && bDone) {
-    const aDate = toMillis(a.terminationDate) ?? createdAt(a);
-    const bDate = toMillis(b.terminationDate) ?? createdAt(b);
+    // Mirror src/utils/taskSorting.ts: completion time, then the legacy mirror
+    // (rows written before the temporal split), then creation time.
+    const aDate = toMillis(a.completedAt) ?? toMillis(a.terminationDate) ?? createdAt(a);
+    const bDate = toMillis(b.completedAt) ?? toMillis(b.terminationDate) ?? createdAt(b);
     return bDate - aDate;
   }
   return 0;
@@ -69,9 +71,18 @@ function sortByPriority(a: SortableTask, b: SortableTask): number {
   return priorityValue(a) - priorityValue(b);
 }
 
+/** Mirrors effectiveDueDate in src/lib/task-conversions.ts: a Done task's
+ *  terminationDate is its completion time, not a deadline. */
+function effectiveDueMillis(task: SortableTask): number | null {
+  const due = toMillis(task.dueDate);
+  if (due !== null) return due;
+  if (task.triageStatus !== 'Done') return toMillis(task.terminationDate);
+  return null;
+}
+
 function sortByDeadlines(a: SortableTask, b: SortableTask): number {
-  const aTime = toMillis(a.terminationDate);
-  const bTime = toMillis(b.terminationDate);
+  const aTime = effectiveDueMillis(a);
+  const bTime = effectiveDueMillis(b);
   const aHas = aTime !== null && aTime !== 0;
   const bHas = bTime !== null && bTime !== 0;
   if (aHas && !bHas) return -1;

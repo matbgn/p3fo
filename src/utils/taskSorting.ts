@@ -1,4 +1,5 @@
 import { Task, TriageStatus } from '@/hooks/useTasks';
+import { effectiveDueDate } from '@/lib/task-conversions';
 
 // Configuration options for different sorting behaviors
 export interface SortingConfig {
@@ -37,7 +38,7 @@ const sortByDoneStatus = (a: Task, b: Task): number => {
   if (isADoneOrDropped && !isBDoneOrDropped) return 1;
   if (!isADoneOrDropped && isBDoneOrDropped) return -1;
   if (isADoneOrDropped && isBDoneOrDropped) {
-    return (b.terminationDate ?? b.createdAt) - (a.terminationDate ?? a.createdAt);
+    return (b.completedAt ?? b.terminationDate ?? b.createdAt) - (a.completedAt ?? a.terminationDate ?? a.createdAt);
   }
   return 0;
 };
@@ -86,8 +87,10 @@ const sortByPriority = (a: Task, b: Task): number => {
 
 // Base sorting criteria for deadlines
 const sortByDeadlines = (a: Task, b: Task): number => {
-  const aHasDeadline = a.terminationDate !== undefined && a.terminationDate !== 0;
-  const bHasDeadline = b.terminationDate !== undefined && b.terminationDate !== 0;
+  const aDeadline = effectiveDueDate(a);
+  const bDeadline = effectiveDueDate(b);
+  const aHasDeadline = aDeadline !== undefined && aDeadline !== 0;
+  const bHasDeadline = bDeadline !== undefined && bDeadline !== 0;
   if (aHasDeadline && !bHasDeadline) return -1;
   if (!aHasDeadline && bHasDeadline) return 1;
   return 0;

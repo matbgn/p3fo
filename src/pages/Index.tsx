@@ -64,12 +64,11 @@ const activeStyle: React.CSSProperties = {
 
 const Index: React.FC = () => {
   useSprintAutoCloseSweep();
-  const { view, setView, focusedTaskId, handleFocusOnTask, disabledModules } = useViewNavigation();
+  const { view, setView, focusedTaskId, handleFocusOnTask, disabledModules, navigateTo } = useViewNavigation();
 
   const handleNavigateToFocusSessions = useCallback(() => {
-    sessionStorage.setItem('p3fo_metrics_tab', 'pomodoro');
-    setView('metrics');
-  }, [setView]);
+    navigateTo('metrics', 'focus-sessions');
+  }, [navigateTo]);
   const { userSettings, loading: userSettingsLoading, userId } = useUserSettingsContext();
   const hasTasks = useHasTasks();
 
@@ -192,7 +191,7 @@ const Index: React.FC = () => {
   const focusView = React.useMemo(() => <LazyWrapper><TaskBoard focusedTaskId={focusedTaskId} onFocusOnTask={handleFocusOnTask} /></LazyWrapper>, [focusedTaskId, handleFocusOnTask]);
   const kanbanView = React.useMemo(() => <LazyWrapper><KanbanBoard onFocusOnTask={handleFocusOnTask} highlightedTaskId={focusedTaskId} /></LazyWrapper>, [handleFocusOnTask, focusedTaskId]);
   const timetableView = React.useMemo(() => <LazyWrapper><Timetable onJumpToTask={handleFocusOnTask} /></LazyWrapper>, [handleFocusOnTask]);
-  const programView = React.useMemo(() => <LazyWrapper><ProgramTopView onFocusOnTask={handleFocusOnTask} /></LazyWrapper>, [handleFocusOnTask]);
+  const programView = React.useMemo(() => <LazyWrapper><ProgramTopView /></LazyWrapper>, []);
   const planView = React.useMemo(() => <LazyWrapper><PlanView onFocusOnTask={handleFocusOnTask} /></LazyWrapper>, [handleFocusOnTask]);
   const celebrationView = React.useMemo(() => <LazyWrapper><CelebrationView onFocusOnTask={handleFocusOnTask} /></LazyWrapper>, [handleFocusOnTask]);
   const dreamView = React.useMemo(() => <LazyWrapper><DreamTopView onFocusOnTask={handleFocusOnTask} /></LazyWrapper>, [handleFocusOnTask]);

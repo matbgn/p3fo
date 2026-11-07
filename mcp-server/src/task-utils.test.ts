@@ -577,6 +577,54 @@ describe('task import validation', () => {
     assert.ok(prepared.errors.length > 0);
   });
 
+  it('derives the legacy terminationDate from an imported dueDate', () => {
+    const prepared = prepareTaskImport([
+      { id: 'due-only', title: 'Due only', dueDate: '2026-04-01T00:00:00.000Z' },
+    ], existing);
+
+    assert.equal(prepared.errors.length, 0);
+    const task = prepared.normalized[0];
+    assert.equal(task.dueDate, '2026-04-01T00:00:00.000Z');
+    assert.equal(task.terminationDate, '2026-04-01T00:00:00.000Z');
+    assert.equal(task.completedAt, null);
+  });
+
+  it('derives the legacy terminationDate from an imported completedAt for Done tasks', () => {
+    const prepared = prepareTaskImport([
+      {
+        id: 'done',
+        title: 'Done',
+        triageStatus: 'Done',
+        completedAt: '2026-04-02T00:00:00.000Z',
+      },
+    ], existing);
+
+    assert.equal(prepared.errors.length, 0);
+    const task = prepared.normalized[0];
+    assert.equal(task.completedAt, '2026-04-02T00:00:00.000Z');
+    assert.equal(task.terminationDate, '2026-04-02T00:00:00.000Z');
+    assert.equal(task.dueDate, null);
+  });
+
+  it('keeps stored completion fields for a Done task updated with only dueDate', () => {
+    const done = makeTask({
+      id: 'done-existing',
+      title: 'Done existing',
+      triageStatus: 'Done',
+      completedAt: '2026-03-01T00:00:00.000Z',
+      terminationDate: '2026-03-01T00:00:00.000Z',
+    });
+
+    const prepared = prepareTaskImport([
+      { id: 'done-existing', title: 'Done existing', dueDate: '2026-05-01T00:00:00.000Z' },
+    ], [done]);
+
+    const task = prepared.normalized[0];
+    assert.equal(task.dueDate, '2026-05-01T00:00:00.000Z');
+    assert.equal(task.completedAt, '2026-03-01T00:00:00.000Z');
+    assert.equal(task.terminationDate, '2026-03-01T00:00:00.000Z');
+  });
+
   it('merges partial imports over existing tasks instead of wiping fields', () => {
     const parent = makeTask({ id: 'parent', title: 'Parent' });
     const existingTask = makeTask({

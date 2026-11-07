@@ -6,6 +6,8 @@ import { QuickAddTask } from './QuickAddTask';
 import { sortTasks } from '@/utils/taskSorting';
 import { hasActivableContent } from '@/utils/taskActivable';
 import { renumberSiblings } from '@/utils/priorityEncoding';
+import { useStoryboardDragDrop } from '@/hooks/useStoryboardDragDrop';
+import { StoryboardDropIndicator } from './StoryboardDropIndicator';
 import type { Filters } from './FilterControls';
 
 interface SubfocusViewProps {
@@ -70,13 +72,7 @@ export const SubfocusView: React.FC<SubfocusViewProps> = ({
   onDrillIntoChild,
 }) => {
   const { t } = useTranslation();
-  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
-  const [reorderingTaskId, setReorderingTaskId] = useState<string | null>(null);
   const [openParents, setOpenParents] = useState<Record<string, boolean>>({});
-
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  const autoScrollRafRef = React.useRef<number | null>(null);
-  const autoScrollDirectionRef = React.useRef<number>(0);
 
   const selectedParent = selectedParentId ? map[selectedParentId] : null;
 
@@ -92,6 +88,27 @@ export const SubfocusView: React.FC<SubfocusViewProps> = ({
       .filter(child => hasActivableContent(child, map))
       .sort(sortTasks.taskboard);
   }, [selectedParent, map]);
+
+  const handleStoryboardReorder = useCallback(
+    (ordered: Task[]) =>
+      updatePrioritiesBulk(renumberSiblings(ordered, selectedParent?.priority ?? 0, depth)),
+    [updatePrioritiesBulk, selectedParent, depth],
+  );
+
+  const {
+    containerRef,
+    draggedId,
+    dropPreview,
+    reorderingId,
+    handleDragStart,
+    handleDragOver,
+    handleDrop,
+    handleDragEnd,
+    handleDragLeave,
+  } = useStoryboardDragDrop<Task>({
+    items: directChildren,
+    onReorder: handleStoryboardReorder,
+  });
 
   // Recursively gather all descendants for the collapsible nested groups.
   const getAllDescendants = useCallback(
@@ -114,101 +131,6 @@ export const SubfocusView: React.FC<SubfocusViewProps> = ({
   const toggleParent = useCallback((id: string) => {
     setOpenParents(prev => ({ ...prev, [id]: !prev[id] }));
   }, []);
-
-  const stopAutoScroll = useCallback(() => {
-    autoScrollDirectionRef.current = 0;
-    if (autoScrollRafRef.current !== null) {
-      cancelAnimationFrame(autoScrollRafRef.current);
-      autoScrollRafRef.current = null;
-    }
-  }, []);
-
-  const tickAutoScroll = useCallback(() => {
-    const container = containerRef.current;
-    if (!container || autoScrollDirectionRef.current === 0) {
-      autoScrollRafRef.current = null;
-      return;
-    }
-    const speed = 12;
-    container.scrollLeft += autoScrollDirectionRef.current * speed;
-    autoScrollRafRef.current = requestAnimationFrame(tickAutoScroll);
-  }, []);
-
-  const handleDragOver = useCallback(
-    (e: React.DragEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      const container = containerRef.current;
-      if (!container) return;
-      const rect = container.getBoundingClientRect();
-      const EDGE = 60;
-      const clientX = e.clientX;
-      let direction = 0;
-      if (clientX - rect.left < EDGE) direction = -1;
-      else if (rect.right - clientX < EDGE) direction = 1;
-      if (direction !== autoScrollDirectionRef.current) {
-        autoScrollDirectionRef.current = direction;
-        if (direction !== 0 && autoScrollRafRef.current === null) {
-          autoScrollRafRef.current = requestAnimationFrame(tickAutoScroll);
-        }
-      }
-    },
-    [tickAutoScroll],
-  );
-
-  const handleDragStart = useCallback((e: React.DragEvent<HTMLDivElement>, taskId: string) => {
-    setDraggedTaskId(taskId);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', taskId);
-  }, []);
-
-  const handleDrop = useCallback(
-    async (e: React.DragEvent<HTMLDivElement>, targetTaskId: string) => {
-      stopAutoScroll();
-      e.preventDefault();
-      e.stopPropagation();
-      if (!draggedTaskId || draggedTaskId === targetTaskId) return;
-
-      const draggedTask = directChildren.find(task => task.id === draggedTaskId);
-      const targetTask = directChildren.find(task => task.id === targetTaskId);
-
-      if (!draggedTask) return;
-      if (!targetTask && targetTaskId !== '') return;
-
-      const currentDisplayOrder = directChildren;
-      const draggedIndex = currentDisplayOrder.findIndex(task => task.id === draggedTaskId);
-      const targetIndex = currentDisplayOrder.findIndex(task => task.id === targetTaskId);
-
-      if (targetIndex === -1 && targetTaskId !== '') return;
-
-      let newDisplayOrder: Task[];
-      if (targetTaskId === '') {
-        newDisplayOrder = currentDisplayOrder.filter(task => task.id !== draggedTaskId);
-        newDisplayOrder.push(draggedTask);
-      } else if (targetIndex !== -1) {
-        newDisplayOrder = currentDisplayOrder.filter(task => task.id !== draggedTaskId);
-        const adjustedTargetIndex = targetIndex > draggedIndex ? targetIndex - 1 : targetIndex;
-        newDisplayOrder.splice(adjustedTargetIndex, 0, draggedTask);
-      } else {
-        newDisplayOrder = currentDisplayOrder.filter(task => task.id !== draggedTaskId);
-        newDisplayOrder.push(draggedTask);
-      }
-
-      // Dot-notation renumbering: siblings at `depth`, parent priority from selectedParent.
-      const parentPriority = selectedParent?.priority ?? 0;
-      const updatedPriorities = renumberSiblings(newDisplayOrder, parentPriority, depth);
-
-      setReorderingTaskId(draggedTaskId);
-      setDraggedTaskId(null);
-
-      try {
-        await updatePrioritiesBulk(updatedPriorities);
-      } finally {
-        setReorderingTaskId(null);
-      }
-    },
-    [directChildren, draggedTaskId, selectedParent, depth, stopAutoScroll, updatePrioritiesBulk],
-  );
 
   // Empty state: no parent selected.
   if (!selectedParentId || !selectedParent) {
@@ -262,15 +184,14 @@ export const SubfocusView: React.FC<SubfocusViewProps> = ({
       </div>
 
       <div
-        className="flex flex-nowrap overflow-x-auto flex-1 min-h-0 p-2 gap-3"
+        className="relative flex flex-nowrap overflow-x-auto flex-1 min-h-0 p-2 gap-3"
         ref={containerRef}
         onDragOver={handleDragOver}
-        onDrop={(e) => handleDrop(e, '')}
-        onDragEndCapture={stopAutoScroll}
-        onDragLeave={(e) => {
-          if (e.currentTarget === e.target) stopAutoScroll();
-        }}
+        onDrop={handleDrop}
+        onDragEndCapture={handleDragEnd}
+        onDragLeave={handleDragLeave}
       >
+        <StoryboardDropIndicator preview={dropPreview} />
         {directChildren.length === 0 ? (
           <div className="text-muted-foreground p-4">
             {t('taskboard.subfocusEmptyNoChildren')}
@@ -278,9 +199,14 @@ export const SubfocusView: React.FC<SubfocusViewProps> = ({
         ) : (
           directChildren.map(task => {
             const descendants = getAllDescendants(task);
-            const isReordering = reorderingTaskId === task.id;
+            const isReordering = reorderingId === task.id;
             return (
-              <div key={task.id} className="flex flex-col gap-2 min-w-fit">
+              <div
+                key={task.id}
+                className="flex flex-col gap-2 min-w-fit"
+                data-storyboard-column
+                data-task-id={task.id}
+              >
                 <StoryboardCard
                   task={task}
                   tasks={tasks}
@@ -290,12 +216,9 @@ export const SubfocusView: React.FC<SubfocusViewProps> = ({
                   open={!!openParents[task.id]}
                   onToggleOpen={toggleParent}
                   isReordering={isReordering}
-                  isDragged={draggedTaskId === task.id}
-                  isDragOver={!!draggedTaskId && draggedTaskId !== task.id}
+                  isDragged={draggedId === task.id}
                   draggable={!isReordering}
                   onDragStart={(e) => handleDragStart(e, task.id)}
-                  onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, task.id)}
                 />
 
                 {openParents[task.id] && descendants.length > 0 && (
@@ -313,8 +236,7 @@ export const SubfocusView: React.FC<SubfocusViewProps> = ({
                         isHighlighted={child.id === focusedTaskId}
                         {...taskCardMutationProps}
                         disableReparenting={true}
-                        isDragged={draggedTaskId === child.id}
-                        isDragOver={!!draggedTaskId && draggedTaskId !== child.id}
+                        isDragged={draggedId === child.id}
                       />
                     ))}
                   </div>

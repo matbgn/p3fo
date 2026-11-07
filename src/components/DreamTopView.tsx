@@ -24,6 +24,10 @@ import { IntentionalFrameworkViewInner } from './IntentionalFrameworkView';
 import { CollaborativeFrameworkViewInner } from './CollaborativeFrameworkView';
 import { useFocusMode } from "@/hooks/useFocusMode";
 import type { ModuleId } from '@/lib/persistence-types';
+import { cn } from '@/lib/utils';
+import { isActionableStatus, resolveStoryboardInsertion } from '@/lib/storyboard-drop';
+import { useStoryboardDragDrop } from '@/hooks/useStoryboardDragDrop';
+import { StoryboardDropIndicator } from './StoryboardDropIndicator';
 
 interface DreamTopViewProps {
   onFocusOnTask: (taskId: string) => void;
@@ -93,14 +97,9 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
   );
 
   const [activeView, setActiveView] = useState<ActiveView>('storyboard');
-  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
-  const [reorderingTaskId, setReorderingTaskId] = useState<string | null>(null);
   const [openParents, setOpenParents] = useState<Record<string, boolean>>({});
   const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(false);
   const [loadingFilters, setLoadingFilters] = useState(true);
-  const storyboardContainerRef = React.useRef<HTMLDivElement>(null);
-  const autoScrollRafRef = React.useRef<number | null>(null);
-  const autoScrollDirectionRef = React.useRef<number>(0);
 
   const [storedFilters, setStoredFilters] = useState<Filters>(() => getDefaultFilters());
 
@@ -223,6 +222,27 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
       .sort(sortTasks.plan);
   }, [tasks, displayFilters]);
 
+  const handleStoryboardReorder = React.useCallback(
+    (ordered: Task[]) => updatePrioritiesBulk(renumberSiblings(ordered, 0, 0)),
+    [updatePrioritiesBulk],
+  );
+
+  const {
+    containerRef: storyboardContainerRef,
+    draggedId: draggedTaskId,
+    dropPreview,
+    reorderingId: reorderingTaskId,
+    handleDragStart,
+    handleDragOver,
+    handleDrop,
+    handleDragEnd,
+    handleDragLeave,
+  } = useStoryboardDragDrop<Task>({
+    items: prioritizedTasks,
+    onReorder: handleStoryboardReorder,
+    resolveInsertion: resolveStoryboardInsertion,
+  });
+
   // Get all children for a parent task (recursively)
   const getAllChildren = (task: Task): Task[] => {
     let children: Task[] = [];
@@ -244,100 +264,6 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
       ...prev,
       [id]: !prev[id]
     }));
-  };
-
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
-    setDraggedTaskId(taskId);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', taskId);
-  };
-
-  const stopAutoScroll = React.useCallback(() => {
-    autoScrollDirectionRef.current = 0;
-    if (autoScrollRafRef.current !== null) {
-      cancelAnimationFrame(autoScrollRafRef.current);
-      autoScrollRafRef.current = null;
-    }
-  }, []);
-
-  const tickAutoScroll = React.useCallback(() => {
-    const container = storyboardContainerRef.current;
-    if (!container || autoScrollDirectionRef.current === 0) {
-      autoScrollRafRef.current = null;
-      return;
-    }
-    const speed = 12; // px per frame
-    container.scrollLeft += autoScrollDirectionRef.current * speed;
-    autoScrollRafRef.current = requestAnimationFrame(tickAutoScroll);
-  }, []);
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    if (activeView !== 'storyboard') return;
-    const container = storyboardContainerRef.current;
-    if (!container) return;
-    const rect = container.getBoundingClientRect();
-    const EDGE = 60;
-    const clientX = e.clientX;
-    let direction = 0;
-    if (clientX - rect.left < EDGE) direction = -1;
-    else if (rect.right - clientX < EDGE) direction = 1;
-    if (direction !== autoScrollDirectionRef.current) {
-      autoScrollDirectionRef.current = direction;
-      if (direction !== 0 && autoScrollRafRef.current === null) {
-        autoScrollRafRef.current = requestAnimationFrame(tickAutoScroll);
-      }
-    }
-  };
-
-  const handleDrop = async (e: React.DragEvent<HTMLDivElement>, targetTaskId: string) => {
-    stopAutoScroll();
-    e.preventDefault();
-    e.stopPropagation();
-    if (!draggedTaskId || draggedTaskId === targetTaskId) {
-      return;
-    }
-
-    const draggedTask = prioritizedTasks.find(task => task.id === draggedTaskId);
-    const targetTask = prioritizedTasks.find(task => task.id === targetTaskId);
-
-    if (!draggedTask) return;
-    if (!targetTask && targetTaskId !== '') return;
-
-    const currentDisplayOrder = prioritizedTasks;
-
-    const draggedIndex = currentDisplayOrder.findIndex(task => task.id === draggedTaskId);
-    const targetIndex = currentDisplayOrder.findIndex(task => task.id === targetTaskId);
-
-    if (targetIndex === -1 && targetTaskId !== '') {
-      return;
-    }
-
-    let newDisplayOrder;
-    if (targetTaskId === '') {
-      newDisplayOrder = currentDisplayOrder.filter(task => task.id !== draggedTaskId);
-      newDisplayOrder.push(draggedTask);
-    } else if (targetIndex !== -1) {
-      newDisplayOrder = currentDisplayOrder.filter(task => task.id !== draggedTaskId);
-      const adjustedTargetIndex = targetIndex > draggedIndex ? targetIndex - 1 : targetIndex;
-      newDisplayOrder.splice(adjustedTargetIndex, 0, draggedTask);
-    } else {
-      newDisplayOrder = currentDisplayOrder.filter(task => task.id !== draggedTaskId);
-      newDisplayOrder.push(draggedTask);
-    }
-
-    const updatedPriorities = renumberSiblings(newDisplayOrder, 0, 0);
-
-    // Set reordering state to show spinner
-    setReorderingTaskId(draggedTaskId);
-    setDraggedTaskId(null);
-
-    try {
-      await updatePrioritiesBulk(updatedPriorities);
-    } finally {
-      setReorderingTaskId(null);
-    }
   };
 
   // Render Dream Board
@@ -489,26 +415,39 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
         <CardContent className="flex-grow overflow-hidden">
           {activeView === 'storyboard' ? (
             <div
-              className="flex flex-nowrap overflow-x-auto h-full p-2 gap-3"
+              className="relative flex flex-nowrap overflow-x-auto h-full p-2 gap-3"
               ref={storyboardContainerRef}
               onDragOver={handleDragOver}
-              onDrop={(e) => handleDrop(e, '')}
-              onDragEndCapture={stopAutoScroll}
-              onDragLeave={(e) => {
-                if (e.currentTarget === e.target) stopAutoScroll();
-              }}
+              onDrop={handleDrop}
+              onDragEndCapture={handleDragEnd}
+              onDragLeave={handleDragLeave}
             >
+              <StoryboardDropIndicator preview={dropPreview} />
               {prioritizedTasks.length === 0 ? (
                 <div className="text-muted-foreground p-4">{t('dreamTop.noTasksToPlan')}</div>
               ) : (
                 prioritizedTasks.map(task => {
                   const children = getAllChildren(task);
                   const isReordering = reorderingTaskId === task.id;
+                  const isDimmed = dropPreview?.lockedGroup
+                    ? dropPreview.lockedGroup === 'actionable'
+                      ? isActionableStatus(task.triageStatus)
+                      : !isActionableStatus(task.triageStatus)
+                    : false;
                   return (
-                    <div key={task.id} className="flex flex-col gap-2 min-w-fit">
+                    <div
+                      key={task.id}
+                      className="flex flex-col gap-2 min-w-fit"
+                      data-storyboard-column
+                      data-task-id={task.id}
+                    >
                       <StoryboardCard
                         task={task}
                         tasks={tasks}
+                        className={cn(
+                          'transition-[opacity,filter] duration-150',
+                          isDimmed && 'opacity-30 grayscale',
+                        )}
                         isHighlighted={task.id === focusedTaskId}
                         updateStatus={updateStatus}
                         updateDifficulty={updateDifficulty}
@@ -533,11 +472,8 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
                         onToggleOpen={toggleParent}
                         isReordering={isReordering}
                         isDragged={draggedTaskId === task.id}
-                        isDragOver={!!draggedTaskId && draggedTaskId !== task.id}
                         draggable={!isReordering}
                         onDragStart={(e) => handleDragStart(e, task.id)}
-                        onDragOver={handleDragOver}
-                        onDrop={(e) => handleDrop(e, task.id)}
                       />
 
                       {openParents[task.id] && children.length > 0 && (
@@ -571,7 +507,6 @@ const DreamTopViewInner: React.FC<DreamTopViewProps> = ({ onFocusOnTask }) => {
                               updateDurationInMinutes={updateDurationInMinutes}
                               disableReparenting={true}
                               isDragged={draggedTaskId === child.id}
-                              isDragOver={!!draggedTaskId && draggedTaskId !== child.id}
                             />
                           ))}
                         </div>

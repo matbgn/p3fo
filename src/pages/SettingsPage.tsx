@@ -37,6 +37,7 @@ const ALL_MODULES: { id: ModuleId; isTopLevel: boolean }[] = [
   { id: 'plan.salary', isTopLevel: false },
   { id: 'program', isTopLevel: true },
   { id: 'program.calendar', isTopLevel: false },
+  { id: 'program.planner', isTopLevel: false },
   { id: 'program.resources', isTopLevel: false },
   { id: 'kanban', isTopLevel: true },
   { id: 'focus', isTopLevel: true },
@@ -215,6 +216,10 @@ const SettingsPage: React.FC = () => {
                     onValueChange={(value) => handleSettingChange('defaultPlanView', value)}
                     className="flex flex-col space-y-1 mt-2"
                   >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="planner" id="plan-view-planner" />
+                      <Label htmlFor="plan-view-planner">{t('common.view.planner')}</Label>
+                    </div>
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="week" id="plan-view-week" />
                       <Label htmlFor="plan-view-week">{t('common.view.week')}</Label>

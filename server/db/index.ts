@@ -1,6 +1,7 @@
 // Database client interface and factory
 import { TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, FertilizationBoardEntity, DreamBoardEntity, SalaryBoardEntity, CircleEntity, ReminderEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from '../../src/lib/persistence-types.js';
 import type { SprintStateEntity } from '../../src/lib/sprint-types.js';
+import { applyTemporalMirror } from '../../mcp-server/src/task-temporal.js';
 
 export interface SprintWellbeingRecord {
   userId: string;
@@ -20,6 +21,25 @@ export interface PaginatedResponse<T> {
   total: number;
 }
 
+/**
+ * Keep the legacy `terminationDate` mirror in sync with the split temporal
+ * fields on server-side writes (API, MCP, import). The rule itself lives in
+ * `mcp-server/src/task-temporal.ts` so the MCP importer uses the exact same
+ * semantics without a second copy.
+ *
+ * `previousStatus` lets the helper detect a real status transition: a partial
+ * patch that only changes `triageStatus` still has to stamp or clear the
+ * completion fields, while an unrelated patch must not touch them.
+ */
+export function applyTaskTemporalMirror(
+  target: Partial<TaskEntity>,
+  provided: Partial<TaskEntity>,
+  previousStatus?: string | null,
+): Partial<TaskEntity> {
+  applyTemporalMirror(target, provided, previousStatus);
+  return target;
+}
+
 // Define the database client interface
 export interface DbClient {
   initialize(): Promise<void>;
@@ -33,7 +53,7 @@ export interface DbClient {
     excludeStatuses?: string[],
     triageStatuses?: string[],
     includeSubtasks?: boolean,
-    options?: { search?: string; active?: boolean },
+    options?: { search?: string; active?: boolean; includeDeleted?: boolean },
   ): Promise<PaginatedResponse<TaskEntity>>;
   getTaskById(id: string): Promise<TaskEntity | null>;
   createTask(task: Partial<TaskEntity>): Promise<TaskEntity>;

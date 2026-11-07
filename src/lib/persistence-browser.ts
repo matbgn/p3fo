@@ -104,6 +104,42 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
   }
 
+  private buildTaskEntity(input: Partial<TaskEntity>): TaskEntity {
+    return {
+      id: input.id || crypto.randomUUID(),
+      title: input.title || 'New Task',
+      createdAt: input.createdAt || new Date().toISOString(),
+      updatedAt: input.updatedAt ?? null,
+      triageStatus: input.triageStatus || 'Backlog',
+      urgent: input.urgent || false,
+      impact: input.impact || false,
+      majorIncident: input.majorIncident || false,
+      sprintTarget: input.sprintTarget || false,
+      difficulty: input.difficulty || 1,
+      timer: input.timer || [],
+      category: input.category || 'General',
+      terminationDate: input.terminationDate || null,
+      dueDate: input.dueDate || null,
+      completedAt: input.completedAt || null,
+      comment: input.comment || null,
+      durationInMinutes: input.durationInMinutes || null,
+      priority: input.priority || null,
+      userId: input.userId || null,
+      parentId: input.parentId || null,
+      children: input.children || [],
+      linkedVoteIds: input.linkedVoteIds || undefined,
+      blockedSince: input.blockedSince ?? null,
+      plannedDate: input.plannedDate ?? null,
+      plannedTime: input.plannedTime ?? null,
+      plannedPosition: input.plannedPosition ?? null,
+      color: input.color ?? 'none',
+      recurrence: input.recurrence ?? null,
+      seriesId: input.seriesId ?? null,
+      occurrenceDate: input.occurrenceDate ?? null,
+      deletedAt: input.deletedAt ?? null,
+    };
+  }
+
   async createTask(input: Partial<TaskEntity>): Promise<TaskEntity> {
     if (typeof window === 'undefined') {
       throw new Error('Cannot create task in non-browser environment');
@@ -111,33 +147,31 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
 
     try {
       const tasks = await this.listTasks();
-      const newTask: TaskEntity = {
-        id: input.id || crypto.randomUUID(),
-        title: input.title || 'New Task',
-        createdAt: input.createdAt || new Date().toISOString(),
-        updatedAt: input.updatedAt ?? null,
-        triageStatus: input.triageStatus || 'Backlog',
-        urgent: input.urgent || false,
-        impact: input.impact || false,
-        majorIncident: input.majorIncident || false,
-        sprintTarget: input.sprintTarget || false,
-        difficulty: input.difficulty || 1,
-        timer: input.timer || [],
-        category: input.category || 'General',
-        terminationDate: input.terminationDate || null,
-        comment: input.comment || null,
-        durationInMinutes: input.durationInMinutes || null,
-        priority: input.priority || null,
-        userId: input.userId || null,
-        parentId: input.parentId || null,
-        children: input.children || [],
-      };
+      const newTask = this.buildTaskEntity(input);
 
       tasks.push(newTask);
       localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
       return newTask;
     } catch (error) {
       console.error('Error creating task in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async createTasks(inputs: TaskEntity[]): Promise<TaskEntity[]> {
+    if (typeof window === 'undefined') {
+      throw new Error('Cannot create tasks in non-browser environment');
+    }
+
+    try {
+      const tasks = await this.listTasks();
+      const created = inputs.map((input) => this.buildTaskEntity(input));
+
+      tasks.push(...created);
+      localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
+      return created;
+    } catch (error) {
+      console.error('Error creating tasks in localStorage:', error);
       throw error;
     }
   }
@@ -160,6 +194,28 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       return tasks[index];
     } catch (error) {
       console.error('Error updating task in localStorage:', error);
+      throw error;
+    }
+  }
+
+  async bulkUpdateTasks(inputs: TaskEntity[]): Promise<void> {
+    if (typeof window === 'undefined') {
+      throw new Error('Cannot update tasks in non-browser environment');
+    }
+    if (inputs.length === 0) return;
+
+    try {
+      const tasks = await this.listTasks();
+      const patches = new Map(inputs.map((input) => [input.id, input]));
+
+      const updated = tasks.map((task) => {
+        const patch = patches.get(task.id);
+        return patch ? { ...task, ...patch } : task;
+      });
+
+      localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(updated));
+    } catch (error) {
+      console.error('Error bulk-updating tasks in localStorage:', error);
       throw error;
     }
   }

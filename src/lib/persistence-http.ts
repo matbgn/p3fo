@@ -48,7 +48,9 @@ export class HttpApiPersistence implements PersistenceAdapter {
   // Tasks
   async listTasks(userId?: string, excludeStatuses?: string[]): Promise<TaskEntity[]> {
     let endpoint = '/api/tasks';
-    const params: string[] = [];
+    // The shared store must see deleted tombstones so recurrence expansion keeps
+    // suppressing deleted occurrences; other API consumers use the default.
+    const params: string[] = ['include_deleted=true'];
     if (userId) params.push(`user_id=${encodeURIComponent(userId)}`);
     if (excludeStatuses && excludeStatuses.length > 0) {
       params.push(`exclude_statuses=${encodeURIComponent(excludeStatuses.join(','))}`);
@@ -69,10 +71,34 @@ export class HttpApiPersistence implements PersistenceAdapter {
     });
   }
 
+  async createTasks(tasks: TaskEntity[]): Promise<TaskEntity[]> {
+    if (tasks.length === 0) return [];
+
+    // The server exposes a bulk upsert for task lists; use it instead of one
+    // POST per task. The adapter contract requires complete entities here.
+    await this.makeRequest('/api/tasks/import', {
+      method: 'POST',
+      body: JSON.stringify(tasks),
+    });
+
+    return tasks;
+  }
+
   async updateTask(id: string, patch: Partial<TaskEntity>): Promise<TaskEntity> {
     return this.makeRequest(`/api/tasks/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(patch),
+    });
+  }
+
+  async bulkUpdateTasks(tasks: TaskEntity[]): Promise<void> {
+    if (tasks.length === 0) return;
+
+    // The import endpoint is a full-row upsert. The adapter contract requires
+    // complete entities so browser and HTTP adapters share the same semantics.
+    await this.makeRequest('/api/tasks/import', {
+      method: 'POST',
+      body: JSON.stringify(tasks),
     });
   }
 

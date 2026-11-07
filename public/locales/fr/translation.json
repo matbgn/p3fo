@@ -18,7 +18,8 @@
     },
     "view": {
       "week": "Semaine",
-      "month": "Mois"
+      "month": "Mois",
+      "planner": "Planificateur de jour"
     },
     "retry": "Réessayer",
     "reload": "Recharger"
@@ -164,6 +165,10 @@
         "calendar": {
           "label": "Calendrier",
           "description": "Sous-vue Calendrier dans Programme"
+        },
+        "planner": {
+          "label": "Planificateur de jour",
+          "description": "Sous-vue planificateur de jour dans Programme"
         },
         "resources": {
           "label": "Ressources",
@@ -398,7 +403,7 @@
     "categoryLabel": "Catégorie",
     "difficultyLabel": "Difficulté",
     "selectDifficulty": "Sélectionner la difficulté",
-    "terminationDateLabel": "Date de fin",
+    "terminationDateLabel": "Date d'échéance",
     "plannedDurationLabel": "Durée planifiée (min)",
     "urgentLabel": "Urgent",
     "highImpactLabel": "Impact élevé",
@@ -1275,13 +1280,17 @@
     "inProgressNoDate": "En cours (sans date de fin)",
     "quickAddTask": "Ajout rapide de tâche...",
     "filtersAndControls": "Filtres & Contrôles",
-    "newTask": "Nouvelle Tâche",
-    "titleLabel": "Titre",
-    "taskTitlePlaceholder": "Titre de la tâche...",
+    "newTask": "Nouvelle carte",
+    "titleLabel": "Titre de la carte",
+    "taskTitlePlaceholder": "Titre de la carte...",
     "scheduledFor": "Planifié pour : {{date}}",
     "create": "Créer",
     "dragStartTime": "Glisser pour changer l'heure de début",
-    "dragEndTime": "Glisser pour changer l'heure de fin"
+    "dragEndTime": "Glisser pour changer l'heure de fin",
+    "dueDates": "Dates d'échéance",
+    "planned": "Planifié",
+    "allDay": "Toute la journée",
+    "moreEvents": "+{{count}} de plus"
   },
   "prioritization": {
     "title": "Priorisation comparative",
@@ -2043,5 +2052,44 @@
         "5": "Tout le temps"
       }
     }
+  },
+  "planner": {
+    "today": "Aujourd'hui",
+    "previousWeek": "Semaine précédente",
+    "nextWeek": "Semaine suivante",
+    "unscheduled": "Non planifié",
+    "unscheduledEmpty": "Déposez une tâche ici pour la laisser non planifiée.",
+    "addChecklistItem": "Ajouter un élément",
+    "plannedDate": "Date planifiée",
+    "time": "Heure",
+    "colour": "Couleur",
+    "duplicate": "Dupliquer",
+    "delete": "Supprimer",
+    "moveTomorrow": "Déplacer à demain",
+    "moveNextWeek": "Déplacer à la semaine prochaine",
+    "moveUnscheduled": "Déplacer vers non planifié",
+    "carryOverTitle": "{{count}} tâche inachevée déplacée à aujourd'hui",
+    "carryOverTitle_other": "{{count}} tâches inachevées déplacées à aujourd'hui",
+    "deleted": "« {{title}} » supprimée",
+    "duplicated": "« {{title}} » dupliquée",
+    "dragTask": "Déplacer la tâche",
+    "markDone": "Marquer comme terminée",
+    "markNotDone": "Marquer comme non terminée",
+    "dueDate": "Date d'échéance",
+    "recurring": "Récurrente",
+    "urgent": "Urgent",
+    "impact": "Impact",
+    "nextOccurrence": "Prochaine",
+    "stopRepeating": "Arrêter la répétition",
+    "previousMonth": "Mois précédent",
+    "nextMonth": "Mois suivant",
+    "unscheduledNoPlanDate": "Non planifié (pas de date planifiée)",
+    "unscheduledNoDueDate": "Non planifié (pas de date d'échéance)",
+    "length": "Durée (min)",
+    "dueTime": "Heure d'échéance",
+    "selectTime": "Choisir l'heure",
+    "cardTab": "Carte",
+    "detailsTab": "Détails",
+    "flags": "Indicateurs"
   }
 }

@@ -10,6 +10,12 @@ import { BrowserJsonPersistence } from "@/lib/persistence-browser";
 import { getSelectedMode } from "@/lib/persistence-factory";
 import { confirmDialog } from "@/lib/confirm-modal";
 import { computeChildPriority } from "@/utils/priorityEncoding";
+import type { TaskColor } from "@/lib/planner/types";
+import { isTaskColor } from "@/lib/planner/colors";
+import type { Recurrence } from "@/lib/recurrence/types";
+import { compareCarryOverOrder, isCarriedOver } from "@/lib/planner/carry-over";
+import { appendPosition, compareDayOrder, duplicateTaskPosition, maxPlannedPosition, positionBetween, positionForDrop } from "@/lib/planner/position";
+import { adjustSeriesForAnchorMove, dueDateForOccurrence, filterWorkflowTasks, occurrenceId, parseStoredRecurrence, uniqueTasksById } from "@/lib/recurrence/engine";
 if (typeof crypto.randomUUID !== 'function') {
   crypto.randomUUID = function () {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
@@ -55,6 +61,8 @@ export type Task = {
   timer?: { startTime: number; endTime: number }[];
   category?: Category;
   terminationDate?: number;
+  dueDate?: number;
+  completedAt?: number;
   comment?: string;
   durationInMinutes?: number;
   priority?: number;
@@ -62,6 +70,14 @@ export type Task = {
   updatedAt?: number;
   linkedVoteIds?: string[];
   blockedSince?: number;
+  plannedDate?: string | null;
+  plannedTime?: string | null;
+  plannedPosition?: string | null;
+  color?: TaskColor;
+  recurrence?: Recurrence | null;
+  seriesId?: string | null;
+  occurrenceDate?: string | null;
+  deletedAt?: number;
 };
 
 
@@ -108,15 +124,31 @@ const toEpochMillis = (value: unknown): number | undefined => {
 // Yjs is fed both by client Task objects and by server-broadcast persistence
 // entities (ISO timestamps). Normalise every incoming task so consumers always
 // receive the frontend shape and never crash on string timestamps.
-const normalizeYjsTask = (raw: Task): Task => ({
-  ...raw,
-  createdAt: toEpochMillis(raw.createdAt) ?? Date.now(),
-  updatedAt: toEpochMillis(raw.updatedAt) ?? Date.now(),
-  terminationDate: toEpochMillis(raw.terminationDate),
-  blockedSince: toEpochMillis(raw.blockedSince),
-  triageStatus: raw.triageStatus || 'Backlog',
-  children: raw.children || [],
-});
+const normalizeYjsTask = (raw: Task): Task => {
+  const terminationDate = toEpochMillis(raw.terminationDate);
+  const triageStatus = raw.triageStatus || 'Backlog';
+
+  return {
+    ...raw,
+    createdAt: toEpochMillis(raw.createdAt) ?? Date.now(),
+    updatedAt: toEpochMillis(raw.updatedAt) ?? Date.now(),
+    terminationDate,
+    // Mirror convertEntitiesToTasks: legacy rows stored the deadline for active
+    // tasks and the completion time for Done tasks in terminationDate only.
+    dueDate: toEpochMillis(raw.dueDate)
+      ?? (triageStatus !== 'Done' ? terminationDate : undefined),
+    completedAt: toEpochMillis(raw.completedAt)
+      ?? (triageStatus === 'Done' ? terminationDate : undefined),
+    blockedSince: toEpochMillis(raw.blockedSince),
+    deletedAt: toEpochMillis(raw.deletedAt),
+    color: isTaskColor(raw.color) ? raw.color : 'none',
+    recurrence: parseStoredRecurrence(raw.recurrence),
+    seriesId: raw.seriesId ?? null,
+    occurrenceDate: raw.occurrenceDate ?? null,
+    triageStatus,
+    children: raw.children || [],
+  };
+};
 
 const updateTaskInTasks = (taskId: string, updater: (task: Task) => Task) => {
   tasks = tasks.map(t => {
@@ -358,10 +390,20 @@ async function createTask(title: string, parentId: string | null, userId?: strin
     timer: [],
     category: parentTask?.category ?? undefined,
     terminationDate: undefined,
+    dueDate: undefined,
+    completedAt: undefined,
     comment: undefined,
     durationInMinutes: undefined,
     priority: newPriority,
     userId: userId ?? parentTask?.userId ?? undefined,
+    plannedDate: parentTask?.plannedDate ?? null,
+    plannedTime: null,
+    plannedPosition: null,
+    color: parentTask?.color ?? 'none',
+    recurrence: null,
+    seriesId: null,
+    occurrenceDate: null,
+    deletedAt: undefined,
   };
 
   try {
@@ -373,9 +415,12 @@ async function createTask(title: string, parentId: string | null, userId?: strin
 
     await adapter.createTask(entity);
 
-    // Update local state
-    tasks = [...tasks, t];
-    
+    // Update local state. A server/Yjs broadcast can arrive before this line,
+    // so merge by id instead of blindly appending.
+    tasks = tasks.some((existing) => existing.id === t.id)
+      ? tasks.map((existing) => (existing.id === t.id ? { ...existing, ...t } : existing))
+      : [...tasks, t];
+
     syncTaskToYjs(t.id, t);
 
     let timerTransferred = false;
@@ -656,11 +701,15 @@ async function updateStatus(taskId: string, status: TriageStatus): Promise<Updat
   // Update local tasks state
   tasks = tasks.map(t => {
     if (tasksToUpdate.has(t.id)) {
+      const now = Date.now();
+      const dueDate = t.dueDate ?? (t.triageStatus !== 'Done' ? t.terminationDate : undefined);
       const updatedTask = {
         ...t,
         triageStatus: status,
-        terminationDate: status === 'Done' ? Date.now() : undefined,
-        updatedAt: Date.now()
+        completedAt: status === 'Done' ? now : undefined,
+        dueDate,
+        terminationDate: status === 'Done' ? now : dueDate,
+        updatedAt: now
       };
 
       // Track when task entered Blocked status; clear when leaving
@@ -738,6 +787,58 @@ const INACTIVE_STATUSES: TriageStatus[] = ["Done", "Dropped", "Archived"];
 
 const isTriageInactive = (status: TriageStatus | undefined): boolean =>
   !!status && INACTIVE_STATUSES.includes(status);
+
+/**
+ * Soft-delete a materialized series occurrence together with its descendants.
+ * A tombstone is required so the recurrence engine suppresses the occurrence
+ * date; hard-deleting the row would make the series regenerate the same card.
+ */
+async function softDeleteOccurrenceTree(occurrenceTaskId: string): Promise<void> {
+  const now = Date.now();
+  const descendants: Task[] = [];
+  const queue = [occurrenceTaskId];
+  while (queue.length > 0) {
+    const parentId = queue.pop() as string;
+    for (const task of tasks) {
+      if (task.parentId === parentId) {
+        descendants.push(task);
+        queue.push(task.id);
+      }
+    }
+  }
+
+  const ids = new Set([occurrenceTaskId, ...descendants.map((task) => task.id)]);
+  const updated = tasks
+    .filter((task) => ids.has(task.id))
+    .map((task) => ({
+      ...task,
+      deletedAt: task.deletedAt ?? now,
+      updatedAt: now,
+    }));
+
+  const updatedById = new Map(updated.map((task) => [task.id, task]));
+  tasks = tasks.map((task) => updatedById.get(task.id) ?? task);
+
+  const reminderStore = useReminderStore.getState();
+  for (const task of updated) {
+    reminderStore.deleteRemindersByTaskId(task.id);
+  }
+  doc.transact(() => {
+    for (const task of updated) {
+      syncTaskToYjs(task.id, task);
+    }
+  });
+
+  try {
+    const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+    const adapter = await persistence;
+    await adapter.bulkUpdateTasks(updated.map((task) => taskToEntity(task)));
+  } catch (error) {
+    console.error('Error deleting recurring occurrence:', error);
+  }
+
+  eventBus.publish('tasksChanged');
+}
 
 // Function to check if all subtasks of a parent are done/dropped/archived and update parent status accordingly
 function checkParentTaskCompletion(parentId: string) {
@@ -963,14 +1064,18 @@ const updateTerminationDate = async (taskId: string, terminationDate: number | u
   const task = tasks.find(t => t.id === taskId);
   if (!task) return;
 
-  updateTaskInTasks(taskId, (t) => ({ ...t, terminationDate: terminationDate }));
+  updateTaskInTasks(taskId, (t) => ({
+    ...t,
+    dueDate: terminationDate,
+    terminationDate: t.triageStatus === 'Done' ? t.terminationDate : terminationDate,
+  }));
 
   // Persist to backend
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
     const adapter = await persistence;
-    const entity = { ...taskToEntity(task), terminationDate: terminationDate ? new Date(terminationDate).toISOString() : null };
-    await adapter.updateTask(taskId, entity);
+    const updatedTask = tasks.find(t => t.id === taskId) ?? task;
+    await adapter.updateTask(taskId, taskToEntity(updatedTask));
   } catch (error) {
     console.error("Error updating termination date:", error);
   }
@@ -982,6 +1087,23 @@ const updateTerminationDate = async (taskId: string, terminationDate: number | u
 
 export function getAllTasksSnapshot(): Task[] {
   return tasks;
+}
+
+// The filtered views are derived from the shared store and are needed by every
+// hook consumer (several per rendered card). Cache them per store snapshot so a
+// mutation pays for the full-store pass once instead of once per consumer.
+let visibleTasksCache: { source: Task[]; workflow: Task[]; all: Task[] } | null = null;
+
+function getVisibleTasks(includeRecurring: boolean): Task[] {
+  if (!visibleTasksCache || visibleTasksCache.source !== tasks) {
+    visibleTasksCache = {
+      source: tasks,
+      workflow: filterWorkflowTasks(tasks),
+      all: uniqueTasksById(tasks),
+    };
+  }
+
+  return includeRecurring ? visibleTasksCache.all : visibleTasksCache.workflow;
 }
 
 export function areTasksFiltered(): boolean {
@@ -1008,8 +1130,18 @@ export function useHasTasks(): boolean {
   return hasTasks;
 }
 
-export function useTasks(options?: { subscribe?: boolean }) {
+export function useTasks(options?: { subscribe?: boolean; includeRecurring?: boolean }) {
   const shouldSubscribe = options?.subscribe ?? true;
+  const includeRecurring = options?.includeRecurring ?? false;
+  // `tasks` is the shared store array and is replaced on every mutation, so the
+  // memo invalidates exactly when task state changes. The expensive filtering is
+  // cached per store snapshot in `getVisibleTasks` because this hook runs once
+  // per rendered card.
+  const visibleTasks = React.useMemo(
+    () => getVisibleTasks(includeRecurring),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `tasks` is a module-level store whose array is replaced on every mutation; the reference change is exactly what should invalidate this memo.
+    [includeRecurring, tasks],
+  );
   const [_, setForceRender] = React.useState({});
 
   React.useEffect(() => {
@@ -1107,6 +1239,14 @@ export function useTasks(options?: { subscribe?: boolean }) {
     const taskToDelete = map[taskId];
     if (!taskToDelete) return;
 
+    // Deleting a materialized series occurrence must leave a tombstone, even
+    // from views that use the generic delete action; otherwise the recurrence
+    // engine regenerates the same card on its next expansion.
+    if (taskToDelete.seriesId && taskToDelete.occurrenceDate) {
+      await softDeleteOccurrenceTree(taskId);
+      return;
+    }
+
     const childrenIds = new Set<string>();
     const getChildren = (id: string) => {
       childrenIds.add(id);
@@ -1198,6 +1338,17 @@ export function useTasks(options?: { subscribe?: boolean }) {
         title: `${task.title} (Copy)`,
         createdAt: Date.now(),
         priority: newBasePriority, // Use pre-calculated value (O(1) lookup)
+        // Do not copy the planner position: two cards sharing a fractional key
+        // make "drop before" ambiguous. An unpositioned copy sorts after the
+        // positioned cards until the planner assigns a fresh key on duplicate.
+        plannedPosition: null,
+        // A duplicated occurrence is a standalone card. Keeping the source
+        // series link would make later deletes target the original occurrence.
+        seriesId: null,
+        occurrenceDate: null,
+        // A duplicated series must not keep the rule: both templates would
+        // expand over the same dates and render every occurrence twice.
+        recurrence: null,
       };
 
       // Duplicate children if they exist
@@ -1607,10 +1758,534 @@ export function useTasks(options?: { subscribe?: boolean }) {
     eventBus.publish("tasksChanged");
   }, []);
 
+  const updatePlannerFields = React.useCallback(async (
+    taskId: string,
+    patch: Partial<Pick<Task, 'plannedDate' | 'plannedTime' | 'plannedPosition' | 'color' | 'durationInMinutes'>> & {
+      dueDate?: number | null;
+    },
+  ): Promise<Task | null> => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return null;
+
+    const { dueDate: dueDatePatch, ...rest } = patch;
+    const updated: Task = {
+      ...task,
+      ...rest,
+      updatedAt: Date.now(),
+    };
+
+    if (dueDatePatch !== undefined) {
+      updated.dueDate = dueDatePatch ?? undefined;
+      // Several existing views (Todolist, next-action, MCP sorting) still read
+      // terminationDate for active tasks; keep the legacy mirror in sync.
+      if (updated.triageStatus !== 'Done') {
+        updated.terminationDate = dueDatePatch ?? undefined;
+      }
+    }
+
+    // A series template's anchor is its planned date. Keep the rule's end date
+    // and the deadline offset relative to the anchor when the planner moves it,
+    // and never persist a rule without an anchor (it would never expand and the
+    // workflow filter would hide the template).
+    if (task.recurrence && !task.seriesId && patch.plannedDate !== undefined) {
+      const adjusted = adjustSeriesForAnchorMove(task, task.recurrence, patch.plannedDate);
+      updated.recurrence = adjusted.recurrence;
+      if (dueDatePatch === undefined && adjusted.dueDate != null) {
+        updated.dueDate = adjusted.dueDate;
+        if (updated.triageStatus !== 'Done') {
+          updated.terminationDate = adjusted.dueDate;
+        }
+      }
+    }
+
+    tasks = tasks.map((t) => (t.id === taskId ? updated : t));
+    syncTaskToYjs(taskId, updated);
+
+    try {
+      const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+      const adapter = await persistence;
+      await adapter.updateTask(taskId, taskToEntity(updated));
+    } catch (error) {
+      console.error('Error updating planner fields:', error);
+    }
+
+    eventBus.publish('tasksChanged');
+    return updated;
+  }, []);
+
+  const createPlannedTask = React.useCallback(async (input: {
+    title: string;
+    plannedDate: string;
+    plannedTime?: string | null;
+    color?: TaskColor;
+    dueDate?: number | null;
+    durationInMinutes?: number | null;
+    userId?: string;
+    parentId?: string | null;
+  }): Promise<string | null> => {
+    const title = input.title.trim();
+    if (!title) return null;
+
+    const id = await createTask(title, input.parentId ?? null, input.userId);
+    if (!id) return null;
+
+    const dayTasks = tasks
+      .filter((t) => t.id !== id && !t.parentId && t.plannedDate === input.plannedDate)
+      .sort(compareDayOrder);
+    const plannedPosition = appendPosition(dayTasks);
+
+    await updatePlannerFields(id, {
+      plannedDate: input.plannedDate,
+      plannedTime: input.plannedTime ?? null,
+      plannedPosition,
+      color: input.color ?? 'none',
+      dueDate: input.dueDate ?? undefined,
+      durationInMinutes: input.durationInMinutes ?? undefined,
+    });
+
+    return id;
+  }, [updatePlannerFields]);
+
+  const updatePlannedDate = React.useCallback(async (taskId: string, plannedDate: string | null) => {
+    if (plannedDate === null) {
+      return updatePlannerFields(taskId, {
+        plannedDate: null,
+        plannedTime: null,
+        plannedPosition: null,
+      });
+    }
+
+    const dayTasks = tasks
+      .filter((t) => t.id !== taskId && !t.parentId && t.plannedDate === plannedDate)
+      .sort(compareDayOrder);
+    const plannedPosition = appendPosition(dayTasks);
+    const task = tasks.find((t) => t.id === taskId);
+
+    return updatePlannerFields(taskId, {
+      plannedDate,
+      plannedTime: task?.plannedTime ?? null,
+      plannedPosition,
+    });
+  }, [updatePlannerFields]);
+
+  const updatePlannedTime = React.useCallback((taskId: string, plannedTime: string | null) => {
+    return updatePlannerFields(taskId, { plannedTime });
+  }, [updatePlannerFields]);
+
+  const updateColor = React.useCallback((taskId: string, color: TaskColor) => {
+    return updatePlannerFields(taskId, { color });
+  }, [updatePlannerFields]);
+
+  const clearPlannedDate = React.useCallback((taskId: string) => {
+    return updatePlannerFields(taskId, {
+      plannedDate: null,
+      plannedTime: null,
+      plannedPosition: null,
+    });
+  }, [updatePlannerFields]);
+
+  const movePlannedTask = React.useCallback(async (
+    taskId: string,
+    input: {
+      plannedDate: string;
+      beforeId?: string | null;
+      displayOrder?: Pick<Task, 'id' | 'plannedTime' | 'plannedPosition'>[];
+    },
+  ) => {
+    const dragged = tasks.find((t) => t.id === taskId);
+    const fallback = tasks
+      .filter((t) => t.id !== taskId && !t.parentId && t.plannedDate === input.plannedDate)
+      .sort(compareDayOrder);
+    const displayedOrder = (input.displayOrder ?? fallback).filter((t) => t.id !== taskId);
+    const plannedPosition = positionForDrop(
+      displayedOrder,
+      input.beforeId,
+      dragged?.plannedTime ?? null,
+    );
+
+    return updatePlannerFields(taskId, {
+      plannedDate: input.plannedDate,
+      plannedPosition,
+    });
+  }, [updatePlannerFields]);
+
+  const duplicatePlannedTask = React.useCallback(async (taskId: string): Promise<string | null> => {
+    const original = tasks.find((t) => t.id === taskId);
+    if (!original) return null;
+
+    const newId = await duplicateTaskStructure(taskId);
+    if (!newId) return null;
+
+    const dayTasks = tasks
+      .filter((t) => t.id !== newId && !t.parentId && t.plannedDate === original.plannedDate)
+      .sort(compareDayOrder);
+    const { sourcePosition, copyPosition } = duplicateTaskPosition(original, dayTasks);
+
+    if (!original.plannedPosition) {
+      await updatePlannerFields(taskId, { plannedPosition: sourcePosition });
+    }
+
+    await updatePlannerFields(newId, {
+      plannedDate: original.plannedDate ?? null,
+      plannedTime: original.plannedTime ?? null,
+      plannedPosition: copyPosition,
+      color: original.color ?? 'none',
+    });
+
+    return newId;
+  }, [duplicateTaskStructure, updatePlannerFields]);
+
+  const bulkCarryOverPlannedTasks = React.useCallback(async (today: string): Promise<{ count: number; snapshots: Task[] }> => {
+    const candidates = tasks
+      .filter((task) => isCarriedOver(task, today))
+      .sort(compareCarryOverOrder);
+
+    if (candidates.length === 0) {
+      return { count: 0, snapshots: [] };
+    }
+
+    const todays = tasks
+      .filter((task) => !task.parentId && task.plannedDate === today)
+      .sort(compareDayOrder);
+
+    let after = maxPlannedPosition(todays);
+    const snapshots = candidates.map((task) => ({ ...task }));
+    const updates = candidates.map((task) => {
+      const plannedPosition = positionBetween(after, null);
+      after = plannedPosition;
+
+      return {
+        ...task,
+        plannedDate: today,
+        plannedPosition,
+        updatedAt: Date.now(),
+      };
+    });
+
+    const byId = new Map(updates.map((task) => [task.id, task]));
+    tasks = tasks.map((task) => byId.get(task.id) ?? task);
+
+    try {
+      const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+      const adapter = await persistence;
+      doc.transact(() => {
+        for (const task of updates) {
+          syncTaskToYjs(task.id, task);
+        }
+      });
+      // One bulk write: per-task updateTask calls rewrite the whole task list
+      // in the browser adapter and issue one request per card over HTTP.
+      await adapter.bulkUpdateTasks(updates.map((task) => taskToEntity(task)));
+    } catch (error) {
+      console.error('Error carrying over planner tasks:', error);
+    }
+
+    eventBus.publish('tasksChanged');
+    return { count: updates.length, snapshots };
+  }, []);
+
+  const restoreTaskSnapshots = React.useCallback(async (snapshots: Task[]) => {
+    if (snapshots.length === 0) return;
+
+    const byId = new Map(tasks.map((task) => [task.id, task]));
+    const toCreate: Task[] = [];
+
+    doc.transact(() => {
+      for (const snapshot of snapshots) {
+        const restored: Task = { ...snapshot, updatedAt: Date.now() };
+        if (byId.has(snapshot.id)) {
+          byId.set(snapshot.id, restored);
+        } else {
+          byId.set(snapshot.id, restored);
+          toCreate.push(restored);
+        }
+        syncTaskToYjs(restored.id, restored);
+      }
+    });
+
+    tasks = Array.from(byId.values());
+
+    // Deleting a task removes it from its parent's `children` list and may have
+    // auto-completed the parent. Undoing the delete must restore both, otherwise
+    // the restored child stays detached from the hierarchy and the parent keeps
+    // a status derived from the temporary childless state.
+    const parentIds = new Set(
+      snapshots
+        .map((snapshot) => snapshot.parentId)
+        .filter((parentId): parentId is string => Boolean(parentId) && Boolean(byId.has(parentId as string))),
+    );
+    if (parentIds.size > 0) {
+      tasks = recomputeChildrenFromParentId(tasks);
+      for (const parentId of parentIds) {
+        checkParentTaskCompletion(parentId);
+      }
+    }
+
+    try {
+      const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+      const adapter = await persistence;
+      const createIds = new Set(toCreate.map((task) => task.id));
+      const toUpdate = snapshots
+        .filter((snapshot) => !createIds.has(snapshot.id))
+        .map((snapshot) => byId.get(snapshot.id))
+        .filter((task): task is Task => Boolean(task));
+
+      if (toUpdate.length > 0) {
+        await adapter.bulkUpdateTasks(toUpdate.map((task) => taskToEntity(task)));
+      }
+      if (toCreate.length > 0) {
+        await adapter.createTasks(toCreate.map((task) => taskToEntity(task)));
+      }
+    } catch (error) {
+      console.error('Error restoring task snapshots:', error);
+    }
+
+    eventBus.publish('tasksChanged');
+  }, []);
+
+  const updateTaskFields = React.useCallback(async (taskId: string, patch: Partial<Task>): Promise<Task | null> => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return null;
+
+    const updated: Task = { ...task, ...patch, updatedAt: Date.now() };
+    tasks = tasks.map((t) => (t.id === taskId ? updated : t));
+    syncTaskToYjs(taskId, updated);
+
+    try {
+      const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+      const adapter = await persistence;
+      await adapter.updateTask(taskId, taskToEntity(updated));
+    } catch (error) {
+      console.error('Error updating task fields:', error);
+    }
+
+    eventBus.publish('tasksChanged');
+    return updated;
+  }, []);
+
+  // Single-write schedulers used by calendar drag/drop so one drop does not
+  // issue a write (and a tasksChanged publish) per changed field.
+  const schedulePlannedTask = React.useCallback(async (
+    taskId: string,
+    input: { plannedDate: string; plannedTime: string | null; durationInMinutes?: number },
+  ): Promise<Task | null> => {
+    const dayTasks = tasks
+      .filter((t) => t.id !== taskId && !t.parentId && t.plannedDate === input.plannedDate)
+      .sort(compareDayOrder);
+    const plannedPosition = appendPosition(dayTasks);
+
+    return updatePlannerFields(taskId, {
+      plannedDate: input.plannedDate,
+      plannedTime: input.plannedTime,
+      plannedPosition,
+      ...(input.durationInMinutes !== undefined ? { durationInMinutes: input.durationInMinutes } : {}),
+    });
+  }, [updatePlannerFields]);
+
+  const scheduleDueTask = React.useCallback(async (
+    taskId: string,
+    dueDate: number,
+    durationInMinutes?: number,
+  ): Promise<Task | null> => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return null;
+
+    return updateTaskFields(taskId, {
+      dueDate,
+      // Done tasks keep terminationDate as their completion timestamp; active
+      // tasks keep mirroring the deadline into the legacy field.
+      terminationDate: task.triageStatus === 'Done' ? task.terminationDate : dueDate,
+      ...(durationInMinutes !== undefined ? { durationInMinutes } : {}),
+    });
+  }, [updateTaskFields]);
+
+  const createTaskRecord = React.useCallback(async (task: Task): Promise<string> => {
+    try {
+      const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+      const adapter = await persistence;
+      await adapter.createTask(taskToEntity(task));
+    } catch (error) {
+      console.error('Error creating task record:', error);
+    }
+
+    tasks = [...tasks.filter((existing) => existing.id !== task.id), task];
+    syncTaskToYjs(task.id, task);
+    eventBus.publish('tasksChanged');
+    return task.id;
+  }, []);
+
+  const setRecurrence = React.useCallback(async (taskId: string, recurrence: Recurrence | null) => {
+    return updateTaskFields(taskId, {
+      recurrence,
+      seriesId: null,
+      occurrenceDate: null,
+    });
+  }, [updateTaskFields]);
+
+  const stopRecurrence = React.useCallback(async (taskId: string) => {
+    return updateTaskFields(taskId, { recurrence: null });
+  }, [updateTaskFields]);
+
+  const materializeRecurringOccurrence = React.useCallback(async (
+    seriesId: string,
+    date: string,
+    overrides: Partial<Task> = {},
+  ): Promise<string | null> => {
+    const series = tasks.find((t) => t.id === seriesId);
+    if (!series?.recurrence || !series.plannedDate) return null;
+
+    const id = occurrenceId(seriesId, date);
+    const existing = tasks.find((t) => t.id === id);
+
+    if (existing) {
+      if (Object.keys(overrides).length > 0) {
+        await updateTaskFields(id, overrides);
+      }
+      return id;
+    }
+
+    const now = Date.now();
+    const occurrenceDueDate = dueDateForOccurrence(series, date);
+    const occurrence: Task = {
+      ...series,
+      id,
+      plannedDate: date,
+      plannedPosition: null,
+      recurrence: null,
+      seriesId,
+      occurrenceDate: date,
+      triageStatus: 'Ready',
+      completedAt: undefined,
+      terminationDate: occurrenceDueDate,
+      dueDate: occurrenceDueDate,
+      parentId: null,
+      children: [],
+      timer: [],
+      blockedSince: undefined,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: undefined,
+      ...overrides,
+    };
+
+    await createTaskRecord(occurrence);
+
+    // Clone the series' subtasks with one index pass and a single persistence
+    // batch. Cloning each descendant with its own full-store write was O(n·k)
+    // and published a tasksChanged event per child.
+    const childrenByParent = new Map<string, Task[]>();
+    for (const task of tasks) {
+      if (!task.parentId) continue;
+      const siblings = childrenByParent.get(task.parentId);
+      if (siblings) siblings.push(task);
+      else childrenByParent.set(task.parentId, [task]);
+    }
+
+    const clones: Task[] = [];
+    const collectClones = (sourceParentId: string, targetParentId: string) => {
+      for (const child of childrenByParent.get(sourceParentId) ?? []) {
+        const cloneId = crypto.randomUUID();
+        clones.push({
+          ...child,
+          id: cloneId,
+          parentId: targetParentId,
+          children: [],
+          plannedDate: null,
+          plannedTime: null,
+          plannedPosition: null,
+          recurrence: null,
+          seriesId: null,
+          occurrenceDate: null,
+          deletedAt: undefined,
+          triageStatus: child.triageStatus === 'Done' ? 'Backlog' : child.triageStatus,
+          completedAt: undefined,
+          terminationDate: undefined,
+          dueDate: undefined,
+          timer: [],
+          blockedSince: undefined,
+          createdAt: now,
+          updatedAt: now,
+        });
+        collectClones(child.id, cloneId);
+      }
+    };
+    collectClones(seriesId, id);
+
+    if (clones.length > 0) {
+      try {
+        const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+        const adapter = await persistence;
+        await adapter.createTasks(clones.map((clone) => taskToEntity(clone)));
+      } catch (error) {
+        console.error('Error creating occurrence subtasks:', error);
+      }
+
+      tasks = recomputeChildrenFromParentId([...tasks, ...clones]);
+      doc.transact(() => {
+        for (const clone of clones) syncTaskToYjs(clone.id, clone);
+      });
+      eventBus.publish('tasksChanged');
+    }
+
+    return id;
+  }, [createTaskRecord, updateTaskFields]);
+
+  const deleteRecurringOccurrence = React.useCallback(async (seriesId: string, date: string) => {
+    const id = occurrenceId(seriesId, date);
+    const existing = tasks.find((t) => t.id === id);
+
+    if (existing) {
+      await softDeleteOccurrenceTree(id);
+      return existing;
+    }
+
+    const series = tasks.find((t) => t.id === seriesId);
+    if (!series) return null;
+
+    const now = Date.now();
+    const tombstone: Task = {
+      ...series,
+      id,
+      plannedDate: date,
+      plannedPosition: null,
+      recurrence: null,
+      seriesId,
+      occurrenceDate: date,
+      deletedAt: now,
+      triageStatus: 'Dropped',
+      completedAt: undefined,
+      terminationDate: undefined,
+      parentId: null,
+      children: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await createTaskRecord(tombstone);
+    return tombstone;
+  }, [createTaskRecord]);
+
   return {
-    allTasks: tasks,
-    tasks,
+    allTasks: visibleTasks,
+    tasks: visibleTasks,
     createTask,
+    createPlannedTask,
+    updatePlannedDate,
+    updatePlannedTime,
+    schedulePlannedTask,
+    scheduleDueTask,
+    updateColor,
+    clearPlannedDate,
+    movePlannedTask,
+    duplicatePlannedTask,
+    bulkCarryOverPlannedTasks,
+    restoreTaskSnapshots,
+    updateTaskFields,
+    createTaskRecord,
+    setRecurrence,
+    stopRecurrence,
+    materializeRecurringOccurrence,
+    deleteRecurringOccurrence,
     reparent,
     toggleDone,
     updateStatus,

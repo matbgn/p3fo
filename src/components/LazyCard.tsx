@@ -10,6 +10,8 @@ interface LazyCardProps {
   onDragStart?: React.DragEventHandler<HTMLDivElement>;
   onDragOver?: React.DragEventHandler<HTMLDivElement>;
   onDrop?: React.DragEventHandler<HTMLDivElement>;
+  /** Mount the heavy card immediately (forced jump target). */
+  forceMount?: boolean;
 }
 
 /**
@@ -30,6 +32,7 @@ const LazyCard: React.FC<LazyCardProps> = React.memo(({
   onDragStart,
   onDragOver,
   onDrop,
+  forceMount,
 }) => {
   const ref = React.useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = React.useState(false);
@@ -52,7 +55,7 @@ const LazyCard: React.FC<LazyCardProps> = React.memo(({
     return () => observer.disconnect();
   }, []);
 
-  if (!isVisible) {
+  if (!isVisible && !forceMount) {
     return (
       <div
         ref={ref}

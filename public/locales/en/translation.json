@@ -18,7 +18,8 @@
     },
     "view": {
       "week": "Week",
-      "month": "Month"
+      "month": "Month",
+      "planner": "Day planner"
     },
     "retry": "Retry",
     "reload": "Reload"
@@ -164,6 +165,10 @@
         "calendar": {
           "label": "Calendar",
           "description": "Calendar sub-view within Program"
+        },
+        "planner": {
+          "label": "Day planner",
+          "description": "Day planner sub-view within Program"
         },
         "resources": {
           "label": "Resources",
@@ -398,7 +403,7 @@
     "categoryLabel": "Category",
     "difficultyLabel": "Difficulty",
     "selectDifficulty": "Select difficulty",
-    "terminationDateLabel": "Termination Date",
+    "terminationDateLabel": "Due date",
     "plannedDurationLabel": "Planned Duration (min)",
     "urgentLabel": "Urgent",
     "highImpactLabel": "High Impact",
@@ -1275,13 +1280,17 @@
     "inProgressNoDate": "In Progress (No Termination Date)",
     "quickAddTask": "Quick add task...",
     "filtersAndControls": "Filters & Controls",
-    "newTask": "New Task",
-    "titleLabel": "Title",
-    "taskTitlePlaceholder": "Task title...",
+    "newTask": "New Card",
+    "titleLabel": "Card title",
+    "taskTitlePlaceholder": "Card title...",
     "scheduledFor": "Scheduled for: {{date}}",
     "create": "Create",
     "dragStartTime": "Drag to change start time",
-    "dragEndTime": "Drag to change end time"
+    "dragEndTime": "Drag to change end time",
+    "dueDates": "Due dates",
+    "planned": "Planned",
+    "allDay": "All day",
+    "moreEvents": "+{{count}} more"
   },
   "prioritization": {
     "title": "Comparative Prioritization",
@@ -2043,5 +2052,44 @@
         "5": "All of the time"
       }
     }
+  },
+  "planner": {
+    "today": "Today",
+    "previousWeek": "Previous week",
+    "nextWeek": "Next week",
+    "unscheduled": "Unscheduled",
+    "unscheduledEmpty": "Drop a task here to leave it unplanned.",
+    "addChecklistItem": "Add an item",
+    "plannedDate": "Planned date",
+    "time": "Time",
+    "colour": "Colour",
+    "duplicate": "Duplicate",
+    "delete": "Delete",
+    "moveTomorrow": "Move to tomorrow",
+    "moveNextWeek": "Move to next week",
+    "moveUnscheduled": "Move to Unscheduled",
+    "carryOverTitle": "Moved {{count}} unfinished task to today",
+    "carryOverTitle_other": "Moved {{count}} unfinished tasks to today",
+    "deleted": "Deleted “{{title}}”",
+    "duplicated": "Duplicated “{{title}}”",
+    "dragTask": "Drag task",
+    "markDone": "Mark as done",
+    "markNotDone": "Mark as not done",
+    "dueDate": "Due date",
+    "recurring": "Recurring",
+    "urgent": "Urgent",
+    "impact": "Impact",
+    "nextOccurrence": "Next",
+    "stopRepeating": "Stop repeating",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
+    "unscheduledNoPlanDate": "Unscheduled (No plan date)",
+    "unscheduledNoDueDate": "Unscheduled (No due date)",
+    "length": "Length (min)",
+    "dueTime": "Due time",
+    "selectTime": "Select time",
+    "cardTab": "Card",
+    "detailsTab": "Details",
+    "flags": "Flags"
   }
 }

@@ -1,5 +1,5 @@
 import { Pool, PoolClient } from 'pg';
-import { DbClient, SprintWellbeingRecord } from './index.js';
+import { DbClient, SprintWellbeingRecord, applyTaskTemporalMirror } from './index.js';
 import type { SprintStateEntity } from '../../src/lib/sprint-types.js';
 import type {
   TaskEntity,
@@ -41,12 +41,22 @@ interface TaskDbRow {
   timer: { startTime: number | null; elapsedTime: number; isRunning: boolean } | null;
   category: string;
   terminationDate: string | null;
+  dueDate: string | null;
+  completedAt: string | null;
   comment: string | null;
   durationInMinutes: number | null;
   priority: number | null;
   userId: string | null;
   linkedVoteIds: string[] | null;
   blockedSince: string | null;
+  plannedDate: string | null;
+  plannedTime: string | null;
+  plannedPosition: string | null;
+  color: string | null;
+  recurrence: string | null;
+  seriesId: string | null;
+  occurrenceDate: string | null;
+  deletedAt: string | null;
 }
 
 interface UserSettingsDbRow {
@@ -61,6 +71,7 @@ interface UserSettingsDbRow {
   timezone: string | null;
   weekStartDay: number | null;
   defaultPlanView: string | null;
+  plannerDefault: boolean | null;
   preferredWorkingDays: number[] | Record<string, number> | null;
   trigram: string | null;
   pomodoroConfig: Record<string, unknown> | null;
@@ -222,12 +233,22 @@ class PostgresClient implements DbClient {
         "timer" JSONB, -- JSONB for efficient JSON operations
         "category" TEXT DEFAULT 'General',
         "terminationDate" TIMESTAMP WITH TIME ZONE,
+        "dueDate" TIMESTAMP WITH TIME ZONE,
+        "completedAt" TIMESTAMP WITH TIME ZONE,
         "comment" TEXT,
         "durationInMinutes" INTEGER,
         "priority" REAL,
         "userId" TEXT,
         "linkedVoteIds" JSONB,
         "blockedSince" TIMESTAMP WITH TIME ZONE,
+        "plannedDate" TEXT,
+        "plannedTime" TEXT,
+        "plannedPosition" TEXT,
+        "color" TEXT DEFAULT 'none',
+        "recurrence" TEXT,
+        "seriesId" TEXT,
+        "occurrenceDate" TEXT,
+        "deletedAt" TIMESTAMP WITH TIME ZONE,
         CONSTRAINT "fk_tasks_parent" FOREIGN KEY ("parentId") REFERENCES "tasks" ("id") ON DELETE SET NULL DEFERRABLE INITIALLY IMMEDIATE
       )
     `);
@@ -246,6 +267,7 @@ class PostgresClient implements DbClient {
         "timezone" TEXT,
         "weekStartDay" INTEGER,
         "defaultPlanView" TEXT,
+        "plannerDefault" BOOLEAN,
         "preferredWorkingDays" JSONB,
         "trigram" TEXT,
          "pomodoroConfig" JSONB,
@@ -688,6 +710,7 @@ class PostgresClient implements DbClient {
     // Add new columns for UserSettings
     await addColumn('userSettings', 'weekStartDay', 'INTEGER');
     await addColumn('userSettings', 'defaultPlanView', 'TEXT');
+    await addColumn('userSettings', 'plannerDefault', 'BOOLEAN');
     await addColumn('userSettings', 'preferredWorkingDays', 'JSONB');
     await addColumn('userSettings', 'trigram', 'TEXT');
     await addColumn('userSettings', 'pomodoroConfig', 'JSONB');
@@ -723,6 +746,80 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
 
     // Tasks blockedSince column (EF prosthetic: tracks when task entered Blocked status)
     await addColumn('tasks', 'blockedSince', 'TIMESTAMP WITH TIME ZONE');
+
+    // Temporal split columns + one-time backfill. A migration marker (rather
+    // than a pre-DDL column probe) keeps the backfill retryable: if the process
+    // dies after the columns are added but before the backfill commits, the
+    // next boot runs it again instead of skipping it forever.
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS "_migrations" (
+        "id" TEXT PRIMARY KEY,
+        "appliedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    await addColumn('tasks', 'dueDate', 'TIMESTAMP WITH TIME ZONE');
+    await addColumn('tasks', 'completedAt', 'TIMESTAMP WITH TIME ZONE');
+
+    // Planner columns
+    await addColumn('tasks', 'plannedDate', 'TEXT');
+    await addColumn('tasks', 'plannedTime', 'TEXT');
+    await addColumn('tasks', 'plannedPosition', 'TEXT');
+    await addColumn('tasks', 'color', "TEXT DEFAULT 'none'");
+    await addColumn('tasks', 'recurrence', 'TEXT');
+    await addColumn('tasks', 'seriesId', 'TEXT');
+    await addColumn('tasks', 'occurrenceDate', 'TEXT');
+    await addColumn('tasks', 'deletedAt', 'TIMESTAMP WITH TIME ZONE');
+
+    // Lazy backfill: before the temporal split, terminationDate was both the
+    // deadline and the completion timestamp. Preserve both meanings for rows
+    // touched since the deploy window. The marker is written in the same
+    // transaction as the updates, so a crash or failed migration retries on
+    // the next start. Older rows are not rewritten: readers fall back to
+    // terminationDate for historical data, and touching the full history at
+    // boot would lock a large part of the table.
+    const TEMPORAL_BACKFILL_WINDOW_DAYS = 2;
+    const temporalBackfillCutoff = new Date(
+      Date.now() - TEMPORAL_BACKFILL_WINDOW_DAYS * 86_400_000,
+    ).toISOString();
+    const temporalSplitMigrationId = 'tasks.temporal-split-backfill';
+    const migrationClient = await this.pool.connect();
+    try {
+      await migrationClient.query('BEGIN');
+      const marker = await migrationClient.query(
+        `SELECT 1 FROM "_migrations" WHERE "id" = $1`,
+        [temporalSplitMigrationId],
+      );
+      if (marker.rows.length === 0) {
+        await migrationClient.query(`
+          UPDATE "tasks"
+          SET "dueDate" = "terminationDate"
+          WHERE "dueDate" IS NULL
+            AND "completedAt" IS NULL
+            AND "terminationDate" IS NOT NULL
+            AND "triageStatus" <> 'Done'
+            AND "updatedAt" >= $1::timestamptz
+        `, [temporalBackfillCutoff]);
+        await migrationClient.query(`
+          UPDATE "tasks"
+          SET "completedAt" = "terminationDate"
+          WHERE "completedAt" IS NULL
+            AND "terminationDate" IS NOT NULL
+            AND "triageStatus" = 'Done'
+            AND "updatedAt" >= $1::timestamptz
+        `, [temporalBackfillCutoff]);
+        await migrationClient.query(
+          `INSERT INTO "_migrations" ("id") VALUES ($1) ON CONFLICT ("id") DO NOTHING`,
+          [temporalSplitMigrationId],
+        );
+      }
+      await migrationClient.query('COMMIT');
+    } catch (error) {
+      await migrationClient.query('ROLLBACK').catch(() => undefined);
+      console.error('Task temporal split backfill failed; it will retry on next start:', error);
+    } finally {
+      migrationClient.release();
+    }
 
     // VoteLoops proposalId column (per-proposal loops)
     await addColumn('voteLoops', 'proposalId', 'TEXT NOT NULL DEFAULT \'\'');
@@ -803,7 +900,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     excludeStatuses?: string[],
     triageStatuses?: string[],
     includeSubtasks?: boolean,
-    options?: { search?: string; active?: boolean },
+    options?: { search?: string; active?: boolean; includeDeleted?: boolean },
   ): Promise<{ data: TaskEntity[]; total: number }> {
     const conditions: string[] = [];
     const params: (string | number | boolean | null)[] = [];
@@ -837,6 +934,13 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
 
     if (includeSubtasks === false) {
       conditions.push(`"parentId" IS NULL`);
+    }
+
+    // Soft-deleted tombstone rows stay in the table so recurrence expansion can
+    // suppress deleted occurrences. Callers that render tasks must opt in to
+    // receive them; MCP listings and audits use the default and exclude them.
+    if (!options?.includeDeleted) {
+      conditions.push(`"deletedAt" IS NULL`);
     }
 
     const whereClause = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '';
@@ -888,6 +992,8 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       timer: input.timer || [],
       category: input.category || 'General',
       terminationDate: input.terminationDate || null,
+      dueDate: input.dueDate || null,
+      completedAt: input.completedAt || null,
       comment: input.comment || null,
       durationInMinutes: input.durationInMinutes || null,
       priority: input.priority ?? null,
@@ -896,12 +1002,23 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       children: input.children || [],
       linkedVoteIds: input.linkedVoteIds || undefined,
       blockedSince: input.blockedSince || null,
+      plannedDate: input.plannedDate ?? null,
+      plannedTime: input.plannedTime ?? null,
+      plannedPosition: input.plannedPosition ?? null,
+      color: input.color ?? 'none',
+      recurrence: input.recurrence ?? null,
+      seriesId: input.seriesId ?? null,
+      occurrenceDate: input.occurrenceDate ?? null,
+      deletedAt: input.deletedAt ?? null,
     };
+
+    applyTaskTemporalMirror(newTask, input);
 
     await this.pool.query(`
       INSERT INTO "tasks" ("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget",
-                         "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId", "linkedVoteIds", "blockedSince")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+                         "difficulty", "timer", "category", "terminationDate", "dueDate", "completedAt", "comment", "durationInMinutes", "priority", "userId", "linkedVoteIds", "blockedSince",
+                         "plannedDate", "plannedTime", "plannedPosition", "color", "recurrence", "seriesId", "occurrenceDate", "deletedAt")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
     `, [
       newTask.id,
       newTask.parentId,
@@ -917,12 +1034,22 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       JSON.stringify(newTask.timer),
       newTask.category,
       newTask.terminationDate,
+      newTask.dueDate ?? null,
+      newTask.completedAt ?? null,
       newTask.comment,
       newTask.durationInMinutes,
       newTask.priority,
       newTask.userId,
       newTask.linkedVoteIds || null,
       newTask.blockedSince,
+      newTask.plannedDate ?? null,
+      newTask.plannedTime ?? null,
+      newTask.plannedPosition ?? null,
+      newTask.color ?? 'none',
+      newTask.recurrence ?? null,
+      newTask.seriesId ?? null,
+      newTask.occurrenceDate ?? null,
+      newTask.deletedAt ?? null,
     ]);
 
     return newTask;
@@ -934,7 +1061,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       return null;
     }
 
-    const updatedTask = { ...currentTask, ...patch };
+    const updatedTask = applyTaskTemporalMirror({ ...currentTask, ...patch }, patch, currentTask.triageStatus) as TaskEntity;
 
     const params = [
       updatedTask.parentId,
@@ -949,12 +1076,22 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       JSON.stringify(updatedTask.timer),
       updatedTask.category,
       updatedTask.terminationDate,
+      updatedTask.dueDate ?? null,
+      updatedTask.completedAt ?? null,
       updatedTask.comment,
       updatedTask.durationInMinutes,
       updatedTask.priority,
       updatedTask.userId,
       updatedTask.linkedVoteIds ? JSON.stringify(updatedTask.linkedVoteIds) : null,
       updatedTask.blockedSince ?? null,
+      updatedTask.plannedDate ?? null,
+      updatedTask.plannedTime ?? null,
+      updatedTask.plannedPosition ?? null,
+      updatedTask.color ?? 'none',
+      updatedTask.recurrence ?? null,
+      updatedTask.seriesId ?? null,
+      updatedTask.occurrenceDate ?? null,
+      updatedTask.deletedAt ?? null,
       id
     ];
 
@@ -962,9 +1099,11 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       UPDATE "tasks"
       SET "parentId" = $1, "title" = $2, "updatedAt" = $3, "triageStatus" = $4, "urgent" = $5,
           "impact" = $6, "majorIncident" = $7, "sprintTarget" = $8, "difficulty" = $9, "timer" = $10,
-          "category" = $11, "terminationDate" = $12, "comment" = $13,
-          "durationInMinutes" = $14, "priority" = $15, "userId" = $16, "linkedVoteIds" = $17, "blockedSince" = $18
-      WHERE "id" = $19
+          "category" = $11, "terminationDate" = $12, "dueDate" = $13, "completedAt" = $14, "comment" = $15,
+          "durationInMinutes" = $16, "priority" = $17, "userId" = $18, "linkedVoteIds" = $19, "blockedSince" = $20,
+          "plannedDate" = $21, "plannedTime" = $22, "plannedPosition" = $23, "color" = $24,
+          "recurrence" = $25, "seriesId" = $26, "occurrenceDate" = $27, "deletedAt" = $28
+      WHERE "id" = $29
     `, params);
 
     return updatedTask;
@@ -1051,10 +1190,12 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       await client.query('SET CONSTRAINTS ALL DEFERRED');
 
       for (const task of tasks) {
+        applyTaskTemporalMirror(task, task, task.triageStatus);
         await client.query(`
           INSERT INTO "tasks" ("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget",
-                             "difficulty", "timer", "category", "terminationDate", "comment", "durationInMinutes", "priority", "userId", "blockedSince")
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+                             "difficulty", "timer", "category", "terminationDate", "dueDate", "completedAt", "comment", "durationInMinutes", "priority", "userId", "linkedVoteIds", "blockedSince",
+                             "plannedDate", "plannedTime", "plannedPosition", "color", "recurrence", "seriesId", "occurrenceDate", "deletedAt")
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
           ON CONFLICT ("id") DO UPDATE SET
             "parentId" = EXCLUDED."parentId",
             "title" = EXCLUDED."title",
@@ -1068,11 +1209,22 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
             "timer" = EXCLUDED."timer",
             "category" = EXCLUDED."category",
             "terminationDate" = EXCLUDED."terminationDate",
+            "dueDate" = EXCLUDED."dueDate",
+            "completedAt" = EXCLUDED."completedAt",
             "comment" = EXCLUDED."comment",
             "durationInMinutes" = EXCLUDED."durationInMinutes",
             "priority" = EXCLUDED."priority",
             "userId" = EXCLUDED."userId",
-            "blockedSince" = EXCLUDED."blockedSince"
+            "linkedVoteIds" = EXCLUDED."linkedVoteIds",
+            "blockedSince" = EXCLUDED."blockedSince",
+            "plannedDate" = EXCLUDED."plannedDate",
+            "plannedTime" = EXCLUDED."plannedTime",
+            "plannedPosition" = EXCLUDED."plannedPosition",
+            "color" = EXCLUDED."color",
+            "recurrence" = EXCLUDED."recurrence",
+            "seriesId" = EXCLUDED."seriesId",
+            "occurrenceDate" = EXCLUDED."occurrenceDate",
+            "deletedAt" = EXCLUDED."deletedAt"
         `, [
           task.id,
           task.parentId,
@@ -1088,11 +1240,22 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
           JSON.stringify(task.timer),
           task.category,
           task.terminationDate,
+          task.dueDate ?? null,
+          task.completedAt ?? null,
           task.comment,
           task.durationInMinutes,
           task.priority,
           task.userId,
+          task.linkedVoteIds ? JSON.stringify(task.linkedVoteIds) : null,
           task.blockedSince ?? null,
+          task.plannedDate ?? null,
+          task.plannedTime ?? null,
+          task.plannedPosition ?? null,
+          task.color ?? 'none',
+          task.recurrence ?? null,
+          task.seriesId ?? null,
+          task.occurrenceDate ?? null,
+          task.deletedAt ?? null,
         ]);
       }
 
@@ -1119,8 +1282,8 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     const updated = { ...current, ...data, userId };
 
     await this.pool.query(`
-      INSERT INTO "userSettings" ("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness", "weekStartDay", "defaultPlanView", "preferredWorkingDays", "trigram", "pomodoroConfig", "focusModeConfig", "travelerConfig", "nonActionPeriodHours")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      INSERT INTO "userSettings" ("userId", "username", "logo", "hasCompletedOnboarding", "workload", "splitTime", "monthlyBalances", "timezone", "cardCompactness", "weekStartDay", "defaultPlanView", "plannerDefault", "preferredWorkingDays", "trigram", "pomodoroConfig", "focusModeConfig", "travelerConfig", "nonActionPeriodHours")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       ON CONFLICT ("userId") DO UPDATE SET
         "username" = EXCLUDED."username",
         "logo" = EXCLUDED."logo",
@@ -1132,6 +1295,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
         "cardCompactness" = EXCLUDED."cardCompactness",
         "weekStartDay" = EXCLUDED."weekStartDay",
         "defaultPlanView" = EXCLUDED."defaultPlanView",
+        "plannerDefault" = EXCLUDED."plannerDefault",
         "preferredWorkingDays" = EXCLUDED."preferredWorkingDays",
         "trigram" = EXCLUDED."trigram",
         "pomodoroConfig" = EXCLUDED."pomodoroConfig",
@@ -1150,6 +1314,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       updated.cardCompactness,
       updated.weekStartDay ?? null,
       updated.defaultPlanView ?? null,
+      updated.plannerDefault ?? false,
       updated.preferredWorkingDays ? JSON.stringify(updated.preferredWorkingDays) : null,
       updated.trigram ?? null,
       updated.pomodoroConfig ? JSON.stringify(updated.pomodoroConfig) : null,
@@ -2408,6 +2573,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       monthlyBalances: row.monthlyBalances as unknown as Record<string, MonthlyBalanceData> | undefined,
       weekStartDay: row.weekStartDay as 0 | 1 | undefined,
       defaultPlanView: row.defaultPlanView as 'week' | 'month' | undefined,
+      plannerDefault: Boolean(row.plannerDefault),
       preferredWorkingDays: row.preferredWorkingDays || undefined,
       trigram: row.trigram || undefined,
       pomodoroConfig: row.pomodoroConfig ? (typeof row.pomodoroConfig === 'string' ? JSON.parse(row.pomodoroConfig) : row.pomodoroConfig) : undefined,

@@ -27,7 +27,7 @@ export interface CombinedSettings {
     hoursToBeDoneByDay: number;
     cardAgingBaseDays: number;
     weekStartDay: 0 | 1;
-    defaultPlanView: 'week' | 'month';
+    defaultPlanView: 'week' | 'month' | 'planner';
     preferredWorkingDays: Record<string, number>;
     timezone: string;
     country: string;
@@ -157,11 +157,21 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                     if (local) merged.weekStartDay = parseInt(local) as 0 | 1;
                 }
 
-                if (userSettings.defaultPlanView) {
+                const storedPlannerDefault = userSettings.plannerDefault === true;
+                if (storedPlannerDefault) {
+                    merged.defaultPlanView = 'planner';
+                } else if (userSettings.defaultPlanView) {
                     merged.defaultPlanView = userSettings.defaultPlanView;
                 } else {
-                    const local = localStorage.getItem('defaultPlanView');
-                    if (local) merged.defaultPlanView = local as 'week' | 'month';
+                    // Legacy key: older bundles only understand week/month, so
+                    // the planner default lives under its own key.
+                    const localPlanner = localStorage.getItem('plannerDefault');
+                    if (localPlanner === 'true') {
+                        merged.defaultPlanView = 'planner';
+                    } else {
+                        const local = localStorage.getItem('defaultPlanView');
+                        if (local === 'week' || local === 'month') merged.defaultPlanView = local;
+                    }
                 }
 
                 if (userSettings.preferredWorkingDays) {
@@ -251,9 +261,19 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 hasUpdates = true;
             }
             if (!userSettings.defaultPlanView) {
+                const localPlanner = localStorage.getItem('plannerDefault') === 'true';
                 const local = localStorage.getItem('defaultPlanView');
-                if (local) updates.defaultPlanView = local as 'week' | 'month';
-                else if (settings.defaultPlanView) updates.defaultPlanView = settings.defaultPlanView;
+                if (localPlanner) {
+                    updates.plannerDefault = true;
+                    // Keep the legacy column at a view older bundles can render.
+                    updates.defaultPlanView = local === 'week' || local === 'month' ? local : 'month';
+                } else if (local === 'week' || local === 'month') {
+                    updates.defaultPlanView = local;
+                } else if (settings.defaultPlanView === 'week' || settings.defaultPlanView === 'month') {
+                    updates.defaultPlanView = settings.defaultPlanView;
+                } else {
+                    updates.defaultPlanView = 'month';
+                }
                 hasUpdates = true;
             }
             if (!userSettings.preferredWorkingDays) {
@@ -379,7 +399,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
         setSettings(prev => ({ ...prev, ...updates }));
 
         try {
-            const userUpdates: Partial<{ splitTime?: string; workload?: number; timezone?: string; weekStartDay?: 0 | 1; defaultPlanView?: 'week' | 'month'; preferredWorkingDays?: Record<string, number>; trigram?: string }> = {};
+            const userUpdates: Partial<{ splitTime?: string; workload?: number; timezone?: string; weekStartDay?: 0 | 1; defaultPlanView?: 'week' | 'month'; plannerDefault?: boolean; preferredWorkingDays?: Record<string, number>; trigram?: string }> = {};
             const appUpdates: Partial<AppSettingsEntity> = {};
 
             const addToUser = (key: string, value: unknown) => {
@@ -408,8 +428,19 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
             }
             if (updates.defaultPlanView !== undefined) {
                 if (userSettings) {
-                    addToUser('defaultPlanView', updates.defaultPlanView);
-                    localStorage.setItem('defaultPlanView', updates.defaultPlanView);
+                    if (updates.defaultPlanView === 'planner') {
+                        // Never persist "planner" in the legacy defaultPlanView:
+                        // older bundles feed that value straight to
+                        // react-big-calendar and crash. The dedicated flag is
+                        // ignored by them, so a rollback stays safe.
+                        addToUser('plannerDefault', true);
+                        localStorage.setItem('plannerDefault', 'true');
+                    } else {
+                        addToUser('defaultPlanView', updates.defaultPlanView);
+                        addToUser('plannerDefault', false);
+                        localStorage.setItem('defaultPlanView', updates.defaultPlanView);
+                        localStorage.removeItem('plannerDefault');
+                    }
                 }
             }
             if (updates.preferredWorkingDays !== undefined) {

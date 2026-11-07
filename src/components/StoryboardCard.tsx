@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TaskCard } from './TaskCard';
 import { Task, Category, TriageStatus } from '@/hooks/useTasks';
@@ -6,11 +6,13 @@ import { cn } from '@/lib/utils';
 import { useViewDisplay } from '@/hooks/useView';
 import { COMPACTNESS_ULTRA, COMPACTNESS_COMPACT } from '@/context/ViewContextDefinition';
 import { HOVER_ENTER_DELAY_MS } from '@/lib/hover-constants';
+import { taskColorBar } from '@/lib/planner/colors';
 import { AlertTriangle, CircleDot, Clock, Flame, Crosshair } from 'lucide-react';
 
 interface StoryboardCardProps {
   task: Task;
   tasks: Task[];
+  className?: string;
   isHighlighted?: boolean;
   updateStatus: (id: string, status: TriageStatus) => void;
   updateDifficulty: (id: string, difficulty: 0.5 | 1 | 2 | 3 | 5 | 8) => void;
@@ -35,11 +37,9 @@ interface StoryboardCardProps {
   onToggleOpen?: (id: string, toggleAll?: boolean) => void;
   isReordering?: boolean;
   isDragged?: boolean;
-  isDragOver?: boolean;
   draggable?: boolean;
   onDragStart?: (e: React.DragEvent<HTMLDivElement>) => void;
-  onDragOver?: (e: React.DragEvent<HTMLDivElement>) => void;
-  onDrop?: (e: React.DragEvent<HTMLDivElement>) => void;
+  onHoverHeightChange?: (height: number | null) => void;
 }
 
 function getDifficultyColor(difficulty: number | undefined): string {
@@ -53,6 +53,7 @@ function getDifficultyColor(difficulty: number | undefined): string {
 export const StoryboardCard: React.FC<StoryboardCardProps> = React.memo(({
   task,
   tasks,
+  className,
   isHighlighted,
   updateStatus,
   updateDifficulty,
@@ -77,17 +78,39 @@ export const StoryboardCard: React.FC<StoryboardCardProps> = React.memo(({
   onToggleOpen,
   isReordering,
   isDragged,
-  isDragOver,
   draggable,
   onDragStart,
-  onDragOver,
-  onDrop,
+  onHoverHeightChange,
 }) => {
   const { t } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
+  const hoverCardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isHovered || !onHoverHeightChange) {
+      onHoverHeightChange?.(null);
+      return;
+    }
+
+    const element = hoverCardRef.current;
+    if (!element) return;
+
+    const report = () => onHoverHeightChange(element.offsetHeight);
+    report();
+    const observer = new ResizeObserver(report);
+    observer.observe(element);
+
+    return () => {
+      observer.disconnect();
+      onHoverHeightChange(null);
+    };
+  }, [isHovered, onHoverHeightChange]);
+
   const [isPinned, setIsPinned] = useState(false);
   const hoverTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDraggingRef = React.useRef(false);
+  const suppressClickRef = React.useRef(false);
+  const wrapperRef = React.useRef<HTMLDivElement>(null);
 
   const handleMouseEnter = useCallback(() => {
     if (isDraggingRef.current) return;
@@ -120,6 +143,7 @@ export const StoryboardCard: React.FC<StoryboardCardProps> = React.memo(({
 
   const handleDragStartEvent = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     isDraggingRef.current = true;
+    suppressClickRef.current = true;
     setIsHovered(false);
     setIsPinned(false);
     if (hoverTimerRef.current) {
@@ -131,11 +155,15 @@ export const StoryboardCard: React.FC<StoryboardCardProps> = React.memo(({
 
   const handleDragEndEvent = useCallback(() => {
     isDraggingRef.current = false;
+    setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 0);
   }, []);
 
   React.useEffect(() => {
     if (!isPinned) return;
-    const handleClickOutside = () => {
+    const handleClickOutside = (event: PointerEvent) => {
+      if (wrapperRef.current?.contains(event.target as Node)) return;
       setIsPinned(false);
       setIsHovered(false);
     };
@@ -143,8 +171,14 @@ export const StoryboardCard: React.FC<StoryboardCardProps> = React.memo(({
     return () => document.removeEventListener('pointerdown', handleClickOutside);
   }, [isPinned]);
 
+  const handleCompactClick = useCallback(() => {
+    if (suppressClickRef.current || isDraggingRef.current) return;
+    pinCard();
+  }, [pinCard]);
+
   const { cardCompactness } = useViewDisplay();
   const difficultyColor = getDifficultyColor(task.difficulty);
+  const colorBar = taskColorBar(task.color);
   const isDone = task.triageStatus === 'Done' || task.triageStatus === 'Dropped';
 
   const scale = cardCompactness === COMPACTNESS_ULTRA ? 1 : cardCompactness === COMPACTNESS_COMPACT ? 1.25 : 1.5;
@@ -184,24 +218,31 @@ export const StoryboardCard: React.FC<StoryboardCardProps> = React.memo(({
 
   return (
     <div
-      className="relative"
+      ref={wrapperRef}
+      className={cn('relative', className)}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       draggable={draggable}
       onDragStart={handleDragStartEvent}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
       onDragEnd={handleDragEndEvent}
     >
       <div
+        onClick={handleCompactClick}
         className={cn(
-          'transition-all duration-200 rounded-md border shadow-sm bg-card text-card-foreground cursor-default select-none overflow-hidden',
+          'relative transition-all duration-200 rounded-md border shadow-sm bg-card text-card-foreground cursor-pointer select-none overflow-hidden',
           isDone && 'opacity-50',
           isHighlighted && 'ring-2 ring-yellow-400',
           isDragged && 'opacity-50',
         )}
         style={{ width: cardWidth, minHeight: cardMinHeight, fontSize }}
       >
+        {colorBar && (
+          <span
+            className="absolute inset-y-0 left-0 w-1"
+            style={{ backgroundColor: colorBar }}
+            aria-hidden
+          />
+        )}
         <div className="flex flex-col justify-between h-full" style={{ padding: padPx }}>
           <div
             className={cn(
@@ -236,11 +277,11 @@ export const StoryboardCard: React.FC<StoryboardCardProps> = React.memo(({
 
       {isHovered && (
         <div
+          ref={hoverCardRef}
           className="absolute top-0 left-0 z-50"
           style={{
             width: hoverWidth,
             opacity: isDragged ? 0.5 : 1,
-            border: isDragOver ? '2px dashed #ccc' : 'none',
           }}
           onPointerDown={(e) => {
             e.stopPropagation();
