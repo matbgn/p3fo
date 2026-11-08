@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.39.2 (2026-11-08)
+
+---
+
 ## v0.39.1 (2026-11-07)
 
 ### Bug Fixes
@@ -133,41 +137,5 @@
 - **time picker:** add a11y title to time picker dialog (a8e0e9e)
 - **auth:** reload on 401 to refresh proxy session (f677dc4)
 - **i18n:** respect base url for locale loading (c97c43c)
-
----
-
-## v0.32.0 (2026-07-22)
-
-### Features
-
-- **i18n:** add German to voting module and translate hardcoded UI strings (9d6b772)
-- **i18n:** translate individual metrics (forecast, hourly balance, vacations, QoL survey) (c707fb0)
-- **i18n:** translate NextTaskSpotlight callout (mood, greeting, start working) and consistency components (e380803)
-- **i18n:** translate NotificationCenter (Snooze, Mark as Read, Clear All, title, empty state) (2474a6f)
-- **i18n:** translate metric cards (HighImpact, FailureRate, NewCapabilities, QLI) (e793cfd)
-- **i18n:** translate PlanView toggle buttons, titles, and action buttons (ae2fcea)
-- **i18n:** translate ResourcesScheduler subview (workload title, team members, today, tasks assigned, unassigned, tooltip duration/start/end) (12549ed)
-- **i18n:** translate RolesTable subview (search, headers, list/user filter, involvement labels) (6a7edec)
-- **i18n:** resolve framework category labels/descriptions via t() at render (dfa846a)
-- **i18n:** translate KanbanBoard column headers (Backlog/Ready/WIP/Blocked/Done/Dropped/Archived) (fbeb456)
-- **i18n:** translate FertilizationView and DreamView column titles + fact tags (e5828a5)
-- **i18n:** translate ChronologicalView and ProgramTopView strings (4cc38b6)
-- **i18n:** translate TodoStrip and CirclesView strings (b540cfa)
-- **i18n:** translate TodolistView and TodolistRow strings (32293bc)
-- **i18n:** translate framework views, DreamTopView navigation and labels (c1bab4a)
-- **i18n:** translate DreamView board strings, timeline, and voting controls (29c3aa7)
-- **i18n:** translate FertilizationView moderation, voting modes, and board options (24c9c1e)
-- **i18n:** add initial multi-language support (31cea89)
-- **salary system:** add projected hourly rate tab (de12e7d)
-- **salary system:** edit fake employees in team simulator (b3b33cd)
-- **salary system:** add team simulator panel (0888c38)
-- **salary system:** add salary calculator (a8d5d59)
-
-### Bug Fixes
-
-- **salary system:** correct hourly rate base (7786c79)
-- **mcp:** live-sync task mutations via Yjs (bfe34b4)
-- **mcp:** use POST aliases for MCP task mutations (ffa9d8d)
-- **consistency:** base trend on today vs prior 7-day avg (ad26ec0)
 
 ---
