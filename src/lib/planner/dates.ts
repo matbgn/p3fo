@@ -16,6 +16,10 @@ export function addDays(date: Date, days: number): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
 }
 
+export function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
 export function addDaysToKey(key: string, days: number): string {
   return toDateKey(addDays(parseDateKey(key), days));
 }

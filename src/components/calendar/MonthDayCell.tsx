@@ -110,7 +110,7 @@ export const MonthDayCell: React.FC<DateCellWrapperProps> = ({ children, value }
   return (
     <HoverCard openDelay={250} closeDelay={100}>
       <HoverCardTrigger asChild>{cell}</HoverCardTrigger>
-      <HoverCardContent align="start" side="bottom" className="w-auto p-0">
+      <HoverCardContent align="start" side="top" className="w-auto p-0">
         <EventList date={value} events={dayEvents} onSelectEvent={onSelectEvent} />
       </HoverCardContent>
     </HoverCard>
@@ -120,7 +120,7 @@ export const MonthDayCell: React.FC<DateCellWrapperProps> = ({ children, value }
 export const MonthShowMore: React.FC<ShowMoreProps<CalendarDisplayEvent>> = ({
   count,
   slotDate,
-  remainingEvents,
+  events,
 }) => {
   const { t } = useTranslation();
   const { onSelectEvent } = React.useContext(MonthCalendarContext);
@@ -132,8 +132,8 @@ export const MonthShowMore: React.FC<ShowMoreProps<CalendarDisplayEvent>> = ({
           {t('program.moreEvents', { count })}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-auto p-0">
-        <EventList date={slotDate} events={remainingEvents} onSelectEvent={onSelectEvent} />
+      <PopoverContent align="start" side="top" className="w-auto p-0">
+        <EventList date={slotDate} events={events} onSelectEvent={onSelectEvent} />
       </PopoverContent>
     </Popover>
   );

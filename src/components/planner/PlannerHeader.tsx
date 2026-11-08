@@ -1,18 +1,16 @@
 import React from 'react';
-import { formatDateRangeTitle, formatWeekNumber } from '@/lib/planner/format';
+import { formatDateRangeTitle, formatWeekSpan } from '@/lib/planner/format';
 import { CalendarNavHeader } from './CalendarNavHeader';
 
 type PlannerHeaderProps = {
-  weekStart: Date;
-  weekNumber: number;
+  rangeStart: Date;
   onPrevious: () => void;
   onNext: () => void;
   onToday: () => void;
 };
 
 export const PlannerHeader: React.FC<PlannerHeaderProps> = ({
-  weekStart,
-  weekNumber,
+  rangeStart,
   onPrevious,
   onNext,
   onToday,
@@ -21,8 +19,8 @@ export const PlannerHeader: React.FC<PlannerHeaderProps> = ({
 
   return (
     <CalendarNavHeader
-      title={formatDateRangeTitle(weekStart, locale)}
-      subtitle={formatWeekNumber(weekNumber)}
+      title={formatDateRangeTitle(rangeStart, locale)}
+      subtitle={formatWeekSpan(rangeStart)}
       onPrevious={onPrevious}
       onNext={onNext}
       onToday={onToday}

@@ -13,13 +13,12 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { addDays, addDaysToKey, addWeeks, combineDateKeyAndTime, isoWeekNumber, parseDateKey, startOfWeek, toDateKey, weekDateKeys } from '@/lib/planner/dates';
+import { addDaysToKey, addWeeks, combineDateKeyAndTime, parseDateKey, startOfDay, weekDateKeys } from '@/lib/planner/dates';
 import { compareDayOrder } from '@/lib/planner/position';
 import { edgeDropDate, type WeekDirection } from '@/lib/planner/drop';
 import type { Task } from '@/hooks/useTasks';
 import { useTasks } from '@/hooks/useTasks';
 import { useAllTasks } from '@/hooks/useAllTasks';
-import { useSettingsContext } from '@/context/SettingsContext';
 import { useUsersContext } from '@/context/UsersContext';
 import { useToday } from '@/hooks/useToday';
 import { useToast } from '@/hooks/use-toast';
@@ -120,14 +119,13 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
     stopRecurrence,
     setRecurrence,
   } = useTasks();
-  const { settings } = useSettingsContext();
   const { users } = useUsersContext();
   const { toast } = useToast();
   const today = useToday();
-  const weekStartDay = (settings.weekStartDay === 0 ? 0 : 1) as 0 | 1;
-  const weekStart = React.useMemo(() => startOfWeek(anchorDate, weekStartDay), [anchorDate, weekStartDay]);
-  const days = React.useMemo(() => weekDateKeys(weekStart), [weekStart]);
-  const weekNumber = React.useMemo(() => isoWeekNumber(addDays(weekStart, 3)), [weekStart]);
+  // The planner shows a rolling window: the anchor day plus the next six,
+  // independent of the configured calendar week start.
+  const windowStart = React.useMemo(() => startOfDay(anchorDate), [anchorDate]);
+  const days = React.useMemo(() => weekDateKeys(windowStart), [windowStart]);
 
   const rawRootTasks = React.useMemo(() => {
     const seen = new Set<string>();
@@ -385,9 +383,9 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
 
     if (overId.startsWith('edge:')) {
       const direction = Number(overId.slice(5)) as WeekDirection;
-      const targetDate = edgeDropDate(task, weekStart, direction, weekStartDay);
+      const targetDate = edgeDropDate(task, windowStart, direction);
       await updatePlannedDate(resolvedTaskId, targetDate);
-      onNavigate(addWeeks(weekStart, direction));
+      onNavigate(addWeeks(windowStart, direction));
       return;
     }
 
@@ -437,10 +435,9 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
   return (
     <div className="relative flex h-full min-h-[32rem] flex-col overflow-hidden rounded-lg border bg-card">
       <PlannerHeader
-        weekStart={weekStart}
-        weekNumber={weekNumber}
-        onPrevious={() => onNavigate(addWeeks(weekStart, -1))}
-        onNext={() => onNavigate(addWeeks(weekStart, 1))}
+        rangeStart={windowStart}
+        onPrevious={() => onNavigate(addWeeks(windowStart, -1))}
+        onNext={() => onNavigate(addWeeks(windowStart, 1))}
         onToday={() => onNavigate(parseDateKey(today))}
       />
 

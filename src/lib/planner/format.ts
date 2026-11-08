@@ -1,4 +1,4 @@
-import { parseDateKey } from './dates';
+import { addDays, isoWeekNumber, parseDateKey } from './dates';
 
 function dateFormatter(locale: string | undefined, options: Intl.DateTimeFormatOptions) {
   return new Intl.DateTimeFormat(locale, options);
@@ -18,6 +18,16 @@ export function formatMonthTitle(date: Date, locale?: string, style: 'short' | '
 
 export function formatWeekNumber(week: number): string {
   return `W${week}`;
+}
+
+/** Label a rolling seven-day window, which may span two ISO weeks. */
+export function formatWeekSpan(start: Date, days = 6): string {
+  const startWeek = isoWeekNumber(start);
+  const endWeek = isoWeekNumber(addDays(start, days));
+
+  return startWeek === endWeek
+    ? formatWeekNumber(startWeek)
+    : `${formatWeekNumber(startWeek)}–${formatWeekNumber(endWeek)}`;
 }
 
 export function formatDateRangeTitle(weekStart: Date, locale?: string): string {

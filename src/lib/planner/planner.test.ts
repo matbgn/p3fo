@@ -3,10 +3,13 @@ import {
   addDaysToKey,
   isoWeekNumber,
   parseDateKey,
+  startOfDay,
   startOfWeek,
   toDateKey,
   weekDateKeys,
 } from './dates';
+import { edgeDropDate } from './drop';
+import { formatWeekSpan } from './format';
 import { appendPosition, compareDayOrder, duplicateTaskPosition, positionBetween, positionForDrop } from './position';
 import { parseSmartTime } from './smart-time';
 import { isCarriedOver } from './carry-over';
@@ -28,6 +31,47 @@ describe('planner dates', () => {
   it('computes ISO week numbers across year boundaries', () => {
     expect(isoWeekNumber(new Date(2026, 0, 1))).toBe(1);
     expect(isoWeekNumber(new Date(2026, 11, 31))).toBe(53);
+  });
+
+  it('rolls a seven-day window from the anchor day instead of the week start', () => {
+    const sundayAfternoon = new Date(2026, 10, 8, 15, 30);
+
+    expect(toDateKey(startOfDay(sundayAfternoon))).toBe('2026-11-08');
+    expect(weekDateKeys(startOfDay(sundayAfternoon))).toEqual([
+      '2026-11-08',
+      '2026-11-09',
+      '2026-11-10',
+      '2026-11-11',
+      '2026-11-12',
+      '2026-11-13',
+      '2026-11-14',
+    ]);
+  });
+});
+
+describe('planner labels', () => {
+  it('shows both ISO weeks when a rolling window spans two', () => {
+    expect(formatWeekSpan(new Date(2026, 10, 8))).toBe('W45–W46');
+    expect(formatWeekSpan(new Date(2026, 10, 9))).toBe('W46');
+  });
+
+  it('spans the year boundary', () => {
+    expect(formatWeekSpan(new Date(2026, 11, 29))).toBe('W53–W1');
+  });
+});
+
+describe('planner edge drops', () => {
+  const task = { id: 't1', title: 'Task', plannedDate: '2026-11-11' };
+  const windowStart = new Date(2026, 10, 8);
+
+  it('shifts a card by one week from its planned day', () => {
+    expect(edgeDropDate(task, windowStart, 1)).toBe('2026-11-18');
+    expect(edgeDropDate(task, windowStart, -1)).toBe('2026-11-04');
+  });
+
+  it('falls back to the adjacent window start for unscheduled cards', () => {
+    expect(edgeDropDate({ id: 't2', title: 'Task' }, windowStart, 1)).toBe('2026-11-15');
+    expect(edgeDropDate({ id: 't2', title: 'Task' }, windowStart, -1)).toBe('2026-11-01');
   });
 });
 

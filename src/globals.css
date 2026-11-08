@@ -236,6 +236,32 @@
   }
 }
 
+/* Month view: keep the "+N more" link on the day-number line instead of
+   letting it consume an event row, and open its event list upwards so it
+   does not cover the current day's content. */
+.rbc-month-row .rbc-row-content > .rbc-row:has(> .rbc-row-segment > .rbc-show-more) {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.rbc-month-row .rbc-row-content > .rbc-row:has(> .rbc-row-segment > .rbc-show-more) > .rbc-row-segment {
+  padding: 0;
+}
+
+.rbc-month-row .rbc-row-content > .rbc-row:has(> .rbc-row-segment > .rbc-show-more) .rbc-show-more {
+  display: block;
+  width: fit-content;
+  margin: 0;
+  padding: 0 2px;
+  line-height: 1.5rem;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
 @media print {
   .card-aged-1,
   .card-aged-2,
