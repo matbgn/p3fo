@@ -628,7 +628,9 @@
     "uuidPlaceholder": "Neue UUID eingeben",
     "switchWarning": "Sie haben {{n}} Aufgabe(n). UUID-Wechsel verwirft Ihren aktuellen Arbeitsbereich zugunsten der Ziel-UUID.",
     "switch": "Wechseln",
-    "removeLogo": "Logo entfernen"
+    "removeLogo": "Logo entfernen",
+    "remoteCursors": "Entfernte Cursor",
+    "remoteCursorsHint": "Zeigt die Cursor anderer Benutzer auf diesem Gerät. Die Zusammenarbeit bleibt unberührt."
   },
   "salary": {
     "loading": "Laden…",

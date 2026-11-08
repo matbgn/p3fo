@@ -4,8 +4,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Shuffle, Edit2, User, Upload, Fingerprint, AlertTriangle } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Shuffle, Edit2, User, Upload, Fingerprint, AlertTriangle, MousePointer2 } from "lucide-react";
 import { useUserSettings } from "@/hooks/useUserSettings";
+import { useRemoteCursorsPreference } from "@/hooks/useRemoteCursorsPreference";
 import { useTasks } from "@/hooks/useTasks";
 import { useUsersContext, UserWithTrigram } from "@/context/UsersContext";
 import { UserContext } from "@/context/UserContextDefinition";
@@ -16,6 +18,7 @@ import { generateTrigram } from "@/utils/userTrigrams";
 export function UserSection() {
   const { t } = useTranslation();
   const { userSettings, updateUsername, updateLogo, regenerateUsername, updateTrigram } = useUserSettings();
+  const { showRemoteCursors, setShowRemoteCursors } = useRemoteCursorsPreference();
   const { users } = useUsersContext();
   const userContext = useContext(UserContext);
   const { tasks } = useTasks();
@@ -372,6 +375,26 @@ export function UserSection() {
                 {t('userSection.removeLogo')}
               </Button>
             )}
+
+            {/* Local display preference: hide remote awareness cursors */}
+            <div className="border-t pt-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-sm font-medium leading-none">
+                    <MousePointer2 className="h-4 w-4" />
+                    {t('userSection.remoteCursors')}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {t('userSection.remoteCursorsHint')}
+                  </p>
+                </div>
+                <Switch
+                  checked={showRemoteCursors}
+                  onCheckedChange={setShowRemoteCursors}
+                  aria-label={t('userSection.remoteCursors')}
+                />
+              </div>
+            </div>
           </div>
         </div>
       </PopoverContent>

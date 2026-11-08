@@ -628,7 +628,9 @@
     "uuidPlaceholder": "Enter new UUID",
     "switchWarning": "You have {{n}} task(s). Switching UUID will discard your current workspace in favor of the target UUID.",
     "switch": "Switch",
-    "removeLogo": "Remove Logo"
+    "removeLogo": "Remove Logo",
+    "remoteCursors": "Remote cursors",
+    "remoteCursorsHint": "Show other users' cursors on this device. Collaboration is unaffected."
   },
   "salary": {
     "loading": "Loading…",

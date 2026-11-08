@@ -628,7 +628,9 @@
     "uuidPlaceholder": "Entrez le nouvel UUID",
     "switchWarning": "Vous avez {{n}} tâche(s). Changer d'UUID abandonnera votre espace actuel au profit de l'UUID cible.",
     "switch": "Changer",
-    "removeLogo": "Supprimer le logo"
+    "removeLogo": "Supprimer le logo",
+    "remoteCursors": "Curseurs distants",
+    "remoteCursorsHint": "Afficher les curseurs des autres utilisateurs sur cet appareil. La collaboration n'est pas affectée."
   },
   "salary": {
     "loading": "Chargement…",

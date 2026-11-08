@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useCursors } from '@/hooks/useCursors';
+import { useRemoteCursorsPreference } from '@/hooks/useRemoteCursorsPreference';
 import { MousePointer2 } from 'lucide-react';
 import { useViewNavigation } from "@/hooks/useView";
 
 export const CursorOverlay = () => {
     const cursors = useCursors();
+    const { showRemoteCursors } = useRemoteCursorsPreference();
     const { view } = useViewNavigation();
     const [isVisible, setIsVisible] = useState(true);
     const isPublicVotePage = window.location.pathname.includes('/v/');
@@ -20,7 +22,7 @@ export const CursorOverlay = () => {
         };
     }, []);
 
-    if (!isVisible || isPublicVotePage) return null;
+    if (!isVisible || !showRemoteCursors || isPublicVotePage) return null;
 
     return (
         <div className="pointer-events-none fixed inset-0 z-[9999] overflow-hidden">
