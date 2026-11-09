@@ -2069,6 +2069,8 @@
     "nextWeek": "Nächste Woche",
     "unscheduled": "Ungeplant",
     "unscheduledEmpty": "Ziehe eine Aufgabe hierher, um sie ungeplant zu lassen.",
+    "collapseUnscheduled": "Ungeplante Aufgaben einklappen",
+    "expandUnscheduled": "Ungeplante Aufgaben ausklappen",
     "addChecklistItem": "Eintrag hinzufügen",
     "plannedDate": "Geplantes Datum",
     "time": "Uhrzeit",

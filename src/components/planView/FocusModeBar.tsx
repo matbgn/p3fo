@@ -26,14 +26,14 @@ export const FocusModeBar: React.FC<FocusModeBarProps> = ({
 
     return (
         <div className="shrink-0">
-            <div className="flex items-center justify-between px-3 py-2 border-b bg-background/80 backdrop-blur-sm">
-                <div className="flex items-center gap-2 min-w-0">
+            <div className="flex flex-col gap-2 px-3 py-2 border-b bg-background/80 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
                     {title && (
                         <span className="text-sm font-semibold text-muted-foreground truncate">{title}</span>
                     )}
                     {leftContent}
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
                     {rightContent}
                     {filterDropdownContent && (
                         <div className="flex items-center gap-2">

@@ -7,6 +7,7 @@ type PlannerHeaderProps = {
   onPrevious: () => void;
   onNext: () => void;
   onToday: () => void;
+  actions?: React.ReactNode;
 };
 
 export const PlannerHeader: React.FC<PlannerHeaderProps> = ({
@@ -14,6 +15,7 @@ export const PlannerHeader: React.FC<PlannerHeaderProps> = ({
   onPrevious,
   onNext,
   onToday,
+  actions,
 }) => {
   const locale = typeof document !== 'undefined' ? document.documentElement.lang : undefined;
 
@@ -24,6 +26,7 @@ export const PlannerHeader: React.FC<PlannerHeaderProps> = ({
       onPrevious={onPrevious}
       onNext={onNext}
       onToday={onToday}
+      actions={actions}
     />
   );
 };

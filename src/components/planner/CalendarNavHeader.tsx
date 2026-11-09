@@ -10,6 +10,7 @@ type CalendarNavHeaderProps = {
   onPrevious: () => void;
   onNext: () => void;
   onToday: () => void;
+  actions?: React.ReactNode;
 };
 
 export const CalendarNavHeader: React.FC<CalendarNavHeaderProps> = ({
@@ -19,6 +20,7 @@ export const CalendarNavHeader: React.FC<CalendarNavHeaderProps> = ({
   onPrevious,
   onNext,
   onToday,
+  actions,
 }) => {
   const { t } = useTranslation();
   const previousLabel = period === 'month' ? t('planner.previousMonth') : t('planner.previousWeek');
@@ -44,6 +46,8 @@ export const CalendarNavHeader: React.FC<CalendarNavHeaderProps> = ({
         <h2 className="truncate text-base font-semibold leading-tight">{title}</h2>
         {subtitle && <p className="text-[11px] text-muted-foreground">{subtitle}</p>}
       </div>
+
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 };

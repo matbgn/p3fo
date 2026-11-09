@@ -15,14 +15,16 @@ import { CalendarNavHeader } from './planner/CalendarNavHeader';
 import { MonthCalendarContext, MonthDayCell, MonthShowMore, type CalendarDisplayEvent } from './calendar/MonthDayCell';
 import { QuickAddTaskDialog, type QuickAddTaskInput } from './planner/QuickAddTaskDialog';
 import { TaskEditorDialog } from './planner/TaskEditorDialog';
-import { AlertTriangle, CircleDot, Flame, GripHorizontal, Columns3, CalendarRange } from 'lucide-react';
+import { FocusModeBar } from './planView/FocusModeBar';
+import { useFocusMode } from '@/hooks/useFocusMode';
+import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, CircleDot, Flame, GripHorizontal, Columns3, CalendarRange } from 'lucide-react';
 import type { Filters } from './FilterControls';
 import { loadFiltersFromSessionStorage } from '@/lib/filter-storage';
-import { addDays, addDaysToKey, addWeeks, combineDateKeyAndTime, isoWeekNumber, parseDateKey, startOfWeek, toDateKey } from '@/lib/planner/dates';
+import { addDays, addDaysToKey, addWeeks, combineDateKeyAndTime, isoWeekNumber, parseDateKey, startOfDay, startOfWeek, toDateKey } from '@/lib/planner/dates';
 import { parseSmartTime } from '@/lib/planner/smart-time';
 import { isModuleEffectivelyDisabled } from '@/lib/persistence-types';
 import { dueOffsetForSeries, expandSeriesForRange, isOccurrence, isSeriesTemplate } from '@/lib/recurrence/engine';
-import { formatDateRangeTitle, formatMonthTitle, formatWeekNumber } from '@/lib/planner/format';
+import { formatDateRangeTitle, formatMonthTitle, formatWeekNumber, formatWeekSpan } from '@/lib/planner/format';
 import { getDefaultFilters, validateFilters, mergeViewFilters } from '@/lib/filter-merge';
 import { taskColorBar } from '@/lib/planner/colors';
 import { cn } from '@/lib/utils';
@@ -95,9 +97,14 @@ function matchesDisplayFilters(task: Task, filters: Filters): boolean {
   return true;
 }
 
-const ProgramView: React.FC = () => {
+type ProgramViewProps = {
+  focusHeaderRightContent?: React.ReactNode;
+};
+
+const ProgramView: React.FC<ProgramViewProps> = ({ focusHeaderRightContent }) => {
   const { t } = useTranslation();
   const calendarRef = useRef<Calendar>(null);
+  const { isFocusMode } = useFocusMode();
 
   const { settings } = useSettingsContext();
   const weekStartsOn = settings.weekStartDay;
@@ -748,90 +755,164 @@ const ProgramView: React.FC = () => {
   };
   const navigateTodayPeriod = () => setAnchorDate(new Date());
 
+  const plannerWindowStart = React.useMemo(() => startOfDay(anchorDate), [anchorDate]);
+  const focusPeriodTitle = layout === 'planner'
+    ? formatDateRangeTitle(plannerWindowStart, locale)
+    : periodTitle;
+  const focusPeriodSubtitle = layout === 'planner'
+    ? formatWeekSpan(plannerWindowStart)
+    : periodSubtitle;
+  const previousPeriodLabel = layout === 'month' ? t('planner.previousMonth') : t('planner.previousWeek');
+  const nextPeriodLabel = layout === 'month' ? t('planner.nextMonth') : t('planner.nextWeek');
+  const navigateFocusPrevious = layout === 'planner'
+    ? () => setAnchorDate(addWeeks(plannerWindowStart, -1))
+    : navigatePreviousPeriod;
+  const navigateFocusNext = layout === 'planner'
+    ? () => setAnchorDate(addWeeks(plannerWindowStart, 1))
+    : navigateNextPeriod;
+
+  const layoutControls = (
+    <div className="flex items-center gap-1 rounded-md border bg-card p-1">
+      {!plannerDisabled && (
+        <Button
+          variant={layout === 'planner' ? 'secondary' : 'ghost'}
+          size="sm"
+          className="h-7 gap-1.5 px-2 text-xs"
+          onClick={() => setLayout('planner')}
+        >
+          <Columns3 className="h-3.5 w-3.5" />
+          {t('common.view.planner')}
+        </Button>
+      )}
+      <Button
+        variant={layout === 'week' ? 'secondary' : 'ghost'}
+        size="sm"
+        className="h-7 gap-1.5 px-2 text-xs"
+        onClick={() => {
+          setLayout('week');
+          setView('week');
+        }}
+      >
+        <CalendarRange className="h-3.5 w-3.5" />
+        {t('common.view.week')}
+      </Button>
+      <Button
+        variant={layout === 'month' ? 'secondary' : 'ghost'}
+        size="sm"
+        className="h-7 gap-1.5 px-2 text-xs"
+        onClick={() => {
+          setLayout('month');
+          setView('month');
+        }}
+      >
+        <CalendarRange className="h-3.5 w-3.5" />
+        {t('common.view.month')}
+      </Button>
+    </div>
+  );
+
+  const modeControls = layout !== 'planner' ? (
+    <div className="flex items-center gap-1 rounded-md border bg-card p-1">
+      <Button
+        variant={calendarMode === 'due' ? 'secondary' : 'ghost'}
+        size="sm"
+        className="h-7 px-2 text-xs"
+        onClick={() => setCalendarMode('due')}
+      >
+        {t('program.dueDates')}
+      </Button>
+      <Button
+        variant={calendarMode === 'planned' ? 'secondary' : 'ghost'}
+        size="sm"
+        className="h-7 px-2 text-xs"
+        onClick={() => setCalendarMode('planned')}
+      >
+        {t('program.planned')}
+      </Button>
+    </div>
+  ) : null;
+
   return (
     <div
       className="flex h-full min-h-0 flex-col gap-2"
       onDragStartCapture={() => document.body.classList.add('rbc-dnd-active')}
     >
-      <div className="flex flex-wrap items-center gap-2 self-start">
-        <div className="flex items-center gap-1 rounded-md border bg-card p-1">
-        {!plannerDisabled && (
-          <Button
-            variant={layout === 'planner' ? 'secondary' : 'ghost'}
-            size="sm"
-            className="h-7 gap-1.5 px-2 text-xs"
-            onClick={() => setLayout('planner')}
-          >
-            <Columns3 className="h-3.5 w-3.5" />
-            {t('common.view.planner')}
-          </Button>
-        )}
-        <Button
-          variant={layout === 'week' ? 'secondary' : 'ghost'}
-          size="sm"
-          className="h-7 gap-1.5 px-2 text-xs"
-          onClick={() => {
-            setLayout('week');
-            setView('week');
-          }}
-        >
-          <CalendarRange className="h-3.5 w-3.5" />
-          {t('common.view.week')}
-        </Button>
-        <Button
-          variant={layout === 'month' ? 'secondary' : 'ghost'}
-          size="sm"
-          className="h-7 gap-1.5 px-2 text-xs"
-          onClick={() => {
-            setLayout('month');
-            setView('month');
-          }}
-        >
-          <CalendarRange className="h-3.5 w-3.5" />
-          {t('common.view.month')}
-        </Button>
-      </div>
-
-      {layout !== 'planner' && (
-        <div className="flex items-center gap-1 rounded-md border bg-card p-1">
-          <Button
-            variant={calendarMode === 'due' ? 'secondary' : 'ghost'}
-            size="sm"
-            className="h-7 px-2 text-xs"
-            onClick={() => setCalendarMode('due')}
-          >
-            {t('program.dueDates')}
-          </Button>
-          <Button
-            variant={calendarMode === 'planned' ? 'secondary' : 'ghost'}
-            size="sm"
-            className="h-7 px-2 text-xs"
-            onClick={() => setCalendarMode('planned')}
-          >
-            {t('program.planned')}
-          </Button>
-        </div>
+      {isFocusMode && (
+        <FocusModeBar
+          title={t('programTop.programCalendar')}
+          leftContent={
+            <div className="flex min-w-0 flex-wrap items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={navigateFocusPrevious}
+                aria-label={previousPeriodLabel}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={navigateFocusNext}
+                aria-label={nextPeriodLabel}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1.5 px-2 text-xs"
+                onClick={navigateTodayPeriod}
+              >
+                <CalendarDays className="h-3.5 w-3.5" />
+                {t('planner.today')}
+              </Button>
+              <span className="ml-1 truncate text-sm font-semibold">{focusPeriodTitle}</span>
+              {focusPeriodSubtitle && (
+                <span className="shrink-0 text-[11px] text-muted-foreground">{focusPeriodSubtitle}</span>
+              )}
+              <div className="ml-1">{layoutControls}</div>
+            </div>
+          }
+          rightContent={
+            <div className="flex flex-wrap items-center justify-end gap-1.5">
+              {modeControls}
+              {focusHeaderRightContent}
+            </div>
+          }
+        />
       )}
-      </div>
 
       {layout === 'planner' ? (
         <PlannerView
           anchorDate={anchorDate}
           onNavigate={setAnchorDate}
           currentUserId={currentUserId}
+          hideHeader={isFocusMode}
+          headerActions={layoutControls}
         />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1">
         <Card className="h-full min-h-0 flex flex-col">
-          <CalendarNavHeader
-            title={periodTitle}
-            subtitle={periodSubtitle}
-            period={view === 'month' ? 'month' : 'week'}
-            onPrevious={navigatePreviousPeriod}
-            onNext={navigateNextPeriod}
-            onToday={navigateTodayPeriod}
-          />
+          {!isFocusMode && (
+            <CalendarNavHeader
+              title={periodTitle}
+              subtitle={periodSubtitle}
+              period={view === 'month' ? 'month' : 'week'}
+              onPrevious={navigatePreviousPeriod}
+              onNext={navigateNextPeriod}
+              onToday={navigateTodayPeriod}
+              actions={
+                <>
+                  {layoutControls}
+                  {modeControls}
+                </>
+              }
+            />
+          )}
           <CardContent
             className="h-full overflow-y-auto flex-grow relative"
             onDragOver={handleCalendarDragOver}

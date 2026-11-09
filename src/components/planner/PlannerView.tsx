@@ -39,6 +39,8 @@ type PlannerViewProps = {
   anchorDate: Date;
   onNavigate: (date: Date) => void;
   currentUserId?: string;
+  hideHeader?: boolean;
+  headerActions?: React.ReactNode;
 };
 
 type ContextState = {
@@ -100,6 +102,8 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
   anchorDate,
   onNavigate,
   currentUserId,
+  hideHeader = false,
+  headerActions,
 }) => {
   const { t } = useTranslation();
   const { tasks: allTasks } = useAllTasks({ includeRecurring: true });
@@ -434,12 +438,15 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
 
   return (
     <div className="relative flex h-full min-h-[32rem] flex-col overflow-hidden rounded-lg border bg-card">
-      <PlannerHeader
-        rangeStart={windowStart}
-        onPrevious={() => onNavigate(addWeeks(windowStart, -1))}
-        onNext={() => onNavigate(addWeeks(windowStart, 1))}
-        onToday={() => onNavigate(parseDateKey(today))}
-      />
+      {!hideHeader && (
+        <PlannerHeader
+          rangeStart={windowStart}
+          onPrevious={() => onNavigate(addWeeks(windowStart, -1))}
+          onNext={() => onNavigate(addWeeks(windowStart, 1))}
+          onToday={() => onNavigate(parseDateKey(today))}
+          actions={headerActions}
+        />
+      )}
 
       <DndContext
         sensors={sensors}

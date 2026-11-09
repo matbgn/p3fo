@@ -827,6 +827,13 @@ const KanbanBoardInner: React.FC<{ onFocusOnTask?: (taskId: string) => void; hig
         {isFocusMode && (
           <FocusModeBar
             title={t('kanban.boardTitle')}
+            leftContent={
+              <QuickAddTask
+                userId={storedFilters.selectedUserId && storedFilters.selectedUserId !== 'UNASSIGNED' ? storedFilters.selectedUserId : undefined}
+                onCreatedFromTemplate={onFocusOnTask}
+                className="w-64 sm:w-80"
+              />
+            }
             hasActiveFilters={
               !!storedFilters.searchText?.trim() ||
               !!storedFilters.selectedUserId ||

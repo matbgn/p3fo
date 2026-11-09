@@ -2069,6 +2069,8 @@
     "nextWeek": "Semaine suivante",
     "unscheduled": "Non planifié",
     "unscheduledEmpty": "Déposez une tâche ici pour la laisser non planifiée.",
+    "collapseUnscheduled": "Réduire les tâches non planifiées",
+    "expandUnscheduled": "Développer les tâches non planifiées",
     "addChecklistItem": "Ajouter un élément",
     "plannedDate": "Date planifiée",
     "time": "Heure",

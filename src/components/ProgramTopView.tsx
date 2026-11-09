@@ -114,14 +114,6 @@ const ProgramTopViewInner: React.FC = () => {
 
     return (
         <div className={`h-full flex flex-col ${isFocusMode ? 'relative' : ''}`}>
-            {isFocusMode && (
-                <FocusModeBar
-                    title={viewTitle}
-                    rightContent={
-                        <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} enabledSubViews={enabledSubViews} />
-                    }
-                />
-            )}
             <Card className={`flex-1 flex flex-col min-h-0 border-0 shadow-none ${isFocusMode ? 'overflow-auto' : ''}`}>
                 {!isFocusMode && (
                     <CardHeader className="flex flex-col space-y-4 pb-2 shrink-0">
@@ -132,7 +124,13 @@ const ProgramTopViewInner: React.FC = () => {
                     </CardHeader>
                 )}
                 <CardContent className="flex-1 min-h-0 overflow-y-auto p-0 program-view-scroll-container">
-                    <ProgramView />
+                    <ProgramView
+                        focusHeaderRightContent={
+                            isFocusMode ? (
+                                <ViewToggleButtons activeView={activeView} setActiveView={setActiveView} enabledSubViews={enabledSubViews} />
+                            ) : undefined
+                        }
+                    />
                 </CardContent>
             </Card>
 

@@ -2069,6 +2069,8 @@
     "nextWeek": "Next week",
     "unscheduled": "Unscheduled",
     "unscheduledEmpty": "Drop a task here to leave it unplanned.",
+    "collapseUnscheduled": "Collapse unscheduled tasks",
+    "expandUnscheduled": "Expand unscheduled tasks",
     "addChecklistItem": "Add an item",
     "plannedDate": "Planned date",
     "time": "Time",
