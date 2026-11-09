@@ -1,10 +1,11 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Clock } from 'lucide-react';
+import { Clock, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { TimePickerDialog } from '@/components/ui/time-picker-dialog';
 import { combineDateKeyAndTime, formatTimeFromTimestamp } from '@/lib/planner/dates';
+import { cn } from '@/lib/utils';
 import { useToday } from '@/hooks/useToday';
 
 type CardScheduleFieldsProps = {
@@ -57,16 +58,31 @@ export const CardScheduleFields: React.FC<CardScheduleFieldsProps> = ({
         </label>
         <div className="space-y-1 text-xs font-medium text-muted-foreground">
           <span>{t('planner.time')}</span>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-8 w-full justify-start gap-2 font-normal"
-            onClick={() => setTimeTarget('planned')}
-            disabled={!plannedDate}
-          >
-            <Clock className="h-3.5 w-3.5" />
-            {plannedTime || t('planner.selectTime')}
-          </Button>
+          <div className="relative">
+            <Button
+              type="button"
+              variant="outline"
+              className={cn('h-8 w-full justify-start gap-2 font-normal', plannedTime && 'pr-8')}
+              onClick={() => setTimeTarget('planned')}
+              disabled={!plannedDate}
+            >
+              <Clock className="h-3.5 w-3.5" />
+              {plannedTime || t('planner.selectTime')}
+            </Button>
+            {plannedDate && plannedTime && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label={t('planner.clearPlannedTime')}
+                title={t('planner.clearPlannedTime')}
+                onClick={() => onPlannedTimeChange('')}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -82,16 +98,31 @@ export const CardScheduleFields: React.FC<CardScheduleFieldsProps> = ({
         </label>
         <div className="space-y-1 text-xs font-medium text-muted-foreground">
           <span>{t('planner.dueTime')}</span>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-8 w-full justify-start gap-2 font-normal"
-            onClick={() => setTimeTarget('due')}
-            disabled={!dueDate}
-          >
-            <Clock className="h-3.5 w-3.5" />
-            {dueTime || t('planner.selectTime')}
-          </Button>
+          <div className="relative">
+            <Button
+              type="button"
+              variant="outline"
+              className={cn('h-8 w-full justify-start gap-2 font-normal', dueTime && 'pr-8')}
+              onClick={() => setTimeTarget('due')}
+              disabled={!dueDate}
+            >
+              <Clock className="h-3.5 w-3.5" />
+              {dueTime || t('planner.selectTime')}
+            </Button>
+            {dueDate && dueTime && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label={t('planner.clearDueTime')}
+                title={t('planner.clearDueTime')}
+                onClick={() => onDueTimeChange('')}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
         </div>
         <label className="space-y-1 text-xs font-medium text-muted-foreground">
           {t('planner.length')}

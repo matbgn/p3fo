@@ -873,12 +873,14 @@ const ProgramView: React.FC<ProgramViewProps> = ({ focusHeaderRightContent }) =>
               {focusPeriodSubtitle && (
                 <span className="shrink-0 text-[11px] text-muted-foreground">{focusPeriodSubtitle}</span>
               )}
-              <div className="ml-1">{layoutControls}</div>
+              <div className="ml-1 flex flex-wrap items-center gap-1">
+                {layoutControls}
+                {modeControls}
+              </div>
             </div>
           }
           rightContent={
             <div className="flex flex-wrap items-center justify-end gap-1.5">
-              {modeControls}
               {focusHeaderRightContent}
             </div>
           }
