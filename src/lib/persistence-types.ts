@@ -317,6 +317,25 @@ export interface PersistenceAdapter {
   deleteVoteResponse?(voteId: string, voterToken: string, proposalId: string | null, loopId?: string | null): Promise<void>;
   importVoteResponses(items: VoteResponseEntity[]): Promise<void>;
 
+  // Comparative prioritization ballots
+  listVoteRankingSubmissions(
+    voteId: string,
+    ownerId?: string,
+    moderatorToken?: string,
+  ): Promise<VoteRankingSubmission[]>;
+  /**
+   * Import ballots. When `replaceVoteIds` is provided, the stored ballots for
+   * those votes are replaced (rows absent from `items` are deleted) instead of
+   * merged. When omitted, the import is a plain upsert. `replaceVoteIds` should
+   * cover every vote the backup represents, including votes with zero ballots,
+   * so a restore cannot leave stale ballots behind. An empty array is a no-op
+   * and never clears unrelated votes.
+   */
+  importVoteRankingSubmissions(
+    items: VoteRankingSubmission[],
+    replaceVoteIds?: string[],
+  ): Promise<void>;
+
   // Vote loops (CONSENT_LOOP)
   listVoteLoops(voteId: string): Promise<VoteLoop[]>;
   createVoteLoop(voteId: string, loop: Partial<VoteLoop>): Promise<VoteLoop>;

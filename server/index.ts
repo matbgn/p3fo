@@ -6,8 +6,9 @@ import crypto from 'node:crypto';
 import { createDbClient } from './db/index.js';
 import { DbClient } from './db/index.js';
 import { VoteKind, VoteLoop, VoteModerator, VoteResponseEntity, PomodoroSession } from '../src/lib/persistence-types.js';
-import type { TaskEntity } from '../src/lib/persistence-types.js';
+import type { TaskEntity, VoteRankingSubmission } from '../src/lib/persistence-types.js';
 import type { SprintStateEntity } from '../src/lib/sprint-types.js';
+import { isVoteAnonymous, redactRankingSubmissionForBackup } from '../src/lib/vote-ranking.js';
 import {
   WHO5_QUESTIONS,
   applyClose,
@@ -1360,7 +1361,7 @@ app.get('/api/votes/:idOrSlug/results', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Vote not found' });
     }
     const responses = await db.getVoteResponses(vote.id);
-    const safeResponses = vote.config.isAnonymous
+    const safeResponses = isVoteAnonymous(vote.config)
       ? responses.map(r => ({ ...r, userId: null }))
       : responses;
     res.json({ vote, responses: safeResponses, totalVotes: responses.length });
@@ -1368,6 +1369,33 @@ app.get('/api/votes/:idOrSlug/results', async (req: Request, res: Response) => {
     console.error('Error fetching vote results:', error);
     const message = error instanceof Error ? error.message : String(error);
     res.status(500).json({ error: 'Failed to fetch results', details: message });
+  }
+});
+
+// Comparative prioritization ballots (bulk list used by backup export)
+app.get('/api/votes/:idOrSlug/ranking-submissions', async (req: Request, res: Response) => {
+  try {
+    const { idOrSlug } = req.params;
+    let vote = await db.getVoteById(idOrSlug);
+    if (!vote) {
+      vote = await db.getVoteBySlug(idOrSlug);
+    }
+    if (!vote) {
+      return res.status(404).json({ error: 'Vote not found' });
+    }
+    const submissions = await db.getVoteRankingSubmissions(vote.id);
+    // Never expose the participant credential; restore reissues a fresh token.
+    // Anonymous votes also must not leak per-ballot identities. An absent
+    // `isAnonymous` flag means anonymous, matching the rest of the UI.
+    const anonymous = isVoteAnonymous(vote.config);
+    const safeSubmissions = submissions.map(submission =>
+      redactRankingSubmissionForBackup(submission, anonymous),
+    );
+    res.json({ submissions: safeSubmissions });
+  } catch (error: unknown) {
+    console.error('Error fetching vote ranking submissions:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to fetch ranking submissions', details: message });
   }
 });
 
@@ -1443,6 +1471,31 @@ app.post('/api/vote-responses/import', express.json({ limit: '10mb' }), async (r
     console.error('Error importing vote responses:', error);
     const message = error instanceof Error ? error.message : String(error);
     res.status(500).json({ error: 'Failed to import vote responses', details: message });
+  }
+});
+
+app.post('/api/vote-ranking-submissions/import', express.json({ limit: '10mb' }), async (req: Request, res: Response) => {
+  try {
+    // The restore client sends `{ items, replaceVoteIds }` so a backup replaces
+    // stored ballots instead of merging; a bare array is still accepted for
+    // compatibility and is treated as a plain upsert.
+    const body = req.body as
+      | VoteRankingSubmission[]
+      | { items?: VoteRankingSubmission[]; replaceVoteIds?: string[] };
+    const items = Array.isArray(body) ? body : body?.items;
+    if (!Array.isArray(items)) {
+      return res.status(400).json({ error: 'Expected an array of ranking submissions' });
+    }
+    const replaceVoteIds = Array.isArray(body) ? undefined : body?.replaceVoteIds;
+    if (replaceVoteIds !== undefined && !Array.isArray(replaceVoteIds)) {
+      return res.status(400).json({ error: 'replaceVoteIds must be an array' });
+    }
+    await db.importVoteRankingSubmissions(items, replaceVoteIds);
+    res.status(204).send();
+  } catch (error: unknown) {
+    console.error('Error importing vote ranking submissions:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to import vote ranking submissions', details: message });
   }
 });
 

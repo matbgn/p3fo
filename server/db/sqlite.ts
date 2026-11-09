@@ -18,6 +18,7 @@ import type {
   FrameworkType,
   VoteEntity,
   VoteResponseEntity,
+  VoteRankingSubmission,
   VoteLoop,
   VoteModerator,
   VoteKind,
@@ -175,6 +176,19 @@ interface VoteResponseDbRow {
   value: number;
   comment: string | null;
   submittedAt: string;
+}
+
+interface VoteRankingSubmissionDbRow {
+  id: string;
+  voteId: string;
+  voterToken: string;
+  userId: string | null;
+  displayName: string | null;
+  draftPayload: string | null;
+  submittedPayload: string | null;
+  draftUpdatedAt: string | null;
+  submittedAt: string | null;
+  lastSeenAt: string;
 }
 
 interface VoteLoopDbRow {
@@ -582,6 +596,23 @@ class SqliteClient implements DbClient {
       )
     `);
 
+    // Comparative prioritization ballots
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS "voteRankingSubmissions" (
+        "id" TEXT PRIMARY KEY,
+        "voteId" TEXT NOT NULL REFERENCES "votes"("id") ON DELETE CASCADE,
+        "voterToken" TEXT NOT NULL,
+        "userId" TEXT,
+        "displayName" TEXT,
+        "draftPayload" TEXT,
+        "submittedPayload" TEXT,
+        "draftUpdatedAt" TEXT,
+        "submittedAt" TEXT,
+        "lastSeenAt" TEXT NOT NULL,
+        UNIQUE("voteId", "voterToken")
+      )
+    `);
+
     // Create pomodoroSessions table
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS "pomodoroSessions" (
@@ -624,6 +655,8 @@ class SqliteClient implements DbClient {
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_voteLoops_voteId" ON "voteLoops"("voteId")`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_voteModerators_voteId" ON "voteModerators"("voteId")`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_voteModerators_token" ON "voteModerators"("token")`);
+    // No separate voteId index for voteRankingSubmissions: the UNIQUE("voteId",
+    // "voterToken") constraint already creates one whose leading column is voteId.
 
     // Reminders indexes
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_reminders_userId" ON "reminders"("userId")`);
@@ -2455,6 +2488,7 @@ class SqliteClient implements DbClient {
 
   async resetVote(id: string): Promise<VoteEntity | null> {
     this.db.prepare('DELETE FROM "voteResponses" WHERE "voteId" = ?').run(id);
+    this.db.prepare('DELETE FROM "voteRankingSubmissions" WHERE "voteId" = ?').run(id);
     this.db.prepare('DELETE FROM "voteLoops" WHERE "voteId" = ?').run(id);
 
     const row = this.db.prepare(`
@@ -2619,6 +2653,108 @@ class SqliteClient implements DbClient {
       this.db.exec('ROLLBACK');
       throw error;
     }
+  }
+
+  // Comparative prioritization ballots
+  async getVoteRankingSubmissions(voteId: string): Promise<VoteRankingSubmission[]> {
+    const rows = this.db.prepare(
+      'SELECT * FROM "voteRankingSubmissions" WHERE "voteId" = ? ORDER BY "lastSeenAt" DESC'
+    ).all(voteId) as unknown as VoteRankingSubmissionDbRow[];
+    return rows.map(row => this.mapVoteRankingSubmissionDbRowToEntity(row));
+  }
+
+  async importVoteRankingSubmissions(
+    items: VoteRankingSubmission[],
+    replaceVoteIds?: string[],
+  ): Promise<void> {
+    const stmt = this.db.prepare(`
+      INSERT INTO "voteRankingSubmissions"(
+        "id", "voteId", "voterToken", "userId", "displayName",
+        "draftPayload", "submittedPayload", "draftUpdatedAt", "submittedAt", "lastSeenAt"
+      ) VALUES(@id, @voteId, @voterToken, @userId, @displayName,
+        @draftPayload, @submittedPayload, @draftUpdatedAt, @submittedAt, @lastSeenAt)
+      ON CONFLICT("id") DO UPDATE SET
+        "userId" = excluded."userId",
+        "displayName" = excluded."displayName",
+        "draftPayload" = excluded."draftPayload",
+        "submittedPayload" = excluded."submittedPayload",
+        "draftUpdatedAt" = excluded."draftUpdatedAt",
+        "submittedAt" = excluded."submittedAt",
+        "lastSeenAt" = excluded."lastSeenAt"
+      -- A preserved id must never overwrite a row that belongs to another vote.
+      WHERE "voteRankingSubmissions"."voteId" = excluded."voteId"
+    `);
+    // A preserved `id` can collide with the primary key on re-import (exports
+    // redact voterToken, so the composite conflict target no longer matches).
+    // Drop a row that already holds the same participant token under another id
+    // so the insert cannot violate UNIQUE(voteId, voterToken) either.
+    const deleteConflict = this.db.prepare(
+      'DELETE FROM "voteRankingSubmissions" WHERE "voteId" = ? AND "voterToken" = ? AND "id" <> ?'
+    );
+    this.db.exec('BEGIN');
+    try {
+      // Restores must replace, not merge: delete the affected votes' ballots
+      // first so rows absent from the backup cannot keep feeding aggregation.
+      // A non-empty id list scopes the delete; an empty list is a no-op so a
+      // stray empty payload can never wipe ballots for unrelated votes.
+      if (replaceVoteIds && replaceVoteIds.length > 0) {
+        const deleteVote = this.db.prepare(
+          'DELETE FROM "voteRankingSubmissions" WHERE "voteId" = ?'
+        );
+        for (const voteId of replaceVoteIds) {
+          deleteVote.run(voteId);
+        }
+      }
+      for (const item of items) {
+        const voterToken = item.voterToken || crypto.randomUUID();
+        if (item.voterToken) {
+          deleteConflict.run(item.voteId, item.voterToken, item.id);
+        }
+        stmt.run({
+          id: item.id,
+          voteId: item.voteId,
+          // Exports redact the participant credential; reissue one on restore.
+          voterToken,
+          userId: item.userId,
+          displayName: item.displayName,
+          draftPayload: item.draft ? JSON.stringify(item.draft) : null,
+          submittedPayload: item.submitted ? JSON.stringify(item.submitted) : null,
+          draftUpdatedAt: item.draftUpdatedAt,
+          submittedAt: item.submittedAt,
+          lastSeenAt: item.lastSeenAt,
+        });
+      }
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  private parseRankingPayload(value: string | null | undefined) {
+    if (!value) return null;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+
+  private mapVoteRankingSubmissionDbRowToEntity(
+    row: VoteRankingSubmissionDbRow,
+  ): VoteRankingSubmission {
+    return {
+      id: row.id,
+      voteId: row.voteId,
+      voterToken: row.voterToken,
+      userId: row.userId,
+      displayName: row.displayName,
+      draft: this.parseRankingPayload(row.draftPayload),
+      submitted: this.parseRankingPayload(row.submittedPayload),
+      draftUpdatedAt: row.draftUpdatedAt,
+      submittedAt: row.submittedAt,
+      lastSeenAt: row.lastSeenAt,
+    };
   }
 
   private tryFixVoteLoopsUniqueConstraint(): void {
@@ -3106,6 +3242,7 @@ class SqliteClient implements DbClient {
       this.db.exec('DROP TABLE IF EXISTS "frameworks"');
       this.db.exec('DROP TABLE IF EXISTS "votes"');
       this.db.exec('DROP TABLE IF EXISTS "voteResponses"');
+      this.db.exec('DROP TABLE IF EXISTS "voteRankingSubmissions"');
       this.db.exec('DROP TABLE IF EXISTS "voteLoops"');
       this.db.exec('DROP TABLE IF EXISTS "voteModerators"');
       this.db.exec('DROP TABLE IF EXISTS "pomodoroSessions"');

@@ -1,5 +1,5 @@
 // Database client interface and factory
-import { TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, FertilizationBoardEntity, DreamBoardEntity, SalaryBoardEntity, CircleEntity, ReminderEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from '../../src/lib/persistence-types.js';
+import { TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, FertilizationBoardEntity, DreamBoardEntity, SalaryBoardEntity, CircleEntity, ReminderEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteRankingSubmission, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from '../../src/lib/persistence-types.js';
 import type { SprintStateEntity } from '../../src/lib/sprint-types.js';
 import { applyTemporalMirror } from '../../mcp-server/src/task-temporal.js';
 
@@ -158,6 +158,16 @@ export interface DbClient {
   createVoteResponse(voteId: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity>;
   deleteVoteResponse(voteId: string, voterToken: string, proposalId: string | null, loopId?: string | null): Promise<void>;
   importVoteResponses(items: VoteResponseEntity[]): Promise<void>;
+
+  // Comparative prioritization ballots
+  getVoteRankingSubmissions(voteId: string): Promise<VoteRankingSubmission[]>;
+  /**
+   * Import ballots. When `replaceVoteIds` is provided, ballots for those votes
+   * are deleted before inserting so a restore replaces rather than merges; the
+   * list is expected to cover every vote the backup represents. An empty array
+   * is a no-op, never an unscoped wipe.
+   */
+  importVoteRankingSubmissions(items: VoteRankingSubmission[], replaceVoteIds?: string[]): Promise<void>;
 
   // Vote loops (CONSENT_LOOP)
   getVoteLoops(voteId: string): Promise<VoteLoop[]>;

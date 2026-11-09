@@ -1,5 +1,6 @@
 import type {
   RankingEngine,
+  VoteConfig,
   VoteEntity,
   VoteRankingBallot,
   VoteRankingResult,
@@ -29,6 +30,36 @@ export function rankingEngineToK(engine: RankingEngine): 2 | 4 {
 
 export function expectedRankingPairs(itemCount: number): number {
   return itemCount < 2 ? 0 : (itemCount * (itemCount - 1)) / 2;
+}
+
+/**
+ * Single source of truth for whether a vote hides participant identities.
+ * An absent `isAnonymous` flag means anonymous, matching the rest of the UI
+ * (`vote.config.isAnonymous ?? true`). Every server route and export path must
+ * use this instead of re-deriving the default from the raw flag.
+ */
+export function isVoteAnonymous(
+  config: Pick<VoteConfig, 'isAnonymous'> | null | undefined,
+): boolean {
+  return config?.isAnonymous !== false;
+}
+
+/**
+ * Single source of truth for the backup/export shape of a ranking ballot.
+ * Backups never carry the participant credential, and anonymous votes must not
+ * carry per-ballot identities. An absent `isAnonymous` flag is anonymous, which
+ * matches the rest of the UI (`vote.config.isAnonymous ?? true`).
+ */
+export function redactRankingSubmissionForBackup(
+  submission: VoteRankingSubmission,
+  isAnonymous: boolean,
+): VoteRankingSubmission {
+  return {
+    ...submission,
+    voterToken: '',
+    userId: isAnonymous ? null : submission.userId,
+    displayName: isAnonymous ? null : submission.displayName,
+  };
 }
 
 export interface FinalizeWinnerResolution {

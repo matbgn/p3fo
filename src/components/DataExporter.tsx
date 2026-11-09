@@ -7,7 +7,9 @@ import { useUserSettings } from '@/hooks/useUserSettings';
 import { getPersistenceAdapter } from '@/lib/persistence-factory';
 import { convertEntitiesToTasks } from '@/lib/task-conversions';
 import { getAllTemplates } from '@/lib/task-templates';
-import { VoteResponseEntity, VoteLoop, VoteModerator } from '@/lib/persistence-types';
+import { CURRENT_SCHEMA_VERSION } from '@/lib/apply-imported-data';
+import { isVoteAnonymous, redactRankingSubmissionForBackup } from '@/lib/vote-ranking';
+import { VoteResponseEntity, VoteLoop, VoteModerator, VoteRankingSubmission } from '@/lib/persistence-types';
 
 const DataExporter: React.FC = () => {
   const { t } = useTranslation();
@@ -83,10 +85,11 @@ const DataExporter: React.FC = () => {
       // Fetch ALL pomodoro/focus sessions
       const allPomodoroSessions = await adapter.listPomodoroSessions();
 
-      // Fetch vote responses, loops, and moderators for each vote
+      // Fetch vote responses, loops, moderators, and ranking ballots for each vote
       const allVoteResponses: VoteResponseEntity[] = [];
       const allVoteLoops: VoteLoop[] = [];
       const allVoteModerators: VoteModerator[] = [];
+      const allVoteRankingSubmissions: VoteRankingSubmission[] = [];
       for (const vote of allVotes) {
         const responses = await adapter.listVoteResponses(vote.id);
         allVoteResponses.push(...responses);
@@ -96,11 +99,28 @@ const DataExporter: React.FC = () => {
         allVoteModerators.push(...moderators);
       }
 
+      // Fetch ballots for every vote, not only those currently in
+      // COMPARATIVE_PRIORITIZATION mode: restore replaces ballots for every
+      // vote id in the backup, so omitting a vote here would permanently
+      // delete its stored ballots on restore. Votes with no ballots return
+      // an empty list. Ballots are the app's largest dataset, so fetch them
+      // concurrently instead of one serial request per vote.
+      const rankingsByVote = await Promise.all(
+        allVotes.map(async vote => {
+          const rankings = await adapter.listVoteRankingSubmissions(vote.id, userId);
+          // Never export the participant credential; restore reissues a fresh token.
+          // Anonymous votes (including an absent flag) must also drop identities.
+          const anonymous = isVoteAnonymous(vote.config);
+          return rankings.map(item => redactRankingSubmissionForBackup(item, anonymous));
+        }),
+      );
+      allVoteRankingSubmissions.push(...rankingsByVote.flat());
+
       // Fetch task templates (workspace + user scopes, localStorage-backed)
       const taskTemplates = getAllTemplates();
 
       const exportData = {
-        schemaVersion: 5,
+        schemaVersion: CURRENT_SCHEMA_VERSION,
         tasks: allTasks,
         scheduledReminders: allReminders,
         qolSurveyResponses: allQolSurveyResponses,
@@ -115,6 +135,7 @@ salaryBoard: salaryBoardState,
         allUserSettings,
         votes: allVotes,
         voteResponses: allVoteResponses,
+        voteRankingSubmissions: allVoteRankingSubmissions,
         voteLoops: allVoteLoops,
         voteModerators: allVoteModerators,
         pomodoroSessions: allPomodoroSessions,

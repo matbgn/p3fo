@@ -1,4 +1,4 @@
-import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, SalaryBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from './persistence-types';
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, SalaryBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteRankingSubmission, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from './persistence-types';
 import type { SprintStateEntity, SprintOutcome, SprintWellbeingAggregate } from './sprint-types';
 import {
   applyClose,
@@ -29,6 +29,7 @@ const REMINDERS_STORAGE_KEY = 'p3fo_reminders_v1';
 const FRAMEWORKS_STORAGE_KEY = 'p3fo_frameworks_v1';
 const VOTES_STORAGE_KEY = 'p3fo_votes_v1';
 const VOTE_RESPONSES_STORAGE_KEY = 'p3fo_vote_responses_v1';
+const VOTE_RANKING_SUBMISSIONS_STORAGE_KEY = 'p3fo_vote_ranking_submissions_v1';
 const VOTE_LOOPS_STORAGE_KEY = 'p3fo_vote_loops_v1';
 const VOTE_MODERATORS_STORAGE_KEY = 'p3fo_vote_moderators_v1';
 const POMODORO_SESSIONS_STORAGE_KEY = 'p3fo_pomodoro_sessions_v1';
@@ -947,6 +948,11 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       localStorage.removeItem(FRAMEWORKS_STORAGE_KEY);
       localStorage.removeItem(POMODORO_SESSIONS_STORAGE_KEY);
       localStorage.removeItem(NOTIFIED_KEYS_STORAGE_KEY);
+      localStorage.removeItem(VOTES_STORAGE_KEY);
+      localStorage.removeItem(VOTE_RESPONSES_STORAGE_KEY);
+      localStorage.removeItem(VOTE_RANKING_SUBMISSIONS_STORAGE_KEY);
+      localStorage.removeItem(VOTE_LOOPS_STORAGE_KEY);
+      localStorage.removeItem(VOTE_MODERATORS_STORAGE_KEY);
       sessionStorage.removeItem(FILTERS_STORAGE_KEY);
 
       // Clear dynamic keys (users and QoL surveys)
@@ -1216,11 +1222,22 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
   }
 
+  private removeRankingSubmissionsForVote(id: string): void {
+    const storedRankings = localStorage.getItem(VOTE_RANKING_SUBMISSIONS_STORAGE_KEY);
+    if (!storedRankings) {
+      this.rankingSubmissionsCache = null;
+      return;
+    }
+    const rankings = this.readRankingSubmissions();
+    this.writeRankingSubmissions(rankings.filter(item => item.voteId !== id));
+  }
+
   async deleteVote(id: string): Promise<void> {
     try {
       const votes = await this.listVotes();
       const filtered = votes.filter(v => v.id !== id);
       localStorage.setItem(VOTES_STORAGE_KEY, JSON.stringify(filtered));
+      this.removeRankingSubmissionsForVote(id);
     } catch (error) {
       console.error('Error deleting vote from localStorage:', error);
       throw error;
@@ -1256,6 +1273,8 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
         const all: VoteLoop[] = JSON.parse(storedLoops);
         localStorage.setItem(VOTE_LOOPS_STORAGE_KEY, JSON.stringify(all.filter(l => l.voteId !== id)));
       }
+
+      this.removeRankingSubmissionsForVote(id);
 
       return votes[index];
     } catch (error) {
@@ -1340,6 +1359,80 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       console.error('Error importing vote responses to localStorage:', error);
       throw error;
     }
+  }
+
+  // Comparative prioritization ballots
+  private rankingSubmissionsCache: {
+    raw: string;
+    items: VoteRankingSubmission[];
+  } | null = null;
+
+  /**
+   * Parse the ballot store once per stored value. Backup export reads this
+   * store once per vote, and ballots are the largest dataset in the app, so
+   * without the cache the whole store would be re-parsed for every vote.
+   * The cache is keyed on the raw string, so any write invalidates it.
+   */
+  private readRankingSubmissions(): VoteRankingSubmission[] {
+    const raw = localStorage.getItem(VOTE_RANKING_SUBMISSIONS_STORAGE_KEY);
+    if (!raw) {
+      this.rankingSubmissionsCache = null;
+      return [];
+    }
+    if (this.rankingSubmissionsCache?.raw === raw) {
+      return this.rankingSubmissionsCache.items;
+    }
+    const items: VoteRankingSubmission[] = JSON.parse(raw);
+    this.rankingSubmissionsCache = { raw, items };
+    return items;
+  }
+
+  async listVoteRankingSubmissions(
+    voteId: string,
+    _ownerId?: string,
+    _moderatorToken?: string,
+  ): Promise<VoteRankingSubmission[]> {
+    try {
+      return this.readRankingSubmissions().filter(item => item.voteId === voteId);
+    } catch (error) {
+      console.error('Error reading vote ranking submissions from localStorage:', error);
+      return [];
+    }
+  }
+
+  private writeRankingSubmissions(items: VoteRankingSubmission[]): void {
+    const raw = JSON.stringify(items);
+    localStorage.setItem(VOTE_RANKING_SUBMISSIONS_STORAGE_KEY, raw);
+    this.rankingSubmissionsCache = { raw, items };
+  }
+
+  async importVoteRankingSubmissions(
+    items: VoteRankingSubmission[],
+    replaceVoteIds?: string[],
+  ): Promise<void> {
+    if (typeof window === 'undefined') return;
+    // HTTP exports redact the participant credential; reissue one on restore so
+    // every row still has a unique voterToken.
+    const normalized = items.map(item => ({
+      ...item,
+      voterToken: item.voterToken || crypto.randomUUID(),
+    }));
+    const existing = this.readRankingSubmissions();
+    if (!replaceVoteIds || replaceVoteIds.length === 0) {
+      // Documented plain upsert (an empty array is a no-op): merge by id and
+      // never delete ballots the payload does not mention, so a legacy or empty
+      // payload cannot wipe the store.
+      const incomingIds = new Set(normalized.map(item => item.id));
+      const kept = existing.filter(item => !incomingIds.has(item.id));
+      this.writeRankingSubmissions([...kept, ...normalized]);
+      return;
+    }
+    // Replace exactly the votes the backup covers, matching the HTTP adapter and
+    // the DB clients so a restore cannot wipe or duplicate ballots for votes
+    // created after the export.
+    const replaceSet = new Set(replaceVoteIds);
+    const kept = existing.filter(item => !replaceSet.has(item.voteId));
+    this.writeRankingSubmissions([...kept, ...normalized]);
   }
 
   // Vote loops
