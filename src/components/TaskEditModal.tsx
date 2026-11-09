@@ -33,7 +33,7 @@ import { useTasks } from "@/hooks/useTasks";
 import { CardScheduleFields } from "./planner/CardScheduleFields";
 import { RepeatPicker } from "./planner/RepeatPicker";
 import { TaskColorPicker } from "./planner/TaskColorPicker";
-import { combineDateKeyAndTime, timeFromTimestamp, toDateKey } from "@/lib/planner/dates";
+import { combineDateKeyAndTime, normalizeDueTime, toDateKey } from "@/lib/planner/dates";
 import { effectiveDueDate } from "@/lib/task-conversions";
 import { useToday } from "@/hooks/useToday";
 
@@ -48,7 +48,7 @@ interface TaskEditModalProps {
     updateCategory: (id: string, category: Category) => void;
     updateDifficulty: (id: string, difficulty: 0.5 | 1 | 2 | 3 | 5 | 8) => void;
     updateUser: (id: string, userId: string | undefined) => void;
-    updateTerminationDate: (id: string, date: number | undefined) => void;
+    updateTerminationDate: (id: string, date: number | undefined, dueTime?: string | null) => void;
     updateDurationInMinutes: (id: string, duration: number | undefined) => void;
     toggleUrgent: (id: string) => void;
     toggleImpact: (id: string) => void;
@@ -129,7 +129,7 @@ const TaskEditModalInner: React.FC<TaskEditModalProps> = ({
 
     const effectiveDue = effectiveDueDate(activeTask);
     const dueDateValue = effectiveDue ? toDateKey(new Date(effectiveDue)) : '';
-    const dueTimeValue = effectiveDue ? timeFromTimestamp(effectiveDue) : '';
+    const dueTimeValue = normalizeDueTime(activeTask.dueTime, effectiveDue) ?? '';
     const durationValue = durationDraft;
     const todayKey = useToday();
 
@@ -237,8 +237,8 @@ const TaskEditModalInner: React.FC<TaskEditModalProps> = ({
                             duration={durationValue}
                             onPlannedDateChange={(value) => void updatePlannedDate(activeTask.id, value || null)}
                             onPlannedTimeChange={(value) => void updatePlannedTime(activeTask.id, value || null)}
-                            onDueDateChange={(value) => updateTerminationDate(activeTask.id, value ? combineDateKeyAndTime(value, dueTimeValue) : undefined)}
-                            onDueTimeChange={(value) => updateTerminationDate(activeTask.id, dueDateValue ? combineDateKeyAndTime(dueDateValue, value) : undefined)}
+                            onDueDateChange={(value) => updateTerminationDate(activeTask.id, value ? combineDateKeyAndTime(value, dueTimeValue) : undefined, dueTimeValue || null)}
+                            onDueTimeChange={(value) => updateTerminationDate(activeTask.id, dueDateValue ? combineDateKeyAndTime(dueDateValue, value) : undefined, value || null)}
                             onDurationChange={setDurationDraft}
                             onDurationCommit={commitDuration}
                         />

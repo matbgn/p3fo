@@ -226,3 +226,61 @@ describe('recurrence validation during import', () => {
     assert.equal(prepared.normalized.length, 0);
   });
 });
+
+describe('temporal mirror dueTime', () => {
+  // applyTemporalMirror expects the caller to have merged the patch into the
+  // target already (server writes pass { ...current, ...patch }).
+  const current = () => ({
+    triageStatus: 'Ready',
+    dueDate: '2026-01-01T15:30:00.000Z',
+    dueTime: '15:30' as string | null,
+    terminationDate: '2026-01-01T15:30:00.000Z',
+  });
+
+  it('clears a stale due time when a due date is supplied without one', () => {
+    const provided = { dueDate: '2026-03-01T00:00:00.000Z' };
+    const task = { ...current(), ...provided };
+
+    applyTemporalMirror(task, provided, 'Ready');
+
+    assert.equal(task.dueDate, '2026-03-01T00:00:00.000Z');
+    assert.equal(task.dueTime, null);
+  });
+
+  it('clears the due time when the due date is cleared through terminationDate', () => {
+    const provided = { terminationDate: null };
+    const task = { ...current(), ...provided };
+
+    applyTemporalMirror(task, provided, 'Ready');
+
+    assert.equal(task.dueDate, null);
+    assert.equal(task.dueTime, null);
+  });
+
+  it('re-resolves the due time when only the legacy terminationDate moves', () => {
+    const provided = { terminationDate: '2026-02-01T00:00:00.000Z' };
+    const task = { ...current(), ...provided };
+
+    applyTemporalMirror(task, provided, 'Ready');
+
+    assert.equal(task.dueDate, '2026-02-01T00:00:00.000Z');
+    assert.equal(task.dueTime, null);
+  });
+
+  it('keeps an explicit due time', () => {
+    const provided = { dueDate: '2026-01-02T00:00:00.000Z', dueTime: '08:15' };
+    const task = { ...current(), ...provided };
+
+    applyTemporalMirror(task, provided, 'Ready');
+
+    assert.equal(task.dueTime, '08:15');
+  });
+
+  it('does not touch the due time on an unrelated patch', () => {
+    const task = current();
+
+    applyTemporalMirror(task, { triageStatus: 'Ready' }, 'Ready');
+
+    assert.equal(task.dueTime, '15:30');
+  });
+});

@@ -55,6 +55,7 @@ export interface TaskEntity {
   category: Category | string;
   terminationDate: string | null;
   dueDate?: string | null;
+  dueTime?: string | null;
   completedAt?: string | null;
   comment: string | null;
   durationInMinutes: number | null;

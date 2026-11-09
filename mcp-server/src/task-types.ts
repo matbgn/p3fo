@@ -21,6 +21,7 @@ export interface TaskRecord {
   category?: string | null;
   terminationDate?: Timestamp;
   dueDate?: Timestamp;
+  dueTime?: string | null;
   completedAt?: Timestamp;
   comment?: string | null;
   durationInMinutes?: number | null;

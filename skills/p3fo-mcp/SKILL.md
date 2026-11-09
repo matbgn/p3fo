@@ -173,6 +173,42 @@ All tools return JSON (pretty-printed) as a single `text` content block. Errors 
 
 `TriageStatus` ∈ `Backlog | Ready | WIP | Blocked | Done | Dropped | Archived`. `Category` ∈ Marketing, Documentation, Consulting, Testing, Funerals, Negotiated overtime, Sickness, Finances, HR, Training, Support, UX/UI, Admin, Development, System Operations, Private (plus the server default `General`).
 
+#### Due dates and all-day events — IMPORTANT
+
+- `dueDate` accepts an ISO 8601 timestamp or a date-only `YYYY-MM-DD`.
+- `dueTime` is the dedicated wall-clock time (`HH:MM`). It is independent from
+  the planned-date/time pair and mirrors the app's due-time field.
+  - `dueTime: null` (or omitted together with a date-only `dueDate`) means the
+    deadline is **all-day**. The event appears in the all-day row at the top of
+    the week calendar, not in the timed grid.
+  - `dueTime: "17:00"` means the deadline is at 17:00 local time.
+  - A full `dueDate` timestamp without `dueTime` keeps the time in the
+    timestamp; readers render it in their own timezone. Send `dueTime`
+    explicitly when the wall-clock time must be exact.
+  - To remove only the due time but keep the date:
+    `{ "dueDate": "2026-11-09", "dueTime": null }`.
+  - `dueDate: null` removes the due date and time entirely.
+- `terminationDate` is the legacy mirror of `dueDate` for active tasks and the
+  completion timestamp for Done tasks. Prefer `dueDate`/`dueTime`.
+- Planned events use `plannedDate` (`YYYY-MM-DD`) plus `plannedTime` (`HH:MM`).
+  Set `plannedTime` to `null` (or omit it) for an all-day planned event.
+
+Examples:
+
+```jsonc
+// All-day due date (no due time)
+{ "params": { "id": "<task-id>", "patch": { "dueDate": "2026-11-09", "dueTime": null } } }
+
+// Due at 17:00 local time
+{ "params": { "id": "<task-id>", "patch": { "dueDate": "2026-11-09", "dueTime": "17:00" } } }
+
+// Change only the time, keeping the stored date
+{ "params": { "id": "<task-id>", "patch": { "dueTime": "17:00" } } }
+
+// Remove the due date and time entirely
+{ "params": { "id": "<task-id>", "patch": { "dueDate": null } } }
+```
+
 #### Listing gotchas — IMPORTANT
 
 - **`total` may exceed `data.length`** when `limit` is set. Never conclude a task doesn't exist from a single page: check `total` vs `data.length`, use `hasMore`/`nextCursor`, or filter. Prefer `p3fo_find_tasks` / `p3fo_get_task_by_title` to locate a specific task in one call.

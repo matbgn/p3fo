@@ -42,6 +42,7 @@ interface TaskDbRow {
   category: string;
   terminationDate: string | null;
   dueDate: string | null;
+  dueTime: string | null;
   completedAt: string | null;
   comment: string | null;
   durationInMinutes: number | null;
@@ -234,6 +235,7 @@ class PostgresClient implements DbClient {
         "category" TEXT DEFAULT 'General',
         "terminationDate" TIMESTAMP WITH TIME ZONE,
         "dueDate" TIMESTAMP WITH TIME ZONE,
+        "dueTime" TEXT,
         "completedAt" TIMESTAMP WITH TIME ZONE,
         "comment" TEXT,
         "durationInMinutes" INTEGER,
@@ -759,6 +761,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     `);
 
     await addColumn('tasks', 'dueDate', 'TIMESTAMP WITH TIME ZONE');
+    await addColumn('tasks', 'dueTime', 'TEXT');
     await addColumn('tasks', 'completedAt', 'TIMESTAMP WITH TIME ZONE');
 
     // Planner columns
@@ -820,6 +823,14 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     } finally {
       migrationClient.release();
     }
+
+    // Historical timed deadlines are derived on read (see normalizeDueTime).
+    // Do not backfill the new dueTime column here: dueDate stores an instant in
+    // the device-local date domain, so any single app/session timezone (e.g.
+    // appSettings.timezone, usually UTC on the server) would bake a shifted
+    // wall clock into every historical row, and an explicit dueTime wins on
+    // read, making that shift permanent. A full-history rewrite at boot would
+    // also contradict the bounded temporal-split backfill above.
 
     // VoteLoops proposalId column (per-proposal loops)
     await addColumn('voteLoops', 'proposalId', 'TEXT NOT NULL DEFAULT \'\'');
@@ -993,6 +1004,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       category: input.category || 'General',
       terminationDate: input.terminationDate || null,
       dueDate: input.dueDate || null,
+      dueTime: input.dueTime ?? null,
       completedAt: input.completedAt || null,
       comment: input.comment || null,
       durationInMinutes: input.durationInMinutes || null,
@@ -1016,9 +1028,9 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
 
     await this.pool.query(`
       INSERT INTO "tasks" ("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget",
-                         "difficulty", "timer", "category", "terminationDate", "dueDate", "completedAt", "comment", "durationInMinutes", "priority", "userId", "linkedVoteIds", "blockedSince",
+                         "difficulty", "timer", "category", "terminationDate", "dueDate", "dueTime", "completedAt", "comment", "durationInMinutes", "priority", "userId", "linkedVoteIds", "blockedSince",
                          "plannedDate", "plannedTime", "plannedPosition", "color", "recurrence", "seriesId", "occurrenceDate", "deletedAt")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
     `, [
       newTask.id,
       newTask.parentId,
@@ -1035,6 +1047,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       newTask.category,
       newTask.terminationDate,
       newTask.dueDate ?? null,
+      newTask.dueTime ?? null,
       newTask.completedAt ?? null,
       newTask.comment,
       newTask.durationInMinutes,
@@ -1077,6 +1090,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       updatedTask.category,
       updatedTask.terminationDate,
       updatedTask.dueDate ?? null,
+      updatedTask.dueTime ?? null,
       updatedTask.completedAt ?? null,
       updatedTask.comment,
       updatedTask.durationInMinutes,
@@ -1099,11 +1113,11 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       UPDATE "tasks"
       SET "parentId" = $1, "title" = $2, "updatedAt" = $3, "triageStatus" = $4, "urgent" = $5,
           "impact" = $6, "majorIncident" = $7, "sprintTarget" = $8, "difficulty" = $9, "timer" = $10,
-          "category" = $11, "terminationDate" = $12, "dueDate" = $13, "completedAt" = $14, "comment" = $15,
-          "durationInMinutes" = $16, "priority" = $17, "userId" = $18, "linkedVoteIds" = $19, "blockedSince" = $20,
-          "plannedDate" = $21, "plannedTime" = $22, "plannedPosition" = $23, "color" = $24,
-          "recurrence" = $25, "seriesId" = $26, "occurrenceDate" = $27, "deletedAt" = $28
-      WHERE "id" = $29
+          "category" = $11, "terminationDate" = $12, "dueDate" = $13, "dueTime" = $14, "completedAt" = $15, "comment" = $16,
+          "durationInMinutes" = $17, "priority" = $18, "userId" = $19, "linkedVoteIds" = $20, "blockedSince" = $21,
+          "plannedDate" = $22, "plannedTime" = $23, "plannedPosition" = $24, "color" = $25,
+          "recurrence" = $26, "seriesId" = $27, "occurrenceDate" = $28, "deletedAt" = $29
+      WHERE "id" = $30
     `, params);
 
     return updatedTask;
@@ -1193,9 +1207,9 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
         applyTaskTemporalMirror(task, task, task.triageStatus);
         await client.query(`
           INSERT INTO "tasks" ("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget",
-                             "difficulty", "timer", "category", "terminationDate", "dueDate", "completedAt", "comment", "durationInMinutes", "priority", "userId", "linkedVoteIds", "blockedSince",
+                             "difficulty", "timer", "category", "terminationDate", "dueDate", "dueTime", "completedAt", "comment", "durationInMinutes", "priority", "userId", "linkedVoteIds", "blockedSince",
                              "plannedDate", "plannedTime", "plannedPosition", "color", "recurrence", "seriesId", "occurrenceDate", "deletedAt")
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
           ON CONFLICT ("id") DO UPDATE SET
             "parentId" = EXCLUDED."parentId",
             "title" = EXCLUDED."title",
@@ -1210,6 +1224,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
             "category" = EXCLUDED."category",
             "terminationDate" = EXCLUDED."terminationDate",
             "dueDate" = EXCLUDED."dueDate",
+            "dueTime" = EXCLUDED."dueTime",
             "completedAt" = EXCLUDED."completedAt",
             "comment" = EXCLUDED."comment",
             "durationInMinutes" = EXCLUDED."durationInMinutes",
@@ -1241,6 +1256,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
           task.category,
           task.terminationDate,
           task.dueDate ?? null,
+          task.dueTime ?? null,
           task.completedAt ?? null,
           task.comment,
           task.durationInMinutes,

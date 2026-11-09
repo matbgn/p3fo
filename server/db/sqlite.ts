@@ -41,6 +41,7 @@ interface TaskDbRow {
   category: string;
   terminationDate: string | null;
   dueDate: string | null;
+  dueTime: string | null;
   completedAt: string | null;
   comment: string | null;
   durationInMinutes: number | null;
@@ -300,6 +301,7 @@ class SqliteClient implements DbClient {
         "category" TEXT DEFAULT 'General',
         "terminationDate" TEXT,
         "dueDate" TEXT,
+        "dueTime" TEXT,
         "completedAt" TEXT,
         "comment" TEXT,
         "durationInMinutes" INTEGER,
@@ -775,6 +777,7 @@ class SqliteClient implements DbClient {
     `);
 
     addColumn('tasks', 'dueDate', 'TEXT');
+    addColumn('tasks', 'dueTime', 'TEXT');
     addColumn('tasks', 'completedAt', 'TEXT');
 
     // Planner columns
@@ -835,6 +838,14 @@ class SqliteClient implements DbClient {
       }
       console.error('Task temporal split backfill failed; it will retry on next start:', error);
     }
+
+    // Historical timed deadlines are derived on read (see normalizeDueTime).
+    // Do not backfill the new dueTime column here: dueDate stores an instant in
+    // the device-local date domain, so any single app/session timezone (e.g.
+    // appSettings.timezone, usually UTC in the container) would bake a shifted
+    // wall clock into every historical row, and an explicit dueTime wins on
+    // read, making that shift permanent. A full-history rewrite at boot would
+    // also contradict the bounded temporal-split backfill above.
 
     // VoteLoops proposalId column (per-proposal loops)
     addColumn('voteLoops', 'proposalId', 'TEXT NOT NULL DEFAULT \'\'');
@@ -899,6 +910,7 @@ class SqliteClient implements DbClient {
               "category" TEXT DEFAULT 'General',
               "terminationDate" TEXT,
               "dueDate" TEXT,
+              "dueTime" TEXT,
               "completedAt" TEXT,
               "comment" TEXT,
               "durationInMinutes" INTEGER,
@@ -925,13 +937,13 @@ class SqliteClient implements DbClient {
           this.db.exec(`
             INSERT INTO "tasks_new" (
               "id", "parentId", "title", "createdAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget",
-              "difficulty", "timer", "category", "terminationDate", "dueDate", "completedAt", "comment", "durationInMinutes",
+              "difficulty", "timer", "category", "terminationDate", "dueDate", "dueTime", "completedAt", "comment", "durationInMinutes",
               "priority", "updatedAt", "userId", "linkedVoteIds", "blockedSince", "plannedDate", "plannedTime",
               "plannedPosition", "color", "recurrence", "seriesId", "occurrenceDate", "deletedAt"
             )
             SELECT
               "id", "parentId", "title", "createdAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget",
-              "difficulty", "timer", "category", "terminationDate", "dueDate", "completedAt", "comment", "durationInMinutes",
+              "difficulty", "timer", "category", "terminationDate", "dueDate", "dueTime", "completedAt", "comment", "durationInMinutes",
               "priority", "updatedAt", "userId", "linkedVoteIds", "blockedSince", "plannedDate", "plannedTime",
               "plannedPosition", "color", "recurrence", "seriesId", "occurrenceDate", "deletedAt"
             FROM "tasks";
@@ -1079,6 +1091,7 @@ class SqliteClient implements DbClient {
       category: input.category || 'General',
       terminationDate: input.terminationDate || null,
       dueDate: input.dueDate || null,
+      dueTime: input.dueTime ?? null,
       completedAt: input.completedAt || null,
       comment: input.comment || null,
       durationInMinutes: input.durationInMinutes || null,
@@ -1116,6 +1129,7 @@ class SqliteClient implements DbClient {
       category: newTask.category,
       terminationDate: newTask.terminationDate,
       dueDate: newTask.dueDate,
+      dueTime: newTask.dueTime ?? null,
       completedAt: newTask.completedAt,
       comment: newTask.comment,
       durationInMinutes: newTask.durationInMinutes,
@@ -1134,8 +1148,8 @@ class SqliteClient implements DbClient {
     };
 
     this.db.prepare(`
-      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget", "difficulty", "timer", "category", "terminationDate", "dueDate", "completedAt", "comment", "durationInMinutes", "priority", "userId", "linkedVoteIds", "blockedSince", "plannedDate", "plannedTime", "plannedPosition", "color", "recurrence", "seriesId", "occurrenceDate", "deletedAt")
-      VALUES(@id, @parentId, @title, @createdAt, @updatedAt, @triageStatus, @urgent, @impact, @majorIncident, @sprintTarget, @difficulty, @timer, @category, @terminationDate, @dueDate, @completedAt, @comment, @durationInMinutes, @priority, @userId, @linkedVoteIds, @blockedSince, @plannedDate, @plannedTime, @plannedPosition, @color, @recurrence, @seriesId, @occurrenceDate, @deletedAt)
+      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget", "difficulty", "timer", "category", "terminationDate", "dueDate", "dueTime", "completedAt", "comment", "durationInMinutes", "priority", "userId", "linkedVoteIds", "blockedSince", "plannedDate", "plannedTime", "plannedPosition", "color", "recurrence", "seriesId", "occurrenceDate", "deletedAt")
+      VALUES(@id, @parentId, @title, @createdAt, @updatedAt, @triageStatus, @urgent, @impact, @majorIncident, @sprintTarget, @difficulty, @timer, @category, @terminationDate, @dueDate, @dueTime, @completedAt, @comment, @durationInMinutes, @priority, @userId, @linkedVoteIds, @blockedSince, @plannedDate, @plannedTime, @plannedPosition, @color, @recurrence, @seriesId, @occurrenceDate, @deletedAt)
     `).run(params);
 
     return newTask;
@@ -1164,6 +1178,7 @@ class SqliteClient implements DbClient {
       category: updated.category,
       terminationDate: updated.terminationDate,
       dueDate: updated.dueDate ?? null,
+      dueTime: updated.dueTime ?? null,
       completedAt: updated.completedAt ?? null,
       comment: updated.comment,
       durationInMinutes: updated.durationInMinutes,
@@ -1196,6 +1211,7 @@ class SqliteClient implements DbClient {
         "category" = @category,
         "terminationDate" = @terminationDate,
         "dueDate" = @dueDate,
+        "dueTime" = @dueTime,
         "completedAt" = @completedAt,
         "comment" = @comment,
         "durationInMinutes" = @durationInMinutes,
@@ -1293,8 +1309,8 @@ class SqliteClient implements DbClient {
     }
 
     const insertStmt = this.db.prepare(`
-      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget", "difficulty", "timer", "category", "terminationDate", "dueDate", "completedAt", "comment", "durationInMinutes", "priority", "userId", "linkedVoteIds", "blockedSince", "plannedDate", "plannedTime", "plannedPosition", "color", "recurrence", "seriesId", "occurrenceDate", "deletedAt")
-      VALUES(@id, @parentId, @title, @createdAt, @updatedAt, @triageStatus, @urgent, @impact, @majorIncident, @sprintTarget, @difficulty, @timer, @category, @terminationDate, @dueDate, @completedAt, @comment, @durationInMinutes, @priority, @userId, @linkedVoteIds, @blockedSince, @plannedDate, @plannedTime, @plannedPosition, @color, @recurrence, @seriesId, @occurrenceDate, @deletedAt)
+      INSERT INTO "tasks"("id", "parentId", "title", "createdAt", "updatedAt", "triageStatus", "urgent", "impact", "majorIncident", "sprintTarget", "difficulty", "timer", "category", "terminationDate", "dueDate", "dueTime", "completedAt", "comment", "durationInMinutes", "priority", "userId", "linkedVoteIds", "blockedSince", "plannedDate", "plannedTime", "plannedPosition", "color", "recurrence", "seriesId", "occurrenceDate", "deletedAt")
+      VALUES(@id, @parentId, @title, @createdAt, @updatedAt, @triageStatus, @urgent, @impact, @majorIncident, @sprintTarget, @difficulty, @timer, @category, @terminationDate, @dueDate, @dueTime, @completedAt, @comment, @durationInMinutes, @priority, @userId, @linkedVoteIds, @blockedSince, @plannedDate, @plannedTime, @plannedPosition, @color, @recurrence, @seriesId, @occurrenceDate, @deletedAt)
       ON CONFLICT("id") DO UPDATE SET
       "parentId" = excluded."parentId",
         "title" = excluded."title",
@@ -1309,6 +1325,7 @@ class SqliteClient implements DbClient {
         "category" = excluded."category",
         "terminationDate" = excluded."terminationDate",
         "dueDate" = excluded."dueDate",
+        "dueTime" = excluded."dueTime",
         "completedAt" = excluded."completedAt",
         "comment" = excluded."comment",
         "durationInMinutes" = excluded."durationInMinutes",
@@ -1349,6 +1366,7 @@ class SqliteClient implements DbClient {
           category: task.category,
           terminationDate: task.terminationDate ?? null,
           dueDate: task.dueDate ?? null,
+          dueTime: task.dueTime ?? null,
           completedAt: task.completedAt ?? null,
           comment: task.comment,
           durationInMinutes: task.durationInMinutes,

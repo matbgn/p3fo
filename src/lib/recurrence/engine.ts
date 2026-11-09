@@ -1,6 +1,6 @@
 import type { Task } from '@/hooks/useTasks';
 import { MAX_EVERY_DAYS, type Recurrence } from './types';
-import { addDays, addDaysToKey, addDaysToTimestamp, parseDateKey, toDateKey } from '@/lib/planner/dates';
+import { addDays, addDaysToKey, addDaysToTimestamp, combineDateKeyAndTime, normalizeDueTime, parseDateKey, toDateKey } from '@/lib/planner/dates';
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 // Hard stop for pathological ranges: expansion must never scan indefinitely.
@@ -163,17 +163,11 @@ export function dueDateForOccurrence(series: Task, date: string): number | undef
   const offset = dueOffsetForSeries(series);
   if (offset === undefined) return undefined;
   // Start from the occurrence date + offset, then restore the series deadline's
-  // time-of-day so timed deadlines are preserved (and keep local wall time
-  // across DST instead of rebuilding the value from an ISO string).
-  const seriesDue = new Date(series.dueDate);
+  // wall-clock time (or midnight for an all-day deadline) so timed deadlines
+  // are preserved across DST instead of rebuilding from an ISO string.
   const occurrenceDue = addDays(parseDateKey(date), offset);
-  occurrenceDue.setHours(
-    seriesDue.getHours(),
-    seriesDue.getMinutes(),
-    seriesDue.getSeconds(),
-    seriesDue.getMilliseconds(),
-  );
-  return occurrenceDue.getTime();
+  const dueTime = normalizeDueTime(series.dueTime, series.dueDate);
+  return combineDateKeyAndTime(toDateKey(occurrenceDue), dueTime);
 }
 
 /**

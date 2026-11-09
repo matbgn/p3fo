@@ -3,6 +3,7 @@ import type { TaskRecord } from './task-types.js';
 import { ALLOWED_TRIAGE_STATUSES } from './bulk-update.js';
 import { GENERAL_CATEGORY, isGeneralCategory, isKnownCategory } from './categories.js';
 import { applyTemporalMirror, type TemporalTaskFields } from './task-temporal.js';
+import { combineDueDateAndTime, existingDueDateFor, normalizeDateInput, normalizeDueTimeInput } from './task-dates.js';
 import { validateRecurrenceAnchor } from './task-recurrence.js';
 
 export interface ImportTaskInput {
@@ -20,6 +21,7 @@ export interface ImportTaskInput {
   category?: string;
   terminationDate?: string | number | null;
   dueDate?: string | number | null;
+  dueTime?: string | null;
   completedAt?: string | number | null;
   deletedAt?: string | number | null;
   comment?: string | null;
@@ -48,7 +50,9 @@ function toIso(value: unknown): string | null {
     return Number.isFinite(value) ? new Date(value).toISOString() : null;
   }
   if (typeof value === 'string') {
-    const parsed = Date.parse(value);
+    const normalized = normalizeDateInput(value);
+    if (normalized === null || normalized === undefined) return null;
+    const parsed = Date.parse(normalized);
     return Number.isNaN(parsed) ? null : new Date(parsed).toISOString();
   }
   return null;
@@ -187,32 +191,78 @@ export function prepareTaskImport(
     const providedTermination = input.terminationDate !== undefined
       ? toOptionalIso(input.terminationDate)
       : undefined;
-    const providedDue = input.dueDate !== undefined ? toOptionalIso(input.dueDate) : undefined;
     const providedCompleted = input.completedAt !== undefined ? toOptionalIso(input.completedAt) : undefined;
     const storedValue = (value: unknown) =>
       value !== undefined && value !== null ? toOptionalIso(value) : undefined;
 
-    task.terminationDate = providedTermination !== undefined
-      ? providedTermination
-      : storedValue(existing?.terminationDate) ?? null;
+    let providedDue = input.dueDate !== undefined ? toOptionalIso(input.dueDate) : undefined;
+    const providedDueTime = input.dueTime !== undefined ? normalizeDueTimeInput(input.dueTime) : undefined;
+    if (providedDue === undefined && providedDueTime !== undefined) {
+      // A dueTime-only update needs a date. A supplied deadline mirror is the
+      // freshest source for active tasks; otherwise fall back to the stored due
+      // date (active tasks may still hold their deadline only in the mirror).
+      const fallbackDue = triageStatus !== 'Done' && providedTermination !== undefined
+        ? providedTermination
+        : storedValue(existingDueDateFor(existing));
+      if (fallbackDue) providedDue = combineDueDateAndTime(fallbackDue, providedDueTime ?? null);
+    }
+    if (providedDue !== undefined && providedDue !== null && providedDueTime !== undefined) {
+      providedDue = combineDueDateAndTime(providedDue, providedDueTime ?? null);
+    }
+
+    // For active tasks the legacy terminationDate mirrors the deadline, so an
+    // applied due time must reach the mirror too; otherwise it stays at the
+    // time-less supplied value (e.g. local midnight) while dueDate carries the
+    // requested time.
+    const combinedTermination =
+      providedTermination !== undefined &&
+      triageStatus !== 'Done' &&
+      providedDueTime !== undefined &&
+      providedDue != null
+        ? providedDue
+        : undefined;
+
+    task.terminationDate = combinedTermination !== undefined
+      ? combinedTermination
+      : providedTermination !== undefined
+        ? providedTermination
+        : storedValue(existing?.terminationDate) ?? null;
     task.dueDate = providedDue !== undefined ? providedDue : storedValue(existing?.dueDate) ?? null;
+    // The dedicated due time is owned by applyTemporalMirror below: an explicit
+    // value wins (`null` means all-day) and a date change without one clears it,
+    // exactly like REST writes. Deriving it here would encode a second policy in
+    // the server process timezone and silently override the mirror.
+    task.dueTime = providedDueTime !== undefined
+      ? providedDueTime ?? null
+      : (existing?.dueTime ?? null);
     task.completedAt = providedCompleted !== undefined
       ? providedCompleted
       : storedValue(existing?.completedAt) ?? null;
 
     const providedTemporal: Partial<TemporalTaskFields> = {};
     if (input.triageStatus !== undefined) providedTemporal.triageStatus = input.triageStatus;
-    if (providedTermination !== undefined) providedTemporal.terminationDate = providedTermination;
+    if (providedTermination !== undefined) providedTemporal.terminationDate = combinedTermination ?? providedTermination;
     if (providedDue !== undefined) providedTemporal.dueDate = providedDue;
+    if (providedDueTime !== undefined) providedTemporal.dueTime = providedDueTime;
     if (providedCompleted !== undefined) providedTemporal.completedAt = providedCompleted;
 
     applyTemporalMirror(task as TemporalTaskFields, providedTemporal, existing?.triageStatus ?? null);
+
+    // The mirror guarantees an effective due date for active tasks, and Done
+    // tasks keep their terminationDate as the completion time, never a deadline.
+    const dueDateValue = typeof task.dueDate === 'string' ? task.dueDate : null;
+    if (typeof providedDueTime === 'string' && !dueDateValue) {
+      // The create/update tools reject this combination; surface it here
+      // instead of silently discarding the requested time.
+      taskWarnings.push(`${label}.dueTime was ignored because the task has no due date`);
+    }
 
     // Keep the keys present even when there is no value. The import endpoint
     // binds every column and node:sqlite rejects undefined parameters (a
     // deleted key binds as undefined); `null` is the "no value" marker.
     task.terminationDate = task.terminationDate ?? null;
     task.dueDate = task.dueDate ?? null;
+    task.dueTime = task.dueTime ?? null;
     task.completedAt = task.completedAt ?? null;
     task.deletedAt = input.deletedAt !== undefined
       ? toOptionalIso(input.deletedAt) ?? null

@@ -15,6 +15,7 @@ import { isTaskColor } from "@/lib/planner/colors";
 import type { Recurrence } from "@/lib/recurrence/types";
 import { compareCarryOverOrder, isCarriedOver } from "@/lib/planner/carry-over";
 import { appendPosition, compareDayOrder, duplicateTaskPosition, maxPlannedPosition, positionBetween, positionForDrop } from "@/lib/planner/position";
+import { normalizeDueTimestamp, resolveTaskDueFields } from "@/lib/planner/dates";
 import { adjustSeriesForAnchorMove, dueDateForOccurrence, filterWorkflowTasks, occurrenceId, parseStoredRecurrence, uniqueTasksById } from "@/lib/recurrence/engine";
 if (typeof crypto.randomUUID !== 'function') {
   crypto.randomUUID = function () {
@@ -62,6 +63,7 @@ export type Task = {
   category?: Category;
   terminationDate?: number;
   dueDate?: number;
+  dueTime?: string | null;
   completedAt?: number;
   comment?: string;
   durationInMinutes?: number;
@@ -127,6 +129,15 @@ const toEpochMillis = (value: unknown): number | undefined => {
 const normalizeYjsTask = (raw: Task): Task => {
   const terminationDate = toEpochMillis(raw.terminationDate);
   const triageStatus = raw.triageStatus || 'Backlog';
+  // Shared with convertEntitiesToTasks so the entity and live-Yjs load paths
+  // cannot drift. A stored/hydrated null dueTime derives its time from the
+  // timestamp (local midnight still yields null for genuine all-day rows).
+  const { dueDate, dueTime } = resolveTaskDueFields({
+    dueDate: raw.dueDate,
+    terminationDate,
+    triageStatus,
+    dueTime: raw.dueTime,
+  });
 
   return {
     ...raw,
@@ -135,8 +146,8 @@ const normalizeYjsTask = (raw: Task): Task => {
     terminationDate,
     // Mirror convertEntitiesToTasks: legacy rows stored the deadline for active
     // tasks and the completion time for Done tasks in terminationDate only.
-    dueDate: toEpochMillis(raw.dueDate)
-      ?? (triageStatus !== 'Done' ? terminationDate : undefined),
+    dueDate,
+    dueTime,
     completedAt: toEpochMillis(raw.completedAt)
       ?? (triageStatus === 'Done' ? terminationDate : undefined),
     blockedSince: toEpochMillis(raw.blockedSince),
@@ -391,6 +402,7 @@ async function createTask(title: string, parentId: string | null, userId?: strin
     category: parentTask?.category ?? undefined,
     terminationDate: undefined,
     dueDate: undefined,
+    dueTime: undefined,
     completedAt: undefined,
     comment: undefined,
     durationInMinutes: undefined,
@@ -1060,14 +1072,25 @@ async function updateUser(taskId: string, userId: string | undefined) {
 
   eventBus.publish("tasksChanged");
 };
-const updateTerminationDate = async (taskId: string, terminationDate: number | undefined) => {
+const updateTerminationDate = async (
+  taskId: string,
+  terminationDate: number | undefined,
+  // Explicit wall-clock time for the new deadline. `null` means all-day;
+  // omitted derives the time from the timestamp (legacy callers). Without this,
+  // an explicit 00:00 deadline is indistinguishable from all-day and collapses.
+  dueTime?: string | null,
+) => {
   const task = tasks.find(t => t.id === taskId);
   if (!task) return;
 
+  const normalizedDue = terminationDate !== undefined
+    ? normalizeDueTimestamp(terminationDate, dueTime)
+    : undefined;
   updateTaskInTasks(taskId, (t) => ({
     ...t,
-    dueDate: terminationDate,
-    terminationDate: t.triageStatus === 'Done' ? t.terminationDate : terminationDate,
+    dueDate: normalizedDue?.dueDate,
+    dueTime: normalizedDue?.dueTime,
+    terminationDate: t.triageStatus === 'Done' ? t.terminationDate : normalizedDue?.dueDate,
   }));
 
   // Persist to backend
@@ -1762,12 +1785,16 @@ export function useTasks(options?: { subscribe?: boolean; includeRecurring?: boo
     taskId: string,
     patch: Partial<Pick<Task, 'plannedDate' | 'plannedTime' | 'plannedPosition' | 'color' | 'durationInMinutes'>> & {
       dueDate?: number | null;
+      // Explicit wall clock for the new due date. `null` means all-day;
+      // omitted derives the time from the supplied timestamp (legacy callers).
+      // Without this a supplied 00:00 deadline collapses to all-day.
+      dueTime?: string | null;
     },
   ): Promise<Task | null> => {
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return null;
 
-    const { dueDate: dueDatePatch, ...rest } = patch;
+    const { dueDate: dueDatePatch, dueTime: dueTimePatch, ...rest } = patch;
     const updated: Task = {
       ...task,
       ...rest,
@@ -1775,11 +1802,13 @@ export function useTasks(options?: { subscribe?: boolean; includeRecurring?: boo
     };
 
     if (dueDatePatch !== undefined) {
-      updated.dueDate = dueDatePatch ?? undefined;
+      const normalizedDue = dueDatePatch != null ? normalizeDueTimestamp(dueDatePatch, dueTimePatch) : undefined;
+      updated.dueDate = normalizedDue?.dueDate;
+      updated.dueTime = normalizedDue?.dueTime;
       // Several existing views (Todolist, next-action, MCP sorting) still read
       // terminationDate for active tasks; keep the legacy mirror in sync.
       if (updated.triageStatus !== 'Done') {
-        updated.terminationDate = dueDatePatch ?? undefined;
+        updated.terminationDate = normalizedDue?.dueDate;
       }
     }
 
@@ -1791,9 +1820,16 @@ export function useTasks(options?: { subscribe?: boolean; includeRecurring?: boo
       const adjusted = adjustSeriesForAnchorMove(task, task.recurrence, patch.plannedDate);
       updated.recurrence = adjusted.recurrence;
       if (dueDatePatch === undefined && adjusted.dueDate != null) {
-        updated.dueDate = adjusted.dueDate;
+        // Preserve the template's explicit due time when its anchor moves so an
+        // explicit 00:00 deadline is not re-derived as all-day.
+        const normalizedDue = normalizeDueTimestamp(
+          adjusted.dueDate,
+          dueTimePatch !== undefined ? dueTimePatch : task.dueTime,
+        );
+        updated.dueDate = normalizedDue.dueDate;
+        updated.dueTime = normalizedDue.dueTime;
         if (updated.triageStatus !== 'Done') {
-          updated.terminationDate = adjusted.dueDate;
+          updated.terminationDate = normalizedDue.dueDate;
         }
       }
     }
@@ -1819,6 +1855,7 @@ export function useTasks(options?: { subscribe?: boolean; includeRecurring?: boo
     plannedTime?: string | null;
     color?: TaskColor;
     dueDate?: number | null;
+    dueTime?: string | null;
     durationInMinutes?: number | null;
     userId?: string;
     parentId?: string | null;
@@ -1840,6 +1877,7 @@ export function useTasks(options?: { subscribe?: boolean; includeRecurring?: boo
       plannedPosition,
       color: input.color ?? 'none',
       dueDate: input.dueDate ?? undefined,
+      dueTime: input.dueTime,
       durationInMinutes: input.durationInMinutes ?? undefined,
     });
 
@@ -2090,11 +2128,13 @@ export function useTasks(options?: { subscribe?: boolean; includeRecurring?: boo
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return null;
 
+    const normalizedDue = normalizeDueTimestamp(dueDate);
     return updateTaskFields(taskId, {
-      dueDate,
+      dueDate: normalizedDue.dueDate,
+      dueTime: normalizedDue.dueTime,
       // Done tasks keep terminationDate as their completion timestamp; active
       // tasks keep mirroring the deadline into the legacy field.
-      terminationDate: task.triageStatus === 'Done' ? task.terminationDate : dueDate,
+      terminationDate: task.triageStatus === 'Done' ? task.terminationDate : normalizedDue.dueDate,
       ...(durationInMinutes !== undefined ? { durationInMinutes } : {}),
     });
   }, [updateTaskFields]);
@@ -2201,6 +2241,7 @@ export function useTasks(options?: { subscribe?: boolean; includeRecurring?: boo
           completedAt: undefined,
           terminationDate: undefined,
           dueDate: undefined,
+          dueTime: undefined,
           timer: [],
           blockedSince: undefined,
           createdAt: now,

@@ -20,7 +20,7 @@ import { useFocusMode } from '@/hooks/useFocusMode';
 import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, CircleDot, Flame, GripHorizontal, Columns3, CalendarRange } from 'lucide-react';
 import type { Filters } from './FilterControls';
 import { loadFiltersFromSessionStorage } from '@/lib/filter-storage';
-import { addDays, addDaysToKey, addWeeks, combineDateKeyAndTime, isoWeekNumber, parseDateKey, startOfDay, startOfWeek, toDateKey } from '@/lib/planner/dates';
+import { addDays, addDaysToKey, addWeeks, combineDateKeyAndTime, isoWeekNumber, normalizeDueTimestamp, parseDateKey, startOfDay, startOfWeek, toDateKey } from '@/lib/planner/dates';
 import { parseSmartTime } from '@/lib/planner/smart-time';
 import { isModuleEffectivelyDisabled } from '@/lib/persistence-types';
 import { dueOffsetForSeries, expandSeriesForRange, isOccurrence, isSeriesTemplate } from '@/lib/recurrence/engine';
@@ -31,6 +31,22 @@ import { cn } from '@/lib/utils';
 
 
 const MAX_RECURRENCE_PAD_DAYS = 366;
+
+/**
+ * Resolve where a due date renders: timed at its explicit due time, or all-day
+ * at local midnight. Shared by the base-task and recurrence-expansion paths so
+ * both classify the same task identically.
+ */
+function resolveDueStart(
+  task: Task,
+  due: number,
+): { startDate: Date; allDay: boolean } | null {
+  if (Number.isNaN(new Date(due).getTime())) return null;
+  // Delegate to the shared rule so the calendar cannot classify a deadline
+  // differently from the rest of the app.
+  const normalized = normalizeDueTimestamp(due, task.dueTime);
+  return { startDate: new Date(normalized.dueDate), allDay: normalized.dueTime === null };
+}
 
 type DragTarget = {
   date: Date;
@@ -325,9 +341,10 @@ const ProgramView: React.FC<ProgramViewProps> = ({ focusHeaderRightContent }) =>
       } else {
         const due = task.dueDate ?? task.terminationDate;
         if (!due) continue;
-        startDate = new Date(due);
-        if (Number.isNaN(startDate.getTime())) continue;
-        allDay = startDate.getHours() === 0 && startDate.getMinutes() === 0 && startDate.getSeconds() === 0;
+        const resolved = resolveDueStart(task, due);
+        if (!resolved) continue;
+        startDate = resolved.startDate;
+        allDay = resolved.allDay;
       }
 
       addEvent(task, startDate, allDay);
@@ -381,8 +398,9 @@ const ProgramView: React.FC<ProgramViewProps> = ({ focusHeaderRightContent }) =>
         if (Number.isNaN(startDate.getTime())) return;
         const dueKey = toDateKey(startDate);
         if (dueKey < recurrenceRange.start || dueKey > recurrenceRange.end) return;
-        const allDay = startDate.getHours() === 0 && startDate.getMinutes() === 0 && startDate.getSeconds() === 0;
-        addEvent(task, startDate, allDay);
+        const resolved = resolveDueStart(task, task.dueDate);
+        if (!resolved) return;
+        addEvent(task, resolved.startDate, resolved.allDay);
       };
 
       for (const occurrence of occurrences) {
@@ -670,6 +688,7 @@ const ProgramView: React.FC<ProgramViewProps> = ({ focusHeaderRightContent }) =>
       plannedTime,
       color: input.color,
       dueDate,
+      dueTime: input.dueTime,
       durationInMinutes: input.durationInMinutes ?? DEFAULT_DURATION_MIN,
       userId: currentUserId,
     });

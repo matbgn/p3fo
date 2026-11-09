@@ -52,6 +52,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { useSettingsContext } from "@/context/SettingsContext";
 import { effectiveDueDate } from "@/lib/task-conversions";
+import { formatTimeFromTimestamp, normalizeDueTime } from "@/lib/planner/dates";
 import { Calendar } from "@/components/ui/calendar";
 import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
 import { TaskEditModal } from "./TaskEditModal";
@@ -85,7 +86,7 @@ interface TodolistRowProps {
   updateCategory: (id: string, category: Category) => void;
   updateTitle: (id: string, title: string) => void;
   updateComment: (id: string, comment: string) => void;
-  updateTerminationDate: (id: string, terminationDate: number | undefined) => void;
+  updateTerminationDate: (id: string, terminationDate: number | undefined, dueTime?: string | null) => void;
   updateDurationInMinutes: (id: string, durationInMinutes: number | undefined) => void;
   updateUser: (id: string, userId: string | undefined) => void;
   deleteTask: (id: string) => void;
@@ -258,6 +259,7 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
   }, [task.durationInMinutes]);
 
   const effectiveDue = effectiveDueDate(task);
+  const dueTime = normalizeDueTime(task.dueTime, effectiveDue);
 
   React.useEffect(() => {
     const existingReminder = scheduledReminders.find(
@@ -572,7 +574,7 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
                             if (date) {
                               const current = effectiveDue ? new Date(effectiveDue) : new Date();
                               date.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
-                              updateTerminationDate(task.id, date.getTime());
+                              updateTerminationDate(task.id, date.getTime(), dueTime);
                             } else {
                               updateTerminationDate(task.id, undefined);
                             }
@@ -727,7 +729,7 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
         onClose={() => setTimePickerOpen(false)}
         initialTime={effectiveDue || Date.now()}
         onTimeChange={(timestamp) => {
-          updateTerminationDate(task.id, timestamp);
+          updateTerminationDate(task.id, timestamp, formatTimeFromTimestamp(timestamp));
           updateScheduledReminderTriggerDate(task.id, new Date(timestamp).toISOString(), offsetMinutes);
         }}
       />

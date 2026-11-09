@@ -133,4 +133,76 @@ describe('task-conversions', () => {
       })
     })
   })
+
+  describe('dueTime', () => {
+    const baseEntity = (overrides: Partial<TaskEntity>): TaskEntity => ({
+      id: 'due-1',
+      title: 'Due task',
+      createdAt: '2024-04-24T08:00:00.000Z',
+      triageStatus: 'Ready',
+      urgent: false,
+      impact: false,
+      majorIncident: false,
+      sprintTarget: false,
+      difficulty: 1,
+      timer: [],
+      category: 'General',
+      terminationDate: null,
+      comment: null,
+      durationInMinutes: null,
+      priority: null,
+      userId: null,
+      parentId: null,
+      ...overrides,
+    })
+
+    it('treats a date-only deadline (local midnight) as all-day', () => {
+      const dueDate = new Date(2026, 10, 9);
+      const [task] = convertEntitiesToTasks([
+        baseEntity({ dueDate: dueDate.toISOString(), dueTime: null }),
+      ]);
+
+      expect(task.dueTime).toBeNull();
+      expect(task.dueDate).toBe(dueDate.getTime());
+    })
+
+    it('derives dueTime from a legacy due timestamp', () => {
+      const dueDate = new Date(2026, 10, 9, 17, 0);
+      const [task] = convertEntitiesToTasks([
+        baseEntity({ dueDate: dueDate.toISOString() }),
+      ]);
+
+      expect(task.dueTime).toBe('17:00');
+      expect(task.dueDate).toBe(dueDate.getTime());
+    })
+
+    it('derives dueTime from a timed timestamp even when storage has null', () => {
+      const dueDate = new Date(2026, 10, 9, 17, 0);
+      const [task] = convertEntitiesToTasks([
+        baseEntity({ dueDate: dueDate.toISOString(), dueTime: null }),
+      ]);
+
+      expect(task.dueTime).toBe('17:00');
+      expect(task.dueDate).toBe(dueDate.getTime());
+    })
+
+    it('round-trips dueDate and dueTime', () => {
+      const dueDate = new Date(2026, 10, 9, 17, 0).getTime();
+      const task: Task = {
+        id: 'due-rt',
+        title: 'Due round trip',
+        createdAt: 1713945600000,
+        triageStatus: 'Ready',
+        dueDate,
+        dueTime: '17:00',
+      };
+
+      const entity = taskToEntity(task);
+      const [back] = convertEntitiesToTasks([entity]);
+
+      expect(entity.dueTime).toBe('17:00');
+      expect(back.dueTime).toBe('17:00');
+      expect(back.dueDate).toBe(dueDate);
+    })
+  })
 })

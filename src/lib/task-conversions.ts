@@ -12,6 +12,7 @@ import type { Task, TriageStatus, Category } from '@/hooks/useTasks';
 import type { TaskEntity } from './persistence-types';
 import { parseStoredRecurrence } from './recurrence/engine';
 import { isTaskColor } from './planner/colors';
+import { normalizeDueTimestamp, resolveTaskDueFields } from './planner/dates';
 
 /**
  * Converts a TaskEntity to a Task object for frontend use.
@@ -24,6 +25,12 @@ export const convertEntitiesToTasks = (entities: TaskEntity[]): Task[] => {
 
     // First pass: create all task objects and map them by ID
     entities.forEach(entity => {
+        // A stored NULL dueTime can mean "not materialized yet". Deriving from
+        // the timestamp is safe: genuine all-day rows store local midnight,
+        // which derives back to null, while a timed timestamp recovers its wall
+        // clock instead of being flattened. Shared with useTasks so both load
+        // paths cannot drift.
+        const { dueDate, dueTime } = resolveTaskDueFields(entity);
         const task: Task = {
             id: entity.id,
             title: entity.title,
@@ -39,11 +46,8 @@ export const convertEntitiesToTasks = (entities: TaskEntity[]): Task[] => {
             timer: entity.timer,
             category: entity.category as Category,
             terminationDate: entity.terminationDate ? new Date(entity.terminationDate).getTime() : undefined,
-            dueDate: entity.dueDate
-                ? new Date(entity.dueDate).getTime()
-                : entity.triageStatus !== 'Done' && entity.terminationDate
-                    ? new Date(entity.terminationDate).getTime()
-                    : undefined,
+            dueDate,
+            dueTime,
             completedAt: entity.completedAt
                 ? new Date(entity.completedAt).getTime()
                 : entity.triageStatus === 'Done' && entity.terminationDate
@@ -96,39 +100,48 @@ export const effectiveDueDate = (
  * @param task - The frontend Task object
  * @returns TaskEntity ready for database persistence
  */
-export const taskToEntity = (task: Task): TaskEntity => ({
-    id: task.id,
-    title: task.title,
-    createdAt: new Date(task.createdAt).toISOString(),
-    triageStatus: task.triageStatus,
-    urgent: task.urgent || false,
-    impact: task.impact || false,
-    majorIncident: task.majorIncident || false,
-    sprintTarget: task.sprintTarget || false,
-    difficulty: task.difficulty || 1,
-    timer: task.timer || [],
-    category: task.category || 'General',
-    terminationDate: task.terminationDate ? new Date(task.terminationDate).toISOString() : null,
-    dueDate: task.dueDate ? new Date(task.dueDate).toISOString() : null,
-    completedAt: task.completedAt ? new Date(task.completedAt).toISOString() : null,
-    comment: task.comment || null,
-    durationInMinutes: task.durationInMinutes || null,
-    priority: task.priority || null,
-    userId: task.userId || null,
-    parentId: task.parentId || null,
-    children: task.children || [],
-    updatedAt: task.updatedAt ? new Date(task.updatedAt).toISOString() : null,
-    linkedVoteIds: task.linkedVoteIds || undefined,
-    blockedSince: task.blockedSince ? new Date(task.blockedSince).toISOString() : null,
-    plannedDate: task.plannedDate ?? null,
-    plannedTime: task.plannedTime ?? null,
-    plannedPosition: task.plannedPosition ?? null,
-    color: task.color ?? 'none',
-    recurrence: task.recurrence ? JSON.stringify(task.recurrence) : null,
-    seriesId: task.seriesId ?? null,
-    occurrenceDate: task.occurrenceDate ?? null,
-    deletedAt: task.deletedAt ? new Date(task.deletedAt).toISOString() : null,
-});
+export const taskToEntity = (task: Task): TaskEntity => {
+    const normalizedDue = task.dueDate === undefined
+        ? undefined
+        : normalizeDueTimestamp(task.dueDate, task.dueTime);
+    const dueDate = normalizedDue ? new Date(normalizedDue.dueDate).toISOString() : null;
+    const dueTime = normalizedDue?.dueTime ?? null;
+
+    return {
+        id: task.id,
+        title: task.title,
+        createdAt: new Date(task.createdAt).toISOString(),
+        triageStatus: task.triageStatus,
+        urgent: task.urgent || false,
+        impact: task.impact || false,
+        majorIncident: task.majorIncident || false,
+        sprintTarget: task.sprintTarget || false,
+        difficulty: task.difficulty || 1,
+        timer: task.timer || [],
+        category: task.category || 'General',
+        terminationDate: task.terminationDate ? new Date(task.terminationDate).toISOString() : null,
+        dueDate,
+        dueTime,
+        completedAt: task.completedAt ? new Date(task.completedAt).toISOString() : null,
+        comment: task.comment || null,
+        durationInMinutes: task.durationInMinutes || null,
+        priority: task.priority || null,
+        userId: task.userId || null,
+        parentId: task.parentId || null,
+        children: task.children || [],
+        updatedAt: task.updatedAt ? new Date(task.updatedAt).toISOString() : null,
+        linkedVoteIds: task.linkedVoteIds || undefined,
+        blockedSince: task.blockedSince ? new Date(task.blockedSince).toISOString() : null,
+        plannedDate: task.plannedDate ?? null,
+        plannedTime: task.plannedTime ?? null,
+        plannedPosition: task.plannedPosition ?? null,
+        color: task.color ?? 'none',
+        recurrence: task.recurrence ? JSON.stringify(task.recurrence) : null,
+        seriesId: task.seriesId ?? null,
+        occurrenceDate: task.occurrenceDate ?? null,
+        deletedAt: task.deletedAt ? new Date(task.deletedAt).toISOString() : null,
+    };
+};
 
 /**
  * Batch converts multiple Task objects to TaskEntity objects.

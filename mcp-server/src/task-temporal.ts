@@ -11,8 +11,38 @@
 export interface TemporalTaskFields {
   triageStatus?: string | null;
   dueDate?: string | null;
+  dueTime?: string | null;
   completedAt?: string | null;
   terminationDate?: string | null;
+}
+
+/**
+ * Keep `dueTime` consistent with the effective due date on server-side writes.
+ *
+ * An explicit dueTime always wins (`null` means all-day). When a date write
+ * omits dueTime the stored time is cleared instead of being derived here: the
+ * server process may run in a different timezone than the app, so deriving the
+ * wall clock server-side would shift every deadline. Readers derive the
+ * missing time from the due timestamp in their own timezone, and genuine
+ * all-day rows store local midnight (which derives back to null). A due time
+ * can never survive without a due date.
+ */
+function syncDueTime(
+  target: Partial<TemporalTaskFields>,
+  provided: Partial<TemporalTaskFields>,
+  dateChanged: boolean,
+): void {
+  const has = (key: keyof TemporalTaskFields) =>
+    Object.prototype.hasOwnProperty.call(provided, key);
+
+  if (!dateChanged && !has('dueTime')) return;
+
+  if (target.dueDate == null) {
+    target.dueTime = null;
+    return;
+  }
+
+  if (!has('dueTime')) target.dueTime = null;
 }
 
 export function applyTemporalMirror(
@@ -41,6 +71,9 @@ export function applyTemporalMirror(
       target.completedAt = new Date().toISOString();
       target.terminationDate = target.completedAt;
     }
+    // For a Done task terminationDate is the completion time, never a
+    // deadline, so only an explicit dueDate may move the due time.
+    syncDueTime(target, provided, has('dueDate'));
     return target;
   }
 
@@ -73,5 +106,8 @@ export function applyTemporalMirror(
     }
   }
 
+  // For active tasks dueDate and terminationDate mirror the same deadline, so
+  // either one moving must re-resolve the stored due time.
+  syncDueTime(target, provided, has('dueDate') || has('terminationDate'));
   return target;
 }

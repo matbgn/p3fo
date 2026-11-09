@@ -120,6 +120,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       category: input.category || 'General',
       terminationDate: input.terminationDate || null,
       dueDate: input.dueDate || null,
+      dueTime: input.dueTime ?? null,
       completedAt: input.completedAt || null,
       comment: input.comment || null,
       durationInMinutes: input.durationInMinutes || null,

@@ -317,6 +317,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
       plannedTime: input.plannedTime ?? parsed.time,
       color: input.color,
       dueDate: input.dueDate ? combineDateKeyAndTime(input.dueDate, input.dueTime) : null,
+      dueTime: input.dueTime,
       durationInMinutes: input.durationInMinutes,
       userId: currentUserId,
     });

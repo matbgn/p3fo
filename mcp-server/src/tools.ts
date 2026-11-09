@@ -16,6 +16,7 @@ import { buildPriorityAudit, buildTaskStats } from './task-audit.js';
 import { ALLOWED_TRIAGE_STATUSES, applyBulkUpdates, type BulkItem } from './bulk-update.js';
 import { prepareTaskImport, type ImportTaskInput } from './import-tasks.js';
 import { adjustRecurrenceForAnchorMove, validateRecurrenceAnchor } from './task-recurrence.js';
+import { DATE_KEY_PATTERN, TIME_OF_DAY_PATTERN, existingDueDateFor, normalizeTaskDateFields } from './task-dates.js';
 
 const stringOrUndefined = z.string().optional();
 const recordSchema = z.record(z.string(), z.unknown()).optional();
@@ -107,8 +108,6 @@ function makeCursor(offset: number): string {
 }
 
 // Reusable param schemas ------------------------------------------------------
-const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const TIME_OF_DAY_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 // Fractional-index keys start with an A-Z/a-z head and use base-62 digits.
 // The planner additionally tolerates legacy malformed keys at read time.
 const FRACTIONAL_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9]*$/;
@@ -172,8 +171,9 @@ const taskSchema = z.object({
   difficulty: z.number().optional(),
   timer: z.array(z.unknown()).optional(),
   category: z.string().optional(),
-  terminationDate: z.string().nullable().optional(),
-  dueDate: z.string().nullable().optional(),
+  terminationDate: z.string().describe('Legacy deadline/completion mirror. Prefer dueDate; date-only values are treated as all-day.').nullable().optional(),
+  dueDate: z.string().describe('Due date as ISO 8601 or YYYY-MM-DD. Date-only means an all-day due date at local midnight; use null to remove the due date.').nullable().optional(),
+  dueTime: z.string().regex(TIME_OF_DAY_PATTERN, 'Expected HH:MM').describe('Due time as HH:MM, or null for an all-day deadline. Omit with a full dueDate timestamp to let readers derive the wall clock from it.').nullable().optional(),
   completedAt: z.string().nullable().optional(),
   comment: z.string().nullable().optional(),
   durationInMinutes: z.number().nullable().optional(),
@@ -197,8 +197,12 @@ const taskSchema = z.object({
 const importTaskSchema = taskSchema.extend({
   createdAt: z.union([z.string(), z.number()]).optional(),
   updatedAt: z.union([z.string(), z.number()]).nullable().optional(),
-  terminationDate: z.union([z.string(), z.number()]).nullable().optional(),
-  dueDate: z.union([z.string(), z.number()]).nullable().optional(),
+  terminationDate: z.union([z.string(), z.number()]).nullable().optional()
+    .describe('Legacy deadline/completion mirror. Prefer dueDate; date-only values are treated as all-day.'),
+  dueDate: z.union([z.string(), z.number()]).nullable().optional()
+    .describe('Due date as ISO 8601 or YYYY-MM-DD. Date-only means an all-day due date at local midnight; use null to remove the due date.'),
+  dueTime: z.string().regex(TIME_OF_DAY_PATTERN, 'Expected HH:MM').nullable().optional()
+    .describe('Due time as HH:MM, or null for an all-day deadline.'),
   completedAt: z.union([z.string(), z.number()]).nullable().optional(),
   blockedSince: z.union([z.string(), z.number()]).nullable().optional(),
   deletedAt: z.union([z.string(), z.number()]).nullable().optional(),
@@ -633,8 +637,22 @@ export function registerTools(server: McpServer, client: P3foClient) {
           args.params.task.recurrence,
         );
         if (recurrenceError) return validationText([recurrenceError]);
+        // An active task may supply its deadline through the legacy
+        // terminationDate mirror instead of dueDate, so that also satisfies the
+        // due-date requirement of a dueTime patch.
+        const suppliedDeadline =
+          args.params.task.terminationDate != null &&
+          args.params.task.triageStatus !== 'Done';
+        if (
+          args.params.task.dueTime != null &&
+          args.params.task.dueDate == null &&
+          !suppliedDeadline
+        ) {
+          return validationText(['dueTime requires dueDate when creating a task']);
+        }
 
-        const result = await client.createTask(args.params.task);
+        const task = normalizeTaskDateFields(args.params.task);
+        const result = await client.createTask(task);
         clearTaskCache();
         return asText(result);
       } catch (e) { return errorText(e); }
@@ -646,16 +664,48 @@ export function registerTools(server: McpServer, client: P3foClient) {
     { params: z.object({ id: z.string(), patch: taskSchema.partial() }) },
     async (args) => {
       try {
-        const { id, patch } = args.params;
+        const { id } = args.params;
+        const rawPatch = args.params.patch;
+        const recurrenceNeedsExisting =
+          (rawPatch.recurrence !== undefined || rawPatch.plannedDate !== undefined) &&
+          (rawPatch.recurrence === undefined || rawPatch.plannedDate === undefined);
+        // A partial date patch needs the stored status: `terminationDate` is the
+        // completion timestamp of a Done task, so deriving a due time from it
+        // would corrupt the deadline unless the status is known.
+        const dateNeedsExisting =
+          rawPatch.dueDate === undefined &&
+          (rawPatch.dueTime !== undefined || rawPatch.terminationDate !== undefined);
+
+        let existing: TaskRecord | null = null;
+        if (recurrenceNeedsExisting || dateNeedsExisting) {
+          existing = await client.getTaskById(id) as TaskRecord | null;
+        }
+
+        // Active tasks keep their deadline in the legacy terminationDate
+        // mirror, so a dueTime-only patch must combine with that fallback too.
+        const existingDueDate = existingDueDateFor(existing);
+
+        // A supplied terminationDate is the deadline mirror for active tasks, so
+        // it can satisfy a dueTime patch's due-date requirement.
+        const patchedStatus = rawPatch.triageStatus ?? existing?.triageStatus;
+        const suppliedDeadline =
+          rawPatch.terminationDate != null && patchedStatus !== 'Done';
+
+        if (
+          rawPatch.dueTime != null &&
+          rawPatch.dueDate === undefined &&
+          existing &&
+          !existingDueDate &&
+          !suppliedDeadline
+        ) {
+          return validationText(['dueTime requires dueDate; the task has no due date']);
+        }
+
+        const patch = normalizeTaskDateFields(rawPatch, existingDueDate, existing?.triageStatus);
 
         // A recurrence patch may rely on the stored plannedDate (and vice
         // versa), so merge with the current task before validating the rule.
         if (patch.recurrence !== undefined || patch.plannedDate !== undefined) {
-          let existing: TaskRecord | null = null;
-          if (patch.recurrence === undefined || patch.plannedDate === undefined) {
-            existing = await client.getTaskById(id) as TaskRecord | null;
-          }
-
           // If one side is a patch and the other must come from storage, only
           // validate when the task (and therefore the merged value) exists.
           if (existing || (patch.recurrence !== undefined && patch.plannedDate !== undefined)) {

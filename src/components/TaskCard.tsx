@@ -52,6 +52,7 @@ import { LiveTimeBadge, EditableTitle, DIFFICULTY_OPTIONS, getDifficultyColor, D
 import { SubtaskProgress } from "./SubtaskProgress";
 import { taskColorBar } from "@/lib/planner/colors";
 import { effectiveDueDate } from "@/lib/task-conversions";
+import { formatTimeFromTimestamp, normalizeDueTime } from "@/lib/planner/dates";
 
 interface TaskCardProps {
   task: Task;
@@ -66,7 +67,7 @@ interface TaskCardProps {
   updateCategory: (id: string, category: Category) => void;
   updateTitle: (id: string, title: string) => void;
   updateComment: (id: string, comment: string) => void;
-  updateTerminationDate: (id: string, terminationDate: number | undefined) => void;
+  updateTerminationDate: (id: string, terminationDate: number | undefined, dueTime?: string | null) => void;
   updateDurationInMinutes: (id: string, durationInMinutes: number | undefined) => void;
   updateUser: (id: string, userId: string | undefined) => void;
   deleteTask: (id: string) => void;
@@ -187,6 +188,7 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
   // Done tasks may carry their completion time in the legacy terminationDate;
   // convertEntitiesToTasks maps that to completedAt, so do not show it as due.
   const effectiveDue = effectiveDueDate(task);
+  const dueTime = normalizeDueTime(task.dueTime, effectiveDue);
   const [isHovered, setIsHovered] = React.useState(false);
   const [isHoverPinned, setIsHoverPinned] = React.useState(false);
   const hoverTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -655,7 +657,7 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
                  >
                   <CalendarIcon className="mr-2 h-3 w-3" />
                    {effectiveDue ? (
-                     format(new Date(effectiveDue), "PPP p")
+                     format(new Date(effectiveDue), dueTime ? "PPP p" : "PPP")
                    ) : (
                      <span>{t('task.pickDate')}</span>
                    )}
@@ -672,7 +674,7 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
                       date.setHours(current.getHours(), current.getMinutes(), current.getSeconds());
 
                       const newTimestamp = date.getTime();
-                      updateTerminationDate(task.id, newTimestamp);
+                      updateTerminationDate(task.id, newTimestamp, dueTime);
                       updateScheduledReminderTriggerDate(task.id, date.toISOString(), offsetMinutes);
                     } else {
                       updateTerminationDate(task.id, undefined);
@@ -689,8 +691,8 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
                     onClick={() => setTimePickerOpen(true)}
                   >
                     <Clock className="mr-2 h-4 w-4" />
-                     {effectiveDue ? (
-                       format(new Date(effectiveDue), "HH:mm")
+                     {dueTime ? (
+                       <span>{dueTime}</span>
                      ) : (
                        <span className="text-muted-foreground">{t('task.setTime')}</span>
                      )}
@@ -1198,7 +1200,7 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
         onClose={() => setTimePickerOpen(false)}
         initialTime={effectiveDue ?? Date.now()}
         onTimeChange={(timestamp) => {
-          updateTerminationDate(task.id, timestamp);
+          updateTerminationDate(task.id, timestamp, formatTimeFromTimestamp(timestamp));
           updateScheduledReminderTriggerDate(task.id, new Date(timestamp).toISOString(), offsetMinutes);
         }}
       />

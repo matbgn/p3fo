@@ -81,6 +81,75 @@ export function timeFromTimestamp(timestamp: number): string {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }
 
+/** Due time in HH:MM, or null when the due date is all-day. */
+export function dueTimeFromTimestamp(timestamp: number): string | null {
+  return timeFromTimestamp(timestamp) || null;
+}
+
+/**
+ * Keep the due timestamp and its explicit time field in sync. `dueTime`
+ * overrides the time embedded in the timestamp; `null` means all-day and
+ * `undefined` derives it from the legacy timestamp.
+ */
+export function normalizeDueTimestamp(
+  timestamp: number,
+  dueTime?: string | null,
+): { dueDate: number; dueTime: string | null } {
+  const date = new Date(timestamp);
+  const resolved = normalizeDueTime(dueTime, timestamp);
+  return {
+    dueDate: resolved
+      ? combineDateKeyAndTime(toDateKey(date), resolved)
+      : startOfDay(date).getTime(),
+    dueTime: resolved,
+  };
+}
+
+/**
+ * Resolve an explicit due time, falling back to the time embedded in a legacy
+ * due timestamp. `null` is authoritative (all-day); `undefined` means legacy
+ * data that predates the split and should be derived.
+ */
+export function normalizeDueTime(
+  dueTime: string | null | undefined,
+  dueTimestamp: number | undefined,
+): string | null {
+  if (typeof dueTime === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(dueTime)) {
+    return dueTime;
+  }
+  if (dueTime === null) return null;
+  if (dueTimestamp === undefined) return null;
+  return dueTimeFromTimestamp(dueTimestamp);
+}
+
+/**
+ * Hydrate a task's due fields from stored values. Accepts epoch milliseconds or
+ * ISO strings so the entity and live-Yjs paths share one rule: an explicit
+ * dueTime wins, a missing one is derived from the legacy timestamp, and active
+ * tasks fall back to the terminationDate deadline mirror. Returns undefined when
+ * the task has no usable due date.
+ */
+export function resolveTaskDueFields(raw: {
+  dueDate?: number | string | null;
+  terminationDate?: number | string | null;
+  triageStatus?: string | null;
+  dueTime?: string | null;
+}): { dueDate: number | undefined; dueTime: string | null | undefined } {
+  const toMillis = (value: number | string | null | undefined): number | undefined => {
+    if (value === null || value === undefined) return undefined;
+    if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  };
+
+  const rawDueDate = toMillis(raw.dueDate)
+    ?? (raw.triageStatus !== 'Done' ? toMillis(raw.terminationDate) : undefined);
+  if (rawDueDate === undefined) return { dueDate: undefined, dueTime: undefined };
+
+  const normalized = normalizeDueTimestamp(rawDueDate, raw.dueTime ?? undefined);
+  return { dueDate: normalized.dueDate, dueTime: normalized.dueTime };
+}
+
 
 export function formatTimeFromTimestamp(timestamp: number): string {
   const date = new Date(timestamp);
