@@ -377,7 +377,8 @@ export type TimeFrame = '3mo' | '6mo' | '1y' | '2y' | '4y';
 export type VotingMode = 'THUMBS_UP' | 'THUMBS_UD_NEUTRAL' | 'POINTS' | 'MAJORITY_JUDGMENT';
 export type VotingPhase = 'IDLE' | 'VOTING' | 'REVEALED';
 
-export type VoteMode = VotingMode | 'CONSENT_LOOP';
+export type VoteMode = VotingMode | 'CONSENT_LOOP' | 'COMPARATIVE_PRIORITIZATION';
+export type RankingEngine = 'bt-k2' | 'bt-k4';
 export type VoteKind = 'consultation' | 'decision';
 export type VotePhase = 'IDLE' | 'OPEN' | 'CLOSED' | 'FINALIZED';
 
@@ -407,6 +408,64 @@ export interface VoteConfig {
   isHiddenFromHome?: boolean;
   openAt?: string;
   closeAt?: string;
+  /** Comparative prioritization ballot engine. Default: 'bt-k4'. */
+  rankingEngine?: RankingEngine;
+  /** Preserve collective ties instead of requiring a moderator tie-break. Default: true. */
+  allowTies?: boolean;
+}
+
+export interface VoteRankingComparison {
+  a: string;
+  b: string;
+  winner: string;
+}
+
+export interface VoteRankingCoverage {
+  coveredPairs: number;
+  totalPairs: number;
+  percent: number;
+}
+
+export interface VoteRankingBallot {
+  itemIds: string[];
+  comparisons: VoteRankingComparison[];
+  batchCount: number;
+  coverage: VoteRankingCoverage;
+  confidencePercent: number;
+  stopReason: string | null;
+  engine: RankingEngine;
+  engineVersion: string;
+}
+
+export interface VoteRankingGroup {
+  rank: number;
+  proposalIds: string[];
+  score: number;
+}
+
+export interface VoteRankingResult {
+  groups: VoteRankingGroup[];
+  method: 'weighted-partial-ranking-bt';
+  engine: RankingEngine;
+  participantCount: number;
+  coverage: { mean: number; min: number; max: number };
+  condorcetWinnerId: string | null;
+  hasMajorityCycle: boolean;
+}
+
+export interface VoteRankingSubmission {
+  id: string;
+  voteId: string;
+  voterToken: string;
+  userId: string | null;
+  displayName: string | null;
+  /** Latest progress; used by the facilitator panel. */
+  draft: VoteRankingBallot | null;
+  /** Last explicitly submitted ballot; the only payload used for aggregation. */
+  submitted: VoteRankingBallot | null;
+  draftUpdatedAt: string | null;
+  submittedAt: string | null;
+  lastSeenAt: string;
 }
 
 export interface VoteEntity {
@@ -424,6 +483,7 @@ export interface VoteEntity {
     finalizedAt: string;
     finalizedByUserId: string;
     signature?: string;
+    ranking?: VoteRankingResult;
   };
   moderationTokens?: VoteModerator[];
   createdAt: string;

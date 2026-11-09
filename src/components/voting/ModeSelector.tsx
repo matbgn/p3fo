@@ -2,7 +2,7 @@ import * as React from "react";
 import { VoteMode } from "@/lib/persistence-types";
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { cn } from "@/lib/utils";
-import { ThumbsUp, Minus, Coins, Award, RotateCcw } from "lucide-react";
+import { ThumbsUp, Minus, Coins, Award, RotateCcw, ListOrdered } from "lucide-react";
 
 interface ModeSelectorProps {
   value: VoteMode;
@@ -16,6 +16,7 @@ const MODE_ICONS: Record<VoteMode, React.ReactNode> = {
   POINTS: <Coins className="w-4 h-4" />,
   MAJORITY_JUDGMENT: <Award className="w-4 h-4" />,
   CONSENT_LOOP: <RotateCcw className="w-4 h-4" />,
+  COMPARATIVE_PRIORITIZATION: <ListOrdered className="w-4 h-4" />,
 };
 
 const ALL_MODES: VoteMode[] = ["THUMBS_UP", "THUMBS_UD_NEUTRAL", "POINTS", "MAJORITY_JUDGMENT", "CONSENT_LOOP"];
