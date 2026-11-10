@@ -944,6 +944,16 @@
       "consentLoop": "Zustimmungs-Schleife"
     }
   },
+  "rankingExport": {
+    "export": "Exportieren",
+    "copyPlain": "Einfache Liste kopieren",
+    "copyRanked": "Sortierte Liste kopieren",
+    "downloadCsv": "CSV herunterladen",
+    "downloadJson": "JSON herunterladen",
+    "copied": "Liste kopiert",
+    "downloaded": "Download gestartet",
+    "copyFailed": "Kopieren fehlgeschlagen"
+  },
   "fertilization": {
     "title": "Düngungstafel",
     "noModerator": "Kein aktiver Moderator. Starten Sie eine Sitzung, um Moderator zu werden.",

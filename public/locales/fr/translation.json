@@ -944,6 +944,16 @@
       "consentLoop": "Boucle de consentement"
     }
   },
+  "rankingExport": {
+    "export": "Exporter",
+    "copyPlain": "Copier la liste simple",
+    "copyRanked": "Copier la liste classée",
+    "downloadCsv": "Télécharger le CSV",
+    "downloadJson": "Télécharger le JSON",
+    "copied": "Liste copiée",
+    "downloaded": "Téléchargement lancé",
+    "copyFailed": "Échec de la copie"
+  },
   "fertilization": {
     "title": "Tableau de fertilisation",
     "noModerator": "Aucun modérateur actif. Démarrez une session pour devenir modérateur.",
@@ -1872,7 +1882,7 @@
       "budgetName": "Mois type",
       "systemLabel": "Système de salaire du Acme Theatre"
     },
-    "fertilization": {
+  "fertilization": {
       "fact1": "Complet pour la première de la Symphonie de la Culbute (320 places).",
       "fact2": "14 séances d'affilée sans la moindre panne de projection.",
       "fact3": "Fréquentation mensuelle : 2 140 spectateurs (meilleur mois depuis la réouverture).",

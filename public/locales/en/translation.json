@@ -944,6 +944,16 @@
       "consentLoop": "Consent Loop"
     }
   },
+  "rankingExport": {
+    "export": "Export",
+    "copyPlain": "Copy plain list",
+    "copyRanked": "Copy ranked list",
+    "downloadCsv": "Download CSV",
+    "downloadJson": "Download JSON",
+    "copied": "List copied",
+    "downloaded": "Download started",
+    "copyFailed": "Copy failed"
+  },
   "fertilization": {
     "title": "Fertilization Board",
     "noModerator": "No moderator active. Start a session to become the moderator.",
