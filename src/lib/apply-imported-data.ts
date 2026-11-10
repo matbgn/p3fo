@@ -349,9 +349,22 @@ export async function applyImportedData(
           ),
         )
       : undefined;
+    // Votes whose ballots the exporter could not read are absent from this file,
+    // so they must stay out of the replace scope; replacing them would delete
+    // ballots the backup never contained. Older backups lack the field (and were
+    // exported before the read was gated), so they keep the full scope.
+    const incompleteVoteIds = Array.isArray(importedData.incompleteRankingVoteIds)
+      ? new Set(
+          (importedData.incompleteRankingVoteIds as unknown[])
+            .filter((id): id is string => typeof id === 'string'),
+        )
+      : null;
+    const scopedVoteIds = backupVoteIds && incompleteVoteIds
+      ? backupVoteIds.filter(id => !incompleteVoteIds.has(id))
+      : backupVoteIds;
     await adapter.importVoteRankingSubmissions(
       importedData.voteRankingSubmissions,
-      backupVoteIds,
+      scopedVoteIds,
     );
   }
   if (importedData.voteLoops && Array.isArray(importedData.voteLoops)) {

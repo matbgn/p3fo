@@ -19,11 +19,13 @@ import type {
   VoteEntity,
   VoteResponseEntity,
   VoteRankingSubmission,
+  VoteRankingBallot,
   VoteLoop,
   VoteModerator,
   VoteKind,
   PomodoroSession
 } from '../../src/lib/persistence-types.js';
+import type { BallotParticipationStat } from '../../src/lib/vote-ranking.js';
 
 // Raw database row types (SQLite stores booleans as 0/1 integers and JSON as strings)
 interface TaskDbRow {
@@ -185,6 +187,18 @@ interface VoteRankingSubmissionDbRow {
   userId: string | null;
   displayName: string | null;
   draftPayload: string | null;
+  submittedPayload: string | null;
+  draftUpdatedAt: string | null;
+  submittedAt: string | null;
+  lastSeenAt: string;
+}
+
+interface VoteRankingSubmittedDbRow {
+  id: string;
+  voteId: string;
+  voterToken: string;
+  userId: string | null;
+  displayName: string | null;
   submittedPayload: string | null;
   draftUpdatedAt: string | null;
   submittedAt: string | null;
@@ -2663,6 +2677,147 @@ class SqliteClient implements DbClient {
     return rows.map(row => this.mapVoteRankingSubmissionDbRowToEntity(row));
   }
 
+  async getVoteRankingSubmission(voteId: string, voterToken: string): Promise<VoteRankingSubmission | null> {
+    const row = this.db.prepare(
+      'SELECT * FROM "voteRankingSubmissions" WHERE "voteId" = ? AND "voterToken" = ?'
+    ).get(voteId, voterToken) as unknown as VoteRankingSubmissionDbRow | undefined;
+    return row ? this.mapVoteRankingSubmissionDbRowToEntity(row) : null;
+  }
+
+  async upsertVoteRankingSubmission(
+    voteId: string,
+    patch: {
+      voterToken: string;
+      userId?: string | null;
+      displayName?: string | null;
+      draft?: VoteRankingBallot | null;
+      draftUpdatedAt?: string | null;
+      submitted?: VoteRankingBallot | null;
+      submittedAt?: string | null;
+      lastSeenAt?: string;
+    },
+  ): Promise<VoteRankingSubmission> {
+    // Write only the fields the patch carries. Reading the row first and
+    // rewriting every column is not atomic: an autosave that read before a
+    // concurrent submit committed would overwrite `submittedPayload` with null
+    // and silently erase the ballot. It also re-read/re-serialized the whole
+    // (potentially huge) submitted payload on every draft autosave.
+    const now = new Date().toISOString();
+    const setClauses: string[] = [];
+    if (patch.userId !== undefined) setClauses.push('"userId" = excluded."userId"');
+    if (patch.displayName !== undefined) setClauses.push('"displayName" = excluded."displayName"');
+    if (patch.draft !== undefined) setClauses.push('"draftPayload" = excluded."draftPayload"');
+    if (patch.submitted !== undefined) setClauses.push('"submittedPayload" = excluded."submittedPayload"');
+    if (patch.draftUpdatedAt !== undefined) setClauses.push('"draftUpdatedAt" = excluded."draftUpdatedAt"');
+    if (patch.submittedAt !== undefined) setClauses.push('"submittedAt" = excluded."submittedAt"');
+    setClauses.push('"lastSeenAt" = excluded."lastSeenAt"');
+
+    const row = this.db.prepare(`
+      INSERT INTO "voteRankingSubmissions"(
+        "id", "voteId", "voterToken", "userId", "displayName",
+        "draftPayload", "submittedPayload", "draftUpdatedAt", "submittedAt", "lastSeenAt"
+      ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT("voteId", "voterToken") DO UPDATE SET ${setClauses.join(', ')}
+      RETURNING *
+    `).get(
+      crypto.randomUUID(),
+      voteId,
+      patch.voterToken,
+      patch.userId ?? null,
+      patch.displayName ?? null,
+      patch.draft ? JSON.stringify(patch.draft) : null,
+      patch.submitted ? JSON.stringify(patch.submitted) : null,
+      patch.draftUpdatedAt ?? null,
+      patch.submittedAt ?? null,
+      patch.lastSeenAt ?? now,
+    ) as unknown as VoteRankingSubmissionDbRow;
+    return this.mapVoteRankingSubmissionDbRowToEntity(row);
+  }
+
+  async deleteVoteRankingSubmission(voteId: string, voterToken: string): Promise<void> {
+    this.db.prepare(
+      'DELETE FROM "voteRankingSubmissions" WHERE "voteId" = ? AND "voterToken" = ?'
+    ).run(voteId, voterToken);
+  }
+
+  async getVoteRankingSubmittedBallots(voteId: string): Promise<VoteRankingSubmission[]> {
+    const rows = this.db.prepare(`
+      SELECT "id", "voteId", "voterToken", "userId", "displayName",
+             "submittedPayload", "draftUpdatedAt", "submittedAt", "lastSeenAt"
+      FROM "voteRankingSubmissions"
+      WHERE "voteId" = ? AND "submittedPayload" IS NOT NULL
+      ORDER BY "lastSeenAt" DESC
+    `).all(voteId) as unknown as VoteRankingSubmittedDbRow[];
+    // Reuse the row mapper so a new entity field cannot silently disappear from
+    // this lean read path (the Postgres implementation does the same).
+    return rows.map((row) =>
+      this.mapVoteRankingSubmissionDbRowToEntity({ ...row, draftPayload: null }),
+    );
+  }
+
+  async countVoteRankingSubmittedBallots(voteId: string): Promise<number> {
+    const row = this.db.prepare(
+      'SELECT COUNT(*) AS "count" FROM "voteRankingSubmissions" WHERE "voteId" = ? AND "submittedPayload" IS NOT NULL'
+    ).get(voteId) as unknown as { count: number };
+    return Number(row?.count ?? 0);
+  }
+
+  async getVoteRankingParticipationStats(voteId: string): Promise<BallotParticipationStat[]> {
+    // `json_extract` parses its whole document once per call, so avoid wrapping
+    // it in a redundant `json_valid` guard (also a full parse) and drop the
+    // guards that only test for NULL. That keeps this per-poll query at four
+    // parses per row instead of ten.
+    const rows = this.db.prepare(`
+      SELECT
+        "voterToken",
+        "displayName",
+        CASE WHEN "draftPayload" IS NOT NULL THEN 1 ELSE 0 END AS "hasDraft",
+        CASE WHEN "submittedPayload" IS NOT NULL THEN 1 ELSE 0 END AS "hasSubmitted",
+        json_extract("draftPayload", '$.coverage.percent') AS "draftCoveragePercent",
+        json_extract("draftPayload", '$.confidencePercent') AS "draftConfidencePercent",
+        json_extract("submittedPayload", '$.coverage.percent') AS "submittedCoveragePercent",
+        json_extract("submittedPayload", '$.confidencePercent') AS "submittedConfidencePercent",
+        "draftUpdatedAt",
+        "submittedAt",
+        "lastSeenAt"
+      FROM "voteRankingSubmissions"
+      WHERE "voteId" = ?
+      ORDER BY "lastSeenAt" DESC
+    `).all(voteId) as unknown as Array<Record<string, unknown>>;
+    const numberOrNull = (value: unknown): number | null =>
+      typeof value === 'number' && Number.isFinite(value) ? value : null;
+    return rows.map((row) => ({
+      voterToken: row.voterToken as string,
+      displayName: (row.displayName as string | null) ?? null,
+      hasDraft: Boolean(row.hasDraft),
+      hasSubmitted: Boolean(row.hasSubmitted),
+      draftCoveragePercent: numberOrNull(row.draftCoveragePercent),
+      draftConfidencePercent: numberOrNull(row.draftConfidencePercent),
+      submittedCoveragePercent: numberOrNull(row.submittedCoveragePercent),
+      submittedConfidencePercent: numberOrNull(row.submittedConfidencePercent),
+      draftUpdatedAt: (row.draftUpdatedAt as string | null) ?? null,
+      submittedAt: (row.submittedAt as string | null) ?? null,
+      lastSeenAt: row.lastSeenAt as string,
+    }));
+  }
+
+  async hasVoteRankingSubmissionIdentities(voteId: string): Promise<boolean> {
+    const row = this.db.prepare(`
+      SELECT 1 AS "one" FROM "voteRankingSubmissions"
+      WHERE "voteId" = ? AND ("userId" IS NOT NULL OR "displayName" IS NOT NULL)
+      LIMIT 1
+    `).get(voteId) as unknown as { one: number } | undefined;
+    return Boolean(row);
+  }
+
+  async scrubVoteRankingSubmissionIdentities(voteId: string): Promise<void> {
+    this.db.prepare(`
+      UPDATE "voteRankingSubmissions"
+      SET "userId" = NULL, "displayName" = NULL
+      WHERE "voteId" = ? AND ("userId" IS NOT NULL OR "displayName" IS NOT NULL)
+    `).run(voteId);
+  }
+
   async importVoteRankingSubmissions(
     items: VoteRankingSubmission[],
     replaceVoteIds?: string[],
@@ -2676,9 +2831,19 @@ class SqliteClient implements DbClient {
       ON CONFLICT("id") DO UPDATE SET
         "userId" = excluded."userId",
         "displayName" = excluded."displayName",
-        "draftPayload" = excluded."draftPayload",
+        -- Backups never carry in-progress drafts (they are live participation
+        -- data), so a restore must not clear a stored draft it could not contain.
+        "draftPayload" = COALESCE(excluded."draftPayload", "voteRankingSubmissions"."draftPayload"),
         "submittedPayload" = excluded."submittedPayload",
-        "draftUpdatedAt" = excluded."draftUpdatedAt",
+        -- Keep the preserved draft and its timestamp paired. The backup withholds
+        -- the draft payload but still carries its draftUpdatedAt column;
+        -- overwriting the timestamp would make a newer local draft look older
+        -- than the restored submission and flip the participant back to
+        -- "submitted".
+        "draftUpdatedAt" = CASE
+          WHEN excluded."draftPayload" IS NULL THEN "voteRankingSubmissions"."draftUpdatedAt"
+          ELSE excluded."draftUpdatedAt"
+        END,
         "submittedAt" = excluded."submittedAt",
         "lastSeenAt" = excluded."lastSeenAt"
       -- A preserved id must never overwrite a row that belongs to another vote.
@@ -2693,16 +2858,23 @@ class SqliteClient implements DbClient {
     );
     this.db.exec('BEGIN');
     try {
-      // Restores must replace, not merge: delete the affected votes' ballots
-      // first so rows absent from the backup cannot keep feeding aggregation.
-      // A non-empty id list scopes the delete; an empty list is a no-op so a
-      // stray empty payload can never wipe ballots for unrelated votes.
+      // Restores must replace, not merge: rows absent from the backup must stop
+      // feeding aggregation. Rows that only hold an in-progress draft are kept,
+      // because the redacted backup cannot carry drafts and deleting them would
+      // be unrecoverable data loss; their submitted payload is cleared instead
+      // (a restored row re-adds it) and the draft columns survive the upsert via
+      // COALESCE. A non-empty id list scopes the change; an empty list is a
+      // no-op so a stray empty payload can never wipe ballots for unrelated votes.
       if (replaceVoteIds && replaceVoteIds.length > 0) {
-        const deleteVote = this.db.prepare(
-          'DELETE FROM "voteRankingSubmissions" WHERE "voteId" = ?'
+        const clearSubmitted = this.db.prepare(
+          'UPDATE "voteRankingSubmissions" SET "submittedPayload" = NULL, "submittedAt" = NULL WHERE "voteId" = ? AND "draftPayload" IS NOT NULL'
+        );
+        const deleteDraftless = this.db.prepare(
+          'DELETE FROM "voteRankingSubmissions" WHERE "voteId" = ? AND "draftPayload" IS NULL'
         );
         for (const voteId of replaceVoteIds) {
-          deleteVote.run(voteId);
+          clearSubmitted.run(voteId);
+          deleteDraftless.run(voteId);
         }
       }
       for (const item of items) {

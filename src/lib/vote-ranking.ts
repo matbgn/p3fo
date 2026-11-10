@@ -45,6 +45,25 @@ export function isVoteAnonymous(
 }
 
 /**
+ * Single source of truth for whether a vote's ranking ballots/results may be
+ * shown to a non-moderator. The route layer and the backup exporter share this
+ * definition so a visibility change cannot silently expose hidden ballots or
+ * produce an incomplete backup.
+ */
+export function areRankingResultsVisible(vote: Pick<VoteEntity, 'config'>): boolean {
+  // Match the rest of the UI (`VoteResults`, `PublicVotePage`): results are
+  // visible only once the vote is closed, or when the owner opted in. Any other
+  // phase, including the default IDLE, must stay hidden so a restored/imported
+  // IDLE vote cannot leak its ballots or show premature results.
+  const phase = vote.config.phase;
+  return (
+    phase === 'CLOSED' ||
+    phase === 'FINALIZED' ||
+    vote.config.showResultsBeforeClose === true
+  );
+}
+
+/**
  * Single source of truth for the backup/export shape of a ranking ballot.
  * Backups never carry the participant credential, and anonymous votes must not
  * carry per-ballot identities. An absent `isAnonymous` flag is anonymous, which

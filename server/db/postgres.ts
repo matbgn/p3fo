@@ -20,11 +20,13 @@ import type {
   VoteEntity,
   VoteResponseEntity,
   VoteRankingSubmission,
+  VoteRankingBallot,
   VoteLoop,
   VoteModerator,
   VoteKind,
   PomodoroSession
 } from '../../src/lib/persistence-types.js';
+import type { BallotParticipationStat } from '../../src/lib/vote-ranking.js';
 
 // Raw database row types for pg (JSONB is already parsed, booleans are booleans)
 interface TaskDbRow {
@@ -2456,6 +2458,153 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     );
   }
 
+  async getVoteRankingSubmission(voteId: string, voterToken: string): Promise<VoteRankingSubmission | null> {
+    const result = await this.pool.query(
+      'SELECT * FROM "voteRankingSubmissions" WHERE "voteId" = $1 AND "voterToken" = $2',
+      [voteId, voterToken],
+    );
+    if (result.rows.length === 0) return null;
+    return this.mapVoteRankingSubmissionRow(result.rows[0] as Record<string, unknown>);
+  }
+
+  async upsertVoteRankingSubmission(
+    voteId: string,
+    patch: {
+      voterToken: string;
+      userId?: string | null;
+      displayName?: string | null;
+      draft?: VoteRankingBallot | null;
+      draftUpdatedAt?: string | null;
+      submitted?: VoteRankingBallot | null;
+      submittedAt?: string | null;
+      lastSeenAt?: string;
+    },
+  ): Promise<VoteRankingSubmission> {
+    // Write only the fields the patch actually carries. A read-then-write-all
+    // merge is not safe with concurrent writers: an `in_progress` autosave that
+    // read the row before a concurrent submit committed would rewrite
+    // `submittedPayload` back to null, silently erasing the ballot. It also
+    // forced every draft autosave to re-read and re-serialize the (potentially
+    // huge) submitted payload. A single atomic upsert that only touches present
+    // fields fixes both and `RETURNING *` gives the merged row back.
+    const now = new Date().toISOString();
+    const setClauses: string[] = [];
+    if (patch.userId !== undefined) setClauses.push('"userId" = EXCLUDED."userId"');
+    if (patch.displayName !== undefined) setClauses.push('"displayName" = EXCLUDED."displayName"');
+    if (patch.draft !== undefined) setClauses.push('"draftPayload" = EXCLUDED."draftPayload"');
+    if (patch.submitted !== undefined) setClauses.push('"submittedPayload" = EXCLUDED."submittedPayload"');
+    if (patch.draftUpdatedAt !== undefined) setClauses.push('"draftUpdatedAt" = EXCLUDED."draftUpdatedAt"');
+    if (patch.submittedAt !== undefined) setClauses.push('"submittedAt" = EXCLUDED."submittedAt"');
+    setClauses.push('"lastSeenAt" = EXCLUDED."lastSeenAt"');
+
+    const result = await this.pool.query(`
+      INSERT INTO "voteRankingSubmissions"(
+        "id", "voteId", "voterToken", "userId", "displayName",
+        "draftPayload", "submittedPayload", "draftUpdatedAt", "submittedAt", "lastSeenAt"
+      ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      ON CONFLICT("voteId", "voterToken") DO UPDATE SET ${setClauses.join(', ')}
+      RETURNING *
+    `, [
+      crypto.randomUUID(),
+      voteId,
+      patch.voterToken,
+      patch.userId ?? null,
+      patch.displayName ?? null,
+      patch.draft ? JSON.stringify(patch.draft) : null,
+      patch.submitted ? JSON.stringify(patch.submitted) : null,
+      patch.draftUpdatedAt ?? null,
+      patch.submittedAt ?? null,
+      patch.lastSeenAt ?? now,
+    ]);
+    return this.mapVoteRankingSubmissionRow(result.rows[0] as Record<string, unknown>);
+  }
+
+  async deleteVoteRankingSubmission(voteId: string, voterToken: string): Promise<void> {
+    await this.pool.query(
+      'DELETE FROM "voteRankingSubmissions" WHERE "voteId" = $1 AND "voterToken" = $2',
+      [voteId, voterToken],
+    );
+  }
+
+  async getVoteRankingSubmittedBallots(voteId: string): Promise<VoteRankingSubmission[]> {
+    const result = await this.pool.query(`
+      SELECT "id", "voteId", "voterToken", "userId", "displayName",
+             "submittedPayload", "draftUpdatedAt", "submittedAt", "lastSeenAt"
+      FROM "voteRankingSubmissions"
+      WHERE "voteId" = $1 AND "submittedPayload" IS NOT NULL
+      ORDER BY "lastSeenAt" DESC
+    `, [voteId]);
+    return result.rows.map((row: Record<string, unknown>) =>
+      this.mapVoteRankingSubmissionRow({ ...row, draftPayload: null }),
+    );
+  }
+
+  async countVoteRankingSubmittedBallots(voteId: string): Promise<number> {
+    const result = await this.pool.query(
+      'SELECT COUNT(*)::int AS "count" FROM "voteRankingSubmissions" WHERE "voteId" = $1 AND "submittedPayload" IS NOT NULL',
+      [voteId],
+    );
+    return Number(result.rows[0]?.count ?? 0);
+  }
+
+  async getVoteRankingParticipationStats(voteId: string): Promise<BallotParticipationStat[]> {
+    const result = await this.pool.query(`
+      SELECT
+        "voterToken",
+        "displayName",
+        CASE WHEN "draftPayload" IS NULL THEN false ELSE true END AS "hasDraft",
+        CASE WHEN "submittedPayload" IS NULL THEN false ELSE true END AS "hasSubmitted",
+        -- Guard every numeric cast with jsonb_typeof: a malformed historical row
+        -- (stored before import validation existed) must degrade to null instead
+        -- of failing the whole participation poll with a cast error.
+        CASE WHEN jsonb_typeof("draftPayload" -> 'coverage' -> 'percent') = 'number'
+          THEN ("draftPayload" -> 'coverage' ->> 'percent')::double precision END AS "draftCoveragePercent",
+        CASE WHEN jsonb_typeof("draftPayload" -> 'confidencePercent') = 'number'
+          THEN ("draftPayload" ->> 'confidencePercent')::double precision END AS "draftConfidencePercent",
+        CASE WHEN jsonb_typeof("submittedPayload" -> 'coverage' -> 'percent') = 'number'
+          THEN ("submittedPayload" -> 'coverage' ->> 'percent')::double precision END AS "submittedCoveragePercent",
+        CASE WHEN jsonb_typeof("submittedPayload" -> 'confidencePercent') = 'number'
+          THEN ("submittedPayload" ->> 'confidencePercent')::double precision END AS "submittedConfidencePercent",
+        "draftUpdatedAt",
+        "submittedAt",
+        "lastSeenAt"
+      FROM "voteRankingSubmissions"
+      WHERE "voteId" = $1
+      ORDER BY "lastSeenAt" DESC
+    `, [voteId]);
+    return result.rows.map((row: Record<string, unknown>) => ({
+      voterToken: row.voterToken as string,
+      displayName: (row.displayName as string | null) ?? null,
+      hasDraft: Boolean(row.hasDraft),
+      hasSubmitted: Boolean(row.hasSubmitted),
+      draftCoveragePercent: typeof row.draftCoveragePercent === 'number' ? row.draftCoveragePercent : null,
+      draftConfidencePercent: typeof row.draftConfidencePercent === 'number' ? row.draftConfidencePercent : null,
+      submittedCoveragePercent: typeof row.submittedCoveragePercent === 'number' ? row.submittedCoveragePercent : null,
+      submittedConfidencePercent: typeof row.submittedConfidencePercent === 'number' ? row.submittedConfidencePercent : null,
+      draftUpdatedAt: this.toIsoString(row.draftUpdatedAt),
+      submittedAt: this.toIsoString(row.submittedAt),
+      lastSeenAt: this.toIsoString(row.lastSeenAt) ?? new Date().toISOString(),
+    }));
+  }
+
+  async hasVoteRankingSubmissionIdentities(voteId: string): Promise<boolean> {
+    const result = await this.pool.query(`
+      SELECT EXISTS (
+        SELECT 1 FROM "voteRankingSubmissions"
+        WHERE "voteId" = $1 AND ("userId" IS NOT NULL OR "displayName" IS NOT NULL)
+      ) AS "present"
+    `, [voteId]);
+    return Boolean(result.rows[0]?.present);
+  }
+
+  async scrubVoteRankingSubmissionIdentities(voteId: string): Promise<void> {
+    await this.pool.query(`
+      UPDATE "voteRankingSubmissions"
+      SET "userId" = NULL, "displayName" = NULL
+      WHERE "voteId" = $1 AND ("userId" IS NOT NULL OR "displayName" IS NOT NULL)
+    `, [voteId]);
+  }
+
   async importVoteRankingSubmissions(
     items: VoteRankingSubmission[],
     replaceVoteIds?: string[],
@@ -2467,9 +2616,20 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     const conflictClause = `ON CONFLICT ("id") DO UPDATE SET
               "userId" = EXCLUDED."userId",
               "displayName" = EXCLUDED."displayName",
-              "draftPayload" = EXCLUDED."draftPayload",
+              -- Backups never carry in-progress drafts (they are live
+              -- participation data), so a restore must not clear a stored draft
+              -- it could not contain.
+              "draftPayload" = COALESCE(EXCLUDED."draftPayload", "voteRankingSubmissions"."draftPayload"),
               "submittedPayload" = EXCLUDED."submittedPayload",
-              "draftUpdatedAt" = EXCLUDED."draftUpdatedAt",
+              -- Keep the preserved draft and its timestamp paired. The backup
+              -- withholds the draft payload but still carries its draftUpdatedAt
+              -- column; overwriting the timestamp would make a newer local draft
+              -- look older than the restored submission and flip the participant
+              -- back to "submitted".
+              "draftUpdatedAt" = CASE
+                WHEN EXCLUDED."draftPayload" IS NULL THEN "voteRankingSubmissions"."draftUpdatedAt"
+                ELSE EXCLUDED."draftUpdatedAt"
+              END,
               "submittedAt" = EXCLUDED."submittedAt",
               "lastSeenAt" = EXCLUDED."lastSeenAt"
             -- A preserved id must never overwrite a row that belongs to another vote.
@@ -2477,13 +2637,22 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      // Restores must replace, not merge: delete the affected votes' ballots
-      // first so rows absent from the backup cannot keep feeding aggregation.
-      // A non-empty id list scopes the delete; an empty list is a no-op so a
-      // stray empty payload can never wipe ballots for unrelated votes.
+      // Restores must replace, not merge: rows absent from the backup must stop
+      // feeding aggregation. Rows that only hold an in-progress draft are kept,
+      // because the redacted backup cannot carry drafts and deleting them would
+      // be unrecoverable data loss; their submitted payload is cleared instead
+      // (a restored row re-adds it) and the draft columns survive the upsert via
+      // COALESCE. A non-empty id list scopes the change; an empty list is a
+      // no-op so a stray empty payload can never wipe ballots for unrelated votes.
       if (replaceVoteIds && replaceVoteIds.length > 0) {
         await client.query(
-          'DELETE FROM "voteRankingSubmissions" WHERE "voteId" = ANY($1::text[])',
+          `UPDATE "voteRankingSubmissions"
+           SET "submittedPayload" = NULL, "submittedAt" = NULL
+           WHERE "voteId" = ANY($1::text[]) AND "draftPayload" IS NOT NULL`,
+          [replaceVoteIds],
+        );
+        await client.query(
+          'DELETE FROM "voteRankingSubmissions" WHERE "voteId" = ANY($1::text[]) AND "draftPayload" IS NULL',
           [replaceVoteIds],
         );
       }

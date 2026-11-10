@@ -1411,28 +1411,75 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     replaceVoteIds?: string[],
   ): Promise<void> {
     if (typeof window === 'undefined') return;
-    // HTTP exports redact the participant credential; reissue one on restore so
-    // every row still has a unique voterToken.
-    const normalized = items.map(item => ({
-      ...item,
-      voterToken: item.voterToken || crypto.randomUUID(),
-    }));
     const existing = this.readRankingSubmissions();
+    const existingById = new Map(existing.map(item => [item.id, item]));
+    // HTTP exports redact the participant credential; reissue one on restore so
+    // every row still has a unique voterToken. A preserved id that already
+    // belongs to a different vote is dropped, mirroring the SQL upserts' vote-id
+    // guard so an incorrect backup cannot relocate a stored ballot only in
+    // browser mode.
+    const normalized = items
+      .map(item => ({
+        ...item,
+        voterToken: item.voterToken || crypto.randomUUID(),
+      }))
+      .filter(item => {
+        const previous = existingById.get(item.id);
+        return !previous || previous.voteId === item.voteId;
+      });
+    // Both import modes must carry a stored draft forward when the incoming row
+    // has none; the SQL adapters do this with COALESCE, and a redacted backup
+    // may omit a draft it could not contain. Keeping this in one helper stops
+    // the plain-upsert and replacement paths from diverging.
+    const carryForwardDrafts = (
+      incoming: VoteRankingSubmission[],
+      stored: VoteRankingSubmission[],
+    ): VoteRankingSubmission[] => {
+      const storedById = new Map(stored.map(item => [item.id, item]));
+      return incoming.map(item => {
+        const previous = storedById.get(item.id);
+        if (!previous || item.draft) return item;
+        return {
+          ...item,
+          draft: previous.draft,
+          draftUpdatedAt: previous.draftUpdatedAt,
+        };
+      });
+    };
     if (!replaceVoteIds || replaceVoteIds.length === 0) {
       // Documented plain upsert (an empty array is a no-op): merge by id and
       // never delete ballots the payload does not mention, so a legacy or empty
       // payload cannot wipe the store.
-      const incomingIds = new Set(normalized.map(item => item.id));
+      const merged = carryForwardDrafts(normalized, existing);
+      const incomingIds = new Set(merged.map(item => item.id));
       const kept = existing.filter(item => !incomingIds.has(item.id));
-      this.writeRankingSubmissions([...kept, ...normalized]);
+      this.writeRankingSubmissions([...kept, ...merged]);
       return;
     }
     // Replace exactly the votes the backup covers, matching the HTTP adapter and
     // the DB clients so a restore cannot wipe or duplicate ballots for votes
-    // created after the export.
+    // created after the export. Mirror the SQL adapters' draft rule: the
+    // redacted backup cannot carry in-progress drafts, so a replacement must
+    // never delete a draft-bearing row. It clears its submitted snapshot so a
+    // removed ballot stops feeding aggregation, while draftless rows are
+    // deleted. A restored row carries the stored draft forward too, matching the
+    // COALESCE in the SQL upserts.
     const replaceSet = new Set(replaceVoteIds);
-    const kept = existing.filter(item => !replaceSet.has(item.voteId));
-    this.writeRankingSubmissions([...kept, ...normalized]);
+    const incomingIds = new Set(normalized.map(item => item.id));
+    const merged = carryForwardDrafts(normalized, existing);
+    const kept: VoteRankingSubmission[] = [];
+    for (const item of existing) {
+      // Rows the import re-inserts are superseded by the merged payload.
+      if (incomingIds.has(item.id)) continue;
+      if (!replaceSet.has(item.voteId)) {
+        kept.push(item);
+        continue;
+      }
+      if (item.draft) {
+        kept.push({ ...item, submitted: null, submittedAt: null });
+      }
+    }
+    this.writeRankingSubmissions([...kept, ...merged]);
   }
 
   // Vote loops

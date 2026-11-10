@@ -329,7 +329,8 @@ export interface PersistenceAdapter {
    * merged. When omitted, the import is a plain upsert. `replaceVoteIds` should
    * cover every vote the backup represents, including votes with zero ballots,
    * so a restore cannot leave stale ballots behind. An empty array is a no-op
-   * and never clears unrelated votes.
+   * and never clears unrelated votes. In-progress drafts are never deleted by a
+   * replacement, because a redacted backup cannot contain them.
    */
   importVoteRankingSubmissions(
     items: VoteRankingSubmission[],
