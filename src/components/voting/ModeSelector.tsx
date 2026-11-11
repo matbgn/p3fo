@@ -1,5 +1,6 @@
 import * as React from "react";
 import { VoteMode } from "@/lib/persistence-types";
+import { getSelectedMode } from "@/lib/persistence-factory";
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { cn } from "@/lib/utils";
 import { ThumbsUp, Minus, Coins, Award, RotateCcw, ListOrdered } from "lucide-react";
@@ -19,13 +20,25 @@ const MODE_ICONS: Record<VoteMode, React.ReactNode> = {
   COMPARATIVE_PRIORITIZATION: <ListOrdered className="w-4 h-4" />,
 };
 
-const ALL_MODES: VoteMode[] = ["THUMBS_UP", "THUMBS_UD_NEUTRAL", "POINTS", "MAJORITY_JUDGMENT", "CONSENT_LOOP"];
+const ALL_MODES: VoteMode[] = ["THUMBS_UP", "THUMBS_UD_NEUTRAL", "POINTS", "MAJORITY_JUDGMENT", "CONSENT_LOOP", "COMPARATIVE_PRIORITIZATION"];
 
 export const ModeSelector: React.FC<ModeSelectorProps> = ({ value, onChange, disabled }) => {
   const t = getVotingStrings();
+  // Comparative prioritization is implemented only against the server API.
+  // Browser-JSON/static deployments have no /api routes, so offering the mode
+  // there would create a vote whose ballot, results and finalize all fail.
+  // Reuse the persistence factory's resolved mode instead of re-deriving it from
+  // `API_URL`: an empty API_URL means same-origin `/api` (dev proxy, Docker),
+  // which is still server mode, so `!API_URL` would hide the mode exactly where
+  // the ranking endpoints exist.
+  const isBrowserOnly = getSelectedMode() === "browser-json";
+  const availableModes =
+    isBrowserOnly && value !== "COMPARATIVE_PRIORITIZATION"
+      ? ALL_MODES.filter((mode) => mode !== "COMPARATIVE_PRIORITIZATION")
+      : ALL_MODES;
   return (
     <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-      {ALL_MODES.map((mode) => (
+      {availableModes.map((mode) => (
         <button
           key={mode}
           type="button"

@@ -53,7 +53,7 @@ const VoteCard: React.FC<{
   const { t: tt } = useTranslation();
   const phaseLabel = t.phases[vote.config.phase] || vote.config.phase;
   const phaseColor = PHASE_COLORS[vote.config.phase] || "bg-gray-100 text-gray-700";
-  const modeLabel = tt(`voting.mode.${vote.config.mode === "THUMBS_UP" ? "thumbsUp" : vote.config.mode === "THUMBS_UD_NEUTRAL" ? "thumbsUdNeutral" : vote.config.mode === "POINTS" ? "points" : vote.config.mode === "MAJORITY_JUDGMENT" ? "majorityJudgment" : "consentLoop"}`);
+  const modeLabel = t.modes[vote.config.mode] ?? vote.config.mode;
 
   return (
     <div
@@ -360,7 +360,7 @@ const VoteDetailPanel: React.FC<{
   vote: VoteEntity;
   onBack: () => void;
   onEdit: () => void;
-  onFinalize: (outcome: VoteEntity["outcome"]) => Promise<void>;
+  onFinalize: (outcome: VoteEntity["outcome"]) => Promise<boolean>;
   onDelete: (id: string) => void;
   onReset: (id: string) => void;
   onOpenPublic: (slug: string) => void;
@@ -378,8 +378,9 @@ const VoteDetailPanel: React.FC<{
   const canClose = vote.config.phase === "OPEN";
   const canReset = !isFinalized && !canOpen;
   const isConsentLoop = vote.config.mode === "CONSENT_LOOP";
+  const isComparative = vote.config.mode === "COMPARATIVE_PRIORITIZATION";
 
-  const { loops, openRound, closeRound, updateRoundContent, loadLoops } = useVoteLoops(vote.id);
+  const { loops, openRound, closeRound, updateRoundContent, loadLoops } = useVoteLoops(vote.id, !isComparative);
 
   const handleOpenRound = async (proposalId: string) => {
     const adapter = await getPersistenceAdapter();
@@ -707,9 +708,9 @@ const VotingPage: React.FC = () => {
     }
   };
 
-  const handleFinalize = async (outcome: VoteEntity["outcome"]) => {
-    if (!selectedVote) return;
-    await finalizeVote(selectedVote.id, outcome);
+  const handleFinalize = async (outcome: VoteEntity["outcome"]): Promise<boolean> => {
+    if (!selectedVote) return false;
+    return Boolean(await finalizeVote(selectedVote.id, outcome));
   };
 
   const handleDelete = async (id: string) => {

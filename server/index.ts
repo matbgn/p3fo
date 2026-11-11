@@ -36,6 +36,7 @@ import {
   deriveBallotParticipationFromStats,
   MAX_RANKED_ITEMS,
   resolveFinalizedWinner,
+  voteAllowsTies,
 } from '../src/lib/vote-ranking.js';
 
 const YJS_ROOM = 'p3fo-room';
@@ -114,7 +115,7 @@ const DB_SQLITE_FILE = process.env.P3FO_DB_SQLITE_FILE || './p3fo.db';
 app.use(compression({ threshold: 1024 }));
 app.use(cors({
   origin: true,
-  allowedHeaders: ['Content-Type', 'traceparent', 'tracestate', 'X-API-Key', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'traceparent', 'tracestate', 'X-API-Key', 'Authorization', 'X-Voter-Token', 'X-Moderator-Token'],
   exposedHeaders: ['traceparent', 'tracestate'],
 }));
 app.use(express.json({ limit: '10mb' }));
@@ -1268,7 +1269,7 @@ app.post('/api/votes/:id/finalize', async (req: Request, res: Response) => {
         return res.status(400).json({ error: 'No submitted ballots to finalize' });
       }
       const topGroup = ranking.groups[0].proposalIds;
-      const allowTies = vote.config.allowTies !== false;
+      const allowTies = voteAllowsTies(vote.config);
       const requestedWinner = typeof req.body?.winningProposalId === 'string'
         ? req.body.winningProposalId
         : null;
@@ -1343,6 +1344,19 @@ async function findVoteByIdOrSlug(idOrSlug: string) {
   return (await db.getVoteById(idOrSlug)) || (await db.getVoteBySlug(idOrSlug));
 }
 
+function requestToken(
+  req: Request,
+  header: string,
+  queryKey: string,
+): string | undefined {
+  // Prefer a custom header so bearer credentials do not land in access/proxy
+  // logs and browser history; keep the query form for older clients.
+  const headerValue = req.get(header);
+  if (headerValue) return headerValue;
+  const queryValue = req.query[queryKey];
+  return typeof queryValue === 'string' ? queryValue : undefined;
+}
+
 /**
  * A `moderatorToken` is the only real secret in this codebase. `ownerId` is
  * returned by the public vote endpoint and is not authentication, so live
@@ -1354,9 +1368,7 @@ async function findVoteByIdOrSlug(idOrSlug: string) {
  * than a credential unlocks the public read for locked votes.
  */
 async function canModerateVote(req: Request, vote: { id: string }): Promise<boolean> {
-  const moderatorToken = typeof req.query.moderatorToken === 'string'
-    ? req.query.moderatorToken
-    : undefined;
+  const moderatorToken = requestToken(req, 'x-moderator-token', 'moderatorToken');
   if (!moderatorToken) return false;
   const resolved = await db.resolveVoteModeratorToken(moderatorToken);
   return Boolean(resolved && resolved.vote.id === vote.id);
@@ -1546,11 +1558,24 @@ app.get('/api/votes/:idOrSlug/ranking-submissions', async (req: Request, res: Re
   try {
     const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
     if (!vote) return res.status(404).json({ error: 'Vote not found' });
-    const voterToken = typeof req.query.voterToken === 'string' ? req.query.voterToken : undefined;
+    // The credential travels in a header, so the response body varies by that
+    // header even though the URL does not. Without no-store a shared cache
+    // could serve one participant's ballot to a different voter requesting the
+    // same URL.
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Vary', 'X-Voter-Token, X-Moderator-Token');
+    const voterToken = requestToken(req, 'x-voter-token', 'voterToken');
     if (voterToken) {
       // A participant reads back their own ballot with their bearer token.
       const submission = await db.getVoteRankingSubmission(vote.id, voterToken);
-      return res.json({ submissions: submission ? [submission] : [] });
+      // Do not echo the bearer credential back in the body; the caller already
+      // holds it and the ballot payload is all it needs. `scope` proves the
+      // header was honored so a client can distinguish this own-ballot read
+      // from the tokenless bulk branch (e.g. an older server during rollout).
+      return res.json({
+        scope: 'self',
+        submissions: submission ? [{ ...submission, voterToken: undefined }] : [],
+      });
     }
     // Bulk read: the workspace backup path. Never expose the participant
     // credential and never leak per-ballot identities on anonymous votes; an
@@ -1641,7 +1666,7 @@ app.delete('/api/votes/:idOrSlug/ranking-submissions', async (req: Request, res:
   try {
     const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
     if (!vote) return res.status(404).json({ error: 'Vote not found' });
-    const voterToken = typeof req.query.voterToken === 'string' ? req.query.voterToken : undefined;
+    const voterToken = requestToken(req, 'x-voter-token', 'voterToken');
     if (!voterToken) return res.status(400).json({ error: 'voterToken is required' });
     if (vote.config.phase !== 'OPEN') {
       return res.status(400).json({ error: 'Vote is not open for ballots' });
@@ -1665,6 +1690,10 @@ app.get('/api/votes/:idOrSlug/ranking-participation', async (req: Request, res: 
   try {
     const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
     if (!vote) return res.status(404).json({ error: 'Vote not found' });
+    // Moderator-authenticated payload selected by a header, not the URL: keep
+    // shared caches from returning one facilitator's response to another.
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Vary', 'X-Moderator-Token');
     if (!(await canModerateVote(req, vote))) {
       return res.status(403).json({ error: 'Facilitator access required' });
     }

@@ -18,6 +18,8 @@ type VotingStrings = {
     copied: string;
     add: string;
     addProposal: string;
+    batchImport: string;
+    import: string;
     addModerator: string;
     delete: string;
     edit: string;
@@ -51,6 +53,7 @@ type VotingStrings = {
     results: string;
     rounds: string;
     proposals: string;
+    batchImportProposals: string;
     moderation: string;
     moderators: string;
     settings: string;
@@ -115,6 +118,7 @@ type VotingStrings = {
     loadingModeration: string;
     loadingResults: string;
     noVotesYet: string;
+    batchImportProposalsDescription: string;
     noVotesAvailable: string;
     noModerators: string;
     noRoundsYet: string;
@@ -163,6 +167,7 @@ type VotingStrings = {
     summaryOverride: string;
     comment: string;
     proposal: string;
+    batchImportProposals: string;
     searchVotes: string;
     url: string;
     writeProposal: string;
@@ -209,6 +214,7 @@ const en: VotingStrings = {
     POINTS: "Points Budget",
     MAJORITY_JUDGMENT: "Majority Judgment",
     CONSENT_LOOP: "Consent Loop",
+    COMPARATIVE_PRIORITIZATION: "Comparative Prioritization",
   },
   modeDescriptions: {
     THUMBS_UP: "Simple yes vote per proposal",
@@ -216,6 +222,7 @@ const en: VotingStrings = {
     POINTS: "Distribute a budget of points",
     MAJORITY_JUDGMENT: "Grade each proposal on a scale",
     CONSENT_LOOP: "Iterative rounds until adopted or blocked",
+    COMPARATIVE_PRIORITIZATION: "Rank proposals through adaptive pairwise comparisons",
   },
   mjGrades: {
     4: "Excellent",
@@ -238,6 +245,8 @@ const en: VotingStrings = {
     copied: "Copied!",
     add: "Add",
     addProposal: "Add proposal",
+    batchImport: "Batch import",
+    import: "Import",
     addModerator: "Add moderator",
     delete: "Delete",
     edit: "Edit",
@@ -271,6 +280,7 @@ const en: VotingStrings = {
     results: "Results",
     rounds: "Rounds",
     proposals: "Proposals",
+    batchImportProposals: "Batch import proposals",
     moderation: "Moderation",
     moderators: "Moderators",
     settings: "Settings",
@@ -335,6 +345,7 @@ const en: VotingStrings = {
     loadingModeration: "Loading moderation view...",
     loadingResults: "Loading results...",
     noVotesYet: "No votes yet.",
+    batchImportProposalsDescription: "Paste one proposal per line. Each line becomes a proposal.",
     noVotesAvailable: "No votes available",
     noModerators: "No moderators added yet.",
     noRoundsYet: "No rounds yet. Open the first round to begin the consent loop.",
@@ -383,6 +394,7 @@ const en: VotingStrings = {
     summaryOverride: "Override the auto-generated summary...",
     comment: "Share your thoughts...",
     proposal: "Your proposal...",
+    batchImportProposals: "Proposal A\nProposal B\nProposal C",
     searchVotes: "Search votes...",
     url: "https://...",
     writeProposal: "Write your proposal here...",
@@ -429,6 +441,7 @@ const fr: VotingStrings = {
     POINTS: "Budget de points",
     MAJORITY_JUDGMENT: "Jugement majoritaire",
     CONSENT_LOOP: "Boucle de consentement",
+    COMPARATIVE_PRIORITIZATION: "Priorisation comparative",
   },
   modeDescriptions: {
     THUMBS_UP: "Vote simple par proposition",
@@ -436,6 +449,7 @@ const fr: VotingStrings = {
     POINTS: "R\u00e9partir un budget de points",
     MAJORITY_JUDGMENT: "Noter chaque proposition sur une \u00e9chelle",
     CONSENT_LOOP: "Tours it\u00e9ratifs jusqu'\u00e0 adoption ou blocage",
+    COMPARATIVE_PRIORITIZATION: "Classer les propositions par comparaisons par paires adaptatives",
   },
   mjGrades: {
     4: "Excellent",
@@ -458,6 +472,8 @@ const fr: VotingStrings = {
     copied: "Copi\u00e9\u00a0!",
     add: "Ajouter",
     addProposal: "Ajouter une proposition",
+    batchImport: "Importer en lot",
+    import: "Importer",
     addModerator: "Ajouter un mod\u00e9rateur",
     delete: "Supprimer",
     edit: "Modifier",
@@ -491,6 +507,7 @@ const fr: VotingStrings = {
     results: "R\u00e9sultats",
     rounds: "Tours",
     proposals: "Propositions",
+    batchImportProposals: "Importer des propositions en lot",
     moderation: "Mod\u00e9ration",
     moderators: "Mod\u00e9rateurs",
     settings: "Param\u00e8tres",
@@ -555,6 +572,7 @@ const fr: VotingStrings = {
     loadingModeration: "Chargement de la mod\u00e9ration...",
     loadingResults: "Chargement des r\u00e9sultats...",
     noVotesYet: "Aucun vote pour le moment.",
+    batchImportProposalsDescription: "Collez une proposition par ligne. Chaque ligne devient une proposition.",
     noVotesAvailable: "Aucun vote disponible",
     noModerators: "Aucun mod\u00e9rateur ajout\u00e9.",
     noRoundsYet: "Aucun tour. Ouvrez le premier tour pour commencer la boucle de consentement.",
@@ -603,6 +621,7 @@ const fr: VotingStrings = {
     summaryOverride: "Remplacer le r\u00e9sum\u00e9 g\u00e9n\u00e9r\u00e9 automatiquement...",
     comment: "Partagez vos id\u00e9es...",
     proposal: "Votre proposition...",
+    batchImportProposals: "Proposition A\nProposition B\nProposition C",
     searchVotes: "Rechercher des votes...",
     url: "https://...",
     writeProposal: "\u00c9crivez votre proposition ici...",
@@ -649,6 +668,7 @@ const de: VotingStrings = {
     POINTS: "Punkte-Budget",
     MAJORITY_JUDGMENT: "Mehrheitsurteil",
     CONSENT_LOOP: "Zustimmungs-Schleife",
+    COMPARATIVE_PRIORITIZATION: "Vergleichende Priorisierung",
   },
   modeDescriptions: {
     THUMBS_UP: "Einfache Ja-Stimme pro Vorschlag",
@@ -656,6 +676,7 @@ const de: VotingStrings = {
     POINTS: "Ein Punktebudget verteilen",
     MAJORITY_JUDGMENT: "Jeden Vorschlag auf einer Skala bewerten",
     CONSENT_LOOP: "Iterative Runden bis angenommen oder blockiert",
+    COMPARATIVE_PRIORITIZATION: "Vorschläge durch adaptive Paarvergleiche ordnen",
   },
   mjGrades: {
     4: "Ausgezeichnet",
@@ -678,6 +699,8 @@ const de: VotingStrings = {
     copied: "Kopiert!",
     add: "Hinzufügen",
     addProposal: "Vorschlag hinzufügen",
+    batchImport: "Stapelimport",
+    import: "Importieren",
     addModerator: "Moderator hinzufügen",
     delete: "Löschen",
     edit: "Bearbeiten",
@@ -711,6 +734,7 @@ const de: VotingStrings = {
     results: "Resultate",
     rounds: "Runden",
     proposals: "Vorschläge",
+    batchImportProposals: "Vorschläge im Stapel importieren",
     moderation: "Moderation",
     moderators: "Moderatoren",
     settings: "Einstellungen",
@@ -775,6 +799,7 @@ const de: VotingStrings = {
     loadingModeration: "Moderationsansicht laden...",
     loadingResults: "Resultate laden...",
     noVotesYet: "Noch keine Stimmen.",
+    batchImportProposalsDescription: "Fügen Sie einen Vorschlag pro Zeile ein. Jede Zeile wird ein Vorschlag.",
     noVotesAvailable: "Keine Abstimmungen verfügbar",
     noModerators: "Noch keine Moderatoren hinzugefügt.",
     noRoundsYet: "Noch keine Runden. Öffnen Sie die erste Runde, um die Zustimmungs-Schleife zu starten.",
@@ -823,6 +848,7 @@ const de: VotingStrings = {
     summaryOverride: "Die auto-generierte Zusammenfassung überschreiben...",
     comment: "Teilen Sie Ihre Gedanken...",
     proposal: "Ihr Vorschlag...",
+    batchImportProposals: "Vorschlag A\nVorschlag B\nVorschlag C",
     searchVotes: "Abstimmungen suchen...",
     url: "https://...",
     writeProposal: "Schreiben Sie hier Ihren Vorschlag...",

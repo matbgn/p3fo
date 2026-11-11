@@ -64,6 +64,15 @@ export function areRankingResultsVisible(vote: Pick<VoteEntity, 'config'>): bool
 }
 
 /**
+ * Single source of truth for whether a comparative vote lets a top-group tie
+ * be finalized as a tie. The finalize dialog, the editor and the finalize
+ * route must agree, so the default lives here instead of three inline copies.
+ */
+export function voteAllowsTies(config: Pick<VoteEntity['config'], 'allowTies'>): boolean {
+  return config.allowTies !== false;
+}
+
+/**
  * Single source of truth for the backup/export shape of a ranking ballot.
  * Backups never carry the participant credential, and anonymous votes must not
  * carry per-ballot identities. An absent `isAnonymous` flag is anonymous, which
@@ -137,6 +146,147 @@ export function activeProposalIds(vote: VoteEntity): string[] {
     .map((proposal) => proposal.id);
 }
 
+/** Inline content (styled text spans) must concatenate without separators, so a
+ * word split across spans is not broken in half. */
+function collectInlineText(node: unknown): string {
+  if (typeof node === 'string') return node;
+  if (Array.isArray(node)) return node.map(collectInlineText).join('');
+  if (node && typeof node === 'object') {
+    const inline = node as Record<string, unknown>;
+    let text = typeof inline.text === 'string' ? inline.text : '';
+    if (inline.content) text += collectInlineText(inline.content);
+    if (inline.children) text += collectInlineText(inline.children);
+    return text;
+  }
+  return '';
+}
+
+/** Block content (paragraphs, list items) is separated by whitespace, otherwise
+ * two sibling paragraphs collapse into one run-together title. */
+function collectBlockText(node: unknown): string {
+  if (typeof node === 'string') return node;
+  if (Array.isArray(node)) return node.map(collectBlockText).join(' ');
+  if (node && typeof node === 'object') {
+    const block = node as Record<string, unknown>;
+    const text = typeof block.text === 'string' ? block.text : '';
+    const content = block.content ? collectInlineText(block.content) : '';
+    const children = block.children ? ` ${collectBlockText(block.children)}` : '';
+    return `${text}${content}${children}`;
+  }
+  return '';
+}
+
+/**
+ * Single source of truth for a proposal's displayable text. Proposal `content`
+ * is stored as BlockNote JSON (or legacy HTML/plain text); extracting it here
+ * keeps the rendered title and the "has content" check from diverging.
+ * Returns null when the proposal has no displayable text at all.
+ */
+export function proposalPlainText(proposal: {
+  description?: string | null;
+  content?: string | null;
+}): string | null {
+  const description = proposal.description?.trim();
+  if (description) return description;
+  const raw = proposal.content?.trim();
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      // BlockNote JSON: a text-less document (empty paragraph, image-only
+      // block) has no title and must not fall through to emitting raw JSON.
+      const text = collectBlockText(parsed).replace(/\s+/g, ' ').trim();
+      return text || null;
+    }
+  } catch {
+    // Not BlockNote JSON; fall back to HTML/plain-text extraction below.
+  }
+  const plain = raw
+    // Replace tags with whitespace, not nothing: stripping block tags would
+    // merge separate paragraphs into one run-together title.
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return plain || null;
+}
+
+/**
+ * Single source of truth for the human-readable proposal title. Using the raw
+ * `content` shows markup/JSON in the UI, so every caller must derive the title
+ * here; text-less proposals fall back to their id.
+ */
+export function proposalDisplayTitle(proposal: {
+  id?: string;
+  description?: string | null;
+  content?: string | null;
+}): string {
+  return proposalPlainText(proposal) ?? proposal.id ?? '';
+}
+
+/** Media blocks (image/video/file) carry their payload in `props` rather than
+ * text, so `proposalPlainText` ignores them. Inspect `props` directly or a
+ * media-only proposal looks blank and gets dropped on batch import. */
+function blocksHaveMedia(node: unknown): boolean {
+  if (Array.isArray(node)) return node.some(blocksHaveMedia);
+  if (!node || typeof node !== 'object') return false;
+  const block = node as Record<string, unknown>;
+  const props = block.props;
+  if (props && typeof props === 'object') {
+    const record = props as Record<string, unknown>;
+    const url = typeof record.url === 'string' ? record.url.trim() : '';
+    const caption = typeof record.caption === 'string' ? record.caption.trim() : '';
+    if (url || caption) return true;
+  }
+  return blocksHaveMedia(block.children);
+}
+
+/**
+ * Single source of truth for whether a proposal has any displayable content.
+ * Derives from the same extraction as `proposalDisplayTitle` so the "empty
+ * proposal" check treats nested block text exactly like the rendered title, and
+ * additionally treats media blocks as content so an image-only proposal is not
+ * mistaken for a blank placeholder.
+ */
+export function proposalHasContent(proposal: {
+  description?: string | null;
+  content?: string | null;
+}): boolean {
+  if (proposalPlainText(proposal) !== null) return true;
+  const raw = proposal.content?.trim();
+  if (!raw) return false;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) return blocksHaveMedia(parsed);
+  } catch {
+    // Non-JSON content already had its text extracted by `proposalPlainText`.
+  }
+  return false;
+}
+
+/**
+ * Single source of truth for the ranked-item cap and ordering. The client uses
+ * it to declare its ballot's itemIds and the result builder uses it to pick the
+ * set it aggregates, so the two cannot drift apart when the cap or tie-break
+ * changes. Callers supply the count key (comparison frequency on the client,
+ * ballot-inclusion frequency on the server) that defines "most compared".
+ */
+export function selectRankedItemIds(
+  activeIds: string[],
+  counts: Map<string, number>,
+  positions: Map<string, number>,
+): string[] {
+  if (activeIds.length <= MAX_RANKED_ITEMS) return [...activeIds];
+  return [...activeIds]
+    .sort(
+      (a, b) =>
+        (counts.get(b) ?? 0) - (counts.get(a) ?? 0) ||
+        (positions.get(a) ?? 0) - (positions.get(b) ?? 0) ||
+        a.localeCompare(b),
+    )
+    .slice(0, MAX_RANKED_ITEMS);
+}
+
 export function buildVoteRankingResult(
   vote: VoteEntity,
   submissions: VoteRankingSubmission[],
@@ -149,27 +299,19 @@ export function buildVoteRankingResult(
     .filter((ballot): ballot is VoteRankingBallot => ballot !== null);
   if (submitted.length === 0) return null;
 
-  let rankedIds = activeIds;
+  const comparedCount = new Map<string, number>();
+  const position = new Map(
+    vote.proposals.map((proposal) => [proposal.id, proposal.position]),
+  );
   if (activeIds.length > MAX_RANKED_ITEMS) {
     const active = new Set(activeIds);
-    const comparedCount = new Map<string, number>();
     for (const ballot of submitted) {
       for (const id of ballot.itemIds) {
         if (active.has(id)) comparedCount.set(id, (comparedCount.get(id) ?? 0) + 1);
       }
     }
-    const position = new Map(
-      vote.proposals.map((proposal) => [proposal.id, proposal.position]),
-    );
-    rankedIds = [...activeIds]
-      .sort(
-        (a, b) =>
-          (comparedCount.get(b) ?? 0) - (comparedCount.get(a) ?? 0) ||
-          (position.get(a) ?? 0) - (position.get(b) ?? 0) ||
-          a.localeCompare(b),
-      )
-      .slice(0, MAX_RANKED_ITEMS);
   }
+  const rankedIds = selectRankedItemIds(activeIds, comparedCount, position);
 
   const pooled = poolBallots(submitted, rankedIds);
   if (pooled.includedBallots === 0) return null;

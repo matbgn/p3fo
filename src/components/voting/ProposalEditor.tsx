@@ -1,12 +1,15 @@
 import * as React from "react";
-import { Plus, Trash2, GripVertical, ExternalLink } from "lucide-react";
+import { Plus, Trash2, GripVertical, ExternalLink, Upload } from "lucide-react";
 import { VoteProposal, VoteKind } from "@/lib/persistence-types";
 import { getVotingStrings } from "@/lib/voting-i18n";
+import { proposalHasContent, proposalPlainText } from "@/lib/vote-ranking";
 import { BlockNoteProposalEditor, BlockNoteProposalEditorHandle } from "./BlockNoteProposalEditor";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 
 interface ProposalEditorProps {
   proposals: VoteProposal[];
@@ -30,6 +33,8 @@ export const ProposalEditor = React.forwardRef<ProposalEditorHandle, ProposalEdi
   readOnly = false,
 }, ref) => {
   const t = getVotingStrings();
+  const [batchOpen, setBatchOpen] = React.useState(false);
+  const [batchText, setBatchText] = React.useState('');
   const editorRefs = React.useRef<(BlockNoteProposalEditorHandle | null)[]>([]);
   const proposalsRef = React.useRef(proposals);
   proposalsRef.current = proposals;
@@ -76,6 +81,44 @@ export const ProposalEditor = React.forwardRef<ProposalEditorHandle, ProposalEdi
     const [moved] = next.splice(from, 1);
     next.splice(to, 0, moved);
     onChange(next.map((p, i) => ({ ...p, position: i })));
+  };
+
+  // Shared with `proposalDisplayTitle`: inspecting only top-level nodes would
+  // treat nested block text as empty and drop those proposals on batch import.
+  const hasContent = (proposal: VoteProposal): boolean => proposalHasContent(proposal);
+
+  const handleBatchImport = () => {
+    const lines = batchText
+      .split(/\r?\n/)
+      .map((line) => line.replace(/^\s*(?:[-*]|\d+[.)])\s+/, ""))
+      // Reuse the same normalization as the rendered title, so imported markup
+      // cannot be stored in a shape that displays differently later (tags are
+      // replaced with a space, keeping sibling blocks from merging).
+      .map((line) => proposalPlainText({ content: line }) ?? "")
+      .filter(Boolean);
+    if (lines.length === 0) return;
+
+    const current = [...proposalsRef.current];
+    editorRefs.current.forEach((editor, index) => {
+      if (editor && index < current.length) {
+        current[index] = { ...current[index], content: editor.flush() };
+      }
+    });
+    const base = current.filter(hasContent);
+    const imported: VoteProposal[] = lines.map((text, index) => ({
+      id: crypto.randomUUID(),
+      description: text.slice(0, 200),
+      content: text,
+      position: base.length + index,
+      active: true,
+    }));
+
+    onChange([...base, ...imported].map((proposal, index) => ({
+      ...proposal,
+      position: index,
+    })));
+    setBatchText('');
+    setBatchOpen(false);
   };
 
   return (
@@ -183,17 +226,54 @@ export const ProposalEditor = React.forwardRef<ProposalEditorHandle, ProposalEdi
       ))}
 
       {!readOnly && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={addProposal}
-          className="w-full"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          {t.buttons.addProposal}
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addProposal}
+            className="flex-1"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            {t.buttons.addProposal}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setBatchOpen(true)}
+            className="sm:w-auto"
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            {t.buttons.batchImport}
+          </Button>
+        </div>
       )}
+
+      <Dialog open={batchOpen} onOpenChange={setBatchOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t.labels.batchImportProposals}</DialogTitle>
+            <DialogDescription>
+              {t.messages.batchImportProposalsDescription}
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={batchText}
+            onChange={(event) => setBatchText(event.target.value)}
+            placeholder={t.placeholders.batchImportProposals}
+            rows={10}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBatchOpen(false)}>
+              {t.buttons.cancel}
+            </Button>
+            <Button onClick={handleBatchImport} disabled={!batchText.trim()}>
+              {t.buttons.import}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {kind === "consultation" && onAllowAudienceProposalsChange && (
         <div className="flex items-center gap-2 pt-2 border-t">

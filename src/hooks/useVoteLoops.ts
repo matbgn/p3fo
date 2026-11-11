@@ -42,11 +42,12 @@ if (isCollaborationEnabled()) {
   });
 }
 
-export const useVoteLoops = (voteId: string) => {
+export const useVoteLoops = (voteId: string, enabled = true) => {
   const [loops, setLoops] = React.useState<VoteLoop[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
+  const [isLoading, setIsLoading] = React.useState(enabled);
 
   const loadLoops = React.useCallback(async () => {
+    if (!enabled) return [];
     try {
       const adapter = await getPersistenceAdapter();
       const result = await adapter.listVoteLoops(voteId);
@@ -57,9 +58,13 @@ export const useVoteLoops = (voteId: string) => {
       console.error("Error loading vote loops:", error);
       return [];
     }
-  }, [voteId]);
+  }, [voteId, enabled]);
 
   React.useEffect(() => {
+    if (!enabled) {
+      setIsLoading(false);
+      return;
+    }
     let mounted = true;
 
     const initialFetch = async () => {
@@ -115,7 +120,7 @@ export const useVoteLoops = (voteId: string) => {
       eventBus.unsubscribe("voteLoopsChanged", eventHandler);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [voteId]);
+  }, [voteId, enabled]);
 
   const openRound = async (
     proposalId: string,

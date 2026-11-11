@@ -344,7 +344,7 @@ export const useVotes = (opts?: { linkedTaskId?: string; ownerId?: string; kind?
   };
 };
 
-export const useVoteResults = (voteId: string) => {
+export const useVoteResults = (voteId: string, enabled = true) => {
   const [responses, setResponses] = React.useState<VoteResponseEntity[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
 
@@ -360,6 +360,10 @@ export const useVoteResults = (voteId: string) => {
   }, [voteId]);
 
   React.useEffect(() => {
+    if (!enabled) {
+      setIsLoading(false);
+      return;
+    }
     let mounted = true;
 
     const initialFetch = async () => {
@@ -415,7 +419,7 @@ export const useVoteResults = (voteId: string) => {
       eventBus.unsubscribe("voteResponsesChanged", eventHandler);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [voteId]);
+  }, [voteId, enabled]);
 
   return { responses, isLoading, refetch: fetchResults };
 };

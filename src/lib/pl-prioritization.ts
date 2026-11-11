@@ -579,8 +579,9 @@ function pairIsUncertain(a: string, b: string, scores: Record<string, number>): 
 export function selectNextBatch(
   state: PrioritizationState,
   k?: number,
+  options: { forceContinue?: boolean } = {},
 ): ComparisonBatch | null {
-  if (isConfident(state) && canStop(state)) return null;
+  if (!options.forceContinue && isConfident(state) && canStop(state)) return null;
 
   const effectiveK = Math.min(k ?? state.k, state.tasks.length);
   if (effectiveK < 2) return null;
@@ -708,7 +709,7 @@ export function selectNextBatch(
       }
     }
     if (!bestPair) return null;
-    if (bestPairH < INFO_GAIN_FLOOR && canStop(state)) return null;
+    if (!options.forceContinue && bestPairH < INFO_GAIN_FLOOR && canStop(state)) return null;
 
     selected = [bestPair[0], bestPair[1]];
     while (selected.length < effectiveK) {

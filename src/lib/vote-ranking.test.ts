@@ -8,6 +8,8 @@ import {
   buildVoteRankingResult,
   computeBallotCoverage,
   deriveBallotParticipation,
+  proposalDisplayTitle,
+  proposalHasContent,
   resolveFinalizedWinner,
 } from './vote-ranking';
 
@@ -98,6 +100,68 @@ describe('finalize winner resolution', () => {
       error: 'tied-requires-selection',
     });
     expect(resolveFinalizedWinner(['a', 'b'], false, 'b')).toEqual({ winningProposalId: 'b' });
+  });
+});
+
+describe('proposal text extraction', () => {
+  it('prefers the description and reads plain or HTML content', () => {
+    expect(proposalDisplayTitle({ id: 'a', description: ' Desc ' })).toBe('Desc');
+    expect(proposalDisplayTitle({ id: 'a', content: 'Plain text' })).toBe('Plain text');
+    expect(proposalDisplayTitle({ id: 'a', content: '<p>Hello&nbsp;world</p>' })).toBe(
+      'Hello world',
+    );
+  });
+
+  it('reads nested BlockNote block text', () => {
+    const content = JSON.stringify([
+      { type: 'paragraph', content: [{ type: 'text', text: 'Nested title' }] },
+    ]);
+    expect(proposalDisplayTitle({ id: 'a', content })).toBe('Nested title');
+    expect(proposalHasContent({ content })).toBe(true);
+  });
+
+  it('separates sibling blocks instead of concatenating their text', () => {
+    const blockContent = JSON.stringify([
+      { type: 'paragraph', content: [{ type: 'text', text: 'Alpha' }] },
+      { type: 'paragraph', content: [{ type: 'text', text: 'Beta' }] },
+    ]);
+    expect(proposalDisplayTitle({ id: 'a', content: blockContent })).toBe('Alpha Beta');
+    expect(proposalDisplayTitle({ id: 'a', content: '<p>Alpha</p><p>Beta</p>' })).toBe(
+      'Alpha Beta',
+    );
+  });
+
+  it('keeps a word split across inline spans intact', () => {
+    const content = JSON.stringify([
+      {
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: 'Hel', styles: { bold: true } },
+          { type: 'text', text: 'lo' },
+        ],
+      },
+    ]);
+    expect(proposalDisplayTitle({ id: 'a', content })).toBe('Hello');
+  });
+
+  it('treats a text-less BlockNote document as empty instead of returning JSON', () => {
+    // Regression: the title used to fall through to the raw JSON fallback while
+    // the content check reported empty, so both helpers disagreed.
+    const content = JSON.stringify([{ type: 'paragraph', content: [] }]);
+    expect(proposalDisplayTitle({ id: 'fallback-id', content })).toBe('fallback-id');
+    expect(proposalHasContent({ content })).toBe(false);
+  });
+
+  it('treats a media-only proposal as content instead of a blank placeholder', () => {
+    // Regression: an image-only proposal has no text, so the batch import used
+    // to drop it as if it were the empty default proposal.
+    const content = JSON.stringify([
+      { type: 'image', props: { url: 'https://example.test/a.png', caption: '' } },
+    ]);
+    expect(proposalHasContent({ content })).toBe(true);
+    expect(proposalHasContent({ content: JSON.stringify([{ type: 'paragraph', props: {} }]) })).toBe(
+      false,
+    );
   });
 });
 
