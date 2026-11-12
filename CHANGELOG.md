@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.40.0 (2026-11-12)
+
+### Features
+
+- **planner:** add day hover card and filter sync (17c8c5f)
+- **comparative tool:** add comparative vote UI (6db33b7)
+- **comparative tool:** add ranking export menu (d9f0590)
+- **comparative tool:** add live ranking ballot API (49dd113)
+- **comparative tool:** persist and back up ranking ballots (be4f41e)
+- **comparative tool:** add weighted partial-ranking vote engine (4a7aacf)
+
+### Bug Fixes
+
+- **common:** add dedicated all-day due time for tasks (d432ef3)
+- **planner:** clear planned and due times in the UI (53fe839)
+
+---
+
 ## v0.39.2 (2026-11-08)
 
 ---
@@ -108,34 +126,5 @@
 ---
 
 ## v0.33.1 (2026-07-25)
-
----
-
-## v0.33.0 (2026-07-25)
-
-### Features
-
-- **layout:** floating top-right overlay for size slider + exit focus button (3ab0b8d)
-- **umbrella:** add a scratch search bar to the umbrella navigation (df8881c)
-- **salary:** add a duplicate button on the employee table (3b295c4)
-- **notifications:** click title to jump to card and localize aging/blocked messages (6300c50)
-- **6 hats boards:** add card pinning to retro boards (f9e0c0f)
-
-### Bug Fixes
-
-- **notifications:** re-localize reminders via i18n keys at render (9c58551)
-- **mood:** ask on daily load then every N hours (c0c67cd)
-- **viewSwitcher:** move slider + focus button next to user icon on narrow screens (77fe887)
-- **viewSwitcher:** keep user icon, notification bell and language flag visible on narrow screens (f410261)
-- **userSection:** remove redundant trigram text next to avatar (9db0199)
-- **layout:** size slider + focus button in normal flow, not floating (23888a2)
-- **layout:** move focus toggle to floating top-right, simplify size slider (f46da91)
-- **quickTimer:** two-line layout on mobile, task zone on top (1281709)
-- **quickTimer:** cap task title to 24 chars and collapse traveler idle config into a popover (eae8553)
-- **quickTimer:** always show technique zone when a technique is enabled (f25a5d9)
-- **quickTimer:** keep running task title, elapsed time and pause button visible while a pomodoro or traveler session is active (e41c7f1)
-- **time picker:** add a11y title to time picker dialog (a8e0e9e)
-- **auth:** reload on 401 to refresh proxy session (f677dc4)
-- **i18n:** respect base url for locale loading (c97c43c)
 
 ---
