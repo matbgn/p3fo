@@ -21,6 +21,7 @@ import { Save, X, CalendarIcon, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { VoteEntity, VoteMode, VoteKind, VoteConfig, VoteProposal } from "@/lib/persistence-types";
+import { DEFAULT_RANKING_ENGINE, voteAllowsTies } from "@/lib/vote-ranking";
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { useTranslation } from "react-i18next";
 import { KindSelector } from "./KindSelector";
@@ -72,6 +73,8 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
   const [allowVoteChangeUntilClose, setAllowVoteChangeUntilClose] = React.useState(true);
   const [multipleChoiceVote, setMultipleChoiceVote] = React.useState(true);
   const [maxPointsPerUser, setMaxPointsPerUser] = React.useState(10);
+  const [rankingEngine, setRankingEngine] = React.useState<"bt-k2" | "bt-k4">(DEFAULT_RANKING_ENGINE);
+  const [allowTies, setAllowTies] = React.useState(true);
   const [allowMultiple, setAllowMultiple] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
   const [openAt, setOpenAt] = React.useState<number | null>(null);
@@ -100,6 +103,8 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
       setAllowVoteChangeUntilClose(vote.config.allowVoteChangeUntilClose ?? true);
       setMultipleChoiceVote(vote.config.multipleChoiceVote ?? true);
       setMaxPointsPerUser(vote.config.maxPointsPerUser ?? 10);
+      setRankingEngine(vote.config.rankingEngine ?? DEFAULT_RANKING_ENGINE);
+      setAllowTies(voteAllowsTies(vote.config));
       setAllowMultiple(vote.config.allowMultiple ?? false);
       setOpenAt(vote.config.openAt ? new Date(vote.config.openAt).getTime() : null);
       setCloseAt(vote.config.closeAt ? new Date(vote.config.closeAt).getTime() : null);
@@ -117,6 +122,8 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
       setAllowVoteChangeUntilClose(true);
       setMultipleChoiceVote(true);
       setMaxPointsPerUser(10);
+      setRankingEngine(DEFAULT_RANKING_ENGINE);
+      setAllowTies(true);
       setAllowMultiple(false);
       setOpenAt(null);
       setCloseAt(null);
@@ -140,13 +147,15 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
         kind,
         phase: vote?.config.phase || "IDLE",
         isAnonymous,
-        allowFreeText,
+        allowFreeText: mode !== "COMPARATIVE_PRIORITIZATION" ? allowFreeText : undefined,
         requireObjectionComment: showObjectionComment ? requireObjectionComment : undefined,
         allowAudienceProposals: kind === "consultation" ? allowAudienceProposals : undefined,
         showResultsBeforeClose,
         allowVoteChangeUntilClose,
-        multipleChoiceVote: mode !== "POINTS" && mode !== "CONSENT_LOOP" ? multipleChoiceVote : undefined,
+        multipleChoiceVote: mode !== "POINTS" && mode !== "CONSENT_LOOP" && mode !== "COMPARATIVE_PRIORITIZATION" ? multipleChoiceVote : undefined,
         maxPointsPerUser: mode === "POINTS" ? maxPointsPerUser : undefined,
+        rankingEngine: mode === "COMPARATIVE_PRIORITIZATION" ? rankingEngine : undefined,
+        allowTies: mode === "COMPARATIVE_PRIORITIZATION" ? allowTies : undefined,
         allowMultiple: mode === "POINTS" ? allowMultiple : undefined,
         openAt: openAt ? new Date(openAt).toISOString() : undefined,
         closeAt: closeAt ? new Date(closeAt).toISOString() : undefined,
@@ -257,6 +266,34 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
             </div>
           )}
 
+          {mode === "COMPARATIVE_PRIORITIZATION" && (
+            <div className="space-y-3 border rounded-md p-3 bg-gray-50">
+              <div className="space-y-1">
+                <Label className="text-sm">{tt("voting.comparative.engine")}</Label>
+                <select
+                  value={rankingEngine}
+                  onChange={(event) => setRankingEngine(event.target.value as "bt-k2" | "bt-k4")}
+                  disabled={hasStarted || isFinalized}
+                  className="text-sm border rounded px-2 py-1 bg-white"
+                >
+                  <option value="bt-k4">BT K=4</option>
+                  <option value="bt-k2">BT K=2</option>
+                </select>
+              </div>
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">{tt("voting.comparative.allowTies")}</Label>
+                <Switch
+                  checked={allowTies}
+                  onCheckedChange={setAllowTies}
+                  disabled={hasStarted || isFinalized}
+                />
+              </div>
+              <p className="text-xs text-gray-500">
+                {tt("voting.comparative.configHelp")}
+              </p>
+            </div>
+          )}
+
           <Separator />
 
           <div className="space-y-3">
@@ -271,14 +308,16 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
               />
             </div>
 
-            <div className="flex items-center justify-between">
-              <Label className="text-sm">{t.labels.allowFreeText}</Label>
-              <Switch
-                checked={allowFreeText}
-                onCheckedChange={setAllowFreeText}
-                disabled={isFinalized}
-              />
-            </div>
+            {mode !== "COMPARATIVE_PRIORITIZATION" && (
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">{t.labels.allowFreeText}</Label>
+                <Switch
+                  checked={allowFreeText}
+                  onCheckedChange={setAllowFreeText}
+                  disabled={isFinalized}
+                />
+              </div>
+            )}
 
             {showObjectionComment && (
               <div className="flex items-center justify-between">
@@ -309,7 +348,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
               />
             </div>
 
-            {mode !== "POINTS" && mode !== "CONSENT_LOOP" && (
+            {mode !== "POINTS" && mode !== "CONSENT_LOOP" && mode !== "COMPARATIVE_PRIORITIZATION" && (
               <div className="flex items-center justify-between">
                 <Label className="text-sm">{t.labels.multipleChoiceVote}</Label>
                 <Switch

@@ -2,6 +2,27 @@ import * as React from "react";
 import { VoteModerator } from "@/lib/persistence-types";
 import { getPersistenceAdapter } from "@/lib/persistence-factory";
 
+/** Keep the previous array when a poll returns the same list, so polling does
+ * not force a re-render of the whole vote detail subtree. */
+function applyModerators(
+  previous: VoteModerator[],
+  next: VoteModerator[],
+): VoteModerator[] {
+  if (
+    previous.length === next.length &&
+    previous.every(
+      (moderator, index) =>
+        moderator.id === next[index].id &&
+        moderator.token === next[index].token &&
+        moderator.active === next[index].active &&
+        moderator.lastSeenAt === next[index].lastSeenAt,
+    )
+  ) {
+    return previous;
+  }
+  return next;
+}
+
 export const useVoteModerators = (voteId: string) => {
   const [moderators, setModerators] = React.useState<VoteModerator[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -10,7 +31,7 @@ export const useVoteModerators = (voteId: string) => {
     try {
       const adapter = await getPersistenceAdapter();
       const result = await adapter.listVoteModerators(voteId);
-      setModerators(result);
+      setModerators((previous) => applyModerators(previous, result));
       return result;
     } catch (error) {
       console.error("Error loading vote moderators:", error);
@@ -27,7 +48,7 @@ export const useVoteModerators = (voteId: string) => {
         const adapter = await getPersistenceAdapter();
         const result = await adapter.listVoteModerators(voteId);
         if (mounted) {
-          setModerators(result);
+          setModerators((previous) => applyModerators(previous, result));
           setIsLoading(false);
         }
       } catch (error) {

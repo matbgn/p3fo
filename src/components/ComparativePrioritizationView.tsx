@@ -46,6 +46,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Task, useTasks } from '@/hooks/useTasks';
 import { Button } from '@/components/ui/button';
+import { RankingExportMenu } from '@/components/RankingExportMenu';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
@@ -440,6 +441,29 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
     setPrioritizedResults(null);
   };
 
+  const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
+
+  const exportItems = useMemo(() => {
+    const results = prioritizedResults ?? [];
+    return results.map((result, index) => {
+      const next = results[index + 1];
+      const previous = results[index - 1];
+      return {
+        // Condorcet uses integer Copeland wins and BT clamps scores, so equal
+        // scores are expected. Ranks stay positional (matching the on-screen
+        // list and the priorities `applyPriorities` assigns); equal scores are
+        // surfaced through the `tied` flag instead of a shared rank.
+        rank: index + 1,
+        id: result.taskId,
+        title: taskById.get(result.taskId)?.title || result.taskId,
+        score: result.score,
+        tied:
+          (previous !== undefined && previous.score === result.score) ||
+          (next !== undefined && next.score === result.score),
+      };
+    });
+  }, [prioritizedResults, taskById]);
+
   return (
     <Card className="h-full flex flex-col border-0">
       <CardHeader>
@@ -448,10 +472,16 @@ const ComparativePrioritizationView: React.FC<ComparativePrioritizationViewProps
       <CardContent className="flex-grow overflow-auto p-4">
         {prioritizedResults ? (
           <div>
-            <h3 className="text-lg font-semibold mb-2">{t('prioritization.results')}</h3>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <h3 className="text-lg font-semibold">{t('prioritization.results')}</h3>
+              <RankingExportMenu
+                items={exportItems}
+                filename="p3fo-prioritized-tasks"
+              />
+            </div>
             <ul className="list-none pl-0 space-y-1">
               {prioritizedResults.map((result, index) => {
-                const task = tasks.find(t => t.id === result.taskId);
+                const task = taskById.get(result.taskId);
                 return (
                   <li key={task?.id} className="flex justify-between items-center py-1">
                     <span>{task?.title}</span>

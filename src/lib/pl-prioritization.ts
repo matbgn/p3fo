@@ -338,6 +338,39 @@ function addWin(
 }
 
 /**
+ * Decompose a batch result into pairwise BT wins.
+ *
+ * Single source of truth for the batch→pairwise rules shared by `recordBatch`
+ * and by callers that persist the comparison list (e.g. comparative ballots).
+ *
+ * @param batchTaskIds - IDs of the tasks shown in the batch.
+ * @param highestId - The task chosen as highest priority.
+ * @param lowestId - The task chosen as lowest priority (undefined for K=2).
+ * @param k - Batch size (defaults to `batchTaskIds.length`).
+ */
+export function batchPairwiseWins(
+  batchTaskIds: string[],
+  highestId: string,
+  lowestId?: string,
+  k?: number,
+): Array<{ winnerId: string; loserId: string }> {
+  const effectiveLowest = lowestId ?? batchTaskIds.find((id) => id !== highestId);
+  if (!effectiveLowest) return [];
+  if (k === 2 || lowestId === undefined) {
+    return [{ winnerId: highestId, loserId: effectiveLowest }];
+  }
+  const wins: Array<{ winnerId: string; loserId: string }> = [];
+  for (const id of batchTaskIds) {
+    if (id === highestId) continue;
+    wins.push({ winnerId: highestId, loserId: id });
+    if (id !== lowestId) {
+      wins.push({ winnerId: id, loserId: lowestId });
+    }
+  }
+  return wins;
+}
+
+/**
  * Record a batch result and advance the engine state.
  *
  * Decomposes the K-wise batch choice into pairwise BT wins:
@@ -369,18 +402,9 @@ export function recordBatch(
 
   const allTaskIds = state.tasks.map((t) => t.id);
   const batchIds = batchTaskIds ?? allTaskIds;
-  const effectiveLowest = lowestId ?? batchIds.find((id) => id !== highestId);
 
-  if (state.k === 2 || !lowestId) {
-    if (effectiveLowest) addWin(winMatrix, highestId, effectiveLowest);
-  } else {
-    for (const id of batchIds) {
-      if (id === highestId) continue;
-      addWin(winMatrix, highestId, id);
-      if (id !== lowestId) {
-        addWin(winMatrix, id, lowestId);
-      }
-    }
+  for (const win of batchPairwiseWins(batchIds, highestId, lowestId, state.k)) {
+    addWin(winMatrix, win.winnerId, win.loserId);
   }
 
   const scores = estimateScores(winMatrix, allTaskIds);
@@ -555,8 +579,9 @@ function pairIsUncertain(a: string, b: string, scores: Record<string, number>): 
 export function selectNextBatch(
   state: PrioritizationState,
   k?: number,
+  options: { forceContinue?: boolean } = {},
 ): ComparisonBatch | null {
-  if (isConfident(state) && canStop(state)) return null;
+  if (!options.forceContinue && isConfident(state) && canStop(state)) return null;
 
   const effectiveK = Math.min(k ?? state.k, state.tasks.length);
   if (effectiveK < 2) return null;
@@ -684,7 +709,7 @@ export function selectNextBatch(
       }
     }
     if (!bestPair) return null;
-    if (bestPairH < INFO_GAIN_FLOOR && canStop(state)) return null;
+    if (!options.forceContinue && bestPairH < INFO_GAIN_FLOOR && canStop(state)) return null;
 
     selected = [bestPair[0], bestPair[1]];
     while (selected.length < effectiveK) {

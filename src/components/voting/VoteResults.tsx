@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { BarChart3, Users, MessageSquare, Trophy, ArrowUpDown, ArrowDownWideNarrow } from "lucide-react";
 import { LoopRoundProposalTooltip } from "./LoopRoundProposalTooltip";
 import { ProposalContentDisplay } from "./ProposalContentDisplay";
+import { PartialRankingResults } from "./PartialRankingResults";
 
 interface VoteResultsProps {
   vote: VoteEntity;
@@ -182,10 +183,36 @@ const ConsentLoopResults: React.FC<{ vote: VoteEntity }> = ({ vote }) => {
   );
 };
 
+export const VoteOutcomeBanner: React.FC<{ vote: VoteEntity }> = ({ vote }) => {
+  const t = getVotingStrings();
+  const { t: tt } = useTranslation();
+  if (!vote.outcome) return null;
+  return (
+    <div className="border-2 border-blue-500 rounded-lg p-4 bg-blue-50">
+      <div className="flex items-center gap-2 mb-2">
+        <Trophy className="w-5 h-5 text-blue-600" />
+        <span className="font-semibold text-blue-900">{t.labels.outcome}</span>
+      </div>
+      <p className="text-sm text-blue-800">{vote.outcome.summary}</p>
+      {vote.outcome.signature && (
+        <p className="text-sm text-blue-700 mt-1 italic">"{vote.outcome.signature}"</p>
+      )}
+      <p className="text-xs text-blue-500 mt-2">
+        {tt("voting.finalizedPrefix")} {new Date(vote.outcome.finalizedAt).toLocaleString()}
+      </p>
+    </div>
+  );
+};
+
 export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
   const t = getVotingStrings();
   const { t: tt } = useTranslation();
-  const { responses, isLoading } = useVoteResults(vote.id);
+  const { responses, isLoading } = useVoteResults(
+    vote.id,
+    // Comparative votes never store vote responses; polling the response
+    // endpoint for them is pure waste.
+    vote.config.mode !== "COMPARATIVE_PRIORITIZATION",
+  );
   const isAnonymous = vote.config.isAnonymous ?? true;
 
   const [resultsSortMetric, setResultsSortMetric] = React.useState<"original" | "median" | "average">("original");
@@ -193,6 +220,15 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
 
   const totalVoters = new Set(responses.map((r) => r.voterToken)).size;
   const commentsCount = responses.filter((r) => r.comment).length;
+
+  if (vote.config.mode === "COMPARATIVE_PRIORITIZATION") {
+    return (
+      <div className="space-y-4">
+        <VoteOutcomeBanner vote={vote} />
+        <PartialRankingResults vote={vote} canExport />
+      </div>
+    );
+  }
 
   if (vote.config.mode === "CONSENT_LOOP") {
     return (
@@ -206,19 +242,7 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
         </div>
 
         {vote.outcome && (
-          <div className="border-2 border-blue-500 rounded-lg p-4 bg-blue-50">
-            <div className="flex items-center gap-2 mb-2">
-              <Trophy className="w-5 h-5 text-blue-600" />
-              <span className="font-semibold text-blue-900">{t.labels.outcome}</span>
-            </div>
-            <p className="text-sm text-blue-800">{vote.outcome.summary}</p>
-            {vote.outcome.signature && (
-              <p className="text-sm text-blue-700 mt-1 italic">"{vote.outcome.signature}"</p>
-            )}
-            <p className="text-xs text-blue-500 mt-2">
-              {tt("voting.finalizedPrefix")} {new Date(vote.outcome.finalizedAt).toLocaleString()}
-            </p>
-          </div>
+          <VoteOutcomeBanner vote={vote} />
         )}
 
         <div className="flex gap-4 text-sm text-gray-500">
@@ -250,19 +274,7 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
       </div>
 
       {vote.outcome && (
-        <div className="border-2 border-blue-500 rounded-lg p-4 bg-blue-50">
-          <div className="flex items-center gap-2 mb-2">
-            <Trophy className="w-5 h-5 text-blue-600" />
-            <span className="font-semibold text-blue-900">{t.labels.outcome}</span>
-          </div>
-          <p className="text-sm text-blue-800">{vote.outcome.summary}</p>
-          {vote.outcome.signature && (
-            <p className="text-sm text-blue-700 mt-1 italic">"{vote.outcome.signature}"</p>
-          )}
-          <p className="text-xs text-blue-500 mt-2">
-            {tt("voting.finalizedPrefix")} {new Date(vote.outcome.finalizedAt).toLocaleString()}
-          </p>
-        </div>
+        <VoteOutcomeBanner vote={vote} />
       )}
 
       <div className="flex gap-4 text-sm text-gray-500">

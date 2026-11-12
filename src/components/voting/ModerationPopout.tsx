@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { VoteResults } from "@/components/voting/VoteResults";
+import { RankingParticipationPanel } from "@/components/voting/RankingParticipationPanel";
 import { LoopRoundControls } from "@/components/voting/LoopRoundControls";
 import { LoopRoundEditor } from "@/components/voting/LoopRoundEditor";
 import { LoopRoundTabs } from "@/components/voting/LoopRoundTabs";
@@ -332,10 +333,12 @@ const ProposalEditorPanel: React.FC<{
 
 export const ModerationPopout: React.FC = () => {
   const t = getVotingStrings();
+  const { t: tt } = useTranslation();
   const { token } = useParams<{ token: string }>();
   const { vote, moderator, isLoading, error } = useModeratorToken(token || null);
-  const [activeTab, setActiveTab] = React.useState<"edit" | "results">("edit");
+  const [activeTab, setActiveTab] = React.useState<"edit" | "results" | "participation">("edit");
   const isConsentLoop = vote?.config.mode === "CONSENT_LOOP";
+  const isComparative = vote?.config.mode === "COMPARATIVE_PRIORITIZATION";
 
   if (isLoading) {
     return (
@@ -412,12 +415,15 @@ export const ModerationPopout: React.FC = () => {
 
       <main className="max-w-4xl mx-auto p-4">
         <div className="mb-4">
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "edit" | "results")}>
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "edit" | "results" | "participation")}>
             <TabsList>
               <TabsTrigger value="edit">
             {isConsentLoop ? t.labels.rounds : t.labels.proposals}
               </TabsTrigger>
               <TabsTrigger value="results">{t.labels.results}</TabsTrigger>
+              {isComparative && (
+                <TabsTrigger value="participation">{tt("voting.comparative.participation")}</TabsTrigger>
+              )}
             </TabsList>
             <TabsContent value="edit">
               <ProposalEditorPanel
@@ -428,6 +434,15 @@ export const ModerationPopout: React.FC = () => {
             <TabsContent value="results">
               <VoteResults vote={vote} />
             </TabsContent>
+            {isComparative && (
+              <TabsContent value="participation">
+                <RankingParticipationPanel
+                  voteId={vote.id}
+                  ownerId={vote.ownerId}
+                  moderatorToken={token}
+                />
+              </TabsContent>
+            )}
           </Tabs>
         </div>
       </main>

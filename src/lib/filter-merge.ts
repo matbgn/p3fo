@@ -1,5 +1,5 @@
 import type { Filters } from '@/components/FilterControls'
-import type { TriageStatus, Category } from '@/hooks/useTasks'
+import type { TriageStatus, Category, Task } from '@/hooks/useTasks'
 
 export type ViewFilterOverrides = {
   excludeStatuses?: TriageStatus[]
@@ -66,6 +66,64 @@ export function mergeViewFilters(
   }
 
   return result
+}
+
+export type TaskFilterMatchOptions = {
+  searchComments?: boolean
+}
+
+export function taskMatchesFilters(
+  task: Task,
+  filters: Filters,
+  options: TaskFilterMatchOptions = {}
+): boolean {
+  if (filters.searchText?.trim()) {
+    const searchText = filters.searchText.toLowerCase()
+    const matchesTitle = task.title.toLowerCase().includes(searchText)
+    const matchesComment =
+      options.searchComments && Boolean(task.comment?.toLowerCase().includes(searchText))
+    if (!matchesTitle && !matchesComment) return false
+  }
+
+  if (filters.showUrgent && !task.urgent) return false
+  if (filters.showImpact && !task.impact) return false
+  if (filters.showMajorIncident && !task.majorIncident) return false
+  if (filters.showSprintTarget && !task.sprintTarget) return false
+
+  if (
+    filters.difficulty &&
+    filters.difficulty.length > 0 &&
+    !filters.difficulty.includes(task.difficulty)
+  ) {
+    return false
+  }
+
+  if (
+    filters.category &&
+    filters.category.length > 0 &&
+    task.category &&
+    !filters.category.includes(task.category)
+  ) {
+    return false
+  }
+
+  if (
+    filters.status &&
+    filters.status.length > 0 &&
+    !filters.status.includes(task.triageStatus)
+  ) {
+    return false
+  }
+
+  if (filters.selectedUserId) {
+    if (filters.selectedUserId === 'UNASSIGNED') {
+      if (task.userId && task.userId !== 'unassigned') return false
+    } else if (task.userId !== filters.selectedUserId) {
+      return false
+    }
+  }
+
+  return true
 }
 
 export function validateFilters(stored: unknown): Filters {

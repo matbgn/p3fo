@@ -1,5 +1,7 @@
 // Database client interface and factory
-import { TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, FertilizationBoardEntity, DreamBoardEntity, SalaryBoardEntity, CircleEntity, ReminderEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from '../../src/lib/persistence-types.js';
+import { TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, FertilizationBoardEntity, DreamBoardEntity, SalaryBoardEntity, CircleEntity, ReminderEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteRankingSubmission, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from '../../src/lib/persistence-types.js';
+import type { VoteRankingBallot } from '../../src/lib/persistence-types.js';
+import type { BallotParticipationStat } from '../../src/lib/vote-ranking.js';
 import type { SprintStateEntity } from '../../src/lib/sprint-types.js';
 import { applyTemporalMirror } from '../../mcp-server/src/task-temporal.js';
 
@@ -158,6 +160,52 @@ export interface DbClient {
   createVoteResponse(voteId: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity>;
   deleteVoteResponse(voteId: string, voterToken: string, proposalId: string | null, loopId?: string | null): Promise<void>;
   importVoteResponses(items: VoteResponseEntity[]): Promise<void>;
+
+  // Comparative prioritization ballots
+  getVoteRankingSubmissions(voteId: string): Promise<VoteRankingSubmission[]>;
+  getVoteRankingSubmission(voteId: string, voterToken: string): Promise<VoteRankingSubmission | null>;
+  /**
+   * Create or update the ballot row for `(voteId, voterToken)`. Fields left
+   * `undefined` keep their stored value, so an autosave that omits `submitted`
+   * can never erase a previously submitted ballot.
+   */
+  upsertVoteRankingSubmission(
+    voteId: string,
+    patch: {
+      voterToken: string;
+      userId?: string | null;
+      displayName?: string | null;
+      draft?: VoteRankingBallot | null;
+      draftUpdatedAt?: string | null;
+      submitted?: VoteRankingBallot | null;
+      submittedAt?: string | null;
+      lastSeenAt?: string;
+    },
+  ): Promise<VoteRankingSubmission>;
+  deleteVoteRankingSubmission(voteId: string, voterToken: string): Promise<void>;
+  /** Only rows carrying a submitted ballot; draft payloads are not loaded. */
+  getVoteRankingSubmittedBallots(voteId: string): Promise<VoteRankingSubmission[]>;
+  /** Count submitted ballots without loading any ballot payload. */
+  countVoteRankingSubmittedBallots(voteId: string): Promise<number>;
+  /** Lean participation projection that avoids loading full ballot payloads. */
+  getVoteRankingParticipationStats(voteId: string): Promise<BallotParticipationStat[]>;
+  /**
+   * Cheap existence check for stored participant identities. Callers use it to
+   * decide whether an identity scrub is needed without a state transition, so a
+   * failed scrub is repaired by the next save instead of never running again.
+   */
+  hasVoteRankingSubmissionIdentities(voteId: string): Promise<boolean>;
+  /** Null out stored participant identities after anonymity is switched on. */
+  scrubVoteRankingSubmissionIdentities(voteId: string): Promise<void>;
+  /**
+   * Import ballots. When `replaceVoteIds` is provided, ballots for those votes
+   * are deleted before inserting so a restore replaces rather than merges; the
+   * list is expected to cover every vote the backup represents. In-progress
+   * drafts are preserved, because a redacted backup cannot contain them and
+   * deleting them would lose data the restore cannot put back. An empty array
+   * is a no-op, never an unscoped wipe.
+   */
+  importVoteRankingSubmissions(items: VoteRankingSubmission[], replaceVoteIds?: string[]): Promise<void>;
 
   // Vote loops (CONSENT_LOOP)
   getVoteLoops(voteId: string): Promise<VoteLoop[]>;

@@ -19,13 +19,13 @@ import { FocusModeBar } from './planView/FocusModeBar';
 import { useFocusMode } from '@/hooks/useFocusMode';
 import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, CircleDot, Flame, GripHorizontal, Columns3, CalendarRange } from 'lucide-react';
 import type { Filters } from './FilterControls';
-import { loadFiltersFromSessionStorage } from '@/lib/filter-storage';
+import { loadFiltersFromSessionStorage, subscribeToFilterChanges } from '@/lib/filter-storage';
 import { addDays, addDaysToKey, addWeeks, combineDateKeyAndTime, isoWeekNumber, normalizeDueTimestamp, parseDateKey, startOfDay, startOfWeek, toDateKey } from '@/lib/planner/dates';
 import { parseSmartTime } from '@/lib/planner/smart-time';
 import { isModuleEffectivelyDisabled } from '@/lib/persistence-types';
 import { dueOffsetForSeries, expandSeriesForRange, isOccurrence, isSeriesTemplate } from '@/lib/recurrence/engine';
 import { formatDateRangeTitle, formatMonthTitle, formatWeekNumber, formatWeekSpan } from '@/lib/planner/format';
-import { getDefaultFilters, validateFilters, mergeViewFilters } from '@/lib/filter-merge';
+import { getDefaultFilters, validateFilters, mergeViewFilters, taskMatchesFilters } from '@/lib/filter-merge';
 import { taskColorBar } from '@/lib/planner/colors';
 import { cn } from '@/lib/utils';
 
@@ -65,52 +65,7 @@ function resolveLayout(
 }
 
 function matchesDisplayFilters(task: Task, filters: Filters): boolean {
-  if (filters.searchText?.trim()) {
-    const searchText = filters.searchText.toLowerCase();
-    if (!task.title.toLowerCase().includes(searchText)) {
-      return false;
-    }
-  }
-
-  if (filters.showUrgent && !task.urgent) return false;
-  if (filters.showImpact && !task.impact) return false;
-  if (filters.showMajorIncident && !task.majorIncident) return false;
-  if (filters.showSprintTarget && !task.sprintTarget) return false;
-
-  if (
-    filters.difficulty &&
-    filters.difficulty.length > 0 &&
-    !filters.difficulty.includes(task.difficulty)
-  ) {
-    return false;
-  }
-
-  if (
-    filters.category &&
-    filters.category.length > 0 &&
-    task.category &&
-    !filters.category.includes(task.category)
-  ) {
-    return false;
-  }
-
-  if (
-    filters.status &&
-    filters.status.length > 0 &&
-    !filters.status.includes(task.triageStatus)
-  ) {
-    return false;
-  }
-
-  if (filters.selectedUserId) {
-    if (filters.selectedUserId === 'UNASSIGNED') {
-      if (task.userId && task.userId !== 'unassigned') return false;
-    } else if (task.userId !== filters.selectedUserId) {
-      return false;
-    }
-  }
-
-  return true;
+  return taskMatchesFilters(task, filters);
 }
 
 type ProgramViewProps = {
@@ -231,6 +186,10 @@ const ProgramView: React.FC<ProgramViewProps> = ({ focusHeaderRightContent }) =>
       }
     };
     load();
+
+    // This view stays mounted across view switches, so filter changes made in
+    // other views must be pushed in rather than read once at mount.
+    return subscribeToFilterChanges((next) => setStoredFilters(validateFilters(next)));
   }, []);
 
   const baseParentTasks = useMemo(() => {

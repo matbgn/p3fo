@@ -5,6 +5,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { AlertTriangle, CircleDot, Flag, GripVertical, Repeat } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TASK_COLOR_STYLES } from '@/lib/planner/colors';
 import type { Task } from '@/hooks/useTasks';
 import type { UserWithTrigram } from '@/context/UsersContext';
@@ -49,6 +50,23 @@ export const TaskRow = React.forwardRef<HTMLDivElement, TaskRowProps>(function T
   const user = task.userId ? users.find((candidate) => candidate.userId === task.userId) : undefined;
   const color = TASK_COLOR_STYLES[task.color ?? 'none'];
   const done = task.triageStatus === 'Done';
+
+  const titleRef = React.useRef<HTMLButtonElement>(null);
+  const [titleTooltipOpen, setTitleTooltipOpen] = React.useState(false);
+
+  const titleButton = (
+    <button
+      ref={titleRef}
+      type="button"
+      className={cn(
+        'min-w-0 flex-1 truncate text-left',
+        done && 'text-muted-foreground line-through',
+      )}
+      onClick={() => onOpen(task)}
+    >
+      {task.title}
+    </button>
+  );
 
   return (
     <div
@@ -99,16 +117,23 @@ export const TaskRow = React.forwardRef<HTMLDivElement, TaskRowProps>(function T
         </span>
       )}
 
-      <button
-        type="button"
-        className={cn(
-          'min-w-0 flex-1 truncate text-left',
-          done && 'text-muted-foreground line-through',
-        )}
-        onClick={() => onOpen(task)}
+      <Tooltip
+        open={titleTooltipOpen}
+        delayDuration={300}
+        onOpenChange={(next) => {
+          if (!next) {
+            setTitleTooltipOpen(false);
+            return;
+          }
+          const element = titleRef.current;
+          setTitleTooltipOpen(Boolean(element && element.scrollWidth > element.clientWidth));
+        }}
       >
-        {task.title}
-      </button>
+        <TooltipTrigger asChild>{titleButton}</TooltipTrigger>
+        <TooltipContent side="top" className="max-w-xs break-words">
+          {task.title}
+        </TooltipContent>
+      </Tooltip>
 
       {(task.recurrence || task.seriesId) && (
         <Repeat className="h-3 w-3 shrink-0 text-muted-foreground" aria-label={t('planner.recurring')} />

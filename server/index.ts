@@ -5,9 +5,10 @@ import cors from 'cors';
 import crypto from 'node:crypto';
 import { createDbClient } from './db/index.js';
 import { DbClient } from './db/index.js';
-import { VoteKind, VoteLoop, VoteModerator, VoteResponseEntity, PomodoroSession } from '../src/lib/persistence-types.js';
-import type { TaskEntity } from '../src/lib/persistence-types.js';
+import { VoteKind, VoteLoop, VoteModerator, VoteResponseEntity, VoteRankingSubmission, PomodoroSession } from '../src/lib/persistence-types.js';
+import type { TaskEntity, VoteRankingBallot, VoteEntity, VoteRankingResult } from '../src/lib/persistence-types.js';
 import type { SprintStateEntity } from '../src/lib/sprint-types.js';
+import { isVoteAnonymous, redactRankingSubmissionForBackup } from '../src/lib/vote-ranking.js';
 import {
   WHO5_QUESTIONS,
   applyClose,
@@ -25,6 +26,18 @@ import QRCode from 'qrcode';
 import { WebSocketServer } from 'ws';
 import { setupWSConnection, getYDoc } from 'y-websocket/bin/utils';
 import * as Y from 'yjs';
+
+import {
+  activeProposalIds,
+  areRankingResultsVisible,
+  buildVoteRankingResult,
+  computeBallotCoverage,
+  DEFAULT_RANKING_ENGINE,
+  deriveBallotParticipationFromStats,
+  MAX_RANKED_ITEMS,
+  resolveFinalizedWinner,
+  voteAllowsTies,
+} from '../src/lib/vote-ranking.js';
 
 const YJS_ROOM = 'p3fo-room';
 
@@ -102,7 +115,7 @@ const DB_SQLITE_FILE = process.env.P3FO_DB_SQLITE_FILE || './p3fo.db';
 app.use(compression({ threshold: 1024 }));
 app.use(cors({
   origin: true,
-  allowedHeaders: ['Content-Type', 'traceparent', 'tracestate', 'X-API-Key', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'traceparent', 'tracestate', 'X-API-Key', 'Authorization', 'X-Voter-Token', 'X-Moderator-Token'],
   exposedHeaders: ['traceparent', 'tracestate'],
 }));
 app.use(express.json({ limit: '10mb' }));
@@ -1198,6 +1211,29 @@ app.put('/api/votes/:id', async (req: Request, res: Response) => {
     if (!vote) {
       return res.status(404).json({ error: 'Vote not found' });
     }
+    // Turning anonymity on must also scrub identities captured while the vote
+    // was non-anonymous. The decision is state-based, not transition-based, and
+    // runs only after the anonymity change is persisted, so a failed update can
+    // never irreversibly destroy identities while the vote stays non-anonymous.
+    // Deriving it from the stored state means a failed scrub (or a crash between
+    // the two statements) is repaired by the next save instead of never running
+    // again, and the existence check keeps the table-wide scrub off the
+    // per-keystroke save path because it is false once identities are gone.
+    if (
+      isVoteAnonymous(vote.config) &&
+      (await db.hasVoteRankingSubmissionIdentities(vote.id))
+    ) {
+      try {
+        await db.scrubVoteRankingSubmissionIdentities(vote.id);
+      } catch (error: unknown) {
+        console.error('Error scrubbing vote ranking identities:', error);
+        const message = error instanceof Error ? error.message : String(error);
+        return res.status(500).json({
+          error: 'Vote was updated but ballot identities could not be scrubbed',
+          details: message,
+        });
+      }
+    }
     res.json(vote);
   } catch (error: unknown) {
     console.error('Error updating vote:', error);
@@ -1215,7 +1251,60 @@ app.post('/api/votes/:id/finalize', async (req: Request, res: Response) => {
     if (vote.config.kind !== 'decision') {
       return res.status(400).json({ error: 'Only decision votes can be finalized' });
     }
-    const outcome = req.body;
+
+    let outcome = req.body;
+    if (vote.config.mode === 'COMPARATIVE_PRIORITIZATION') {
+      // Finalizing requires naming the ranking's winner, but a hidden vote's
+      // results are not readable yet, so the moderator could not know it. The
+      // only way out of that dead end is to close the vote (results become
+      // visible) or to have opted into showing results before close.
+      if (!areRankingResultsVisible(vote)) {
+        return res.status(400).json({
+          error: 'Close the vote before finalizing so the ranking winner is available',
+        });
+      }
+      const submissions = await db.getVoteRankingSubmittedBallots(vote.id);
+      const ranking = getVoteRankingResult(vote, submissions);
+      if (!ranking || ranking.groups.length === 0) {
+        return res.status(400).json({ error: 'No submitted ballots to finalize' });
+      }
+      const topGroup = ranking.groups[0].proposalIds;
+      const allowTies = voteAllowsTies(vote.config);
+      const requestedWinner = typeof req.body?.winningProposalId === 'string'
+        ? req.body.winningProposalId
+        : null;
+
+      const resolution = resolveFinalizedWinner(topGroup, allowTies, requestedWinner);
+      if (resolution.error) {
+        return res.status(400).json({
+          error: resolution.error === 'tied-requires-tie'
+            ? 'Top group is tied; finalize as a tie or disable allowTies'
+            : 'Top group is tied; select one proposal from the top group',
+        });
+      }
+      // The client writes `summary` from its own selection, so persisting a
+      // server-derived winner that differs from that selection would store an
+      // outcome whose text contradicts `winningProposalId`. Require the
+      // moderator to confirm the ranking's winner instead of silently
+      // overriding the request (the dialog defaults to "tie").
+      if (resolution.winningProposalId !== requestedWinner) {
+        return res.status(400).json({
+          error: requestedWinner === null
+            ? 'The ranking has a winner; select it in the finalize dialog'
+            : 'The selected proposal is not the ranking winner',
+        });
+      }
+      const winningProposalId = resolution.winningProposalId;
+
+      outcome = {
+        ...req.body,
+        winningProposalId,
+        ranking,
+        finalizedAt: req.body?.finalizedAt || new Date().toISOString(),
+        finalizedByUserId: req.body?.finalizedByUserId || vote.ownerId,
+      };
+    }
+
     const finalized = await db.finalizeVote(req.params.id, outcome);
     res.json(finalized);
   } catch (error: unknown) {
@@ -1248,6 +1337,526 @@ app.post('/api/votes/:id/reset', async (req: Request, res: Response) => {
     console.error('Error resetting vote:', error);
     const message = error instanceof Error ? error.message : String(error);
     res.status(500).json({ error: 'Failed to reset vote', details: message });
+  }
+});
+
+async function findVoteByIdOrSlug(idOrSlug: string) {
+  return (await db.getVoteById(idOrSlug)) || (await db.getVoteBySlug(idOrSlug));
+}
+
+function requestToken(
+  req: Request,
+  header: string,
+  queryKey: string,
+): string | undefined {
+  // Prefer a custom header so bearer credentials do not land in access/proxy
+  // logs and browser history; keep the query form for older clients.
+  const headerValue = req.get(header);
+  if (headerValue) return headerValue;
+  const queryValue = req.query[queryKey];
+  return typeof queryValue === 'string' ? queryValue : undefined;
+}
+
+/**
+ * A `moderatorToken` is the only real secret in this codebase. `ownerId` is
+ * returned by the public vote endpoint and is not authentication, so live
+ * participation data (draft progress, last-seen, editing state) must require a
+ * moderator session. `ownerId` is therefore never honoured here: a public
+ * caller (the backup read included) only receives submitted ballots, and only
+ * once results are visible. Submitted-ballot backups must still be possible for
+ * votes that have no moderator yet, which is why the visibility rule rather
+ * than a credential unlocks the public read for locked votes.
+ */
+async function canModerateVote(req: Request, vote: { id: string }): Promise<boolean> {
+  const moderatorToken = requestToken(req, 'x-moderator-token', 'moderatorToken');
+  if (!moderatorToken) return false;
+  const resolved = await db.resolveVoteModeratorToken(moderatorToken);
+  return Boolean(resolved && resolved.vote.id === vote.id);
+}
+
+const RANKING_RESULT_CACHE_LIMIT = 32;
+const rankingResultCache = new Map<string, { signature: string; result: VoteRankingResult | null }>();
+
+function rankingSignature(vote: VoteEntity, submissions: VoteRankingSubmission[]): string {
+  let hash = 2166136261 >>> 0;
+  const feed = (text: string) => {
+    for (let i = 0; i < text.length; i++) {
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash, 16777619) >>> 0;
+    }
+  };
+  feed(vote.id);
+  for (const proposal of vote.proposals) {
+    feed(`${proposal.id}:${proposal.active ? 1 : 0}:${proposal.position};`);
+  }
+  for (const submission of submissions) {
+    if (!submission.submitted) continue;
+    // `submittedAt` is rewritten on every submit, so it versions the payload
+    // without hashing (potentially large) ballot JSON on each request.
+    feed(
+      `${submission.voterToken}:${submission.submittedAt ?? ''}:` +
+      `${submission.submitted.comparisons.length}:${submission.submitted.batchCount};`,
+    );
+  }
+  return hash.toString(36);
+}
+
+/**
+ * `estimatePartialRanking` is super-linear in the number of ranked proposals,
+ * so the same submission set must not be recomputed on every results request.
+ * Invalidate implicitly by hashing the inputs that affect the result.
+ */
+function getVoteRankingResult(
+  vote: VoteEntity,
+  submissions: VoteRankingSubmission[],
+): VoteRankingResult | null {
+  const signature = rankingSignature(vote, submissions);
+  const cached = rankingResultCache.get(vote.id);
+  if (cached && cached.signature === signature) return cached.result;
+  const result = buildVoteRankingResult(vote, submissions);
+  if (rankingResultCache.size >= RANKING_RESULT_CACHE_LIMIT) {
+    const oldest = rankingResultCache.keys().next().value;
+    if (oldest !== undefined) rankingResultCache.delete(oldest);
+  }
+  rankingResultCache.set(vote.id, { signature, result });
+  return result;
+}
+
+type RankingBallotShapeError =
+  | 'invalid-item-ids'
+  | 'too-few-item-ids'
+  | 'invalid-comparisons'
+  | 'invalid-comparison-entry'
+  | 'invalid-comparison-types'
+  | 'invalid-comparison-pair'
+  | 'invalid-comparison-winner';
+
+const RANKING_BALLOT_SHAPE_ERRORS: Record<RankingBallotShapeError, string> = {
+  'invalid-item-ids': 'itemIds must be an array of at most 100 ids',
+  'too-few-item-ids': 'At least two item ids are required',
+  'invalid-comparisons': 'comparisons must be an array of at most 20000 entries',
+  'invalid-comparison-entry': 'Invalid comparison entry',
+  'invalid-comparison-types': 'Comparison a, b and winner must be strings',
+  'invalid-comparison-pair': 'Comparison contains an invalid proposal pair',
+  'invalid-comparison-winner': 'Comparison winner must be one of the compared proposals',
+};
+
+/**
+ * Shared shape validation for the two ballot ingest paths (participant submit
+ * and backup import). Both must apply the same itemIds cap/stale-filter and the
+ * same a/b/winner comparison rules; only the surrounding requirements differ
+ * (status and a minimum item count when submitting, a required coverage summary
+ * on import). Error codes let each route keep its own message text.
+ */
+function sanitizeRankingBallotShape(
+  rawItemIds: unknown,
+  rawComparisons: unknown,
+  proposalIds: Set<string>,
+  options: { minItemIds?: number; requireStringItemIds?: boolean } = {},
+): {
+  itemIds?: string[];
+  comparisons?: VoteRankingBallot['comparisons'];
+  error?: RankingBallotShapeError;
+} {
+  if (!Array.isArray(rawItemIds) || rawItemIds.length > MAX_RANKED_ITEMS) {
+    return { error: 'invalid-item-ids' };
+  }
+  if (options.requireStringItemIds && !rawItemIds.every((id) => typeof id === 'string')) {
+    return { error: 'invalid-item-ids' };
+  }
+  // A ballot is a snapshot: a proposal can be removed from the vote while it is
+  // still OPEN, so an in-flight ballot may legitimately reference an id that no
+  // longer exists. Drop those stale references (aggregation already ignores
+  // them) instead of rejecting every subsequent autosave and submit.
+  const itemIds = Array.from(
+    new Set(rawItemIds.filter((id): id is string => typeof id === 'string')),
+  ).filter((id) => proposalIds.has(id));
+  if (options.minItemIds !== undefined && itemIds.length < options.minItemIds) {
+    return { error: 'too-few-item-ids' };
+  }
+  if (!Array.isArray(rawComparisons) || rawComparisons.length > 20000) {
+    return { error: 'invalid-comparisons' };
+  }
+
+  const comparisons: VoteRankingBallot['comparisons'] = [];
+  for (const raw of rawComparisons) {
+    if (!raw || typeof raw !== 'object') {
+      return { error: 'invalid-comparison-entry' };
+    }
+    const entry = raw as Record<string, unknown>;
+    const a = entry.a;
+    const b = entry.b;
+    const winner = entry.winner;
+    if (typeof a !== 'string' || typeof b !== 'string' || typeof winner !== 'string') {
+      return { error: 'invalid-comparison-types' };
+    }
+    if (a === b) {
+      return { error: 'invalid-comparison-pair' };
+    }
+    if (!proposalIds.has(a) || !proposalIds.has(b)) {
+      continue;
+    }
+    if (winner !== a && winner !== b) {
+      return { error: 'invalid-comparison-winner' };
+    }
+    comparisons.push({ a, b, winner });
+  }
+
+  return { itemIds, comparisons };
+}
+
+function validateRankingBallot(
+  vote: VoteEntity,
+  body: Record<string, unknown>,
+): { ballot?: VoteRankingBallot; status?: 'in_progress' | 'submitted'; error?: string } {
+  const status = body.status;
+  if (status !== 'in_progress' && status !== 'submitted') {
+    return { error: 'status must be in_progress or submitted' };
+  }
+  if (typeof body.voterToken !== 'string' || body.voterToken.trim() === '') {
+    return { error: 'voterToken is required' };
+  }
+  const proposalIds = new Set(vote.proposals.map((proposal) => proposal.id));
+  const shape = sanitizeRankingBallotShape(body.itemIds, body.comparisons, proposalIds, {
+    minItemIds: 2,
+  });
+  if (shape.error) {
+    return { error: RANKING_BALLOT_SHAPE_ERRORS[shape.error] };
+  }
+  const itemIds = shape.itemIds!;
+  const comparisons = shape.comparisons!;
+
+  const engine = vote.config.rankingEngine ?? DEFAULT_RANKING_ENGINE;
+  if (body.engine !== undefined && body.engine !== engine) {
+    return { error: `This vote uses ${engine}` };
+  }
+
+  // Coverage must be measured against the server-known active proposal set, not
+  // the client-supplied itemIds, otherwise a ballot can inflate its reported
+  // coverage by declaring a tiny denominator. Reuse `activeProposalIds` so this
+  // denominator cannot drift from the set result aggregation ranks.
+  const activeIds = activeProposalIds(vote);
+  const denominatorIds = activeIds.length >= 2 ? activeIds : itemIds;
+
+  return {
+    status,
+    ballot: {
+      itemIds,
+      comparisons,
+      batchCount: Number.isFinite(body.batchCount) ? Number(body.batchCount) : 0,
+      coverage: computeBallotCoverage({ itemIds: denominatorIds, comparisons }),
+      confidencePercent: Math.max(0, Math.min(100, Number(body.confidencePercent) || 0)),
+      stopReason: typeof body.stopReason === 'string' ? body.stopReason : null,
+      engine,
+      engineVersion: typeof body.engineVersion === 'string' ? body.engineVersion : 'unknown',
+    },
+  };
+}
+
+// Comparative prioritization ballots (participant self-read + bulk backup read)
+app.get('/api/votes/:idOrSlug/ranking-submissions', async (req: Request, res: Response) => {
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) return res.status(404).json({ error: 'Vote not found' });
+    // The credential travels in a header, so the response body varies by that
+    // header even though the URL does not. Without no-store a shared cache
+    // could serve one participant's ballot to a different voter requesting the
+    // same URL.
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Vary', 'X-Voter-Token, X-Moderator-Token');
+    const voterToken = requestToken(req, 'x-voter-token', 'voterToken');
+    if (voterToken) {
+      // A participant reads back their own ballot with their bearer token.
+      const submission = await db.getVoteRankingSubmission(vote.id, voterToken);
+      // Do not echo the bearer credential back in the body; the caller already
+      // holds it and the ballot payload is all it needs. `scope` proves the
+      // header was honored so a client can distinguish this own-ballot read
+      // from the tokenless bulk branch (e.g. an older server during rollout).
+      return res.json({
+        scope: 'self',
+        submissions: submission ? [{ ...submission, voterToken: undefined }] : [],
+      });
+    }
+    // Bulk read: the workspace backup path. Never expose the participant
+    // credential and never leak per-ballot identities on anonymous votes; an
+    // absent `isAnonymous` flag means anonymous, matching the rest of the app.
+    // A hidden (OPEN) vote's ballots are its results, so they must not be
+    // readable through a public value: only a moderator session may read them
+    // before the results are visible, exactly like `/ranking-results`. Drafts
+    // are live participation data and therefore also moderator-only; the public
+    // path receives submitted ballots only and skips loading draft payloads.
+    const isModerator = await canModerateVote(req, vote);
+    if (!isModerator && !areRankingResultsVisible(vote)) {
+      return res.json({ submissions: [] });
+    }
+    const submissions = isModerator
+      ? await db.getVoteRankingSubmissions(vote.id)
+      : await db.getVoteRankingSubmittedBallots(vote.id);
+    const anonymous = isVoteAnonymous(vote.config);
+    res.json({
+      submissions: submissions.map((submission) =>
+        redactRankingSubmissionForBackup(submission, anonymous),
+      ),
+    });
+  } catch (error: unknown) {
+    console.error('Error fetching ranking submissions:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to fetch ranking submissions', details: message });
+  }
+});
+
+app.post('/api/votes/:idOrSlug/ranking-submissions', async (req: Request, res: Response) => {
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) return res.status(404).json({ error: 'Vote not found' });
+    if (vote.config.mode !== 'COMPARATIVE_PRIORITIZATION') {
+      return res.status(400).json({ error: 'Vote is not in comparative prioritization mode' });
+    }
+    if (vote.config.phase !== 'OPEN') {
+      return res.status(400).json({ error: 'Vote is not open for ballots' });
+    }
+
+    const validation = validateRankingBallot(vote, req.body ?? {});
+    if (!validation.ballot || !validation.status) {
+      return res.status(400).json({ error: validation.error ?? 'Invalid ballot' });
+    }
+
+    // Only a vote that locks ballots needs the stored submission. The default
+    // allows changes, and loading the full ballot on every autosave is costly.
+    if (vote.config.allowVoteChangeUntilClose === false) {
+      const existing = await db.getVoteRankingSubmission(vote.id, req.body.voterToken);
+      if (existing?.submitted) {
+        return res.status(400).json({ error: 'Ballot already submitted' });
+      }
+    }
+
+    const now = new Date().toISOString();
+    const isAnonymous = isVoteAnonymous(vote.config);
+    const submission = await db.upsertVoteRankingSubmission(vote.id, {
+      voterToken: req.body.voterToken,
+      // Anonymous votes must not persist who cast the ballot.
+      userId: isAnonymous ? null : (typeof req.body.userId === 'string' ? req.body.userId : null),
+      displayName: isAnonymous
+        ? null
+        : (typeof req.body.displayName === 'string' ? req.body.displayName : null),
+      draft: validation.ballot,
+      draftUpdatedAt: now,
+      submitted: validation.status === 'submitted' ? validation.ballot : undefined,
+      submittedAt: validation.status === 'submitted' ? now : undefined,
+      lastSeenAt: now,
+    });
+    // The client already holds the ballot it just uploaded; echo only the
+    // canonical metadata instead of the full (up to 20k comparison) payload.
+    res.status(201).json({
+      id: submission.id,
+      voteId: submission.voteId,
+      submitted: submission.submitted !== null,
+      submittedAt: submission.submittedAt,
+      draftUpdatedAt: submission.draftUpdatedAt,
+      lastSeenAt: submission.lastSeenAt,
+    });
+  } catch (error: unknown) {
+    console.error('Error upserting ranking submission:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to save ranking ballot', details: message });
+  }
+});
+
+app.delete('/api/votes/:idOrSlug/ranking-submissions', async (req: Request, res: Response) => {
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) return res.status(404).json({ error: 'Vote not found' });
+    const voterToken = requestToken(req, 'x-voter-token', 'voterToken');
+    if (!voterToken) return res.status(400).json({ error: 'voterToken is required' });
+    if (vote.config.phase !== 'OPEN') {
+      return res.status(400).json({ error: 'Vote is not open for ballots' });
+    }
+    // Mirror the submit-side lock: a submitted ballot cannot be withdrawn when
+    // the vote disallows changes until close.
+    const existing = await db.getVoteRankingSubmission(vote.id, voterToken);
+    if (existing?.submitted && vote.config.allowVoteChangeUntilClose === false) {
+      return res.status(400).json({ error: 'Ballot already submitted' });
+    }
+    await db.deleteVoteRankingSubmission(vote.id, voterToken);
+    res.status(204).send();
+  } catch (error: unknown) {
+    console.error('Error deleting ranking submission:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to delete ranking ballot', details: message });
+  }
+});
+
+app.get('/api/votes/:idOrSlug/ranking-participation', async (req: Request, res: Response) => {
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) return res.status(404).json({ error: 'Vote not found' });
+    // Moderator-authenticated payload selected by a header, not the URL: keep
+    // shared caches from returning one facilitator's response to another.
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Vary', 'X-Moderator-Token');
+    if (!(await canModerateVote(req, vote))) {
+      return res.status(403).json({ error: 'Facilitator access required' });
+    }
+    // Read only the summary fields: this endpoint is polled every few seconds and
+    // deriving participation does not need each ballot's full comparison JSON.
+    const stats = await db.getVoteRankingParticipationStats(vote.id);
+    res.json(deriveBallotParticipationFromStats(vote.id, stats, isVoteAnonymous(vote.config)));
+  } catch (error: unknown) {
+    console.error('Error fetching ranking participation:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to fetch ranking participation', details: message });
+  }
+});
+
+app.get('/api/votes/:idOrSlug/ranking-results', async (req: Request, res: Response) => {
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) return res.status(404).json({ error: 'Vote not found' });
+    if (!areRankingResultsVisible(vote)) {
+      // Hidden results only need a participation count, not every ballot's
+      // full comparison JSON (which can hold up to 20,000 entries each).
+      const submittedCount = await db.countVoteRankingSubmittedBallots(vote.id);
+      return res.json({ hidden: true, participantCount: submittedCount, result: null });
+    }
+    // Aggregation consumes only submitted ballots, so skip draft payloads
+    // entirely instead of fetching, deserializing and discarding them.
+    const submissions = await db.getVoteRankingSubmittedBallots(vote.id);
+    const submittedCount = submissions.length;
+    const result = getVoteRankingResult(vote, submissions);
+    res.json({ hidden: false, participantCount: submittedCount, result });
+  } catch (error: unknown) {
+    console.error('Error computing ranking results:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to compute ranking results', details: message });
+  }
+});
+
+app.post('/api/vote-ranking-submissions/import', express.json({ limit: '10mb' }), async (req: Request, res: Response) => {
+  try {
+    // The restore client sends `{ items, replaceVoteIds }` so a backup replaces
+    // the covered votes' ballots instead of merging; a bare array is still
+    // accepted for compatibility and is treated as a plain upsert.
+    const body = req.body as
+      | VoteRankingSubmission[]
+      | { items?: VoteRankingSubmission[]; replaceVoteIds?: string[] };
+    const rawItems = Array.isArray(body) ? body : body?.items;
+    if (!Array.isArray(rawItems)) {
+      return res.status(400).json({ error: 'Expected an array of ranking submissions' });
+    }
+    if (rawItems.length > 10000) {
+      return res.status(413).json({ error: 'Too many ranking submissions in one import' });
+    }
+    const replaceVoteIds = Array.isArray(body) ? undefined : body?.replaceVoteIds;
+    if (replaceVoteIds !== undefined && !Array.isArray(replaceVoteIds)) {
+      return res.status(400).json({ error: 'replaceVoteIds must be an array' });
+    }
+    if (replaceVoteIds !== undefined && replaceVoteIds.length > 10000) {
+      return res.status(413).json({ error: 'Too many replaceVoteIds in one import' });
+    }
+    // Restore data bypasses the participant submit route, so validate the
+    // payload shape here to stop malformed or unbounded rows reaching the DB.
+    // Restore runs after votes are imported, so resolve each referenced vote and
+    // reject ballots for unknown votes or proposals instead of persisting rows
+    // that could be used to tamper with an unrelated vote. Load the vote set once
+    // instead of awaiting a lookup per item/replace id: both arrays are
+    // user-controlled and a per-id await is an unbounded N+1.
+    const votesById = new Map((await db.getVotes()).map((vote) => [vote.id, vote]));
+    const resolveVote = (voteId: string): VoteEntity | null => votesById.get(voteId) ?? null;
+    const items: VoteRankingSubmission[] = [];
+    for (const raw of rawItems) {
+      if (!raw || typeof raw !== 'object') {
+        return res.status(400).json({ error: 'Invalid ranking submission entry' });
+      }
+      const item = raw as Partial<VoteRankingSubmission>;
+      if (
+        typeof item.id !== 'string' ||
+        typeof item.voteId !== 'string' ||
+        typeof item.lastSeenAt !== 'string'
+      ) {
+        return res.status(400).json({ error: 'Ranking submission is missing id, voteId or lastSeenAt' });
+      }
+      const vote = resolveVote(item.voteId);
+      if (!vote) {
+        return res.status(400).json({ error: 'Ranking submission references an unknown vote' });
+      }
+      // Ballots may exist for a vote that has since left COMPARATIVE_PRIORITIZATION
+      // mode, and the backup exports every vote so a restore cannot delete
+      // omitted ballots. Accept those rows instead of failing the whole restore;
+      // they stay inert until the vote returns to ranking mode.
+      const proposalIds = new Set(vote.proposals.map((proposal) => proposal.id));
+      for (const ballot of [item.draft, item.submitted]) {
+        if (!ballot) continue;
+        // Same shape rules as the participant submit route. A backup can
+        // legitimately reference a proposal that was deactivated or removed
+        // after the ballot was cast, so stale references are clamped out
+        // (aggregation already ignores them) instead of rejecting the restore.
+        const shape = sanitizeRankingBallotShape(
+          ballot.itemIds,
+          ballot.comparisons,
+          proposalIds,
+          { requireStringItemIds: true },
+        );
+        if (shape.error) {
+          const error = shape.error === 'invalid-item-ids'
+            ? 'Imported ballot has invalid itemIds'
+            : shape.error === 'invalid-comparisons'
+              ? 'Imported ballot has invalid comparisons'
+              : 'Imported ballot has an invalid comparison';
+          return res.status(400).json({ error });
+        }
+        ballot.itemIds = shape.itemIds!;
+        ballot.comparisons = shape.comparisons!;
+        // Downstream participation/aggregation code assumes a numeric coverage
+        // percentage; reject payloads that would persist a malformed row.
+        if (
+          !ballot.coverage ||
+          typeof ballot.coverage.percent !== 'number' ||
+          !Number.isFinite(ballot.coverage.percent)
+        ) {
+          return res.status(400).json({ error: 'Imported ballot has invalid coverage' });
+        }
+        // The Postgres participation projection casts confidencePercent to
+        // double precision, so persist only the same finite 0-100 value the
+        // participant submit path stores; a string/object here would break
+        // every participation poll for the vote.
+        const confidencePercent = Number(ballot.confidencePercent);
+        ballot.confidencePercent = Number.isFinite(confidencePercent)
+          ? Math.max(0, Math.min(100, confidencePercent))
+          : 0;
+      }
+      // Import bypasses the participant submit route, so apply the same
+      // anonymity rule: an anonymous vote must never persist who voted, even if
+      // a (possibly tampered) backup supplies identities.
+      if (isVoteAnonymous(vote.config)) {
+        item.userId = null;
+        item.displayName = null;
+      }
+      items.push(item as VoteRankingSubmission);
+    }
+    // The restore client owns the decision of which votes it could read: it
+    // omits votes whose ballots the matching backup could not contain (see
+    // `incompleteRankingVoteIds`), so a complete backup still converges instead
+    // of leaving stale ballots behind. The server only validates that the scope
+    // references known votes; it cannot infer readability from result
+    // visibility because a moderator-token backup includes hidden votes.
+    let effectiveReplaceVoteIds = replaceVoteIds;
+    if (replaceVoteIds && replaceVoteIds.length > 0) {
+      const kept: string[] = [];
+      for (const voteId of replaceVoteIds) {
+        if (typeof voteId !== 'string') {
+          return res.status(400).json({ error: 'replaceVoteIds must contain vote ids' });
+        }
+        if (!resolveVote(voteId)) continue;
+        kept.push(voteId);
+      }
+      effectiveReplaceVoteIds = kept;
+    }
+    await db.importVoteRankingSubmissions(items, effectiveReplaceVoteIds);
+    res.status(204).send();
+  } catch (error: unknown) {
+    console.error('Error importing ranking submissions:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to import ranking submissions', details: message });
   }
 });
 
@@ -1300,6 +1909,8 @@ app.post('/api/votes/:idOrSlug/responses', async (req: Request, res: Response) =
           valueError = 'CONSENT_LOOP votes must be an integer between -1 and 5';
         }
         break;
+      case 'COMPARATIVE_PRIORITIZATION':
+        return res.status(400).json({ error: 'Use the ranking-submissions endpoint for this vote' });
       default:
         valueError = `Unknown vote mode: ${mode}`;
     }
@@ -1360,7 +1971,7 @@ app.get('/api/votes/:idOrSlug/results', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Vote not found' });
     }
     const responses = await db.getVoteResponses(vote.id);
-    const safeResponses = vote.config.isAnonymous
+    const safeResponses = isVoteAnonymous(vote.config)
       ? responses.map(r => ({ ...r, userId: null }))
       : responses;
     res.json({ vote, responses: safeResponses, totalVotes: responses.length });

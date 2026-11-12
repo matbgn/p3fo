@@ -1,4 +1,4 @@
-import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, SalaryBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from './persistence-types';
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, SalaryBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteRankingSubmission, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from './persistence-types';
 import type { SprintStateEntity, SprintOutcome } from './sprint-types';
 import { DEFAULT_TASKS_INITIALIZED_KEY } from '@/hooks/useTasks';
 
@@ -570,6 +570,102 @@ export class HttpApiPersistence implements PersistenceAdapter {
       method: 'POST',
       body: JSON.stringify(items),
     });
+  }
+
+  // Comparative prioritization ballots
+  async listVoteRankingSubmissions(
+    voteId: string,
+    ownerId?: string,
+    moderatorToken?: string,
+  ): Promise<VoteRankingSubmission[]> {
+    const params = new URLSearchParams();
+    const resolvedOwnerId = ownerId ?? (typeof localStorage !== 'undefined'
+      ? localStorage.getItem('p3fo_user_id')
+      : null);
+    if (resolvedOwnerId) params.set('ownerId', resolvedOwnerId);
+    if (moderatorToken) params.set('moderatorToken', moderatorToken);
+    const query = params.toString();
+    const response = await this.makeRequest(
+      `/api/votes/${voteId}/ranking-submissions${query ? `?${query}` : ''}`,
+    ) as { submissions?: VoteRankingSubmission[] };
+    return response.submissions || [];
+  }
+
+  async importVoteRankingSubmissions(
+    items: VoteRankingSubmission[],
+    replaceVoteIds?: string[],
+  ): Promise<void> {
+    // Ranking ballots can hold tens of thousands of comparisons, and the server
+    // caps each request body at 10 MB. Send one request per vote so the server
+    // can delete and re-insert that vote's ballots inside a single transaction.
+    // Batched multi-vote requests would delete every vote's ballots up front and
+    // then commit only the first batch, so a later failure would permanently
+    // erase the ballots that the remaining batches were supposed to restore.
+    const MAX_REQUEST_BYTES = 9 * 1024 * 1024; // stay under the server's 10 MB cap
+    // Only a non-empty `replaceVoteIds` scopes a restore, matching the DB
+    // clients and the documented contract: an empty array is a no-op and never
+    // deletes ballots. The delete scope is exactly `replaceVoteIds`, which must
+    // already cover every vote in the backup, including zero-ballot votes.
+    const hasScope = Array.isArray(replaceVoteIds) && replaceVoteIds.length > 0;
+    const scopeSet = hasScope ? new Set(replaceVoteIds) : null;
+
+    // Serialize each ballot once and reuse the fragment for sizing and the body.
+    const serializedByVote = new Map<string, string[]>();
+    for (const item of items) {
+      const list = serializedByVote.get(item.voteId) ?? [];
+      list.push(JSON.stringify(item));
+      serializedByVote.set(item.voteId, list);
+    }
+
+    // Build every mutating body up front so the whole restore can be
+    // size-checked before any request is issued. Sizing uses UTF-8 bytes (not
+    // JS string length) so non-ASCII ballots cannot slip past the server's
+    // 10 MB body cap. `replaceVoteIds` is only included when the caller scoped
+    // the restore; a bare `{ items }` body is a plain upsert.
+    const encoder = new TextEncoder();
+    const bodyByVote = new Map<string, string>();
+    for (const [voteId, fragments] of serializedByVote) {
+      const scope = scopeSet?.has(voteId)
+        ? `,"replaceVoteIds":${JSON.stringify([voteId])}`
+        : '';
+      bodyByVote.set(voteId, `{"items":[${fragments.join(',')}]${scope}}`);
+    }
+    for (const [voteId, body] of bodyByVote) {
+      const bytes = encoder.encode(body).length;
+      if (bytes > MAX_REQUEST_BYTES) {
+        throw new Error(
+          `Ranking ballots for vote ${voteId} are ~${Math.ceil(bytes / (1024 * 1024))} MB, ` +
+          `exceeding the ${Math.floor(MAX_REQUEST_BYTES / (1024 * 1024))} MB restore request limit. ` +
+          'Nothing was deleted; split the vote or raise the server limit before restoring.',
+        );
+      }
+    }
+
+    const send = async (body: string): Promise<void> => {
+      await this.makeRequest('/api/vote-ranking-submissions/import', {
+        method: 'POST',
+        body,
+      });
+    };
+
+    // Restore votes that have ballots first, then clear the covered votes that
+    // have none last. If a per-vote request fails, the zero-ballot votes still
+    // hold their previous (if stale) ballots instead of being erased, so a
+    // failed restore never destroys data; re-running it converges. Scoped to
+    // the covered votes; never an unscoped delete, so unrelated votes are left
+    // intact.
+    for (const body of bodyByVote.values()) {
+      await send(body);
+    }
+
+    if (scopeSet) {
+      const zeroBallotVoteIds = Array.from(scopeSet).filter(id => !serializedByVote.has(id));
+      if (zeroBallotVoteIds.length > 0) {
+        await send(
+          `{"items":[],"replaceVoteIds":${JSON.stringify(zeroBallotVoteIds)}}`,
+        );
+      }
+    }
   }
 
   // Vote loops

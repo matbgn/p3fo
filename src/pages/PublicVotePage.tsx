@@ -1,5 +1,7 @@
 import * as React from "react";
 import { useTranslation } from "react-i18next";
+import { ComparativeVotePage } from './ComparativeVotePage';
+import { VoteOutcomeBanner } from '@/components/voting/VoteResults';
 import { useParams } from "react-router-dom";
 import { VoteEntity, VoteResponseEntity, VoteProposal, VoteLoop } from "@/lib/persistence-types";
 import { MJ_SCALE } from "@/components/planView/constants";
@@ -19,7 +21,6 @@ import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
 import { syncResponsesToYjs } from "@/hooks/useVotes";
 import {
   Vote,
-  Trophy,
   Clock,
   Users,
   Link2,
@@ -271,7 +272,7 @@ const PublicVotePage: React.FC = () => {
         yVoteProposals.set(v.id, v);
       }
 
-      const r = await fetchResults(slug);
+      const r = v.config.mode === "COMPARATIVE_PRIORITIZATION" ? null : await fetchResults(slug);
       if (!mounted) return;
       if (r) {
         setResponses(r.responses);
@@ -348,7 +349,15 @@ const PublicVotePage: React.FC = () => {
       yVoteLoops.observe(yjsLoopHandler);
     } else {
       const interval = setInterval(async () => {
-        const [r, v] = await Promise.all([fetchResults(slug!), fetchVote(slug!)]);
+        // Comparative votes store ranking ballots, not vote responses; skip the
+        // responses request so every public viewer does not repeatedly fetch and
+        // discard a payload the comparative page never reads.
+        const skipResponses =
+          voteRef.current?.config.mode === "COMPARATIVE_PRIORITIZATION";
+        const [v, r] = await Promise.all([
+          fetchVote(slug!),
+          skipResponses ? Promise.resolve(null) : fetchResults(slug!),
+        ]);
         if (!mounted) return;
         if (r) setResponses(r.responses);
         if (v) setVote(v);
@@ -557,6 +566,16 @@ const PublicVotePage: React.FC = () => {
     );
   }
 
+  if (vote.config.mode === "COMPARATIVE_PRIORITIZATION") {
+    return (
+      <ComparativeVotePage
+        vote={vote}
+        slug={slug || vote.slug}
+        voterToken={voterToken}
+      />
+    );
+  }
+
   const activeProposals = vote.proposals.filter((p) => p.active);
   const totalVoters = new Set(responses.map((r) => r.voterToken)).size;
 
@@ -578,20 +597,8 @@ const PublicVotePage: React.FC = () => {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto px-4 py-8">
         {isFinalized && vote.outcome && (
-          <div className="border-2 border-blue-500 rounded-lg p-4 bg-blue-50 mb-6">
-            <div className="flex items-center gap-2 mb-2">
-              <Trophy className="w-5 h-5 text-blue-600" />
-              <span className="font-semibold text-blue-900">{ts.labels.outcome}</span>
-            </div>
-            <p className="text-sm text-blue-800">{vote.outcome.summary}</p>
-            {vote.outcome.signature && (
-              <p className="text-sm text-blue-700 mt-1 italic">
-                &ldquo;{vote.outcome.signature}&rdquo;
-              </p>
-            )}
-            <p className="text-xs text-blue-500 mt-2">
-              {tt("voting.finalizedPrefix")} {new Date(vote.outcome.finalizedAt).toLocaleString()}
-            </p>
+          <div className="mb-6">
+            <VoteOutcomeBanner vote={vote} />
           </div>
         )}
 
@@ -614,7 +621,7 @@ const PublicVotePage: React.FC = () => {
               {ts.kinds[vote.config.kind] || vote.config.kind}
             </Badge>
             <Badge variant="outline">
-              {tt(`voting.mode.${vote.config.mode === "THUMBS_UP" ? "thumbsUp" : vote.config.mode === "THUMBS_UD_NEUTRAL" ? "thumbsUdNeutral" : vote.config.mode === "POINTS" ? "points" : vote.config.mode === "MAJORITY_JUDGMENT" ? "majorityJudgment" : "consentLoop"}`)}
+              {ts.modes[vote.config.mode] ?? vote.config.mode}
             </Badge>
           </div>
 
