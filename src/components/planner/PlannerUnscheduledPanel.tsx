@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button';
 import { StoryboardCard } from '@/components/StoryboardCard';
 import { QuickAddTask } from '@/components/QuickAddTask';
 import { FilterControls, type Filters } from '@/components/FilterControls';
-import { getDefaultFilters, mergeViewFilters, validateFilters } from '@/lib/filter-merge';
-import { loadFiltersFromSessionStorage } from '@/lib/filter-storage';
+import { getDefaultFilters, mergeViewFilters, taskMatchesFilters, validateFilters } from '@/lib/filter-merge';
+import { loadFiltersFromSessionStorage, subscribeToFilterChanges } from '@/lib/filter-storage';
 import { sortTasks } from '@/utils/taskSorting';
 import { cn } from '@/lib/utils';
 import { useTasks, type Task } from '@/hooks/useTasks';
@@ -64,8 +64,11 @@ export const PlannerUnscheduledPanel: React.FC<PlannerUnscheduledPanelProps> = (
       if (!cancelled && loaded) setStoredFilters(validateFilters(loaded));
     });
 
+    const unsubscribe = subscribeToFilterChanges((next) => setStoredFilters(validateFilters(next)));
+
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, [isControlled]);
 
@@ -79,54 +82,7 @@ export const PlannerUnscheduledPanel: React.FC<PlannerUnscheduledPanelProps> = (
 
   const filteredTasks = React.useMemo(() => {
     return unscheduled
-      .filter((task) => {
-        if (displayFilters.searchText?.trim()) {
-          const searchText = displayFilters.searchText.toLowerCase();
-          if (
-            !task.title.toLowerCase().includes(searchText) &&
-            !task.comment?.toLowerCase().includes(searchText)
-          ) {
-            return false;
-          }
-        }
-        if (displayFilters.showUrgent && !task.urgent) return false;
-        if (displayFilters.showImpact && !task.impact) return false;
-        if (displayFilters.showMajorIncident && !task.majorIncident) return false;
-        if (displayFilters.showSprintTarget && !task.sprintTarget) return false;
-        if (
-          displayFilters.difficulty &&
-          Array.isArray(displayFilters.difficulty) &&
-          displayFilters.difficulty.length > 0 &&
-          !displayFilters.difficulty.includes(task.difficulty)
-        ) {
-          return false;
-        }
-        if (
-          displayFilters.category &&
-          Array.isArray(displayFilters.category) &&
-          displayFilters.category.length > 0 &&
-          task.category &&
-          !displayFilters.category.includes(task.category)
-        ) {
-          return false;
-        }
-        if (
-          displayFilters.status &&
-          Array.isArray(displayFilters.status) &&
-          displayFilters.status.length > 0 &&
-          !displayFilters.status.includes(task.triageStatus)
-        ) {
-          return false;
-        }
-        if (displayFilters.selectedUserId) {
-          if (displayFilters.selectedUserId === 'UNASSIGNED') {
-            if (task.userId && task.userId !== 'unassigned') return false;
-          } else if (task.userId !== displayFilters.selectedUserId) {
-            return false;
-          }
-        }
-        return true;
-      })
+      .filter((task) => taskMatchesFilters(task, displayFilters, { searchComments: true }))
       .sort(sortTasks.plan);
   }, [displayFilters, unscheduled]);
 

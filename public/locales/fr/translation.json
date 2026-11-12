@@ -2168,6 +2168,10 @@
     "selectTime": "Choisir l'heure",
     "cardTab": "Carte",
     "detailsTab": "Détails",
-    "flags": "Indicateurs"
+    "flags": "Indicateurs",
+    "dayTaskCount_one": "{{count}} tâche",
+    "dayTaskCount_other": "{{count}} tâches",
+    "dayTotalDuration": "{{minutes}} min planifiées",
+    "noTasksPlanned": "Aucune tâche planifiée"
   }
 }

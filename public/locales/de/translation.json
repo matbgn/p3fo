@@ -2168,6 +2168,10 @@
     "selectTime": "Uhrzeit wählen",
     "cardTab": "Karte",
     "detailsTab": "Details",
-    "flags": "Markierungen"
+    "flags": "Markierungen",
+    "dayTaskCount_one": "{{count}} Aufgabe",
+    "dayTaskCount_other": "{{count}} Aufgaben",
+    "dayTotalDuration": "{{minutes}} Min. geplant",
+    "noTasksPlanned": "Keine Aufgaben geplant"
   }
 }

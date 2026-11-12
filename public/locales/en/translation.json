@@ -2168,6 +2168,10 @@
     "selectTime": "Select time",
     "cardTab": "Card",
     "detailsTab": "Details",
-    "flags": "Flags"
+    "flags": "Flags",
+    "dayTaskCount_one": "{{count}} task",
+    "dayTaskCount_other": "{{count}} tasks",
+    "dayTotalDuration": "{{minutes}} min planned",
+    "noTasksPlanned": "No tasks planned"
   }
 }
