@@ -1,4 +1,4 @@
-import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, SalaryBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteRankingSubmission, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from './persistence-types';
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, SalaryBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteDraftEntity, VotePresenceEntity, VoteRankingSubmission, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from './persistence-types';
 import type { SprintStateEntity, SprintOutcome, SprintWellbeingAggregate } from './sprint-types';
 import {
   applyClose,
@@ -1361,6 +1361,20 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
   }
 
+  // Live in-progress selections and presence are server-only: the draft and
+  // presence channels are read through a moderator capability and fed by a
+  // participant HTTP write, and browser-only mode has neither a server nor the
+  // Yjs revision signal that tells a viewer to refetch. Keeping a parallel
+  // in-memory copy here would be a second implementation that nothing writes to,
+  // so the reads are simply empty.
+  async listVoteDrafts(_voteId: string): Promise<VoteDraftEntity[]> {
+    return [];
+  }
+
+  async listVotePresence(_voteId: string): Promise<VotePresenceEntity[]> {
+    return [];
+  }
+
   // Comparative prioritization ballots
   private rankingSubmissionsCache: {
     raw: string;
@@ -1596,7 +1610,11 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
   }
 
-  async revokeVoteModerator(moderatorId: string): Promise<void> {
+  async revokeVoteModerator(
+    _voteId: string,
+    moderatorId: string,
+    _moderatorToken?: string,
+  ): Promise<void> {
     if (typeof window === 'undefined') throw new Error('Cannot revoke moderator in non-browser environment');
     try {
       const stored = localStorage.getItem(VOTE_MODERATORS_STORAGE_KEY);

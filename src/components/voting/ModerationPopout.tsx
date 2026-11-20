@@ -13,6 +13,8 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { VoteResults } from "@/components/voting/VoteResults";
 import { RankingParticipationPanel } from "@/components/voting/RankingParticipationPanel";
+import { VoteParticipationPanel } from "@/components/voting/VoteParticipationPanel";
+import { VoteEditor } from "@/components/voting/VoteEditor";
 import { LoopRoundControls } from "@/components/voting/LoopRoundControls";
 import { LoopRoundEditor } from "@/components/voting/LoopRoundEditor";
 import { LoopRoundTabs } from "@/components/voting/LoopRoundTabs";
@@ -23,7 +25,6 @@ import {
   Shield,
   AlertTriangle,
   Eye,
-  PenLine,
   GitCompare,
   Save,
 } from "lucide-react";
@@ -38,7 +39,7 @@ const LoopPanel: React.FC<{
 }> = ({ vote, moderatorDisplayName }) => {
   const t = getVotingStrings();
   const { loops, openRound, closeRound, updateRoundContent } = useVoteLoops(vote.id);
-  const { responses: voteResponses } = useVoteResults(vote.id);
+  const { responses: voteResponses } = useVoteResults(vote.id, true, false);
   const activeProposals = vote.proposals.filter((p) => p.active);
   const isOpen = vote.config.phase === "OPEN";
   const [expandedProposalId, setExpandedProposalId] = React.useState<string>(activeProposals[0]?.id || "");
@@ -265,78 +266,12 @@ const LoopPanel: React.FC<{
   );
 };
 
-const ProposalEditorPanel: React.FC<{
-  vote: VoteEntity;
-  moderatorDisplayName: string;
-}> = ({ vote, moderatorDisplayName: _moderatorDisplayName }) => {
-  const t = getVotingStrings();
-  const { t: tt } = useTranslation();
-  const [proposals, setProposals] = React.useState(vote.proposals);
-  const [isSaving, setIsSaving] = React.useState(false);
-
-  const handleProposalChange = (proposalId: string, content: string) => {
-    setProposals((prev) =>
-      prev.map((p) => (p.id === proposalId ? { ...p, content } : p))
-    );
-  };
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    try {
-      const adapter = await getPersistenceAdapter();
-      await adapter.updateVote(vote.id, { proposals });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  if (vote.config.mode === "CONSENT_LOOP") {
-    return (
-      <LoopPanel vote={vote} moderatorDisplayName={_moderatorDisplayName} />
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      {proposals.map((proposal, index) => (
-        <div key={proposal.id} className="space-y-2">
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-xs">
-              {tt("voting.proposalN", { n: index + 1 })}
-            </Badge>
-            {proposal.infoUrl && (
-              <a
-                href={proposal.infoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-blue-500 hover:underline"
-              >
-                {t.buttons.moreInfo}
-              </a>
-            )}
-          </div>
-          <BlockNoteProposalEditor
-            value={proposal.content || ""}
-            onChange={(json) => handleProposalChange(proposal.id, json)}
-            placeholder={`Proposal ${index + 1} content...`}
-          />
-        </div>
-      ))}
-
-      <Button onClick={handleSave} disabled={isSaving} size="sm">
-        <PenLine className="w-4 h-4 mr-1" />
-        {isSaving ? t.buttons.saving : "Save proposals"}
-      </Button>
-    </div>
-  );
-};
-
 export const ModerationPopout: React.FC = () => {
   const t = getVotingStrings();
   const { t: tt } = useTranslation();
   const { token } = useParams<{ token: string }>();
-  const { vote, moderator, isLoading, error } = useModeratorToken(token || null);
-  const [activeTab, setActiveTab] = React.useState<"edit" | "results" | "participation">("edit");
+  const { vote, moderator, isLoading, error, refresh: refreshVote } = useModeratorToken(token || null);
+  const [activeTab, setActiveTab] = React.useState<"edition" | "rounds" | "results" | "participation">("edition");
   const isConsentLoop = vote?.config.mode === "CONSENT_LOOP";
   const isComparative = vote?.config.mode === "COMPARATIVE_PRIORITIZATION";
 
@@ -368,6 +303,15 @@ export const ModerationPopout: React.FC = () => {
   const phaseLabel = t.phases[vote.config.phase] || vote.config.phase;
   const modeLabel = VOTING_MODES_LABELS[vote.config.mode] || vote.config.mode;
   const publicUrl = `${window.location.origin}/v/${vote.slug}`;
+  const saveVote = async (input: Partial<VoteEntity>) => {
+    const adapter = await getPersistenceAdapter();
+    const updated = await adapter.updateVote(vote.id, input);
+    // Publish on the same live channel as the in-app editor; otherwise a
+    // popout edit stays invisible to participants and the main window until a
+    // refetch, even though the shared `VoteEditor` implies live updates.
+    if (updated) syncVoteToYjs(vote.id, updated);
+    await refreshVote();
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -415,34 +359,40 @@ export const ModerationPopout: React.FC = () => {
 
       <main className="max-w-4xl mx-auto p-4">
         <div className="mb-4">
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "edit" | "results" | "participation")}>
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "edition" | "rounds" | "results" | "participation")}>
             <TabsList>
-              <TabsTrigger value="edit">
-            {isConsentLoop ? t.labels.rounds : t.labels.proposals}
-              </TabsTrigger>
-              <TabsTrigger value="results">{t.labels.results}</TabsTrigger>
-              {isComparative && (
-                <TabsTrigger value="participation">{tt("voting.comparative.participation")}</TabsTrigger>
+              <TabsTrigger value="edition">{tt("voting.edition")}</TabsTrigger>
+              {isConsentLoop && (
+                <TabsTrigger value="rounds">{t.labels.rounds}</TabsTrigger>
               )}
+              <TabsTrigger value="results">{t.labels.results}</TabsTrigger>
+              <TabsTrigger value="participation">{tt("voting.participation")}</TabsTrigger>
             </TabsList>
-            <TabsContent value="edit">
-              <ProposalEditorPanel
-                vote={vote}
-                moderatorDisplayName={moderator.displayName}
-              />
+            <TabsContent value="edition">
+              <VoteEditor inline vote={vote} onSave={saveVote} />
             </TabsContent>
+            {isConsentLoop && (
+              <TabsContent value="rounds">
+                <LoopPanel
+                  vote={vote}
+                  moderatorDisplayName={moderator.displayName}
+                />
+              </TabsContent>
+            )}
             <TabsContent value="results">
-              <VoteResults vote={vote} />
+              <VoteResults vote={vote} moderatorToken={token} moderatorView />
             </TabsContent>
-            {isComparative && (
-              <TabsContent value="participation">
+            <TabsContent value="participation">
+              {isComparative ? (
                 <RankingParticipationPanel
                   voteId={vote.id}
                   ownerId={vote.ownerId}
                   moderatorToken={token}
                 />
-              </TabsContent>
-            )}
+              ) : (
+                <VoteParticipationPanel vote={vote} moderatorToken={token} />
+              )}
+            </TabsContent>
           </Tabs>
         </div>
       </main>

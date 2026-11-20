@@ -2596,7 +2596,12 @@ class SqliteClient implements DbClient {
       submittedAt: response.submittedAt || new Date().toISOString(),
     };
 
-    this.db.prepare(`
+    // `RETURNING *` is required: on conflict the upsert keeps the existing row
+    // (and its id), so returning the generated `newResponse.id` would publish a
+    // key that has no database row. The live Yjs map and the delete broadcast
+    // must both use the persisted id so an upsert replaces a voter's live entry
+    // instead of duplicating it.
+    const persisted = this.db.prepare(`
       INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt")
       VALUES(@id, @voteId, @proposalId, @loopId, @userId, @voterToken, @value, @comment, @submittedAt)
       ON CONFLICT("voteId", "voterToken", COALESCE("proposalId", ''), COALESCE("loopId", '')) DO UPDATE SET
@@ -2606,7 +2611,8 @@ class SqliteClient implements DbClient {
         "value" = excluded."value",
         "comment" = excluded."comment",
         "submittedAt" = excluded."submittedAt"
-    `).run({
+      RETURNING *
+    `).get({
       id: newResponse.id,
       voteId: newResponse.voteId,
       proposalId: newResponse.proposalId,
@@ -2616,9 +2622,9 @@ class SqliteClient implements DbClient {
       value: newResponse.value,
       comment: newResponse.comment ?? null,
       submittedAt: newResponse.submittedAt,
-    });
+    }) as unknown as VoteResponseDbRow | undefined;
 
-    return newResponse;
+    return persisted ? this.mapVoteResponseDbRowToEntity(persisted) : newResponse;
   }
 
   async deleteVoteResponse(
@@ -2626,14 +2632,22 @@ class SqliteClient implements DbClient {
     voterToken: string,
     proposalId: string | null,
     loopId: string | null = null,
-  ): Promise<void> {
-    this.db.prepare(`
-      DELETE FROM "voteResponses"
-      WHERE "voteId" = @voteId
+  ): Promise<string[]> {
+    // One predicate for both statements: the ids returned for Yjs eviction must
+    // be exactly the rows this call deletes.
+    const predicate = `
+      "voteId" = @voteId
         AND "voterToken" = @voterToken
         AND COALESCE("proposalId", '') = COALESCE(@proposalId, '')
         AND COALESCE("loopId", '') = COALESCE(@loopId, '')
-    `).run({ voteId, voterToken, proposalId, loopId });
+    `;
+    const rows = this.db
+      .prepare(`SELECT "id" FROM "voteResponses" WHERE ${predicate}`)
+      .all({ voteId, voterToken, proposalId, loopId }) as unknown as Array<{ id: string }>;
+    this.db
+      .prepare(`DELETE FROM "voteResponses" WHERE ${predicate}`)
+      .run({ voteId, voterToken, proposalId, loopId });
+    return rows.map((row) => row.id);
   }
 
   async importVoteResponses(items: VoteResponseEntity[]): Promise<void> {
@@ -2758,6 +2772,13 @@ class SqliteClient implements DbClient {
   async countVoteRankingSubmittedBallots(voteId: string): Promise<number> {
     const row = this.db.prepare(
       'SELECT COUNT(*) AS "count" FROM "voteRankingSubmissions" WHERE "voteId" = ? AND "submittedPayload" IS NOT NULL'
+    ).get(voteId) as unknown as { count: number };
+    return Number(row?.count ?? 0);
+  }
+
+  async countVoteRankingParticipants(voteId: string): Promise<number> {
+    const row = this.db.prepare(
+      'SELECT COUNT(*) AS "count" FROM "voteRankingSubmissions" WHERE "voteId" = ?'
     ).get(voteId) as unknown as { count: number };
     return Number(row?.count ?? 0);
   }
@@ -3186,16 +3207,20 @@ class SqliteClient implements DbClient {
     this.db.prepare('UPDATE "voteModerators" SET "active" = 0 WHERE "id" = ?').run(moderatorId);
   }
 
-  async resolveVoteModeratorToken(token: string): Promise<{ vote: VoteEntity; moderator: VoteModerator } | null> {
+  async verifyVoteModeratorToken(token: string): Promise<{ vote: VoteEntity; moderator: VoteModerator } | null> {
     const rows = this.db.prepare('SELECT * FROM "voteModerators" WHERE "token" = ? AND "active" = 1').all(token) as unknown as VoteModeratorDbRow[];
     if (rows.length === 0) return null;
     const moderator = this.mapVoteModeratorDbRowToEntity(rows[0]);
     const vote = await this.getVoteById(moderator.voteId);
     if (!vote) return null;
-
-    this.db.prepare('UPDATE "voteModerators" SET "lastSeenAt" = ? WHERE "id" = ?').run(new Date().toISOString(), moderator.id);
-
     return { vote, moderator };
+  }
+
+  async resolveVoteModeratorToken(token: string): Promise<{ vote: VoteEntity; moderator: VoteModerator } | null> {
+    const resolved = await this.verifyVoteModeratorToken(token);
+    if (!resolved) return null;
+    this.db.prepare('UPDATE "voteModerators" SET "lastSeenAt" = ? WHERE "id" = ?').run(new Date().toISOString(), resolved.moderator.id);
+    return resolved;
   }
 
   async importVoteModerators(items: VoteModerator[]): Promise<void> {

@@ -1,4 +1,4 @@
-import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, SalaryBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteRankingSubmission, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from './persistence-types';
+import { PersistenceAdapter, TaskEntity, UserSettingsEntity, AppSettingsEntity, QolSurveyResponseEntity, FilterStateEntity, StorageMetadata, FertilizationBoardEntity, DreamBoardEntity, SalaryBoardEntity, ReminderEntity, CircleEntity, FrameworkEntity, FrameworkType, VoteEntity, VoteResponseEntity, VoteDraftEntity, VotePresenceEntity, VoteRankingSubmission, VoteLoop, VoteModerator, VoteKind, PomodoroSession } from './persistence-types';
 import type { SprintStateEntity, SprintOutcome } from './sprint-types';
 import { DEFAULT_TASKS_INITIALIZED_KEY } from '@/hooks/useTasks';
 
@@ -540,8 +540,18 @@ export class HttpApiPersistence implements PersistenceAdapter {
   }
 
   // Vote responses
-  async listVoteResponses(voteId: string): Promise<VoteResponseEntity[]> {
-    return this.makeRequest(`/api/votes/${voteId}/results`).then((r: { responses: VoteResponseEntity[] }) => r.responses || []);
+  async listVoteResponses(
+    voteId: string,
+    moderatorToken?: string,
+  ): Promise<VoteResponseEntity[]> {
+    // A moderator token selects the collision-resistant `participantId`
+    // projection used to merge the draft channel; the public call stays
+    // alias-only and never receives a per-participant digest.
+    const headers: Record<string, string> = {};
+    if (moderatorToken) headers['X-Moderator-Token'] = moderatorToken;
+    return this.makeRequest(`/api/votes/${voteId}/results`, { headers }).then(
+      (r: { responses: VoteResponseEntity[] }) => r.responses || [],
+    );
   }
 
   async createVoteResponse(voteId: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity> {
@@ -570,6 +580,29 @@ export class HttpApiPersistence implements PersistenceAdapter {
       method: 'POST',
       body: JSON.stringify(items),
     });
+  }
+
+  // Ephemeral in-progress selections. Reads require the moderator capability;
+  // the public page writes through the participant-authenticated endpoint.
+  async listVoteDrafts(voteId: string, moderatorToken?: string): Promise<VoteDraftEntity[]> {
+    const headers: Record<string, string> = {};
+    if (moderatorToken) headers['X-Moderator-Token'] = moderatorToken;
+    return this.makeRequest(`/api/votes/${voteId}/drafts`, { headers }).then(
+      (result: { drafts?: VoteDraftEntity[] }) => result.drafts ?? [],
+    );
+  }
+
+  // Ephemeral presence. A read requires the moderator capability; the write is
+  // authenticated by the participant's voter token.
+  async listVotePresence(
+    voteId: string,
+    moderatorToken?: string,
+  ): Promise<VotePresenceEntity[]> {
+    const headers: Record<string, string> = {};
+    if (moderatorToken) headers['X-Moderator-Token'] = moderatorToken;
+    return this.makeRequest(`/api/votes/${voteId}/presence`, { headers }).then(
+      (result: { presence?: VotePresenceEntity[] }) => result.presence ?? [],
+    );
   }
 
   // Comparative prioritization ballots
@@ -712,8 +745,19 @@ export class HttpApiPersistence implements PersistenceAdapter {
     });
   }
 
-  async revokeVoteModerator(moderatorId: string): Promise<void> {
-    await this.makeRequest(`/api/vote-moderators/${moderatorId}`, { method: 'DELETE' });
+  async revokeVoteModerator(
+    voteId: string,
+    moderatorId: string,
+    moderatorToken?: string,
+  ): Promise<void> {
+    // Revocation is a moderator-capability operation: the server verifies that
+    // the presented token belongs to this vote before deactivating any link.
+    const headers: Record<string, string> = {};
+    if (moderatorToken) headers['X-Moderator-Token'] = moderatorToken;
+    await this.makeRequest(`/api/votes/${voteId}/moderators/${moderatorId}`, {
+      method: 'DELETE',
+      headers,
+    });
   }
 
   async resolveVoteModerator(token: string): Promise<{ vote: VoteEntity; moderator: VoteModerator } | null> {

@@ -11,16 +11,39 @@ import { RankingExportMenu } from '@/components/RankingExportMenu';
 interface PartialRankingResultsProps {
   vote: VoteEntity;
   canExport?: boolean;
+  /** A moderator session may watch the ranking evolve before the vote closes. */
+  moderatorToken?: string;
+  /** The in-app owner/moderator detail panel, as opposed to the participant
+   * results view that obeys the vote's pre-close visibility setting. */
+  moderatorView?: boolean;
 }
 
-export const PartialRankingResults: React.FC<PartialRankingResultsProps> = ({ vote, canExport = false }) => {
+export const PartialRankingResults: React.FC<PartialRankingResultsProps> = ({
+  vote,
+  canExport = false,
+  moderatorToken,
+  moderatorView = false,
+}) => {
   const { t: tt } = useTranslation();
   // A finalized vote already carries its authoritative ranking snapshot; do not
   // let a transient results fetch failure hide data we already have.
   const hasStoredResult = Boolean(vote.outcome?.ranking);
-  const { data, isLoading, error } = useVoteRankingResults(vote.slug, !hasStoredResult);
-  const result: VoteRankingResult | null =
+  const { data, isLoading, error, liveState } = useVoteRankingResults(
+    vote.slug,
+    !hasStoredResult,
+    moderatorToken,
+    vote.id,
+    moderatorView,
+  );
+  // Prefer the authoritative ranking. Before anything is submitted, the
+  // facilitator view also receives a provisional ranking computed from drafts
+  // so the moderator can watch the result take shape live.
+  const officialResult: VoteRankingResult | null =
     vote.outcome?.ranking ?? data?.result ?? null;
+  const draftResult: VoteRankingResult | null =
+    officialResult ? null : (data?.draftResult ?? null);
+  const result: VoteRankingResult | null = officialResult ?? draftResult;
+  const isDraft = !officialResult && Boolean(draftResult);
   const hidden = hasStoredResult ? false : data?.hidden ?? false;
   const participantCount = data?.participantCount ?? result?.participantCount ?? 0;
   const proposalById = new Map(vote.proposals.map((proposal) => [proposal.id, proposal]));
@@ -47,6 +70,11 @@ export const PartialRankingResults: React.FC<PartialRankingResultsProps> = ({ vo
     return (
       <div className="rounded-lg border bg-white p-5 text-sm text-gray-500">
         {tt('voting.comparative.noBallots')}
+        {moderatorView && liveState && liveState.participantCount > 0 && (
+          <span className="block mt-1 text-xs text-blue-700">
+            {tt('voting.comparative.joinedCount', { count: liveState.participantCount })}
+          </span>
+        )}
       </div>
     );
   }
@@ -66,7 +94,7 @@ export const PartialRankingResults: React.FC<PartialRankingResultsProps> = ({ vo
     vote.proposals.map((proposal) => [proposal.id, proposalDisplayTitle(proposal)]),
   );
   const plainTitle = (id: string) => titleById.get(id) ?? id;
-  const exportItems = canExport
+  const exportItems = canExport && !isDraft
     ? result.groups.flatMap((group) =>
         group.proposalIds.map((id) => ({
           rank: group.rank,
@@ -86,12 +114,18 @@ export const PartialRankingResults: React.FC<PartialRankingResultsProps> = ({ vo
           <h3 className="text-base font-semibold text-gray-900">
             {tt('voting.comparative.collectiveRanking')}
           </h3>
-          <Badge variant={topTied ? 'secondary' : 'default'}>
-            {topTied
-              ? tt('voting.comparative.tied')
-              : tt('voting.comparative.winner')}
-          </Badge>
-          {canExport && (
+          {isDraft ? (
+            <Badge variant="secondary">
+              {tt('voting.comparative.draftResults')}
+            </Badge>
+          ) : (
+            <Badge variant={topTied ? 'secondary' : 'default'}>
+              {topTied
+                ? tt('voting.comparative.tied')
+                : tt('voting.comparative.winner')}
+            </Badge>
+          )}
+          {canExport && !isDraft && (
             <RankingExportMenu
               items={exportItems}
               filename={`vote-${vote.slug}-ranking`}
@@ -100,9 +134,19 @@ export const PartialRankingResults: React.FC<PartialRankingResultsProps> = ({ vo
           )}
         </div>
         <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500">
-          <span className="flex items-center gap-1">
+          {moderatorView && liveState && (
+            <span className="flex items-center gap-1 text-blue-700">
+              <Users className="w-3.5 h-3.5" />
+              {tt('voting.comparative.joinedCount', { count: liveState.participantCount })}
+            </span>
+          )}
+          <span
+            className={`flex items-center gap-1 ${isDraft ? 'text-amber-700' : ''}`}
+          >
             <Users className="w-3.5 h-3.5" />
-            {tt('voting.comparative.submittedCount', { count: result.participantCount })}
+            {isDraft
+              ? tt('voting.comparative.inProgressBallots', { count: result.participantCount })
+              : tt('voting.comparative.submittedCount', { count: result.participantCount })}
           </span>
           <span className="flex items-center gap-1">
             <BarChart3 className="w-3.5 h-3.5" />
@@ -110,6 +154,11 @@ export const PartialRankingResults: React.FC<PartialRankingResultsProps> = ({ vo
           </span>
           <span>{tt('voting.comparative.method')}</span>
         </div>
+        {isDraft && (
+          <p className="mt-2 text-xs text-amber-700">
+            {tt('voting.comparative.draftResultsHint')}
+          </p>
+        )}
         {result.condorcetWinnerId && (
           <p className="mt-3 text-xs text-green-700">
             {tt('voting.comparative.condorcetWinner')}:{' '}

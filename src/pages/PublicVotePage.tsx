@@ -16,9 +16,10 @@ import QRCodeBlock from "@/components/voting/QRCodeBlock";
 import { LoopRoundProposalTooltip } from "@/components/voting/LoopRoundProposalTooltip";
 import { LoopRoundDiffDialog } from "@/components/voting/LoopRoundDiffDialog";
 import { ProposalContentDisplay } from "@/components/voting/ProposalContentDisplay";
-import { yVoteProposals, yVoteLoops, yVoteResponses, isCollaborationEnabled, initializeCollaboration } from "@/lib/collaboration";
+import { doc, yVoteProposals, yVoteLoops, yVoteResponses, isCollaborationEnabled, initializeCollaboration } from "@/lib/collaboration";
 import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
-import { syncResponsesToYjs } from "@/hooks/useVotes";
+import { responseVoterAlias, noteVoteResponseDeletions, syncResponsesToYjs } from "@/hooks/useVotes";
+import { voterAlias } from "@/lib/vote-ranking";
 import {
   Vote,
   Clock,
@@ -134,6 +135,71 @@ async function deleteResponse(
   }
 }
 
+/**
+ * Publish the participant's in-progress selections to the moderator-only draft
+ * channel. The server authenticates the write with the voter token, stores the
+ * values in memory and expires them; nothing is persisted as a vote.
+ */
+async function publishVoteDraft(
+  slug: string,
+  body: { voterToken: string; values: Record<string, number>; publisherId: string },
+): Promise<void> {
+  try {
+    const res = await fetch(`/api/votes/${slug}/drafts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Unknown error" }));
+      console.error("Vote draft publish error:", err.error);
+    }
+  } catch {
+    // Drafts are best effort; a failed write must never block voting.
+  }
+}
+
+async function deleteVoteDraft(
+  slug: string,
+  body: { voterToken: string; publisherId: string },
+): Promise<void> {
+  try {
+    const query = body.publisherId
+      ? `?${new URLSearchParams({ publisherId: body.publisherId }).toString()}`
+      : "";
+    await fetch(`/api/votes/${slug}/drafts${query}`, {
+      method: "DELETE",
+      // The voter token is a bearer credential: send it as a header so it does
+      // not land in access/proxy logs or browser history.
+      headers: { "X-Voter-Token": body.voterToken },
+      // Best effort on pagehide: keepalive lets the request outlive the page.
+      keepalive: true,
+    });
+  } catch {
+    // Drafts are best effort; the server also expires them on its own.
+  }
+}
+
+/** Presence heartbeat: "this participant has the page open", selection-free. */
+async function publishVotePresence(
+  slug: string,
+  body: { voterToken: string },
+): Promise<void> {
+  try {
+    const res = await fetch(`/api/votes/${slug}/presence`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Unknown error" }));
+      console.error("Vote presence error:", err.error);
+    }
+  } catch {
+    // Presence is best effort; it must never block voting.
+  }
+}
+
 async function submitAudienceProposal(
   slug: string,
   content: string
@@ -231,11 +297,12 @@ const PublicVotePage: React.FC = () => {
 
   const refreshData = React.useCallback(async () => {
     if (!slug || !vote) return;
+    const resultsStartedAt = Date.now();
     const [r, v] = await Promise.all([fetchResults(slug), fetchVote(slug)]);
     if (r) {
       setResponses(r.responses);
       if (isCollaborationEnabled() && v) {
-        syncResponsesToYjs(v.id, r.responses);
+        syncResponsesToYjs(v.id, r.responses, resultsStartedAt);
       }
     }
     if (v) {
@@ -272,16 +339,23 @@ const PublicVotePage: React.FC = () => {
         yVoteProposals.set(v.id, v);
       }
 
+      const resultsStartedAt = Date.now();
       const r = v.config.mode === "COMPARATIVE_PRIORITIZATION" ? null : await fetchResults(slug);
       if (!mounted) return;
       if (r) {
         setResponses(r.responses);
         if (isCollaborationEnabled()) {
-          syncResponsesToYjs(v.id, r.responses);
+          syncResponsesToYjs(v.id, r.responses, resultsStartedAt);
         }
         const myToken = getVoterToken(slug);
         if (myToken) {
-          const myResponses = r.responses.filter((x) => x.voterToken === myToken);
+          // The public results route blanks the withdrawal credential and
+          // returns the stable alias instead, so own-response matching uses the
+          // same alias the withdraw and draft paths already use.
+          const myAlias = voterAlias(v.id, myToken);
+          const myResponses = r.responses.filter(
+            (x) => responseVoterAlias(v.id, x) === myAlias,
+          );
           if (myResponses.length > 0) {
             setHasSubmitted(true);
             const vals: Record<string, number> = {};
@@ -289,6 +363,9 @@ const PublicVotePage: React.FC = () => {
               if (x.proposalId) vals[x.proposalId] = x.value;
             });
             setVoterValues(vals);
+            // Treat the loaded server values as the submitted baseline so an
+            // untouched reload is not published as a "dirty" draft.
+            setSubmittedVoterValues(vals);
           }
         }
       }
@@ -306,7 +383,8 @@ const PublicVotePage: React.FC = () => {
     };
     load();
 
-    const yjsVoteHandler = () => {
+    const yjsVoteHandler = (_event: unknown, transaction: { local: boolean }) => {
+      if (transaction.local) return;
       if (!mounted) return;
       if (isCollaborationEnabled()) {
         const allVotes = (Array.from(yVoteProposals.values()) as unknown[])
@@ -317,7 +395,11 @@ const PublicVotePage: React.FC = () => {
       }
     };
 
-    const yjsResponseHandler = () => {
+    const yjsResponseHandler = (_event: unknown, transaction: { local: boolean }) => {
+      // Local upserts already updated `responses` from the fetch that produced
+      // them; re-reading the map here would replay a withdrawn response that
+      // the server's delete broadcast has not reached this client yet.
+      if (transaction.local) return;
       if (!mounted) return;
       if (isCollaborationEnabled()) {
         const allResponses = (Array.from(yVoteResponses.values()) as unknown[])
@@ -330,7 +412,8 @@ const PublicVotePage: React.FC = () => {
       }
     };
 
-    const yjsLoopHandler = () => {
+    const yjsLoopHandler = (_event: unknown, transaction: { local: boolean }) => {
+      if (transaction.local) return;
       if (!mounted) return;
       if (isCollaborationEnabled()) {
         const allLoops = (Array.from(yVoteLoops.values()) as unknown[])
@@ -433,6 +516,30 @@ const PublicVotePage: React.FC = () => {
     if (!slug || !vote) return;
     const ok = await deleteResponse(slug, { voterToken, proposalId });
     if (ok) {
+      // Remove the withdrawn rows from the shared map here as well: the server
+      // broadcast is fire-and-forget, and an upsert-only client would otherwise
+      // keep the deleted response in the map and replay it on the next remote
+      // Yjs event.
+      if (isCollaborationEnabled()) {
+        const keysToDelete: string[] = [];
+        yVoteResponses.forEach((value, key) => {
+          const parsed = parseYjsResponseValue(value);
+          if (
+            parsed &&
+            parsed.voteId === vote.id &&
+            responseVoterAlias(vote.id, parsed) === voterAlias(vote.id, voterToken) &&
+            parsed.proposalId === proposalId
+          ) {
+            keysToDelete.push(key as string);
+          }
+        });
+        if (keysToDelete.length > 0) {
+          // Remember the ids so a results fetch already in flight cannot restore
+          // this withdrawal into the shared map.
+          noteVoteResponseDeletions(keysToDelete);
+          doc.transact(() => keysToDelete.forEach((key) => yVoteResponses.delete(key)));
+        }
+      }
       setVoterValues((prev) => {
         const next = { ...prev };
         delete next[proposalId];
@@ -440,6 +547,15 @@ const PublicVotePage: React.FC = () => {
           setHasSubmitted(false);
           setJustVoted(false);
         }
+        return next;
+      });
+      // Keep the submitted baseline in step with what the server now holds;
+      // otherwise `hasPendingVotes` stays true and re-publishes a phantom draft
+      // for a withdrawal that was already persisted.
+      setSubmittedVoterValues((prev) => {
+        if (!(proposalId in prev)) return prev;
+        const next = { ...prev };
+        delete next[proposalId];
         return next;
       });
       refreshData();
@@ -494,6 +610,109 @@ const PublicVotePage: React.FC = () => {
   const isAnonymous = vote?.config.isAnonymous ?? true;
 
   const mode = vote?.config.mode;
+
+  // Publish pending local selections so the moderator tally can evolve before
+  // "Submit all votes" is pressed. Nothing is persisted as a vote: this is an
+  // ephemeral entry on the server, removed on submit/unload and expired after a
+  // TTL.
+  const draftVoteId = vote?.id;
+  const draftVotePhase = vote?.config.phase;
+  // Identifies this tab's writes: a second tab of the same voter (same alias)
+  // must not delete the draft the editing tab is publishing.
+  const draftPublisherId = React.useRef<string>("");
+  // Tracks whether this tab currently has a draft on the server, so leaving the
+  // pending state deletes exactly once instead of issuing a DELETE on mount.
+  const draftPublishedRef = React.useRef(false);
+  if (!draftPublisherId.current) {
+    draftPublisherId.current =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random()}`;
+  }
+  React.useEffect(() => {
+    if (!slug || !draftVoteId || !voterToken) return;
+    if (mode === "CONSENT_LOOP" || mode === "COMPARATIVE_PRIORITIZATION") return;
+    // Drafts go to the moderator-authenticated channel, never to the shared
+    // Yjs room, so hidden-result and anonymous votes can publish them without
+    // exposing in-progress selections to other clients.
+    const shouldPublish =
+      draftVotePhase === "OPEN" && !votedAndLocked && hasPendingVotes;
+    if (!shouldPublish) {
+      if (!draftPublishedRef.current) return;
+      draftPublishedRef.current = false;
+      void deleteVoteDraft(slug, {
+        voterToken,
+        publisherId: draftPublisherId.current,
+      });
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      if (Object.keys(voterValues).length === 0) {
+        draftPublishedRef.current = false;
+        void deleteVoteDraft(slug, {
+          voterToken,
+          publisherId: draftPublisherId.current,
+        });
+        return;
+      }
+      draftPublishedRef.current = true;
+      void publishVoteDraft(slug, {
+        voterToken,
+        values: { ...voterValues },
+        publisherId: draftPublisherId.current,
+      });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [
+    slug,
+    draftVoteId,
+    draftVotePhase,
+    mode,
+    votedAndLocked,
+    hasPendingVotes,
+    voterValues,
+    voterToken,
+  ]);
+
+  React.useEffect(() => {
+    if (!slug || !draftVoteId || !voterToken) return;
+    const clear = () => {
+      if (!draftPublishedRef.current) return;
+      draftPublishedRef.current = false;
+      void deleteVoteDraft(slug, {
+        voterToken,
+        publisherId: draftPublisherId.current,
+      });
+    };
+    window.addEventListener("pagehide", clear);
+    return () => {
+      window.removeEventListener("pagehide", clear);
+      clear();
+    };
+  }, [slug, draftVoteId, voterToken]);
+
+  // Presence is independent of selections: a participant who only opened the
+  // page still appears in the moderator's participation view, before touching a
+  // ballot. The channel is moderator-authenticated, so an anonymous/hidden
+  // vote can report "someone is here" without exposing who to other clients.
+  // Comparative votes use the server-side ranking participation panel instead.
+  React.useEffect(() => {
+    if (!slug || !draftVoteId || !voterToken) return;
+    if (mode === "COMPARATIVE_PRIORITIZATION") return;
+    if (draftVotePhase !== "OPEN") return;
+    let cancelled = false;
+    const publish = () => {
+      if (cancelled) return;
+      void publishVotePresence(slug, { voterToken });
+    };
+    publish();
+    const timer = window.setInterval(publish, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [slug, draftVoteId, draftVotePhase, voterToken, mode]);
+
   const mjGradeLabel = React.useCallback(
     (value: number) => {
       const key = value === -1 ? "reject" : value === 0 ? "insufficient" : value === 1 ? "passable" : value === 2 ? "acceptable" : value === 3 ? "good" : "excellent";
@@ -577,7 +796,7 @@ const PublicVotePage: React.FC = () => {
   }
 
   const activeProposals = vote.proposals.filter((p) => p.active);
-  const totalVoters = new Set(responses.map((r) => r.voterToken)).size;
+  const totalVoters = new Set(responses.map((r) => responseVoterAlias(vote.id, r))).size;
 
   const tallyThumbsUpResult = (proposalId: string) =>
     tallyThumbsUpShared(responses, proposalId).count;

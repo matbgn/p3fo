@@ -31,10 +31,12 @@ import { useSettingsContext } from "@/context/SettingsContext";
 import { instantToPlainDateTime, plainDateTimeToTimestamp } from "@/lib/format-utils";
 
 interface VoteEditorProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   vote?: VoteEntity | null;
   onSave: (input: Partial<VoteEntity>) => Promise<void>;
+  /** Render the form directly (Edition tab) instead of inside a modal. */
+  inline?: boolean;
 }
 
 const DEFAULT_CONFIG: VoteConfig = {
@@ -48,10 +50,11 @@ const DEFAULT_PROPOSALS: VoteProposal[] = [
 ];
 
 export const VoteEditor: React.FC<VoteEditorProps> = ({
-  open,
+  open = false,
   onOpenChange,
   vote,
   onSave,
+  inline = false,
 }) => {
   const isEditing = !!vote;
   const isFinalized = vote?.config.phase === "FINALIZED";
@@ -88,26 +91,26 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
   const timezone = settings.timezone || "Europe/Zurich";
   const weekStartsOn = settings.weekStartDay as 0 | 1;
 
-  React.useEffect(() => {
-    if (vote) {
-      setTitle(vote.title);
-      setDescription(vote.description || "");
-      setKind(vote.config.kind);
-      setMode(vote.config.mode);
-      setProposals(vote.proposals.length > 0 ? vote.proposals : DEFAULT_PROPOSALS);
-      setIsAnonymous(vote.config.isAnonymous ?? true);
-      setAllowFreeText(vote.config.allowFreeText ?? false);
-      setRequireObjectionComment(vote.config.requireObjectionComment ?? false);
-      setAllowAudienceProposals(vote.config.allowAudienceProposals ?? false);
-      setShowResultsBeforeClose(vote.config.showResultsBeforeClose ?? false);
-      setAllowVoteChangeUntilClose(vote.config.allowVoteChangeUntilClose ?? true);
-      setMultipleChoiceVote(vote.config.multipleChoiceVote ?? true);
-      setMaxPointsPerUser(vote.config.maxPointsPerUser ?? 10);
-      setRankingEngine(vote.config.rankingEngine ?? DEFAULT_RANKING_ENGINE);
-      setAllowTies(voteAllowsTies(vote.config));
-      setAllowMultiple(vote.config.allowMultiple ?? false);
-      setOpenAt(vote.config.openAt ? new Date(vote.config.openAt).getTime() : null);
-      setCloseAt(vote.config.closeAt ? new Date(vote.config.closeAt).getTime() : null);
+  const loadVote = React.useCallback((source: VoteEntity | null) => {
+    if (source) {
+      setTitle(source.title);
+      setDescription(source.description || "");
+      setKind(source.config.kind);
+      setMode(source.config.mode);
+      setProposals(source.proposals.length > 0 ? source.proposals : DEFAULT_PROPOSALS);
+      setIsAnonymous(source.config.isAnonymous ?? true);
+      setAllowFreeText(source.config.allowFreeText ?? false);
+      setRequireObjectionComment(source.config.requireObjectionComment ?? false);
+      setAllowAudienceProposals(source.config.allowAudienceProposals ?? false);
+      setShowResultsBeforeClose(source.config.showResultsBeforeClose ?? false);
+      setAllowVoteChangeUntilClose(source.config.allowVoteChangeUntilClose ?? true);
+      setMultipleChoiceVote(source.config.multipleChoiceVote ?? true);
+      setMaxPointsPerUser(source.config.maxPointsPerUser ?? 10);
+      setRankingEngine(source.config.rankingEngine ?? DEFAULT_RANKING_ENGINE);
+      setAllowTies(voteAllowsTies(source.config));
+      setAllowMultiple(source.config.allowMultiple ?? false);
+      setOpenAt(source.config.openAt ? new Date(source.config.openAt).getTime() : null);
+      setCloseAt(source.config.closeAt ? new Date(source.config.closeAt).getTime() : null);
     } else {
       setTitle("");
       setDescription("");
@@ -128,7 +131,33 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
       setOpenAt(null);
       setCloseAt(null);
     }
-  }, [vote, open]);
+  }, []);
+
+  const initializedRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (inline) {
+      // Mounted inside a tab: load once per vote id and do not clobber the
+      // draft while the parent's 5s vote poll recreates the object.
+      const key = vote?.id ?? "new";
+      if (initializedRef.current === key) return;
+      initializedRef.current = key;
+      loadVote(vote ?? null);
+      return;
+    }
+    if (!open) {
+      initializedRef.current = null;
+      return;
+    }
+    loadVote(vote ?? null);
+  }, [inline, open, vote, loadVote]);
+
+  const handleCancel = () => {
+    if (inline) {
+      loadVote(vote ?? null);
+      return;
+    }
+    onOpenChange?.(false);
+  };
 
   const showObjectionComment =
     mode === "THUMBS_UD_NEUTRAL" || mode === "MAJORITY_JUDGMENT" || mode === "CONSENT_LOOP";
@@ -170,25 +199,39 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
         config,
       });
 
-      onOpenChange(false);
+      if (!inline) onOpenChange?.(false);
     } finally {
       setIsSaving(false);
     }
   };
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{isEditing ? t.pages.editVote : t.pages.createNewVote}</DialogTitle>
-          <DialogDescription>
-            {isEditing
-              ? isFinalized
-                ? t.pages.closed
-                : t.buttons.saveChanges
-              : t.buttons.createVote}
-          </DialogDescription>
-        </DialogHeader>
+  const content = (
+    <>
+        {inline ? (
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold text-gray-900">
+              {isEditing ? t.pages.editVote : t.pages.createNewVote}
+            </h2>
+            <p className="text-sm text-gray-500">
+              {isEditing
+                ? isFinalized
+                  ? t.pages.closed
+                  : t.buttons.saveChanges
+                : t.buttons.createVote}
+            </p>
+          </div>
+        ) : (
+          <DialogHeader>
+            <DialogTitle>{isEditing ? t.pages.editVote : t.pages.createNewVote}</DialogTitle>
+            <DialogDescription>
+              {isEditing
+                ? isFinalized
+                  ? t.pages.closed
+                  : t.buttons.saveChanges
+                : t.buttons.createVote}
+            </DialogDescription>
+          </DialogHeader>
+        )}
 
         <div className="space-y-6">
           <div className="space-y-2">
@@ -502,10 +545,10 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
         <DialogFooter>
           <Button
             variant="outline"
-            onClick={() => onOpenChange(false)}
+            onClick={handleCancel}
           >
             <X className="w-4 h-4 mr-2" />
-            {t.buttons.cancel}
+            {inline ? tt("voting.revert") : t.buttons.cancel}
           </Button>
           {!isFinalized && (
             <Button
@@ -545,6 +588,21 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
             }}
           />
         )}
+    </>
+  );
+
+  if (inline) {
+    return (
+      <div className="w-full rounded-lg border bg-white p-5">
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        {content}
       </DialogContent>
     </Dialog>
   );

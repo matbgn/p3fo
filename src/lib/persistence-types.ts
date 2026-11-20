@@ -312,10 +312,19 @@ export interface PersistenceAdapter {
   importVotes(items: VoteEntity[]): Promise<void>;
 
   // Vote responses
-  listVoteResponses(voteId: string): Promise<VoteResponseEntity[]>;
+  listVoteResponses(voteId: string, moderatorToken?: string): Promise<VoteResponseEntity[]>;
   createVoteResponse?(voteId: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity>;
   deleteVoteResponse?(voteId: string, voterToken: string, proposalId: string | null, loopId?: string | null): Promise<void>;
   importVoteResponses(items: VoteResponseEntity[]): Promise<void>;
+
+  // Ephemeral in-progress selections (non-comparative modes). Read-only here:
+  // the public page writes through the participant-authenticated endpoints, and
+  // a read requires the moderator capability.
+  listVoteDrafts(voteId: string, moderatorToken?: string): Promise<VoteDraftEntity[]>;
+
+  // Ephemeral presence: who has the public page open, whether or not they have
+  // touched a ballot. Read-only here for the same reason.
+  listVotePresence(voteId: string, moderatorToken?: string): Promise<VotePresenceEntity[]>;
 
   // Comparative prioritization ballots
   listVoteRankingSubmissions(
@@ -347,7 +356,7 @@ export interface PersistenceAdapter {
   // Vote moderators
   listVoteModerators(voteId: string): Promise<VoteModerator[]>;
   addVoteModerator(voteId: string, input: { displayName: string; email?: string }): Promise<VoteModerator>;
-  revokeVoteModerator(moderatorId: string): Promise<void>;
+  revokeVoteModerator(voteId: string, moderatorId: string, moderatorToken?: string): Promise<void>;
   resolveVoteModerator(token: string): Promise<{ vote: VoteEntity; moderator: VoteModerator } | null>;
   importVoteModerators(items: VoteModerator[]): Promise<void>;
 
@@ -518,9 +527,52 @@ export interface VoteResponseEntity {
   loopId?: string;
   userId: string | null;
   voterToken: string;
+  /**
+   * Non-credential pseudonym used when a response is published in the shared
+   * Yjs document. The shared copy blanks `voterToken` and carries this instead.
+   */
+  voterAlias?: string;
+  /**
+   * Vote-scoped, one-way participant digest (server-derived). Only returned to
+   * a moderator-authenticated reader, where it is the collision-resistant join
+   * key for the in-progress draft channel. Never a credential and never exposed
+   * on the public results route.
+   */
+  participantId?: string;
   value: number;
   comment?: string;
   submittedAt: string;
+}
+
+export interface VoteDraftEntity {
+  voteId: string;
+  /** Stable, non-credential pseudonym (`voterAlias`); never the raw token. */
+  voterAlias: string;
+  /**
+   * Vote-scoped, one-way participant digest (server-derived). The moderator-only
+   * draft channel joins these to submitted responses instead of the short
+   * public alias, which can be brute-forced into a collision.
+   */
+  participantId?: string;
+  /** Local selections keyed by proposal id. */
+  values: Record<string, number>;
+  updatedAt: string;
+  /** Per-tab writer id so one tab cannot delete another tab's draft. */
+  publisherId?: string;
+}
+
+export interface VotePresenceEntity {
+  voteId: string;
+  /** Stable, non-credential pseudonym (`voterAlias`); never the raw token. */
+  voterAlias: string;
+  /**
+   * Vote-scoped, one-way participant digest (server-derived). The moderator-only
+   * presence channel dedupes on this rather than the short public alias, which a
+   * participant can brute-force into a collision.
+   */
+  participantId?: string;
+  joinedAt: string;
+  lastSeenAt: string;
 }
 
 export interface VoteLoop {

@@ -3,6 +3,7 @@ import type {
   VoteEntity,
   VoteRankingBallot,
   VoteRankingSubmission,
+  VoteResponseEntity,
 } from './persistence-types';
 import {
   buildVoteRankingResult,
@@ -10,7 +11,10 @@ import {
   deriveBallotParticipation,
   proposalDisplayTitle,
   proposalHasContent,
+  redactVoteResponseForVote,
   resolveFinalizedWinner,
+  shareVoteResponse,
+  voterAlias,
 } from './vote-ranking';
 
 function makeVote(ids: string[]): VoteEntity {
@@ -337,5 +341,70 @@ describe('ballot participation', () => {
     expect(anonymous.ballots[0].alias).toBe(named.ballots[0].alias);
     expect(anonymous.ballots[0].displayName).toBeNull();
     expect(named.ballots[0].displayName).toBe('Alice');
+  });
+});
+
+describe('shared vote response projection', () => {
+  const vote = {
+    id: 'vote-1',
+    config: { mode: 'THUMBS_UP', kind: 'decision', phase: 'OPEN', isAnonymous: false },
+  } as unknown as VoteEntity;
+
+  const response: VoteResponseEntity = {
+    id: 'r1',
+    voteId: 'vote-1',
+    proposalId: 'p1',
+    userId: 'u1',
+    voterToken: 'secret-withdrawal-token',
+    value: 1,
+    comment: 'ok',
+    submittedAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  it('never publishes the raw withdrawal token to the shared document', () => {
+    const shared = shareVoteResponse('vote-1', redactVoteResponseForVote(vote, response));
+    expect(shared.voterToken).toBe('');
+    expect(shared.voterAlias).toBe(voterAlias('vote-1', 'secret-withdrawal-token'));
+    expect(JSON.stringify(shared)).not.toContain('secret-withdrawal-token');
+    // Non-anonymous identity and payload survive the projection.
+    expect(shared.userId).toBe('u1');
+    expect(shared.value).toBe(1);
+  });
+
+  it('strips the moderator-only participant digest from the shared document', () => {
+    // The digest is a capability-scoped join key; publishing it would expose it
+    // to every connected client and make identical rows compare unequal.
+    const moderatorRow = { ...response, participantId: 'digest-1' };
+    const shared = shareVoteResponse('vote-1', redactVoteResponseForVote(vote, moderatorRow));
+    expect(shared.participantId).toBeUndefined();
+    expect(JSON.stringify(shared)).not.toContain('digest-1');
+  });
+
+  it('strips the withdrawal token from the public results projection too', () => {
+    // The HTTP /results route uses this projection directly; returning the raw
+    // token would let any visitor withdraw another participant's response.
+    const safe = redactVoteResponseForVote(vote, response);
+    expect(safe.voterToken).toBe('');
+    expect(safe.voterAlias).toBe(voterAlias('vote-1', 'secret-withdrawal-token'));
+    expect(JSON.stringify(safe)).not.toContain('secret-withdrawal-token');
+  });
+
+  it('is idempotent for an already-shared row', () => {
+    const shared = shareVoteResponse('vote-1', response);
+    const again = shareVoteResponse('vote-1', shared);
+    expect(again.voterAlias).toBe(shared.voterAlias);
+  });
+
+  it('redacts identity for anonymous votes', () => {
+    const anonymousVote = {
+      id: 'vote-1',
+      config: { ...vote.config, isAnonymous: true },
+    } as unknown as VoteEntity;
+    const shared = shareVoteResponse(
+      'vote-1',
+      redactVoteResponseForVote(anonymousVote, response),
+    );
+    expect(shared.userId).toBeNull();
+    expect(shared.voterToken).toBe('');
   });
 });

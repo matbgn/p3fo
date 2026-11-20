@@ -158,7 +158,12 @@ export interface DbClient {
   // Vote responses
   getVoteResponses(voteId: string): Promise<VoteResponseEntity[]>;
   createVoteResponse(voteId: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity>;
-  deleteVoteResponse(voteId: string, voterToken: string, proposalId: string | null, loopId?: string | null): Promise<void>;
+  /**
+   * Delete the matching response rows and return their ids, so the live Yjs
+   * channel can evict exactly those keys instead of re-broadcasting the whole
+   * vote.
+   */
+  deleteVoteResponse(voteId: string, voterToken: string, proposalId: string | null, loopId?: string | null): Promise<string[]>;
   importVoteResponses(items: VoteResponseEntity[]): Promise<void>;
 
   // Comparative prioritization ballots
@@ -187,6 +192,12 @@ export interface DbClient {
   getVoteRankingSubmittedBallots(voteId: string): Promise<VoteRankingSubmission[]>;
   /** Count submitted ballots without loading any ballot payload. */
   countVoteRankingSubmittedBallots(voteId: string): Promise<number>;
+  /**
+   * Count everyone who opened/participated in a comparative vote without
+   * parsing ballot payloads. Used by the live broadcast, which only needs the
+   * aggregate counts, not per-participant coverage/confidence.
+   */
+  countVoteRankingParticipants(voteId: string): Promise<number>;
   /** Lean participation projection that avoids loading full ballot payloads. */
   getVoteRankingParticipationStats(voteId: string): Promise<BallotParticipationStat[]>;
   /**
@@ -219,6 +230,10 @@ export interface DbClient {
   addVoteModerator(voteId: string, input: { displayName: string; email?: string; addedByUserId: string }): Promise<VoteModerator>;
   revokeVoteModerator(moderatorId: string): Promise<void>;
   resolveVoteModeratorToken(token: string): Promise<{ vote: VoteEntity; moderator: VoteModerator } | null>;
+  /** Resolve a moderator token without recording a "last seen" stamp. Used for
+   * read-only capability checks so that merely viewing results (or the in-app
+   * owner view reusing the token) does not mark the link as used. */
+  verifyVoteModeratorToken(token: string): Promise<{ vote: VoteEntity; moderator: VoteModerator } | null>;
   importVoteModerators(items: VoteModerator[]): Promise<void>;
 
   // Pomodoro sessions

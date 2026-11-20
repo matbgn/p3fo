@@ -21,26 +21,14 @@ const syncLoopToYjs = (loop: VoteLoop) => {
   }
 };
 
-const syncLoopsToYjs = (voteId: string, loops: VoteLoop[]) => {
+const syncLoopsToYjs = (_voteId: string, loops: VoteLoop[]) => {
   if (!isCollaborationEnabled()) return;
+  // Upsert only: a stale fetch must not delete a round another client just
+  // opened. Reset clears loops explicitly.
   doc.transact(() => {
-    const keysToDelete: string[] = [];
-    yVoteLoops.forEach((v, k) => {
-      const parsed = parseYjsLoopValue(v);
-      if (parsed && parsed.voteId === voteId && !loops.some(l => l.id === parsed.id)) {
-        keysToDelete.push(k as string);
-      }
-    });
-    keysToDelete.forEach(k => yVoteLoops.delete(k));
     loops.forEach(l => yVoteLoops.set(l.id, l));
   });
 };
-
-if (isCollaborationEnabled()) {
-  yVoteLoops.observe(() => {
-    eventBus.publish("voteLoopsChanged");
-  });
-}
 
 export const useVoteLoops = (voteId: string, enabled = true) => {
   const [loops, setLoops] = React.useState<VoteLoop[]>([]);
@@ -96,15 +84,15 @@ export const useVoteLoops = (voteId: string, enabled = true) => {
 
     if (isCollaborationEnabled()) {
       yVoteLoops.observe(yjsHandler);
-      const eventHandler = () => {
+      // Safety net only; the live path is the Yjs observer above.
+      const interval = setInterval(() => {
         if (!mounted) return;
         loadLoops();
-      };
-      eventBus.subscribe("voteLoopsChanged", eventHandler);
+      }, 15000);
       return () => {
         mounted = false;
+        clearInterval(interval);
         yVoteLoops.unobserve(yjsHandler);
-        eventBus.unsubscribe("voteLoopsChanged", eventHandler);
       };
     }
 

@@ -53,7 +53,7 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
     isLoading: rankingLoading,
     error: rankingError,
     refresh: refreshRanking,
-  } = useVoteRankingResults(vote.slug, open && isComparative);
+  } = useVoteRankingResults(vote.slug, open && isComparative, undefined, vote.id);
   const { loops, isLoading: loopsLoading } = useVoteLoops(vote.id, !isComparative);
   const { responses, isLoading: responsesLoading } = useVoteResults(vote.id, !isComparative);
   const consentDataLoading = loopsLoading || responsesLoading;

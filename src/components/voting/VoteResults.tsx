@@ -1,7 +1,7 @@
 import * as React from "react";
-import { VoteEntity, VoteProposal, VoteLoop } from "@/lib/persistence-types";
+import { VoteEntity, VoteProposal, VoteLoop, VoteResponseEntity } from "@/lib/persistence-types";
 import { VOTING_MODES_LABELS, MJ_SCALE } from "@/components/planView/constants";
-import { useVoteResults } from "@/hooks/useVotes";
+import { useVoteParticipation, useVoteResults, responseVoterAlias } from "@/hooks/useVotes";
 import { useVoteLoops } from "@/hooks/useVoteLoops";
 import { tallyThumbsUp, tallyUDNeutral, tallyPoints, tallyMajorityJudgment, tallyConsentLoop, getBestConsentRound } from "@/lib/vote-tally";
 import { getVotingStrings } from "@/lib/voting-i18n";
@@ -14,6 +14,12 @@ import { PartialRankingResults } from "./PartialRankingResults";
 
 interface VoteResultsProps {
   vote: VoteEntity;
+  /** When present, comparative results stream live to this moderator session
+   * even while they are still hidden from the public page. */
+  moderatorToken?: string;
+  /** Selects the in-app moderator detail view rather than the participant
+   * results view, which stays gated by the pre-close visibility setting. */
+  moderatorView?: boolean;
 }
 
 
@@ -27,7 +33,7 @@ const PHASE_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "
 const ConsentLoopResults: React.FC<{ vote: VoteEntity }> = ({ vote }) => {
   const t = getVotingStrings();
   const { t: tt } = useTranslation();
-  const { responses, isLoading: responsesLoading } = useVoteResults(vote.id);
+  const { responses, isLoading: responsesLoading } = useVoteResults(vote.id, true, false);
   const { loops, isLoading: loopsLoading } = useVoteLoops(vote.id);
   const activeProposals = vote.proposals.filter((p) => p.active);
 
@@ -204,28 +210,64 @@ export const VoteOutcomeBanner: React.FC<{ vote: VoteEntity }> = ({ vote }) => {
   );
 };
 
-export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
+export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, moderatorView = false }) => {
   const t = getVotingStrings();
   const { t: tt } = useTranslation();
-  const { responses, isLoading } = useVoteResults(
+  const { responses, isLoading, hasDrafts, draftCount } = useVoteResults(
     vote.id,
     // Comparative votes never store vote responses; polling the response
     // endpoint for them is pure waste.
     vote.config.mode !== "COMPARATIVE_PRIORITIZATION",
+    // Only the moderator view shows in-progress selections, and only while the
+    // vote is open: a draft left behind by a dead tab must never be merged into
+    // the tally after the vote closed, where "submitted votes only" applies.
+    moderatorView && vote.config.phase === "OPEN",
+    // Drafts are read from the moderator-authenticated channel; without an
+    // active moderator link the view safely falls back to submitted ballots.
+    moderatorToken,
+  );
+  const participants = useVoteParticipation(
+    vote.id,
+    // Presence only exists while the vote is open; the endpoint returns an
+    // empty list otherwise, so polling a closed vote would be pure waste.
+    vote.config.mode !== "COMPARATIVE_PRIORITIZATION" && vote.config.phase === "OPEN",
+    moderatorToken,
+  );
+  // Union of people who submitted/are drafting and people who merely opened
+  // the page. The latter is the "joined but not voting yet" pre-state. Dedupe on
+  // the moderator-only participant digest when present so two colliding public
+  // aliases do not collapse to one person (nor one person to two).
+  const identityOfResponse = React.useCallback(
+    (response: VoteResponseEntity) =>
+      response.participantId ?? responseVoterAlias(vote.id, response),
+    [vote.id],
+  );
+  const joinedCount = React.useMemo(
+    () =>
+      new Set([
+        ...responses.map(identityOfResponse),
+        ...participants.map((participant) => participant.participantId ?? participant.voterAlias),
+      ]).size,
+    [identityOfResponse, responses, participants],
   );
   const isAnonymous = vote.config.isAnonymous ?? true;
 
   const [resultsSortMetric, setResultsSortMetric] = React.useState<"original" | "median" | "average">("original");
   const [resultsSortDir, setResultsSortDir] = React.useState<"asc" | "desc">("desc");
 
-  const totalVoters = new Set(responses.map((r) => r.voterToken)).size;
+  const totalVoters = new Set(responses.map(identityOfResponse)).size;
   const commentsCount = responses.filter((r) => r.comment).length;
 
   if (vote.config.mode === "COMPARATIVE_PRIORITIZATION") {
     return (
       <div className="space-y-4">
         <VoteOutcomeBanner vote={vote} />
-        <PartialRankingResults vote={vote} canExport />
+        <PartialRankingResults
+          vote={vote}
+          canExport
+          moderatorToken={moderatorToken}
+          moderatorView={moderatorView}
+        />
       </div>
     );
   }
@@ -271,6 +313,9 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
         </Badge>
         <Badge variant="outline">{VOTING_MODES_LABELS[vote.config.mode]}</Badge>
         <Badge variant="outline">{vote.config.kind === "decision" ? t.kinds.decision : t.kinds.consultation}</Badge>
+        {hasDrafts && (
+          <Badge variant="secondary">{tt("voting.draftResults")}</Badge>
+        )}
       </div>
 
       {vote.outcome && (
@@ -282,6 +327,12 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
           <Users className="w-4 h-4" />
           {totalVoters} {totalVoters !== 1 ? t.labels.voters : t.labels.voter}
         </span>
+        {joinedCount > totalVoters && (
+          <span className="flex items-center gap-1 text-blue-700">
+            <Users className="w-4 h-4" />
+            {tt("voting.joinedCount", { count: joinedCount })}
+          </span>
+        )}
         {commentsCount > 0 && (
           <span className="flex items-center gap-1">
             <MessageSquare className="w-4 h-4" />
@@ -289,6 +340,12 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote }) => {
           </span>
         )}
       </div>
+
+      {hasDrafts && (
+        <p className="text-xs text-amber-700">
+          {tt("voting.draftIncludedHint", { count: draftCount })}
+        </p>
+      )}
 
       {isLoading ? (
         <p className="text-sm text-gray-400">{t.messages.loadingResults}</p>

@@ -5,6 +5,7 @@ import type {
   VoteRankingBallot,
   VoteRankingResult,
   VoteRankingSubmission,
+  VoteResponseEntity,
 } from './persistence-types';
 import {
   computeCondorcetDiagnostics,
@@ -42,6 +43,56 @@ export function isVoteAnonymous(
   config: Pick<VoteConfig, 'isAnonymous'> | null | undefined,
 ): boolean {
   return config?.isAnonymous !== false;
+}
+
+/**
+ * Replace the bearer withdrawal credential with its stable pseudonym and drop
+ * server-only fields. Shared by every path that publishes a response, so the
+ * token/alias rule cannot drift between the HTTP route, the Yjs broadcast and a
+ * client-side sync.
+ */
+function withPublicResponseIdentity(
+  voteId: string,
+  response: VoteResponseEntity,
+): VoteResponseEntity {
+  // `participantId` is a moderator-only join key: it is handed to a
+  // capability-holding reader to merge drafts, and must never reach the shared,
+  // unauthenticated document (where it would also make identical rows compare
+  // unequal and defeat change detection).
+  const { participantId: _participantId, ...rest } = response;
+  return {
+    ...rest,
+    voterToken: '',
+    voterAlias: response.voterAlias ?? voterAlias(voteId, response.voterToken),
+  };
+}
+
+/**
+ * Single source of truth for the anonymity transform of a stored vote
+ * response. Used by both the HTTP results route and the shared-Yjs broadcast,
+ * so a change to the redaction rule cannot silently apply to only one of the
+ * two response-producing paths.
+ *
+ * The raw `voterToken` is a bearer withdrawal credential, so it must never leave
+ * the server on a shared or public path. It is replaced by the stable,
+ * non-reversible `voterAlias`; callers that already hold an alias keep it
+ * (idempotent).
+ */
+export function redactVoteResponseForVote(
+  vote: Pick<VoteEntity, 'id' | 'config'>,
+  response: VoteResponseEntity,
+): VoteResponseEntity {
+  return {
+    ...withPublicResponseIdentity(vote.id, response),
+    userId: isVoteAnonymous(vote.config) ? null : response.userId,
+  };
+}
+
+export function redactVoteResponsesForVote(
+  vote: Pick<VoteEntity, 'id' | 'config'>,
+  responses: VoteResponseEntity[],
+): VoteResponseEntity[] {
+  return responses.map((response) => redactVoteResponseForVote(vote, response));
 }
 
 /**
@@ -375,6 +426,30 @@ function hashString(value: string): string {
   return hash.toString(36).toUpperCase().padStart(6, '0').slice(0, 6);
 }
 
+/** Stable anonymous label for a participant across vote modes. */
+export function voterAlias(voteId: string, voterToken: string): string {
+  return `P-${hashString(`${voteId}:${voterToken}`)}`;
+}
+
+/**
+ * The representation of a vote response that is safe to publish in the shared,
+ * unauthenticated Yjs document. The raw `voterToken` is a bearer credential for
+ * withdrawing a response, so it is replaced by the stable, non-reversible
+ * `voterAlias`. Idempotent: an already-shared row keeps its alias instead of
+ * being hashed again.
+ *
+ * Moderator-only fields (`participantId`) are stripped here as well: callers
+ * that hold a moderator capability hand the digest to the draft merge, but a
+ * row published to every client must be byte-identical regardless of which
+ * viewer produced it.
+ */
+export function shareVoteResponse(
+  voteId: string,
+  response: VoteResponseEntity,
+): VoteResponseEntity {
+  return withPublicResponseIdentity(voteId, response);
+}
+
 export type BallotParticipationStatus =
   | 'in_progress'
   | 'submitted'
@@ -483,7 +558,7 @@ export function deriveBallotParticipationFromStats(
     );
     if (earlyConverged) counts.earlyConverged++;
 
-    const alias = `P-${hashString(`${voteId}:${row.voterToken}`)}`;
+    const alias = voterAlias(voteId, row.voterToken);
     // Fall back to the stable alias rather than a row index: rows are ordered by
     // lastSeenAt, so indexes change between polls.
     const displayName = isAnonymous ? null : row.displayName || alias;

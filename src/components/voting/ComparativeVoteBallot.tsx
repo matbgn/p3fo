@@ -190,6 +190,10 @@ export const ComparativeVoteBallot: React.FC<ComparativeVoteBallotProps> = ({
   // whole ballot with no user progress.
   const [saveSeq, setSaveSeq] = React.useState(0);
   const hydratedRef = React.useRef(false);
+  // After an explicit withdrawal, do not immediately re-register the same
+  // participant as "joined" when the ballot re-hydrates. The next real
+  // comparison re-arms the autosave and registers them again.
+  const suppressJoinRef = React.useRef(false);
 
   // A submitted ballot is locked when the vote disallows changes. `submission`
   // holds server data, but an explicit submit in this session is tracked by
@@ -245,7 +249,10 @@ export const ComparativeVoteBallot: React.FC<ComparativeVoteBallotProps> = ({
   };
 
   React.useEffect(() => {
-    if (hydratedRef.current || isLoading || tasks.length < 2) return;
+    // A failed self-ballot load leaves `submission` null; treating that as
+    // "no ballot yet" would upload an empty draft over the participant's
+    // stored one. Wait for a successful load before hydrating or registering.
+    if (hydratedRef.current || isLoading || error || tasks.length < 2) return;
     const source = submission?.draft ?? submission?.submitted ?? null;
     if (source) {
       const hydrated = hydrateState(tasks, k, source);
@@ -268,9 +275,25 @@ export const ComparativeVoteBallot: React.FC<ComparativeVoteBallotProps> = ({
       setComparisons([]);
       setBatchCount(0);
       setCurrentBatch(selectNextBatch(fresh));
+      // Register presence as soon as the ballot is usable. Without this a
+      // participant who has not made a comparison yet stays invisible to the
+      // moderator, even though they joined. This writes an empty draft (0%
+      // coverage) once; the first comparison autosave replaces it. Route it
+      // through `inFlightSaveRef` so an immediate submit waits for it and it
+      // cannot stamp a draft time after the submission.
+      if (!locked && !suppressJoinRef.current) {
+        const pending = save(buildBallotRef.current(fresh), 'in_progress', saveMetaRef.current)
+          .catch(() => {
+            // Non-critical: the first comparison autosave retries the write.
+          });
+        inFlightSaveRef.current = pending;
+        void pending.finally(() => {
+          if (inFlightSaveRef.current === pending) inFlightSaveRef.current = null;
+        });
+      }
     }
     hydratedRef.current = true;
-  }, [isLoading, submission, tasks, k, locked]);
+  }, [isLoading, submission, tasks, k, locked, save, error]);
 
   React.useEffect(() => {
     // `isSaving` belongs in the guard and the dependency list: starting a submit
@@ -301,6 +324,7 @@ export const ComparativeVoteBallot: React.FC<ComparativeVoteBallotProps> = ({
       setComparisons((previous) => [...previous, ...added]);
       setBatchCount((count) => count + 1);
       setSaveSeq((seq) => seq + 1);
+      suppressJoinRef.current = false;
       setBatchPhase('highest');
       setSelectedHighestId(null);
       if (next.done) {
@@ -370,6 +394,9 @@ export const ComparativeVoteBallot: React.FC<ComparativeVoteBallotProps> = ({
       setSaveError(caught instanceof Error ? caught.message : String(caught));
       return;
     }
+    // The re-hydration below must not silently re-add this participant as an
+    // empty in-progress ballot right after they withdrew.
+    suppressJoinRef.current = true;
     hydratedRef.current = false;
     setEngineState(null);
     setCurrentBatch(null);

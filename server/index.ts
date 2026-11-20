@@ -8,7 +8,14 @@ import { DbClient } from './db/index.js';
 import { VoteKind, VoteLoop, VoteModerator, VoteResponseEntity, VoteRankingSubmission, PomodoroSession } from '../src/lib/persistence-types.js';
 import type { TaskEntity, VoteRankingBallot, VoteEntity, VoteRankingResult } from '../src/lib/persistence-types.js';
 import type { SprintStateEntity } from '../src/lib/sprint-types.js';
-import { isVoteAnonymous, redactRankingSubmissionForBackup } from '../src/lib/vote-ranking.js';
+import {
+  isVoteAnonymous,
+  redactRankingSubmissionForBackup,
+  redactVoteResponseForVote,
+  redactVoteResponsesForVote,
+  shareVoteResponse,
+  voterAlias,
+} from '../src/lib/vote-ranking.js';
 import {
   WHO5_QUESTIONS,
   applyClose,
@@ -34,10 +41,15 @@ import {
   computeBallotCoverage,
   DEFAULT_RANKING_ENGINE,
   deriveBallotParticipationFromStats,
+  isDraftNewer,
   MAX_RANKED_ITEMS,
   resolveFinalizedWinner,
   voteAllowsTies,
 } from '../src/lib/vote-ranking.js';
+import { VOTE_SCOPED_YJS_MAPS } from '../src/lib/vote-yjs-maps.js';
+import { clearVoteDrafts, deleteVoteDraft, listVoteDrafts, sweepExpiredVoteDrafts, upsertVoteDraft } from '../src/lib/vote-drafts.js';
+import { clearVotePresence, listVotePresence, sweepExpiredVotePresence, touchVotePresence } from '../src/lib/vote-presence.js';
+import { validateVoteResponseValue } from '../src/lib/vote-validation.js';
 
 const YJS_ROOM = 'p3fo-room';
 
@@ -97,6 +109,305 @@ function broadcastTaskDeletionToYjs(taskId: string) {
   } catch {
     // Yjs doc may not exist yet — safe to skip
   }
+}
+
+/** Read a value stored in a shared Y.Map as a plain object. */
+function yjsValueToRecord<T>(value: unknown): T | null {
+  if (!value) return null;
+  if (typeof value === 'object' && 'toJSON' in (value as object)) {
+    try {
+      return (value as { toJSON: () => T }).toJSON();
+    } catch {
+      return null;
+    }
+  }
+  return value as T;
+}
+
+/**
+ * Unforgeable store key for the ephemeral draft/presence channels.
+ *
+ * The public `voterAlias` is a short label derived from a 32-bit hash, published
+ * in the shared document so it can collide (accidentally, or deliberately by a
+ * participant brute-forcing a token that hashes to someone else's alias). Keying
+ * a store on it would let one participant overwrite another's draft or presence.
+ * A server-side SHA-256 of the token is stable across requests and infeasible to
+ * collide, and it never leaves the process.
+ */
+function voteParticipantKey(voteId: string, voterToken: string): string {
+  return crypto.createHash('sha256').update(`${voteId}:${voterToken}`).digest('hex');
+}
+
+/** Upsert one response into the live map. Used on create. */
+function broadcastVoteResponseToYjs(vote: VoteEntity, response: VoteResponseEntity) {
+  try {
+    // Redact the identity for anonymous votes and replace the withdrawal
+    // credential (`voterToken`) with its stable alias: the shared map is
+    // readable by every connected client, so a raw token must never be written.
+    const safeResponse = shareVoteResponse(
+      vote.id,
+      redactVoteResponseForVote(vote, response),
+    );
+    const doc = getYDoc(YJS_ROOM) as Y.Doc;
+    doc.getMap('voteResponses').set(safeResponse.id, safeResponse);
+  } catch {
+    // Yjs doc may not exist yet — safe to skip
+  }
+}
+
+/**
+ * Evict exactly the rows a withdrawal removed. The database layer returns the
+ * deleted ids, so this never re-reads or re-broadcasts the rest of the vote's
+ * responses (a Y.Map.set creates a new item even for an unchanged value).
+ */
+function broadcastVoteResponsesRemovedFromYjs(responseIds: string[]) {
+  if (responseIds.length === 0) return;
+  try {
+    const doc = getYDoc(YJS_ROOM) as Y.Doc;
+    const map = doc.getMap('voteResponses');
+    doc.transact(() => {
+      for (const id of responseIds) map.delete(id);
+    });
+  } catch {
+    // Yjs doc may not exist yet — safe to skip
+  }
+}
+
+/**
+ * Older clients published responses verbatim into the shared document, and a
+ * stale bundle can keep doing so during a rollout. The server now normalises the
+ * `/ws/<room>` name, so those clients join the same room as the redacting
+ * writers. Rewrite any response that still carries a raw `voterToken` as soon as
+ * it enters the room, so the withdrawal credential is removed from the server
+ * copy and from every client that syncs after the scrub, regardless of which
+ * client version produced it.
+ */
+function scrubLegacyVoteResponseTokensFromYjs() {
+  try {
+    const doc = getYDoc(YJS_ROOM) as Y.Doc;
+    const map = doc.getMap('voteResponses');
+    const scrubKeys = (keys: Iterable<string>) => {
+      const stale: Array<[string, VoteResponseEntity]> = [];
+      for (const key of keys) {
+        const parsed = yjsValueToRecord<VoteResponseEntity>(map.get(key));
+        if (parsed && typeof parsed.voterToken === 'string' && parsed.voterToken.length > 0) {
+          stale.push([key, parsed]);
+        }
+      }
+      if (stale.length === 0) return;
+      doc.transact(() => {
+        for (const [key, parsed] of stale) {
+          map.set(key, shareVoteResponse(parsed.voteId, parsed));
+        }
+      });
+    };
+    // A process that restarts in place may already hold rows; scan them once,
+    // then only the keys each incoming update touches. The rewrite blanks the
+    // token, so the scrub is idempotent and cannot loop.
+    scrubKeys(Array.from(map.keys()));
+    map.observe((event) => scrubKeys(event.keysChanged));
+  } catch {
+    // Yjs doc may not exist yet — safe to skip
+  }
+}
+
+/**
+ * In-progress selections and presence used to live in the shared document.
+ * They now travel through moderator-authenticated channels, so purge any rows
+ * an earlier version left behind (the draft rows could still carry a raw voter
+ * token; the presence rows expose who joined when).
+ */
+function purgeLegacyVoteLiveMapsFromYjs() {
+  try {
+    const doc = getYDoc(YJS_ROOM) as Y.Doc;
+    for (const mapName of ['voteResponseDrafts', 'voteParticipation']) {
+      const legacy = doc.getMap(mapName);
+      const purge = () => {
+        if (legacy.size === 0) return;
+        doc.transact(() => legacy.clear());
+      };
+      // The document is empty at startup, before any client connects, so a
+      // one-shot purge cannot see rows an older bundle writes later. Observe as
+      // well; clearing re-enters with size 0 and is therefore idempotent.
+      legacy.observe(purge);
+      purge();
+    }
+  } catch {
+    // Yjs doc may not exist yet — safe to skip
+  }
+}
+
+/**
+ * Tell connected clients that a vote's draft set changed. The value is only a
+ * revision counter: draft content stays behind the moderator capability and is
+ * fetched by the viewer after this signal arrives. A monotonic counter (not a
+ * timestamp) guarantees a visible change even for two writes in the same ms.
+ */
+const draftRevisionCounters = new Map<string, number>();
+const presenceRevisionCounters = new Map<string, number>();
+
+function bumpVoteLiveRevision(
+  mapName: 'voteDraftRevisions' | 'votePresenceRevisions',
+  counters: Map<string, number>,
+  voteId: string,
+) {
+  try {
+    const next = (counters.get(voteId) ?? 0) + 1;
+    counters.set(voteId, next);
+    const doc = getYDoc(YJS_ROOM) as Y.Doc;
+    doc.getMap(mapName).set(voteId, { voteId, revision: next });
+  } catch {
+    // Yjs doc may not exist yet — safe to skip
+  }
+}
+
+function broadcastVoteDraftRevision(voteId: string) {
+  scheduleVoteLiveRevision('voteDraftRevisions', draftRevisionCounters, voteId);
+}
+
+function broadcastVotePresenceRevision(voteId: string) {
+  scheduleVoteLiveRevision('votePresenceRevisions', presenceRevisionCounters, voteId);
+}
+
+/**
+ * Each revision bump is a write to the single shared room document, which the
+ * WebSocket server forwards to every connected client. Draft autosave and
+ * presence heartbeats are per-participant, so writing one update per request
+ * fans out O(participants) broadcasts; coalesce a burst per vote into one
+ * update. The counter still advances monotonically, so a viewer that refetches
+ * after the coalesced write sees the latest state.
+ */
+const LIVE_REVISION_COALESCE_MS = 1000;
+const pendingLiveRevisions = new Map<
+  string,
+  {
+    mapName: 'voteDraftRevisions' | 'votePresenceRevisions';
+    counters: Map<string, number>;
+    voteId: string;
+    timer: ReturnType<typeof setTimeout>;
+  }
+>();
+
+function scheduleVoteLiveRevision(
+  mapName: 'voteDraftRevisions' | 'votePresenceRevisions',
+  counters: Map<string, number>,
+  voteId: string,
+) {
+  const key = `${mapName}:${voteId}`;
+  const existing = pendingLiveRevisions.get(key);
+  if (existing) clearTimeout(existing.timer);
+  const timer = setTimeout(() => {
+    pendingLiveRevisions.delete(key);
+    bumpVoteLiveRevision(mapName, counters, voteId);
+  }, LIVE_REVISION_COALESCE_MS);
+  pendingLiveRevisions.set(key, { mapName, counters, voteId, timer });
+}
+
+/** Drop a vote's coalesced revision timers so a deleted vote cannot be bumped. */
+function cancelPendingVoteLiveRevisions(voteId: string) {
+  for (const [key, pending] of pendingLiveRevisions) {
+    if (pending.voteId === voteId) {
+      clearTimeout(pending.timer);
+      pendingLiveRevisions.delete(key);
+    }
+  }
+}
+
+/** Remove all live data attached to a vote (reset/delete). */
+function clearVoteFromYjs(voteId: string) {
+  try {
+    draftRevisionCounters.delete(voteId);
+    presenceRevisionCounters.delete(voteId);
+    cancelPendingVoteLiveRevisions(voteId);
+    // A ranking broadcast scheduled by an autosave that just happened would
+    // otherwise fire after this clear and resurrect `voteRankingState[voteId]`.
+    const pendingRanking = pendingRankingLiveBroadcasts.get(voteId);
+    if (pendingRanking) {
+      clearTimeout(pendingRanking.timer);
+      pendingRankingLiveBroadcasts.delete(voteId);
+    }
+    rankingLiveRevisions.delete(voteId);
+    const doc = getYDoc(YJS_ROOM) as Y.Doc;
+    // Shared registry (see src/lib/vote-yjs-maps.ts) so the client's clear path
+    // and this one cannot drift.
+    doc.transact(() => {
+      for (const mapName of VOTE_SCOPED_YJS_MAPS) {
+        const map = doc.getMap(mapName);
+        const keysToDelete: string[] = [];
+        map.forEach((value, key) => {
+          const parsed = yjsValueToRecord<{ voteId?: string }>(value);
+          if (parsed?.voteId === voteId) keysToDelete.push(key as string);
+        });
+        // One transaction for every map: deleting a vote with many live rows
+        // must emit one update, not one per key.
+        keysToDelete.forEach((key) => map.delete(key));
+      }
+    });
+  } catch {
+    // Yjs doc may not exist yet — safe to skip
+  }
+}
+
+/**
+ * Comparative votes need a live signal too, but broadcasting full ballots (up
+ * to 20k comparisons each) or voter identities would be wasteful and unsafe.
+ * Broadcast only revisions and aggregate counts; the moderator's results view
+ * refetches the server-computed ranking when a revision changes.
+ */
+const rankingLiveRevisions = new Map<string, { participation: number; results: number }>();
+
+async function broadcastRankingLiveState(
+  vote: VoteEntity,
+  options: { resultsChanged?: boolean } = {},
+) {
+  try {
+    // The live signal only carries an aggregate count. Read it with one cheap
+    // COUNT query: the full participation aggregate parses every ballot payload
+    // (four `json_extract` calls per row) and this runs on the autosave write
+    // path, so it must not scale with payload size.
+    const seen = await db.countVoteRankingParticipants(vote.id);
+    const now = Date.now();
+    const previous = rankingLiveRevisions.get(vote.id) ?? { participation: 0, results: 0 };
+    const next = {
+      participation: now,
+      results: options.resultsChanged ? now : previous.results,
+    };
+    rankingLiveRevisions.set(vote.id, next);
+    const doc = getYDoc(YJS_ROOM) as Y.Doc;
+    doc.getMap('voteRankingState').set(vote.id, {
+      voteId: vote.id,
+      participationRevision: next.participation,
+      resultsRevision: next.results,
+      participantCount: seen,
+    });
+  } catch {
+    // Yjs doc may not exist yet — safe to skip
+  }
+}
+
+/**
+ * The live-state broadcast runs a full participation aggregate. Autosave is
+ * debounced to ~2s per participant, so running it inline would put a full-table
+ * JSON scan on every autosave. Coalesce a burst per vote and run it after the
+ * request has been answered.
+ */
+const pendingRankingLiveBroadcasts = new Map<
+  string,
+  { vote: VoteEntity; resultsChanged: boolean; timer: ReturnType<typeof setTimeout> }
+>();
+
+function scheduleRankingLiveBroadcast(
+  vote: VoteEntity,
+  options: { resultsChanged?: boolean } = {},
+) {
+  const existing = pendingRankingLiveBroadcasts.get(vote.id);
+  if (existing) clearTimeout(existing.timer);
+  const resultsChanged = Boolean(options.resultsChanged) || Boolean(existing?.resultsChanged);
+  const timer = setTimeout(() => {
+    pendingRankingLiveBroadcasts.delete(vote.id);
+    void broadcastRankingLiveState(vote, { resultsChanged });
+  }, 250);
+  pendingRankingLiveBroadcasts.set(vote.id, { vote, resultsChanged, timer });
 }
 
 // Initialize Express app
@@ -1317,6 +1628,9 @@ app.post('/api/votes/:id/finalize', async (req: Request, res: Response) => {
 app.delete('/api/votes/:id', async (req: Request, res: Response) => {
   try {
     await db.deleteVote(req.params.id);
+    clearVoteFromYjs(req.params.id);
+    clearVoteDrafts(req.params.id);
+    clearVotePresence(req.params.id);
     res.status(204).send();
   } catch (error: unknown) {
     console.error('Error deleting vote:', error);
@@ -1331,6 +1645,12 @@ app.post('/api/votes/:id/reset', async (req: Request, res: Response) => {
     if (!reset) {
       res.status(404).json({ error: 'Vote not found' });
       return;
+    }
+    clearVoteFromYjs(reset.id);
+    clearVoteDrafts(reset.id);
+    clearVotePresence(reset.id);
+    if (reset.config.mode === 'COMPARATIVE_PRIORITIZATION') {
+      scheduleRankingLiveBroadcast(reset, { resultsChanged: true });
     }
     res.json(reset);
   } catch (error: unknown) {
@@ -1370,14 +1690,28 @@ function requestToken(
 async function canModerateVote(req: Request, vote: { id: string }): Promise<boolean> {
   const moderatorToken = requestToken(req, 'x-moderator-token', 'moderatorToken');
   if (!moderatorToken) return false;
-  const resolved = await db.resolveVoteModeratorToken(moderatorToken);
+  // Verify without stamping `lastSeenAt`: this capability check runs for every
+  // live results/participation poll, including the in-app owner view that
+  // reuses the vote's active moderator link. Only opening the moderation page
+  // itself should count as the link being "used".
+  const resolved = await db.verifyVoteModeratorToken(moderatorToken);
   return Boolean(resolved && resolved.vote.id === vote.id);
 }
 
 const RANKING_RESULT_CACHE_LIMIT = 32;
 const rankingResultCache = new Map<string, { signature: string; result: VoteRankingResult | null }>();
 
-function rankingSignature(vote: VoteEntity, submissions: VoteRankingSubmission[]): string {
+/**
+ * Version the inputs that change a ranking result. `includeDrafts` also feeds
+ * `draftUpdatedAt` and draft sizes, because the submitted-only signature
+ * deliberately ignores drafts (it must not invalidate the official ranking when
+ * a draft changes).
+ */
+function rankingSignature(
+  vote: VoteEntity,
+  submissions: VoteRankingSubmission[],
+  includeDrafts = false,
+): string {
   let hash = 2166136261 >>> 0;
   const feed = (text: string) => {
     for (let i = 0; i < text.length; i++) {
@@ -1390,6 +1724,16 @@ function rankingSignature(vote: VoteEntity, submissions: VoteRankingSubmission[]
     feed(`${proposal.id}:${proposal.active ? 1 : 0}:${proposal.position};`);
   }
   for (const submission of submissions) {
+    if (includeDrafts) {
+      feed(
+        `${submission.voterToken}:${submission.draftUpdatedAt ?? ''}:` +
+        `${submission.submittedAt ?? ''}:` +
+        `${submission.draft?.comparisons.length ?? 0}:` +
+        `${submission.submitted?.comparisons.length ?? 0}:` +
+        `${submission.draft?.batchCount ?? 0}:${submission.submitted?.batchCount ?? 0};`,
+      );
+      continue;
+    }
     if (!submission.submitted) continue;
     // `submittedAt` is rewritten on every submit, so it versions the payload
     // without hashing (potentially large) ballot JSON on each request.
@@ -1404,22 +1748,99 @@ function rankingSignature(vote: VoteEntity, submissions: VoteRankingSubmission[]
 /**
  * `estimatePartialRanking` is super-linear in the number of ranked proposals,
  * so the same submission set must not be recomputed on every results request.
- * Invalidate implicitly by hashing the inputs that affect the result.
+ * Invalidate implicitly by hashing the inputs that affect the result. One
+ * implementation owns the cache lookup and LRU eviction for every ranking
+ * projection.
  */
+function cachedRankingResult(
+  cache: Map<string, { signature: string; result: VoteRankingResult | null }>,
+  vote: VoteEntity,
+  submissions: VoteRankingSubmission[],
+  signatureOf: (vote: VoteEntity, submissions: VoteRankingSubmission[]) => string,
+  build: (vote: VoteEntity, submissions: VoteRankingSubmission[]) => VoteRankingResult | null,
+): VoteRankingResult | null {
+  const signature = signatureOf(vote, submissions);
+  const cached = cache.get(vote.id);
+  if (cached && cached.signature === signature) return cached.result;
+  const result = build(vote, submissions);
+  if (cache.size >= RANKING_RESULT_CACHE_LIMIT) {
+    const oldest = cache.keys().next().value;
+    if (oldest !== undefined) cache.delete(oldest);
+  }
+  cache.set(vote.id, { signature, result });
+  return result;
+}
+
 function getVoteRankingResult(
   vote: VoteEntity,
   submissions: VoteRankingSubmission[],
 ): VoteRankingResult | null {
-  const signature = rankingSignature(vote, submissions);
-  const cached = rankingResultCache.get(vote.id);
-  if (cached && cached.signature === signature) return cached.result;
-  const result = buildVoteRankingResult(vote, submissions);
-  if (rankingResultCache.size >= RANKING_RESULT_CACHE_LIMIT) {
-    const oldest = rankingResultCache.keys().next().value;
-    if (oldest !== undefined) rankingResultCache.delete(oldest);
+  return cachedRankingResult(
+    rankingResultCache,
+    vote,
+    submissions,
+    rankingSignature,
+    buildVoteRankingResult,
+  );
+}
+
+/**
+ * The ballot a facilitator sees as "in progress": the newest draft when the
+ * participant is editing, otherwise the last submission. Used only for the
+ * provisional ranking shown before any ballot has been submitted.
+ */
+function effectiveRankingBallot(
+  submission: VoteRankingSubmission,
+): VoteRankingBallot | null {
+  const draftIsNewer = isDraftNewer(
+    submission.draft !== null,
+    submission.draftUpdatedAt,
+    submission.submittedAt,
+  );
+  if (draftIsNewer && submission.draft) return submission.draft;
+  return submission.submitted ?? submission.draft;
+}
+
+/**
+ * Provisional ranking built from every participant's current ballot, including
+ * drafts. Cached against a draft-aware signature: the facilitator view refetches
+ * on every participation change, and most of those do not alter a draft.
+ */
+function buildDraftRankingResult(
+  vote: VoteEntity,
+  submissions: VoteRankingSubmission[],
+): VoteRankingResult | null {
+  if (activeProposalIds(vote).length === 0) return null;
+  const effective: VoteRankingSubmission[] = [];
+  for (const submission of submissions) {
+    const ballot = effectiveRankingBallot(submission);
+    // A participant who joined but has not compared anything yet shows up in
+    // the participation counts, but must not dilute the provisional ranking's
+    // coverage/participant count.
+    if (ballot && ballot.comparisons.length > 0) {
+      effective.push({ ...submission, submitted: ballot });
+    }
   }
-  rankingResultCache.set(vote.id, { signature, result });
-  return result;
+  if (effective.length === 0) return null;
+  return buildVoteRankingResult(vote, effective);
+}
+
+const draftRankingResultCache = new Map<
+  string,
+  { signature: string; result: VoteRankingResult | null }
+>();
+
+function getDraftRankingResult(
+  vote: VoteEntity,
+  submissions: VoteRankingSubmission[],
+): VoteRankingResult | null {
+  return cachedRankingResult(
+    draftRankingResultCache,
+    vote,
+    submissions,
+    (v, s) => rankingSignature(v, s, true),
+    buildDraftRankingResult,
+  );
 }
 
 type RankingBallotShapeError =
@@ -1645,6 +2066,12 @@ app.post('/api/votes/:idOrSlug/ranking-submissions', async (req: Request, res: R
       submittedAt: validation.status === 'submitted' ? now : undefined,
       lastSeenAt: now,
     });
+    // Mark the public live channel even though the ballot payload itself stays
+    // private. Draft autosaves only move participation; an explicit submit also
+    // changes the aggregate ranking.
+    scheduleRankingLiveBroadcast(vote, {
+      resultsChanged: validation.status === 'submitted',
+    });
     // The client already holds the ballot it just uploaded; echo only the
     // canonical metadata instead of the full (up to 20k comparison) payload.
     res.status(201).json({
@@ -1678,6 +2105,7 @@ app.delete('/api/votes/:idOrSlug/ranking-submissions', async (req: Request, res:
       return res.status(400).json({ error: 'Ballot already submitted' });
     }
     await db.deleteVoteRankingSubmission(vote.id, voterToken);
+    scheduleRankingLiveBroadcast(vote, { resultsChanged: true });
     res.status(204).send();
   } catch (error: unknown) {
     console.error('Error deleting ranking submission:', error);
@@ -1694,6 +2122,9 @@ app.get('/api/votes/:idOrSlug/ranking-participation', async (req: Request, res: 
     // shared caches from returning one facilitator's response to another.
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Vary', 'X-Moderator-Token');
+    // `ownerId` is public and a query flag is caller-controlled, so neither can
+    // grant the live participation table. Only a moderator session may read
+    // draft progress, last-seen and editing state (see `canModerateVote`).
     if (!(await canModerateVote(req, vote))) {
       return res.status(403).json({ error: 'Facilitator access required' });
     }
@@ -1712,18 +2143,42 @@ app.get('/api/votes/:idOrSlug/ranking-results', async (req: Request, res: Respon
   try {
     const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
     if (!vote) return res.status(404).json({ error: 'Vote not found' });
-    if (!areRankingResultsVisible(vote)) {
+    // The standalone moderation popout and the in-app owner view both send the
+    // vote's moderator token; the token, not the `includeHidden` query flag, is
+    // the capability. The flag only tells a caller that already holds the
+    // capability whether to request the facilitator projection.
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Vary', 'X-Moderator-Token');
+    const isModerator = await canModerateVote(req, vote);
+    if (!isModerator && !areRankingResultsVisible(vote)) {
       // Hidden results only need a participation count, not every ballot's
       // full comparison JSON (which can hold up to 20,000 entries each).
       const submittedCount = await db.countVoteRankingSubmittedBallots(vote.id);
       return res.json({ hidden: true, participantCount: submittedCount, result: null });
     }
-    // Aggregation consumes only submitted ballots, so skip draft payloads
-    // entirely instead of fetching, deserializing and discarding them.
-    const submissions = await db.getVoteRankingSubmittedBallots(vote.id);
+    // The official ranking consumes submitted ballots only. Facilitator views
+    // additionally get a provisional ranking built from drafts, so the
+    // moderator sees the ranking take shape as soon as participants start
+    // comparing, instead of an empty result until the first submission.
+    // A facilitator needs both the submitted payloads and the drafts, so read
+    // every row once and derive the submitted set instead of issuing a second
+    // full-table query for the same vote.
+    let submissions: VoteRankingSubmission[];
+    let draftResult: VoteRankingResult | null = null;
+    // Only an open vote can have a provisional draft ranking. Drafts can no
+    // longer be submitted once the vote closes, so a closed vote — like every
+    // public view — reads the lean submitted-only projection instead of
+    // fetching and JSON-parsing every draft payload just to discard it.
+    if (isModerator && vote.config.phase === 'OPEN') {
+      const allSubmissions = await db.getVoteRankingSubmissions(vote.id);
+      submissions = allSubmissions.filter((submission) => submission.submitted !== null);
+      draftResult = getDraftRankingResult(vote, allSubmissions);
+    } else {
+      submissions = await db.getVoteRankingSubmittedBallots(vote.id);
+    }
     const submittedCount = submissions.length;
     const result = getVoteRankingResult(vote, submissions);
-    res.json({ hidden: false, participantCount: submittedCount, result });
+    res.json({ hidden: false, participantCount: submittedCount, result, draftResult });
   } catch (error: unknown) {
     console.error('Error computing ranking results:', error);
     const message = error instanceof Error ? error.message : String(error);
@@ -1876,50 +2331,13 @@ app.post('/api/votes/:idOrSlug/responses', async (req: Request, res: Response) =
     }
 
     const { value } = req.body;
-    if (typeof value !== 'number' || !Number.isFinite(value)) {
-      return res.status(400).json({ error: 'Invalid vote value: must be a finite number' });
-    }
-
-    const mode = vote.config.mode;
-    const MAX_MJ = 5;
-    const MIN_MJ = -1;
-    let valueError: string | null = null;
-
-    switch (mode) {
-      case 'THUMBS_UP':
-        if (value !== 1) valueError = 'THUMBS_UP votes must have value 1';
-        break;
-      case 'THUMBS_UD_NEUTRAL':
-        if (![-1, 0, 1].includes(value)) valueError = 'THUMBS_UD_NEUTRAL votes must be -1, 0, or 1';
-        break;
-      case 'POINTS': {
-        const maxPts = vote.config.maxPointsPerUser ?? 10;
-        if (!Number.isInteger(value) || value < 0 || value > maxPts) {
-          valueError = `POINTS votes must be an integer between 0 and ${maxPts}`;
-        }
-        break;
-      }
-      case 'MAJORITY_JUDGMENT':
-        if (value < MIN_MJ || value > MAX_MJ || !Number.isInteger(value)) {
-          valueError = 'MAJORITY_JUDGMENT votes must be an integer between -1 and 5';
-        }
-        break;
-      case 'CONSENT_LOOP':
-        if (value < MIN_MJ || value > MAX_MJ || !Number.isInteger(value)) {
-          valueError = 'CONSENT_LOOP votes must be an integer between -1 and 5';
-        }
-        break;
-      case 'COMPARATIVE_PRIORITIZATION':
-        return res.status(400).json({ error: 'Use the ranking-submissions endpoint for this vote' });
-      default:
-        valueError = `Unknown vote mode: ${mode}`;
-    }
-
+    const valueError = validateVoteResponseValue(vote, value);
     if (valueError) {
       return res.status(400).json({ error: valueError });
     }
 
     const response = await db.createVoteResponse(vote.id, req.body);
+    broadcastVoteResponseToYjs(vote, response);
     res.status(201).json(response);
   } catch (error: unknown) {
     console.error('Error creating vote response:', error);
@@ -1945,17 +2363,195 @@ app.delete('/api/votes/:idOrSlug/responses', async (req: Request, res: Response)
     if (vote.config.phase !== 'OPEN') {
       return res.status(400).json({ error: 'Vote is not open for responses' });
     }
-    await db.deleteVoteResponse(
+    const deletedProposalId = typeof proposalId === 'string' ? proposalId : null;
+    const deletedLoopId = typeof loopId === 'string' ? loopId : null;
+    const deletedResponseIds = await db.deleteVoteResponse(
       vote.id,
       voterToken,
-      typeof proposalId === 'string' ? proposalId : null,
-      typeof loopId === 'string' ? loopId : null,
+      deletedProposalId,
+      deletedLoopId,
     );
+    broadcastVoteResponsesRemovedFromYjs(deletedResponseIds);
     res.status(204).send();
   } catch (error: unknown) {
     console.error('Error deleting vote response:', error);
     const message = error instanceof Error ? error.message : String(error);
     res.status(500).json({ error: 'Failed to withdraw vote', details: message });
+  }
+});
+
+// Ephemeral in-progress selections (non-comparative modes).
+//
+// Writes are authenticated by the participant's voter token, exactly like a
+// response submit; reads require a moderator session because the payload
+// reveals unsubmitted choices and participation. Keeping this in memory (with a
+// TTL) means nothing is persisted as a vote and no schema migration is needed.
+const MAX_DRAFT_ENTRIES = 500;
+
+app.post('/api/votes/:idOrSlug/drafts', async (req: Request, res: Response) => {
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) {
+      return res.status(404).json({ error: 'Vote not found' });
+    }
+    if (vote.config.phase !== 'OPEN') {
+      return res.status(400).json({ error: 'Vote is not open for drafts' });
+    }
+    if (vote.config.mode === 'COMPARATIVE_PRIORITIZATION') {
+      return res.status(400).json({ error: 'Use the ranking-submissions endpoint for this vote' });
+    }
+
+    const { voterToken, values, publisherId } = req.body ?? {};
+    if (typeof voterToken !== 'string' || voterToken.length === 0) {
+      return res.status(400).json({ error: 'voterToken is required' });
+    }
+    if (!values || typeof values !== 'object' || Array.isArray(values)) {
+      return res.status(400).json({ error: 'values must be an object keyed by proposal id' });
+    }
+    const entries = Object.entries(values as Record<string, unknown>);
+    if (entries.length > MAX_DRAFT_ENTRIES) {
+      return res.status(400).json({ error: 'Too many draft entries' });
+    }
+
+    // Ignore proposals that no longer exist (a stale client may still hold one)
+    // but reject values the submit route would refuse, so a draft can never
+    // show a state that could not be submitted.
+    const proposalIds = new Set(vote.proposals.map((proposal) => proposal.id));
+    const cleanValues: Record<string, number> = {};
+    for (const [proposalId, value] of entries) {
+      if (!proposalIds.has(proposalId)) continue;
+      const valueError = validateVoteResponseValue(vote, value as number);
+      if (valueError) {
+        return res.status(400).json({ error: valueError });
+      }
+      cleanValues[proposalId] = value as number;
+    }
+
+    upsertVoteDraft({
+      voteId: vote.id,
+      voterAlias: voterAlias(vote.id, voterToken),
+      participantKey: voteParticipantKey(vote.id, voterToken),
+      values: cleanValues,
+      publisherId: typeof publisherId === 'string' ? publisherId : undefined,
+    });
+    broadcastVoteDraftRevision(vote.id);
+    res.status(204).send();
+  } catch (error: unknown) {
+    console.error('Error publishing vote draft:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to publish vote draft', details: message });
+  }
+});
+
+app.delete('/api/votes/:idOrSlug/drafts', async (req: Request, res: Response) => {
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) {
+      return res.status(404).json({ error: 'Vote not found' });
+    }
+    // Prefer the header: the voter token is the participant's withdrawal
+    // credential, and this DELETE runs on page unload for every participant, so
+    // a query token would be written to access/proxy logs. The query form stays
+    // as a fallback for older clients.
+    const voterToken = requestToken(req, 'x-voter-token', 'voterToken');
+    const publisherId = req.query.publisherId;
+    if (!voterToken) {
+      return res.status(400).json({ error: 'voterToken is required' });
+    }
+    const removed = deleteVoteDraft(
+      vote.id,
+      voteParticipantKey(vote.id, voterToken),
+      typeof publisherId === 'string' ? publisherId : undefined,
+    );
+    if (removed) broadcastVoteDraftRevision(vote.id);
+    res.status(204).send();
+  } catch (error: unknown) {
+    console.error('Error deleting vote draft:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to delete vote draft', details: message });
+  }
+});
+
+app.get('/api/votes/:idOrSlug/drafts', async (req: Request, res: Response) => {
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) {
+      return res.status(404).json({ error: 'Vote not found' });
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Vary', 'X-Moderator-Token');
+    if (!(await canModerateVote(req, vote))) {
+      return res.status(403).json({ error: 'Facilitator access required' });
+    }
+    // A closed vote must show submitted ballots only, even if a dead tab's
+    // draft has not expired yet.
+    const drafts =
+      vote.config.phase === 'OPEN'
+        ? listVoteDrafts(vote.id).map((draft) => ({
+            voteId: draft.voteId,
+            voterAlias: draft.voterAlias,
+            participantId: draft.participantId,
+            values: draft.values,
+            updatedAt: draft.updatedAt,
+          }))
+        : [];
+    res.json({ drafts });
+  } catch (error: unknown) {
+    console.error('Error fetching vote drafts:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to fetch vote drafts', details: message });
+  }
+});
+
+// Ephemeral presence: who has the public page open, before touching a ballot.
+// The write is authenticated by the voter token; the read needs a moderator
+// session because it reveals participation (and, for anonymous votes, that
+// someone is taking part at all).
+app.post('/api/votes/:idOrSlug/presence', async (req: Request, res: Response) => {
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) {
+      return res.status(404).json({ error: 'Vote not found' });
+    }
+    if (vote.config.phase !== 'OPEN') {
+      return res.status(400).json({ error: 'Vote is not open' });
+    }
+    const { voterToken } = req.body ?? {};
+    if (typeof voterToken !== 'string' || voterToken.length === 0) {
+      return res.status(400).json({ error: 'voterToken is required' });
+    }
+    touchVotePresence({
+      voteId: vote.id,
+      voterAlias: voterAlias(vote.id, voterToken),
+      participantKey: voteParticipantKey(vote.id, voterToken),
+    });
+    broadcastVotePresenceRevision(vote.id);
+    res.status(204).send();
+  } catch (error: unknown) {
+    console.error('Error publishing vote presence:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to publish vote presence', details: message });
+  }
+});
+
+app.get('/api/votes/:idOrSlug/presence', async (req: Request, res: Response) => {
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) {
+      return res.status(404).json({ error: 'Vote not found' });
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Vary', 'X-Moderator-Token');
+    if (!(await canModerateVote(req, vote))) {
+      return res.status(403).json({ error: 'Facilitator access required' });
+    }
+    const presence =
+      vote.config.phase === 'OPEN' ? listVotePresence(vote.id) : [];
+    res.json({ presence });
+  } catch (error: unknown) {
+    console.error('Error fetching vote presence:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to fetch vote presence', details: message });
   }
 });
 
@@ -1971,9 +2567,21 @@ app.get('/api/votes/:idOrSlug/results', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Vote not found' });
     }
     const responses = await db.getVoteResponses(vote.id);
-    const safeResponses = isVoteAnonymous(vote.config)
-      ? responses.map(r => ({ ...r, userId: null }))
-      : responses;
+    const safeResponses = redactVoteResponsesForVote(vote, responses);
+    // The moderator view merges in-progress drafts into these submitted rows.
+    // Join on the server's unforgeable, vote-scoped participant digest rather
+    // than the short public alias, which a participant can brute-force into a
+    // collision and use to impersonate another participant in the live tally.
+    // The digest is one-way and only returned to a caller that already holds
+    // this vote's moderator capability; the public projection stays alias-only.
+    if (await canModerateVote(req, vote)) {
+      for (let index = 0; index < safeResponses.length; index++) {
+        safeResponses[index].participantId = voteParticipantKey(
+          vote.id,
+          responses[index].voterToken,
+        );
+      }
+    }
     res.json({ vote, responses: safeResponses, totalVotes: responses.length });
   } catch (error: unknown) {
     console.error('Error fetching vote results:', error);
@@ -2083,7 +2691,30 @@ app.get('/api/votes/:id/moderators', async (req: Request, res: Response) => {
 
 app.post('/api/votes/:id/moderators', async (req: Request, res: Response) => {
   try {
-    const moderator = await db.addVoteModerator(req.params.id, req.body);
+    const vote = await findVoteByIdOrSlug(req.params.id);
+    if (!vote) return res.status(404).json({ error: 'Vote not found' });
+    const body = (req.body ?? {}) as {
+      displayName?: unknown;
+      email?: unknown;
+      addedByUserId?: unknown;
+    };
+    // `addedByUserId` is audit metadata, not a credential. Older clients (and
+    // the one-click share-link UI) do not send it; default to the vote owner
+    // instead of passing `undefined` to SQLite.
+    const moderator = await db.addVoteModerator(vote.id, {
+      displayName:
+        typeof body.displayName === 'string' && body.displayName.trim()
+          ? body.displayName.trim()
+          : 'Moderator link',
+      email:
+        typeof body.email === 'string' && body.email.trim()
+          ? body.email.trim()
+          : undefined,
+      addedByUserId:
+        typeof body.addedByUserId === 'string' && body.addedByUserId.trim()
+          ? body.addedByUserId
+          : vote.ownerId,
+    });
     res.status(201).json(moderator);
   } catch (error: unknown) {
     console.error('Error adding vote moderator:', error);
@@ -2094,6 +2725,22 @@ app.post('/api/votes/:id/moderators', async (req: Request, res: Response) => {
 
 app.delete('/api/votes/:id/moderators/:moderatorId', async (req: Request, res: Response) => {
   try {
+    const vote = await findVoteByIdOrSlug(req.params.id);
+    if (!vote) {
+      return res.status(404).json({ error: 'Vote not found' });
+    }
+    // Revoking a link is a privileged, destructive operation. Require a live
+    // moderator capability for this vote (any active link, including the one
+    // being revoked) so an unauthenticated caller cannot deactivate links.
+    if (!(await canModerateVote(req, vote))) {
+      return res.status(403).json({ error: 'Facilitator access required' });
+    }
+    // Only allow revoking a link that belongs to this vote; moderator ids are
+    // otherwise globally addressable.
+    const moderators = await db.getVoteModerators(vote.id);
+    if (!moderators.some((moderator) => moderator.id === req.params.moderatorId)) {
+      return res.status(404).json({ error: 'Moderator not found' });
+    }
     await db.revokeVoteModerator(req.params.moderatorId);
     res.status(204).send();
   } catch (error: unknown) {
@@ -2388,6 +3035,17 @@ app.use('*', async (req: Request, res: Response) => {
 async function startServer() {
   try {
     await initializeDb();
+    purgeLegacyVoteLiveMapsFromYjs();
+    // Redact withdrawal tokens written by clients that predate this change (a
+    // stale bundle keeps publishing raw tokens into the shared room).
+    scrubLegacyVoteResponseTokensFromYjs();
+    // Ephemeral live stores prune on write, but a vote nobody writes to or
+    // moderates again would keep its expired drafts/presence for the life of the
+    // process. Sweep on a timer so the TTL holds even then.
+    setInterval(() => {
+      sweepExpiredVoteDrafts();
+      sweepExpiredVotePresence();
+    }, 5 * 60 * 1000);
     startSprintScheduler(db, broadcastTaskToYjs);
 
     // Check if tasks exist, if not, the frontend will call the init-defaults endpoint
@@ -2418,7 +3076,13 @@ async function startServer() {
     });
 
     wss.on('connection', (ws, req) => {
-      const docName = req.url?.slice(1).split('?')[0] || 'default-doc';
+      // The browser connects to <origin>/ws/<room>; a dev proxy may strip the
+      // /ws prefix before forwarding. Normalize both to the bare room name so
+      // the doc that clients share is also the doc server-side broadcasts use
+      // (see YJS_ROOM). Without this, production writes landed in
+      // "ws/p3fo-room" while getYDoc(YJS_ROOM) wrote to "p3fo-room".
+      const rawDocName = req.url?.slice(1).split('?')[0] || 'default-doc';
+      const docName = rawDocName.startsWith('ws/') ? rawDocName.slice(3) : rawDocName;
       setupWSConnection(ws, req, { docName });
     });
 

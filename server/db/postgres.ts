@@ -2357,7 +2357,12 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       submittedAt: response.submittedAt || new Date().toISOString(),
     };
 
-    await this.pool.query(`
+    // `RETURNING *` is required: on conflict the upsert keeps the existing row
+    // (and its id), so returning the generated `newResponse.id` would publish a
+    // key that has no database row. The live Yjs map and the delete broadcast
+    // must both use the persisted id so an upsert replaces a voter's live entry
+    // instead of duplicating it.
+    const result = await this.pool.query(`
       INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt")
       VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
       ON CONFLICT ("voteId", "voterToken", (COALESCE("proposalId", '')), (COALESCE("loopId", '')))
@@ -2368,6 +2373,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
           "value" = EXCLUDED."value",
           "comment" = EXCLUDED."comment",
           "submittedAt" = EXCLUDED."submittedAt"
+      RETURNING *
     `, [
       newResponse.id,
       newResponse.voteId,
@@ -2380,7 +2386,22 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       newResponse.submittedAt,
     ]);
 
-    return newResponse;
+    const row = result.rows[0] as Record<string, unknown> | undefined;
+    if (!row) return newResponse;
+    return {
+      id: row.id as string,
+      voteId: row.voteId as string,
+      proposalId: row.proposalId as string | null,
+      loopId: (row.loopId as string | null) ?? undefined,
+      userId: row.userId as string | null,
+      voterToken: row.voterToken as string,
+      value: row.value as number,
+      comment: (row.comment as string | null) ?? undefined,
+      // `pg` parses TIMESTAMPTZ into a `Date`. This entity is written straight
+      // into the shared Yjs map, where lib0 encodes a `Date` as `{}`, so it must
+      // stay an ISO string here (same rule as the other vote mappings).
+      submittedAt: this.toIsoString(row.submittedAt) ?? newResponse.submittedAt,
+    };
   }
 
   async deleteVoteResponse(
@@ -2388,15 +2409,17 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     voterToken: string,
     proposalId: string | null,
     loopId: string | null = null,
-  ): Promise<void> {
-    await this.pool.query(
+  ): Promise<string[]> {
+    const result = await this.pool.query(
       `DELETE FROM "voteResponses"
        WHERE "voteId" = $1
          AND "voterToken" = $2
          AND COALESCE("proposalId", '') = COALESCE($3, '')
-         AND COALESCE("loopId", '') = COALESCE($4, '')`,
+         AND COALESCE("loopId", '') = COALESCE($4, '')
+       RETURNING "id"`,
       [voteId, voterToken, proposalId, loopId],
     );
+    return (result.rows as Array<{ id: string }>).map((row) => row.id);
   }
 
   async importVoteResponses(items: VoteResponseEntity[]): Promise<void> {
@@ -2542,6 +2565,14 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
   async countVoteRankingSubmittedBallots(voteId: string): Promise<number> {
     const result = await this.pool.query(
       'SELECT COUNT(*)::int AS "count" FROM "voteRankingSubmissions" WHERE "voteId" = $1 AND "submittedPayload" IS NOT NULL',
+      [voteId],
+    );
+    return Number(result.rows[0]?.count ?? 0);
+  }
+
+  async countVoteRankingParticipants(voteId: string): Promise<number> {
+    const result = await this.pool.query(
+      'SELECT COUNT(*)::int AS "count" FROM "voteRankingSubmissions" WHERE "voteId" = $1',
       [voteId],
     );
     return Number(result.rows[0]?.count ?? 0);
@@ -2860,7 +2891,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     await this.pool.query('UPDATE "voteModerators" SET "active" = FALSE WHERE "id" = $1', [moderatorId]);
   }
 
-  async resolveVoteModeratorToken(token: string): Promise<{ vote: VoteEntity; moderator: VoteModerator } | null> {
+  async verifyVoteModeratorToken(token: string): Promise<{ vote: VoteEntity; moderator: VoteModerator } | null> {
     const result = await this.pool.query('SELECT * FROM "voteModerators" WHERE "token" = $1 AND "active" = TRUE', [token]);
     if (result.rows.length === 0) return null;
 
@@ -2880,9 +2911,14 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
 
     const vote = await this.getVoteById(moderator.voteId);
     if (!vote) return null;
-
-    await this.pool.query('UPDATE "voteModerators" SET "lastSeenAt" = $1 WHERE "id" = $2', [new Date().toISOString(), moderator.id]);
     return { vote, moderator };
+  }
+
+  async resolveVoteModeratorToken(token: string): Promise<{ vote: VoteEntity; moderator: VoteModerator } | null> {
+    const resolved = await this.verifyVoteModeratorToken(token);
+    if (!resolved) return null;
+    await this.pool.query('UPDATE "voteModerators" SET "lastSeenAt" = $1 WHERE "id" = $2', [new Date().toISOString(), resolved.moderator.id]);
+    return resolved;
   }
 
   async importVoteModerators(items: VoteModerator[]): Promise<void> {
