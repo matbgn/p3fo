@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.41.0 (2026-11-20)
+
+### Features
+
+- **voting:** add live drafts and participation (f473e57)
+
+---
+
 ## v0.40.0 (2026-11-12)
 
 ### Features
@@ -122,9 +130,5 @@
 - **metrics:** anchor grid to week start and end on current day for heatmap (14f9d33)
 - **salary system:** honor 13th-salary switch and derive hours/day (afc8fe9)
 - **quickTimer:** hide archived tasks from running task slot (bdd630c)
-
----
-
-## v0.33.1 (2026-07-25)
 
 ---
