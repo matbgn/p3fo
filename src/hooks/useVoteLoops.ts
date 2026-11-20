@@ -21,32 +21,21 @@ const syncLoopToYjs = (loop: VoteLoop) => {
   }
 };
 
-const syncLoopsToYjs = (voteId: string, loops: VoteLoop[]) => {
+const syncLoopsToYjs = (_voteId: string, loops: VoteLoop[]) => {
   if (!isCollaborationEnabled()) return;
+  // Upsert only: a stale fetch must not delete a round another client just
+  // opened. Reset clears loops explicitly.
   doc.transact(() => {
-    const keysToDelete: string[] = [];
-    yVoteLoops.forEach((v, k) => {
-      const parsed = parseYjsLoopValue(v);
-      if (parsed && parsed.voteId === voteId && !loops.some(l => l.id === parsed.id)) {
-        keysToDelete.push(k as string);
-      }
-    });
-    keysToDelete.forEach(k => yVoteLoops.delete(k));
     loops.forEach(l => yVoteLoops.set(l.id, l));
   });
 };
 
-if (isCollaborationEnabled()) {
-  yVoteLoops.observe(() => {
-    eventBus.publish("voteLoopsChanged");
-  });
-}
-
-export const useVoteLoops = (voteId: string) => {
+export const useVoteLoops = (voteId: string, enabled = true) => {
   const [loops, setLoops] = React.useState<VoteLoop[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
+  const [isLoading, setIsLoading] = React.useState(enabled);
 
   const loadLoops = React.useCallback(async () => {
+    if (!enabled) return [];
     try {
       const adapter = await getPersistenceAdapter();
       const result = await adapter.listVoteLoops(voteId);
@@ -57,9 +46,13 @@ export const useVoteLoops = (voteId: string) => {
       console.error("Error loading vote loops:", error);
       return [];
     }
-  }, [voteId]);
+  }, [voteId, enabled]);
 
   React.useEffect(() => {
+    if (!enabled) {
+      setIsLoading(false);
+      return;
+    }
     let mounted = true;
 
     const initialFetch = async () => {
@@ -91,15 +84,15 @@ export const useVoteLoops = (voteId: string) => {
 
     if (isCollaborationEnabled()) {
       yVoteLoops.observe(yjsHandler);
-      const eventHandler = () => {
+      // Safety net only; the live path is the Yjs observer above.
+      const interval = setInterval(() => {
         if (!mounted) return;
         loadLoops();
-      };
-      eventBus.subscribe("voteLoopsChanged", eventHandler);
+      }, 15000);
       return () => {
         mounted = false;
+        clearInterval(interval);
         yVoteLoops.unobserve(yjsHandler);
-        eventBus.unsubscribe("voteLoopsChanged", eventHandler);
       };
     }
 
@@ -115,7 +108,7 @@ export const useVoteLoops = (voteId: string) => {
       eventBus.unsubscribe("voteLoopsChanged", eventHandler);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [voteId]);
+  }, [voteId, enabled]);
 
   const openRound = async (
     proposalId: string,

@@ -1,9 +1,10 @@
 import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
-import { Vote, Plus, BarChart3, Clock, Trash2, ExternalLink, Eye, Trophy, Edit, ToggleLeft, Shield, Share2, RotateCcw, GitCompare, Save } from "lucide-react";
+import { Vote, Plus, BarChart3, Clock, Trash2, ExternalLink, Eye, Trophy, ToggleLeft, Shield, Share2, RotateCcw, GitCompare, Save } from "lucide-react";
 import { useVotes, useVoteResults, syncVoteToYjs } from "@/hooks/useVotes";
 import { useVoteLoops } from "@/hooks/useVoteLoops";
+import { useVoteModerators } from "@/hooks/useVoteModerators";
 import { getPersistenceAdapter } from "@/lib/persistence-factory";
 import { eventBus } from "@/lib/events";
 import { getVotingStrings } from "@/lib/voting-i18n";
@@ -31,6 +32,8 @@ import { LoopRoundControls } from "@/components/voting/LoopRoundControls";
 import { LoopRoundDiffDialog } from "@/components/voting/LoopRoundDiffDialog";
 import { BlockNoteProposalEditor } from "@/components/voting/BlockNoteProposalEditor";
 import { ModerationPanel } from "@/components/voting/ModerationPanel";
+import { RankingParticipationPanel } from "@/components/voting/RankingParticipationPanel";
+import { VoteParticipationPanel } from "@/components/voting/VoteParticipationPanel";
 import QRCodeBlock from "@/components/voting/QRCodeBlock";
 import { deserializeBlocks } from "@/components/voting/BlockNoteProposalEditor";
 
@@ -53,7 +56,7 @@ const VoteCard: React.FC<{
   const { t: tt } = useTranslation();
   const phaseLabel = t.phases[vote.config.phase] || vote.config.phase;
   const phaseColor = PHASE_COLORS[vote.config.phase] || "bg-gray-100 text-gray-700";
-  const modeLabel = tt(`voting.mode.${vote.config.mode === "THUMBS_UP" ? "thumbsUp" : vote.config.mode === "THUMBS_UD_NEUTRAL" ? "thumbsUdNeutral" : vote.config.mode === "POINTS" ? "points" : vote.config.mode === "MAJORITY_JUDGMENT" ? "majorityJudgment" : "consentLoop"}`);
+  const modeLabel = t.modes[vote.config.mode] ?? vote.config.mode;
 
   return (
     <div
@@ -139,7 +142,7 @@ const ConsentLoopPanel: React.FC<{
 }> = ({ vote, loops, responses, onOpenRound, onCloseRound, onUpdateRoundContent, isModerator }) => {
   const t = getVotingStrings();
   const { t: tt } = useTranslation();
-  const { responses: voteResponses } = useVoteResults(vote.id);
+  const { responses: voteResponses } = useVoteResults(vote.id, true, false);
   const activeProposals = vote.proposals.filter((p) => p.active);
   const isOpen = vote.config.phase === "OPEN";
 
@@ -359,18 +362,59 @@ const ConsentLoopPanel: React.FC<{
 const VoteDetailPanel: React.FC<{
   vote: VoteEntity;
   onBack: () => void;
-  onEdit: () => void;
-  onFinalize: (outcome: VoteEntity["outcome"]) => Promise<void>;
+  onSaveVote: (input: Partial<VoteEntity>) => Promise<void>;
+  onFinalize: (outcome: VoteEntity["outcome"]) => Promise<boolean>;
   onDelete: (id: string) => void;
   onReset: (id: string) => void;
   onOpenPublic: (slug: string) => void;
   onPhaseChange: (id: string, phase: VoteEntity["config"]["phase"]) => Promise<void>;
-}> = ({ vote, onBack, onEdit, onFinalize, onDelete, onReset, onOpenPublic, onPhaseChange }) => {
+}> = ({ vote, onBack, onSaveVote, onFinalize, onDelete, onReset, onOpenPublic, onPhaseChange }) => {
   const t = getVotingStrings();
   const { t: tt } = useTranslation();
   const [showFinalizeDialog, setShowFinalizeDialog] = React.useState(false);
   const [showResetDialog, setShowResetDialog] = React.useState(false);
-  const [activeDetailTab, setActiveDetailTab] = React.useState<"results" | "rounds" | "moderation">("results");
+  // Editing a draft is the useful default there, but an OPEN/CLOSED vote must
+  // open on results: the edition tab mounts one rich-text editor per proposal,
+  // which is wasted work just to view a live vote.
+  const [activeDetailTab, setActiveDetailTab] = React.useState<"edition" | "results" | "rounds" | "moderation" | "participation">(
+    vote.config.phase === "IDLE" ? "edition" : "results",
+  );
+  // The moderator credential is the only way to read hidden results and live
+  // participation. The in-app owner view uses the vote's active moderator link;
+  // without one it safely falls back to the public projection. One instance owns
+  // the list so a link created/revoked in the moderation tab immediately updates
+  // the token used by the results and participation tabs.
+  const moderationState = useVoteModerators(vote.id);
+  const activeModeratorToken = React.useMemo(
+    () => moderationState.moderators.find((moderator) => moderator.active)?.token,
+    [moderationState.moderators],
+  );
+  // The in-app owner view is the facilitator view. Hidden results and live
+  // drafts are read through a moderator capability, so ensure one exists when
+  // the live tabs are opened instead of requiring a manual link first.
+  const ensuredModeratorRef = React.useRef(false);
+  const ensureActiveModerator = moderationState.ensureActiveModerator;
+  const moderatorsLoading = moderationState.isLoading;
+  React.useEffect(() => {
+    if (moderatorsLoading || activeModeratorToken) return;
+    if (activeDetailTab !== "results" && activeDetailTab !== "participation") return;
+    // Only an OPEN vote has live drafts/presence to read. Every mode that
+    // publishes presence needs the capability, including consent-loop votes:
+    // the participation tab shows joined-but-not-voting participants there too.
+    if (vote.config.phase !== "OPEN") return;
+    if (ensuredModeratorRef.current) return;
+    ensuredModeratorRef.current = true;
+    void ensureActiveModerator("Owner").then((moderator) => {
+      if (!moderator) ensuredModeratorRef.current = false;
+    });
+  }, [
+    moderatorsLoading,
+    activeModeratorToken,
+    activeDetailTab,
+    ensureActiveModerator,
+    vote.config.mode,
+    vote.config.phase,
+  ]);
   const isDecision = vote.config.kind === "decision";
   const isFinalized = vote.config.phase === "FINALIZED";
   const canFinalize = isDecision && (vote.config.phase === "CLOSED" || vote.config.phase === "OPEN");
@@ -378,8 +422,9 @@ const VoteDetailPanel: React.FC<{
   const canClose = vote.config.phase === "OPEN";
   const canReset = !isFinalized && !canOpen;
   const isConsentLoop = vote.config.mode === "CONSENT_LOOP";
+  const isComparative = vote.config.mode === "COMPARATIVE_PRIORITIZATION";
 
-  const { loops, openRound, closeRound, updateRoundContent, loadLoops } = useVoteLoops(vote.id);
+  const { loops, openRound, closeRound, updateRoundContent, loadLoops } = useVoteLoops(vote.id, !isComparative);
 
   const handleOpenRound = async (proposalId: string) => {
     const adapter = await getPersistenceAdapter();
@@ -445,11 +490,6 @@ const VoteDetailPanel: React.FC<{
             {t.buttons.reset}
           </Button>
         )}
-        {!isFinalized && (
-            <Button variant="ghost" size="sm" onClick={onEdit} title={tt("voting.edit")}>
-              <Edit className="w-4 h-4" />
-            </Button>
-          )}
         </div>
       </div>
 
@@ -509,15 +549,22 @@ const VoteDetailPanel: React.FC<{
 
       {isConsentLoop && (
         <div className="mb-4">
-          <Tabs value={activeDetailTab} onValueChange={(v) => setActiveDetailTab(v as "results" | "rounds" | "moderation")}>
+          <Tabs value={activeDetailTab} onValueChange={(v) => setActiveDetailTab(v as "edition" | "results" | "rounds" | "moderation" | "participation")}>
             <TabsList>
+              <TabsTrigger value="edition">{tt("voting.edition")}</TabsTrigger>
               <TabsTrigger value="rounds">{t.labels.rounds}</TabsTrigger>
               <TabsTrigger value="results">{t.labels.results}</TabsTrigger>
+              <TabsTrigger value="participation">
+                {tt("voting.participation")}
+              </TabsTrigger>
               <TabsTrigger value="moderation">
                 <Shield className="w-3 h-3 mr-1" />
                 {t.labels.moderation}
               </TabsTrigger>
             </TabsList>
+            <TabsContent value="edition">
+              <VoteEditor inline vote={vote} onSave={onSaveVote} />
+            </TabsContent>
             <TabsContent value="rounds">
               <ConsentLoopPanel
                 vote={vote}
@@ -529,12 +576,20 @@ const VoteDetailPanel: React.FC<{
               />
             </TabsContent>
             <TabsContent value="results">
-              <VoteResults vote={vote} />
+              <VoteResults
+                vote={vote}
+                moderatorToken={activeModeratorToken}
+                moderatorView
+              />
+            </TabsContent>
+            <TabsContent value="participation">
+              <VoteParticipationPanel vote={vote} moderatorToken={activeModeratorToken} />
             </TabsContent>
             <TabsContent value="moderation">
               <ModerationPanel
                 vote={vote}
                 currentUserId={vote.ownerId}
+                moderationState={moderationState}
                 onOpenModerationPopout={(token) => {
                   window.open(`${window.location.origin}/v/${vote.slug}/m/${token}`, "_blank");
                 }}
@@ -546,23 +601,46 @@ const VoteDetailPanel: React.FC<{
 
       {!isConsentLoop && (
         <div className="mb-4">
-          <Tabs value={activeDetailTab} onValueChange={(v) => setActiveDetailTab(v as "results" | "rounds" | "moderation")}>
+          <Tabs value={activeDetailTab} onValueChange={(v) => setActiveDetailTab(v as "edition" | "results" | "rounds" | "moderation" | "participation")}>
             <TabsList>
+              <TabsTrigger value="edition">{tt("voting.edition")}</TabsTrigger>
               <TabsTrigger value="results">{t.labels.results}</TabsTrigger>
+              <TabsTrigger value="participation">
+                {tt("voting.participation")}
+              </TabsTrigger>
               <TabsTrigger value="moderation">
                 <Shield className="w-3 h-3 mr-1" />
                 {t.labels.moderation}
               </TabsTrigger>
             </TabsList>
+            <TabsContent value="edition">
+              <VoteEditor inline vote={vote} onSave={onSaveVote} />
+            </TabsContent>
             <TabsContent value="results">
               <div className="flex-1 overflow-auto">
-                <VoteResults vote={vote} />
+                <VoteResults
+                  vote={vote}
+                  moderatorToken={activeModeratorToken}
+                  moderatorView
+                />
               </div>
+            </TabsContent>
+            <TabsContent value="participation">
+              {isComparative ? (
+                <RankingParticipationPanel
+                  voteId={vote.id}
+                  ownerId={vote.ownerId}
+                  moderatorToken={activeModeratorToken}
+                />
+              ) : (
+                <VoteParticipationPanel vote={vote} moderatorToken={activeModeratorToken} />
+              )}
             </TabsContent>
             <TabsContent value="moderation">
               <ModerationPanel
                 vote={vote}
                 currentUserId={vote.ownerId}
+                moderationState={moderationState}
                 onOpenModerationPopout={(token) => {
                   window.open(`${window.location.origin}/v/${vote.slug}/m/${token}`, "_blank");
                 }}
@@ -613,7 +691,6 @@ const VotingPage: React.FC = () => {
 
   const [selectedVote, setSelectedVote] = React.useState<VoteEntity | null>(null);
   const [editorOpen, setEditorOpen] = React.useState(false);
-  const [editorVote, setEditorVote] = React.useState<VoteEntity | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
   React.useEffect(() => {
@@ -628,20 +705,11 @@ const VotingPage: React.FC = () => {
   }, [searchParams, votes, selectedVote, setSearchParams]);
 
   const handleCreate = () => {
-    setEditorVote(null);
     setEditorOpen(true);
   };
 
   const handleSelectVote = (vote: VoteEntity) => {
     setSelectedVote(vote);
-  };
-
-  const handleEditVote = () => {
-    if (selectedVote) {
-      const freshVote = votes.find((v) => v.id === selectedVote.id) || selectedVote;
-      setEditorVote({ ...freshVote });
-      setEditorOpen(true);
-    }
   };
 
   const handleSaveVote = async (input: Partial<VoteEntity>) => {
@@ -707,9 +775,9 @@ const VotingPage: React.FC = () => {
     }
   };
 
-  const handleFinalize = async (outcome: VoteEntity["outcome"]) => {
-    if (!selectedVote) return;
-    await finalizeVote(selectedVote.id, outcome);
+  const handleFinalize = async (outcome: VoteEntity["outcome"]): Promise<boolean> => {
+    if (!selectedVote) return false;
+    return Boolean(await finalizeVote(selectedVote.id, outcome));
   };
 
   const handleDelete = async (id: string) => {
@@ -737,18 +805,12 @@ const VotingPage: React.FC = () => {
         <VoteDetailPanel
           vote={currentVote}
           onBack={() => setSelectedVote(null)}
-          onEdit={handleEditVote}
+          onSaveVote={handleSaveVote}
           onFinalize={handleFinalize}
           onDelete={handleDelete}
           onReset={handleReset}
           onOpenPublic={handleOpenPublic}
           onPhaseChange={handlePhaseChange}
-        />
-        <VoteEditor
-          open={editorOpen}
-          onOpenChange={setEditorOpen}
-          vote={editorVote}
-          onSave={handleSaveVote}
         />
       </div>
     );
@@ -814,7 +876,6 @@ const VotingPage: React.FC = () => {
       <VoteEditor
         open={editorOpen}
         onOpenChange={setEditorOpen}
-        vote={editorVote}
         onSave={handleSaveVote}
       />
     </div>
