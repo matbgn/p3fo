@@ -15,6 +15,7 @@ import {
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { addDaysToKey, addWeeks, combineDateKeyAndTime, parseDateKey, startOfDay, weekDateKeys } from '@/lib/planner/dates';
 import { compareDayOrder } from '@/lib/planner/position';
+import { plannerPlacementDate } from '@/lib/planner/placement';
 import { edgeDropDate, type WeekDirection } from '@/lib/planner/drop';
 import type { Task } from '@/hooks/useTasks';
 import { useTasks } from '@/hooks/useTasks';
@@ -208,7 +209,8 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
     for (const day of days) byIdByDay.set(day, new Map());
 
     for (const task of plainRootTasks) {
-      if (task.plannedDate) byIdByDay.get(task.plannedDate)?.set(task.id, task);
+      const placement = plannerPlacementDate(task);
+      if (placement) byIdByDay.get(placement)?.set(task.id, task);
     }
 
     const weekStart = days[0];
@@ -438,9 +440,12 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
     if (overId.startsWith('task:')) {
       const overTaskId = overId.slice(5);
       const overTask = plannerTaskById.get(overTaskId) ?? allTasks.find((candidate) => candidate.id === overTaskId);
-      if (!overTask?.plannedDate) return;
+      // Target the day the card is actually shown on: a Done card can sit on
+      // its completion day even though its plannedDate is still in the future.
+      const overDay = overTask ? plannerPlacementDate(overTask) : null;
+      if (!overTask || !overDay) return;
 
-      const dayTasks = tasksByDay[overTask.plannedDate] ?? [];
+      const dayTasks = tasksByDay[overDay] ?? [];
       const index = dayTasks.findIndex((candidate) => candidate.id === overTaskId);
       if (index === -1) return;
 
@@ -454,7 +459,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
       const beforeId = draggingDown ? dayTasks[index + 1]?.id ?? null : overTaskId;
 
       void movePlannedTask(resolvedTaskId, {
-        plannedDate: overTask.plannedDate,
+        plannedDate: overDay,
         beforeId,
         displayOrder: dayTasks,
       });

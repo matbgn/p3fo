@@ -13,6 +13,7 @@ import { formatWeekSpan } from './format';
 import { appendPosition, compareDayOrder, duplicateTaskPosition, positionBetween, positionForDrop } from './position';
 import { parseSmartTime } from './smart-time';
 import { isCarriedOver } from './carry-over';
+import { plannerPlacementDate } from './placement';
 
 describe('planner dates', () => {
   it('round-trips date keys without UTC shifts', () => {
@@ -216,6 +217,36 @@ describe('carry over', () => {
   it('ignores cards older than the carry-over lookback window', () => {
     expect(isCarriedOver({ ...base, plannedDate: '2026-03-18' }, '2026-03-25')).toBe(true);
     expect(isCarriedOver({ ...base, plannedDate: '2026-03-17' }, '2026-03-25')).toBe(false);
+  });
+});
+
+describe('planner placement', () => {
+  const completedAt = (key: string) => parseDateKey(key).getTime();
+  const base = {
+    id: 't1',
+    title: 'Task',
+    plannedDate: '2026-11-27',
+    triageStatus: 'Ready',
+  };
+
+  it('keeps unfinished cards on their planned day', () => {
+    expect(plannerPlacementDate({ ...base, completedAt: completedAt('2026-11-23') })).toBe('2026-11-27');
+  });
+
+  it('shows a future-planned task on the day it was actually completed', () => {
+    expect(
+      plannerPlacementDate({ ...base, triageStatus: 'Done', completedAt: completedAt('2026-11-23') }),
+    ).toBe('2026-11-23');
+  });
+
+  it('keeps Done cards without a completion timestamp on their planned day', () => {
+    expect(plannerPlacementDate({ ...base, triageStatus: 'Done' })).toBe('2026-11-27');
+  });
+
+  it('leaves unscheduled tasks out of the day columns', () => {
+    expect(
+      plannerPlacementDate({ ...base, plannedDate: null, triageStatus: 'Done', completedAt: completedAt('2026-11-23') }),
+    ).toBeNull();
   });
 });
 
