@@ -40,6 +40,24 @@ export interface PomodoroState {
   armedBoost: PomodoroBoostMultiplier;
   /** Boost of the phase currently running (0 = idle / not boosted). */
   activeBoost: PomodoroBoostMultiplier;
+  /**
+   * Total duration fixed when this phase started. Keeps the countdown stable
+   * across config reloads and restored sessions (the config may not be loaded
+   * yet, or may have changed).
+   */
+  durationOverrideMs?: number;
+}
+
+/** A running session adopted from another device (takeover). */
+export interface AdoptedPomodoroSession {
+  phase: PomodoroPhase;
+  startedAt: number;
+  cycleCount: number;
+  armedBoost: PomodoroBoostMultiplier;
+  activeBoost: PomodoroBoostMultiplier;
+  taskId?: string | null;
+  /** Remote phase duration; keeps the continued countdown exact. */
+  durationOverrideMs?: number;
 }
 
 export interface FocusModeConfig {

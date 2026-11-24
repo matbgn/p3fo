@@ -47,6 +47,7 @@ import { cn } from "@/lib/utils";
 import { formatDuration } from "@/lib/format-utils";
 import { format } from "date-fns";
 import { addReminder } from "@/utils/reminders";
+import { canUserToggleTaskTimer } from "@/utils/task-timer-ownership";
 import { useReminderStore } from "@/hooks/useReminders";
 import { useShallow } from "zustand/react/shallow";
 import { useUserSettings } from "@/hooks/useUserSettings";
@@ -215,6 +216,8 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
   const weekStartsOn = settings.weekStartDay as 0 | 1;
 
   const canHaveTimer = !hasChildren;
+  const canTrackTask = canUserToggleTaskTimer(task, currentUserId);
+  const trackDisabledReason = canTrackTask ? undefined : 'Assigned to another user';
   const isDone = task.triageStatus === "Done" || task.triageStatus === "Dropped";
   const effectiveSubtasks = subtasks ?? tasks;
   const effectiveModalTasks = tasksForModal ?? tasks;
@@ -479,6 +482,9 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
                 e.stopPropagation();
                 toggleTimer(task.id, currentUserId);
               }}
+              disabled={!canTrackTask}
+              title={trackDisabledReason}
+              aria-label={trackDisabledReason}
             >
               {task.timer?.some(e => !e.endTime) ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
             </Button>

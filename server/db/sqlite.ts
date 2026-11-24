@@ -3355,6 +3355,15 @@ class SqliteClient implements DbClient {
     this.db.prepare(`
       INSERT INTO "pomodoroSessions"("id", "taskId", "userId", "startTime", "endTime", "phase", "duration", "completed", "multiplier")
       VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT("id") DO UPDATE SET
+        "taskId" = excluded."taskId",
+        "userId" = excluded."userId",
+        "startTime" = excluded."startTime",
+        "endTime" = excluded."endTime",
+        "phase" = excluded."phase",
+        "duration" = excluded."duration",
+        "completed" = excluded."completed",
+        "multiplier" = excluded."multiplier"
     `).run(
       session.id,
       taskId,

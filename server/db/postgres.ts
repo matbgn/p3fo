@@ -3054,6 +3054,15 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     await this.pool.query(`
       INSERT INTO "pomodoroSessions" ("id", "taskId", "userId", "startTime", "endTime", "phase", "duration", "completed", "multiplier")
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ON CONFLICT ("id") DO UPDATE SET
+        "taskId" = EXCLUDED."taskId",
+        "userId" = EXCLUDED."userId",
+        "startTime" = EXCLUDED."startTime",
+        "endTime" = EXCLUDED."endTime",
+        "phase" = EXCLUDED."phase",
+        "duration" = EXCLUDED."duration",
+        "completed" = EXCLUDED."completed",
+        "multiplier" = EXCLUDED."multiplier"
     `, [
       session.id,
       taskId,

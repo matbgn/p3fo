@@ -15,6 +15,7 @@ import { UsersProvider } from "@/context/UsersContext";
 import { SettingsProvider } from "@/context/SettingsContext";
 import { PomodoroProvider } from "@/context/PomodoroContext";
 import { TravelerProvider } from "@/context/TravelerContext";
+import { useTrackingPresencePublisher } from "@/hooks/useTrackingPresence";
 import { PomodoroPiPWindow } from "@/components/PomodoroPiPWindow";
 import { PomodoroFocusOverlay } from "@/components/PomodoroFocusOverlay";
 import { PomodoroTransitionAlert } from "@/components/PomodoroTransitionAlert";
@@ -105,6 +106,7 @@ const App = () => {
                     <SettingsProvider>
                       <PomodoroProvider>
                         <TravelerProvider>
+                          <TrackingPresencePublisher />
                           <TimerOverlays />
                           <ViewProvider>
                             <Toaster />
@@ -143,6 +145,12 @@ const App = () => {
       </QueryClientProvider>
     </Profiler>
   );
+};
+
+/** Announces this device's running timer to other clients (display-only). */
+const TrackingPresencePublisher: React.FC = () => {
+  useTrackingPresencePublisher();
+  return null;
 };
 
 const TimerOverlays: React.FC = () => {

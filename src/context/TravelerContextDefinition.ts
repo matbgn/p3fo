@@ -1,5 +1,5 @@
 import { createContext } from 'react';
-import { TravelerConfig, TravelerPhase, TravelerState } from '@/lib/traveler-types';
+import { AdoptedTravelerSession, TravelerConfig, TravelerPhase, TravelerState } from '@/lib/traveler-types';
 import { PomodoroSession } from '@/lib/pomodoro-types';
 
 export interface TravelerContextType {
@@ -13,6 +13,8 @@ export interface TravelerContextType {
   isRunning: boolean;
   isPaused: boolean;
   startWork: (departure: string, destination: string, travelDurationMs: number, travelMode?: 'flight' | 'train') => void;
+  /** Continue a session started on another device (takeover). */
+  adoptSession: (session: AdoptedTravelerSession) => void;
   pause: () => void;
   resume: () => void;
   skip: () => void;

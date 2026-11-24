@@ -1686,7 +1686,11 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
 
     try {
       const sessions = await this.listPomodoroSessions();
-      sessions.push(session);
+      // Idempotent by id: a restored session resumed in more than one tab, or a
+      // retried write, must not add a second indistinguishable time row.
+      const index = sessions.findIndex((s: PomodoroSession) => s.id === session.id);
+      if (index >= 0) sessions[index] = session;
+      else sessions.push(session);
       localStorage.setItem(POMODORO_SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
       return session;
     } catch (error) {
