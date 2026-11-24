@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.42.0 (2026-11-24)
+
+### Features
+
+- **timer:** add cross-device tracking and restore (b20446d)
+
+### Bug Fixes
+
+- **timer dial:** render timer splash as modal dialog (6d58884)
+- **planner:** show done tasks on completion day (796b6fd)
+- **timer dial:** isolate dialog interactions from draggable cards (54d06fb)
+
+---
+
 ## v0.41.0 (2026-11-20)
 
 ### Features
@@ -111,24 +125,5 @@
 - **common:** render properly module groups to bulk-disable views and timers (b7a8b46)
 - **common:** gate example data modal on full workspace scan (49c2b34)
 - **layout:** keep active view mounted (817a06c)
-
----
-
-## v0.34.0 (2026-08-26)
-
-### Features
-
-- **salary:** add employee row colors and mobile-friendly determinants (65186af)
-- **salary:** add employee row reordering and level description sync (e17de1d)
-- **timetable:** add project filter (2e50037)
-
-### Bug Fixes
-
-- **kanban:** show status select on hover in compact card sizes (b025339)
-- **metrics:** correct collaborative metric computations and labels (916343c)
-- **metrics:** count QoL index favorable answers with stored keys (23ebe82)
-- **metrics:** anchor grid to week start and end on current day for heatmap (14f9d33)
-- **salary system:** honor 13th-salary switch and derive hours/day (afc8fe9)
-- **quickTimer:** hide archived tasks from running task slot (bdd630c)
 
 ---
