@@ -16,7 +16,7 @@ import { VoteEntity, VoteLoop } from "@/lib/persistence-types";
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { useTranslation } from "react-i18next";
 import { useVoteLoops } from "@/hooks/useVoteLoops";
-import { tallyConsentLoop, getBestConsentRound } from "@/lib/vote-tally";
+import { tallyConsentLoop, getBestConsentRound, tallyEventRsvp } from "@/lib/vote-tally";
 import { useVoteResults } from "@/hooks/useVotes";
 import { useVoteRankingResults } from "@/hooks/useVoteRanking";
 import { proposalDisplayTitle, resolveFinalizedWinner, voteAllowsTies } from "@/lib/vote-ranking";
@@ -48,6 +48,7 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
 
   const isConsentLoop = vote.config.mode === "CONSENT_LOOP";
   const isComparative = vote.config.mode === "COMPARATIVE_PRIORITIZATION";
+  const isAttendance = vote.config.mode === "ATTENDANCE";
   const {
     data: rankingData,
     isLoading: rankingLoading,
@@ -63,6 +64,11 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
       ? tallyConsentLoop(loops, responses, vote.proposals.filter((p) => p.active).map((p) => p.id))
       : null,
     [isConsentLoop, loops, responses, vote.proposals]
+  );
+
+  const rsvpTally = React.useMemo(
+    () => (isAttendance ? tallyEventRsvp(responses) : null),
+    [isAttendance, responses],
   );
 
   React.useEffect(() => {
@@ -149,13 +155,18 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
       const winningProposal = effectiveWinner
         ? activeProposals.find((p) => p.id === effectiveWinner)
         : null;
+      const attendanceSummaryText = rsvpTally && rsvpTally.total > 0
+        ? `${t.attendanceOptions.going}: ${rsvpTally.going}, ${t.attendanceOptions.maybe}: ${rsvpTally.maybe}, ${t.attendanceOptions.notGoing}: ${rsvpTally.notGoing}`
+        : t.messages.noVotesYet;
       const finalSummary =
         summary.trim() ||
-        (effectiveWinner
-          ? winningProposal
-            ? tt("voting.finalizeSummaryProposal", { n: winningProposal.position + 1 })
-            : tt("voting.finalizeSummaryGeneric")
-          : tt("voting.finalizeSummaryTie"));
+        (isAttendance
+          ? attendanceSummaryText
+          : effectiveWinner
+            ? winningProposal
+              ? tt("voting.finalizeSummaryProposal", { n: winningProposal.position + 1 })
+              : tt("voting.finalizeSummaryGeneric")
+            : tt("voting.finalizeSummaryTie"));
 
       const finalized = await onFinalize({
         winningProposalId: effectiveWinner,
@@ -187,7 +198,9 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
           <DialogDescription>
             {isComparative
               ? tt("voting.comparative.finalizeDescription")
-              : t.messages.selectWinningProposal}
+              : isAttendance
+                ? t.modeDescriptions.ATTENDANCE
+                : t.messages.selectWinningProposal}
           </DialogDescription>
         </DialogHeader>
 
@@ -263,7 +276,33 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
             </div>
           )}
 
-          {!isComparative && (
+          {isAttendance && (
+            <div className="space-y-2 rounded-md border border-blue-200 bg-blue-50 p-3">
+              <Label className="text-sm font-medium">{t.labels.results}</Label>
+              {responsesLoading ? (
+                <p className="text-sm text-gray-500">{t.messages.loadingResults}</p>
+              ) : rsvpTally && rsvpTally.total > 0 ? (
+                <div className="space-y-1 text-sm">
+                  <p className="text-green-700">
+                    {t.attendanceOptions.going}: {rsvpTally.going}
+                  </p>
+                  <p className="text-yellow-700">
+                    {t.attendanceOptions.maybe}: {rsvpTally.maybe}
+                  </p>
+                  <p className="text-red-700">
+                    {t.attendanceOptions.notGoing}: {rsvpTally.notGoing}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {rsvpTally.total} {rsvpTally.total !== 1 ? t.labels.voters : t.labels.voter}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">{t.messages.noVotesYet}</p>
+              )}
+            </div>
+          )}
+
+          {!isComparative && !isAttendance && (
           <div className="space-y-2">
             <Label className="text-sm font-medium">{t.labels.winningProposal}</Label>
             <RadioGroup

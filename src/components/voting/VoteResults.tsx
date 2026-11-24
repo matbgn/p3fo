@@ -3,7 +3,7 @@ import { VoteEntity, VoteProposal, VoteLoop, VoteResponseEntity } from "@/lib/pe
 import { VOTING_MODES_LABELS, MJ_SCALE } from "@/components/planView/constants";
 import { useVoteParticipation, useVoteResults, responseVoterAlias } from "@/hooks/useVotes";
 import { useVoteLoops } from "@/hooks/useVoteLoops";
-import { tallyThumbsUp, tallyUDNeutral, tallyPoints, tallyMajorityJudgment, tallyConsentLoop, getBestConsentRound } from "@/lib/vote-tally";
+import { tallyThumbsUp, tallyUDNeutral, tallyPoints, tallyMajorityJudgment, tallyConsentLoop, getBestConsentRound, EVENT_RSVP_PROPOSAL_ID } from "@/lib/vote-tally";
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,8 @@ import { BarChart3, Users, MessageSquare, Trophy, ArrowUpDown, ArrowDownWideNarr
 import { LoopRoundProposalTooltip } from "./LoopRoundProposalTooltip";
 import { ProposalContentDisplay } from "./ProposalContentDisplay";
 import { PartialRankingResults } from "./PartialRankingResults";
+import { AttendanceRsvpSummary } from "./AttendanceRsvpSummary";
+import { attendancePartySize, summarizeAttendance } from "@/lib/attendance";
 
 interface VoteResultsProps {
   vote: VoteEntity;
@@ -255,6 +257,20 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
   const [resultsSortMetric, setResultsSortMetric] = React.useState<"original" | "median" | "average">("original");
   const [resultsSortDir, setResultsSortDir] = React.useState<"asc" | "desc">("desc");
 
+  // One memoized RSVP projection shared by the header count and the summary
+  // body, so a polling refresh scans the response list once instead of twice
+  // and an unrelated re-render (e.g. a dialog keystroke) does not scan it at all.
+  const attendanceSummary = React.useMemo(
+    () =>
+      vote.config.mode === "ATTENDANCE"
+        ? summarizeAttendance(responses, {
+            isAnonymous,
+            includeComments: vote.config.allowFreeText === true,
+          })
+        : null,
+    [vote.config.mode, vote.config.allowFreeText, responses, isAnonymous],
+  );
+
   const totalVoters = new Set(responses.map(identityOfResponse)).size;
   const commentsCount = responses.filter((r) => r.comment).length;
 
@@ -301,6 +317,91 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
         </div>
 
         <ConsentLoopResults vote={vote} />
+      </div>
+    );
+  }
+
+  if (vote.config.mode === "ATTENDANCE") {
+    const tally = attendanceSummary?.tally;
+    const questions = vote.config.attendance?.customQuestions ?? [];
+    // Organizers asked for emails / custom answers; show them only in the
+    // moderator view. The public projection never carries these fields.
+    const moderatorAttendees = moderatorView
+      ? responses.filter(
+          (response) =>
+            response.proposalId === EVENT_RSVP_PROPOSAL_ID && response.value === 1,
+        )
+      : [];
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Badge variant={PHASE_VARIANTS[vote.config.phase] || "secondary"}>
+            {t.phases[vote.config.phase] || vote.config.phase}
+          </Badge>
+          <Badge variant="outline">{VOTING_MODES_LABELS[vote.config.mode]}</Badge>
+          <Badge variant="outline">
+            {vote.config.kind === "decision" ? t.kinds.decision : t.kinds.consultation}
+          </Badge>
+        </div>
+
+        {vote.outcome && <VoteOutcomeBanner vote={vote} />}
+
+        <div className="flex gap-4 text-sm text-gray-500">
+          <span className="flex items-center gap-1">
+            <Users className="w-4 h-4" />
+            {tally?.total ?? 0} {tally?.total !== 1 ? t.labels.voters : t.labels.voter}
+          </span>
+        </div>
+
+        {isLoading ? (
+          <p className="text-sm text-gray-400">{t.messages.loadingResults}</p>
+        ) : (
+          <div className="border rounded-lg p-3">
+            <AttendanceRsvpSummary
+              responses={responses}
+              isAnonymous={isAnonymous}
+              showComments={vote.config.allowFreeText === true}
+              summary={attendanceSummary ?? undefined}
+            />
+          </div>
+        )}
+
+        {moderatorView && moderatorAttendees.length > 0 && (
+          <div className="border rounded-lg p-3 space-y-2">
+            <h4 className="text-xs font-medium text-gray-400 uppercase">
+              {t.attendance.attendees}
+            </h4>
+            <ul className="space-y-2">
+              {moderatorAttendees.map((response) => {
+                const data = response.attendeeData;
+                return (
+                  <li key={response.id} className="text-sm">
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <span className="font-medium text-gray-900">
+                        {data?.displayName ?? tt("voting.anonymous")}
+                      </span>
+                      <span className="text-xs text-gray-400">× {attendancePartySize(data)}</span>
+                    </div>
+                    {data?.email && (
+                      <div className="text-xs text-gray-500">
+                        {t.attendance.email}: {data.email}
+                      </div>
+                    )}
+                    {questions.map((question) => {
+                      const answer = data?.answers?.[question.id];
+                      if (!answer) return null;
+                      return (
+                        <div key={question.id} className="text-xs text-gray-500">
+                          {question.prompt}: {answer}
+                        </div>
+                      );
+                    })}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
       </div>
     );
   }

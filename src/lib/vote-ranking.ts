@@ -1,4 +1,5 @@
 import type {
+  AttendanceResponseData,
   RankingEngine,
   VoteConfig,
   VoteEntity,
@@ -13,6 +14,7 @@ import {
   estimatePartialRanking,
   poolBallots,
 } from './partial-ranking.js';
+import { attendanceDisplayName, attendanceVisibility } from './attendance.js';
 
 export const RANKING_ENGINE_VERSION = 'weighted-pr-bt-v1';
 export const DEFAULT_RANKING_ENGINE: RankingEngine = 'bt-k4';
@@ -46,6 +48,25 @@ export function isVoteAnonymous(
 }
 
 /**
+ * The single list of RSVP fields that are private to the organizer or the
+ * attendee: an email, the custom-question answers and the private removal
+ * token. Kept in one place so the results projection and the shared-document
+ * projection cannot drift on which fields are safe to publish.
+ */
+function stripPrivateAttendeeFields(
+  data: AttendanceResponseData | undefined,
+): AttendanceResponseData | undefined {
+  if (!data) return undefined;
+  const {
+    email: _email,
+    answers: _answers,
+    removalToken: _removalToken,
+    ...rest
+  } = data;
+  return rest;
+}
+
+/**
  * Replace the bearer withdrawal credential with its stable pseudonym and drop
  * server-only fields. Shared by every path that publishes a response, so the
  * token/alias rule cannot drift between the HTTP route, the Yjs broadcast and a
@@ -58,10 +79,14 @@ function withPublicResponseIdentity(
   // `participantId` is a moderator-only join key: it is handed to a
   // capability-holding reader to merge drafts, and must never reach the shared,
   // unauthenticated document (where it would also make identical rows compare
-  // unequal and defeat change detection).
-  const { participantId: _participantId, ...rest } = response;
+  // unequal and defeat change detection). The RSVP contact fields are
+  // organizer-only too: a moderator client that publishes through
+  // `shareVoteResponse` must not leak them to every connected viewer.
+  const { participantId: _participantId, attendeeData, ...rest } = response;
+  const publicAttendeeData = stripPrivateAttendeeFields(attendeeData);
   return {
     ...rest,
+    ...(publicAttendeeData ? { attendeeData: publicAttendeeData } : {}),
     voterToken: '',
     voterAlias: response.voterAlias ?? voterAlias(voteId, response.voterToken),
   };
@@ -78,21 +103,67 @@ function withPublicResponseIdentity(
  * non-reversible `voterAlias`; callers that already hold an alias keep it
  * (idempotent).
  */
+export interface RedactVoteResponseOptions {
+  /**
+   * Keep the RSVP email and custom-question answers for an authorized moderator
+   * reader. The private removal token is always stripped, even for moderators:
+   * it is a bearer capability, not organizer data.
+   */
+  keepAttendeePrivateFields?: boolean;
+}
+
+function redactAttendeeDataForVote(
+  data: AttendanceResponseData | undefined,
+  anonymous: boolean,
+  keepPrivateFields: boolean,
+): AttendanceResponseData | undefined {
+  if (!data) return undefined;
+  // Start from the shared public projection (no email/answers/removal token),
+  // then re-add the display name only when this view may name the attendee.
+  const { displayName: _displayName, ...publicFields } = stripPrivateAttendeeFields(data) ?? {};
+  const result: AttendanceResponseData = {
+    ...publicFields,
+    partySize: data.partySize,
+    visibility: attendanceVisibility(data),
+  };
+  // A hidden RSVP never names the attendee, just like an anonymous vote. The
+  // rule lives in attendance.ts so redaction and rendering cannot diverge.
+  const publicDisplayName = attendanceDisplayName(data, anonymous);
+  if (!anonymous && publicDisplayName !== undefined) {
+    result.displayName = publicDisplayName;
+  }
+  if (keepPrivateFields) {
+    if (data.email !== undefined) result.email = data.email;
+    if (data.answers !== undefined) result.answers = data.answers;
+  }
+  return result;
+}
+
 export function redactVoteResponseForVote(
   vote: Pick<VoteEntity, 'id' | 'config'>,
   response: VoteResponseEntity,
+  options: RedactVoteResponseOptions = {},
 ): VoteResponseEntity {
-  return {
+  const anonymous = isVoteAnonymous(vote.config);
+  const projected: VoteResponseEntity = {
     ...withPublicResponseIdentity(vote.id, response),
-    userId: isVoteAnonymous(vote.config) ? null : response.userId,
+    userId: anonymous ? null : response.userId,
   };
+  const attendeeData = redactAttendeeDataForVote(
+    response.attendeeData,
+    anonymous,
+    options.keepAttendeePrivateFields === true,
+  );
+  if (attendeeData) projected.attendeeData = attendeeData;
+  return projected;
 }
 
 export function redactVoteResponsesForVote(
   vote: Pick<VoteEntity, 'id' | 'config'>,
   responses: VoteResponseEntity[],
+  options: RedactVoteResponseOptions = {},
 ): VoteResponseEntity[] {
-  return responses.map((response) => redactVoteResponseForVote(vote, response));
+  return responses.map((response) => redactVoteResponseForVote(vote, response, options));
 }
 
 /**

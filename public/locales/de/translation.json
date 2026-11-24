@@ -957,6 +957,7 @@
     "mode": {
       "thumbsUp": "Daumen hoch",
       "thumbsUdNeutral": "Hoch / Runter / Neutral",
+      "attendance": "Teilnahme",
       "points": "Punkte-Budget",
       "majorityJudgment": "Major Judgment",
       "consentLoop": "Zustimmungs-Schleife"

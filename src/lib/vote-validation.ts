@@ -26,6 +26,10 @@ export function validateVoteResponseValue(
       return [-1, 0, 1].includes(value)
         ? null
         : 'THUMBS_UD_NEUTRAL votes must be -1, 0, or 1';
+    case 'ATTENDANCE':
+      return [-1, 0, 1].includes(value)
+        ? null
+        : 'ATTENDANCE votes must be -1, 0, or 1';
     case 'POINTS': {
       const maxPts = vote.config.maxPointsPerUser ?? 10;
       return Number.isInteger(value) && value >= 0 && value <= maxPts

@@ -18,6 +18,13 @@ describe('validateVoteResponseValue', () => {
     expect(validateVoteResponseValue(vote, 2)).toBeTruthy();
   });
 
+  it('accepts -1, 0 and 1 for ATTENDANCE', () => {
+    const vote = voteFor('ATTENDANCE');
+    for (const value of [-1, 0, 1]) expect(validateVoteResponseValue(vote, value)).toBeNull();
+    expect(validateVoteResponseValue(vote, 2)).toBeTruthy();
+    expect(validateVoteResponseValue(vote, -2)).toBeTruthy();
+  });
+
   it('bounds POINTS by the configured budget', () => {
     const vote = voteFor('POINTS', { maxPointsPerUser: 5 });
     expect(validateVoteResponseValue(vote, 5)).toBeNull();

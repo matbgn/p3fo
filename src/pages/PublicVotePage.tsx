@@ -3,15 +3,38 @@ import { useTranslation } from "react-i18next";
 import { ComparativeVotePage } from './ComparativeVotePage';
 import { VoteOutcomeBanner } from '@/components/voting/VoteResults';
 import { useParams } from "react-router-dom";
-import { VoteEntity, VoteResponseEntity, VoteProposal, VoteLoop } from "@/lib/persistence-types";
+import { VoteEntity, VoteResponseEntity, VoteProposal, VoteLoop, AttendanceResponseData } from "@/lib/persistence-types";
 import { MJ_SCALE } from "@/components/planView/constants";
-import { tallyThumbsUp as tallyThumbsUpShared, tallyUDNeutral as tallyUDNeutralShared, tallyPoints as tallyPointsShared, tallyMajorityJudgment as tallyMJShared, tallyConsentLoop as tallyConsentLoopShared, getBestConsentRound } from "@/lib/vote-tally";
+import { tallyThumbsUp as tallyThumbsUpShared, tallyUDNeutral as tallyUDNeutralShared, tallyPoints as tallyPointsShared, tallyMajorityJudgment as tallyMJShared, tallyConsentLoop as tallyConsentLoopShared, getBestConsentRound, EVENT_RSVP_PROPOSAL_ID } from "@/lib/vote-tally";
+import {
+  attendanceCapacityErrorFromTotal,
+  attendancePartySize,
+  findAttendanceAnswerIssue,
+  formatEventMoment,
+  isBasicEmail,
+  resolveMaxPartySize,
+  sanitizeAttendanceData,
+} from "@/lib/attendance";
+import { AttendanceRsvpSummary } from "@/components/voting/AttendanceRsvpSummary";
 import { getVotingStrings } from "@/lib/voting-i18n";
+import {
+  getOrCreateVoterName,
+  getStoredRemovalToken,
+  getStoredVoterName,
+  setStoredRemovalToken,
+  setStoredVoterName,
+  clearStoredRemovalToken,
+} from "@/lib/voter-identity";
+import { buildEventIcs, downloadEventIcs, safeHttpUrl } from "@/lib/ics";
+import { getRandomUsername } from "@/lib/username-generator";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import QRCodeBlock from "@/components/voting/QRCodeBlock";
 import { LoopRoundProposalTooltip } from "@/components/voting/LoopRoundProposalTooltip";
 import { LoopRoundDiffDialog } from "@/components/voting/LoopRoundDiffDialog";
@@ -37,6 +60,12 @@ import {
   ChevronUp,
   ArrowDownWideNarrow,
   ArrowUpDown,
+  CalendarDays,
+  CalendarPlus,
+  Check,
+  Copy,
+  MapPin,
+  Trash2,
   X,
 } from "lucide-react";
 
@@ -95,8 +124,9 @@ async function submitResponse(
     voterToken: string;
     comment?: string;
     loopId?: string;
+    attendeeData?: AttendanceResponseData;
   }
-): Promise<VoteResponseEntity | null> {
+): Promise<{ response: VoteResponseEntity | null; error: string | null }> {
   try {
     const res = await fetch(`/api/votes/${slug}/responses`, {
       method: "POST",
@@ -106,11 +136,37 @@ async function submitResponse(
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: "Unknown error" }));
       console.error("Vote submission error:", err.error);
-      return null;
+      return {
+        response: null,
+        error: typeof err.error === "string" ? err.error : null,
+      };
     }
-    return await res.json();
+    return { response: await res.json(), error: null };
   } catch {
-    return null;
+    return { response: null, error: null };
+  }
+}
+
+/** Withdraw exactly the RSVP row identified by its private removal token. */
+async function deleteResponseByRemovalToken(
+  slug: string,
+  removalToken: string,
+): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/votes/${slug}/responses`, {
+      method: "DELETE",
+      // Send the bearer token in a header (like X-Voter-Token) so it does not
+      // end up in access/proxy logs or browser history.
+      headers: { "X-Removal-Token": removalToken },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Unknown error" }));
+      console.error("RSVP removal error:", err.error);
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -119,10 +175,13 @@ async function deleteResponse(
   body: { voterToken: string; proposalId: string; loopId?: string | null }
 ): Promise<boolean> {
   try {
-    const params = new URLSearchParams({ voterToken: body.voterToken, proposalId: body.proposalId });
+    const params = new URLSearchParams({ proposalId: body.proposalId });
     if (body.loopId) params.set("loopId", body.loopId);
     const res = await fetch(`/api/votes/${slug}/responses?${params.toString()}`, {
       method: "DELETE",
+      // The voter token is a bearer credential: send it as a header so it does
+      // not land in access/proxy logs or browser history.
+      headers: { "X-Voter-Token": body.voterToken },
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: "Unknown error" }));
@@ -267,7 +326,10 @@ const PublicVotePage: React.FC = () => {
   const votedAndLocked = hasSubmitted && !canChangeVote;
   const showResultsBeforeClose = vote ? (vote.config.showResultsBeforeClose ?? false) : false;
   const isClosed = vote?.config.phase === "CLOSED" || vote?.config.phase === "FINALIZED";
-  const isSingleProposal = vote ? !(vote.config.multipleChoiceVote ?? true) : false;
+  const isSingleProposal = vote
+    ? !(vote.config.multipleChoiceVote ?? true) ||
+      vote.config.mode === "ATTENDANCE"
+    : false;
   const showResults = vote ? (isClosed || showResultsBeforeClose) : false;
   const hasPendingVotes = !isSingleProposal && Object.keys(voterValues).length > 0 && (
     !hasSubmitted || JSON.stringify(voterValues) !== JSON.stringify(submittedVoterValues)
@@ -284,6 +346,27 @@ const PublicVotePage: React.FC = () => {
 
   const [loops, setLoops] = React.useState<VoteLoop[]>([]);
 
+  const [rsvpDialogValue, setRsvpDialogValue] = React.useState<number | null>(null);
+  const [rsvpName, setRsvpName] = React.useState("");
+  const [rsvpEmail, setRsvpEmail] = React.useState("");
+  const [rsvpPartySize, setRsvpPartySize] = React.useState(1);
+  const [rsvpVisibility, setRsvpVisibility] = React.useState<"public" | "hidden">("public");
+  const [rsvpAnswers, setRsvpAnswers] = React.useState<Record<string, string>>({});
+  const [rsvpComment, setRsvpComment] = React.useState("");
+  const [rsvpError, setRsvpError] = React.useState<string | null>(null);
+  const [rsvpSubmitting, setRsvpSubmitting] = React.useState(false);
+  const [storedName, setStoredName] = React.useState("");
+  const [welcomeOpen, setWelcomeOpen] = React.useState(false);
+  const [welcomeName, setWelcomeName] = React.useState("");
+  const [removalToken, setRemovalToken] = React.useState<string | null>(null);
+  const [pendingRemoval, setPendingRemoval] = React.useState<string | null>(null);
+  const [removalNotice, setRemovalNotice] = React.useState<string | null>(null);
+  const [removalBusy, setRemovalBusy] = React.useState(false);
+  const [removalCopied, setRemovalCopied] = React.useState(false);
+  const welcomeShownRef = React.useRef<string | null>(null);
+  const processedRemovalRef = React.useRef<string | null>(null);
+  const activeVoteId = vote?.id;
+
   const loopById = React.useMemo(() => {
     const m = new Map<string, VoteLoop>();
     for (const l of loops) m.set(l.id, l);
@@ -294,6 +377,19 @@ const PublicVotePage: React.FC = () => {
   voteRef.current = vote;
 
   const voterToken = slug ? ensureVoterToken(slug) : "";
+
+  const myRsvpAlias = vote ? voterAlias(vote.id, voterToken) : "";
+  const ownRsvp = React.useMemo(
+    () =>
+      vote
+        ? responses.find(
+            (response) =>
+              response.proposalId === EVENT_RSVP_PROPOSAL_ID &&
+              responseVoterAlias(vote.id, response) === myRsvpAlias,
+          )
+        : undefined,
+    [responses, vote, myRsvpAlias],
+  );
 
   const refreshData = React.useCallback(async () => {
     if (!slug || !vote) return;
@@ -489,11 +585,15 @@ const PublicVotePage: React.FC = () => {
         (id) => id !== proposalId,
       );
       if (previousProposalId) {
-        await deleteResponse(slug, { voterToken, proposalId: previousProposalId });
+        const withdrawn = await deleteResponse(slug, {
+          voterToken,
+          proposalId: previousProposalId,
+        });
+        if (!withdrawn) return;
       }
     }
 
-    const result = await submitResponse(slug, {
+    const { response: result } = await submitResponse(slug, {
       proposalId,
       value,
       voterToken,
@@ -610,6 +710,307 @@ const PublicVotePage: React.FC = () => {
   const isAnonymous = vote?.config.isAnonymous ?? true;
 
   const mode = vote?.config.mode;
+  const isAttendance = mode === "ATTENDANCE";
+  const attendance = vote?.config.attendance;
+
+  const attendanceMaxPartySize = resolveMaxPartySize(attendance);
+  const attendanceMaxAttendees = Number(attendance?.maxAttendees);
+  const hasAttendanceCapacity =
+    Number.isFinite(attendanceMaxAttendees) && attendanceMaxAttendees > 0;
+  // Single memoized projection of the response list shared by every RSVP metric
+  // (voter count, going-party total, the capacity checks). The RSVP dialog
+  // re-renders the page on each keystroke, but these full scans only run when
+  // the responses actually change. `otherGoingPartyTotal` excludes this voter's
+  // own row once, instead of rescanning for each capacity decision.
+  const rsvpProjection = React.useMemo(() => {
+    if (!activeVoteId) {
+      return { totalVoters: 0, goingPartyTotal: 0, otherGoingPartyTotal: 0 };
+    }
+    if (!isAttendance) {
+      return {
+        totalVoters: new Set(
+          responses.map((response) => responseVoterAlias(activeVoteId, response)),
+        ).size,
+        goingPartyTotal: 0,
+        otherGoingPartyTotal: 0,
+      };
+    }
+    const aliases = new Set<string>();
+    let goingPartyTotal = 0;
+    let otherGoingPartyTotal = 0;
+    for (const response of responses) {
+      if (response.proposalId !== EVENT_RSVP_PROPOSAL_ID) continue;
+      const alias = responseVoterAlias(activeVoteId, response);
+      aliases.add(alias);
+      if (response.value === 1) {
+        const partySize = attendancePartySize(response.attendeeData);
+        goingPartyTotal += partySize;
+        if (alias !== myRsvpAlias) otherGoingPartyTotal += partySize;
+      }
+    }
+    return { totalVoters: aliases.size, goingPartyTotal, otherGoingPartyTotal };
+  }, [responses, activeVoteId, isAttendance, myRsvpAlias]);
+  const myCurrentRsvpValue =
+    voterValues[EVENT_RSVP_PROPOSAL_ID] ?? ownRsvp?.value;
+  // Both capacity decisions use the same precomputed total, so the button
+  // disable state and the submit-time check cannot disagree if the rule changes.
+  const attendanceFullForVoter = React.useMemo(
+    () =>
+      myCurrentRsvpValue !== 1 &&
+      attendanceCapacityErrorFromTotal(attendance, rsvpProjection.otherGoingPartyTotal, {
+        value: 1,
+        partySize: 1,
+      }) !== null,
+    [attendance, rsvpProjection.otherGoingPartyTotal, myCurrentRsvpValue],
+  );
+  const rsvpCapacityError = React.useMemo(
+    () =>
+      rsvpDialogValue === null
+        ? null
+        : attendanceCapacityErrorFromTotal(
+            attendance,
+            rsvpProjection.otherGoingPartyTotal,
+            { value: rsvpDialogValue, partySize: rsvpPartySize },
+          ),
+    [attendance, rsvpProjection.otherGoingPartyTotal, rsvpDialogValue, rsvpPartySize],
+  );
+  const removalUrl =
+    removalToken && slug && typeof window !== "undefined"
+      ? // Keep the bearer capability in the URL fragment: fragments are never
+        // sent to the server, so the token cannot land in access/proxy logs, a
+        // Referer header, or a chat link unfurl the way a query string would.
+        `${window.location.origin}/v/${slug}#remove=${encodeURIComponent(removalToken)}`
+      : null;
+  const safeInfoUrl = safeHttpUrl(attendance?.infoUrl);
+  const eventStartLabel = formatEventMoment(attendance?.eventStartAt);
+  const eventEndLabel = formatEventMoment(attendance?.eventEndAt);
+
+  const openRsvpDialog = (value: number) => {
+    if (!vote) return;
+    const existing = ownRsvp;
+    const existingData = existing?.attendeeData;
+    setRsvpName(
+      isAnonymous
+        ? ""
+        : storedName ||
+            getStoredVoterName(vote.id) ||
+            existingData?.displayName ||
+            getOrCreateVoterName(vote.id),
+    );
+    setRsvpEmail(existingData?.email ?? "");
+    setRsvpPartySize(
+      Math.min(attendanceMaxPartySize, attendancePartySize(existingData)),
+    );
+    setRsvpVisibility(existingData?.visibility === "hidden" ? "hidden" : "public");
+    setRsvpAnswers(existingData?.answers ? { ...existingData.answers } : {});
+    setRsvpComment(existing?.comment ?? "");
+    setRsvpError(null);
+    setRsvpDialogValue(value);
+  };
+
+  const handleSaveWelcomeName = () => {
+    if (!vote) return;
+    const name = welcomeName.trim();
+    if (!name) return;
+    setStoredVoterName(vote.id, name);
+    setStoredName(name);
+    setRsvpName(name);
+    setWelcomeOpen(false);
+  };
+
+  const handleSubmitRsvpDialog = async () => {
+    if (!slug || !vote || rsvpDialogValue === null) return;
+    setRsvpError(null);
+
+    if (!isAnonymous) {
+      if (!rsvpName.trim()) {
+        setRsvpError(ts.attendance.nameRequired);
+        return;
+      }
+    }
+    const email = rsvpEmail.trim();
+    if (attendance?.askEmail && email && !isBasicEmail(email)) {
+      setRsvpError(ts.attendance.invalidEmail);
+      return;
+    }
+    // Reuse the shared attendance validator instead of re-implementing the
+    // required/choice rules. An existing RSVP's stored answers are stripped from
+    // the public results projection and carried over server-side, so skip the
+    // pre-submit gate for it: otherwise every edit would force a retype of
+    // answers the client can never receive.
+    if (!ownRsvp) {
+      const issue = findAttendanceAnswerIssue(attendance, { answers: rsvpAnswers });
+      if (issue) {
+        const label =
+          issue.kind === "required"
+            ? ts.attendance.requiredAnswer
+            : ts.attendance.invalidAnswer;
+        setRsvpError(`${label}: ${issue.prompt}`);
+        return;
+      }
+    }
+    if (rsvpCapacityError) {
+      setRsvpError(rsvpCapacityError);
+      return;
+    }
+
+    // Single source of truth for RSVP normalization: the same sanitizer the
+    // server applies, so the client and server cannot drift on name length,
+    // email casing/validation, party caps or answer rules.
+    const attendeeData = sanitizeAttendanceData(
+      attendance,
+      {
+        displayName: isAnonymous ? undefined : rsvpName,
+        email,
+        partySize: rsvpPartySize,
+        visibility: rsvpVisibility,
+        answers: rsvpAnswers,
+      },
+      { isAnonymous },
+    );
+
+    setRsvpSubmitting(true);
+    try {
+      const { response: result, error: submitError } = await submitResponse(slug, {
+        proposalId: EVENT_RSVP_PROPOSAL_ID,
+        value: rsvpDialogValue,
+        voterToken,
+        comment:
+          vote.config.allowFreeText && rsvpComment.trim()
+            ? rsvpComment.trim()
+            : undefined,
+        attendeeData,
+      });
+      if (!result) {
+        setRsvpError(submitError || ts.attendance.submitError);
+        return;
+      }
+
+      const savedName = result.attendeeData?.displayName ?? rsvpName.trim();
+      if (!isAnonymous && savedName) {
+        setStoredVoterName(vote.id, savedName);
+        setStoredName(savedName);
+      }
+      const savedToken = result.attendeeData?.removalToken;
+      if (savedToken) {
+        setStoredRemovalToken(vote.id, savedToken);
+        setRemovalToken(savedToken);
+      }
+
+      setHasSubmitted(true);
+      setJustVoted(true);
+      setVoterValues({ [EVENT_RSVP_PROPOSAL_ID]: rsvpDialogValue });
+      setSubmittedVoterValues({ [EVENT_RSVP_PROPOSAL_ID]: rsvpDialogValue });
+      setComment(vote.config.allowFreeText ? rsvpComment : "");
+      setRsvpDialogValue(null);
+      refreshData();
+    } finally {
+      setRsvpSubmitting(false);
+    }
+  };
+
+  const handleAddToCalendar = () => {
+    if (!vote) return;
+    const startAt = vote.config.attendance?.eventStartAt;
+    if (!startAt) return;
+    try {
+      const content = buildEventIcs({
+        title: vote.title,
+        description: vote.description,
+        startAt,
+        endAt: vote.config.attendance?.eventEndAt,
+        location: vote.config.attendance?.location,
+        url:
+          vote.config.attendance?.infoUrl ||
+          (typeof window !== "undefined"
+            ? `${window.location.origin}/v/${vote.slug}`
+            : undefined),
+      });
+      downloadEventIcs(`${vote.slug || "event"}.ics`, content);
+    } catch {
+      // A malformed event date cannot be turned into a calendar file.
+    }
+  };
+
+  const handleCopyRemovalLink = async () => {
+    if (!removalUrl) return;
+    try {
+      await navigator.clipboard.writeText(removalUrl);
+      setRemovalCopied(true);
+      window.setTimeout(() => setRemovalCopied(false), 2000);
+    } catch {
+      setRemovalCopied(false);
+    }
+  };
+
+  // Shared reset for both removal paths (the stored private link and the
+  // in-session button) so their state cleanup cannot drift apart. The stored
+  // token is only dropped when it belongs to the removed RSVP.
+  const resetAfterRsvpRemoval = (voteId: string, token?: string | null) => {
+    if (!token || getStoredRemovalToken(voteId) === token) {
+      clearStoredRemovalToken(voteId);
+    }
+    setRemovalToken(null);
+    setVoterValues((prev) => {
+      const next = { ...prev };
+      delete next[EVENT_RSVP_PROPOSAL_ID];
+      return next;
+    });
+    setSubmittedVoterValues((prev) => {
+      const next = { ...prev };
+      delete next[EVENT_RSVP_PROPOSAL_ID];
+      return next;
+    });
+    setHasSubmitted(false);
+    setJustVoted(false);
+  };
+
+  const handleRemoveMyRsvp = async () => {
+    if (!slug || !vote) return;
+    setRemovalBusy(true);
+    let ok = false;
+    if (removalToken) {
+      ok = await deleteResponseByRemovalToken(slug, removalToken);
+      if (!ok) {
+        ok = await deleteResponse(slug, {
+          voterToken,
+          proposalId: EVENT_RSVP_PROPOSAL_ID,
+        });
+      }
+    } else {
+      ok = await deleteResponse(slug, {
+        voterToken,
+        proposalId: EVENT_RSVP_PROPOSAL_ID,
+      });
+    }
+
+    if (ok) {
+      resetAfterRsvpRemoval(vote.id, removalToken);
+      setRemovalNotice(ts.attendance.removalNotice);
+      refreshData();
+    } else {
+      setRemovalNotice(ts.attendance.removalError);
+    }
+    setRemovalBusy(false);
+  };
+
+  const handleConfirmRemovalLink = async () => {
+    if (!slug || !pendingRemoval) return;
+    setRemovalBusy(true);
+    const ok = await deleteResponseByRemovalToken(slug, pendingRemoval);
+    if (ok) {
+      const currentVote = voteRef.current;
+      if (currentVote) {
+        resetAfterRsvpRemoval(currentVote.id, pendingRemoval);
+        void refreshData();
+      }
+      setRemovalNotice(ts.attendance.removalNotice);
+    } else {
+      setRemovalNotice(ts.attendance.removalError);
+    }
+    setPendingRemoval(null);
+    setRemovalBusy(false);
+  };
 
   // Publish pending local selections so the moderator tally can evolve before
   // "Submit all votes" is pressed. Nothing is persisted as a vote: this is an
@@ -631,7 +1032,7 @@ const PublicVotePage: React.FC = () => {
   }
   React.useEffect(() => {
     if (!slug || !draftVoteId || !voterToken) return;
-    if (mode === "CONSENT_LOOP" || mode === "COMPARATIVE_PRIORITIZATION") return;
+    if (mode === "CONSENT_LOOP" || mode === "COMPARATIVE_PRIORITIZATION" || mode === "ATTENDANCE") return;
     // Drafts go to the moderator-authenticated channel, never to the shared
     // Yjs room, so hidden-result and anonymous votes can publish them without
     // exposing in-progress selections to other clients.
@@ -713,6 +1114,59 @@ const PublicVotePage: React.FC = () => {
     };
   }, [slug, draftVoteId, draftVotePhase, voterToken, mode]);
 
+  // Load the attendee identity and removal token once per vote.
+  React.useEffect(() => {
+    if (!activeVoteId) return;
+    setStoredName(getStoredVoterName(activeVoteId) ?? "");
+    setRemovalToken(getStoredRemovalToken(activeVoteId));
+  }, [activeVoteId]);
+
+  // Welcome dialog: non-anonymous attendance votes only, and only until this
+  // browser has a stored display name for the event.
+  React.useEffect(() => {
+    if (!activeVoteId || !vote) return;
+    if (vote.config.mode !== "ATTENDANCE" || isAnonymous) return;
+    if (vote.config.attendance?.welcomeModal === false) return;
+    if (welcomeShownRef.current === activeVoteId) return;
+    welcomeShownRef.current = activeVoteId;
+
+    const existing = getStoredVoterName(activeVoteId);
+    if (existing) {
+      setStoredName(existing);
+      return;
+    }
+    const generated = getOrCreateVoterName(activeVoteId);
+    setStoredName(generated);
+    setWelcomeName(generated);
+    setWelcomeOpen(true);
+  }, [activeVoteId, vote, isAnonymous]);
+
+  // Private removal links: read the token from the fragment (never sent to the
+  // server), strip it from the address bar, and ask the visitor to confirm.
+  // Only the fragment form is accepted, so a removal token can never arrive in
+  // a request line or access log.
+  // Never delete on a bare GET: prefetchers and mail scanners load these links,
+  // and a removal is irreversible.
+  React.useEffect(() => {
+    if (!slug || typeof window === "undefined") return;
+    const rawHash = window.location.hash.startsWith("#")
+      ? window.location.hash.slice(1)
+      : window.location.hash;
+    const hashParams = new URLSearchParams(rawHash);
+    const token = hashParams.get("remove");
+    if (!token || processedRemovalRef.current === token) return;
+    processedRemovalRef.current = token;
+
+    hashParams.delete("remove");
+    const nextHash = hashParams.toString();
+    window.history.replaceState(
+      {},
+      "",
+      `${window.location.pathname}${window.location.search}${nextHash ? `#${nextHash}` : ""}`,
+    );
+    setPendingRemoval(token);
+  }, [slug]);
+
   const mjGradeLabel = React.useCallback(
     (value: number) => {
       const key = value === -1 ? "reject" : value === 0 ? "insufficient" : value === 1 ? "passable" : value === 2 ? "acceptable" : value === 3 ? "good" : "excellent";
@@ -738,7 +1192,7 @@ const PublicVotePage: React.FC = () => {
   );
 
   const sortedFinalProposals = React.useMemo((): VoteProposal[] => {
-    if (!vote || mode === "CONSENT_LOOP") return [];
+    if (!vote || mode === "CONSENT_LOOP" || mode === "ATTENDANCE") return [];
     const active = vote.proposals.filter((p) => p.active);
     if (resultsSortMetric === "original" || active.length <= 1) return active;
     const metricFor = (p: VoteProposal): number => {
@@ -796,7 +1250,8 @@ const PublicVotePage: React.FC = () => {
   }
 
   const activeProposals = vote.proposals.filter((p) => p.active);
-  const totalVoters = new Set(responses.map((r) => responseVoterAlias(vote.id, r))).size;
+  const totalVoters = rsvpProjection.totalVoters;
+  const goingPartyTotal = rsvpProjection.goingPartyTotal;
 
   const tallyThumbsUpResult = (proposalId: string) =>
     tallyThumbsUpShared(responses, proposalId).count;
@@ -821,55 +1276,194 @@ const PublicVotePage: React.FC = () => {
           </div>
         )}
 
-        <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
-          <div className="flex items-center gap-2 flex-wrap mb-3">
-            <Badge
-              variant={
-                isFinalized
-                  ? "destructive"
-                  : isClosed
-                    ? "outline"
-                    : isActive
-                      ? "default"
-                      : "secondary"
-              }
-            >
-              {ts.phases[vote.config.phase] || vote.config.phase}
-            </Badge>
-            <Badge variant="outline">
-              {ts.kinds[vote.config.kind] || vote.config.kind}
-            </Badge>
-            <Badge variant="outline">
-              {ts.modes[vote.config.mode] ?? vote.config.mode}
-            </Badge>
+        {isAttendance ? (
+          <div className="bg-white rounded-lg shadow-sm border overflow-hidden mb-6">
+            {attendance?.coverImageUrl && (
+              <img
+                src={attendance.coverImageUrl}
+                alt={vote.title}
+                className="w-full h-48 object-cover"
+              />
+            )}
+            <div className="p-6">
+              <div className="flex items-center gap-2 flex-wrap mb-3">
+                <Badge
+                  variant={
+                    isFinalized
+                      ? "destructive"
+                      : isClosed
+                        ? "outline"
+                        : isActive
+                          ? "default"
+                          : "secondary"
+                  }
+                >
+                  {ts.phases[vote.config.phase] || vote.config.phase}
+                </Badge>
+                <Badge variant="outline">
+                  {ts.kinds[vote.config.kind] || vote.config.kind}
+                </Badge>
+                <Badge variant="outline">
+                  {ts.modes[vote.config.mode] ?? vote.config.mode}
+                </Badge>
+              </div>
+
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">
+                {vote.title}
+              </h1>
+              {vote.description && (
+                <p className="text-gray-600 mb-4">{vote.description}</p>
+              )}
+
+              <div className="space-y-2 text-sm text-gray-600">
+                {(eventStartLabel || eventEndLabel) && (
+                  <div className="flex items-start gap-2">
+                    <CalendarDays className="w-4 h-4 mt-0.5 shrink-0 text-gray-400" />
+                    <span>
+                      <span className="font-medium text-gray-700">
+                        {ts.attendance.dateTime}:
+                      </span>{" "}
+                      {eventStartLabel}
+                      {eventStartLabel && eventEndLabel ? " – " : ""}
+                      {eventEndLabel}
+                    </span>
+                  </div>
+                )}
+                {attendance?.location && (
+                  <div className="flex items-start gap-2">
+                    <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-gray-400" />
+                    <span>{attendance.location}</span>
+                  </div>
+                )}
+                {safeInfoUrl && (
+                  <a
+                    href={safeInfoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-500 hover:underline flex items-center gap-1"
+                  >
+                    <Link2 className="w-4 h-4" />
+                    {ts.attendance.eventInfo}
+                  </a>
+                )}
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <Badge variant="outline">
+                  {goingPartyTotal}
+                  {hasAttendanceCapacity ? ` / ${attendanceMaxAttendees}` : ""}{" "}
+                  {ts.attendanceOptions.going}
+                </Badge>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleAddToCalendar}
+                  disabled={!attendance?.eventStartAt}
+                >
+                  <CalendarPlus className="w-4 h-4 mr-1" />
+                  {ts.attendance.addToCalendar}
+                </Button>
+                <span className="flex items-center gap-1 text-sm text-gray-400">
+                  <Users className="w-4 h-4" />
+                  {totalVoters} {totalVoters !== 1 ? ts.labels.voters : ts.labels.voter}
+                </span>
+                {vote.config.closeAt && (
+                  <span className="flex items-center gap-1 text-sm text-gray-400">
+                    <Clock className="w-4 h-4" />
+                    {tt("voting.closesPrefix")} {new Date(vote.config.closeAt).toLocaleString()}
+                  </span>
+                )}
+                {vote.linkedTaskId && (
+                  <span className="flex items-center gap-1 text-sm text-violet-500">
+                    <ExternalLink className="w-4 h-4" />
+                    {ts.labels.linkedTask}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
+            <div className="flex items-center gap-2 flex-wrap mb-3">
+              <Badge
+                variant={
+                  isFinalized
+                    ? "destructive"
+                    : isClosed
+                      ? "outline"
+                      : isActive
+                        ? "default"
+                        : "secondary"
+                }
+              >
+                {ts.phases[vote.config.phase] || vote.config.phase}
+              </Badge>
+              <Badge variant="outline">
+                {ts.kinds[vote.config.kind] || vote.config.kind}
+              </Badge>
+              <Badge variant="outline">
+                {ts.modes[vote.config.mode] ?? vote.config.mode}
+              </Badge>
+            </div>
 
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            {vote.title}
-          </h1>
-          {vote.description && (
-            <p className="text-gray-600 mb-4">{vote.description}</p>
-          )}
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              {vote.title}
+            </h1>
+            {vote.description && (
+              <p className="text-gray-600 mb-4">{vote.description}</p>
+            )}
 
-          <div className="flex items-center gap-4 text-sm text-gray-400">
-            {vote.config.closeAt && (
+            <div className="flex items-center gap-4 text-sm text-gray-400">
+              {vote.config.closeAt && (
+                <span className="flex items-center gap-1">
+                  <Clock className="w-4 h-4" />
+                  {tt("voting.closesPrefix")} {new Date(vote.config.closeAt).toLocaleString()}
+                </span>
+              )}
               <span className="flex items-center gap-1">
-                <Clock className="w-4 h-4" />
-                {tt("voting.closesPrefix")} {new Date(vote.config.closeAt).toLocaleString()}
+                <Users className="w-4 h-4" />
+                 {totalVoters} {totalVoters !== 1 ? ts.labels.voters : ts.labels.voter}
               </span>
-            )}
-            <span className="flex items-center gap-1">
-              <Users className="w-4 h-4" />
-               {totalVoters} {totalVoters !== 1 ? ts.labels.voters : ts.labels.voter}
-            </span>
-            {vote.linkedTaskId && (
-              <span className="flex items-center gap-1 text-violet-500">
-                 <ExternalLink className="w-4 h-4" />
-                 {ts.labels.linkedTask}
-              </span>
-            )}
+              {vote.linkedTaskId && (
+                <span className="flex items-center gap-1 text-violet-500">
+                   <ExternalLink className="w-4 h-4" />
+                   {ts.labels.linkedTask}
+                </span>
+              )}
+            </div>
           </div>
-        </div>
+        )}
+
+        {pendingRemoval && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 text-center">
+            <p className="text-amber-800 mb-3">{ts.attendance.removalConfirm}</p>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleConfirmRemovalLink}
+                disabled={removalBusy}
+              >
+                <Trash2 className="w-4 h-4 mr-1" />
+                {ts.attendance.removeRsvp}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPendingRemoval(null)}
+                disabled={removalBusy}
+              >
+                {ts.buttons.cancel}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {removalNotice && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-center">
+            <p className="text-blue-700">{removalNotice}</p>
+          </div>
+        )}
 
         {!isActive && !isClosed && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 text-center">
@@ -902,7 +1496,138 @@ const PublicVotePage: React.FC = () => {
           </div>
         )}
 
-        {mode !== "CONSENT_LOOP" && !isClosed && (
+        {isAttendance && !isClosed && (
+          <div className="bg-white rounded-lg shadow-sm border p-5 mb-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-1">
+              {ts.attendance.rsvpTitle}
+            </h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {ts.messages.attendancePrompt}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant={
+                  voterValues[EVENT_RSVP_PROPOSAL_ID] === -1
+                    ? "default"
+                    : "outline"
+                }
+                onClick={() => openRsvpDialog(-1)}
+                disabled={!isActive || votedAndLocked}
+                className={
+                  voterValues[EVENT_RSVP_PROPOSAL_ID] === -1
+                    ? "bg-red-600 hover:bg-red-700"
+                    : ""
+                }
+              >
+                <X className="w-4 h-4 mr-1" />
+                {ts.attendanceOptions.notGoing}
+              </Button>
+              <Button
+                size="sm"
+                variant={
+                  voterValues[EVENT_RSVP_PROPOSAL_ID] === 0
+                    ? "default"
+                    : "outline"
+                }
+                onClick={() => openRsvpDialog(0)}
+                disabled={!isActive || votedAndLocked}
+                className={
+                  voterValues[EVENT_RSVP_PROPOSAL_ID] === 0
+                    ? "bg-yellow-500 hover:bg-yellow-600"
+                    : ""
+                }
+              >
+                <Minus className="w-4 h-4 mr-1" />
+                {ts.attendanceOptions.maybe}
+              </Button>
+              <Button
+                size="sm"
+                variant={
+                  voterValues[EVENT_RSVP_PROPOSAL_ID] === 1
+                    ? "default"
+                    : "outline"
+                }
+                onClick={() => openRsvpDialog(1)}
+                disabled={!isActive || votedAndLocked || attendanceFullForVoter}
+                className={
+                  voterValues[EVENT_RSVP_PROPOSAL_ID] === 1
+                    ? "bg-green-600 hover:bg-green-700"
+                    : ""
+                }
+              >
+                <ThumbsUp className="w-4 h-4 mr-1" />
+                {ts.attendanceOptions.going}
+              </Button>
+            </div>
+            {attendanceFullForVoter && (
+              <p className="mt-2 text-sm text-amber-600">{ts.attendance.full}</p>
+            )}
+            {voterValues[EVENT_RSVP_PROPOSAL_ID] !== undefined && (
+              <p className="mt-3 text-sm text-green-700">
+                {ts.attendance.rsvpThanks}
+              </p>
+            )}
+            {showResults && (
+              <div className="mt-4 pt-3 border-t">
+                <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
+                  {ts.labels.results}
+                </h4>
+                <AttendanceRsvpSummary
+                  responses={responses}
+                  isAnonymous={isAnonymous}
+                  showComments={vote.config.allowFreeText === true}
+                />
+              </div>
+            )}
+            {(removalToken || ownRsvp) && (
+              <div className="mt-4 pt-3 border-t space-y-3">
+                <h4 className="text-xs font-medium text-gray-400 uppercase">
+                  {ts.attendance.manageRsvp}
+                </h4>
+                {removalUrl && (
+                  <div className="space-y-1">
+                    <Label className="text-xs text-gray-500">
+                      {ts.attendance.privateRemovalLink}
+                    </Label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Input
+                        readOnly
+                        value={removalUrl}
+                        className="flex-1 min-w-[10rem] text-xs"
+                        onFocus={(event) => event.currentTarget.select()}
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleCopyRemovalLink}
+                      >
+                        {removalCopied ? (
+                          <Check className="w-4 h-4 mr-1" />
+                        ) : (
+                          <Copy className="w-4 h-4 mr-1" />
+                        )}
+                        {removalCopied ? ts.attendance.linkCopied : ts.buttons.copy}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleRemoveMyRsvp}
+                  disabled={removalBusy || !isActive}
+                  className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                >
+                  <Trash2 className="w-4 h-4 mr-1" />
+                  {ts.attendance.removeRsvp}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {mode !== "CONSENT_LOOP" && mode !== "ATTENDANCE" && !isClosed && (
           <>
           <div className="space-y-4 mb-6">
             {activeProposals.map((proposal) => (
@@ -1531,7 +2256,7 @@ const PublicVotePage: React.FC = () => {
           </div>
         )}
 
-        {isActive && vote.config.allowFreeText && (
+        {isActive && vote.config.allowFreeText && mode !== "ATTENDANCE" && (
           <div className="bg-white rounded-lg shadow-sm border p-5 mb-6">
             <label className="text-sm font-medium text-gray-700 flex items-center gap-1 mb-2">
               <MessageSquare className="w-4 h-4" />
@@ -1585,7 +2310,13 @@ const PublicVotePage: React.FC = () => {
             <h3 className="text-sm font-medium text-gray-700 mb-3">
               {ts.labels.finalResults}
             </h3>
-            {mode !== "CONSENT_LOOP" && (
+            {isAttendance ? (
+              <AttendanceRsvpSummary
+                responses={responses}
+                isAnonymous={isAnonymous}
+                showComments={vote.config.allowFreeText === true}
+              />
+            ) : mode !== "CONSENT_LOOP" && (
               <div className="space-y-3">
                 {canSortResults && (
                   <div className="flex items-center gap-2 flex-wrap pb-3 border-b">
@@ -1855,7 +2586,7 @@ const PublicVotePage: React.FC = () => {
                 </div>
               );
             })()}
-            {!isAnonymous && responses.length > 0 && (
+            {!isAnonymous && responses.length > 0 && mode !== "ATTENDANCE" && (
               <div className="mt-4 pt-3 border-t">
                 <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
                   {ts.labels.voters}
@@ -1890,6 +2621,233 @@ const PublicVotePage: React.FC = () => {
           {ts.messages.poweredBy}
         </p>
       </div>
+
+      {isAttendance && !isAnonymous && attendance?.welcomeModal !== false && (
+        <Dialog open={welcomeOpen} onOpenChange={setWelcomeOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{ts.attendance.welcomeTitle}</DialogTitle>
+              <DialogDescription>{ts.attendance.welcomeDescription}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              <Label htmlFor="welcome-display-name">
+                {ts.attendance.displayName}
+              </Label>
+              <Input
+                id="welcome-display-name"
+                value={welcomeName}
+                onChange={(event) => setWelcomeName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") handleSaveWelcomeName();
+                }}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="px-0 text-blue-600 hover:bg-transparent hover:text-blue-700"
+                onClick={() => setWelcomeName(getRandomUsername())}
+              >
+                {ts.attendance.useRandomName}
+              </Button>
+            </div>
+            <DialogFooter>
+              <Button
+                onClick={handleSaveWelcomeName}
+                disabled={!welcomeName.trim()}
+              >
+                {ts.attendance.saveName}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {isAttendance && (
+        <Dialog
+          open={rsvpDialogValue !== null}
+          onOpenChange={(open) => {
+            if (!open && !rsvpSubmitting) setRsvpDialogValue(null);
+          }}
+        >
+          <DialogContent className="max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>{ts.attendance.rsvpTitle}</DialogTitle>
+              <DialogDescription>
+                {rsvpDialogValue === 1
+                  ? ts.attendanceOptions.going
+                  : rsvpDialogValue === 0
+                    ? ts.attendanceOptions.maybe
+                    : ts.attendanceOptions.notGoing}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {!isAnonymous && (
+                <div className="space-y-2">
+                  <Label htmlFor="rsvp-display-name">
+                    {ts.attendance.displayName}
+                  </Label>
+                  <Input
+                    id="rsvp-display-name"
+                    value={rsvpName}
+                    onChange={(event) => setRsvpName(event.target.value)}
+                  />
+                </div>
+              )}
+
+              {attendance?.askEmail && (
+                <div className="space-y-2">
+                  <Label htmlFor="rsvp-email">{ts.attendance.email}</Label>
+                  <Input
+                    id="rsvp-email"
+                    type="email"
+                    value={rsvpEmail}
+                    onChange={(event) => setRsvpEmail(event.target.value)}
+                  />
+                </div>
+              )}
+
+              {attendance?.allowPartySize && (
+                <div className="space-y-2">
+                  <Label htmlFor="rsvp-party-size">{ts.attendance.partySize}</Label>
+                  <Input
+                    id="rsvp-party-size"
+                    type="number"
+                    min={1}
+                    max={attendanceMaxPartySize}
+                    value={rsvpPartySize}
+                    onChange={(event) => {
+                      const next = Math.floor(Number(event.target.value));
+                      setRsvpPartySize(
+                        Math.min(
+                          attendanceMaxPartySize,
+                          Math.max(1, Number.isFinite(next) ? next : 1),
+                        ),
+                      );
+                    }}
+                  />
+                  <p className="text-xs text-gray-400">1–{attendanceMaxPartySize}</p>
+                </div>
+              )}
+
+              {attendance?.allowHiddenAttendance && (
+                <div className="space-y-2">
+                  <Label>{ts.attendance.visibility}</Label>
+                  <RadioGroup
+                    value={rsvpVisibility}
+                    onValueChange={(value) =>
+                      setRsvpVisibility(value === "hidden" ? "hidden" : "public")
+                    }
+                  >
+                    <div className="flex items-center gap-2">
+                      <RadioGroupItem value="public" id="rsvp-visibility-public" />
+                      <Label htmlFor="rsvp-visibility-public" className="font-normal">
+                        {ts.attendance.visibilityPublic}
+                      </Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <RadioGroupItem value="hidden" id="rsvp-visibility-hidden" />
+                      <Label htmlFor="rsvp-visibility-hidden" className="font-normal">
+                        {ts.attendance.visibilityHidden}
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+              )}
+
+              {(attendance?.customQuestions?.length ?? 0) > 0 && (
+                <div className="space-y-4">
+                  <h4 className="text-sm font-medium text-gray-700">
+                    {ts.attendance.customQuestions}
+                  </h4>
+                  {attendance?.customQuestions?.map((question) => (
+                    <div key={question.id} className="space-y-2">
+                      <Label htmlFor={`rsvp-question-${question.id}`}>
+                        {question.prompt}
+                        {question.required && (
+                          <span className="text-red-500 ml-1">*</span>
+                        )}
+                      </Label>
+                      {question.type === "choice" ? (
+                        <select
+                          id={`rsvp-question-${question.id}`}
+                          className="w-full text-sm border rounded px-3 py-2 bg-white"
+                          value={rsvpAnswers[question.id] ?? ""}
+                          onChange={(event) =>
+                            setRsvpAnswers((prev) => ({
+                              ...prev,
+                              [question.id]: event.target.value,
+                            }))
+                          }
+                        >
+                          <option value="">—</option>
+                          {(question.options ?? []).map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <Input
+                          id={`rsvp-question-${question.id}`}
+                          value={rsvpAnswers[question.id] ?? ""}
+                          onChange={(event) =>
+                            setRsvpAnswers((prev) => ({
+                              ...prev,
+                              [question.id]: event.target.value,
+                            }))
+                          }
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {vote.config.allowFreeText && (
+                <div className="space-y-2">
+                  <Label htmlFor="rsvp-comment" className="flex items-center gap-1">
+                    <MessageSquare className="w-4 h-4" />
+                    {ts.labels.comment}
+                  </Label>
+                  <Textarea
+                    id="rsvp-comment"
+                    value={rsvpComment}
+                    onChange={(event) => setRsvpComment(event.target.value)}
+                    placeholder={ts.placeholders.comment}
+                    rows={2}
+                  />
+                </div>
+              )}
+
+              {rsvpCapacityError && (
+                <p className="text-sm text-red-600">{rsvpCapacityError}</p>
+              )}
+              {rsvpError && <p className="text-sm text-red-600">{rsvpError}</p>}
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setRsvpDialogValue(null)}
+                disabled={rsvpSubmitting}
+              >
+                {ts.buttons.cancel}
+              </Button>
+              <Button
+                onClick={handleSubmitRsvpDialog}
+                disabled={
+                  rsvpSubmitting ||
+                  (rsvpDialogValue === 1 && rsvpCapacityError !== null)
+                }
+              >
+                {rsvpSubmitting ? ts.buttons.saving : ts.buttons.submit}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {mode === "CONSENT_LOOP" && (
         <LoopRoundDiffDialog

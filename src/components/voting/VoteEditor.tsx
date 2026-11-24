@@ -20,8 +20,17 @@ import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
 import { Save, X, CalendarIcon, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { VoteEntity, VoteMode, VoteKind, VoteConfig, VoteProposal } from "@/lib/persistence-types";
+import {
+  VoteEntity,
+  VoteMode,
+  VoteKind,
+  VoteConfig,
+  VoteProposal,
+  AttendanceConfig,
+  AttendanceQuestion,
+} from "@/lib/persistence-types";
 import { DEFAULT_RANKING_ENGINE, voteAllowsTies } from "@/lib/vote-ranking";
+import { DEFAULT_MAX_PARTY_SIZE } from "@/lib/attendance";
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { useTranslation } from "react-i18next";
 import { KindSelector } from "./KindSelector";
@@ -48,6 +57,30 @@ const DEFAULT_CONFIG: VoteConfig = {
 const DEFAULT_PROPOSALS: VoteProposal[] = [
   { id: crypto.randomUUID(), content: "", position: 0, active: true },
 ];
+
+const isoToDateTimeLocal = (iso: string, timezone: string): string => {
+  if (!iso) return "";
+  try {
+    const pdt = instantToPlainDateTime(Temporal.Instant.from(iso), timezone);
+    const date = pdt.toPlainDate().toString();
+    const time = pdt.toPlainTime().toString({ smallestUnit: "minute" });
+    return `${date}T${time}`;
+  } catch {
+    return "";
+  }
+};
+
+const dateTimeLocalToIso = (value: string, timezone: string): string => {
+  if (!value) return "";
+  try {
+    const pdt = Temporal.PlainDateTime.from(value);
+    return Temporal.Instant.fromEpochMilliseconds(
+      plainDateTimeToTimestamp(pdt, timezone),
+    ).toString();
+  } catch {
+    return "";
+  }
+};
 
 export const VoteEditor: React.FC<VoteEditorProps> = ({
   open = false,
@@ -82,6 +115,18 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
   const [isSaving, setIsSaving] = React.useState(false);
   const [openAt, setOpenAt] = React.useState<number | null>(null);
   const [closeAt, setCloseAt] = React.useState<number | null>(null);
+  const [eventStartAt, setEventStartAt] = React.useState("");
+  const [eventEndAt, setEventEndAt] = React.useState("");
+  const [attendanceLocation, setAttendanceLocation] = React.useState("");
+  const [coverImageUrl, setCoverImageUrl] = React.useState("");
+  const [attendanceInfoUrl, setAttendanceInfoUrl] = React.useState("");
+  const [welcomeModal, setWelcomeModal] = React.useState(true);
+  const [askEmail, setAskEmail] = React.useState(false);
+  const [allowPartySize, setAllowPartySize] = React.useState(false);
+  const [maxPartySize, setMaxPartySize] = React.useState(DEFAULT_MAX_PARTY_SIZE);
+  const [allowHiddenAttendance, setAllowHiddenAttendance] = React.useState(false);
+  const [maxAttendees, setMaxAttendees] = React.useState(0);
+  const [customQuestions, setCustomQuestions] = React.useState<AttendanceQuestion[]>([]);
   const [timePickerOpen, setTimePickerOpen] = React.useState(false);
   const [timePickerConfig, setTimePickerConfig] = React.useState<{
     type: "openAt" | "closeAt";
@@ -97,7 +142,13 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
       setDescription(source.description || "");
       setKind(source.config.kind);
       setMode(source.config.mode);
-      setProposals(source.proposals.length > 0 ? source.proposals : DEFAULT_PROPOSALS);
+      setProposals(
+        source.config.mode === "ATTENDANCE"
+          ? []
+          : source.proposals.length > 0
+            ? source.proposals
+            : DEFAULT_PROPOSALS,
+      );
       setIsAnonymous(source.config.isAnonymous ?? true);
       setAllowFreeText(source.config.allowFreeText ?? false);
       setRequireObjectionComment(source.config.requireObjectionComment ?? false);
@@ -111,6 +162,27 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
       setAllowMultiple(source.config.allowMultiple ?? false);
       setOpenAt(source.config.openAt ? new Date(source.config.openAt).getTime() : null);
       setCloseAt(source.config.closeAt ? new Date(source.config.closeAt).getTime() : null);
+
+      const attendance = source.config.attendance;
+      setEventStartAt(attendance?.eventStartAt ?? "");
+      setEventEndAt(attendance?.eventEndAt ?? "");
+      setAttendanceLocation(attendance?.location ?? "");
+      setCoverImageUrl(attendance?.coverImageUrl ?? "");
+      setAttendanceInfoUrl(attendance?.infoUrl ?? "");
+      setWelcomeModal(attendance?.welcomeModal ?? true);
+      setAskEmail(attendance?.askEmail ?? false);
+      setAllowPartySize(attendance?.allowPartySize ?? false);
+      setMaxPartySize(attendance?.maxPartySize ?? DEFAULT_MAX_PARTY_SIZE);
+      setAllowHiddenAttendance(attendance?.allowHiddenAttendance ?? false);
+      setMaxAttendees(attendance?.maxAttendees ?? 0);
+      setCustomQuestions(
+        attendance?.customQuestions
+          ? attendance.customQuestions.map((question) => ({
+              ...question,
+              options: question.options ? [...question.options] : undefined,
+            }))
+          : [],
+      );
     } else {
       setTitle("");
       setDescription("");
@@ -130,6 +202,18 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
       setAllowMultiple(false);
       setOpenAt(null);
       setCloseAt(null);
+      setEventStartAt("");
+      setEventEndAt("");
+      setAttendanceLocation("");
+      setCoverImageUrl("");
+      setAttendanceInfoUrl("");
+      setWelcomeModal(true);
+      setAskEmail(false);
+      setAllowPartySize(false);
+      setMaxPartySize(DEFAULT_MAX_PARTY_SIZE);
+      setAllowHiddenAttendance(false);
+      setMaxAttendees(0);
+      setCustomQuestions([]);
     }
   }, []);
 
@@ -162,6 +246,23 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
   const showObjectionComment =
     mode === "THUMBS_UD_NEUTRAL" || mode === "MAJORITY_JUDGMENT" || mode === "CONSENT_LOOP";
 
+  const addQuestion = () => {
+    setCustomQuestions((previous) => [
+      ...previous,
+      { id: crypto.randomUUID(), prompt: "", type: "text", required: false },
+    ]);
+  };
+
+  const updateQuestion = (id: string, patch: Partial<AttendanceQuestion>) => {
+    setCustomQuestions((previous) =>
+      previous.map((question) => (question.id === id ? { ...question, ...patch } : question)),
+    );
+  };
+
+  const removeQuestion = (id: string) => {
+    setCustomQuestions((previous) => previous.filter((question) => question.id !== id));
+  };
+
   const handleSave = async () => {
     if (!title.trim()) return;
 
@@ -171,6 +272,45 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
 
     setIsSaving(true);
     try {
+      const cleanedQuestions: AttendanceQuestion[] = customQuestions
+        .map((question) => {
+          const prompt = question.prompt.trim();
+          const options = (question.options ?? [])
+            .map((option) => option.trim())
+            .filter((option) => option.length > 0);
+          // A "choice" question with no options is unanswerable, and a required
+          // one would block every RSVP. Persist it as free text instead so the
+          // prompt is still asked and remains satisfiable.
+          const type: AttendanceQuestion["type"] =
+            question.type === "choice" && options.length === 0 ? "text" : question.type;
+          return {
+            id: question.id,
+            prompt,
+            type,
+            ...(type === "choice" ? { options } : {}),
+            ...(question.required ? { required: true } : {}),
+          };
+        })
+        .filter((question) => question.prompt.length > 0);
+
+      const attendanceConfig: AttendanceConfig | undefined =
+        mode === "ATTENDANCE"
+          ? {
+              eventStartAt: eventStartAt || undefined,
+              eventEndAt: eventEndAt || undefined,
+              location: attendanceLocation.trim() || undefined,
+              coverImageUrl: coverImageUrl.trim() || undefined,
+              infoUrl: attendanceInfoUrl.trim() || undefined,
+              welcomeModal,
+              askEmail,
+              allowPartySize,
+              maxPartySize,
+              allowHiddenAttendance,
+              maxAttendees,
+              customQuestions: cleanedQuestions.length > 0 ? cleanedQuestions : undefined,
+            }
+          : undefined;
+
       const config: VoteConfig = {
         mode,
         kind,
@@ -178,16 +318,26 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
         isAnonymous,
         allowFreeText: mode !== "COMPARATIVE_PRIORITIZATION" ? allowFreeText : undefined,
         requireObjectionComment: showObjectionComment ? requireObjectionComment : undefined,
-        allowAudienceProposals: kind === "consultation" ? allowAudienceProposals : undefined,
+        allowAudienceProposals:
+          kind === "consultation" && mode !== "ATTENDANCE"
+            ? allowAudienceProposals
+            : undefined,
         showResultsBeforeClose,
         allowVoteChangeUntilClose,
-        multipleChoiceVote: mode !== "POINTS" && mode !== "CONSENT_LOOP" && mode !== "COMPARATIVE_PRIORITIZATION" ? multipleChoiceVote : undefined,
+        multipleChoiceVote:
+          mode !== "POINTS" &&
+          mode !== "CONSENT_LOOP" &&
+          mode !== "COMPARATIVE_PRIORITIZATION" &&
+          mode !== "ATTENDANCE"
+            ? multipleChoiceVote
+            : undefined,
         maxPointsPerUser: mode === "POINTS" ? maxPointsPerUser : undefined,
         rankingEngine: mode === "COMPARATIVE_PRIORITIZATION" ? rankingEngine : undefined,
         allowTies: mode === "COMPARATIVE_PRIORITIZATION" ? allowTies : undefined,
         allowMultiple: mode === "POINTS" ? allowMultiple : undefined,
         openAt: openAt ? new Date(openAt).toISOString() : undefined,
         closeAt: closeAt ? new Date(closeAt).toISOString() : undefined,
+        attendance: attendanceConfig,
       };
 
       await onSave({
@@ -195,7 +345,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
         title: title.trim(),
         description: description.trim() || undefined,
         ownerId: vote?.ownerId || "me",
-        proposals: flushedProposals.filter((p) => p.active),
+        proposals: mode === "ATTENDANCE" ? [] : flushedProposals.filter((p) => p.active),
         config,
       });
 
@@ -391,7 +541,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
               />
             </div>
 
-            {mode !== "POINTS" && mode !== "CONSENT_LOOP" && mode !== "COMPARATIVE_PRIORITIZATION" && (
+            {mode !== "POINTS" && mode !== "CONSENT_LOOP" && mode !== "COMPARATIVE_PRIORITIZATION" && mode !== "ATTENDANCE" && (
               <div className="flex items-center justify-between">
                 <Label className="text-sm">{t.labels.multipleChoiceVote}</Label>
                 <Switch
@@ -528,18 +678,288 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
 
           <Separator />
 
-          <div className="space-y-2">
-            <Label className="text-base font-medium">{t.labels.proposals}</Label>
-            <ProposalEditor
-              ref={proposalEditorRef}
-              proposals={proposals}
-              onChange={setProposals}
-              kind={kind}
-              allowAudienceProposals={allowAudienceProposals}
-              onAllowAudienceProposalsChange={setAllowAudienceProposals}
-              readOnly={isFinalized}
-            />
-          </div>
+          {mode === "ATTENDANCE" ? (
+            <div className="space-y-4">
+              <div className="border rounded-md p-3 bg-gray-50">
+                <p className="text-sm text-gray-600">
+                  {t.modeDescriptions.ATTENDANCE}
+                </p>
+              </div>
+
+              <div className="space-y-4 border rounded-md p-3">
+                <Label className="text-base font-medium">{t.attendanceEditor.sectionTitle}</Label>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-sm" htmlFor="attendance-event-start">
+                      {t.attendanceEditor.eventStartAt}
+                    </Label>
+                    <Input
+                      id="attendance-event-start"
+                      type="datetime-local"
+                      value={isoToDateTimeLocal(eventStartAt, timezone)}
+                      onChange={(e) =>
+                        setEventStartAt(dateTimeLocalToIso(e.target.value, timezone))
+                      }
+                      disabled={isFinalized}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-sm" htmlFor="attendance-event-end">
+                      {t.attendanceEditor.eventEndAt}
+                    </Label>
+                    <Input
+                      id="attendance-event-end"
+                      type="datetime-local"
+                      value={isoToDateTimeLocal(eventEndAt, timezone)}
+                      onChange={(e) =>
+                        setEventEndAt(dateTimeLocalToIso(e.target.value, timezone))
+                      }
+                      disabled={isFinalized}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-sm" htmlFor="attendance-location">
+                    {t.attendanceEditor.location}
+                  </Label>
+                  <Input
+                    id="attendance-location"
+                    value={attendanceLocation}
+                    onChange={(e) => setAttendanceLocation(e.target.value)}
+                    placeholder={t.attendanceEditor.locationPlaceholder}
+                    disabled={isFinalized}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-sm" htmlFor="attendance-cover-image">
+                    {t.attendanceEditor.coverImageUrl}
+                  </Label>
+                  <Input
+                    id="attendance-cover-image"
+                    value={coverImageUrl}
+                    onChange={(e) => setCoverImageUrl(e.target.value)}
+                    placeholder={t.attendanceEditor.coverImageUrlPlaceholder}
+                    disabled={isFinalized}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-sm" htmlFor="attendance-info-url">
+                    {t.attendanceEditor.infoUrl}
+                  </Label>
+                  <Input
+                    id="attendance-info-url"
+                    value={attendanceInfoUrl}
+                    onChange={(e) => setAttendanceInfoUrl(e.target.value)}
+                    placeholder={t.attendanceEditor.infoUrlPlaceholder}
+                    disabled={isFinalized}
+                  />
+                </div>
+
+                {!isAnonymous && (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm">{t.attendanceEditor.welcomeModal}</Label>
+                      <Switch
+                        checked={welcomeModal}
+                        onCheckedChange={setWelcomeModal}
+                        disabled={isFinalized}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500">{t.attendanceEditor.welcomeModalHelp}</p>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm">{t.attendanceEditor.askEmail}</Label>
+                  <Switch
+                    checked={askEmail}
+                    onCheckedChange={setAskEmail}
+                    disabled={isFinalized}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">{t.attendanceEditor.allowPartySize}</Label>
+                    <Switch
+                      checked={allowPartySize}
+                      onCheckedChange={setAllowPartySize}
+                      disabled={isFinalized}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs" htmlFor="attendance-max-party-size">
+                      {t.attendanceEditor.maxPartySize}
+                    </Label>
+                    <Input
+                      id="attendance-max-party-size"
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={maxPartySize}
+                      onChange={(e) =>
+                        setMaxPartySize(
+                          Math.min(Math.max(parseInt(e.target.value, 10) || 1, 1), 100),
+                        )
+                      }
+                      disabled={isFinalized || !allowPartySize}
+                      className="w-24"
+                    />
+                    <p className="text-xs text-gray-500">{t.attendanceEditor.maxPartySizeHelp}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm">{t.attendanceEditor.allowHiddenAttendance}</Label>
+                  <Switch
+                    checked={allowHiddenAttendance}
+                    onCheckedChange={setAllowHiddenAttendance}
+                    disabled={isFinalized}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-sm" htmlFor="attendance-max-attendees">
+                    {t.attendanceEditor.maxAttendees}
+                  </Label>
+                  <Input
+                    id="attendance-max-attendees"
+                    type="number"
+                    min={0}
+                    value={maxAttendees}
+                    onChange={(e) =>
+                      setMaxAttendees(Math.max(parseInt(e.target.value, 10) || 0, 0))
+                    }
+                    placeholder={t.attendanceEditor.unlimited}
+                    disabled={isFinalized}
+                    className="w-24"
+                  />
+                  <p className="text-xs text-gray-500">{t.attendanceEditor.maxAttendeesHelp}</p>
+                </div>
+
+                <div className="space-y-3 border-t pt-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-sm">{t.attendanceEditor.customQuestions}</Label>
+                      <p className="text-xs text-gray-500">
+                        {t.attendanceEditor.customQuestionsHelp}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addQuestion}
+                      disabled={isFinalized}
+                    >
+                      {t.attendanceEditor.addQuestion}
+                    </Button>
+                  </div>
+
+                  {customQuestions.length === 0 ? (
+                    <p className="text-xs text-gray-500">{t.attendanceEditor.noQuestions}</p>
+                  ) : (
+                    customQuestions.map((question, index) => (
+                      <div
+                        key={question.id}
+                        className="space-y-2 rounded-md border p-3 bg-gray-50"
+                      >
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm">
+                            {t.attendanceEditor.question} {index + 1}
+                          </Label>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 text-xs"
+                            onClick={() => removeQuestion(question.id)}
+                            disabled={isFinalized}
+                          >
+                            {t.attendanceEditor.removeQuestion}
+                          </Button>
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-xs">{t.attendanceEditor.prompt}</Label>
+                          <Input
+                            value={question.prompt}
+                            onChange={(e) =>
+                              updateQuestion(question.id, { prompt: e.target.value })
+                            }
+                            placeholder={t.attendanceEditor.promptPlaceholder}
+                            disabled={isFinalized}
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-xs">{t.attendanceEditor.type}</Label>
+                          <select
+                            value={question.type}
+                            onChange={(e) =>
+                              updateQuestion(question.id, {
+                                type: e.target.value as AttendanceQuestion["type"],
+                              })
+                            }
+                            disabled={isFinalized}
+                            className="text-sm border rounded px-2 py-1 bg-white"
+                          >
+                            <option value="text">{t.attendanceEditor.typeText}</option>
+                            <option value="choice">{t.attendanceEditor.typeChoice}</option>
+                          </select>
+                        </div>
+
+                        {question.type === "choice" && (
+                          <div className="space-y-1">
+                            <Label className="text-xs">{t.attendanceEditor.options}</Label>
+                            <Textarea
+                              value={(question.options ?? []).join("\n")}
+                              onChange={(e) =>
+                                updateQuestion(question.id, {
+                                  options: e.target.value.split("\n"),
+                                })
+                              }
+                              rows={3}
+                              placeholder={t.attendanceEditor.optionsPlaceholder}
+                              disabled={isFinalized}
+                            />
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">{t.attendanceEditor.required}</Label>
+                          <Switch
+                            checked={question.required ?? false}
+                            onCheckedChange={(checked) =>
+                              updateQuestion(question.id, { required: checked })
+                            }
+                            disabled={isFinalized}
+                          />
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label className="text-base font-medium">{t.labels.proposals}</Label>
+              <ProposalEditor
+                ref={proposalEditorRef}
+                proposals={proposals}
+                onChange={setProposals}
+                kind={kind}
+                allowAudienceProposals={allowAudienceProposals}
+                onAllowAudienceProposalsChange={setAllowAudienceProposals}
+                readOnly={isFinalized}
+              />
+            </div>
+          )}
         </div>
 
         <DialogFooter>

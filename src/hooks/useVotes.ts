@@ -728,10 +728,12 @@ export const useVoteResults = (
         .map(v => parseYjsResponseValue(v))
         .filter((v): v is VoteResponseEntity => v !== null);
       const voteResponses = allResponses.filter(r => r.voteId === voteId);
-      // The shared projection intentionally omits the moderator-only digest.
-      // Re-attach it from the authenticated copy this client already holds, so a
-      // remote update does not split a participant (draft digest) from their
-      // submission (alias only) in the provisional tally and participation table.
+      // The shared projection intentionally omits the moderator-only digest and
+      // the private RSVP contact fields. Re-attach them from the authenticated
+      // copy this client already holds, so a remote update does not split a
+      // participant (draft digest) from their submission (alias only) in the
+      // provisional tally, nor blank the organizer's attendee details until the
+      // next authenticated refetch.
       setResponses((previous) => {
         if (!moderatorToken) return voteResponses;
         const digestById = new Map(
@@ -739,11 +741,26 @@ export const useVoteResults = (
             .filter((row) => row.participantId)
             .map((row) => [row.id, row.participantId as string]),
         );
-        return voteResponses.map((row) =>
-          row.participantId
-            ? row
-            : { ...row, participantId: digestById.get(row.id) },
+        const attendeeById = new Map(
+          previous
+            .filter((row) => row.attendeeData)
+            .map((row) => [row.id, row.attendeeData]),
         );
+        return voteResponses.map((row) => {
+          const privateAttendee = attendeeById.get(row.id);
+          const attendeeData = row.attendeeData && privateAttendee
+            ? {
+                ...row.attendeeData,
+                email: privateAttendee.email,
+                answers: privateAttendee.answers,
+              }
+            : row.attendeeData;
+          return {
+            ...row,
+            ...(row.participantId ? {} : { participantId: digestById.get(row.id) }),
+            ...(attendeeData ? { attendeeData } : {}),
+          };
+        });
       });
     };
 

@@ -957,6 +957,7 @@
     "mode": {
       "thumbsUp": "Pouce levé",
       "thumbsUdNeutral": "Pour / Contre / Pas contre",
+      "attendance": "Présence",
       "points": "Budget de points",
       "majorityJudgment": "Jugement Majoritaire",
       "consentLoop": "Boucle de consentement"

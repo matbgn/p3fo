@@ -178,6 +178,7 @@ interface VoteResponseDbRow {
   value: number;
   comment: string | null;
   submittedAt: string;
+  attendeeData: string | null;
 }
 
 interface VoteRankingSubmissionDbRow {
@@ -565,7 +566,8 @@ class SqliteClient implements DbClient {
         "voterToken" TEXT NOT NULL,
         "value" REAL NOT NULL,
         "comment" TEXT,
-        "submittedAt" TEXT NOT NULL
+        "submittedAt" TEXT NOT NULL,
+        "attendeeData" TEXT
       )
     `);
     // Replace legacy single-response-per-voter constraint with one that allows
@@ -896,6 +898,9 @@ class SqliteClient implements DbClient {
 
     // VoteLoops proposalId column (per-proposal loops)
     addColumn('voteLoops', 'proposalId', 'TEXT NOT NULL DEFAULT \'\'');
+
+    // Event RSVP metadata for ATTENDANCE votes (JSON-encoded)
+    addColumn('voteResponses', 'attendeeData', 'TEXT');
 
     // Reminders i18n columns (system-generated reminders store a translation
     // key + params instead of baked-in text, so they re-localize on language
@@ -2594,6 +2599,7 @@ class SqliteClient implements DbClient {
       value: response.value ?? 0,
       comment: response.comment,
       submittedAt: response.submittedAt || new Date().toISOString(),
+      attendeeData: response.attendeeData,
     };
 
     // `RETURNING *` is required: on conflict the upsert keeps the existing row
@@ -2602,15 +2608,16 @@ class SqliteClient implements DbClient {
     // must both use the persisted id so an upsert replaces a voter's live entry
     // instead of duplicating it.
     const persisted = this.db.prepare(`
-      INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt")
-      VALUES(@id, @voteId, @proposalId, @loopId, @userId, @voterToken, @value, @comment, @submittedAt)
+      INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt", "attendeeData")
+      VALUES(@id, @voteId, @proposalId, @loopId, @userId, @voterToken, @value, @comment, @submittedAt, @attendeeData)
       ON CONFLICT("voteId", "voterToken", COALESCE("proposalId", ''), COALESCE("loopId", '')) DO UPDATE SET
         "proposalId" = excluded."proposalId",
         "loopId" = excluded."loopId",
         "userId" = excluded."userId",
         "value" = excluded."value",
         "comment" = excluded."comment",
-        "submittedAt" = excluded."submittedAt"
+        "submittedAt" = excluded."submittedAt",
+        "attendeeData" = excluded."attendeeData"
       RETURNING *
     `).get({
       id: newResponse.id,
@@ -2622,6 +2629,7 @@ class SqliteClient implements DbClient {
       value: newResponse.value,
       comment: newResponse.comment ?? null,
       submittedAt: newResponse.submittedAt,
+      attendeeData: newResponse.attendeeData ? JSON.stringify(newResponse.attendeeData) : null,
     }) as unknown as VoteResponseDbRow | undefined;
 
     return persisted ? this.mapVoteResponseDbRowToEntity(persisted) : newResponse;
@@ -2652,13 +2660,14 @@ class SqliteClient implements DbClient {
 
   async importVoteResponses(items: VoteResponseEntity[]): Promise<void> {
     const insertStmt = this.db.prepare(`
-      INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt")
-      VALUES(@id, @voteId, @proposalId, @loopId, @userId, @voterToken, @value, @comment, @submittedAt)
+      INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt", "attendeeData")
+      VALUES(@id, @voteId, @proposalId, @loopId, @userId, @voterToken, @value, @comment, @submittedAt, @attendeeData)
       ON CONFLICT("voteId", "voterToken", COALESCE("proposalId", ''), COALESCE("loopId", '')) DO UPDATE SET
         "proposalId" = excluded."proposalId",
         "value" = excluded."value",
         "comment" = excluded."comment",
-        "submittedAt" = excluded."submittedAt"
+        "submittedAt" = excluded."submittedAt",
+        "attendeeData" = excluded."attendeeData"
     `);
 
     this.db.exec('BEGIN');
@@ -2674,6 +2683,7 @@ class SqliteClient implements DbClient {
           value: item.value,
           comment: item.comment ?? null,
           submittedAt: item.submittedAt,
+          attendeeData: item.attendeeData ? JSON.stringify(item.attendeeData) : null,
         });
       }
       this.db.exec('COMMIT');
@@ -3047,6 +3057,7 @@ class SqliteClient implements DbClient {
       value: row.value,
       comment: row.comment ?? undefined,
       submittedAt: row.submittedAt,
+      attendeeData: row.attendeeData ? JSON.parse(row.attendeeData) : undefined,
     };
   }
 

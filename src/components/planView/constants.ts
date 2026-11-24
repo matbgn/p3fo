@@ -12,6 +12,7 @@ export const MJ_SCALE = [
 export const VOTING_MODES_LABELS = {
     'THUMBS_UP': 'Thumbs Up',
     'THUMBS_UD_NEUTRAL': 'Up / Down / Neutral',
+    'ATTENDANCE': 'Attendance',
     'POINTS': 'Points Budget',
     'MAJORITY_JUDGMENT': 'Majority Judgment',
     'CONSENT_LOOP': 'Consent Loop',
@@ -34,6 +35,7 @@ export function mjGradeLabel(t: TFunction, value: number): string {
 const VOTING_MODE_KEYS: Record<string, string> = {
     'THUMBS_UP': 'voting.mode.thumbsUp',
     'THUMBS_UD_NEUTRAL': 'voting.mode.thumbsUdNeutral',
+    'ATTENDANCE': 'voting.mode.attendance',
     'POINTS': 'voting.mode.points',
     'MAJORITY_JUDGMENT': 'voting.mode.majorityJudgment',
     'CONSENT_LOOP': 'voting.mode.consentLoop',

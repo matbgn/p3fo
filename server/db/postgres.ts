@@ -145,6 +145,7 @@ interface VoteDbRow {
   createdAt: string;
   updatedAt: string;
 }
+
 const DEFAULT_USER_SETTINGS: UserSettingsEntity = {
   userId: 'default-user',
   username: 'User',
@@ -477,7 +478,8 @@ class PostgresClient implements DbClient {
         "voterToken" TEXT NOT NULL,
         "value" DOUBLE PRECISION NOT NULL,
         "comment" TEXT,
-        "submittedAt" TIMESTAMP WITH TIME ZONE NOT NULL
+        "submittedAt" TIMESTAMP WITH TIME ZONE NOT NULL,
+        "attendeeData" JSONB
       )
     `);
     // Replace legacy single-response-per-voter constraint with one that allows
@@ -574,6 +576,7 @@ class PostgresClient implements DbClient {
     `);
     // Add multiplier column for existing deployments (pomodoro boost feature)
     await this.pool.query(`ALTER TABLE "pomodoroSessions" ADD COLUMN IF NOT EXISTS "multiplier" INTEGER NOT NULL DEFAULT 1`);
+    await this.pool.query(`ALTER TABLE "voteResponses" ADD COLUMN IF NOT EXISTS "attendeeData" JSONB`);
     // These indexes dramatically improve query performance when filtering by userId, parentId, or triageStatus
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_tasks_userId" ON "tasks"("userId")`);
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_tasks_parentId" ON "tasks"("parentId")`);
@@ -2341,6 +2344,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       value: row.value as number,
       comment: (row.comment as string | null) ?? undefined,
       submittedAt: row.submittedAt as string,
+      attendeeData: this.parseJsonb(row.attendeeData),
     }));
   }
 
@@ -2355,6 +2359,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       value: response.value ?? 0,
       comment: response.comment,
       submittedAt: response.submittedAt || new Date().toISOString(),
+      attendeeData: response.attendeeData,
     };
 
     // `RETURNING *` is required: on conflict the upsert keeps the existing row
@@ -2363,8 +2368,8 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     // must both use the persisted id so an upsert replaces a voter's live entry
     // instead of duplicating it.
     const result = await this.pool.query(`
-      INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt")
-      VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt", "attendeeData")
+      VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       ON CONFLICT ("voteId", "voterToken", (COALESCE("proposalId", '')), (COALESCE("loopId", '')))
         DO UPDATE SET
           "proposalId" = EXCLUDED."proposalId",
@@ -2372,7 +2377,8 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
           "userId" = EXCLUDED."userId",
           "value" = EXCLUDED."value",
           "comment" = EXCLUDED."comment",
-          "submittedAt" = EXCLUDED."submittedAt"
+          "submittedAt" = EXCLUDED."submittedAt",
+          "attendeeData" = EXCLUDED."attendeeData"
       RETURNING *
     `, [
       newResponse.id,
@@ -2384,6 +2390,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       newResponse.value,
       newResponse.comment ?? null,
       newResponse.submittedAt,
+      newResponse.attendeeData ? JSON.stringify(newResponse.attendeeData) : null,
     ]);
 
     const row = result.rows[0] as Record<string, unknown> | undefined;
@@ -2401,6 +2408,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       // into the shared Yjs map, where lib0 encodes a `Date` as `{}`, so it must
       // stay an ISO string here (same rule as the other vote mappings).
       submittedAt: this.toIsoString(row.submittedAt) ?? newResponse.submittedAt,
+      attendeeData: this.parseJsonb(row.attendeeData),
     };
   }
 
@@ -2428,15 +2436,16 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       await client.query('BEGIN');
       for (const item of items) {
         await client.query(`
-          INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt")
-          VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt", "attendeeData")
+          VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
           ON CONFLICT ("voteId", "voterToken", (COALESCE("proposalId", '')), (COALESCE("loopId", '')))
             DO UPDATE SET
               "proposalId" = EXCLUDED."proposalId",
               "value" = EXCLUDED."value",
               "comment" = EXCLUDED."comment",
-              "submittedAt" = EXCLUDED."submittedAt"
-        `, [item.id, item.voteId, item.proposalId, item.loopId ?? null, item.userId, item.voterToken, item.value, item.comment ?? null, item.submittedAt]);
+              "submittedAt" = EXCLUDED."submittedAt",
+              "attendeeData" = EXCLUDED."attendeeData"
+        `, [item.id, item.voteId, item.proposalId, item.loopId ?? null, item.userId, item.voterToken, item.value, item.comment ?? null, item.submittedAt, item.attendeeData ? JSON.stringify(item.attendeeData) : null]);
       }
       await client.query('COMMIT');
     } catch (error) {
@@ -2451,6 +2460,18 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     if (!value) return null;
     if (value instanceof Date) return value.toISOString();
     return String(value);
+  }
+
+  private parseJsonb(value: unknown): VoteResponseEntity['attendeeData'] {
+    if (!value) return undefined;
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value) as VoteResponseEntity['attendeeData'];
+      } catch {
+        return undefined;
+      }
+    }
+    return value as VoteResponseEntity['attendeeData'];
   }
 
   // Comparative prioritization ballots

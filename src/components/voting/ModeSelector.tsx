@@ -3,7 +3,7 @@ import { VoteMode } from "@/lib/persistence-types";
 import { getSelectedMode } from "@/lib/persistence-factory";
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { cn } from "@/lib/utils";
-import { ThumbsUp, Minus, Coins, Award, RotateCcw, ListOrdered } from "lucide-react";
+import { ThumbsUp, Minus, Coins, Award, RotateCcw, ListOrdered, CalendarCheck } from "lucide-react";
 
 interface ModeSelectorProps {
   value: VoteMode;
@@ -14,13 +14,14 @@ interface ModeSelectorProps {
 const MODE_ICONS: Record<VoteMode, React.ReactNode> = {
   THUMBS_UP: <ThumbsUp className="w-4 h-4" />,
   THUMBS_UD_NEUTRAL: <Minus className="w-4 h-4" />,
+  ATTENDANCE: <CalendarCheck className="w-4 h-4" />,
   POINTS: <Coins className="w-4 h-4" />,
   MAJORITY_JUDGMENT: <Award className="w-4 h-4" />,
   CONSENT_LOOP: <RotateCcw className="w-4 h-4" />,
   COMPARATIVE_PRIORITIZATION: <ListOrdered className="w-4 h-4" />,
 };
 
-const ALL_MODES: VoteMode[] = ["THUMBS_UP", "THUMBS_UD_NEUTRAL", "POINTS", "MAJORITY_JUDGMENT", "CONSENT_LOOP", "COMPARATIVE_PRIORITIZATION"];
+const ALL_MODES: VoteMode[] = ["THUMBS_UP", "THUMBS_UD_NEUTRAL", "ATTENDANCE", "POINTS", "MAJORITY_JUDGMENT", "CONSENT_LOOP", "COMPARATIVE_PRIORITIZATION"];
 
 export const ModeSelector: React.FC<ModeSelectorProps> = ({ value, onChange, disabled }) => {
   const t = getVotingStrings();

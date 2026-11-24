@@ -406,7 +406,7 @@ export type TimeFrame = '3mo' | '6mo' | '1y' | '2y' | '4y';
 export type VotingMode = 'THUMBS_UP' | 'THUMBS_UD_NEUTRAL' | 'POINTS' | 'MAJORITY_JUDGMENT';
 export type VotingPhase = 'IDLE' | 'VOTING' | 'REVEALED';
 
-export type VoteMode = VotingMode | 'CONSENT_LOOP' | 'COMPARATIVE_PRIORITIZATION';
+export type VoteMode = VotingMode | 'ATTENDANCE' | 'CONSENT_LOOP' | 'COMPARATIVE_PRIORITIZATION';
 export type RankingEngine = 'bt-k2' | 'bt-k4';
 export type VoteKind = 'consultation' | 'decision';
 export type VotePhase = 'IDLE' | 'OPEN' | 'CLOSED' | 'FINALIZED';
@@ -418,6 +418,43 @@ export interface VoteProposal {
   infoUrl?: string;
   position: number;
   active: boolean;
+}
+
+export interface AttendanceQuestion {
+  id: string;
+  prompt: string;
+  type: 'text' | 'choice';
+  options?: string[];
+  required?: boolean;
+}
+
+export interface AttendanceConfig {
+  /** ISO timestamp for the event start. */
+  eventStartAt?: string;
+  /** ISO timestamp for the event end. */
+  eventEndAt?: string;
+  location?: string;
+  coverImageUrl?: string;
+  infoUrl?: string;
+  /** Show the "choose a display name" welcome modal on non-anonymous votes. */
+  welcomeModal?: boolean;
+  askEmail?: boolean;
+  allowPartySize?: boolean;
+  maxPartySize?: number;
+  allowHiddenAttendance?: boolean;
+  /** Maximum total party size for "going" RSVPs; 0/undefined = unlimited. */
+  maxAttendees?: number;
+  customQuestions?: AttendanceQuestion[];
+}
+
+export interface AttendanceResponseData {
+  displayName?: string;
+  email?: string;
+  partySize?: number;
+  visibility?: 'public' | 'hidden';
+  /** Server-generated token for the private RSVP removal link. */
+  removalToken?: string;
+  answers?: Record<string, string>;
 }
 
 export interface VoteConfig {
@@ -441,6 +478,8 @@ export interface VoteConfig {
   rankingEngine?: RankingEngine;
   /** Preserve collective ties instead of requiring a moderator tie-break. Default: true. */
   allowTies?: boolean;
+  /** Event RSVP settings for ATTENDANCE votes. */
+  attendance?: AttendanceConfig;
 }
 
 export interface VoteRankingComparison {
@@ -542,6 +581,8 @@ export interface VoteResponseEntity {
   value: number;
   comment?: string;
   submittedAt: string;
+  /** Event RSVP metadata for ATTENDANCE votes. */
+  attendeeData?: AttendanceResponseData;
 }
 
 export interface VoteDraftEntity {

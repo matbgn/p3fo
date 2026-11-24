@@ -1316,6 +1316,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       value: response.value ?? 0,
       comment: response.comment,
       submittedAt: response.submittedAt || new Date().toISOString(),
+      attendeeData: response.attendeeData,
     };
     const stored = localStorage.getItem(VOTE_RESPONSES_STORAGE_KEY);
     const all: VoteResponseEntity[] = stored ? JSON.parse(stored) : [];

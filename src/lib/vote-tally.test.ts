@@ -9,6 +9,8 @@ import {
   tallyConsentLoop,
   getBestConsentRound,
   calculateCardVoteScore,
+  tallyEventRsvp,
+  EVENT_RSVP_PROPOSAL_ID,
 } from './vote-tally'
 import type { VoteResponseEntity, VoteLoop } from './persistence-types'
 
@@ -404,5 +406,45 @@ describe('calculateCardVoteScore', () => {
 
   it('returns 0 for unknown mode', () => {
     expect(calculateCardVoteScore({ a: 1 }, 'THUMBS_UP')).toBe(1)
+  })
+})
+
+describe('tallyEventRsvp', () => {
+  it('counts going, maybe and not going sentinel rows', () => {
+    const responses = [
+      makeResponse({ proposalId: EVENT_RSVP_PROPOSAL_ID, value: 1 }),
+      makeResponse({ id: 'r2', proposalId: EVENT_RSVP_PROPOSAL_ID, value: 1, voterToken: 't2' }),
+      makeResponse({ id: 'r3', proposalId: EVENT_RSVP_PROPOSAL_ID, value: 0, voterToken: 't3' }),
+      makeResponse({ id: 'r4', proposalId: EVENT_RSVP_PROPOSAL_ID, value: -1, voterToken: 't4' }),
+    ]
+    expect(tallyEventRsvp(responses)).toEqual({
+      going: 2,
+      maybe: 1,
+      notGoing: 1,
+      total: 4,
+    })
+  })
+
+  it('ignores rows that are not the event RSVP sentinel', () => {
+    const responses = [
+      makeResponse({ proposalId: 'p1', value: 1 }),
+      makeResponse({ id: 'r2', proposalId: 'p2', value: -1, voterToken: 't2' }),
+      makeResponse({ id: 'r3', proposalId: EVENT_RSVP_PROPOSAL_ID, value: 0, voterToken: 't3' }),
+    ]
+    expect(tallyEventRsvp(responses)).toEqual({
+      going: 0,
+      maybe: 1,
+      notGoing: 0,
+      total: 1,
+    })
+  })
+
+  it('returns zeros for an empty response list', () => {
+    expect(tallyEventRsvp([])).toEqual({
+      going: 0,
+      maybe: 0,
+      notGoing: 0,
+      total: 0,
+    })
   })
 })

@@ -50,6 +50,8 @@ import { VOTE_SCOPED_YJS_MAPS } from '../src/lib/vote-yjs-maps.js';
 import { clearVoteDrafts, deleteVoteDraft, listVoteDrafts, sweepExpiredVoteDrafts, upsertVoteDraft } from '../src/lib/vote-drafts.js';
 import { clearVotePresence, listVotePresence, sweepExpiredVotePresence, touchVotePresence } from '../src/lib/vote-presence.js';
 import { validateVoteResponseValue } from '../src/lib/vote-validation.js';
+import { EVENT_RSVP_PROPOSAL_ID } from '../src/lib/vote-tally.js';
+import { attendanceCapacityError, sanitizeAttendanceData, validateAttendanceAnswers } from '../src/lib/attendance.js';
 
 const YJS_ROOM = 'p3fo-room';
 
@@ -155,6 +157,40 @@ function broadcastVoteResponseToYjs(vote: VoteEntity, response: VoteResponseEnti
   }
 }
 
+function timingSafeTokenEqual(left: string, right: string): boolean {
+  const a = Buffer.from(left);
+  const b = Buffer.from(right);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+/**
+ * Attendance capacity is checked against the current RSVPs and then written in
+ * a second statement. Serialize those two steps per vote inside this process so
+ * two concurrent "going" submissions cannot both observe spare capacity and
+ * overbook. A multi-instance deployment still needs a DB-level guard (e.g. an
+ * advisory lock), which is tracked as a manual deployment step.
+ */
+const attendanceWriteQueues = new Map<string, Promise<void>>();
+
+async function withVoteWriteLock<T>(voteId: string, task: () => Promise<T>): Promise<T> {
+  const previous = attendanceWriteQueues.get(voteId) ?? Promise.resolve();
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const queued = previous.then(() => gate);
+  attendanceWriteQueues.set(voteId, queued);
+  await previous;
+  try {
+    return await task();
+  } finally {
+    release();
+    if (attendanceWriteQueues.get(voteId) === queued) {
+      attendanceWriteQueues.delete(voteId);
+    }
+  }
+}
+
 /**
  * Evict exactly the rows a withdrawal removed. The database layer returns the
  * deleted ids, so this never re-reads or re-broadcasts the rest of the vote's
@@ -177,20 +213,35 @@ function broadcastVoteResponsesRemovedFromYjs(responseIds: string[]) {
  * Older clients published responses verbatim into the shared document, and a
  * stale bundle can keep doing so during a rollout. The server now normalises the
  * `/ws/<room>` name, so those clients join the same room as the redacting
- * writers. Rewrite any response that still carries a raw `voterToken` as soon as
- * it enters the room, so the withdrawal credential is removed from the server
+ * writers. Rewrite any response that still carries a raw `voterToken` or a
+ * private RSVP field (email, custom answers, removal token) as soon as it enters
+ * the room, so a credential or organizer-only datum is removed from the server
  * copy and from every client that syncs after the scrub, regardless of which
- * client version produced it.
+ * client version produced it. A moderator client that fetched the organizer
+ * projection and re-published it through `syncResponsesToYjs` is the path this
+ * guards against.
  */
 function scrubLegacyVoteResponseTokensFromYjs() {
   try {
     const doc = getYDoc(YJS_ROOM) as Y.Doc;
     const map = doc.getMap('voteResponses');
+    const hasPrivateAttendeeFields = (parsed: VoteResponseEntity): boolean => {
+      const data = parsed.attendeeData;
+      return Boolean(
+        data &&
+          (data.email !== undefined ||
+            data.answers !== undefined ||
+            data.removalToken !== undefined),
+      );
+    };
     const scrubKeys = (keys: Iterable<string>) => {
       const stale: Array<[string, VoteResponseEntity]> = [];
       for (const key of keys) {
         const parsed = yjsValueToRecord<VoteResponseEntity>(map.get(key));
-        if (parsed && typeof parsed.voterToken === 'string' && parsed.voterToken.length > 0) {
+        if (!parsed) continue;
+        const hasRawToken =
+          typeof parsed.voterToken === 'string' && parsed.voterToken.length > 0;
+        if (hasRawToken || hasPrivateAttendeeFields(parsed)) {
           stale.push([key, parsed]);
         }
       }
@@ -202,8 +253,8 @@ function scrubLegacyVoteResponseTokensFromYjs() {
       });
     };
     // A process that restarts in place may already hold rows; scan them once,
-    // then only the keys each incoming update touches. The rewrite blanks the
-    // token, so the scrub is idempotent and cannot loop.
+    // then only the keys each incoming update touches. The rewrite strips the
+    // token and private fields, so the scrub is idempotent and cannot loop.
     scrubKeys(Array.from(map.keys()));
     map.observe((event) => scrubKeys(event.keysChanged));
   } catch {
@@ -426,7 +477,7 @@ const DB_SQLITE_FILE = process.env.P3FO_DB_SQLITE_FILE || './p3fo.db';
 app.use(compression({ threshold: 1024 }));
 app.use(cors({
   origin: true,
-  allowedHeaders: ['Content-Type', 'traceparent', 'tracestate', 'X-API-Key', 'Authorization', 'X-Voter-Token', 'X-Moderator-Token'],
+  allowedHeaders: ['Content-Type', 'traceparent', 'tracestate', 'X-API-Key', 'Authorization', 'X-Voter-Token', 'X-Moderator-Token', 'X-Removal-Token'],
   exposedHeaders: ['traceparent', 'tracestate'],
 }));
 app.use(express.json({ limit: '10mb' }));
@@ -1664,17 +1715,11 @@ async function findVoteByIdOrSlug(idOrSlug: string) {
   return (await db.getVoteById(idOrSlug)) || (await db.getVoteBySlug(idOrSlug));
 }
 
-function requestToken(
-  req: Request,
-  header: string,
-  queryKey: string,
-): string | undefined {
-  // Prefer a custom header so bearer credentials do not land in access/proxy
-  // logs and browser history; keep the query form for older clients.
-  const headerValue = req.get(header);
-  if (headerValue) return headerValue;
-  const queryValue = req.query[queryKey];
-  return typeof queryValue === 'string' ? queryValue : undefined;
+function requestToken(req: Request, header: string): string | undefined {
+  // Bearer credentials travel only in a custom header: a query string is
+  // recorded by proxies, access logs and browser history, so it is never
+  // accepted as a credential source.
+  return req.get(header) || undefined;
 }
 
 /**
@@ -1688,7 +1733,7 @@ function requestToken(
  * than a credential unlocks the public read for locked votes.
  */
 async function canModerateVote(req: Request, vote: { id: string }): Promise<boolean> {
-  const moderatorToken = requestToken(req, 'x-moderator-token', 'moderatorToken');
+  const moderatorToken = requestToken(req, 'x-moderator-token');
   if (!moderatorToken) return false;
   // Verify without stamping `lastSeenAt`: this capability check runs for every
   // live results/participation poll, including the in-app owner view that
@@ -1985,7 +2030,7 @@ app.get('/api/votes/:idOrSlug/ranking-submissions', async (req: Request, res: Re
     // same URL.
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Vary', 'X-Voter-Token, X-Moderator-Token');
-    const voterToken = requestToken(req, 'x-voter-token', 'voterToken');
+    const voterToken = requestToken(req, 'x-voter-token');
     if (voterToken) {
       // A participant reads back their own ballot with their bearer token.
       const submission = await db.getVoteRankingSubmission(vote.id, voterToken);
@@ -2093,7 +2138,7 @@ app.delete('/api/votes/:idOrSlug/ranking-submissions', async (req: Request, res:
   try {
     const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
     if (!vote) return res.status(404).json({ error: 'Vote not found' });
-    const voterToken = requestToken(req, 'x-voter-token', 'voterToken');
+    const voterToken = requestToken(req, 'x-voter-token');
     if (!voterToken) return res.status(400).json({ error: 'voterToken is required' });
     if (vote.config.phase !== 'OPEN') {
       return res.status(400).json({ error: 'Vote is not open for ballots' });
@@ -2336,7 +2381,85 @@ app.post('/api/votes/:idOrSlug/responses', async (req: Request, res: Response) =
       return res.status(400).json({ error: valueError });
     }
 
-    const response = await db.createVoteResponse(vote.id, req.body);
+    let response: VoteResponseEntity;
+    if (vote.config.mode === 'ATTENDANCE') {
+      const result = await withVoteWriteLock(vote.id, async () => {
+        const rawAttendeeData =
+          req.body?.attendeeData && typeof req.body.attendeeData === 'object'
+            ? req.body.attendeeData
+            : req.body;
+        const voterToken = typeof req.body?.voterToken === 'string' ? req.body.voterToken : '';
+        const existingResponses = await db.getVoteResponses(vote.id);
+        const existingSentinel = existingResponses.find(
+          (response) =>
+            response.proposalId === EVENT_RSVP_PROPOSAL_ID && response.voterToken === voterToken,
+        );
+        const previous = existingSentinel?.attendeeData;
+        // The public results projection strips email and custom answers, so the
+        // edit form cannot round-trip them. Merge the stored answers into the
+        // payload *before* validating: otherwise a returning attendee whose
+        // required questions were already answered could never change or cancel
+        // their RSVP without retyping answers the client can never receive.
+        const rawAnswers =
+          rawAttendeeData && typeof rawAttendeeData === 'object'
+            ? (rawAttendeeData as Record<string, unknown>).answers
+            : undefined;
+        const incomingAnswers =
+          rawAnswers && typeof rawAnswers === 'object' && !Array.isArray(rawAnswers)
+            ? (rawAnswers as Record<string, unknown>)
+            : {};
+        const effectiveAttendeeData = previous
+          ? {
+              ...(rawAttendeeData as object),
+              answers: { ...(previous.answers ?? {}), ...incomingAnswers },
+            }
+          : rawAttendeeData;
+        const answersError = validateAttendanceAnswers(
+          vote.config.attendance,
+          effectiveAttendeeData,
+        );
+        if (answersError) {
+          return { error: answersError };
+        }
+        const sanitized = sanitizeAttendanceData(vote.config.attendance, effectiveAttendeeData, {
+          isAnonymous: isVoteAnonymous(vote.config),
+        });
+        const capacityError = attendanceCapacityError(
+          vote.config.attendance,
+          existingResponses,
+          { value, partySize: sanitized.partySize ?? 1 },
+          voterToken,
+        );
+        if (capacityError) {
+          return { error: capacityError };
+        }
+        // The client never supplies approval state or the removal token: reuse
+        // the token of an existing sentinel row (so a change keeps the private
+        // link), otherwise mint a fresh one.
+        const removalToken =
+          existingSentinel?.attendeeData?.removalToken ??
+          crypto.randomBytes(24).toString('base64url');
+        const attendeeData = { ...sanitized, removalToken };
+        // Email is optional, so the same carry-over applies when the edit form
+        // submits an empty field it could not have prefilled.
+        if (vote.config.attendance?.askEmail && !attendeeData.email && previous?.email) {
+          attendeeData.email = previous.email;
+        }
+        const created = await db.createVoteResponse(vote.id, {
+          ...req.body,
+          proposalId: EVENT_RSVP_PROPOSAL_ID,
+          loopId: null,
+          attendeeData,
+        });
+        return { response: created };
+      });
+      if ('error' in result) {
+        return res.status(400).json({ error: result.error });
+      }
+      response = result.response;
+    } else {
+      response = await db.createVoteResponse(vote.id, req.body);
+    }
     broadcastVoteResponseToYjs(vote, response);
     res.status(201).json(response);
   } catch (error: unknown) {
@@ -2349,10 +2472,12 @@ app.post('/api/votes/:idOrSlug/responses', async (req: Request, res: Response) =
 app.delete('/api/votes/:idOrSlug/responses', async (req: Request, res: Response) => {
   try {
     const { idOrSlug } = req.params;
-    const { voterToken, proposalId, loopId } = req.query;
-    if (typeof voterToken !== 'string') {
-      return res.status(400).json({ error: 'voterToken is required' });
-    }
+    const { proposalId, loopId } = req.query;
+    // Header-only: the withdrawal credential must not travel in a URL that
+    // proxies, access logs and browser history record.
+    const voterToken = requestToken(req, 'x-voter-token');
+    // The private removal capability must not travel in a URL either.
+    const removalToken = req.get('x-removal-token');
     let vote = await db.getVoteById(idOrSlug);
     if (!vote) {
       vote = await db.getVoteBySlug(idOrSlug);
@@ -2363,8 +2488,43 @@ app.delete('/api/votes/:idOrSlug/responses', async (req: Request, res: Response)
     if (vote.config.phase !== 'OPEN') {
       return res.status(400).json({ error: 'Vote is not open for responses' });
     }
-    const deletedProposalId = typeof proposalId === 'string' ? proposalId : null;
-    const deletedLoopId = typeof loopId === 'string' ? loopId : null;
+    // A participant holding the private RSVP link can withdraw without the
+    // withdrawal credential. Only the sentinel row carrying the matching
+    // server-issued token may be removed.
+    if (
+      typeof removalToken === 'string' &&
+      removalToken.length > 0 &&
+      vote.config.mode === 'ATTENDANCE'
+    ) {
+      const responses = await db.getVoteResponses(vote.id);
+      const row = responses.find(
+        (response) =>
+          response.proposalId === EVENT_RSVP_PROPOSAL_ID &&
+          typeof response.attendeeData?.removalToken === 'string' &&
+          timingSafeTokenEqual(response.attendeeData.removalToken, removalToken),
+      );
+      if (!row) {
+        return res.status(404).json({ error: 'Response not found' });
+      }
+      const deletedResponseIds = await db.deleteVoteResponse(
+        vote.id,
+        row.voterToken,
+        row.proposalId,
+        row.loopId,
+      );
+      broadcastVoteResponsesRemovedFromYjs(deletedResponseIds);
+      return res.status(204).send();
+    }
+    if (typeof voterToken !== 'string') {
+      return res.status(400).json({ error: 'voterToken is required' });
+    }
+    const isAttendance = vote.config.mode === 'ATTENDANCE';
+    const deletedProposalId = isAttendance
+      ? EVENT_RSVP_PROPOSAL_ID
+      : typeof proposalId === 'string' ? proposalId : null;
+    const deletedLoopId = isAttendance
+      ? null
+      : typeof loopId === 'string' ? loopId : null;
     const deletedResponseIds = await db.deleteVoteResponse(
       vote.id,
       voterToken,
@@ -2449,11 +2609,10 @@ app.delete('/api/votes/:idOrSlug/drafts', async (req: Request, res: Response) =>
     if (!vote) {
       return res.status(404).json({ error: 'Vote not found' });
     }
-    // Prefer the header: the voter token is the participant's withdrawal
-    // credential, and this DELETE runs on page unload for every participant, so
-    // a query token would be written to access/proxy logs. The query form stays
-    // as a fallback for older clients.
-    const voterToken = requestToken(req, 'x-voter-token', 'voterToken');
+    // Header-only: the voter token is the participant's withdrawal credential,
+    // and this DELETE runs on page unload for every participant, so a query
+    // token would be written to access/proxy logs.
+    const voterToken = requestToken(req, 'x-voter-token');
     const publisherId = req.query.publisherId;
     if (!voterToken) {
       return res.status(400).json({ error: 'voterToken is required' });
@@ -2567,14 +2726,20 @@ app.get('/api/votes/:idOrSlug/results', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Vote not found' });
     }
     const responses = await db.getVoteResponses(vote.id);
-    const safeResponses = redactVoteResponsesForVote(vote, responses);
+    const isModerator = await canModerateVote(req, vote);
+    // Organizers need the emails and custom-question answers they asked voters
+    // for; expose them only to the moderator capability. The private removal
+    // token stays stripped on every path, including this one.
+    const safeResponses = redactVoteResponsesForVote(vote, responses, {
+      keepAttendeePrivateFields: isModerator,
+    });
     // The moderator view merges in-progress drafts into these submitted rows.
     // Join on the server's unforgeable, vote-scoped participant digest rather
     // than the short public alias, which a participant can brute-force into a
     // collision and use to impersonate another participant in the live tally.
     // The digest is one-way and only returned to a caller that already holds
     // this vote's moderator capability; the public projection stays alias-only.
-    if (await canModerateVote(req, vote)) {
+    if (isModerator) {
       for (let index = 0; index < safeResponses.length; index++) {
         safeResponses[index].participantId = voteParticipantKey(
           vote.id,

@@ -4,6 +4,80 @@ type VotingStrings = {
   kindDescriptions: Record<string, string>;
   modes: Record<string, string>;
   modeDescriptions: Record<string, string>;
+  attendanceOptions: {
+    going: string;
+    maybe: string;
+    notGoing: string;
+  };
+  attendance: {
+    dateTime: string;
+    addToCalendar: string;
+    displayName: string;
+    email: string;
+    partySize: string;
+    visibility: string;
+    visibilityPublic: string;
+    visibilityHidden: string;
+    customQuestions: string;
+    rsvpTitle: string;
+    rsvpThanks: string;
+    removalNotice: string;
+    removalError: string;
+    removalConfirm: string;
+    full: string;
+    attendees: string;
+    hiddenAttendees: string;
+    noAttendees: string;
+    manageRsvp: string;
+    removeRsvp: string;
+    privateRemovalLink: string;
+    linkCopied: string;
+    requiredAnswer: string;
+    invalidAnswer: string;
+    invalidEmail: string;
+    submitError: string;
+    welcomeTitle: string;
+    welcomeDescription: string;
+    useRandomName: string;
+    saveName: string;
+    nameRequired: string;
+    eventInfo: string;
+  };
+  attendanceEditor: {
+    sectionTitle: string;
+    eventStartAt: string;
+    eventEndAt: string;
+    location: string;
+    locationPlaceholder: string;
+    coverImageUrl: string;
+    coverImageUrlPlaceholder: string;
+    infoUrl: string;
+    infoUrlPlaceholder: string;
+    welcomeModal: string;
+    welcomeModalHelp: string;
+    askEmail: string;
+    allowPartySize: string;
+    maxPartySize: string;
+    maxPartySizeHelp: string;
+    allowHiddenAttendance: string;
+    maxAttendees: string;
+    maxAttendeesHelp: string;
+    unlimited: string;
+    customQuestions: string;
+    customQuestionsHelp: string;
+    noQuestions: string;
+    question: string;
+    prompt: string;
+    promptPlaceholder: string;
+    type: string;
+    typeText: string;
+    typeChoice: string;
+    options: string;
+    optionsPlaceholder: string;
+    required: string;
+    addQuestion: string;
+    removeQuestion: string;
+  };
   mjGrades: Record<number, string>;
   buttons: {
     vote: string;
@@ -157,6 +231,7 @@ type VotingStrings = {
     selectWinningRound: string;
     roundAuto: string;
     allocatePointsBudget: string;
+    attendancePrompt: string;
     resetConfirm: string;
     resetWarning: string;
   };
@@ -211,6 +286,7 @@ const en: VotingStrings = {
   modes: {
     THUMBS_UP: "Thumbs Up",
     THUMBS_UD_NEUTRAL: "Up / Down / Neutral",
+    ATTENDANCE: "Attendance",
     POINTS: "Points Budget",
     MAJORITY_JUDGMENT: "Majority Judgment",
     CONSENT_LOOP: "Consent Loop",
@@ -219,10 +295,85 @@ const en: VotingStrings = {
   modeDescriptions: {
     THUMBS_UP: "Simple yes vote per proposal",
     THUMBS_UD_NEUTRAL: "Up, down, or neutral per proposal",
+    ATTENDANCE: "Single RSVP for the whole event",
     POINTS: "Distribute a budget of points",
     MAJORITY_JUDGMENT: "Grade each proposal on a scale",
     CONSENT_LOOP: "Iterative rounds until adopted or blocked",
     COMPARATIVE_PRIORITIZATION: "Rank proposals through adaptive pairwise comparisons",
+  },
+  attendanceOptions: {
+    going: "Going",
+    maybe: "Maybe",
+    notGoing: "Not going",
+  },
+  attendance: {
+    dateTime: "Date & time",
+    addToCalendar: "Add to calendar",
+    displayName: "Display name",
+    email: "Email (optional)",
+    partySize: "Party size",
+    visibility: "Visibility",
+    visibilityPublic: "Show me in the attendee list",
+    visibilityHidden: "Hide me from the attendee list",
+    customQuestions: "Additional questions",
+    rsvpTitle: "Your RSVP",
+    rsvpThanks: "Your RSVP has been saved. You can change it while the event is open.",
+    removalNotice: "Your RSVP has been removed.",
+    removalError: "We could not remove your RSVP. It may already be gone.",
+    removalConfirm: "Remove your RSVP for this event? This cannot be undone.",
+    full: "This event is full.",
+    attendees: "Attendees",
+    hiddenAttendees: "hidden attendees",
+    noAttendees: "No attendees yet.",
+    manageRsvp: "Manage your RSVP",
+    removeRsvp: "Remove my RSVP",
+    privateRemovalLink: "Private removal link",
+    linkCopied: "Link copied",
+    requiredAnswer: "Please answer the required question",
+    invalidAnswer: "Please check your answer",
+    invalidEmail: "Please enter a valid email address",
+    submitError: "Could not save your RSVP. Please try again.",
+    welcomeTitle: "Welcome!",
+    welcomeDescription: "Choose the name other attendees will see.",
+    useRandomName: "Use a random name",
+    saveName: "Save name",
+    nameRequired: "Please enter a display name",
+    eventInfo: "Event details",
+  },
+  attendanceEditor: {
+    sectionTitle: "Event settings",
+    eventStartAt: "Event start",
+    eventEndAt: "Event end",
+    location: "Location",
+    locationPlaceholder: "e.g. Community hall, 3rd floor",
+    coverImageUrl: "Cover image URL",
+    coverImageUrlPlaceholder: "https://...",
+    infoUrl: "Info URL",
+    infoUrlPlaceholder: "https://...",
+    welcomeModal: "Ask non-anonymous voters for a display name",
+    welcomeModalHelp: "Shows a welcome dialog where voters pick the name shown in the attendee list.",
+    askEmail: "Ask for an email address",
+    allowPartySize: "Allow party size",
+    maxPartySize: "Max party size",
+    maxPartySizeHelp: "Between 1 and 100 people per RSVP.",
+    allowHiddenAttendance: "Allow hidden attendance",
+    maxAttendees: "Max attendees",
+    maxAttendeesHelp: "Total number of people allowed. 0 means unlimited.",
+    unlimited: "Unlimited",
+    customQuestions: "Custom questions",
+    customQuestionsHelp: "Ask voters extra questions when they RSVP.",
+    noQuestions: "No custom questions yet.",
+    question: "Question",
+    prompt: "Prompt",
+    promptPlaceholder: "e.g. Any dietary requirements?",
+    type: "Type",
+    typeText: "Text",
+    typeChoice: "Choice",
+    options: "Options",
+    optionsPlaceholder: "Option A\nOption B",
+    required: "Required",
+    addQuestion: "Add question",
+    removeQuestion: "Remove",
   },
   mjGrades: {
     4: "Excellent",
@@ -384,6 +535,7 @@ const en: VotingStrings = {
     selectWinningRound: "Select the round to use as the final result",
     roundAuto: "Auto (best adopted round)",
     allocatePointsBudget: "Allocate points across proposals, then submit all at once.",
+    attendancePrompt: "Let others know if you are going to this event.",
     resetConfirm: "Reset this vote? All responses and loop rounds will be permanently deleted.",
     resetWarning: "This will delete all votes and rounds, and revert the vote to Draft. This cannot be undone.",
   },
@@ -438,6 +590,7 @@ const fr: VotingStrings = {
   modes: {
     THUMBS_UP: "Pouce en l'air",
     THUMBS_UD_NEUTRAL: "Pour / Contre / Neutre",
+    ATTENDANCE: "Pr\u00e9sence",
     POINTS: "Budget de points",
     MAJORITY_JUDGMENT: "Jugement majoritaire",
     CONSENT_LOOP: "Boucle de consentement",
@@ -446,10 +599,85 @@ const fr: VotingStrings = {
   modeDescriptions: {
     THUMBS_UP: "Vote simple par proposition",
     THUMBS_UD_NEUTRAL: "Pour, contre ou neutre par proposition",
+    ATTENDANCE: "Une seule r\u00e9ponse de pr\u00e9sence pour l'\u00e9v\u00e9nement",
     POINTS: "R\u00e9partir un budget de points",
     MAJORITY_JUDGMENT: "Noter chaque proposition sur une \u00e9chelle",
     CONSENT_LOOP: "Tours it\u00e9ratifs jusqu'\u00e0 adoption ou blocage",
     COMPARATIVE_PRIORITIZATION: "Classer les propositions par comparaisons par paires adaptatives",
+  },
+  attendanceOptions: {
+    going: "Pr\u00e9sent",
+    maybe: "Peut-\u00eatre",
+    notGoing: "Absent",
+  },
+  attendance: {
+    dateTime: "Date et heure",
+    addToCalendar: "Ajouter au calendrier",
+    displayName: "Nom affich\u00e9",
+    email: "E-mail (optionnel)",
+    partySize: "Nombre de personnes",
+    visibility: "Visibilit\u00e9",
+    visibilityPublic: "M'afficher dans la liste des participants",
+    visibilityHidden: "Me masquer de la liste des participants",
+    customQuestions: "Questions suppl\u00e9mentaires",
+    rsvpTitle: "Votre r\u00e9ponse",
+    rsvpThanks: "Votre r\u00e9ponse a \u00e9t\u00e9 enregistr\u00e9e. Vous pouvez la modifier tant que l'\u00e9v\u00e9nement est ouvert.",
+    removalNotice: "Votre r\u00e9ponse a \u00e9t\u00e9 supprim\u00e9e.",
+    removalError: "Impossible de supprimer votre r\u00e9ponse. Elle a peut-\u00eatre d\u00e9j\u00e0 \u00e9t\u00e9 retir\u00e9e.",
+    removalConfirm: "Supprimer votre r\u00e9ponse pour cet \u00e9v\u00e9nement\u00a0? Cette action est irr\u00e9versible.",
+    full: "Cet \u00e9v\u00e9nement est complet.",
+    attendees: "Participants",
+    hiddenAttendees: "participants masqu\u00e9s",
+    noAttendees: "Aucun participant pour le moment.",
+    manageRsvp: "G\u00e9rer votre r\u00e9ponse",
+    removeRsvp: "Supprimer ma r\u00e9ponse",
+    privateRemovalLink: "Lien de suppression priv\u00e9",
+    linkCopied: "Lien copi\u00e9",
+    requiredAnswer: "Veuillez r\u00e9pondre \u00e0 la question obligatoire",
+    invalidAnswer: "Veuillez v\u00e9rifier votre r\u00e9ponse",
+    invalidEmail: "Veuillez saisir une adresse e-mail valide",
+    submitError: "Impossible d'enregistrer votre r\u00e9ponse. Veuillez r\u00e9essayer.",
+    welcomeTitle: "Bienvenue\u00a0!",
+    welcomeDescription: "Choisissez le nom que les autres participants verront.",
+    useRandomName: "Utiliser un nom al\u00e9atoire",
+    saveName: "Enregistrer le nom",
+    nameRequired: "Veuillez saisir un nom affich\u00e9",
+    eventInfo: "D\u00e9tails de l'\u00e9v\u00e9nement",
+  },
+  attendanceEditor: {
+    sectionTitle: "Param\u00e8tres de l'\u00e9v\u00e9nement",
+    eventStartAt: "D\u00e9but de l'\u00e9v\u00e9nement",
+    eventEndAt: "Fin de l'\u00e9v\u00e9nement",
+    location: "Lieu",
+    locationPlaceholder: "p. ex. Salle communale, 3e \u00e9tage",
+    coverImageUrl: "URL de l'image de couverture",
+    coverImageUrlPlaceholder: "https://...",
+    infoUrl: "URL d'information",
+    infoUrlPlaceholder: "https://...",
+    welcomeModal: "Demander un nom affich\u00e9 aux votants non anonymes",
+    welcomeModalHelp: "Affiche une fen\u00eatre d'accueil o\u00f9 les votants choisissent le nom visible dans la liste des participants.",
+    askEmail: "Demander une adresse e-mail",
+    allowPartySize: "Autoriser le nombre de personnes",
+    maxPartySize: "Nombre de personnes maximum",
+    maxPartySizeHelp: "Entre 1 et 100 personnes par r\u00e9ponse.",
+    allowHiddenAttendance: "Autoriser la participation masqu\u00e9e",
+    maxAttendees: "Participants maximum",
+    maxAttendeesHelp: "Nombre total de personnes autoris\u00e9es. 0 signifie illimit\u00e9.",
+    unlimited: "Illimit\u00e9",
+    customQuestions: "Questions personnalis\u00e9es",
+    customQuestionsHelp: "Posez des questions suppl\u00e9mentaires lors de la r\u00e9ponse.",
+    noQuestions: "Aucune question personnalis\u00e9e pour le moment.",
+    question: "Question",
+    prompt: "Intitul\u00e9",
+    promptPlaceholder: "p. ex. Des restrictions alimentaires\u00a0?",
+    type: "Type",
+    typeText: "Texte",
+    typeChoice: "Choix",
+    options: "Options",
+    optionsPlaceholder: "Option A\nOption B",
+    required: "Obligatoire",
+    addQuestion: "Ajouter une question",
+    removeQuestion: "Supprimer",
   },
   mjGrades: {
     4: "Excellent",
@@ -611,6 +839,7 @@ const fr: VotingStrings = {
     selectWinningRound: "S\u00e9lectionnez le tour \u00e0 utiliser comme r\u00e9sultat final",
     roundAuto: "Auto (meilleur tour adopt\u00e9)",
     allocatePointsBudget: "R\u00e9partissez les points entre les propositions, puis soumettez-les tous en une fois.",
+    attendancePrompt: "Indiquez si vous participez \u00e0 cet \u00e9v\u00e9nement.",
     resetConfirm: "R\u00e9initialiser ce vote\u00a0? Toutes les r\u00e9ponses et les tours seront d\u00e9finitivement supprim\u00e9s.",
     resetWarning: "Cela supprimera tous les votes et les tours, et r\u00e9tablira le vote en Brouillon. Cette action est irr\u00e9versible.",
   },
@@ -665,6 +894,7 @@ const de: VotingStrings = {
   modes: {
     THUMBS_UP: "Daumen hoch",
     THUMBS_UD_NEUTRAL: "Hoch / Runter / Neutral",
+    ATTENDANCE: "Teilnahme",
     POINTS: "Punkte-Budget",
     MAJORITY_JUDGMENT: "Mehrheitsurteil",
     CONSENT_LOOP: "Zustimmungs-Schleife",
@@ -673,10 +903,85 @@ const de: VotingStrings = {
   modeDescriptions: {
     THUMBS_UP: "Einfache Ja-Stimme pro Vorschlag",
     THUMBS_UD_NEUTRAL: "Hoch, runter oder neutral pro Vorschlag",
+    ATTENDANCE: "Eine einzige Zu- oder Absage für die Veranstaltung",
     POINTS: "Ein Punktebudget verteilen",
     MAJORITY_JUDGMENT: "Jeden Vorschlag auf einer Skala bewerten",
     CONSENT_LOOP: "Iterative Runden bis angenommen oder blockiert",
     COMPARATIVE_PRIORITIZATION: "Vorschläge durch adaptive Paarvergleiche ordnen",
+  },
+  attendanceOptions: {
+    going: "Dabei",
+    maybe: "Vielleicht",
+    notGoing: "Nicht dabei",
+  },
+  attendance: {
+    dateTime: "Datum & Uhrzeit",
+    addToCalendar: "Zum Kalender hinzuf\u00fcgen",
+    displayName: "Anzeige-Name",
+    email: "E-Mail (optional)",
+    partySize: "Personenzahl",
+    visibility: "Sichtbarkeit",
+    visibilityPublic: "In der Teilnehmerliste anzeigen",
+    visibilityHidden: "In der Teilnehmerliste verbergen",
+    customQuestions: "Weitere Fragen",
+    rsvpTitle: "Ihre R\u00fcckmeldung",
+    rsvpThanks: "Ihre R\u00fcckmeldung wurde gespeichert. Sie k\u00f6nnen sie \u00e4ndern, solange die Veranstaltung offen ist.",
+    removalNotice: "Ihre R\u00fcckmeldung wurde entfernt.",
+    removalError: "Ihre R\u00fcckmeldung konnte nicht entfernt werden. M\u00f6glicherweise wurde sie bereits gel\u00f6scht.",
+    removalConfirm: "Ihre R\u00fcckmeldung f\u00fcr diese Veranstaltung entfernen? Dies kann nicht r\u00fcckg\u00e4ngig gemacht werden.",
+    full: "Diese Veranstaltung ist ausgebucht.",
+    attendees: "Teilnehmende",
+    hiddenAttendees: "versteckte Teilnehmende",
+    noAttendees: "Noch keine Teilnehmenden.",
+    manageRsvp: "R\u00fcckmeldung verwalten",
+    removeRsvp: "Meine R\u00fcckmeldung entfernen",
+    privateRemovalLink: "Privater L\u00f6schlink",
+    linkCopied: "Link kopiert",
+    requiredAnswer: "Bitte beantworten Sie die Pflichtfrage",
+    invalidAnswer: "Bitte \u00fcberpr\u00fcfen Sie Ihre Antwort",
+    invalidEmail: "Bitte geben Sie eine g\u00fcltige E-Mail-Adresse ein",
+    submitError: "Ihre R\u00fcckmeldung konnte nicht gespeichert werden. Bitte versuchen Sie es erneut.",
+    welcomeTitle: "Willkommen!",
+    welcomeDescription: "W\u00e4hlen Sie den Namen, den andere Teilnehmende sehen.",
+    useRandomName: "Zuf\u00e4lligen Namen verwenden",
+    saveName: "Namen speichern",
+    nameRequired: "Bitte geben Sie einen Anzeige-Namen ein",
+    eventInfo: "Veranstaltungsdetails",
+  },
+  attendanceEditor: {
+    sectionTitle: "Veranstaltungseinstellungen",
+    eventStartAt: "Beginn der Veranstaltung",
+    eventEndAt: "Ende der Veranstaltung",
+    location: "Ort",
+    locationPlaceholder: "z. B. Gemeindesaal, 3. Stock",
+    coverImageUrl: "URL des Titelbilds",
+    coverImageUrlPlaceholder: "https://...",
+    infoUrl: "Info-URL",
+    infoUrlPlaceholder: "https://...",
+    welcomeModal: "Nicht-anonyme Abstimmende nach Anzeige-Namen fragen",
+    welcomeModalHelp: "Zeigt einen Willkommensdialog, in dem Abstimmende den Namen f\u00fcr die Teilnehmerliste w\u00e4hlen.",
+    askEmail: "Nach E-Mail-Adresse fragen",
+    allowPartySize: "Personenzahl erlauben",
+    maxPartySize: "Max. Personenzahl",
+    maxPartySizeHelp: "Zwischen 1 und 100 Personen pro R\u00fcckmeldung.",
+    allowHiddenAttendance: "Versteckte Teilnahme erlauben",
+    maxAttendees: "Max. Teilnehmende",
+    maxAttendeesHelp: "Gesamtzahl der erlaubten Personen. 0 bedeutet unbegrenzt.",
+    unlimited: "Unbegrenzt",
+    customQuestions: "Eigene Fragen",
+    customQuestionsHelp: "Stellen Sie Abstimmenden bei der R\u00fcckmeldung zus\u00e4tzliche Fragen.",
+    noQuestions: "Noch keine eigenen Fragen.",
+    question: "Frage",
+    prompt: "Frage",
+    promptPlaceholder: "z. B. Besondere Ern\u00e4hrungsanforderungen?",
+    type: "Typ",
+    typeText: "Text",
+    typeChoice: "Auswahl",
+    options: "Optionen",
+    optionsPlaceholder: "Option A\nOption B",
+    required: "Erforderlich",
+    addQuestion: "Frage hinzuf\u00fcgen",
+    removeQuestion: "Entfernen",
   },
   mjGrades: {
     4: "Ausgezeichnet",
@@ -838,6 +1143,7 @@ const de: VotingStrings = {
     selectWinningRound: "Wählen Sie die Runde als Endresultat",
     roundAuto: "Auto (beste angenommene Runde)",
     allocatePointsBudget: "Verteilen Sie Punkte über die Vorschläge, dann reichen Sie alle auf einmal ein.",
+    attendancePrompt: "Teilen Sie mit, ob Sie an dieser Veranstaltung teilnehmen.",
     resetConfirm: "Diese Abstimmung zurücksetzen? Alle Antworten und Schleifenrunden werden dauerhaft gelöscht.",
     resetWarning: "Dies löscht alle Stimmen und Runden und setzt die Abstimmung auf Entwurf zurück. Dies kann nicht rückgängig gemacht werden.",
   },

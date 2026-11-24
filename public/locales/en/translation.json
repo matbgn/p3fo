@@ -957,6 +957,7 @@
     "mode": {
       "thumbsUp": "Thumbs Up",
       "thumbsUdNeutral": "Up / Down / Neutral",
+      "attendance": "Attendance",
       "points": "Points Budget",
       "majorityJudgment": "Majority Judgment",
       "consentLoop": "Consent Loop"

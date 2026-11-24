@@ -233,21 +233,14 @@ export function useMyVoteRankingSubmission(
   const withdraw = React.useCallback(async () => {
     if (!slug || !voterToken) return;
     const url = apiPath(`/api/votes/${slug}/ranking-submissions`);
-    // Credential in the header so it stays out of access logs. An API that
-    // predates header support only reads the query form, so fall back to it (and
-    // only then) instead of breaking withdrawal for the whole deploy-skew
-    // window.
-    const send = (useQuery: boolean) =>
-      fetch(useQuery ? `${url}?voterToken=${encodeURIComponent(voterToken)}` : url, {
-        method: 'DELETE',
-        headers: { 'X-Voter-Token': voterToken },
-      });
-    let response = await send(false);
-    let body = response.ok ? null : await response.json().catch(() => null);
-    if (response.status === 400 && body?.error === 'voterToken is required') {
-      response = await send(true);
-      body = response.ok ? null : await response.json().catch(() => null);
-    }
+    // Header-only: the bearer withdrawal credential must never travel in a URL
+    // that access logs, proxies and browser history record. The API in this
+    // repository reads the header, so no query fallback is needed.
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: { 'X-Voter-Token': voterToken },
+    });
+    const body = response.ok ? null : await response.json().catch(() => null);
     if (!response.ok) {
       throw new Error(body?.error || `HTTP ${response.status}`);
     }
@@ -439,20 +432,11 @@ export function useVoteRankingParticipation(
     setError(null);
     try {
       const base = apiPath(`/api/votes/${voteId}/ranking-participation`);
-      const request = (useQuery: boolean) => {
-        const query = new URLSearchParams(params);
-        // The query form exists only for an API that predates header support;
-        // sending it on every poll would put the facilitator credential in
-        // access/proxy logs.
-        if (useQuery && moderatorToken) query.set('moderatorToken', moderatorToken);
-        return fetch(`${base}?${query.toString()}`, { headers });
-      };
-      let response = await request(false);
-      let body = response.ok ? null : await response.json().catch(() => null);
-      if (response.status === 403 && moderatorToken && body?.error === 'Facilitator access required') {
-        response = await request(true);
-        body = response.ok ? null : await response.json().catch(() => null);
-      }
+      const query = new URLSearchParams(params);
+      // Header-only: the facilitator credential is a bearer capability and must
+      // not be written to access/proxy logs on every poll.
+      const response = await fetch(`${base}?${query.toString()}`, { headers });
+      const body = response.ok ? null : await response.json().catch(() => null);
       if (!response.ok) throw new Error(body?.error || `HTTP ${response.status}`);
       const next = (await response.json()) as BallotParticipationSummary;
       setSummary((previous) => (participationEqual(previous, next) ? previous : next));
