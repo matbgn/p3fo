@@ -1,15 +1,36 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { PomodoroConfig, PomodoroPhase, PomodoroSession, PomodoroState, PomodoroBoostMultiplier, FocusModeConfig, DEFAULT_POMODORO_CONFIG, DEFAULT_FOCUS_MODE_CONFIG, INITIAL_POMODORO_STATE } from '@/lib/pomodoro-types';
+import { AdoptedPomodoroSession, PomodoroConfig, PomodoroPhase, PomodoroSession, PomodoroState, PomodoroBoostMultiplier, FocusModeConfig, DEFAULT_POMODORO_CONFIG, DEFAULT_FOCUS_MODE_CONFIG, INITIAL_POMODORO_STATE } from '@/lib/pomodoro-types';
 import { useSettingsContext } from '@/context/SettingsContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { getPersistenceAdapter } from '@/lib/persistence-factory';
 import { eventBus } from '@/lib/events';
 import { playChime } from '@/lib/audio-chime';
+import { toast } from 'sonner';
+import {
+  clearActiveSession,
+  resolvePomodoroRestore,
+  sessionRecordId,
+  type StoredPomodoroSessionData,
+} from '@/lib/active-session';
+import { useActiveSessionPersistence } from '@/hooks/useActiveSessionPersistence';
+
+const POMODORO_STORAGE_KIND = 'pomodoro';
 
 const INITIAL_STATE: PomodoroState = INITIAL_POMODORO_STATE;
 
+/**
+ * Base (unboosted) duration of a phase. Single source of truth for the
+ * config→duration mapping: every start path writes `durationOverrideMs` from
+ * it, and `phaseDurationFor` falls back to it when no override is set.
+ */
+const basePhaseDurationMs = (phase: PomodoroPhase, cfg: PomodoroConfig): number =>
+  phase === 'work' ? cfg.workDuration
+    : phase === 'short-break' ? cfg.breakDuration
+    : phase === 'long-break' ? cfg.longBreakDuration
+    : 0;
+
 export const usePomodoroTimer = () => {
-  const { settings } = useSettingsContext();
+  const { settings, loading: settingsLoading } = useSettingsContext();
   const { userId } = useCurrentUser();
   const config: PomodoroConfig = settings.pomodoroConfig ?? DEFAULT_POMODORO_CONFIG;
   const focusConfig: FocusModeConfig = settings.focusModeConfig ?? DEFAULT_FOCUS_MODE_CONFIG;
@@ -45,19 +66,27 @@ export const usePomodoroTimer = () => {
     }
   }, []);
 
-  const getPhaseDuration = useCallback((phase: PomodoroPhase): number => {
+  const phaseDurationFor = useCallback((s: PomodoroState): number => {
+    if (s.phase === 'idle') return 0;
+    // A phase's duration is fixed when it starts. Restored sessions and
+    // takeovers carry the source duration, so a not-yet-loaded or changed
+    // config cannot make the countdown jump or complete early.
+    if (
+      typeof s.durationOverrideMs === 'number' &&
+      Number.isFinite(s.durationOverrideMs) &&
+      s.durationOverrideMs > 0
+    ) {
+      return s.durationOverrideMs;
+    }
     const cfg = configRef.current;
     // Boost scales the phase that is actually running: work runs ×N and
     // the break that follows a boosted work round also runs ×N.
-    const boost = phase === 'work' || phase === 'short-break' || phase === 'long-break'
-      ? stateRef.current.activeBoost
-      : 1;
-    const base = phase === 'work' ? cfg.workDuration
-      : phase === 'short-break' ? cfg.breakDuration
-      : phase === 'long-break' ? cfg.longBreakDuration
-      : 0;
-    return base * boost;
+    return basePhaseDurationMs(s.phase, cfg) * s.activeBoost;
   }, []);
+
+  const getPhaseDuration = useCallback((phase: PomodoroPhase): number => {
+    return phaseDurationFor({ ...stateRef.current, phase });
+  }, [phaseDurationFor]);
 
   const getRemaining = useCallback((): number => {
     const s = stateRef.current;
@@ -71,19 +100,26 @@ export const usePomodoroTimer = () => {
     return Math.max(0, remaining);
   }, [getPhaseDuration]);
 
-  const recordSession = useCallback(async (phase: PomodoroPhase, taskId: string | undefined, completed: boolean, startedAtOverride?: number | null) => {
+  const recordSession = useCallback(async (
+    phase: PomodoroPhase,
+    taskId: string | undefined,
+    completed: boolean,
+    startedAtOverride?: number | null,
+    endTimeOverride?: number | null,
+  ) => {
     const s = stateRef.current;
     const startedAt = startedAtOverride !== undefined ? startedAtOverride : s.startedAt;
     if (!startedAt) return;
+    const endTime = endTimeOverride ?? Date.now();
 
     const session: PomodoroSession = {
-      id: crypto.randomUUID(),
+      id: sessionRecordId('pomodoro', userId || 'anonymous', phase, startedAt),
       taskId,
       userId: userId || 'anonymous',
       startTime: startedAt,
-      endTime: Date.now(),
+      endTime,
       phase,
-      duration: Date.now() - startedAt,
+      duration: endTime - startedAt,
       completed,
       kind: 'pomodoro',
       multiplier: phase === 'work' ? s.activeBoost : undefined,
@@ -167,6 +203,8 @@ export const usePomodoroTimer = () => {
     const sessionStartedAt = s.startedAt;
     const sessionBoost = s.activeBoost;
 
+    const breakDuration = basePhaseDurationMs(nextBreak, cfg) * sessionBoost;
+
     if (focusConfigRef.current.autoStartBreak) {
       const breakState: PomodoroState = {
         phase: nextBreak,
@@ -176,6 +214,7 @@ export const usePomodoroTimer = () => {
         pausedElapsed: 0,
         armedBoost: s.armedBoost,
         activeBoost: sessionBoost,
+        durationOverrideMs: breakDuration,
       };
       setState(breakState);
       stateRef.current = breakState;
@@ -191,6 +230,7 @@ export const usePomodoroTimer = () => {
         pausedElapsed: 0,
         armedBoost: s.armedBoost,
         activeBoost: sessionBoost,
+        durationOverrideMs: breakDuration,
       };
       setState(pausedBreakState);
       stateRef.current = pausedBreakState;
@@ -212,6 +252,8 @@ export const usePomodoroTimer = () => {
     // boost was armed during the break; the current boost is cleared.
     const nextBoost = s.armedBoost;
 
+    const workDuration = basePhaseDurationMs('work', cfg) * nextBoost;
+
     if (focusConfigRef.current.autoStartWork) {
       const workState: PomodoroState = {
         phase: 'work',
@@ -221,6 +263,7 @@ export const usePomodoroTimer = () => {
         pausedElapsed: 0,
         armedBoost: 1,
         activeBoost: nextBoost,
+        durationOverrideMs: workDuration,
       };
       setState(workState);
       stateRef.current = workState;
@@ -241,6 +284,7 @@ export const usePomodoroTimer = () => {
         cycleCount: newCycleCount,
         armedBoost: 1,
         activeBoost: nextBoost,
+        durationOverrideMs: workDuration,
       };
       setState(pausedWorkState);
       stateRef.current = pausedWorkState;
@@ -268,6 +312,7 @@ export const usePomodoroTimer = () => {
     // cyclesBeforeLongBreak cycles. Only a full `reset()` clears it.
     // A boost armed beforehand is consumed here: it applies to this work
     // round and to the break that follows it.
+    const boost = stateRef.current.armedBoost;
     const workState: PomodoroState = {
       phase: 'work',
       startedAt: Date.now(),
@@ -275,7 +320,8 @@ export const usePomodoroTimer = () => {
       pausedAt: null,
       pausedElapsed: 0,
       armedBoost: 1,
-      activeBoost: stateRef.current.armedBoost,
+      activeBoost: boost,
+      durationOverrideMs: basePhaseDurationMs('work', configRef.current) * boost,
     };
     setState(workState);
     stateRef.current = workState;
@@ -293,6 +339,7 @@ export const usePomodoroTimer = () => {
       startedAt: Date.now(),
       pausedAt: null,
       pausedElapsed: 0,
+      durationOverrideMs: basePhaseDurationMs(type, configRef.current) * stateRef.current.activeBoost,
     };
     setState(breakState);
     stateRef.current = breakState;
@@ -300,6 +347,33 @@ export const usePomodoroTimer = () => {
     notifyPhaseChange(type);
     startTick(() => onBreakCompleteRef.current());
   }, [startTick, notifyPhaseChange]);
+
+  /**
+   * Continue a session started on another device. The caller has already
+   * adjusted `startedAt` so the remaining time matches the remote session.
+   * No chime/notification fires: this is a continuation, not a new phase.
+   */
+  const adoptSession = useCallback((session: AdoptedPomodoroSession) => {
+    if (session.phase === 'idle') return;
+    setPhaseTransition(null);
+    const adopted: PomodoroState = {
+      phase: session.phase,
+      startedAt: session.startedAt,
+      cycleCount: session.cycleCount,
+      pausedAt: null,
+      pausedElapsed: 0,
+      armedBoost: session.armedBoost,
+      activeBoost: session.activeBoost,
+      durationOverrideMs: session.durationOverrideMs,
+    };
+    setState(adopted);
+    stateRef.current = adopted;
+    setCurrentTaskId(session.taskId ?? undefined);
+    eventBus.publish('pomodoroStarted', {});
+    const onComplete =
+      session.phase === 'work' ? onWorkCompleteRef.current : onBreakCompleteRef.current;
+    startTick(onComplete);
+  }, [startTick]);
 
   const armBoost = useCallback((multiplier: PomodoroBoostMultiplier) => {
     // Boost can only be armed for the NEXT work round: while a boosted
@@ -372,6 +446,7 @@ export const usePomodoroTimer = () => {
           pausedAt: null,
           pausedElapsed: 0,
           cycleCount: newCycleCount,
+          durationOverrideMs: basePhaseDurationMs(nextBreak, configRef.current) * s.activeBoost,
         };
         setState(breakState);
         stateRef.current = breakState;
@@ -386,6 +461,7 @@ export const usePomodoroTimer = () => {
           pausedAt: Date.now(),
           pausedElapsed: 0,
           cycleCount: newCycleCount,
+          durationOverrideMs: basePhaseDurationMs(nextBreak, configRef.current) * s.activeBoost,
         };
         setState(pausedBreakState);
         stateRef.current = pausedBreakState;
@@ -406,6 +482,7 @@ export const usePomodoroTimer = () => {
           cycleCount: newCycleCount,
           armedBoost: 1,
           activeBoost: nextBoost,
+          durationOverrideMs: basePhaseDurationMs('work', configRef.current) * nextBoost,
         };
         setState(workState);
         stateRef.current = workState;
@@ -425,6 +502,7 @@ export const usePomodoroTimer = () => {
           cycleCount: newCycleCount,
           armedBoost: 1,
           activeBoost: nextBoost,
+          durationOverrideMs: basePhaseDurationMs('work', configRef.current) * nextBoost,
         };
         setState(pausedWorkState);
         stateRef.current = pausedWorkState;
@@ -440,11 +518,12 @@ export const usePomodoroTimer = () => {
 
   const reset = useCallback(() => {
     clearTimer();
+    if (userId) clearActiveSession(POMODORO_STORAGE_KIND, userId);
     setState(INITIAL_STATE);
     setCurrentTaskId(undefined);
     setPhaseTransition(null);
     setLastCompletedCycleIndex(-1);
-  }, [clearTimer]);
+  }, [clearTimer, userId]);
 
   const dismissTransition = useCallback(() => {
     setPhaseTransition(null);
@@ -472,6 +551,70 @@ export const usePomodoroTimer = () => {
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
+
+  // ---- Persist and restore the running session across reload/crash ----
+  useActiveSessionPersistence<StoredPomodoroSessionData, PomodoroState>({
+    kind: POMODORO_STORAGE_KIND,
+    userId,
+    ready: !settingsLoading,
+    snapshot: () => {
+      const s = stateRef.current;
+      if (s.phase === 'idle' || !s.startedAt) return null;
+      return { state: s, taskId: taskIdRef.current, durationMs: phaseDurationFor(s) };
+    },
+    persistToken: [
+      state.phase,
+      state.startedAt,
+      state.pausedAt,
+      state.pausedElapsed,
+      state.cycleCount,
+      state.armedBoost,
+      state.activeBoost,
+      state.durationOverrideMs,
+      currentTaskId ?? '',
+    ].join('|'),
+    isRunning: state.phase !== 'idle' && state.pausedAt === null,
+    resolve: (stored, now) => resolvePomodoroRestore(stored.data, stored.savedAt, now),
+    onRestore: (restoredState, stored) => {
+      setState(restoredState);
+      stateRef.current = restoredState;
+      setCurrentTaskId(stored.data.taskId);
+      if (restoredState.pausedAt === null) {
+        startTick(
+          restoredState.phase === 'work'
+            ? onWorkCompleteRef.current
+            : onBreakCompleteRef.current,
+        );
+      }
+      toast.info(
+        restoredState.pausedAt === null
+          ? 'Pomodoro session restored.'
+          : 'Pomodoro session restored (paused).',
+      );
+    },
+    onExpired: (stored, endTime, completed) => {
+      const storedState = stored.data.state;
+      // `recordSession` reads the multiplier from the state ref.
+      stateRef.current = storedState;
+      void recordSession(
+        storedState.phase,
+        stored.data.taskId,
+        completed,
+        storedState.startedAt,
+        endTime,
+      );
+      setState(INITIAL_STATE);
+      // Clear the ref too: the mirror effect runs in this same commit and must
+      // not re-persist the finalized session.
+      stateRef.current = INITIAL_STATE;
+      setCurrentTaskId(undefined);
+      toast.info(
+        completed
+          ? 'A pomodoro session finished while you were away and was saved.'
+          : 'A partial pomodoro session was saved while you were away.',
+      );
+    },
+  });
 
   const remaining = getRemaining();
   const total = state.phase !== 'idle' ? getPhaseDuration(state.phase) : 0;
@@ -501,6 +644,7 @@ export const usePomodoroTimer = () => {
     phaseTransition,
     displayCycleIndex,
     startWork,
+    adoptSession,
     startBreak,
     armBoost,
     clearBoost,

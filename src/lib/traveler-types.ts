@@ -29,6 +29,17 @@ export interface TravelerState {
   travelMode: TravelMode;
 }
 
+/** A running traveler session adopted from another device (takeover). */
+export interface AdoptedTravelerSession {
+  phase: TravelerPhase;
+  startedAt: number;
+  travelDurationMs: number;
+  breakDurationMs: number;
+  departure: string;
+  destination: string;
+  travelMode: TravelMode;
+}
+
 export const CITIES: City[] = [
   { code: 'AMS', name: 'Amsterdam', country: 'NL', lat: 52.3105, lng: 4.7683 },
   { code: 'BKK', name: 'Bangkok', country: 'TH', lat: 13.6900, lng: 100.7501 },

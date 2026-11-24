@@ -3,9 +3,11 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useDroppable } from '@dnd-kit/core';
 import { Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { formatDayLabel, formatWeekday } from '@/lib/planner/format';
 import type { Task } from '@/hooks/useTasks';
 import type { UserWithTrigram } from '@/context/UsersContext';
+import { DayDetailsCard } from './DayDetailsCard';
 import { TaskRow } from './TaskRow';
 
 type DayColumnProps = {
@@ -35,31 +37,55 @@ export const DayColumn: React.FC<DayColumnProps> = ({
 }) => {
   const { setNodeRef, isOver } = useDroppable({ id: `day:${date}`, data: { type: 'day', date } });
   const locale = typeof document !== 'undefined' ? document.documentElement.lang : undefined;
+  const [detailsOpen, setDetailsOpen] = React.useState(false);
+  const pointerOnInteractiveRef = React.useRef(false);
+
+  const handlePointerOver = (event: React.PointerEvent<HTMLElement>) => {
+    const target = event.target as HTMLElement;
+    // Task rows, their controls and open menus keep their own interactions;
+    // everything else in the column (header, empty space) opens the day card.
+    const interactive = Boolean(
+      target.closest('[data-task-id]') || target.closest('[role="menu"]'),
+    );
+    pointerOnInteractiveRef.current = interactive;
+    if (interactive) setDetailsOpen(false);
+  };
 
   return (
-    <section
-      ref={setNodeRef}
-      className={cn(
-        'group/column flex min-h-[18rem] min-w-0 flex-col overflow-hidden border-l border-border/60 first:border-l-0',
-        isWeekend && 'bg-muted/20',
-        isToday && 'bg-primary/[0.04]',
-        isOver && 'ring-2 ring-inset ring-primary/40',
-      )}
-      aria-label={`${formatWeekday(date, locale, 'long')} ${formatDayLabel(date, locale)}`}
-      onDragOver={(event) => {
-        if (event.dataTransfer.types.includes('text/task-id')) {
-          event.preventDefault();
-          event.dataTransfer.dropEffect = 'move';
-        }
-      }}
-      onDrop={(event) => {
-        const taskId = event.dataTransfer.getData('text/task-id');
-        if (taskId) {
-          event.preventDefault();
-          onDropTaskId(taskId, date);
-        }
+    <HoverCard
+      open={detailsOpen}
+      openDelay={400}
+      closeDelay={100}
+      onOpenChange={(next) => {
+        if (next && pointerOnInteractiveRef.current) return;
+        setDetailsOpen(next);
       }}
     >
+      <HoverCardTrigger asChild>
+        <section
+          ref={setNodeRef}
+          className={cn(
+            'group/column flex min-h-[18rem] min-w-0 flex-col overflow-hidden border-l border-border/60 first:border-l-0',
+            isWeekend && 'bg-muted/20',
+            isToday && 'bg-primary/[0.04]',
+            isOver && 'ring-2 ring-inset ring-primary/40',
+          )}
+          aria-label={`${formatWeekday(date, locale, 'long')} ${formatDayLabel(date, locale)}`}
+          onPointerOver={handlePointerOver}
+          onDragOver={(event) => {
+            if (event.dataTransfer.types.includes('text/task-id')) {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = 'move';
+            }
+          }}
+          onDrop={(event) => {
+            const taskId = event.dataTransfer.getData('text/task-id');
+            if (taskId) {
+              event.preventDefault();
+              onDropTaskId(taskId, date);
+            }
+          }}
+        >
       <header
         className={cn(
           'sticky top-0 z-10 border-b border-border/60 bg-background/95 px-2 py-1.5 backdrop-blur',
@@ -67,7 +93,7 @@ export const DayColumn: React.FC<DayColumnProps> = ({
         )}
       >
         <div className="flex items-start justify-between gap-1">
-          <div className="min-w-0">
+          <div className="min-w-0 cursor-default">
             <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               {formatWeekday(date, locale)}
             </div>
@@ -132,6 +158,11 @@ export const DayColumn: React.FC<DayColumnProps> = ({
           </span>
         </button>
       </div>
-    </section>
+        </section>
+      </HoverCardTrigger>
+      <HoverCardContent align="start" side="right" sideOffset={8} collisionPadding={8} className="w-auto p-0">
+        <DayDetailsCard date={date} tasks={tasks} users={users} locale={locale} />
+      </HoverCardContent>
+    </HoverCard>
   );
 };

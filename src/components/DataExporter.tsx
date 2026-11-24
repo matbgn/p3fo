@@ -4,10 +4,12 @@ import { useTasks } from '@/hooks/useTasks';
 import { Button } from '@/components/ui/button';
 import { useReminderStore } from '@/hooks/useReminders';
 import { useUserSettings } from '@/hooks/useUserSettings';
-import { getPersistenceAdapter } from '@/lib/persistence-factory';
+import { getPersistenceAdapter, getSelectedMode } from '@/lib/persistence-factory';
 import { convertEntitiesToTasks } from '@/lib/task-conversions';
 import { getAllTemplates } from '@/lib/task-templates';
-import { VoteResponseEntity, VoteLoop, VoteModerator } from '@/lib/persistence-types';
+import { CURRENT_SCHEMA_VERSION } from '@/lib/apply-imported-data';
+import { areRankingResultsVisible, isVoteAnonymous, redactRankingSubmissionForBackup } from '@/lib/vote-ranking';
+import { VoteResponseEntity, VoteLoop, VoteModerator, VoteRankingSubmission } from '@/lib/persistence-types';
 
 const DataExporter: React.FC = () => {
   const { t } = useTranslation();
@@ -83,10 +85,16 @@ const DataExporter: React.FC = () => {
       // Fetch ALL pomodoro/focus sessions
       const allPomodoroSessions = await adapter.listPomodoroSessions();
 
-      // Fetch vote responses, loops, and moderators for each vote
+      // Fetch vote responses, loops, moderators, and ranking ballots for each vote
       const allVoteResponses: VoteResponseEntity[] = [];
       const allVoteLoops: VoteLoop[] = [];
       const allVoteModerators: VoteModerator[] = [];
+      const allVoteRankingSubmissions: VoteRankingSubmission[] = [];
+      // The bulk ballot read withholds a hidden (OPEN) vote's ballots from
+      // non-moderators, so a backup must present a moderator token or it would
+      // silently omit those ballots. Reuse the active moderator tokens that are
+      // already part of the export to keep the backup complete.
+      const moderatorTokenByVote = new Map<string, string>();
       for (const vote of allVotes) {
         const responses = await adapter.listVoteResponses(vote.id);
         allVoteResponses.push(...responses);
@@ -94,13 +102,50 @@ const DataExporter: React.FC = () => {
         allVoteLoops.push(...loops);
         const moderators = await adapter.listVoteModerators(vote.id);
         allVoteModerators.push(...moderators);
+        const activeModerator = moderators.find(moderator => moderator.active && moderator.token);
+        if (activeModerator) moderatorTokenByVote.set(vote.id, activeModerator.token);
+      }
+
+      // Fetch ballots for every vote, not only those currently in
+      // COMPARATIVE_PRIORITIZATION mode: restore replaces ballots for every
+      // vote id in the backup, so omitting a vote here would permanently
+      // delete its stored ballots on restore. Votes with no ballots return
+      // an empty list. Ballots are the app's largest dataset, so fetch them
+      // concurrently instead of one serial request per vote.
+      const rankingsByVote = await Promise.all(
+        allVotes.map(async vote => {
+          const rankings = await adapter.listVoteRankingSubmissions(
+            vote.id,
+            userId,
+            moderatorTokenByVote.get(vote.id),
+          );
+          // Never export the participant credential; restore reissues a fresh token.
+          // Anonymous votes (including an absent flag) must also drop identities.
+          const anonymous = isVoteAnonymous(vote.config);
+          return rankings.map(item => redactRankingSubmissionForBackup(item, anonymous));
+        }),
+      );
+      allVoteRankingSubmissions.push(...rankingsByVote.flat());
+
+      // A hidden vote without any moderator token cannot be read by the backup
+      // path, so its ballots are absent from the file. Surface that instead of
+      // producing a silently incomplete backup that would lose data on restore.
+      const unreadableRankingVotes = getSelectedMode() === 'server-sql'
+        ? allVotes.filter(
+            vote => !areRankingResultsVisible(vote) && !moderatorTokenByVote.has(vote.id),
+          )
+        : [];
+      if (unreadableRankingVotes.length > 0) {
+        alert(
+          `Warning: ${unreadableRankingVotes.length} open vote(s) with hidden results have no moderator token, so their ballots may be missing from this backup. Assign a vote moderator or close/expose the results, then export again.`,
+        );
       }
 
       // Fetch task templates (workspace + user scopes, localStorage-backed)
       const taskTemplates = getAllTemplates();
 
       const exportData = {
-        schemaVersion: 5,
+        schemaVersion: CURRENT_SCHEMA_VERSION,
         tasks: allTasks,
         scheduledReminders: allReminders,
         qolSurveyResponses: allQolSurveyResponses,
@@ -115,6 +160,11 @@ salaryBoard: salaryBoardState,
         allUserSettings,
         votes: allVotes,
         voteResponses: allVoteResponses,
+        voteRankingSubmissions: allVoteRankingSubmissions,
+        // Votes whose ballots could not be read are absent from this file, so
+        // restore must not treat them as replaceable (that would delete stored
+        // ballots the backup never contained).
+        incompleteRankingVoteIds: unreadableRankingVotes.map(vote => vote.id),
         voteLoops: allVoteLoops,
         voteModerators: allVoteModerators,
         pomodoroSessions: allPomodoroSessions,

@@ -1,0 +1,48 @@
+import type { VoteEntity } from './persistence-types';
+// The grade range is canonical in the voting UI scale: the tally builds every
+// bucket from `MJ_SCALE`, so validation must accept exactly those values.
+import { MJ_SCALE } from '../components/planView/constants.js';
+
+const MIN_MJ = MJ_SCALE[0].value;
+const MAX_MJ = MJ_SCALE[MJ_SCALE.length - 1].value;
+
+/**
+ * Single source of truth for the values a vote mode accepts. The response route
+ * and the ephemeral draft channel both use it, so a draft can never carry a
+ * value that the submit route would reject.
+ */
+export function validateVoteResponseValue(
+  vote: Pick<VoteEntity, 'config'>,
+  value: number,
+): string | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return 'Invalid vote value: must be a finite number';
+  }
+
+  switch (vote.config.mode) {
+    case 'THUMBS_UP':
+      return value === 1 ? null : 'THUMBS_UP votes must have value 1';
+    case 'THUMBS_UD_NEUTRAL':
+      return [-1, 0, 1].includes(value)
+        ? null
+        : 'THUMBS_UD_NEUTRAL votes must be -1, 0, or 1';
+    case 'POINTS': {
+      const maxPts = vote.config.maxPointsPerUser ?? 10;
+      return Number.isInteger(value) && value >= 0 && value <= maxPts
+        ? null
+        : `POINTS votes must be an integer between 0 and ${maxPts}`;
+    }
+    case 'MAJORITY_JUDGMENT':
+      return Number.isInteger(value) && value >= MIN_MJ && value <= MAX_MJ
+        ? null
+        : `MAJORITY_JUDGMENT votes must be an integer between ${MIN_MJ} and ${MAX_MJ}`;
+    case 'CONSENT_LOOP':
+      return Number.isInteger(value) && value >= MIN_MJ && value <= MAX_MJ
+        ? null
+        : `CONSENT_LOOP votes must be an integer between ${MIN_MJ} and ${MAX_MJ}`;
+    case 'COMPARATIVE_PRIORITIZATION':
+      return 'Use the ranking-submissions endpoint for this vote';
+    default:
+      return `Unknown vote mode: ${vote.config.mode}`;
+  }
+}

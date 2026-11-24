@@ -14,7 +14,8 @@ export const VOTING_MODES_LABELS = {
     'THUMBS_UD_NEUTRAL': 'Up / Down / Neutral',
     'POINTS': 'Points Budget',
     'MAJORITY_JUDGMENT': 'Majority Judgment',
-    'CONSENT_LOOP': 'Consent Loop'
+    'CONSENT_LOOP': 'Consent Loop',
+    'COMPARATIVE_PRIORITIZATION': 'Comparative Prioritization'
 };
 
 const MJ_GRADE_KEYS: Record<number, string> = {

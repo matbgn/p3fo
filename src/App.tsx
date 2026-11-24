@@ -1,4 +1,4 @@
-import { useEffect, Profiler } from "react";
+import { useEffect, Profiler, Suspense, lazy } from "react";
 import { otelProfilerCallback } from "./telemetry";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -15,13 +15,19 @@ import { UsersProvider } from "@/context/UsersContext";
 import { SettingsProvider } from "@/context/SettingsContext";
 import { PomodoroProvider } from "@/context/PomodoroContext";
 import { TravelerProvider } from "@/context/TravelerContext";
+import { useTrackingPresencePublisher } from "@/hooks/useTrackingPresence";
 import { PomodoroPiPWindow } from "@/components/PomodoroPiPWindow";
 import { PomodoroFocusOverlay } from "@/components/PomodoroFocusOverlay";
 import { PomodoroTransitionAlert } from "@/components/PomodoroTransitionAlert";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
-import PublicVotePage from "./pages/PublicVotePage";
-import ModerationPopout from "./components/voting/ModerationPopout";
+import { LoadingSpinner } from "./components/ui/loading-spinner";
+import { LazyErrorBoundary } from "./components/ui/lazy-error-boundary";
+// The public vote and moderation routes are not part of the board shell. Loading
+// them on demand keeps the board's first paint from parsing the whole vote UI
+// (including the rich-text proposal editor) before the board is interactive.
+const PublicVotePage = lazy(() => import("./pages/PublicVotePage"));
+const ModerationPopout = lazy(() => import("./components/voting/ModerationPopout"));
 import { useReminderStore } from "./hooks/useReminders";
 import { ViewProvider } from "@/context/ViewContext";
 import { DEFAULT_TASKS_INITIALIZED_KEY } from "./hooks/useTasks";
@@ -100,6 +106,7 @@ const App = () => {
                     <SettingsProvider>
                       <PomodoroProvider>
                         <TravelerProvider>
+                          <TrackingPresencePublisher />
                           <TimerOverlays />
                           <ViewProvider>
                             <Toaster />
@@ -108,12 +115,22 @@ const App = () => {
                             <NotificationManager />
                             <div className="relative">
                               <BrowserRouter basename={import.meta.env.VITE_BASE_URL || "/p3fo"} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-                                <Routes>
-                                  <Route path="/v/:slug" element={<PublicVotePage />} />
-                                  <Route path="/v/:slug/m/:token" element={<ModerationPopout />} />
-                                  <Route path="/" element={<Index />} />
-                                  <Route path="*" element={<NotFound />} />
-                                </Routes>
+                                <LazyErrorBoundary>
+                                  <Suspense
+                                    fallback={
+                                      <div className="flex min-h-screen items-center justify-center">
+                                        <LoadingSpinner />
+                                      </div>
+                                    }
+                                  >
+                                    <Routes>
+                                      <Route path="/v/:slug" element={<PublicVotePage />} />
+                                      <Route path="/v/:slug/m/:token" element={<ModerationPopout />} />
+                                      <Route path="/" element={<Index />} />
+                                      <Route path="*" element={<NotFound />} />
+                                    </Routes>
+                                  </Suspense>
+                                </LazyErrorBoundary>
                               </BrowserRouter>
                             </div>
                           </ViewProvider>
@@ -128,6 +145,12 @@ const App = () => {
       </QueryClientProvider>
     </Profiler>
   );
+};
+
+/** Announces this device's running timer to other clients (display-only). */
+const TrackingPresencePublisher: React.FC = () => {
+  useTrackingPresencePublisher();
+  return null;
 };
 
 const TimerOverlays: React.FC = () => {

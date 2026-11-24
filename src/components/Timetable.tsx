@@ -18,6 +18,7 @@ import { EditableTimeEntry } from "./EditableTimeEntry";
 import { formatDuration } from "@/lib/format-utils";
 import { formatTimeWithTemporal } from "@/lib/format-utils";
 import { useSettingsContext } from "@/context/SettingsContext";
+import { useUserSettings } from "@/hooks/useUserSettings";
 import { UserFilterSelector } from "@/components/UserFilterSelector";
 import { detectTimeOverlaps, getEntryKey } from "@/utils/timeOverlap";
 import { buildCategoricalRows } from "@/utils/timetableGrouping";
@@ -47,6 +48,7 @@ const TimetableInner: React.FC<{
   // We use allTasks for the list, but we need to ensure we don't conflict with useTasks
   const tasks = allTasks;
   const { settings } = useSettingsContext();
+  const { userId: currentUserId } = useUserSettings();
   const { isFocusMode } = useFocusMode();
   const weekStartsOn = settings.weekStartDay as 0 | 1;
   const weeksComputation = settings.weeksComputation || 4;
@@ -1010,7 +1012,7 @@ const TimetableInner: React.FC<{
                           onUpdateUser={updateUser}
                           onDelete={deleteTimeEntry}
                           onJumpToTask={onJumpToTask}
-                          onToggleTimer={toggleTimer}
+                          onToggleTimer={(taskId) => toggleTimer(taskId, currentUserId)}
                           overlapInfo={overlap}
                         />
                       );
@@ -1030,7 +1032,7 @@ const TimetableInner: React.FC<{
             onUpdateUser={updateUser}
             onDelete={deleteTimeEntry}
           onJumpToTask={onJumpToTask}
-          onToggleTimer={toggleTimer}
+          onToggleTimer={(taskId) => toggleTimer(taskId, currentUserId)}
         />
       )}
     </div>

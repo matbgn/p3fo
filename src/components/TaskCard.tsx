@@ -35,6 +35,7 @@ import { cn } from '@/lib/utils';
 import { formatDuration } from '@/lib/format-utils';
 import { format } from "date-fns";
 import { addReminder } from "@/utils/reminders";
+import { canUserToggleTaskTimer } from "@/utils/task-timer-ownership";
 import { useReminderStore } from "@/hooks/useReminders";
 import { useShallow } from "zustand/react/shallow";
 import { UserSelector } from "./UserSelector";
@@ -394,6 +395,8 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
   const canHaveTimer = !hasSubtasks; // Only tasks without children can have timers
 
   const taskTimerRunning = task.timer?.some(e => !e.endTime);
+  const canTrackTask = canUserToggleTaskTimer(task, currentUserId);
+  const trackDisabledReason = canTrackTask ? undefined : 'Assigned to another user';
   const totalDifficulty = hasSubtasks ? calculateTotalDifficulty(task.id) : task.difficulty || 0;
   const totalTime = hasSubtasks ? calculateTotalTime(task.id) : (task.timer || []).reduce((acc, entry) => {
     if (entry.endTime) {
@@ -567,6 +570,9 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
                         e.stopPropagation();
                         toggleTimer(task.id, currentUserId);
                       }}
+                      disabled={!canTrackTask}
+                      title={trackDisabledReason}
+                      aria-label={trackDisabledReason}
                     >
                       {taskTimerRunning ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                     </Button>
@@ -592,6 +598,9 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
                       e.stopPropagation();
                       toggleTimer(task.id, currentUserId);
                     }}
+                    disabled={!canTrackTask}
+                    title={trackDisabledReason}
+                    aria-label={trackDisabledReason}
                   >
                     {taskTimerRunning ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                   </Button>

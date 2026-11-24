@@ -10,6 +10,8 @@ import { BrowserJsonPersistence } from "@/lib/persistence-browser";
 import { getSelectedMode } from "@/lib/persistence-factory";
 import { confirmDialog } from "@/lib/confirm-modal";
 import { computeChildPriority } from "@/utils/priorityEncoding";
+import { canUserToggleTaskTimer, isTaskTimerOwnedByUser } from "@/utils/task-timer-ownership";
+import { clearLocalTaskTracking, getPresenceUserId, setLocalTaskTracking } from "@/lib/tracking-presence";
 import type { TaskColor } from "@/lib/planner/types";
 import { isTaskColor } from "@/lib/planner/colors";
 import type { Recurrence } from "@/lib/recurrence/types";
@@ -170,6 +172,20 @@ const updateTaskInTasks = (taskId: string, updater: (task: Task) => Task) => {
     }
     return t;
   });
+};
+
+/**
+ * Authoritative read of whether a task still has an open timer entry.
+ *
+ * Reads the module-level store synchronously, so presence publishing sees a
+ * just-started timer immediately instead of waiting for the debounced
+ * `tasksChanged` re-render.
+ */
+export const getOpenTaskTimerSnapshot = (taskId: string): { startedAt: number } | null => {
+  const task = tasks.find(t => t.id === taskId);
+  if (!task || !task.timer || task.timer.length === 0) return null;
+  const lastEntry = task.timer[task.timer.length - 1];
+  return lastEntry && lastEntry.endTime === 0 ? { startedAt: lastEntry.startTime } : null;
 };
 
 // Initialize collaboration if not in browser-only mode
@@ -1548,9 +1564,19 @@ export function useTasks(options?: { subscribe?: boolean; includeRecurring?: boo
     if (!task) return { success: false, needsConfirm: false, reason: 'Task not found' };
 
     const isStarting = !task.timer?.some(e => e.endTime === 0);
-    const isTaskBelongingToCurrentUser = currentUserId
-      ? (task.userId === currentUserId || (!task.userId && currentUserId === 'UNASSIGNED'))
-      : true;
+    // Bookkeeping ownership (WIP limits, stop-other-timers) is narrower than
+    // permission: an unassigned task is open to everyone but is not any named
+    // user's own work. See task-timer-ownership.
+    const isTaskBelongingToCurrentUser = isTaskTimerOwnedByUser(task, currentUserId);
+
+    // The open timer entry is shared workspace state, but a task assigned to
+    // another user must only be started/stopped by its owner. Without this a
+    // bystander sees the running entry and can stop someone else's work.
+    if (!canUserToggleTaskTimer(task, currentUserId)) {
+      const reason = 'This task is assigned to another user. Only its owner can start or stop its timer.';
+      toast.error(reason);
+      return { success: false, needsConfirm: false, reason };
+    }
 
     // WIP limit check when starting a timer on a non-WIP task
     if (isStarting && task.triageStatus !== 'WIP') {
@@ -1581,9 +1607,7 @@ export function useTasks(options?: { subscribe?: boolean; includeRecurring?: boo
         t.id !== taskId &&
         t.triageStatus === 'WIP' &&
         t.timer?.some(e => e.endTime === 0) &&
-        (currentUserId
-          ? (t.userId === currentUserId || (!t.userId && currentUserId === 'UNASSIGNED'))
-          : true)
+        isTaskTimerOwnedByUser(t, currentUserId)
       );
       if (otherRunningWip) {
         const confirmed = await confirmDialog({
@@ -1619,11 +1643,7 @@ export function useTasks(options?: { subscribe?: boolean; includeRecurring?: boo
           const lastEntry = t.timer[t.timer.length - 1];
           if (lastEntry && lastEntry.endTime === 0) {
             // Only stop timers on tasks that ALSO belong to the current user
-            const isOtherTaskBelongingToCurrentUser = currentUserId
-              ? (t.userId === currentUserId || (!t.userId && currentUserId === 'UNASSIGNED'))
-              : true;
-
-            if (isOtherTaskBelongingToCurrentUser) {
+            if (isTaskTimerOwnedByUser(t, currentUserId)) {
               const updatedTask = {
                 ...t,
                 timer: t.timer.map((entry, index) =>
@@ -1632,6 +1652,8 @@ export function useTasks(options?: { subscribe?: boolean; includeRecurring?: boo
               };
               tasksToPersist.push(updatedTask);
               syncTaskToYjs(t.id, updatedTask);
+              // A task switch stops this device's previous timer; drop its presence.
+              clearLocalTaskTracking(t.id);
               return updatedTask;
             }
           }
@@ -1655,18 +1677,34 @@ export function useTasks(options?: { subscribe?: boolean; includeRecurring?: boo
     }
 
     // Now toggle the requested timer
+    const startedAt = Date.now();
     updateTaskInTasks(taskId, (task) => {
       const timer = [...(task.timer || [])];
       const lastEntry = timer[timer.length - 1];
       if (lastEntry && lastEntry.endTime === 0) { // If currently running, stop it
         timer[timer.length - 1] = { ...lastEntry, endTime: Date.now() };
       } else { // If not running, start a new one
-        timer.push({ startTime: Date.now(), endTime: 0 });
+        timer.push({ startTime: startedAt, endTime: 0 });
         // Automatically set status to WIP when timer starts
         return { ...task, timer: timer, triageStatus: "WIP" };
       }
       return { ...task, timer: timer };
     });
+
+    // Attribute the open entry to this device so other clients render it as
+    // remote (and this device does not ring its own play button).
+    if (isStarting) {
+      setLocalTaskTracking({
+        taskId,
+        // Attribution is the device's user, not the task owner: the indicator
+        // answers "am I tracking this on another device?". Some call sites
+        // (e.g. the time-sheet play button) omit the user id.
+        userId: currentUserId || getPresenceUserId() || 'anonymous',
+        sinceTs: startedAt,
+      });
+    } else {
+      clearLocalTaskTracking(taskId);
+    }
 
     // Persist to backend
     try {

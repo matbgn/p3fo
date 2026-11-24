@@ -180,6 +180,33 @@ A **Node.js / Express** server providing:
 - **Static hosting** — Serves the Vite build in production with SPA fallback routing
 - **Health check** — `GET /api/health` for monitoring and persistence auto-detection
 
+### Security & Trust Model
+
+P3Fo has **no user accounts, login, or role-based authorization**. The only access
+control is capability-based:
+
+- **Moderation link** — adding a vote moderator mints a random `token` and produces the
+  link `/v/:slug/m/:token`. Anyone holding that link can moderate that vote (see
+  participation, finalize, manage moderators). Treat it like a password.
+- **Voter token** — each browser generates a random `voterToken` the first time it saves
+  a ballot; it is the key to read back or withdraw that ballot. It is not a login.
+- **`ownerId`** — returned by the public vote endpoints. It is an attribution field,
+  **not** an authentication claim.
+
+Consequences of having no auth layer:
+
+- Any client that can reach the API can read and write all workspace data.
+- `GET /api/votes/:id/moderators` returns moderator records including their tokens, so
+  moderation links are only as private as API reachability. Public vote endpoints never
+  return tokens.
+- Live participation data (draft progress, last-seen, editing state) requires a
+  moderator token; public endpoints only expose submitted ballots.
+
+If you deploy P3Fo beyond a single trusted machine, front `/api` with your own
+authentication (for example oauth2-proxy/OIDC, a VPN, or an SSO gateway) — the server
+assumes this in shared deployments. The optional `P3FO_API_KEY` authenticates the
+`/mcp` routes only; it does not protect `/api` or authenticate the browser SPA.
+
 ### Event Bus & Metrics
 
 - `EventBus` — Lightweight pub/sub for cross-component communication (tasks reload, filter changes, etc.)
@@ -271,6 +298,8 @@ A **Node.js / Express** server providing:
 | `P3FO_DB_CLIENT` | `sqlite` | Database engine: `sqlite` or `pg` |
 | `P3FO_DB_SQLITE_FILE` | `./p3fo.db` | Path to the SQLite database file |
 | `P3FO_DB_URL` | — | PostgreSQL connection string |
+| `P3FO_API_KEY` | — | Shared key for `/mcp` routes (unset = no key required). Does not protect `/api` |
+| `PORT` | `5172` | Server listen port |
 | `WS_TARGET` | `ws://localhost:5172` | WebSocket proxy target (dev mode) |
 | `API_TARGET` | `http://localhost:5172` | API proxy target (dev mode) |
 

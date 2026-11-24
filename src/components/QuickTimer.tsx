@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useTranslation } from 'react-i18next';
 import { Button } from "@/components/ui/button";
-import { Pause, Square, ArrowRight, Play, SkipForward, Apple, RotateCcw, PictureInPicture2, PlaneTakeoff, Loader2, ChevronDown, Train, Coffee, ChartNoAxesGantt, Search, Zap, Clock } from "lucide-react";
+import { Pause, Square, ArrowRight, Play, SkipForward, Apple, RotateCcw, PictureInPicture2, PlaneTakeoff, Loader2, ChevronDown, Train, Coffee, ChartNoAxesGantt, Search, Zap, Clock, MonitorSmartphone } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,8 @@ import { useAllTasks } from "@/hooks/useAllTasks";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { usePomodoro } from "@/hooks/usePomodoro";
 import { useTraveler } from "@/hooks/useTraveler";
+import { useRemoteTracking, useTakeOverTracking } from "@/hooks/useTrackingPresence";
+import { useLocalTaskTracking, isRunningWorkPhase } from "@/lib/tracking-presence";
 import { setTravelerIdleState, registerTravelerStartFn, registerTravelerSearchFn, registerTravelerResetFn, registerPomodoroStartFn, setSearchLoading, subscribeTravelerIdle, readTravelerIdleSnapshot } from "@/lib/traveler-idle-state";
 import { useDocumentPiP } from "@/hooks/useDocumentPiP";
 import { PomodoroPhase, PomodoroBoostMultiplier } from "@/lib/pomodoro-types";
@@ -144,6 +146,54 @@ const WhatsNextButton: React.FC<{ visible: boolean; label: string; title: string
 };
 
 // ---------------------------------------------------------------------------
+// Remote tracking presence — display-only marker mirrored from another client
+// ---------------------------------------------------------------------------
+
+const RemoteTrackingBadge: React.FC<{ label: string }> = ({ label }) => (
+  <span
+    className="pointer-events-none absolute -bottom-1 -right-1 z-10 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm ring-2 ring-background"
+    title={label}
+    aria-hidden="true"
+  >
+    <MonitorSmartphone className="h-2 w-2" />
+  </span>
+);
+
+const RemoteTrackingChip: React.FC<{
+  label: string;
+  takeOverLabel?: string | null;
+  onTakeOver?: (() => void) | null;
+}> = ({ label, takeOverLabel, onTakeOver }) => {
+  const className =
+    "inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary";
+  if (!onTakeOver) {
+    return (
+      <span className={className} title={label} aria-label={label} role="status">
+        <MonitorSmartphone className="h-3 w-3" />
+        <span className="max-w-[120px] truncate">{label}</span>
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onTakeOver}
+      className={`${className} cursor-pointer hover:bg-primary/20 transition-colors`}
+      title={takeOverLabel ?? label}
+      aria-label={takeOverLabel ?? label}
+    >
+      <MonitorSmartphone className="h-3 w-3" />
+      <span className="max-w-[120px] truncate">{label}</span>
+      <span className="font-semibold underline decoration-primary/40 underline-offset-2">
+        {takeOverLabel}
+      </span>
+    </button>
+  );
+};
+
+const remoteButtonClass = "outline outline-2 outline-offset-2 outline-dashed outline-primary";
+
+// ---------------------------------------------------------------------------
 // TaskRunningBlock — the task zone content (always visible when a task is running)
 // Visually distinct from technique controls: variant="ghost" + Square icon
 // ---------------------------------------------------------------------------
@@ -158,7 +208,9 @@ const TaskRunningBlock: React.FC<{
   jumpLabel: string;
   pauseLabel: string;
   resumeLabel: string;
-}> = ({ title, elapsed, isRunning, onPause, onJumpToTask, taskId, jumpLabel, pauseLabel, resumeLabel }) => {
+  remoteLabel?: string | null;
+}> = ({ title, elapsed, isRunning, onPause, onJumpToTask, taskId, jumpLabel, pauseLabel, resumeLabel, remoteLabel }) => {
+  const actionLabel = remoteLabel ?? (isRunning ? pauseLabel : resumeLabel);
   return (
     <>
       <div className="text-xs sm:text-sm font-medium min-w-0 flex-1 truncate" title={title}>
@@ -167,16 +219,19 @@ const TaskRunningBlock: React.FC<{
       <div className="text-xs sm:text-sm font-mono shrink-0 text-foreground">
         {formatTime(elapsed)}
       </div>
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={onPause}
-        className="h-7 w-7 sm:h-8 sm:w-8 p-0"
-        title={isRunning ? pauseLabel : resumeLabel}
-        aria-label={isRunning ? pauseLabel : resumeLabel}
-      >
-        {isRunning ? <Square className="h-3 w-3 sm:h-4 sm:w-4" /> : <Play className="h-3 w-3 sm:h-4 sm:w-4" />}
-      </Button>
+      <span className="relative inline-flex">
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onPause}
+          className={cn("h-7 w-7 sm:h-8 sm:w-8 p-0", remoteLabel && remoteButtonClass)}
+          title={actionLabel}
+          aria-label={actionLabel}
+        >
+          {isRunning ? <Square className="h-3 w-3 sm:h-4 sm:w-4" /> : <Play className="h-3 w-3 sm:h-4 sm:w-4" />}
+        </Button>
+        {remoteLabel && <RemoteTrackingBadge label={remoteLabel} />}
+      </span>
       <JumpToTaskArrow visible={!!onJumpToTask} taskId={taskId} onJump={onJumpToTask!} label={jumpLabel} />
     </>
   );
@@ -236,7 +291,10 @@ const LastStoppedTaskBlock: React.FC<{
 const PomodoroControls: React.FC<{
   pomodoro: ReturnType<typeof usePomodoro>;
   t: ReturnType<typeof useTranslation>['t'];
-}> = ({ pomodoro, t }) => {
+  remoteLabel?: string | null;
+  remoteActionLabel?: string | null;
+  onTakeOver?: (() => void) | null;
+}> = ({ pomodoro, t, remoteLabel, remoteActionLabel, onTakeOver }) => {
   const phase = pomodoro.state.phase;
   const isIdle = phase === 'idle';
 
@@ -286,9 +344,19 @@ const PomodoroControls: React.FC<{
           <Play className="h-3 w-3 sm:h-4 sm:w-4" />
         </Button>
       ) : isIdle ? (
-        <Button size="sm" variant="outline" onClick={() => pomodoro.startWork()} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.startWork')} aria-label={t('quickTimer.startWork')}>
-          <Play className="h-3 w-3 sm:h-4 sm:w-4" />
-        </Button>
+        <span className="relative inline-flex">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onTakeOver ?? (() => pomodoro.startWork())}
+            className={cn("h-7 w-7 sm:h-8 sm:w-8 p-0", remoteLabel && remoteButtonClass)}
+            title={remoteActionLabel ?? t('quickTimer.startWork')}
+            aria-label={remoteActionLabel ?? t('quickTimer.startWork')}
+          >
+            <Play className="h-3 w-3 sm:h-4 sm:w-4" />
+          </Button>
+          {remoteLabel && <RemoteTrackingBadge label={remoteLabel} />}
+        </span>
       ) : null}
       {!isIdle && (
         <Button size="sm" variant="outline" onClick={() => pomodoro.skip()} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title={t('quickTimer.skipPhase')} aria-label={t('quickTimer.skipPhase')}>
@@ -551,6 +619,44 @@ export const QuickTimer: React.FC<{
     return { runningTask: running, lastStoppedTask: lastStopped };
   }, [tasks, currentUserId]);
 
+  // ---- Cross-device tracking presence and takeover ----
+  const localTaskTracking = useLocalTaskTracking();
+  const remoteRaw = useRemoteTracking();
+  const takeOverRemote = useTakeOverTracking();
+  // Local tracking wins. A shared open task entry is not local unless this
+  // device started it, otherwise another device's task timer would always
+  // read as "local" and the indicator would never appear.
+  //
+  // Match exactly what this device publishes (see deriveLocalPresence): only a
+  // running work phase counts. A paused session or a break publishes nothing,
+  // so it must not hide another device's live session.
+  const pomodoroLocalWork = isRunningWorkPhase(
+    pomodoro.state.phase,
+    pomodoro.state.startedAt,
+    pomodoro.state.pausedAt,
+  );
+  const travelerLocalWork = isRunningWorkPhase(
+    traveler.state.phase,
+    traveler.state.startedAt,
+    traveler.state.pausedAt,
+  );
+  // `deriveLocalPresence` publishes for any locally-started task timer, so the
+  // UI must treat any registry entry as local — not only the task currently
+  // displayed as running.
+  const localIsTracking =
+    pomodoroLocalWork || travelerLocalWork || !!localTaskTracking;
+  const remote = localIsTracking ? null : remoteRaw;
+  const remoteTechnique = remote?.payload.technique ?? null;
+  const remoteLabel = remote
+    ? t('quickTimer.trackingOn', { device: remote.payload.deviceLabel })
+    : null;
+  const canTakeOver =
+    !!remote && (remoteTechnique === 'pomodoro' || remoteTechnique === 'traveler');
+  const remoteActionLabel =
+    remote && canTakeOver
+      ? t('quickTimer.takeOverOn', { device: remote.payload.deviceLabel })
+      : null;
+  const handleTakeOver = remote && canTakeOver ? () => takeOverRemote(remote) : null;
   const [elapsedTime, setElapsedTime] = useState(0);
 
   useEffect(() => {
@@ -696,6 +802,15 @@ export const QuickTimer: React.FC<{
 
   return (
 <div className="flex flex-col items-center min-[512px]:flex-row gap-1 min-[512px]:gap-1.5 px-2 min-[512px]:px-3 py-1 min-[512px]:py-1 bg-gray-100 rounded-lg min-h-[36px] min-[512px]:min-h-[40px] w-full min-[630px]:w-auto min-w-0">
+      {/* ===== REMOTE TRACKING (always visible while another device works) ===== */}
+      {remote && remoteLabel && (
+        <RemoteTrackingChip
+          label={remoteLabel}
+          takeOverLabel={canTakeOver ? t('quickTimer.takeOver') : null}
+          onTakeOver={handleTakeOver}
+        />
+      )}
+
       {/* ===== TASK ZONE (top on mobile, right on desktop) ===== */}
       {runningTask ? (
         <div className="flex items-center gap-1 min-[512px]:gap-1.5 order-1 min-[630px]:order-2 w-auto min-[512px]:w-full min-[630px]:w-auto min-w-0">
@@ -709,6 +824,7 @@ export const QuickTimer: React.FC<{
             jumpLabel={t('quickTimer.jumpToTask')}
             pauseLabel={t('quickTimer.pauseTask')}
             resumeLabel={t('quickTimer.resumeTask')}
+            remoteLabel={remoteTechnique === 'task' ? remoteLabel : null}
           />
         </div>
       ) : lastStoppedTask ? (
@@ -739,7 +855,13 @@ export const QuickTimer: React.FC<{
       {techniqueHasContent && (
         <div className="flex items-center gap-1 min-[512px]:gap-1.5 bg-muted/30 rounded px-1.5 min-[512px]:px-2 py-0.5 order-2 min-[630px]:order-1 w-auto min-[512px]:w-full min-[630px]:w-auto min-w-0">
           {activeMode === 'pomodoro' && pomodoroModuleEnabled ? (
-            <PomodoroControls pomodoro={pomodoro} t={t} />
+            <PomodoroControls
+              pomodoro={pomodoro}
+              t={t}
+              remoteLabel={remoteTechnique === 'pomodoro' ? remoteLabel : null}
+              remoteActionLabel={remoteTechnique === 'pomodoro' ? remoteActionLabel : null}
+              onTakeOver={remoteTechnique === 'pomodoro' ? handleTakeOver : null}
+            />
           ) : travelerModuleEnabled ? (
             <TravelerControls
               traveler={traveler}

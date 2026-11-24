@@ -20,7 +20,7 @@ import { useReminderStore } from '@/hooks/useReminders';
 import { tasksToEntities, convertEntitiesToTasks } from '@/lib/task-conversions';
 import type { Task } from '@/hooks/useTasks';
 
-export const CURRENT_SCHEMA_VERSION = 5;
+export const CURRENT_SCHEMA_VERSION = 6;
 
 export function extractImportErrorMessage(
   error: unknown,
@@ -333,6 +333,39 @@ export async function applyImportedData(
   }
   if (importedData.voteResponses && Array.isArray(importedData.voteResponses)) {
     await adapter.importVoteResponses(importedData.voteResponses);
+  }
+
+  if (Array.isArray(importedData.voteRankingSubmissions)) {
+    // Scope the replacement to the votes the backup contains, including votes
+    // with zero ballots, so a restore replaces instead of merging without
+    // touching votes that were created after the export. A pre-v6 backup has no
+    // ballot section and leaves existing ballots untouched.
+    const backupVoteIds = Array.isArray(importedData.votes)
+      ? Array.from(
+          new Set(
+            (importedData.votes as { id?: string }[])
+              .map(vote => vote?.id)
+              .filter((id): id is string => typeof id === 'string'),
+          ),
+        )
+      : undefined;
+    // Votes whose ballots the exporter could not read are absent from this file,
+    // so they must stay out of the replace scope; replacing them would delete
+    // ballots the backup never contained. Older backups lack the field (and were
+    // exported before the read was gated), so they keep the full scope.
+    const incompleteVoteIds = Array.isArray(importedData.incompleteRankingVoteIds)
+      ? new Set(
+          (importedData.incompleteRankingVoteIds as unknown[])
+            .filter((id): id is string => typeof id === 'string'),
+        )
+      : null;
+    const scopedVoteIds = backupVoteIds && incompleteVoteIds
+      ? backupVoteIds.filter(id => !incompleteVoteIds.has(id))
+      : backupVoteIds;
+    await adapter.importVoteRankingSubmissions(
+      importedData.voteRankingSubmissions,
+      scopedVoteIds,
+    );
   }
   if (importedData.voteLoops && Array.isArray(importedData.voteLoops)) {
     await adapter.importVoteLoops(importedData.voteLoops);

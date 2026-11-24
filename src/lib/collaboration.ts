@@ -42,6 +42,27 @@ export const ySystemState = instrumentYMap(doc.getMap('systemState'), 'systemSta
 export const yVoteProposals = instrumentYMap(doc.getMap('voteProposals'), 'voteProposals');
 export const yVoteLoops = instrumentYMap(doc.getMap('voteLoops'), 'voteLoops');
 export const yVoteResponses = instrumentYMap(doc.getMap('voteResponses'), 'voteResponses');
+// In-progress selections no longer live in the shared document: they travel
+// through the moderator-authenticated draft channel (`/api/votes/:id/drafts`),
+// so hidden votes and anonymous identities are never fanned out to every
+// client. The legacy `voteResponseDrafts` map is purged once at server start.
+// Presence no longer lives in the shared document either: it travels through
+// the moderator-authenticated presence channel, so anonymous participation is
+// only visible to a facilitator. The legacy `voteParticipation` map is purged
+// once at server start.
+// Lightweight live signals for non-comparative in-progress drafts. The value
+// carries only a revision counter, never draft content or identity: the draft
+// itself is served by the moderator-authenticated `/drafts` endpoint. The
+// signal exists so a moderator view refetches immediately instead of waiting
+// for its polling fallback.
+export const yVoteDraftRevisions = instrumentYMap(doc.getMap('voteDraftRevisions'), 'voteDraftRevisions');
+// Same signal for the presence channel: a moderator view refetches the
+// authenticated participant list immediately after any join/heartbeat.
+export const yVotePresenceRevisions = instrumentYMap(doc.getMap('votePresenceRevisions'), 'votePresenceRevisions');
+// Lightweight live ranking signals for comparative prioritization votes.
+// Keyed by vote id; values carry revisions + counts, never ballots or voter
+// identities, so they are safe to fan out to every connected client.
+export const yVoteRankingState = instrumentYMap(doc.getMap('voteRankingState'), 'voteRankingState');
 
 // Provider and awareness are nullable - only initialized when NOT in browser-only mode
 export let provider: WebsocketProvider | null = null;
@@ -90,4 +111,13 @@ export function initializeCollaboration(): void {
  */
 export function isCollaborationEnabled(): boolean {
     return !PERSISTENCE_CONFIG.FORCE_BROWSER && isInitialized;
+}
+
+/**
+ * Check if the collaboration provider is actually connected and has completed
+ * its initial sync. Callers can use this to enable polling fallbacks when a
+ * proxy blocks the WebSocket upgrade.
+ */
+export function isCollaborationConnected(): boolean {
+    return isCollaborationEnabled() && provider !== null && provider.wsconnected && provider.synced;
 }

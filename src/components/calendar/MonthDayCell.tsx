@@ -73,7 +73,7 @@ const EventList: React.FC<EventListProps> = ({ date, events, onSelectEvent }) =>
               style={{ backgroundColor: eventAccent(event.resource) }}
             />
             <div className="min-w-0 flex-1">
-              <p className="truncate font-medium">{event.title}</p>
+              <p className="line-clamp-2 break-words font-medium">{event.title}</p>
               <p className="text-[10px] text-muted-foreground">
                 {event.allDay ? t('program.allDay') : formatEventTime(event.start)}
               </p>

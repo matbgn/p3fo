@@ -189,8 +189,8 @@ export interface InstrumentedYMap<T = unknown> {
   delete: (key: string) => void;
   has: (key: string) => boolean;
   clear: () => void;
-  observe: (handler: (event: Y.YMapEvent<T>) => void) => void;
-  unobserve: (handler: (event: Y.YMapEvent<T>) => void) => void;
+  observe: (handler: (event: Y.YMapEvent<T>, transaction: Y.Transaction) => void) => void;
+  unobserve: (handler: (event: Y.YMapEvent<T>, transaction: Y.Transaction) => void) => void;
   keys: () => IterableIterator<string>;
   values: () => IterableIterator<T>;
   forEach: (callback: (value: T, key: string, map: Y.Map<T>) => void) => void;
@@ -256,11 +256,11 @@ export function instrumentYMap<T = unknown>(
       return yMap.has(key);
     },
 
-    observe(handler: (event: Y.YMapEvent<T>) => void) {
+    observe(handler: (event: Y.YMapEvent<T>, transaction: Y.Transaction) => void) {
       yMap.observe(handler);
     },
 
-    unobserve(handler: (event: Y.YMapEvent<T>) => void) {
+    unobserve(handler: (event: Y.YMapEvent<T>, transaction: Y.Transaction) => void) {
       yMap.unobserve(handler);
     },
 

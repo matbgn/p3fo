@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { TravelerConfig, TravelerPhase, TravelerState, INITIAL_TRAVELER_STATE, DEFAULT_TRAVELER_CONFIG } from '@/lib/traveler-types';
+import { AdoptedTravelerSession, TravelerConfig, TravelerPhase, TravelerState, INITIAL_TRAVELER_STATE, DEFAULT_TRAVELER_CONFIG } from '@/lib/traveler-types';
 import { PomodoroSession, FocusModeConfig, DEFAULT_FOCUS_MODE_CONFIG } from '@/lib/pomodoro-types';
 import { useSettingsContext } from '@/context/SettingsContext';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
@@ -7,9 +7,20 @@ import { getPersistenceAdapter } from '@/lib/persistence-factory';
 import { eventBus } from '@/lib/events';
 import { computeBreakDuration } from '@/lib/traveler-api';
 import { playChime } from '@/lib/audio-chime';
+import { toast } from 'sonner';
+import {
+  clearActiveSession,
+  resolveTravelerRestore,
+  sessionRecordId,
+  travelerPhaseDurationMs,
+  type StoredTravelerSessionData,
+} from '@/lib/active-session';
+import { useActiveSessionPersistence } from '@/hooks/useActiveSessionPersistence';
+
+const TRAVELER_STORAGE_KIND = 'traveler';
 
 export const useTravelerTimer = () => {
-  const { settings } = useSettingsContext();
+  const { settings, loading: settingsLoading } = useSettingsContext();
   const { userId } = useCurrentUser();
   const config: TravelerConfig = settings.travelerConfig ?? DEFAULT_TRAVELER_CONFIG;
   const focusConfig: FocusModeConfig = settings.focusModeConfig ?? DEFAULT_FOCUS_MODE_CONFIG;
@@ -45,23 +56,31 @@ export const useTravelerTimer = () => {
     const elapsed = s.pausedAt
       ? s.pausedElapsed
       : Date.now() - s.startedAt;
-    const duration = s.phase === 'work' ? s.travelDurationMs : s.breakDurationMs;
+    const duration = travelerPhaseDurationMs(s);
     const remaining = duration - elapsed;
     return Math.max(0, remaining);
   }, []);
 
-  const recordSession = useCallback(async (phase: 'work' | 'break', completed: boolean) => {
+  const recordSession = useCallback(async (
+    phase: 'work' | 'break',
+    completed: boolean,
+    startedAtOverride?: number,
+    endTimeOverride?: number,
+  ) => {
     const s = stateRef.current;
-    if (!s.startedAt) return;
+    const startedAt = startedAtOverride ?? s.startedAt;
+    if (!startedAt) return;
+    const endTime = endTimeOverride ?? Date.now();
+    const recordedPhase: 'work' | 'short-break' = phase === 'work' ? 'work' : 'short-break';
 
     const session: PomodoroSession = {
-      id: crypto.randomUUID(),
+      id: sessionRecordId('traveler', userId || 'anonymous', recordedPhase, startedAt),
       taskId: undefined,
       userId: userId || 'anonymous',
-      startTime: s.startedAt,
-      endTime: Date.now(),
-      phase: phase === 'work' ? 'work' : 'short-break',
-      duration: Date.now() - s.startedAt,
+      startTime: startedAt,
+      endTime,
+      phase: recordedPhase,
+      duration: endTime - startedAt,
       completed,
       kind: 'traveler',
     };
@@ -198,6 +217,32 @@ export const useTravelerTimer = () => {
     startTick(() => onWorkCompleteRef.current());
   }, [notifyPhaseChange, startTick]);
 
+  /**
+   * Continue a traveler session started on another device. The caller has
+   * already adjusted `startedAt` so the remaining time matches the remote.
+   */
+  const adoptSession = useCallback((session: AdoptedTravelerSession) => {
+    if (session.phase === 'idle') return;
+    setPhaseTransition(null);
+    const adopted: TravelerState = {
+      phase: session.phase,
+      startedAt: session.startedAt,
+      pausedAt: null,
+      pausedElapsed: 0,
+      travelDurationMs: session.travelDurationMs,
+      breakDurationMs: session.breakDurationMs,
+      departure: session.departure,
+      destination: session.destination,
+      travelMode: session.travelMode,
+    };
+    setState(adopted);
+    stateRef.current = adopted;
+    eventBus.publish('travelerStarted', {});
+    const onComplete =
+      session.phase === 'work' ? onWorkCompleteRef.current : onBreakCompleteRef.current;
+    startTick(onComplete);
+  }, [startTick]);
+
   const pause = useCallback(() => {
     setState(prev => {
       if (!prev.startedAt || prev.pausedAt) return prev;
@@ -298,9 +343,10 @@ export const useTravelerTimer = () => {
 
   const reset = useCallback(() => {
     clearTimer();
+    if (userId) clearActiveSession(TRAVELER_STORAGE_KIND, userId);
     setState(INITIAL_TRAVELER_STATE);
     setPhaseTransition(null);
-  }, [clearTimer]);
+  }, [clearTimer, userId]);
 
   const dismissTransition = useCallback(() => {
     setPhaseTransition(null);
@@ -329,10 +375,65 @@ export const useTravelerTimer = () => {
     loadSessions();
   }, [loadSessions]);
 
+  // ---- Persist and restore the running session across reload/crash ----
+  useActiveSessionPersistence<StoredTravelerSessionData, TravelerState>({
+    kind: TRAVELER_STORAGE_KIND,
+    userId,
+    ready: !settingsLoading,
+    snapshot: () => {
+      const s = stateRef.current;
+      if (s.phase === 'idle' || !s.startedAt) return null;
+      return { state: s };
+    },
+    persistToken: [
+      state.phase,
+      state.startedAt,
+      state.pausedAt,
+      state.pausedElapsed,
+      state.travelDurationMs,
+      state.breakDurationMs,
+      state.departure,
+      state.destination,
+      state.travelMode,
+    ].join('|'),
+    isRunning: state.phase !== 'idle' && state.pausedAt === null,
+    resolve: (stored, now) => resolveTravelerRestore(stored.data, stored.savedAt, now),
+    onRestore: (restoredState) => {
+      setState(restoredState);
+      stateRef.current = restoredState;
+      if (restoredState.pausedAt === null) {
+        startTick(
+          restoredState.phase === 'work'
+            ? onWorkCompleteRef.current
+            : onBreakCompleteRef.current,
+        );
+      }
+      toast.info(
+        restoredState.pausedAt === null
+          ? 'Traveler session restored.'
+          : 'Traveler session restored (paused).',
+      );
+    },
+    onExpired: (stored, endTime, completed) => {
+      const storedState = stored.data.state;
+      void recordSession(
+        storedState.phase === 'work' ? 'work' : 'break',
+        completed,
+        storedState.startedAt ?? undefined,
+        endTime,
+      );
+      setState(INITIAL_TRAVELER_STATE);
+      stateRef.current = INITIAL_TRAVELER_STATE;
+      toast.info(
+        completed
+          ? 'A traveler session finished while you were away and was saved.'
+          : 'A partial traveler session was saved while you were away.',
+      );
+    },
+  });
+
   const remaining = getRemaining();
-  const total = state.phase !== 'idle'
-    ? (state.phase === 'work' ? state.travelDurationMs : state.breakDurationMs)
-    : 0;
+  const total = travelerPhaseDurationMs(state);
   const progress = total > 0 ? 1 - (remaining / total) : 0;
 
   return {
@@ -344,6 +445,7 @@ export const useTravelerTimer = () => {
     progress,
     phaseTransition,
     startWork,
+    adoptSession,
     pause,
     resume,
     skip,
