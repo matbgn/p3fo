@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.43.0 (2026-11-25)
+
+### Features
+
+- **voting:** add scheduling vote mode (452e931)
+- **voting:** add event attendance RSVP mode (73ee059)
+
+---
+
 ## v0.42.0 (2026-11-24)
 
 ### Features
@@ -115,15 +124,5 @@
 
 - **voting:** align results view with public vote page (018310a)
 - **common:** re-prompt example data after workspace wipe (4a7dd58)
-
----
-
-## v0.34.1 (2026-08-28)
-
-### Bug Fixes
-
-- **common:** render properly module groups to bulk-disable views and timers (b7a8b46)
-- **common:** gate example data modal on full workspace scan (49c2b34)
-- **layout:** keep active view mounted (817a06c)
 
 ---
