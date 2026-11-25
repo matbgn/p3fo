@@ -14,7 +14,7 @@ import {
 } from './vote-tally.js';
 import { getRandomUsername } from './username-generator.js';
 
-const MAX_DISPLAY_NAME_LENGTH = 80;
+export const MAX_DISPLAY_NAME_LENGTH = 80;
 const MAX_EMAIL_LENGTH = 254;
 const MAX_TEXT_ANSWER_LENGTH = 500;
 export const DEFAULT_MAX_PARTY_SIZE = 20;
@@ -276,6 +276,27 @@ export function attendanceVisibility(
   data: AttendanceResponseData | undefined,
 ): 'public' | 'hidden' {
   return data?.visibility === 'hidden' ? 'hidden' : 'public';
+}
+
+/**
+ * Merge a renamed display name into a response's stored attendee data without
+ * ever downgrading a hidden row to public. Shared by the SQLite and Postgres
+ * adapters so a name edit cannot make a hidden attendee visible on only one
+ * deployment.
+ */
+export function mergeAttendeeDisplayName(
+  current: AttendanceResponseData | undefined,
+  displayName: string,
+  visibility: 'hidden' | 'auto',
+): AttendanceResponseData {
+  return {
+    ...(current ?? {}),
+    displayName,
+    visibility:
+      visibility === 'hidden' || attendanceVisibility(current) === 'hidden'
+        ? 'hidden'
+        : 'public',
+  };
 }
 
 /**

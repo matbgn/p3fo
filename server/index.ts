@@ -9,6 +9,7 @@ import { VoteKind, VoteLoop, VoteModerator, VoteResponseEntity, VoteRankingSubmi
 import type { TaskEntity, VoteRankingBallot, VoteEntity, VoteRankingResult } from '../src/lib/persistence-types.js';
 import type { SprintStateEntity } from '../src/lib/sprint-types.js';
 import {
+  hasPrivateAttendeeFields,
   isVoteAnonymous,
   redactRankingSubmissionForBackup,
   redactVoteResponseForVote,
@@ -50,8 +51,17 @@ import { VOTE_SCOPED_YJS_MAPS } from '../src/lib/vote-yjs-maps.js';
 import { clearVoteDrafts, deleteVoteDraft, listVoteDrafts, sweepExpiredVoteDrafts, upsertVoteDraft } from '../src/lib/vote-drafts.js';
 import { clearVotePresence, listVotePresence, sweepExpiredVotePresence, touchVotePresence } from '../src/lib/vote-presence.js';
 import { validateVoteResponseValue } from '../src/lib/vote-validation.js';
+import {
+  MAX_SCHEDULING_SLOTS,
+  activeSchedulingSlots,
+  findActiveSchedulingSlot,
+  normalizeSchedulingConfig,
+  schedulingRunHasAvailability,
+  tallyScheduling,
+  validateSchedulingConfig,
+} from '../src/lib/scheduling.js';
 import { EVENT_RSVP_PROPOSAL_ID } from '../src/lib/vote-tally.js';
-import { attendanceCapacityError, sanitizeAttendanceData, validateAttendanceAnswers } from '../src/lib/attendance.js';
+import { MAX_DISPLAY_NAME_LENGTH, attendanceCapacityError, sanitizeAttendanceData, validateAttendanceAnswers } from '../src/lib/attendance.js';
 
 const YJS_ROOM = 'p3fo-room';
 
@@ -140,18 +150,34 @@ function voteParticipantKey(voteId: string, voterToken: string): string {
   return crypto.createHash('sha256').update(`${voteId}:${voterToken}`).digest('hex');
 }
 
-/** Upsert one response into the live map. Used on create. */
+/**
+ * Upsert one response into the live map. Used on create. Delegates to the batch
+ * path so the anonymity/alias redaction lives in exactly one place and the two
+ * submission paths cannot diverge on what reaches the shared document.
+ */
 function broadcastVoteResponseToYjs(vote: VoteEntity, response: VoteResponseEntity) {
+  broadcastVoteResponsesToYjs(vote, [response]);
+}
+
+/**
+ * Upsert many responses in a single Yjs transaction. A batch availability
+ * submission can touch every active slot, so per-row `map.set` would emit one
+ * update per slot to every connected client.
+ */
+function broadcastVoteResponsesToYjs(vote: VoteEntity, responses: VoteResponseEntity[]) {
+  if (responses.length === 0) return;
   try {
-    // Redact the identity for anonymous votes and replace the withdrawal
-    // credential (`voterToken`) with its stable alias: the shared map is
-    // readable by every connected client, so a raw token must never be written.
-    const safeResponse = shareVoteResponse(
-      vote.id,
-      redactVoteResponseForVote(vote, response),
-    );
     const doc = getYDoc(YJS_ROOM) as Y.Doc;
-    doc.getMap('voteResponses').set(safeResponse.id, safeResponse);
+    const map = doc.getMap('voteResponses');
+    doc.transact(() => {
+      for (const response of responses) {
+        const safeResponse = shareVoteResponse(
+          vote.id,
+          redactVoteResponseForVote(vote, response),
+        );
+        map.set(safeResponse.id, safeResponse);
+      }
+    });
   } catch {
     // Yjs doc may not exist yet — safe to skip
   }
@@ -161,6 +187,56 @@ function timingSafeTokenEqual(left: string, right: string): boolean {
   const a = Buffer.from(left);
   const b = Buffer.from(right);
   return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+/**
+ * Normalize a claimed display name. One rule for scheduling availability
+ * submissions and the rename endpoint, so the length cap cannot drift and a
+ * name cannot be accepted longer on one path than the other.
+ */
+function normalizeVoterDisplayName(raw: unknown): string {
+  return typeof raw === 'string'
+    ? raw.trim().slice(0, MAX_DISPLAY_NAME_LENGTH)
+    : '';
+}
+
+/**
+ * The participant credential is a client-generated UUID. Cap it well above that
+ * so a public submission cannot persist an arbitrarily large value. The cap
+ * matters most on the batch route, which writes the same token into one row per
+ * active slot and would otherwise amplify a multi-megabyte body into gigabytes
+ * of stored text.
+ */
+const MAX_VOTER_TOKEN_LENGTH = 256;
+
+function isValidVoterToken(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= MAX_VOTER_TOKEN_LENGTH
+  );
+}
+
+/**
+ * Build the hidden display name for a scheduling response. One rule for the
+ * single- and batch-submission paths, so the length cap and visibility cannot
+ * drift and leak a name into the public projection.
+ */
+function schedulingAttendeeDisplayName(
+  vote: VoteEntity,
+  body: unknown,
+): VoteResponseEntity['attendeeData'] {
+  if (isVoteAnonymous(vote.config)) return undefined;
+  const rawAttendeeData =
+    body && typeof body === 'object'
+      ? (body as { attendeeData?: unknown }).attendeeData
+      : undefined;
+  const rawName =
+    rawAttendeeData && typeof rawAttendeeData === 'object'
+      ? (rawAttendeeData as { displayName?: unknown }).displayName
+      : undefined;
+  const displayName = normalizeVoterDisplayName(rawName);
+  return displayName ? { displayName, visibility: 'hidden' } : undefined;
 }
 
 /**
@@ -225,15 +301,6 @@ function scrubLegacyVoteResponseTokensFromYjs() {
   try {
     const doc = getYDoc(YJS_ROOM) as Y.Doc;
     const map = doc.getMap('voteResponses');
-    const hasPrivateAttendeeFields = (parsed: VoteResponseEntity): boolean => {
-      const data = parsed.attendeeData;
-      return Boolean(
-        data &&
-          (data.email !== undefined ||
-            data.answers !== undefined ||
-            data.removalToken !== undefined),
-      );
-    };
     const scrubKeys = (keys: Iterable<string>) => {
       const stale: Array<[string, VoteResponseEntity]> = [];
       for (const key of keys) {
@@ -241,7 +308,7 @@ function scrubLegacyVoteResponseTokensFromYjs() {
         if (!parsed) continue;
         const hasRawToken =
           typeof parsed.voterToken === 'string' && parsed.voterToken.length > 0;
-        if (hasRawToken || hasPrivateAttendeeFields(parsed)) {
+        if (hasRawToken || hasPrivateAttendeeFields(parsed.attendeeData)) {
           stale.push([key, parsed]);
         }
       }
@@ -345,8 +412,13 @@ function scheduleVoteLiveRevision(
   voteId: string,
 ) {
   const key = `${mapName}:${voteId}`;
-  const existing = pendingLiveRevisions.get(key);
-  if (existing) clearTimeout(existing.timer);
+  // Throttle, not debounce: a pending timer is not reset by later writes. Draft
+  // autosave (300ms per participant) and presence heartbeats (30s per
+  // participant) can overlap continuously on a busy vote, so clearing the timer
+  // on every write would starve the broadcast and leave every moderator view on
+  // its polling fallback. The counter is read when the timer fires, so one
+  // pending write already covers every request that arrived after it.
+  if (pendingLiveRevisions.has(key)) return;
   const timer = setTimeout(() => {
     pendingLiveRevisions.delete(key);
     bumpVoteLiveRevision(mapName, counters, voteId);
@@ -452,11 +524,23 @@ function scheduleRankingLiveBroadcast(
   options: { resultsChanged?: boolean } = {},
 ) {
   const existing = pendingRankingLiveBroadcasts.get(vote.id);
-  if (existing) clearTimeout(existing.timer);
   const resultsChanged = Boolean(options.resultsChanged) || Boolean(existing?.resultsChanged);
+  if (existing) {
+    // Throttle, not debounce: keep the pending timer so continuous autosaves
+    // cannot starve the broadcast, but accumulate the latest vote/flags so the
+    // pending fire still reflects every write that arrived while it waited.
+    existing.vote = vote;
+    existing.resultsChanged = resultsChanged;
+    return;
+  }
   const timer = setTimeout(() => {
+    const pending = pendingRankingLiveBroadcasts.get(vote.id);
     pendingRankingLiveBroadcasts.delete(vote.id);
-    void broadcastRankingLiveState(vote, { resultsChanged });
+    if (pending) {
+      void broadcastRankingLiveState(pending.vote, {
+        resultsChanged: pending.resultsChanged,
+      });
+    }
   }, 250);
   pendingRankingLiveBroadcasts.set(vote.id, { vote, resultsChanged, timer });
 }
@@ -1540,6 +1624,32 @@ app.get('/api/votes', async (req: Request, res: Response) => {
 
 app.post('/api/votes', async (req: Request, res: Response) => {
   try {
+    if (req.body?.config?.mode === 'SCHEDULING') {
+      const schedulingError = validateSchedulingConfig(
+        req.body.config.scheduling,
+        req.body.proposals,
+      );
+      if (schedulingError) {
+        return res.status(400).json({ error: schedulingError });
+      }
+      // A create request has no separate open transition to validate the frozen
+      // slot set (the PUT route checks the effective slots when a stored vote
+      // leaves IDLE). If a caller creates the vote already out of draft without
+      // proposals, `validateSchedulingConfig` above skips the per-slot checks and
+      // the poll is stored open with no answerable time: the open freeze then
+      // rejects every later attempt to add slots and finalize can never find a
+      // run. Require the slots up front in that case.
+      const requestedPhase = req.body.config.phase;
+      if (
+        requestedPhase !== undefined &&
+        requestedPhase !== 'IDLE' &&
+        req.body.proposals === undefined
+      ) {
+        return res.status(400).json({
+          error: 'A scheduling vote created outside the draft phase requires its time slots',
+        });
+      }
+    }
     const vote = await db.createVote(req.body);
     res.status(201).json(vote);
   } catch (error: unknown) {
@@ -1569,6 +1679,108 @@ app.get('/api/votes/:idOrSlug', async (req: Request, res: Response) => {
 
 app.put('/api/votes/:id', async (req: Request, res: Response) => {
   try {
+    const existing = await db.getVoteById(req.params.id);
+    // `updateVote` shallow-merges `config`, so a partial update inherits the
+    // stored scheduling block and proposal list. Resolve them once: the
+    // "mode is SCHEDULING" check and the "open transition" check below must
+    // validate the exact same effective values, or a change applied to one
+    // leaves the other accepting a slot set the first rejects. An explicit
+    // `scheduling: null` is still honoured as a drop.
+    const requestedConfig: Record<string, unknown> =
+      req.body?.config && typeof req.body.config === 'object'
+        ? (req.body.config as Record<string, unknown>)
+        : {};
+    const effectiveScheduling = (
+      'scheduling' in requestedConfig
+        ? requestedConfig.scheduling
+        : existing?.config.scheduling
+    ) as Parameters<typeof validateSchedulingConfig>[0];
+    const effectiveProposals = req.body?.proposals ?? existing?.proposals;
+    if (req.body?.config?.mode === 'SCHEDULING') {
+      const schedulingError = validateSchedulingConfig(
+        effectiveScheduling,
+        effectiveProposals,
+      );
+      if (schedulingError) {
+        return res.status(400).json({ error: schedulingError });
+      }
+    }
+    if (existing) {
+      // `updateVote` shallow-merges `config`, so the effective values are the
+      // requested ones when present and the stored ones otherwise.
+      const effectiveMode = requestedConfig.mode ?? existing.config.mode;
+      const effectivePhase = requestedConfig.phase ?? existing.config.phase;
+      // A mode switch while the vote is out of draft reinterprets every stored
+      // response under the new mode's semantics: a thumbs-up/down value becomes
+      // schedule availability, or availability rows become ordinary votes. The
+      // editor already disables the mode picker once a vote has started; enforce
+      // the same rule server-side so the API cannot leave the vote uneditable.
+      if (
+        effectiveMode !== existing.config.mode &&
+        existing.config.phase !== 'IDLE'
+      ) {
+        return res.status(400).json({
+          error: 'Vote mode is locked once the vote is open',
+        });
+      }
+      // Opening a scheduling poll freezes its slot set, so validate the set that
+      // will actually be stored: a pruned grid (or a dropped config) can never
+      // produce a candidate time once the poll can no longer be edited. Also
+      // covers switching a draft into SCHEDULING and opening it in one request,
+      // which would otherwise store an open poll whose slots were never checked.
+      if (
+        effectiveMode === 'SCHEDULING' &&
+        effectivePhase !== 'IDLE' &&
+        (existing.config.mode !== 'SCHEDULING' ||
+          existing.config.phase === 'IDLE')
+      ) {
+        const openError = validateSchedulingConfig(
+          effectiveScheduling,
+          effectiveProposals,
+        );
+        if (openError) {
+          return res.status(400).json({ error: openError });
+        }
+      }
+    }
+    if (existing?.config.mode === 'SCHEDULING' && existing.config.phase !== 'IDLE') {
+      // Availability is only comparable while every voter sees the same slots.
+      // Freeze the slot set and its config as soon as the poll leaves draft.
+      const normalizeSlots = (proposals: VoteEntity['proposals'] | undefined) =>
+        activeSchedulingSlots(proposals ?? [])
+          .map((proposal) => ({
+            id: proposal.id,
+            startAt: proposal.timeSlot?.startAt ?? '',
+            endAt: proposal.timeSlot?.endAt ?? '',
+          }))
+          .sort(
+            (a, b) =>
+              a.startAt.localeCompare(b.startAt) || a.id.localeCompare(b.id),
+          );
+      const proposalsChanged =
+        req.body?.proposals !== undefined &&
+        JSON.stringify(normalizeSlots(req.body.proposals)) !==
+          JSON.stringify(normalizeSlots(existing.proposals));
+      const schedulingChanged =
+        req.body?.config?.scheduling !== undefined &&
+        JSON.stringify(
+          normalizeSchedulingConfig(req.body.config.scheduling),
+        ) !== JSON.stringify(normalizeSchedulingConfig(existing.config.scheduling));
+      // Shallow-merge means `config.scheduling: null` would erase the stored
+      // slots while the mode stays SCHEDULING; normalize(null) equals the
+      // defaults, so the value comparison above can miss it. Reject explicitly.
+      // (A mode change is already rejected above for every open vote.)
+      const schedulingDropped =
+        typeof req.body?.config === 'object' &&
+        req.body.config !== null &&
+        'scheduling' in req.body.config &&
+        req.body.config.scheduling === null;
+      if (proposalsChanged || schedulingChanged || schedulingDropped) {
+        return res.status(400).json({
+          error: 'Scheduling slots and mode are locked once the vote is open',
+        });
+      }
+    }
     const vote = await db.updateVote(req.params.id, req.body);
     if (!vote) {
       return res.status(404).json({ error: 'Vote not found' });
@@ -1665,6 +1877,58 @@ app.post('/api/votes/:id/finalize', async (req: Request, res: Response) => {
         finalizedAt: req.body?.finalizedAt || new Date().toISOString(),
         finalizedByUserId: req.body?.finalizedByUserId || vote.ownerId,
       };
+    }
+
+    if (vote.config.mode === 'SCHEDULING') {
+      const requestedWinner = typeof req.body?.winningProposalId === 'string'
+        ? req.body.winningProposalId
+        : null;
+      const activeSlotIds = new Set(
+        activeSchedulingSlots(vote.proposals).map((proposal) => proposal.id),
+      );
+      // A scheduling decision with no availability is not a decision. The
+      // dialog's best-run default would otherwise record the earliest slot even
+      // though nobody answered, so reject it server-side too instead of
+      // trusting the client's guard.
+      const responses = await db.getVoteResponses(vote.id);
+      const hasBallot = responses.some(
+        (response) =>
+          response.proposalId !== null && activeSlotIds.has(response.proposalId),
+      );
+      if (!hasBallot) {
+        return res.status(400).json({ error: 'No submitted availability to finalize' });
+      }
+      if (!requestedWinner || !activeSlotIds.has(requestedWinner)) {
+        return res.status(400).json({
+          error: "Select one of the scheduling vote's active time slots to finalize",
+        });
+      }
+      // Every participant answering "unavailable" still leaves runs in the
+      // tally, but none of them is a time anyone can attend. The results view
+      // reports "no common time" for that data, so the stored outcome must not
+      // announce one. A run is finalizable only with an available or
+      // "if needed" answer, matching the dialog's candidate list.
+      const tally = tallyScheduling(
+        responses,
+        vote.proposals,
+        normalizeSchedulingConfig(vote.config.scheduling),
+      );
+      // Pick the run the moderator actually chose. The dialog names the run's
+      // first slot, so an exact start match must win: several runs overlap, and
+      // a ranking-order `includes` lookup can resolve that start to an earlier
+      // window, storing a winner that contradicts the confirmed summary. Fall
+      // back to `includes` only for a client that names a middle slot.
+      const chosenRun =
+        tally.runs.find((run) => run.slotIds[0] === requestedWinner) ??
+        tally.runs.find((run) => run.slotIds.includes(requestedWinner));
+      if (!chosenRun || !schedulingRunHasAvailability(chosenRun)) {
+        return res.status(400).json({
+          error: 'The selected time has no availability; there is no common time to finalize',
+        });
+      }
+      // Canonicalize to the run's first slot so a client that names a middle
+      // slot still stores the start of the chosen window.
+      outcome = { ...req.body, winningProposalId: chosenRun.slotIds[0] };
     }
 
     const finalized = await db.finalizeVote(req.params.id, outcome);
@@ -2457,6 +2721,34 @@ app.post('/api/votes/:idOrSlug/responses', async (req: Request, res: Response) =
         return res.status(400).json({ error: result.error });
       }
       response = result.response;
+    } else if (vote.config.mode === 'SCHEDULING') {
+      const proposalId =
+        typeof req.body?.proposalId === 'string' ? req.body.proposalId : null;
+      // Resolve the target through the shared slot predicate so this route
+      // cannot accept a slot that the batch and finalize routes reject.
+      const proposal = findActiveSchedulingSlot(vote.proposals, proposalId);
+      if (!proposal) {
+        return res.status(400).json({
+          error:
+            'Scheduling votes require a proposalId for an active time slot',
+        });
+      }
+      const voterToken = req.body?.voterToken;
+      if (!isValidVoterToken(voterToken)) {
+        return res.status(400).json({ error: 'voterToken is required' });
+      }
+      // Build the row explicitly. A scheduling ballot is identified by
+      // (voterToken, proposalId) with no loop, so the id, submittedAt and
+      // userId are server-owned; accepting a client `loopId` would let one
+      // voter mint unlimited rows for the same slot.
+      const attendeeData = schedulingAttendeeDisplayName(vote, req.body);
+      response = await db.createVoteResponse(vote.id, {
+        voterToken,
+        proposalId: proposal.id,
+        loopId: null,
+        value,
+        attendeeData,
+      });
     } else {
       response = await db.createVoteResponse(vote.id, req.body);
     }
@@ -2466,6 +2758,140 @@ app.post('/api/votes/:idOrSlug/responses', async (req: Request, res: Response) =
     console.error('Error creating vote response:', error);
     const message = error instanceof Error ? error.message : String(error);
     res.status(500).json({ error: 'Failed to submit vote', details: message });
+  }
+});
+
+// SCHEDULING sends one availability matrix, not one request per slot. The
+// batch replaces the voter's whole availability for the vote so cleared slots
+// are actually withdrawn.
+app.post('/api/votes/:idOrSlug/responses/batch', async (req: Request, res: Response) => {
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) {
+      return res.status(404).json({ error: 'Vote not found' });
+    }
+    if (vote.config.mode !== 'SCHEDULING') {
+      return res.status(400).json({ error: 'Batch availability is only available for scheduling votes' });
+    }
+    if (vote.config.phase !== 'OPEN') {
+      return res.status(400).json({ error: 'Vote is not open for responses' });
+    }
+    const voterToken = req.body?.voterToken;
+    if (!isValidVoterToken(voterToken)) {
+      return res.status(400).json({ error: 'voterToken is required' });
+    }
+    const rawValues = req.body?.values;
+    if (!rawValues || typeof rawValues !== 'object' || Array.isArray(rawValues)) {
+      return res.status(400).json({ error: 'values must be an object keyed by slot id' });
+    }
+    const entries = Object.entries(rawValues as Record<string, unknown>);
+    if (entries.length > MAX_SCHEDULING_SLOTS) {
+      return res.status(400).json({ error: 'Too many scheduling values' });
+    }
+
+    const activeSlots = new Map(
+      activeSchedulingSlots(vote.proposals).map((proposal) => [
+        proposal.id,
+        proposal,
+      ]),
+    );
+    const clean: Array<{ proposalId: string; value: number }> = [];
+    for (const [proposalId, rawValue] of entries) {
+      if (!activeSlots.has(proposalId)) {
+        return res.status(400).json({ error: 'Scheduling value references an unknown or inactive slot' });
+      }
+      // Do not coerce: `null`, `""` or `[]` become 0 ("if needed") and `true`
+      // becomes 1, turning a malformed payload into a valid availability
+      // answer instead of rejecting it.
+      if (typeof rawValue !== 'number' || !Number.isFinite(rawValue)) {
+        return res.status(400).json({
+          error: 'Scheduling values must be numbers: 1 (available), 0 (if needed) or -1 (unavailable)',
+        });
+      }
+      const valueError = validateVoteResponseValue(vote, rawValue);
+      if (valueError) {
+        return res.status(400).json({ error: valueError });
+      }
+      clean.push({ proposalId, value: rawValue });
+    }
+
+    const attendeeData = schedulingAttendeeDisplayName(vote, req.body);
+
+    // No process-local vote lock here: the read-modify-write is now atomic in
+    // the DB (one transaction plus a per-voter advisory lock), so holding a
+    // per-vote JS lock would needlessly serialize every other voter's batch.
+    const result = await db.replaceVoteResponsesForVoter(
+      vote.id,
+      voterToken,
+      clean.map((entry) => ({
+        proposalId: entry.proposalId,
+        value: entry.value,
+        attendeeData,
+      })),
+      [...activeSlots.keys()],
+    );
+
+    if (result.removedIds.length > 0) {
+      broadcastVoteResponsesRemovedFromYjs(result.removedIds);
+    }
+    broadcastVoteResponsesToYjs(vote, result.responses);
+    // The client refreshes the aggregate matrix after a successful submit and
+    // every other client receives the rows over Yjs, so echoing the whole
+    // (potentially 1000-row) matrix back in the POST body is wasted work.
+    res.status(204).end();
+  } catch (error: unknown) {
+    console.error('Error submitting scheduling availability:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to submit availability', details: message });
+  }
+});
+
+// Rename the voter's claimed display name without touching availability,
+// RSVP metadata, the removal token, or the original submittedAt. The voter's
+// own rows are selected by the withdrawal credential.
+app.post('/api/votes/:idOrSlug/identity', async (req: Request, res: Response) => {
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) {
+      return res.status(404).json({ error: 'Vote not found' });
+    }
+    if (vote.config.mode !== 'ATTENDANCE' && vote.config.mode !== 'SCHEDULING') {
+      return res.status(400).json({
+        error: 'Identity editing is only available for attendance and scheduling votes',
+      });
+    }
+    if (vote.config.phase !== 'OPEN') {
+      return res.status(400).json({ error: 'Vote is not open' });
+    }
+    if (isVoteAnonymous(vote.config)) {
+      return res.status(400).json({ error: 'This vote is anonymous' });
+    }
+    const voterToken = req.body?.voterToken;
+    const displayName = normalizeVoterDisplayName(req.body?.displayName);
+    if (!isValidVoterToken(voterToken) || !displayName) {
+      return res.status(400).json({ error: 'voterToken and displayName are required' });
+    }
+
+    // The DB method reads the target rows and rewrites only `attendeeData`
+    // inside one transaction that holds the same per-voter lock as the
+    // availability batch. A read-modify-write from a pre-lock snapshot could
+    // otherwise resurrect a slot a concurrent batch had just withdrawn.
+    const updated = await withVoteWriteLock(vote.id, () =>
+      db.renameVoteResponsesForVoter(vote.id, voterToken, displayName, {
+        // Attendance names live on the RSVP sentinel row; scheduling names live
+        // on every slot row. `auto` keeps an RSVP that was already hidden hidden.
+        proposalId:
+          vote.config.mode === 'ATTENDANCE' ? EVENT_RSVP_PROPOSAL_ID : null,
+        visibility: vote.config.mode === 'SCHEDULING' ? 'hidden' : 'auto',
+      }),
+    );
+
+    broadcastVoteResponsesToYjs(vote, updated);
+    res.status(204).send();
+  } catch (error: unknown) {
+    console.error('Error updating voter identity:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to update name', details: message });
   }
 });
 
@@ -2546,7 +2972,11 @@ app.delete('/api/votes/:idOrSlug/responses', async (req: Request, res: Response)
 // response submit; reads require a moderator session because the payload
 // reveals unsubmitted choices and participation. Keeping this in memory (with a
 // TTL) means nothing is persisted as a vote and no schema migration is needed.
-const MAX_DRAFT_ENTRIES = 500;
+// Match the scheduling slot cap so a voter who selects every slot of a large
+// poll can still publish the same selection as a live draft. A lower cap would
+// let the batch submit succeed while the draft write was rejected, leaving the
+// moderator's live participation view silently stale.
+const MAX_DRAFT_ENTRIES = MAX_SCHEDULING_SLOTS;
 
 app.post('/api/votes/:idOrSlug/drafts', async (req: Request, res: Response) => {
   try {
@@ -2572,7 +3002,6 @@ app.post('/api/votes/:idOrSlug/drafts', async (req: Request, res: Response) => {
     if (entries.length > MAX_DRAFT_ENTRIES) {
       return res.status(400).json({ error: 'Too many draft entries' });
     }
-
     // Ignore proposals that no longer exist (a stale client may still hold one)
     // but reject values the submit route would refuse, so a draft can never
     // show a state that could not be submitted.
@@ -2592,6 +3021,16 @@ app.post('/api/votes/:idOrSlug/drafts', async (req: Request, res: Response) => {
       voterAlias: voterAlias(vote.id, voterToken),
       participantKey: voteParticipantKey(vote.id, voterToken),
       values: cleanValues,
+      // Only a non-anonymous scheduling poll carries a name on the draft, and
+      // the draft channel is moderator-only, so this never reaches a public
+      // projection. It lets the live participant matrix name someone before
+      // they submit.
+      displayName:
+        vote.config.mode === 'SCHEDULING' && !isVoteAnonymous(vote.config)
+          ? normalizeVoterDisplayName(
+              (req.body as { displayName?: unknown } | undefined)?.displayName,
+            ) || undefined
+          : undefined,
       publisherId: typeof publisherId === 'string' ? publisherId : undefined,
     });
     broadcastVoteDraftRevision(vote.id);
@@ -2644,6 +3083,10 @@ app.get('/api/votes/:idOrSlug/drafts', async (req: Request, res: Response) => {
     }
     // A closed vote must show submitted ballots only, even if a dead tab's
     // draft has not expired yet.
+    // A draft written before anonymity was turned on still holds its name until
+    // the TTL expires. Never re-expose it, matching the results route: turning
+    // anonymity on must not surface names captured while the vote was named.
+    const isAnonymous = isVoteAnonymous(vote.config);
     const drafts =
       vote.config.phase === 'OPEN'
         ? listVoteDrafts(vote.id).map((draft) => ({
@@ -2651,6 +3094,8 @@ app.get('/api/votes/:idOrSlug/drafts', async (req: Request, res: Response) => {
             voterAlias: draft.voterAlias,
             participantId: draft.participantId,
             values: draft.values,
+            // Moderator-only: names an in-progress scheduling participant.
+            displayName: isAnonymous ? undefined : draft.displayName,
             updatedAt: draft.updatedAt,
           }))
         : [];
@@ -2745,6 +3190,23 @@ app.get('/api/votes/:idOrSlug/results', async (req: Request, res: Response) => {
           vote.id,
           responses[index].voterToken,
         );
+      }
+      // Scheduling names are hidden from the public projection, so only the
+      // moderator capability gets them back — and only on a non-anonymous vote.
+      // Turning anonymity on after names were submitted must not re-expose them,
+      // matching how `redactAttendeeDataForVote` drops the name on every other
+      // path. Merge by index to keep the raw name out of every other response
+      // path.
+      if (vote.config.mode === 'SCHEDULING' && !isVoteAnonymous(vote.config)) {
+        for (let index = 0; index < safeResponses.length; index++) {
+          const displayName = responses[index]?.attendeeData?.displayName;
+          if (!displayName) continue;
+          safeResponses[index].attendeeData = {
+            ...(safeResponses[index].attendeeData ?? {}),
+            displayName,
+            visibility: 'hidden',
+          };
+        }
       }
     }
     res.json({ vote, responses: safeResponses, totalVotes: responses.length });

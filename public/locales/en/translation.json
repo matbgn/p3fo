@@ -960,7 +960,8 @@
       "attendance": "Attendance",
       "points": "Points Budget",
       "majorityJudgment": "Majority Judgment",
-      "consentLoop": "Consent Loop"
+      "consentLoop": "Consent Loop",
+      "scheduling": "Scheduling"
     },
     "comparative": {
       "title": "Comparative Prioritization",

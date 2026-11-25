@@ -117,3 +117,42 @@ describe('mergeDraftResponses - collision-resistant identity', () => {
     expect(merged[0].value).toBe(0);
   });
 });
+
+describe('mergeDraftResponses - attendee identity', () => {
+  it('keeps the submitted display name when a newer draft replaces the row', () => {
+    const submitted = {
+      ...submittedRow(1, '2026-01-01T00:05:00.000Z'),
+      voterAlias: alias,
+      attendeeData: { displayName: 'Alice Example', visibility: 'hidden' as const },
+    };
+    const draft = draftRow(0, '2026-01-01T00:10:00.000Z');
+
+    const merged = mergeDraftResponses(voteId, [submitted], [draft]);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0].value).toBe(0);
+    expect(merged[0].attendeeData?.displayName).toBe('Alice Example');
+    expect(merged[0].attendeeData?.visibility).toBe('hidden');
+  });
+
+  it('leaves a draft without a submitted row untouched', () => {
+    const merged = mergeDraftResponses(voteId, [], [draftRow(0, '2026-01-01T00:10:00.000Z')]);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0].attendeeData).toBeUndefined();
+  });
+});
+
+describe('mergeDraftResponses - draft-carried name', () => {
+  it('keeps a name carried on the draft when there is no submission yet', () => {
+    const draft = {
+      ...draftRow(1, '2026-01-01T00:10:00.000Z'),
+      attendeeData: { displayName: 'Dave Draft', visibility: 'hidden' as const },
+    };
+
+    const merged = mergeDraftResponses(voteId, [], [draft]);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0].attendeeData?.displayName).toBe('Dave Draft');
+  });
+});

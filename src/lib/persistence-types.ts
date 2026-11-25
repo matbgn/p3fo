@@ -406,10 +406,20 @@ export type TimeFrame = '3mo' | '6mo' | '1y' | '2y' | '4y';
 export type VotingMode = 'THUMBS_UP' | 'THUMBS_UD_NEUTRAL' | 'POINTS' | 'MAJORITY_JUDGMENT';
 export type VotingPhase = 'IDLE' | 'VOTING' | 'REVEALED';
 
-export type VoteMode = VotingMode | 'ATTENDANCE' | 'CONSENT_LOOP' | 'COMPARATIVE_PRIORITIZATION';
+export type VoteMode =
+  | VotingMode
+  | 'ATTENDANCE'
+  | 'CONSENT_LOOP'
+  | 'COMPARATIVE_PRIORITIZATION'
+  | 'SCHEDULING';
 export type RankingEngine = 'bt-k2' | 'bt-k4';
 export type VoteKind = 'consultation' | 'decision';
 export type VotePhase = 'IDLE' | 'OPEN' | 'CLOSED' | 'FINALIZED';
+
+export interface SchedulingTimeSlot {
+  startAt: string;
+  endAt: string;
+}
 
 export interface VoteProposal {
   id: string;
@@ -418,6 +428,8 @@ export interface VoteProposal {
   infoUrl?: string;
   position: number;
   active: boolean;
+  /** Candidate slot for SCHEDULING votes. */
+  timeSlot?: SchedulingTimeSlot;
 }
 
 export interface AttendanceQuestion {
@@ -457,6 +469,27 @@ export interface AttendanceResponseData {
   answers?: Record<string, string>;
 }
 
+export interface SchedulingConfig {
+  /** Whether participants pick time slots within a day or whole days. Default: 'time'. */
+  unit?: 'time' | 'day';
+  /** IANA time zone the candidate slots are generated in. */
+  timeZone: string;
+  /** Slot granularity in minutes. One of 15, 30 or 60. */
+  granularityMinutes: number;
+  /** Meeting length in minutes; a multiple of the granularity. */
+  durationMinutes: number;
+  /** Local calendar dates (YYYY-MM-DD). */
+  dates: string[];
+  /** Earliest local time of a candidate slot (HH:mm). */
+  dayStart: string;
+  /** Latest local time a candidate slot may end (HH:mm). */
+  dayEnd: string;
+  /** Let voters answer "if needed" (value 0). */
+  allowIfNeeded?: boolean;
+  /** Hard cap on generated candidate slots. */
+  maxSlots?: number;
+}
+
 export interface VoteConfig {
   mode: VoteMode;
   kind: VoteKind;
@@ -480,6 +513,8 @@ export interface VoteConfig {
   allowTies?: boolean;
   /** Event RSVP settings for ATTENDANCE votes. */
   attendance?: AttendanceConfig;
+  /** Candidate slot settings for SCHEDULING votes. */
+  scheduling?: SchedulingConfig;
 }
 
 export interface VoteRankingComparison {
@@ -597,6 +632,13 @@ export interface VoteDraftEntity {
   participantId?: string;
   /** Local selections keyed by proposal id. */
   values: Record<string, number>;
+  /**
+   * Display name the participant chose for a non-anonymous vote, carried on the
+   * moderator-only draft channel so the live participant matrix can name someone
+   * who has not submitted yet. Never public: drafts are read only through the
+   * moderator capability.
+   */
+  displayName?: string;
   updatedAt: string;
   /** Per-tab writer id so one tab cannot delete another tab's draft. */
   publisherId?: string;

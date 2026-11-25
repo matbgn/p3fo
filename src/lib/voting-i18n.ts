@@ -1,3 +1,5 @@
+import i18next from "i18next";
+
 type VotingStrings = {
   phases: Record<string, string>;
   kinds: Record<string, string>;
@@ -42,6 +44,9 @@ type VotingStrings = {
     saveName: string;
     nameRequired: string;
     eventInfo: string;
+    votingAs: string;
+    changeName: string;
+    nameAttachedNote: string;
   };
   attendanceEditor: {
     sectionTitle: string;
@@ -77,6 +82,79 @@ type VotingStrings = {
     required: string;
     addQuestion: string;
     removeQuestion: string;
+  };
+  scheduling: {
+    timezone: string;
+    yourTimezone: string;
+    time: string;
+    myAvailability: string;
+    groupAvailability: string;
+    dateRange: string;
+    dailyStart: string;
+    dailyEnd: string;
+    duration: string;
+    minutes: string;
+    slotCount: string;
+    noSlots: string;
+    available: string;
+    ifNeeded: string;
+    unavailable: string;
+    selectAllAvailable: string;
+    clearAll: string;
+    bestTimes: string;
+    bestDays: string;
+    noCommonTime: string;
+    allDay: string;
+    dayCount: string;
+    selectDaysHelp: string;
+    days: string;
+    heatmap: string;
+    participants: string;
+    addToCalendar: string;
+    winningTime: string;
+    noWinningTime: string;
+    helpText: string;
+    selectSlotsHelp: string;
+    submitError: string;
+    namePrompt: string;
+    namePromptHelp: string;
+  };
+  schedulingEditor: {
+    sectionTitle: string;
+    askFor: string;
+    unitTime: string;
+    unitDay: string;
+    dayModeHelp: string;
+    timezone: string;
+    timezoneHelp: string;
+    dates: string;
+    datesHelp: string;
+    dateRange: string;
+    applyRange: string;
+    startDate: string;
+    endDate: string;
+    weekdays: string;
+    weekdaysHelp: string;
+    dailyStart: string;
+    dailyEnd: string;
+    granularity: string;
+    granularityHelp: string;
+    duration: string;
+    durationHelp: string;
+    allowIfNeeded: string;
+    maxSlots: string;
+    maxSlotsHelp: string;
+    generateSlots: string;
+    slotCount: string;
+    preview: string;
+    noSlots: string;
+    removeSlot: string;
+    addDate: string;
+    removeDate: string;
+    minutesUnit: string;
+    fifteenMinutes: string;
+    thirtyMinutes: string;
+    sixtyMinutes: string;
   };
   mjGrades: Record<number, string>;
   buttons: {
@@ -291,6 +369,7 @@ const en: VotingStrings = {
     MAJORITY_JUDGMENT: "Majority Judgment",
     CONSENT_LOOP: "Consent Loop",
     COMPARATIVE_PRIORITIZATION: "Comparative Prioritization",
+    SCHEDULING: "Scheduling",
   },
   modeDescriptions: {
     THUMBS_UP: "Simple yes vote per proposal",
@@ -300,6 +379,7 @@ const en: VotingStrings = {
     MAJORITY_JUDGMENT: "Grade each proposal on a scale",
     CONSENT_LOOP: "Iterative rounds until adopted or blocked",
     COMPARATIVE_PRIORITIZATION: "Rank proposals through adaptive pairwise comparisons",
+    SCHEDULING: "Find the best time in candidate slots",
   },
   attendanceOptions: {
     going: "Going",
@@ -339,6 +419,9 @@ const en: VotingStrings = {
     saveName: "Save name",
     nameRequired: "Please enter a display name",
     eventInfo: "Event details",
+    votingAs: "You're voting as",
+    changeName: "Change name",
+    nameAttachedNote: "This name is attached to your responses.",
   },
   attendanceEditor: {
     sectionTitle: "Event settings",
@@ -374,6 +457,80 @@ const en: VotingStrings = {
     required: "Required",
     addQuestion: "Add question",
     removeQuestion: "Remove",
+  },
+  scheduling: {
+    timezone: "Time zone",
+    yourTimezone: "Your time zone",
+    time: "Time",
+    myAvailability: "My availability",
+    groupAvailability: "Group availability",
+    dateRange: "Date range",
+    dailyStart: "Daily start",
+    dailyEnd: "Daily end",
+    duration: "Meeting length",
+    minutes: "minutes",
+    slotCount: "{{count}} slots",
+    noSlots: "No slots yet",
+    available: "Available",
+    ifNeeded: "If needed",
+    unavailable: "Unavailable",
+    selectAllAvailable: "Select all available",
+    clearAll: "Clear all",
+    bestTimes: "Best times",
+    bestDays: "Best days",
+    noCommonTime: "No common availability yet.",
+    allDay: "All day",
+    dayCount: "{{count}} days",
+    selectDaysHelp: "Click a day to toggle it; drag to paint the selected status.",
+    days: "days",
+    heatmap: "Heatmap",
+    participants: "Participants",
+    addToCalendar: "Add to calendar",
+    winningTime: "Winning time",
+    noWinningTime: "No times available",
+    helpText: "Mark each slot as available, if needed, or unavailable.",
+    selectSlotsHelp: "Click a slot to toggle it; drag to paint the selected status.",
+    submitError: "Could not save your availability. Please try again.",
+    namePrompt: "What name should others see?",
+    namePromptHelp: "Your name is only shown to the organizer and moderators.",
+  },
+  schedulingEditor: {
+    sectionTitle: "Scheduling settings",
+    askFor: "Ask for",
+    unitTime: "Time slots",
+    unitDay: "Whole days",
+    dayModeHelp:
+      "Voters pick whole days. Daily start and end, slot length and meeting length are not used.",
+    timezone: "Time zone",
+    timezoneHelp: "Slots are generated in this IANA time zone.",
+    dates: "Dates",
+    datesHelp: "Add each local day that can host the meeting.",
+    dateRange: "Date range",
+    applyRange: "Apply range",
+    startDate: "Start date",
+    endDate: "End date",
+    weekdays: "Weekdays",
+    weekdaysHelp: "Only include these weekdays inside the range.",
+    dailyStart: "Daily start",
+    dailyEnd: "Daily end",
+    granularity: "Slot length",
+    granularityHelp: "Each candidate slot is this long.",
+    duration: "Meeting length",
+    durationHelp: "Voters must be free for this many consecutive slots.",
+    allowIfNeeded: "Allow “if needed” answers",
+    maxSlots: "Maximum slots",
+    maxSlotsHelp: "Generated slots are capped at this number (1–1000).",
+    generateSlots: "Generate slots",
+    slotCount: "{{count}} slots",
+    preview: "Preview",
+    noSlots: "No slots generated yet.",
+    removeSlot: "Remove slot",
+    addDate: "Add date",
+    removeDate: "Remove",
+    minutesUnit: "min",
+    fifteenMinutes: "15 minutes",
+    thirtyMinutes: "30 minutes",
+    sixtyMinutes: "60 minutes",
   },
   mjGrades: {
     4: "Excellent",
@@ -595,6 +752,7 @@ const fr: VotingStrings = {
     MAJORITY_JUDGMENT: "Jugement majoritaire",
     CONSENT_LOOP: "Boucle de consentement",
     COMPARATIVE_PRIORITIZATION: "Priorisation comparative",
+    SCHEDULING: "Planification",
   },
   modeDescriptions: {
     THUMBS_UP: "Vote simple par proposition",
@@ -604,6 +762,7 @@ const fr: VotingStrings = {
     MAJORITY_JUDGMENT: "Noter chaque proposition sur une \u00e9chelle",
     CONSENT_LOOP: "Tours it\u00e9ratifs jusqu'\u00e0 adoption ou blocage",
     COMPARATIVE_PRIORITIZATION: "Classer les propositions par comparaisons par paires adaptatives",
+    SCHEDULING: "Trouver le meilleur cr\u00e9neau parmi les disponibilit\u00e9s",
   },
   attendanceOptions: {
     going: "Pr\u00e9sent",
@@ -643,6 +802,9 @@ const fr: VotingStrings = {
     saveName: "Enregistrer le nom",
     nameRequired: "Veuillez saisir un nom affich\u00e9",
     eventInfo: "D\u00e9tails de l'\u00e9v\u00e9nement",
+    votingAs: "Vous votez en tant que",
+    changeName: "Changer de nom",
+    nameAttachedNote: "Ce nom est associ\u00e9 \u00e0 vos r\u00e9ponses.",
   },
   attendanceEditor: {
     sectionTitle: "Param\u00e8tres de l'\u00e9v\u00e9nement",
@@ -678,6 +840,80 @@ const fr: VotingStrings = {
     required: "Obligatoire",
     addQuestion: "Ajouter une question",
     removeQuestion: "Supprimer",
+  },
+  scheduling: {
+    timezone: "Fuseau horaire",
+    yourTimezone: "Votre fuseau horaire",
+    time: "Heure",
+    myAvailability: "Mes disponibilités",
+    groupAvailability: "Disponibilités du groupe",
+    dateRange: "Plage de dates",
+    dailyStart: "D\u00e9but quotidien",
+    dailyEnd: "Fin quotidienne",
+    duration: "Dur\u00e9e de la r\u00e9union",
+    minutes: "minutes",
+    slotCount: "{{count}} cr\u00e9neaux",
+    noSlots: "Aucun cr\u00e9neau pour le moment",
+    available: "Disponible",
+    ifNeeded: "Si n\u00e9cessaire",
+    unavailable: "Indisponible",
+    selectAllAvailable: "Tout marquer disponible",
+    clearAll: "Tout effacer",
+    bestTimes: "Meilleurs moments",
+    bestDays: "Meilleurs jours",
+    noCommonTime: "Aucune disponibilit\u00e9 commune pour le moment.",
+    allDay: "Journ\u00e9e enti\u00e8re",
+    dayCount: "{{count}} jours",
+    selectDaysHelp: "Cliquez sur un jour pour le basculer ; glissez pour appliquer le statut s\u00e9lectionn\u00e9.",
+    days: "jours",
+    heatmap: "Carte de chaleur",
+    participants: "Participants",
+    addToCalendar: "Ajouter au calendrier",
+    winningTime: "Cr\u00e9neau retenu",
+    noWinningTime: "Aucun cr\u00e9neau disponible",
+    helpText: "Indiquez chaque cr\u00e9neau comme disponible, si n\u00e9cessaire ou indisponible.",
+    selectSlotsHelp: "Cliquez sur un cr\u00e9neau pour le basculer ; glissez pour appliquer le statut s\u00e9lectionn\u00e9.",
+    submitError: "Impossible d'enregistrer vos disponibilit\u00e9s. Veuillez r\u00e9essayer.",
+    namePrompt: "Quel nom les autres doivent-ils voir ?",
+    namePromptHelp: "Votre nom n'est visible que par l'organisateur et les mod\u00e9rateurs.",
+  },
+  schedulingEditor: {
+    sectionTitle: "Param\u00e8tres de planification",
+    askFor: "Demander",
+    unitTime: "Cr\u00e9neaux horaires",
+    unitDay: "Journ\u00e9es enti\u00e8res",
+    dayModeHelp:
+      "Les votants choisissent des journ\u00e9es enti\u00e8res ; le d\u00e9but, la fin, la dur\u00e9e des cr\u00e9neaux et la dur\u00e9e de la r\u00e9union ne sont pas utilis\u00e9s.",
+    timezone: "Fuseau horaire",
+    timezoneHelp: "Les cr\u00e9neaux sont g\u00e9n\u00e9r\u00e9s dans ce fuseau IANA.",
+    dates: "Dates",
+    datesHelp: "Ajoutez chaque jour local pouvant accueillir la r\u00e9union.",
+    dateRange: "Plage de dates",
+    applyRange: "Appliquer la plage",
+    startDate: "Date de d\u00e9but",
+    endDate: "Date de fin",
+    weekdays: "Jours de la semaine",
+    weekdaysHelp: "N'inclure que ces jours dans la plage.",
+    dailyStart: "D\u00e9but quotidien",
+    dailyEnd: "Fin quotidienne",
+    granularity: "Dur\u00e9e du cr\u00e9neau",
+    granularityHelp: "Chaque cr\u00e9neau candidat a cette dur\u00e9e.",
+    duration: "Dur\u00e9e de la r\u00e9union",
+    durationHelp: "Les votants doivent \u00eatre libres pendant ces cr\u00e9neaux cons\u00e9cutifs.",
+    allowIfNeeded: "Autoriser les r\u00e9ponses \u00ab si n\u00e9cessaire \u00bb",
+    maxSlots: "Cr\u00e9neaux maximum",
+    maxSlotsHelp: "Les cr\u00e9neaux g\u00e9n\u00e9r\u00e9s sont limit\u00e9s \u00e0 ce nombre (1\u20131000).",
+    generateSlots: "G\u00e9n\u00e9rer les cr\u00e9neaux",
+    slotCount: "{{count}} cr\u00e9neaux",
+    preview: "Aper\u00e7u",
+    noSlots: "Aucun cr\u00e9neau g\u00e9n\u00e9r\u00e9 pour le moment.",
+    removeSlot: "Supprimer le cr\u00e9neau",
+    addDate: "Ajouter une date",
+    removeDate: "Supprimer",
+    minutesUnit: "min",
+    fifteenMinutes: "15 minutes",
+    thirtyMinutes: "30 minutes",
+    sixtyMinutes: "60 minutes",
   },
   mjGrades: {
     4: "Excellent",
@@ -899,6 +1135,7 @@ const de: VotingStrings = {
     MAJORITY_JUDGMENT: "Mehrheitsurteil",
     CONSENT_LOOP: "Zustimmungs-Schleife",
     COMPARATIVE_PRIORITIZATION: "Vergleichende Priorisierung",
+    SCHEDULING: "Terminplanung",
   },
   modeDescriptions: {
     THUMBS_UP: "Einfache Ja-Stimme pro Vorschlag",
@@ -908,6 +1145,7 @@ const de: VotingStrings = {
     MAJORITY_JUDGMENT: "Jeden Vorschlag auf einer Skala bewerten",
     CONSENT_LOOP: "Iterative Runden bis angenommen oder blockiert",
     COMPARATIVE_PRIORITIZATION: "Vorschläge durch adaptive Paarvergleiche ordnen",
+    SCHEDULING: "Die beste Zeit aus Kandidaten-Slots finden",
   },
   attendanceOptions: {
     going: "Dabei",
@@ -947,6 +1185,9 @@ const de: VotingStrings = {
     saveName: "Namen speichern",
     nameRequired: "Bitte geben Sie einen Anzeige-Namen ein",
     eventInfo: "Veranstaltungsdetails",
+    votingAs: "Sie stimmen ab als",
+    changeName: "Namen \u00e4ndern",
+    nameAttachedNote: "Dieser Name ist mit Ihren Antworten verkn\u00fcpft.",
   },
   attendanceEditor: {
     sectionTitle: "Veranstaltungseinstellungen",
@@ -982,6 +1223,80 @@ const de: VotingStrings = {
     required: "Erforderlich",
     addQuestion: "Frage hinzuf\u00fcgen",
     removeQuestion: "Entfernen",
+  },
+  scheduling: {
+    timezone: "Zeitzone",
+    yourTimezone: "Deine Zeitzone",
+    time: "Zeit",
+    myAvailability: "Meine Verfügbarkeit",
+    groupAvailability: "Gruppenverfügbarkeit",
+    dateRange: "Datumsbereich",
+    dailyStart: "T\u00e4glicher Beginn",
+    dailyEnd: "T\u00e4gliches Ende",
+    duration: "Besprechungsdauer",
+    minutes: "Minuten",
+    slotCount: "{{count}} Slots",
+    noSlots: "Noch keine Slots",
+    available: "Verf\u00fcgbar",
+    ifNeeded: "Falls n\u00f6tig",
+    unavailable: "Nicht verf\u00fcgbar",
+    selectAllAvailable: "Alle als verf\u00fcgbar markieren",
+    clearAll: "Alle leeren",
+    bestTimes: "Beste Zeiten",
+    bestDays: "Beste Tage",
+    noCommonTime: "Noch keine gemeinsame Verf\u00fcgbarkeit.",
+    allDay: "Ganzt\u00e4gig",
+    dayCount: "{{count}} Tage",
+    selectDaysHelp: "Klicken Sie auf einen Tag, um ihn umzuschalten; ziehen Sie, um den gew\u00e4hlten Status zu malen.",
+    days: "Tage",
+    heatmap: "Heatmap",
+    participants: "Teilnehmende",
+    addToCalendar: "Zum Kalender hinzuf\u00fcgen",
+    winningTime: "Gew\u00e4hlte Zeit",
+    noWinningTime: "Keine Zeiten verf\u00fcgbar",
+    helpText: "Markieren Sie jeden Slot als verf\u00fcgbar, falls n\u00f6tig oder nicht verf\u00fcgbar.",
+    selectSlotsHelp: "Klicken Sie auf einen Slot, um ihn umzuschalten; ziehen Sie, um den gew\u00e4hlten Status zu malen.",
+    submitError: "Ihre Verf\u00fcgbarkeit konnte nicht gespeichert werden. Bitte versuchen Sie es erneut.",
+    namePrompt: "Welchen Namen sollen andere sehen?",
+    namePromptHelp: "Ihr Name ist nur f\u00fcr die Organisation und Moderierende sichtbar.",
+  },
+  schedulingEditor: {
+    sectionTitle: "Terminplanungs-Einstellungen",
+    askFor: "Abfragen",
+    unitTime: "Zeitfenster",
+    unitDay: "Ganze Tage",
+    dayModeHelp:
+      "Abstimmende w\u00e4hlen ganze Tage; t\u00e4glicher Beginn, Ende, Slot-L\u00e4nge und Besprechungsdauer werden nicht verwendet.",
+    timezone: "Zeitzone",
+    timezoneHelp: "Slots werden in dieser IANA-Zeitzone generiert.",
+    dates: "Daten",
+    datesHelp: "F\u00fcgen Sie jeden lokalen Tag hinzu, an dem die Besprechung stattfinden kann.",
+    dateRange: "Datumsbereich",
+    applyRange: "Bereich anwenden",
+    startDate: "Startdatum",
+    endDate: "Enddatum",
+    weekdays: "Wochentage",
+    weekdaysHelp: "Nur diese Wochentage innerhalb des Bereichs einbeziehen.",
+    dailyStart: "T\u00e4glicher Beginn",
+    dailyEnd: "T\u00e4gliches Ende",
+    granularity: "Slot-L\u00e4nge",
+    granularityHelp: "Jeder Kandidaten-Slot ist so lang.",
+    duration: "Besprechungsdauer",
+    durationHelp: "Abstimmende m\u00fcssen \u00fcber diese aufeinanderfolgenden Slots frei sein.",
+    allowIfNeeded: "\u201eFalls n\u00f6tig\u201c-Antworten erlauben",
+    maxSlots: "Maximale Slots",
+    maxSlotsHelp: "Generierte Slots sind auf diese Zahl begrenzt (1\u20131000).",
+    generateSlots: "Slots generieren",
+    slotCount: "{{count}} Slots",
+    preview: "Vorschau",
+    noSlots: "Noch keine Slots generiert.",
+    removeSlot: "Slot entfernen",
+    addDate: "Datum hinzuf\u00fcgen",
+    removeDate: "Entfernen",
+    minutesUnit: "Min.",
+    fifteenMinutes: "15 Minuten",
+    thirtyMinutes: "30 Minuten",
+    sixtyMinutes: "60 Minuten",
   },
   mjGrades: {
     4: "Ausgezeichnet",
@@ -1182,26 +1497,51 @@ const de: VotingStrings = {
 
 type Locale = "en" | "fr" | "de";
 
+/**
+ * `getVotingStrings()` runs from render bodies, including once per cell of the
+ * scheduling participant matrix (thousands of calls per render), and the
+ * persisted locale is read through a synchronous `localStorage` call. Cache the
+ * resolved locale and drop the cache whenever the app language changes, so the
+ * public vote still follows the LanguageSwitcher without paying a storage read
+ * per call.
+ */
+let cachedLocale: Locale | null = null;
+i18next.on("languageChanged", () => {
+  cachedLocale = null;
+});
+
 function detectLocale(): Locale {
-  const lang = navigator?.language?.toLowerCase() ?? "en";
-  if (lang.startsWith("fr")) return "fr";
-  if (lang.startsWith("de")) return "de";
-  return "en";
+  if (cachedLocale) return cachedLocale;
+  // The app shell initializes i18next with the localStorage detector (key:
+  // i18nextLng), so the public vote follows the language picked anywhere else.
+  // Read it from the instance when it has initialized, and only fall back to
+  // the persisted value directly before init (and in tests).
+  let lang = i18next.resolvedLanguage ?? i18next.language ?? "";
+  if (!lang) {
+    try {
+      lang = localStorage.getItem("i18nextLng") ?? "";
+    } catch {
+      // localStorage can be unavailable in private contexts and tests.
+    }
+  }
+  if (!lang) lang = navigator?.language ?? "en";
+  const normalized = lang.toLowerCase();
+  cachedLocale = normalized.startsWith("fr")
+    ? "fr"
+    : normalized.startsWith("de")
+      ? "de"
+      : "en";
+  return cachedLocale;
 }
 
 const strings: Record<Locale, VotingStrings> = { en, fr, de };
 
-let cachedLocale: Locale | null = null;
-
 export function getVotingStrings(locale?: Locale): VotingStrings {
-  if (locale) return strings[locale];
-  if (!cachedLocale) cachedLocale = detectLocale();
-  return strings[cachedLocale];
+  return strings[locale ?? detectLocale()];
 }
 
 export function useVotingLocale(): Locale {
-  if (!cachedLocale) cachedLocale = detectLocale();
-  return cachedLocale;
+  return detectLocale();
 }
 
 export type { VotingStrings, Locale };

@@ -12,7 +12,9 @@ import { LoopRoundProposalTooltip } from "./LoopRoundProposalTooltip";
 import { ProposalContentDisplay } from "./ProposalContentDisplay";
 import { PartialRankingResults } from "./PartialRankingResults";
 import { AttendanceRsvpSummary } from "./AttendanceRsvpSummary";
+import { SchedulingSummary } from "./SchedulingSummary";
 import { attendancePartySize, summarizeAttendance } from "@/lib/attendance";
+import { normalizeSchedulingConfig, tallyScheduling } from "@/lib/scheduling";
 
 interface VoteResultsProps {
   vote: VoteEntity;
@@ -212,6 +214,67 @@ export const VoteOutcomeBanner: React.FC<{ vote: VoteEntity }> = ({ vote }) => {
   );
 };
 
+/**
+ * Shared results header: phase/mode/kind badges, the outcome banner and the
+ * voter/joined/comments counters. Both the generic and the scheduling branch
+ * render it, so a counter or the draft hint cannot silently disappear from one
+ * mode's results.
+ */
+const VoteResultsHeader: React.FC<{
+  vote: VoteEntity;
+  voters: number;
+  joinedCount: number;
+  commentsCount: number;
+  hasDrafts: boolean;
+  draftCount: number;
+}> = ({ vote, voters, joinedCount, commentsCount, hasDrafts, draftCount }) => {
+  const t = getVotingStrings();
+  const { t: tt } = useTranslation();
+  return (
+    <>
+      <div className="flex items-center gap-3 flex-wrap">
+        <Badge variant={PHASE_VARIANTS[vote.config.phase] || "secondary"}>
+          {t.phases[vote.config.phase] || vote.config.phase}
+        </Badge>
+        <Badge variant="outline">{VOTING_MODES_LABELS[vote.config.mode]}</Badge>
+        <Badge variant="outline">{vote.config.kind === "decision" ? t.kinds.decision : t.kinds.consultation}</Badge>
+        {hasDrafts && (
+          <Badge variant="secondary">{tt("voting.draftResults")}</Badge>
+        )}
+      </div>
+
+      {vote.outcome && (
+        <VoteOutcomeBanner vote={vote} />
+      )}
+
+      <div className="flex gap-4 text-sm text-gray-500">
+        <span className="flex items-center gap-1">
+          <Users className="w-4 h-4" />
+          {voters} {voters !== 1 ? t.labels.voters : t.labels.voter}
+        </span>
+        {joinedCount > voters && (
+          <span className="flex items-center gap-1 text-blue-700">
+            <Users className="w-4 h-4" />
+            {tt("voting.joinedCount", { count: joinedCount })}
+          </span>
+        )}
+        {commentsCount > 0 && (
+          <span className="flex items-center gap-1">
+            <MessageSquare className="w-4 h-4" />
+            {commentsCount} {commentsCount !== 1 ? t.labels.comments : t.labels.comment}
+          </span>
+        )}
+      </div>
+
+      {hasDrafts && (
+        <p className="text-xs text-amber-700">
+          {tt("voting.draftIncludedHint", { count: draftCount })}
+        </p>
+      )}
+    </>
+  );
+};
+
 export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, moderatorView = false }) => {
   const t = getVotingStrings();
   const { t: tt } = useTranslation();
@@ -269,6 +332,21 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
           })
         : null,
     [vote.config.mode, vote.config.allowFreeText, responses, isAnonymous],
+  );
+
+  // Scheduling results are aggregate-only for the public page but include the
+  // participant × slot matrix in the moderator view. One projection is shared
+  // by the header count and the summary body.
+  const schedulingConfig = React.useMemo(
+    () => normalizeSchedulingConfig(vote.config.scheduling),
+    [vote.config.scheduling],
+  );
+  const schedulingTally = React.useMemo(
+    () =>
+      vote.config.mode === "SCHEDULING"
+        ? tallyScheduling(responses, vote.proposals, schedulingConfig)
+        : null,
+    [vote.config.mode, vote.proposals, responses, schedulingConfig],
   );
 
   const totalVoters = new Set(responses.map(identityOfResponse)).size;
@@ -406,47 +484,45 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
     );
   }
 
+  if (vote.config.mode === "SCHEDULING") {
+    const tally = schedulingTally;
+    return (
+      <div className="space-y-4">
+        <VoteResultsHeader
+          vote={vote}
+          voters={tally?.totalVoters ?? 0}
+          joinedCount={joinedCount}
+          commentsCount={commentsCount}
+          hasDrafts={hasDrafts}
+          draftCount={draftCount}
+        />
+
+        {isLoading ? (
+          <p className="text-sm text-gray-400">{t.messages.loadingResults}</p>
+        ) : responses.length === 0 || !tally || tally.totalVoters === 0 ? (
+          <p className="text-sm text-gray-400">{t.messages.noVotesYet}</p>
+        ) : (
+          <SchedulingSummary
+            vote={vote}
+            responses={responses}
+            tally={tally}
+            moderatorView={moderatorView}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3 flex-wrap">
-        <Badge variant={PHASE_VARIANTS[vote.config.phase] || "secondary"}>
-          {t.phases[vote.config.phase] || vote.config.phase}
-        </Badge>
-        <Badge variant="outline">{VOTING_MODES_LABELS[vote.config.mode]}</Badge>
-        <Badge variant="outline">{vote.config.kind === "decision" ? t.kinds.decision : t.kinds.consultation}</Badge>
-        {hasDrafts && (
-          <Badge variant="secondary">{tt("voting.draftResults")}</Badge>
-        )}
-      </div>
-
-      {vote.outcome && (
-        <VoteOutcomeBanner vote={vote} />
-      )}
-
-      <div className="flex gap-4 text-sm text-gray-500">
-        <span className="flex items-center gap-1">
-          <Users className="w-4 h-4" />
-          {totalVoters} {totalVoters !== 1 ? t.labels.voters : t.labels.voter}
-        </span>
-        {joinedCount > totalVoters && (
-          <span className="flex items-center gap-1 text-blue-700">
-            <Users className="w-4 h-4" />
-            {tt("voting.joinedCount", { count: joinedCount })}
-          </span>
-        )}
-        {commentsCount > 0 && (
-          <span className="flex items-center gap-1">
-            <MessageSquare className="w-4 h-4" />
-            {commentsCount} {commentsCount !== 1 ? t.labels.comments : t.labels.comment}
-          </span>
-        )}
-      </div>
-
-      {hasDrafts && (
-        <p className="text-xs text-amber-700">
-          {tt("voting.draftIncludedHint", { count: draftCount })}
-        </p>
-      )}
+      <VoteResultsHeader
+        vote={vote}
+        voters={totalVoters}
+        joinedCount={joinedCount}
+        commentsCount={commentsCount}
+        hasDrafts={hasDrafts}
+        draftCount={draftCount}
+      />
 
       {isLoading ? (
         <p className="text-sm text-gray-400">{t.messages.loadingResults}</p>

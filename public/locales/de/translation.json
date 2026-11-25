@@ -960,7 +960,8 @@
       "attendance": "Teilnahme",
       "points": "Punkte-Budget",
       "majorityJudgment": "Major Judgment",
-      "consentLoop": "Zustimmungs-Schleife"
+      "consentLoop": "Zustimmungs-Schleife",
+      "scheduling": "Terminplanung"
     },
     "comparative": {
       "title": "Vergleichende Priorisierung",

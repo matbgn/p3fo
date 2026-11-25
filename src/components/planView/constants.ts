@@ -16,7 +16,8 @@ export const VOTING_MODES_LABELS = {
     'POINTS': 'Points Budget',
     'MAJORITY_JUDGMENT': 'Majority Judgment',
     'CONSENT_LOOP': 'Consent Loop',
-    'COMPARATIVE_PRIORITIZATION': 'Comparative Prioritization'
+    'COMPARATIVE_PRIORITIZATION': 'Comparative Prioritization',
+    'SCHEDULING': 'Scheduling'
 };
 
 const MJ_GRADE_KEYS: Record<number, string> = {
@@ -39,6 +40,7 @@ const VOTING_MODE_KEYS: Record<string, string> = {
     'POINTS': 'voting.mode.points',
     'MAJORITY_JUDGMENT': 'voting.mode.majorityJudgment',
     'CONSENT_LOOP': 'voting.mode.consentLoop',
+    'SCHEDULING': 'voting.mode.scheduling',
 };
 
 export function votingModeLabel(t: TFunction, mode: string): string {

@@ -398,10 +398,11 @@ const VoteDetailPanel: React.FC<{
   React.useEffect(() => {
     if (moderatorsLoading || activeModeratorToken) return;
     if (activeDetailTab !== "results" && activeDetailTab !== "participation") return;
-    // Only an OPEN vote has live drafts/presence to read. Every mode that
-    // publishes presence needs the capability, including consent-loop votes:
-    // the participation tab shows joined-but-not-voting participants there too.
-    if (vote.config.phase !== "OPEN") return;
+    // Results and participation only exist once the vote has left draft, and
+    // hidden scheduling names stay hidden from the public projection in every
+    // phase. The facilitator view therefore needs a capability for closed and
+    // finalized votes too, not only while the vote is OPEN for live drafts.
+    if (vote.config.phase === "IDLE") return;
     if (ensuredModeratorRef.current) return;
     ensuredModeratorRef.current = true;
     void ensureActiveModerator("Owner").then((moderator) => {
@@ -732,9 +733,13 @@ const VotingPage: React.FC = () => {
   const handlePhaseChange = async (id: string, phase: VoteEntity["config"]["phase"]) => {
     const vote = votes.find((v) => v.id === id);
     if (!vote) return;
-    await updateVote(id, {
+    const updated = await updateVote(id, {
       config: { ...vote.config, phase },
     });
+    // Do not flip the local phase when the server rejects the transition (for
+    // example opening a scheduling poll whose slot set cannot fit one meeting);
+    // the list would otherwise show OPEN for a vote that is still IDLE.
+    if (!updated) return;
     if (selectedVote?.id === id) {
       setSelectedVote({ ...selectedVote, config: { ...selectedVote.config, phase } });
     }

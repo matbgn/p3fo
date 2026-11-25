@@ -63,7 +63,30 @@ function stripPrivateAttendeeFields(
     removalToken: _removalToken,
     ...rest
   } = data;
+  // A hidden RSVP never names the attendee outside the organizer projection.
+  // The moderator scheduling results add the name back, but a moderator client
+  // that syncs that authenticated payload into the shared document must not
+  // carry the name to every connected, unauthenticated viewer. `attendance.ts`
+  // owns the visibility rule so it cannot drift from the results projection.
+  if (attendanceVisibility(rest) === 'hidden') {
+    const { displayName: _hiddenDisplayName, ...withoutName } = rest;
+    return withoutName;
+  }
   return rest;
+}
+
+/**
+ * True when `stripPrivateAttendeeFields` would remove at least one private
+ * value from `data`. Implemented by comparing the stripper's output against its
+ * input, so a field added to the stripper automatically makes the shared-document
+ * scrub detector fire and cannot leave a newly-private field published.
+ */
+export function hasPrivateAttendeeFields(
+  data: AttendanceResponseData | undefined,
+): boolean {
+  if (!data) return false;
+  const stripped = stripPrivateAttendeeFields(data);
+  return JSON.stringify(stripped ?? null) !== JSON.stringify(data);
 }
 
 /**

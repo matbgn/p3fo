@@ -16,7 +16,7 @@ import {
   sanitizeAttendanceData,
 } from "@/lib/attendance";
 import { AttendanceRsvpSummary } from "@/components/voting/AttendanceRsvpSummary";
-import { getVotingStrings } from "@/lib/voting-i18n";
+import { getVotingStrings, type VotingStrings } from "@/lib/voting-i18n";
 import {
   getOrCreateVoterName,
   getStoredRemovalToken,
@@ -26,6 +26,21 @@ import {
   clearStoredRemovalToken,
 } from "@/lib/voter-identity";
 import { buildEventIcs, downloadEventIcs, safeHttpUrl } from "@/lib/ics";
+import {
+  activeSchedulingSlots,
+  buildSchedulingHeatmap,
+  countSchedulingParticipants,
+  formatSchedulingDateKey,
+  getViewerTimeZone,
+  normalizeSchedulingConfig,
+  schedulingBestSlotIds,
+  tallyScheduling,
+} from "@/lib/scheduling";
+import { SchedulingSummary } from "@/components/voting/SchedulingSummary";
+import { SchedulingCalendar } from "@/components/voting/SchedulingCalendar";
+import { SchedulingMonthCalendar } from "@/components/voting/SchedulingMonthCalendar";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { VoterIdentityBar } from "@/components/voting/VoterIdentityBar";
 import { getRandomUsername } from "@/lib/username-generator";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -147,6 +162,68 @@ async function submitResponse(
   }
 }
 
+/** Replace all of a voter's SCHEDULING availability in one request. */
+async function submitSchedulingAvailability(
+  slug: string,
+  body: {
+    voterToken: string;
+    values: Record<string, number>;
+    attendeeData?: AttendanceResponseData;
+  },
+): Promise<{ error: string | null }> {
+  try {
+    const res = await fetch(`/api/votes/${slug}/responses/batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    // Require the route's 204 rather than any 2xx: the production catch-all
+    // serves index.html with 200 for an unmatched path, so a request routed to
+    // an instance that predates the batch route during a rolling deploy would
+    // otherwise be reported as saved while nothing was persisted.
+    if (res.status !== 204) {
+      const err = await res.json().catch(() => null);
+      console.error("Scheduling submission error:", err);
+      return {
+        error:
+          err && typeof err.error === "string" ? err.error : "__network_error__",
+      };
+    }
+    // Success is 204: the server broadcasts the persisted rows over Yjs and the
+    // caller refreshes the matrix, so there is no body to read.
+    return { error: null };
+  } catch {
+    // A network error or aborted request must not look like a successful save,
+    // or the voter is shown as submitted with nothing persisted and no retry.
+    return { error: "__network_error__" };
+  }
+}
+
+/** Update the voter's claimed display name on every existing response. */
+async function updateVoterIdentity(
+  slug: string,
+  voterToken: string,
+  displayName: string,
+): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/votes/${slug}/identity`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ voterToken, displayName }),
+    });
+    // Same strict check as the batch submit: a 200 HTML catch-all response
+    // must not be mistaken for a persisted rename.
+    if (res.status !== 204) {
+      const err = await res.json().catch(() => null);
+      console.error("Identity update error:", err);
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Withdraw exactly the RSVP row identified by its private removal token. */
 async function deleteResponseByRemovalToken(
   slug: string,
@@ -201,7 +278,13 @@ async function deleteResponse(
  */
 async function publishVoteDraft(
   slug: string,
-  body: { voterToken: string; values: Record<string, number>; publisherId: string },
+  body: {
+    voterToken: string;
+    values: Record<string, number>;
+    publisherId: string;
+    /** Non-anonymous scheduling only: lets the moderator view name a draft. */
+    displayName?: string;
+  },
 ): Promise<void> {
   try {
     const res = await fetch(`/api/votes/${slug}/drafts`, {
@@ -309,6 +392,125 @@ function ensureVoterToken(slug: string): string {
   return token;
 }
 
+/**
+ * The display name a scheduling participant's ballot and live draft share.
+ * Anonymous votes never name the participant; both the submit path and the
+ * moderator draft channel use this one rule, so the moderator's live view
+ * cannot disagree with the name stored on the final ballot.
+ */
+function schedulingParticipantName(
+  voteId: string,
+  storedName: string,
+  mode: string | undefined,
+  isAnonymous: boolean,
+): string | undefined {
+  if (mode !== "SCHEDULING" || isAnonymous) return undefined;
+  return storedName || getStoredVoterName(voteId) || getOrCreateVoterName(voteId);
+}
+
+/**
+ * Shared header for every public vote mode: phase/kind/mode badges plus the
+ * title and description. The attendance, scheduling and generic branches render
+ * the same block, so a phase or badge change must not have to be applied three
+ * times.
+ */
+const PublicVoteHeading: React.FC<{
+  vote: VoteEntity;
+  ts: VotingStrings;
+  isFinalized: boolean;
+  isClosed: boolean;
+  isActive: boolean;
+}> = ({ vote, ts, isFinalized, isClosed, isActive }) => (
+  <>
+    <div className="flex items-center gap-2 flex-wrap mb-3">
+      <Badge
+        variant={
+          isFinalized
+            ? "destructive"
+            : isClosed
+              ? "outline"
+              : isActive
+                ? "default"
+                : "secondary"
+        }
+      >
+        {ts.phases[vote.config.phase] || vote.config.phase}
+      </Badge>
+      <Badge variant="outline">
+        {ts.kinds[vote.config.kind] || vote.config.kind}
+      </Badge>
+      <Badge variant="outline">
+        {ts.modes[vote.config.mode] ?? vote.config.mode}
+      </Badge>
+    </div>
+
+    <h1 className="text-2xl font-bold text-gray-900 mb-2">{vote.title}</h1>
+    {vote.description && (
+      <p className="text-gray-600 mb-4">{vote.description}</p>
+    )}
+  </>
+);
+
+/**
+ * Voter count, closing time and linked-task marker shared by the public vote
+ * headers. `leading` carries the mode-specific badge or action; the generic
+ * header lists the close time first, hence the order flag.
+ */
+const PublicVoteCounters: React.FC<{
+  ts: VotingStrings;
+  closesPrefix: string;
+  totalVoters: number;
+  closeAt?: string;
+  linkedTaskId?: string | null;
+  className?: string;
+  leading?: React.ReactNode;
+  closeAtFirst?: boolean;
+}> = ({
+  ts,
+  closesPrefix,
+  totalVoters,
+  closeAt,
+  linkedTaskId,
+  className,
+  leading,
+  closeAtFirst = false,
+}) => {
+  const voters = (
+    <span className="flex items-center gap-1 text-sm text-gray-400">
+      <Users className="w-4 h-4" />
+      {totalVoters} {totalVoters !== 1 ? ts.labels.voters : ts.labels.voter}
+    </span>
+  );
+  const closes = closeAt ? (
+    <span className="flex items-center gap-1 text-sm text-gray-400">
+      <Clock className="w-4 h-4" />
+      {closesPrefix} {new Date(closeAt).toLocaleString()}
+    </span>
+  ) : null;
+  return (
+    <div className={className ?? "mt-4 flex flex-wrap items-center gap-3"}>
+      {leading}
+      {closeAtFirst ? (
+        <>
+          {closes}
+          {voters}
+        </>
+      ) : (
+        <>
+          {voters}
+          {closes}
+        </>
+      )}
+      {linkedTaskId && (
+        <span className="flex items-center gap-1 text-sm text-violet-500">
+          <ExternalLink className="w-4 h-4" />
+          {ts.labels.linkedTask}
+        </span>
+      )}
+    </div>
+  );
+};
+
 const PublicVotePage: React.FC = () => {
   const ts = getVotingStrings();
   const { t: tt } = useTranslation();
@@ -322,18 +524,25 @@ const PublicVotePage: React.FC = () => {
   const [hasSubmitted, setHasSubmitted] = React.useState(false);
   const [justVoted, setJustVoted] = React.useState(false);
   const [submittedVoterValues, setSubmittedVoterValues] = React.useState<Record<string, number>>({});
+  const [schedulingSubmitError, setSchedulingSubmitError] = React.useState<string | null>(null);
+  const [schedulingPaintMode, setSchedulingPaintMode] = React.useState<number>(1);
+  const [schedulingShowGroup, setSchedulingShowGroup] = React.useState(false);
   const canChangeVote = vote ? (vote.config.allowVoteChangeUntilClose ?? true) : true;
   const votedAndLocked = hasSubmitted && !canChangeVote;
   const showResultsBeforeClose = vote ? (vote.config.showResultsBeforeClose ?? false) : false;
   const isClosed = vote?.config.phase === "CLOSED" || vote?.config.phase === "FINALIZED";
   const isSingleProposal = vote
-    ? !(vote.config.multipleChoiceVote ?? true) ||
-      vote.config.mode === "ATTENDANCE"
+    ? vote.config.mode === "SCHEDULING"
+      ? false
+      : !(vote.config.multipleChoiceVote ?? true) ||
+        vote.config.mode === "ATTENDANCE"
     : false;
   const showResults = vote ? (isClosed || showResultsBeforeClose) : false;
-  const hasPendingVotes = !isSingleProposal && Object.keys(voterValues).length > 0 && (
-    !hasSubmitted || JSON.stringify(voterValues) !== JSON.stringify(submittedVoterValues)
-  );
+  const isSchedulingMode = vote?.config.mode === "SCHEDULING";
+  const hasPendingVotes =
+    !isSingleProposal &&
+    (Object.keys(voterValues).length > 0 || (isSchedulingMode && hasSubmitted)) &&
+    (!hasSubmitted || JSON.stringify(voterValues) !== JSON.stringify(submittedVoterValues));
   const [pointsBudget, setPointsBudget] = React.useState<Record<string, number>>({});
   const [audienceProposalText, setAudienceProposalText] = React.useState("");
   const [showPrevRounds, setShowPrevRounds] = React.useState(false);
@@ -388,6 +597,16 @@ const PublicVotePage: React.FC = () => {
               responseVoterAlias(vote.id, response) === myRsvpAlias,
           )
         : undefined,
+    [responses, vote, myRsvpAlias],
+  );
+  const hasOwnResponses = React.useMemo(
+    () =>
+      vote
+        ? responses.some(
+            (response) =>
+              responseVoterAlias(vote.id, response) === myRsvpAlias,
+          )
+        : false,
     [responses, vote, myRsvpAlias],
   );
 
@@ -664,14 +883,52 @@ const PublicVotePage: React.FC = () => {
 
   const handleSubmitAllVotes = async () => {
     if (!slug || !vote) return;
-    const entries = Object.entries(voterValues);
-    for (const [proposalId, value] of entries) {
-      await submitResponse(slug, {
-        proposalId,
-        value,
+    const isSchedulingVote = vote.config.mode === "SCHEDULING";
+    const isAnonymousVote = vote.config.isAnonymous ?? true;
+    // Scheduling keeps a display name on the ballot for the moderator matrix;
+    // anonymous votes never send one, and scheduling never sends a comment.
+    const schedulingDisplayName = schedulingParticipantName(
+      vote.id,
+      storedName,
+      vote.config.mode,
+      isAnonymousVote,
+    );
+    const attendeeData =
+      schedulingDisplayName !== undefined
+        ? { displayName: schedulingDisplayName, visibility: "hidden" as const }
+        : undefined;
+
+    if (isSchedulingVote) {
+      setSchedulingSubmitError(null);
+      const activeSlotIds = new Set(
+        activeSchedulingSlots(vote.proposals).map((proposal) => proposal.id),
+      );
+      const values = Object.fromEntries(
+        Object.entries(voterValues).filter(([proposalId]) =>
+          activeSlotIds.has(proposalId),
+        ),
+      );
+      const { error } = await submitSchedulingAvailability(slug, {
         voterToken,
-        comment: comment || undefined,
+        values,
+        attendeeData,
       });
+      if (error) {
+        setSchedulingSubmitError(
+          error === "__network_error__" ? ts.scheduling.submitError : error,
+        );
+        return;
+      }
+    } else {
+      const entries = Object.entries(voterValues);
+      for (const [proposalId, value] of entries) {
+        await submitResponse(slug, {
+          proposalId,
+          value,
+          voterToken,
+          comment: comment || undefined,
+        });
+      }
     }
     setHasSubmitted(true);
     setJustVoted(true);
@@ -711,6 +968,7 @@ const PublicVotePage: React.FC = () => {
 
   const mode = vote?.config.mode;
   const isAttendance = mode === "ATTENDANCE";
+  const isScheduling = mode === "SCHEDULING";
   const attendance = vote?.config.attendance;
 
   const attendanceMaxPartySize = resolveMaxPartySize(attendance);
@@ -812,10 +1070,23 @@ const PublicVotePage: React.FC = () => {
     if (!vote) return;
     const name = welcomeName.trim();
     if (!name) return;
+    const previousName = storedName;
     setStoredVoterName(vote.id, name);
     setStoredName(name);
     setRsvpName(name);
     setWelcomeOpen(false);
+    if (
+      slug &&
+      previousName !== name &&
+      vote.config.isAnonymous === false &&
+      (vote.config.mode === "ATTENDANCE" ||
+        vote.config.mode === "SCHEDULING") &&
+      hasOwnResponses
+    ) {
+      void updateVoterIdentity(slug, voterToken, name).then((ok) => {
+        if (ok) refreshData();
+      });
+    }
   };
 
   const handleSubmitRsvpDialog = async () => {
@@ -1061,6 +1332,16 @@ const PublicVotePage: React.FC = () => {
         voterToken,
         values: { ...voterValues },
         publisherId: draftPublisherId.current,
+        // Scheduling keeps a display name for the moderator matrix; the draft
+        // is read only through the moderator capability, so an in-progress
+        // participant is named instead of shown as their alias. Anonymous votes
+        // never carry a name.
+        displayName: schedulingParticipantName(
+          draftVoteId,
+          storedName,
+          mode,
+          isAnonymous,
+        ),
       });
     }, 300);
     return () => window.clearTimeout(timer);
@@ -1069,6 +1350,8 @@ const PublicVotePage: React.FC = () => {
     draftVoteId,
     draftVotePhase,
     mode,
+    isAnonymous,
+    storedName,
     votedAndLocked,
     hasPendingVotes,
     voterValues,
@@ -1121,12 +1404,29 @@ const PublicVotePage: React.FC = () => {
     setRemovalToken(getStoredRemovalToken(activeVoteId));
   }, [activeVoteId]);
 
-  // Welcome dialog: non-anonymous attendance votes only, and only until this
-  // browser has a stored display name for the event.
+  // Welcome dialog: non-anonymous attendance and scheduling votes, and only
+  // until this browser has a stored display name for the vote.
   React.useEffect(() => {
     if (!activeVoteId || !vote) return;
-    if (vote.config.mode !== "ATTENDANCE" || isAnonymous) return;
-    if (vote.config.attendance?.welcomeModal === false) return;
+    const voteMode = vote.config.mode;
+    if (voteMode !== "ATTENDANCE" && voteMode !== "SCHEDULING") return;
+    if (isAnonymous) return;
+    // Scheduling always asks non-anonymous voters for a name; attendance keeps
+    // its explicit moderator toggle.
+    const welcomeDisabled =
+      voteMode === "ATTENDANCE"
+        ? vote.config.attendance?.welcomeModal === false
+        : false;
+    if (welcomeDisabled) {
+      // The bar must still show the name silently attached to responses when
+      // the moderator opted out of the dialog.
+      if (!getStoredVoterName(activeVoteId)) {
+        const generated = getOrCreateVoterName(activeVoteId);
+        setStoredName(generated);
+        setWelcomeName(generated);
+      }
+      return;
+    }
     if (welcomeShownRef.current === activeVoteId) return;
     welcomeShownRef.current = activeVoteId;
 
@@ -1217,6 +1517,80 @@ const PublicVotePage: React.FC = () => {
     return resultsSortDir === "desc" ? sorted.reverse() : sorted;
   }, [vote, mode, responses, resultsSortMetric, resultsSortDir]);
 
+  const schedulingConfig = React.useMemo(
+    () => normalizeSchedulingConfig(vote?.config.scheduling),
+    [vote?.config.scheduling],
+  );
+  const viewerTimeZone = React.useMemo(() => getViewerTimeZone(), []);
+  const isDayScheduling = isScheduling && schedulingConfig.unit === "day";
+  // The group heatmap is only meaningful while results are visible. Deriving it
+  // from `showResults` prevents a stale toggle from keeping the aggregate
+  // availability on screen (and the calendar read-only) after the moderator
+  // hides results or reopens the poll, when the toggle button is not rendered
+  // and the viewer cannot switch back.
+  const schedulingGroupView = showResults && schedulingShowGroup;
+  // The full tally (participant matrix + contiguous-run search) is only needed
+  // once results are rendered. While a poll is open with hidden results the
+  // header shows just the voter count, so a cheap distinct-voter scan avoids
+  // rebuilding the whole projection on every poll refresh.
+  const schedulingNeedsTally = showResults || schedulingGroupView;
+  const schedulingTally = React.useMemo(
+    () =>
+      vote && vote.config.mode === "SCHEDULING" && schedulingNeedsTally
+        ? tallyScheduling(responses, vote.proposals, schedulingConfig)
+        : null,
+    [vote, responses, schedulingConfig, schedulingNeedsTally],
+  );
+  const schedulingVoterCount = React.useMemo(() => {
+    if (!vote || vote.config.mode !== "SCHEDULING") return 0;
+    return schedulingTally
+      ? schedulingTally.totalVoters
+      : countSchedulingParticipants(responses, vote.proposals);
+  }, [vote, responses, schedulingTally]);
+  const schedulingHeatmap = React.useMemo(
+    () => (schedulingTally ? buildSchedulingHeatmap(schedulingTally) : null),
+    [schedulingTally],
+  );
+
+  // Keep the slot array reference stable between renders; otherwise the
+  // calendar's date grouping and label memoization rerun on every paint.
+  const schedulingSlots = React.useMemo(() => {
+    if (!vote || vote.config.mode !== "SCHEDULING") return [];
+    return activeSchedulingSlots(vote.proposals);
+  }, [vote]);
+
+  // Distinct calendar days the poll actually offers, in chronological order.
+  // Pruning every slot of a day removes it from the calendar but leaves it in
+  // `config.dates`, so the header must derive its day count/coverage from the
+  // remaining slots rather than the raw config.
+  const schedulingDisplayDates = React.useMemo(() => {
+    const keys = new Set<string>();
+    for (const slot of schedulingSlots) {
+      const key = formatSchedulingDateKey(
+        slot.timeSlot?.startAt ?? "",
+        schedulingConfig.timeZone,
+      );
+      if (key) keys.add(key);
+    }
+    return [...keys].sort();
+  }, [schedulingSlots, schedulingConfig.timeZone]);
+
+  // Highlight every tied best run, matching the summary cards instead of
+  // arbitrarily ringing only the first one.
+  const schedulingBestIds = React.useMemo(
+    () =>
+      showResults && schedulingTally
+        ? schedulingBestSlotIds(schedulingTally)
+        : [],
+    [showResults, schedulingTally],
+  );
+
+  React.useEffect(() => {
+    if (!schedulingConfig.allowIfNeeded && schedulingPaintMode === 0) {
+      setSchedulingPaintMode(1);
+    }
+  }, [schedulingConfig.allowIfNeeded, schedulingPaintMode]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -1250,8 +1624,50 @@ const PublicVotePage: React.FC = () => {
   }
 
   const activeProposals = vote.proposals.filter((p) => p.active);
-  const totalVoters = rsvpProjection.totalVoters;
+  const totalVoters = isScheduling
+    ? schedulingVoterCount
+    : rsvpProjection.totalVoters;
   const goingPartyTotal = rsvpProjection.goingPartyTotal;
+
+  // Active scheduling slots in chronological order. The calendar groups them
+  // by local date for display.
+  const schedulingSlotCount = schedulingSlots.length;
+  const schedulingDateCoverage =
+    schedulingDisplayDates.length === 0
+      ? ""
+      : schedulingDisplayDates.length === 1
+        ? schedulingDisplayDates[0]
+        : `${schedulingDisplayDates[0]} – ${schedulingDisplayDates[schedulingDisplayDates.length - 1]}`;
+
+  const handleSelectAllSchedulingAvailable = () => {
+    setVoterValues((prev) => {
+      const next = { ...prev };
+      for (const slot of schedulingSlots) next[slot.id] = 1;
+      return next;
+    });
+  };
+
+  const handleClearSchedulingSelections = () => {
+    setVoterValues((prev) => {
+      const next = { ...prev };
+      for (const slot of schedulingSlots) delete next[slot.id];
+      return next;
+    });
+  };
+
+  const handlePaintScheduling = (
+    slotIds: string[],
+    value: number | null,
+  ) => {
+    setVoterValues((prev) => {
+      const next = { ...prev };
+      for (const id of slotIds) {
+        if (value === null) delete next[id];
+        else next[id] = value;
+      }
+      return next;
+    });
+  };
 
   const tallyThumbsUpResult = (proposalId: string) =>
     tallyThumbsUpShared(responses, proposalId).count;
@@ -1270,6 +1686,22 @@ const PublicVotePage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto px-4 py-8">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          {(isAttendance || isScheduling) && !isAnonymous && storedName ? (
+            <VoterIdentityBar
+              displayName={storedName}
+              onEdit={() => {
+                setWelcomeName(storedName);
+                setWelcomeOpen(true);
+              }}
+              editDisabled={isClosed}
+            />
+          ) : (
+            <span />
+          )}
+          <LanguageSwitcher />
+        </div>
+
         {isFinalized && vote.outcome && (
           <div className="mb-6">
             <VoteOutcomeBanner vote={vote} />
@@ -1286,34 +1718,13 @@ const PublicVotePage: React.FC = () => {
               />
             )}
             <div className="p-6">
-              <div className="flex items-center gap-2 flex-wrap mb-3">
-                <Badge
-                  variant={
-                    isFinalized
-                      ? "destructive"
-                      : isClosed
-                        ? "outline"
-                        : isActive
-                          ? "default"
-                          : "secondary"
-                  }
-                >
-                  {ts.phases[vote.config.phase] || vote.config.phase}
-                </Badge>
-                <Badge variant="outline">
-                  {ts.kinds[vote.config.kind] || vote.config.kind}
-                </Badge>
-                <Badge variant="outline">
-                  {ts.modes[vote.config.mode] ?? vote.config.mode}
-                </Badge>
-              </div>
-
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                {vote.title}
-              </h1>
-              {vote.description && (
-                <p className="text-gray-600 mb-4">{vote.description}</p>
-              )}
+              <PublicVoteHeading
+                vote={vote}
+                ts={ts}
+                isFinalized={isFinalized}
+                isClosed={isClosed}
+                isActive={isActive}
+              />
 
               <div className="space-y-2 text-sm text-gray-600">
                 {(eventStartLabel || eventEndLabel) && (
@@ -1348,89 +1759,149 @@ const PublicVotePage: React.FC = () => {
                 )}
               </div>
 
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <Badge variant="outline">
-                  {goingPartyTotal}
-                  {hasAttendanceCapacity ? ` / ${attendanceMaxAttendees}` : ""}{" "}
-                  {ts.attendanceOptions.going}
-                </Badge>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleAddToCalendar}
-                  disabled={!attendance?.eventStartAt}
-                >
-                  <CalendarPlus className="w-4 h-4 mr-1" />
-                  {ts.attendance.addToCalendar}
-                </Button>
-                <span className="flex items-center gap-1 text-sm text-gray-400">
-                  <Users className="w-4 h-4" />
-                  {totalVoters} {totalVoters !== 1 ? ts.labels.voters : ts.labels.voter}
-                </span>
-                {vote.config.closeAt && (
-                  <span className="flex items-center gap-1 text-sm text-gray-400">
-                    <Clock className="w-4 h-4" />
-                    {tt("voting.closesPrefix")} {new Date(vote.config.closeAt).toLocaleString()}
-                  </span>
-                )}
-                {vote.linkedTaskId && (
-                  <span className="flex items-center gap-1 text-sm text-violet-500">
-                    <ExternalLink className="w-4 h-4" />
-                    {ts.labels.linkedTask}
-                  </span>
-                )}
-              </div>
+              <PublicVoteCounters
+                ts={ts}
+                closesPrefix={tt("voting.closesPrefix")}
+                totalVoters={totalVoters}
+                closeAt={vote.config.closeAt}
+                linkedTaskId={vote.linkedTaskId}
+                leading={
+                  <>
+                    <Badge variant="outline">
+                      {goingPartyTotal}
+                      {hasAttendanceCapacity
+                        ? ` / ${attendanceMaxAttendees}`
+                        : ""}{" "}
+                      {ts.attendanceOptions.going}
+                    </Badge>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleAddToCalendar}
+                      disabled={!attendance?.eventStartAt}
+                    >
+                      <CalendarPlus className="w-4 h-4 mr-1" />
+                      {ts.attendance.addToCalendar}
+                    </Button>
+                  </>
+                }
+              />
             </div>
+          </div>
+        ) : isScheduling ? (
+          <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
+            <PublicVoteHeading
+              vote={vote}
+              ts={ts}
+              isFinalized={isFinalized}
+              isClosed={isClosed}
+              isActive={isActive}
+            />
+
+            <div className="space-y-2 text-sm text-gray-600">
+              {schedulingDateCoverage && (
+                <div className="flex items-start gap-2">
+                  <CalendarDays className="w-4 h-4 mt-0.5 shrink-0 text-gray-400" />
+                  <span>
+                    <span className="font-medium text-gray-700">
+                      {ts.scheduling.dateRange}:
+                    </span>{" "}
+                    {schedulingDateCoverage}
+                  </span>
+                </div>
+              )}
+              {!isDayScheduling && (
+                <div className="flex items-start gap-2">
+                  <Clock className="w-4 h-4 mt-0.5 shrink-0 text-gray-400" />
+                  <span>
+                    <span className="font-medium text-gray-700">
+                      {ts.scheduling.dailyStart} – {ts.scheduling.dailyEnd}:
+                    </span>{" "}
+                    {schedulingConfig.dayStart} – {schedulingConfig.dayEnd}
+                  </span>
+                </div>
+              )}
+              {!isDayScheduling && (
+                <div className="flex items-start gap-2">
+                  <Clock className="w-4 h-4 mt-0.5 shrink-0 text-gray-400" />
+                  <span>
+                    <span className="font-medium text-gray-700">
+                      {ts.scheduling.duration}:
+                    </span>{" "}
+                    {schedulingConfig.durationMinutes} {ts.scheduling.minutes}
+                  </span>
+                </div>
+              )}
+              {isDayScheduling && (
+                <div className="flex items-start gap-2">
+                  <CalendarDays className="w-4 h-4 mt-0.5 shrink-0 text-gray-400" />
+                  <span className="font-medium text-gray-700">
+                    {ts.scheduling.allDay}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-start gap-2">
+                <CalendarDays className="w-4 h-4 mt-0.5 shrink-0 text-gray-400" />
+                <span>
+                  <span className="font-medium text-gray-700">
+                    {ts.scheduling.timezone}:
+                  </span>{" "}
+                  {schedulingConfig.timeZone}
+                </span>
+              </div>
+              {viewerTimeZone && viewerTimeZone !== schedulingConfig.timeZone && (
+                <div className="flex items-start gap-2">
+                  <Clock className="w-4 h-4 mt-0.5 shrink-0 text-gray-400" />
+                  <span>
+                    <span className="font-medium text-gray-700">
+                      {ts.scheduling.yourTimezone}:
+                    </span>{" "}
+                    {viewerTimeZone}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <PublicVoteCounters
+              ts={ts}
+              closesPrefix={tt("voting.closesPrefix")}
+              totalVoters={totalVoters}
+              closeAt={vote.config.closeAt}
+              linkedTaskId={vote.linkedTaskId}
+              leading={
+                <Badge variant="outline">
+                  {isDayScheduling
+                    ? ts.scheduling.dayCount.replace(
+                        "{{count}}",
+                        String(schedulingDisplayDates.length),
+                      )
+                    : ts.scheduling.slotCount.replace(
+                        "{{count}}",
+                        String(schedulingSlotCount),
+                      )}
+                </Badge>
+              }
+            />
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
-            <div className="flex items-center gap-2 flex-wrap mb-3">
-              <Badge
-                variant={
-                  isFinalized
-                    ? "destructive"
-                    : isClosed
-                      ? "outline"
-                      : isActive
-                        ? "default"
-                        : "secondary"
-                }
-              >
-                {ts.phases[vote.config.phase] || vote.config.phase}
-              </Badge>
-              <Badge variant="outline">
-                {ts.kinds[vote.config.kind] || vote.config.kind}
-              </Badge>
-              <Badge variant="outline">
-                {ts.modes[vote.config.mode] ?? vote.config.mode}
-              </Badge>
-            </div>
+            <PublicVoteHeading
+              vote={vote}
+              ts={ts}
+              isFinalized={isFinalized}
+              isClosed={isClosed}
+              isActive={isActive}
+            />
 
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              {vote.title}
-            </h1>
-            {vote.description && (
-              <p className="text-gray-600 mb-4">{vote.description}</p>
-            )}
-
-            <div className="flex items-center gap-4 text-sm text-gray-400">
-              {vote.config.closeAt && (
-                <span className="flex items-center gap-1">
-                  <Clock className="w-4 h-4" />
-                  {tt("voting.closesPrefix")} {new Date(vote.config.closeAt).toLocaleString()}
-                </span>
-              )}
-              <span className="flex items-center gap-1">
-                <Users className="w-4 h-4" />
-                 {totalVoters} {totalVoters !== 1 ? ts.labels.voters : ts.labels.voter}
-              </span>
-              {vote.linkedTaskId && (
-                <span className="flex items-center gap-1 text-violet-500">
-                   <ExternalLink className="w-4 h-4" />
-                   {ts.labels.linkedTask}
-                </span>
-              )}
-            </div>
+            <PublicVoteCounters
+              ts={ts}
+              closesPrefix={tt("voting.closesPrefix")}
+              totalVoters={totalVoters}
+              closeAt={vote.config.closeAt}
+              linkedTaskId={vote.linkedTaskId}
+              className="flex items-center gap-4 text-sm text-gray-400"
+              closeAtFirst
+            />
           </div>
         )}
 
@@ -1627,7 +2098,138 @@ const PublicVotePage: React.FC = () => {
           </div>
         )}
 
-        {mode !== "CONSENT_LOOP" && mode !== "ATTENDANCE" && !isClosed && (
+        {isScheduling && !isClosed && (
+          <div className="bg-white rounded-lg shadow-sm border p-5 mb-6">
+            <div className="space-y-2 mb-3">
+              <p className="text-sm text-gray-500">{ts.scheduling.helpText}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                {!schedulingGroupView && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant={schedulingPaintMode === 1 ? "default" : "outline"}
+                      onClick={() => setSchedulingPaintMode(1)}
+                      disabled={!isActive || votedAndLocked}
+                      className={
+                        schedulingPaintMode === 1
+                          ? "bg-green-600 hover:bg-green-700"
+                          : ""
+                      }
+                    >
+                      {ts.scheduling.available}
+                    </Button>
+                    {schedulingConfig.allowIfNeeded && (
+                      <Button
+                        size="sm"
+                        variant={schedulingPaintMode === 0 ? "default" : "outline"}
+                        onClick={() => setSchedulingPaintMode(0)}
+                        disabled={!isActive || votedAndLocked}
+                        className={
+                          schedulingPaintMode === 0
+                            ? "bg-yellow-500 hover:bg-yellow-600"
+                            : ""
+                        }
+                      >
+                        {ts.scheduling.ifNeeded}
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant={schedulingPaintMode === -1 ? "default" : "outline"}
+                      onClick={() => setSchedulingPaintMode(-1)}
+                      disabled={!isActive || votedAndLocked}
+                      className={
+                        schedulingPaintMode === -1
+                          ? "bg-red-600 hover:bg-red-700"
+                          : ""
+                      }
+                    >
+                      {ts.scheduling.unavailable}
+                    </Button>
+                  </>
+                )}
+                <span className="mx-1 h-5 w-px bg-gray-200" />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSelectAllSchedulingAvailable}
+                  disabled={!isActive || votedAndLocked || schedulingGroupView}
+                >
+                  {ts.scheduling.selectAllAvailable}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleClearSchedulingSelections}
+                  disabled={!isActive || votedAndLocked || schedulingGroupView}
+                >
+                  {ts.scheduling.clearAll}
+                </Button>
+                {showResults && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setSchedulingShowGroup((value) => !value)}
+                  >
+                    {schedulingGroupView
+                      ? ts.scheduling.myAvailability
+                      : ts.scheduling.groupAvailability}
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {isDayScheduling ? (
+              <SchedulingMonthCalendar
+                slots={schedulingSlots}
+                timeZone={schedulingConfig.timeZone}
+                values={voterValues}
+                paintMode={schedulingPaintMode}
+                onPaint={handlePaintScheduling}
+                readOnly={!isActive || votedAndLocked || schedulingGroupView}
+                heatmap={schedulingGroupView ? schedulingHeatmap : null}
+                bestSlotIds={schedulingBestIds}
+              />
+            ) : (
+              <SchedulingCalendar
+                slots={schedulingSlots}
+                timeZone={schedulingConfig.timeZone}
+                values={voterValues}
+                paintMode={schedulingPaintMode}
+                onPaint={handlePaintScheduling}
+                readOnly={!isActive || votedAndLocked || schedulingGroupView}
+                heatmap={schedulingGroupView ? schedulingHeatmap : null}
+                bestSlotIds={schedulingBestIds}
+              />
+            )}
+
+            {schedulingSubmitError && (
+              <p className="mt-3 text-sm text-red-600">{schedulingSubmitError}</p>
+            )}
+            {isActive && hasPendingVotes && (
+              <div className="flex justify-center mt-4">
+                <Button onClick={handleSubmitAllVotes}>
+                  {ts.buttons.submitAllVotes}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {isScheduling && showResults && (
+          <div className="bg-white rounded-lg shadow-sm border p-5 mb-6">
+            <h3 className="text-sm font-medium text-gray-700 mb-3">
+              {ts.labels.results}
+            </h3>
+            <SchedulingSummary
+              vote={vote}
+              responses={responses}
+              tally={schedulingTally}
+            />
+          </div>
+        )}
+
+        {mode !== "CONSENT_LOOP" && mode !== "ATTENDANCE" && mode !== "SCHEDULING" && !isClosed && (
           <>
           <div className="space-y-4 mb-6">
             {activeProposals.map((proposal) => (
@@ -2256,7 +2858,7 @@ const PublicVotePage: React.FC = () => {
           </div>
         )}
 
-        {isActive && vote.config.allowFreeText && mode !== "ATTENDANCE" && (
+        {isActive && vote.config.allowFreeText && mode !== "ATTENDANCE" && mode !== "SCHEDULING" && (
           <div className="bg-white rounded-lg shadow-sm border p-5 mb-6">
             <label className="text-sm font-medium text-gray-700 flex items-center gap-1 mb-2">
               <MessageSquare className="w-4 h-4" />
@@ -2280,7 +2882,8 @@ const PublicVotePage: React.FC = () => {
 
         {isActive &&
           vote.config.kind === "consultation" &&
-          vote.config.allowAudienceProposals && (
+          vote.config.allowAudienceProposals &&
+          mode !== "SCHEDULING" && (
             <div className="bg-white rounded-lg shadow-sm border p-5 mb-6">
               <h3 className="text-sm font-medium text-gray-700 mb-2">
                 {ts.labels.suggestProposal}
@@ -2305,7 +2908,7 @@ const PublicVotePage: React.FC = () => {
             </div>
           )}
 
-        {isClosed && (
+        {isClosed && !isScheduling && (
           <div className="bg-white rounded-lg shadow-sm border p-5 mb-6">
             <h3 className="text-sm font-medium text-gray-700 mb-3">
               {ts.labels.finalResults}
@@ -2622,12 +3225,23 @@ const PublicVotePage: React.FC = () => {
         </p>
       </div>
 
-      {isAttendance && !isAnonymous && attendance?.welcomeModal !== false && (
+      {(isAttendance || isScheduling) && !isAnonymous && (
         <Dialog open={welcomeOpen} onOpenChange={setWelcomeOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{ts.attendance.welcomeTitle}</DialogTitle>
-              <DialogDescription>{ts.attendance.welcomeDescription}</DialogDescription>
+              <DialogTitle>
+                {isScheduling
+                  ? ts.scheduling.namePrompt
+                  : ts.attendance.welcomeTitle}
+              </DialogTitle>
+              <DialogDescription>
+                {isScheduling
+                  ? ts.scheduling.namePromptHelp
+                  : ts.attendance.welcomeDescription}
+              </DialogDescription>
+              <p className="text-xs text-gray-500">
+                {ts.attendance.nameAttachedNote}
+              </p>
             </DialogHeader>
             <div className="space-y-2">
               <Label htmlFor="welcome-display-name">

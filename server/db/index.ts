@@ -42,6 +42,13 @@ export function applyTaskTemporalMirror(
   return target;
 }
 
+/** One row of a voter's atomic response replacement. */
+export interface VoteResponseUpsert {
+  proposalId: string;
+  value: number;
+  attendeeData?: VoteResponseEntity['attendeeData'];
+}
+
 // Define the database client interface
 export interface DbClient {
   initialize(): Promise<void>;
@@ -164,6 +171,42 @@ export interface DbClient {
    * vote.
    */
   deleteVoteResponse(voteId: string, voterToken: string, proposalId: string | null, loopId?: string | null): Promise<string[]>;
+  /**
+   * Atomically replace one voter's rows for `scopeProposalIds`: upsert every
+   * supplied row and delete every in-scope row that is not one of those
+   * upserts, in one serialized transaction. The delete set is derived inside
+   * the transaction (not from a snapshot read before it) and the voter's
+   * replacement is serialized across app instances, so concurrent submissions
+   * cannot merge two intents into a hybrid matrix. A deploy restart or a
+   * failure mid-way must not leave a half-replaced availability matrix
+   * (withdrawn slots still counted). `scopeProposalIds` bounds the delete to
+   * the vote's active slots so rows for removed candidates are left untouched.
+   */
+  replaceVoteResponsesForVoter(
+    voteId: string,
+    voterToken: string,
+    upserts: VoteResponseUpsert[],
+    scopeProposalIds: string[],
+  ): Promise<{ responses: VoteResponseEntity[]; removedIds: string[] }>;
+  /**
+   * Rename the voter's existing canonical rows without touching availability.
+   * The target rows are selected inside the same transaction and per-voter lock
+   * as `replaceVoteResponsesForVoter`, so a concurrently submitted availability
+   * matrix cannot be resurrected from a stale pre-read snapshot, and everything
+   * other than `attendeeData` (value, `submittedAt`, `userId`, comment) is
+   * preserved as stored.
+   */
+  renameVoteResponsesForVoter(
+    voteId: string,
+    voterToken: string,
+    displayName: string,
+    options: {
+      /** Only rows for this proposal; `null` targets every non-null proposal. */
+      proposalId: string | null;
+      /** `hidden` forces hidden visibility; `auto` keeps the row's visibility. */
+      visibility: 'hidden' | 'auto';
+    },
+  ): Promise<VoteResponseEntity[]>;
   importVoteResponses(items: VoteResponseEntity[]): Promise<void>;
 
   // Comparative prioritization ballots

@@ -3,12 +3,19 @@ import { VoteMode } from "@/lib/persistence-types";
 import { getSelectedMode } from "@/lib/persistence-factory";
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { cn } from "@/lib/utils";
-import { ThumbsUp, Minus, Coins, Award, RotateCcw, ListOrdered, CalendarCheck } from "lucide-react";
+import { ThumbsUp, Minus, Coins, Award, RotateCcw, ListOrdered, CalendarCheck, CalendarRange } from "lucide-react";
 
 interface ModeSelectorProps {
   value: VoteMode;
   onChange: (mode: VoteMode) => void;
   disabled?: boolean;
+  /**
+   * Modes the calling flow cannot configure. They stay visible only when
+   * already selected, so a flow without the matching setup (for example the
+   * linked-vote dialog, which has no scheduling editor) cannot offer a mode
+   * whose create request the server rejects.
+   */
+  excludeModes?: VoteMode[];
 }
 
 const MODE_ICONS: Record<VoteMode, React.ReactNode> = {
@@ -19,11 +26,12 @@ const MODE_ICONS: Record<VoteMode, React.ReactNode> = {
   MAJORITY_JUDGMENT: <Award className="w-4 h-4" />,
   CONSENT_LOOP: <RotateCcw className="w-4 h-4" />,
   COMPARATIVE_PRIORITIZATION: <ListOrdered className="w-4 h-4" />,
+  SCHEDULING: <CalendarRange className="w-4 h-4" />,
 };
 
-const ALL_MODES: VoteMode[] = ["THUMBS_UP", "THUMBS_UD_NEUTRAL", "ATTENDANCE", "POINTS", "MAJORITY_JUDGMENT", "CONSENT_LOOP", "COMPARATIVE_PRIORITIZATION"];
+const ALL_MODES: VoteMode[] = ["THUMBS_UP", "THUMBS_UD_NEUTRAL", "ATTENDANCE", "POINTS", "MAJORITY_JUDGMENT", "CONSENT_LOOP", "COMPARATIVE_PRIORITIZATION", "SCHEDULING"];
 
-export const ModeSelector: React.FC<ModeSelectorProps> = ({ value, onChange, disabled }) => {
+export const ModeSelector: React.FC<ModeSelectorProps> = ({ value, onChange, disabled, excludeModes }) => {
   const t = getVotingStrings();
   // Comparative prioritization is implemented only against the server API.
   // Browser-JSON/static deployments have no /api routes, so offering the mode
@@ -33,10 +41,13 @@ export const ModeSelector: React.FC<ModeSelectorProps> = ({ value, onChange, dis
   // which is still server mode, so `!API_URL` would hide the mode exactly where
   // the ranking endpoints exist.
   const isBrowserOnly = getSelectedMode() === "browser-json";
-  const availableModes =
-    isBrowserOnly && value !== "COMPARATIVE_PRIORITIZATION"
-      ? ALL_MODES.filter((mode) => mode !== "COMPARATIVE_PRIORITIZATION")
-      : ALL_MODES;
+  const availableModes = ALL_MODES.filter(
+    (mode) =>
+      // Keep the current selection visible even when it is filtered out.
+      mode === value ||
+      ((!isBrowserOnly || mode !== "COMPARATIVE_PRIORITIZATION") &&
+        !excludeModes?.includes(mode)),
+  );
   return (
     <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
       {availableModes.map((mode) => (

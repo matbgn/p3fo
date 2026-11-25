@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -28,9 +29,26 @@ import {
   VoteProposal,
   AttendanceConfig,
   AttendanceQuestion,
+  SchedulingConfig,
 } from "@/lib/persistence-types";
 import { DEFAULT_RANKING_ENGINE, voteAllowsTies } from "@/lib/vote-ranking";
 import { DEFAULT_MAX_PARTY_SIZE } from "@/lib/attendance";
+import {
+  DEFAULT_SCHEDULING_CONFIG,
+  MAX_SCHEDULING_SLOTS,
+  formatSchedulingDay,
+  formatSchedulingRange,
+  generateSchedulingSlots,
+  getFormatter,
+  getSchedulingTimeZones,
+  mergeSchedulingDates,
+  normalizeSchedulingConfig,
+  normalizeSchedulingGranularity,
+  prunedSchedulingSlotKeys,
+  roundSchedulingDuration,
+  schedulingSlotIdentity,
+  validateSchedulingConfig,
+} from "@/lib/scheduling";
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { useTranslation } from "react-i18next";
 import { KindSelector } from "./KindSelector";
@@ -57,6 +75,45 @@ const DEFAULT_CONFIG: VoteConfig = {
 const DEFAULT_PROPOSALS: VoteProposal[] = [
   { id: crypto.randomUUID(), content: "", position: 0, active: true },
 ];
+
+const SCHEDULING_MAX_DATES = 90;
+const SCHEDULING_WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
+const MAX_DAY_MINUTES = 24 * 60;
+
+const schedulingDateToLocalDate = (key: string): Date | undefined => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
+  if (!match) return undefined;
+  return new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+  );
+};
+
+const localDateToSchedulingKey = (date: Date): string =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate(),
+  ).padStart(2, "0")}`;
+
+const schedulingWeekdayLabel = (isoWeekday: number): string => {
+  // 2024-01-01 is a Monday, so offsetting by isoWeekday - 1 lands on the target.
+  const date = Temporal.PlainDate.from("2024-01-01").add({
+    days: isoWeekday - 1,
+  });
+  const formatter = getFormatter(undefined, { weekday: "short" });
+  if (!formatter) return String(isoWeekday);
+  try {
+    return formatter.format(new Date(`${date.toString()}T12:00:00`));
+  } catch {
+    return String(isoWeekday);
+  }
+};
+
+// Resolved once: the weekday toggles re-render on every keystroke, and an
+// uncached `Intl.DateTimeFormat` here was constructed seven times per render.
+const SCHEDULING_WEEKDAY_LABELS: Record<number, string> = Object.fromEntries(
+  SCHEDULING_WEEKDAYS.map((day) => [day, schedulingWeekdayLabel(day)]),
+);
 
 const isoToDateTimeLocal = (iso: string, timezone: string): string => {
   if (!iso) return "";
@@ -127,6 +184,54 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
   const [allowHiddenAttendance, setAllowHiddenAttendance] = React.useState(false);
   const [maxAttendees, setMaxAttendees] = React.useState(0);
   const [customQuestions, setCustomQuestions] = React.useState<AttendanceQuestion[]>([]);
+  const [schedulingUnit, setSchedulingUnit] = React.useState<"time" | "day">(
+    DEFAULT_SCHEDULING_CONFIG.unit === "day" ? "day" : "time",
+  );
+  const [schedulingTimeZone, setSchedulingTimeZone] = React.useState(
+    DEFAULT_SCHEDULING_CONFIG.timeZone,
+  );
+  const [schedulingGranularity, setSchedulingGranularity] = React.useState<15 | 30 | 60>(
+    normalizeSchedulingGranularity(DEFAULT_SCHEDULING_CONFIG.granularityMinutes),
+  );
+  const [schedulingDuration, setSchedulingDuration] = React.useState(
+    DEFAULT_SCHEDULING_CONFIG.durationMinutes,
+  );
+  // Controlled text mirror of the duration field. The numeric state is the
+  // committed value; keeping the raw text lets a moderator type a multi-digit
+  // duration (e.g. 90) instead of every keystroke being rounded up to the
+  // granularity before the next digit can be entered.
+  const [schedulingDurationInput, setSchedulingDurationInput] = React.useState(
+    String(DEFAULT_SCHEDULING_CONFIG.durationMinutes),
+  );
+  const [schedulingDates, setSchedulingDates] = React.useState<string[]>([]);
+  const [schedulingDayStart, setSchedulingDayStart] = React.useState(
+    DEFAULT_SCHEDULING_CONFIG.dayStart,
+  );
+  const [schedulingDayEnd, setSchedulingDayEnd] = React.useState(
+    DEFAULT_SCHEDULING_CONFIG.dayEnd,
+  );
+  const [schedulingAllowIfNeeded, setSchedulingAllowIfNeeded] = React.useState(
+    DEFAULT_SCHEDULING_CONFIG.allowIfNeeded ?? false,
+  );
+  const [schedulingMaxSlots, setSchedulingMaxSlots] = React.useState(
+    DEFAULT_SCHEDULING_CONFIG.maxSlots ?? 500,
+  );
+  const [schedulingError, setSchedulingError] = React.useState<string | null>(null);
+  const [schedulingDirty, setSchedulingDirty] = React.useState(false);
+  // Slots the moderator explicitly removed from the generated grid. They must be
+  // re-applied whenever a later config edit triggers regeneration, otherwise an
+  // unrelated change (allowIfNeeded, maxSlots) silently restores them. Keys are
+  // local date + wall-clock identities (see `schedulingSlotIdentity`), not slot
+  // ids, because changing the time zone changes every slot's instant id.
+  const [removedSchedulingSlotKeys, setRemovedSchedulingSlotKeys] = React.useState<
+    string[]
+  >([]);
+  const [schedulingRangeStart, setSchedulingRangeStart] = React.useState("");
+  const [schedulingRangeEnd, setSchedulingRangeEnd] = React.useState("");
+  const [schedulingRangeWeekdays, setSchedulingRangeWeekdays] = React.useState<number[]>([
+    1, 2, 3, 4, 5, 6, 7,
+  ]);
+  const [schedulingSingleDate, setSchedulingSingleDate] = React.useState("");
   const [timePickerOpen, setTimePickerOpen] = React.useState(false);
   const [timePickerConfig, setTimePickerConfig] = React.useState<{
     type: "openAt" | "closeAt";
@@ -137,6 +242,42 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
   const weekStartsOn = settings.weekStartDay as 0 | 1;
 
   const loadVote = React.useCallback((source: VoteEntity | null) => {
+    // One scheduling initializer for both the populated and the blank form so
+    // the two branches cannot drift when a scheduling field is added.
+    const applySchedulingConfig = (
+      scheduling: SchedulingConfig | undefined,
+      storedSlotProposals: VoteProposal[] = [],
+    ) => {
+      setSchedulingUnit(scheduling?.unit === "day" ? "day" : "time");
+      setSchedulingTimeZone(scheduling?.timeZone ?? timezone);
+      setSchedulingGranularity(
+        normalizeSchedulingGranularity(scheduling?.granularityMinutes),
+      );
+      const durationMinutes =
+        scheduling?.durationMinutes ??
+        DEFAULT_SCHEDULING_CONFIG.durationMinutes;
+      setSchedulingDuration(durationMinutes);
+      setSchedulingDurationInput(String(durationMinutes));
+      setSchedulingDates(scheduling?.dates ? [...scheduling.dates] : []);
+      setSchedulingDayStart(
+        scheduling?.dayStart ?? DEFAULT_SCHEDULING_CONFIG.dayStart,
+      );
+      setSchedulingDayEnd(scheduling?.dayEnd ?? DEFAULT_SCHEDULING_CONFIG.dayEnd);
+      setSchedulingAllowIfNeeded(scheduling?.allowIfNeeded ?? false);
+      setSchedulingMaxSlots(
+        scheduling?.maxSlots ?? DEFAULT_SCHEDULING_CONFIG.maxSlots ?? 500,
+      );
+      setSchedulingError(null);
+      setSchedulingDirty(false);
+      // Explicit slot removals live only in this session's state, so reopening
+      // the editor would forget them and the next dirty save would regenerate
+      // the full grid, silently restoring pruned slots (including pruned days
+      // in day mode). Rebuild the removal set from the saved config/proposals.
+      setRemovedSchedulingSlotKeys(
+        prunedSchedulingSlotKeys(scheduling, storedSlotProposals),
+      );
+    };
+
     if (source) {
       setTitle(source.title);
       setDescription(source.description || "");
@@ -145,9 +286,11 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
       setProposals(
         source.config.mode === "ATTENDANCE"
           ? []
-          : source.proposals.length > 0
-            ? source.proposals
-            : DEFAULT_PROPOSALS,
+          : source.config.mode === "SCHEDULING"
+            ? source.proposals.filter((proposal) => proposal.timeSlot)
+            : source.proposals.length > 0
+              ? source.proposals
+              : DEFAULT_PROPOSALS,
       );
       setIsAnonymous(source.config.isAnonymous ?? true);
       setAllowFreeText(source.config.allowFreeText ?? false);
@@ -183,6 +326,14 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
             }))
           : [],
       );
+
+      const scheduling = source.config.scheduling;
+      applySchedulingConfig(
+        scheduling,
+        source.config.mode === "SCHEDULING"
+          ? source.proposals.filter((proposal) => proposal.timeSlot)
+          : [],
+      );
     } else {
       setTitle("");
       setDescription("");
@@ -214,8 +365,13 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
       setAllowHiddenAttendance(false);
       setMaxAttendees(0);
       setCustomQuestions([]);
+      applySchedulingConfig(undefined);
     }
-  }, []);
+    setSchedulingRangeStart("");
+    setSchedulingRangeEnd("");
+    setSchedulingRangeWeekdays([1, 2, 3, 4, 5, 6, 7]);
+    setSchedulingSingleDate("");
+  }, [timezone]);
 
   const initializedRef = React.useRef<string | null>(null);
   React.useEffect(() => {
@@ -232,6 +388,14 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
       initializedRef.current = null;
       return;
     }
+    // Load only on the open transition or when the edited vote changes.
+    // `loadVote` now depends on the settings timezone, which resolves
+    // asynchronously after mount and can also change through settings sync;
+    // without this guard a late timezone value re-runs the effect and wipes an
+    // in-progress modal form (the inline branch already uses the same key).
+    const key = vote?.id ?? "new";
+    if (initializedRef.current === key) return;
+    initializedRef.current = key;
     loadVote(vote ?? null);
   }, [inline, open, vote, loadVote]);
 
@@ -241,6 +405,19 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
       return;
     }
     onOpenChange?.(false);
+  };
+
+  const handleModeChange = (nextMode: VoteMode) => {
+    if (nextMode === mode) return;
+    // A scheduling draft's `proposals` are generated time slots, not content.
+    // Leaving them in state when the mode changes would render one editor per
+    // slot and persist every empty slot as a blank content proposal on save.
+    // Entering SCHEDULING is safe: the save path regenerates the slot grid from
+    // the config, so content proposals are replaced there.
+    if (mode === "SCHEDULING") {
+      setProposals([{ id: crypto.randomUUID(), content: "", position: 0, active: true }]);
+    }
+    setMode(nextMode);
   };
 
   const showObjectionComment =
@@ -263,12 +440,183 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
     setCustomQuestions((previous) => previous.filter((question) => question.id !== id));
   };
 
+  const schedulingLocked = hasStarted || isFinalized;
+
+  const schedulingSlotProposals = React.useMemo(
+    () => proposals.filter((proposal) => proposal.timeSlot),
+    [proposals],
+  );
+
+  const schedulingTimeZoneOptions = React.useMemo(() => {
+    const zones = getSchedulingTimeZones();
+    if (schedulingTimeZone && !zones.includes(schedulingTimeZone)) {
+      return [schedulingTimeZone, ...zones];
+    }
+    return zones;
+  }, [schedulingTimeZone]);
+
+  const buildSchedulingConfig = (): SchedulingConfig => ({
+    unit: schedulingUnit,
+    timeZone: schedulingTimeZone,
+    granularityMinutes: schedulingGranularity,
+    durationMinutes: schedulingDuration,
+    dates: [...schedulingDates].sort(),
+    dayStart: schedulingDayStart,
+    dayEnd: schedulingDayEnd,
+    allowIfNeeded: schedulingAllowIfNeeded,
+    maxSlots: schedulingMaxSlots,
+  });
+
+  const markSchedulingDirty = () => {
+    setSchedulingDirty(true);
+    setSchedulingError(null);
+  };
+
+  const handleApplySchedulingRange = () => {
+    if (!schedulingRangeStart || !schedulingRangeEnd) return;
+    let start: Temporal.PlainDate;
+    let end: Temporal.PlainDate;
+    try {
+      start = Temporal.PlainDate.from(schedulingRangeStart);
+      end = Temporal.PlainDate.from(schedulingRangeEnd);
+    } catch {
+      return;
+    }
+    if (Temporal.PlainDate.compare(start, end) > 0) return;
+
+    const weekdays = new Set(
+      schedulingRangeWeekdays.length > 0
+        ? schedulingRangeWeekdays
+        : SCHEDULING_WEEKDAYS,
+    );
+    const generated: string[] = [];
+    let cursor = start;
+    let guard = 0;
+    while (
+      Temporal.PlainDate.compare(cursor, end) <= 0 &&
+      guard < SCHEDULING_MAX_DATES * 31
+    ) {
+      if (weekdays.has(cursor.dayOfWeek)) generated.push(cursor.toString());
+      cursor = cursor.add({ days: 1 });
+      guard += 1;
+    }
+
+    setSchedulingDates((previous) => mergeSchedulingDates(previous, generated, SCHEDULING_MAX_DATES));
+    markSchedulingDirty();
+  };
+
+  const handleToggleSchedulingWeekday = (day: number) => {
+    setSchedulingRangeWeekdays((previous) =>
+      previous.includes(day)
+        ? previous.filter((value) => value !== day)
+        : [...previous, day].sort((a, b) => a - b),
+    );
+  };
+
+  const handleAddSchedulingDate = () => {
+    if (!schedulingSingleDate) return;
+    try {
+      Temporal.PlainDate.from(schedulingSingleDate);
+    } catch {
+      return;
+    }
+    setSchedulingDates((previous) =>
+      mergeSchedulingDates(previous, [schedulingSingleDate], SCHEDULING_MAX_DATES),
+    );
+    setSchedulingSingleDate("");
+    markSchedulingDirty();
+  };
+
+  const handleRemoveSchedulingDate = (date: string) => {
+    setSchedulingDates((previous) => previous.filter((value) => value !== date));
+    markSchedulingDirty();
+  };
+
+  const handleGenerateSchedulingSlots = () => {
+    const { proposals: generated, error } = generateSchedulingSlots(
+      normalizeSchedulingConfig(buildSchedulingConfig()),
+    );
+    if (error) {
+      setSchedulingError(error);
+      return;
+    }
+    // An explicit regenerate rebuilds the full grid, so earlier removals no
+    // longer apply.
+    setRemovedSchedulingSlotKeys([]);
+    setProposals(generated);
+    setSchedulingError(null);
+    setSchedulingDirty(false);
+  };
+
+  const handleRemoveSchedulingSlot = (proposal: VoteProposal) => {
+    // Record the slot's local identity in the zone the grid was generated for,
+    // so a later time-zone change (which rewrites every slot id) still matches.
+    const key = schedulingSlotIdentity(
+      proposal,
+      schedulingUnit,
+      schedulingTimeZone,
+    );
+    setRemovedSchedulingSlotKeys((previous) =>
+      previous.includes(key) ? previous : [...previous, key],
+    );
+    setProposals((previous) => previous.filter((candidate) => candidate.id !== proposal.id));
+  };
+
   const handleSave = async () => {
     if (!title.trim()) return;
 
     // Flush any pending BlockNote editor content into the proposals state
     // before reading it for the save payload.
     const flushedProposals = proposalEditorRef.current?.flush() ?? proposals;
+
+    let schedulingConfig: SchedulingConfig | undefined;
+    let schedulingProposals: VoteProposal[] = [];
+    if (mode === "SCHEDULING") {
+      const normalized = normalizeSchedulingConfig(buildSchedulingConfig());
+      const hasAllSlots =
+        proposals.length > 0 && proposals.every((proposal) => Boolean(proposal.timeSlot));
+      let slotProposals = proposals.filter((proposal) => proposal.timeSlot);
+
+      if (schedulingDirty || !hasAllSlots) {
+        const generated = generateSchedulingSlots(normalized);
+        if (generated.error) {
+          setSchedulingError(generated.error);
+          return;
+        }
+        // Re-apply explicit removals after regeneration so changing an unrelated
+        // scheduling setting cannot silently bring a pruned slot back. The keys
+        // are local identities, so a time-zone change (which rewrites every slot
+        // id) still prunes the same wall-clock slots.
+        const removedKeys = new Set(removedSchedulingSlotKeys);
+        slotProposals = generated.proposals
+          .filter(
+            (proposal) =>
+              !removedKeys.has(
+                schedulingSlotIdentity(
+                  proposal,
+                  normalized.unit === "day" ? "day" : "time",
+                  normalized.timeZone ?? DEFAULT_SCHEDULING_CONFIG.timeZone ?? "UTC",
+                ),
+              ),
+          )
+          .map((proposal, index) => ({ ...proposal, position: index }));
+        // Write the regenerated grid back into form state. The inline editor is
+        // not remounted after saving, so without this the preview (and the next
+        // save) would keep sending the pre-regeneration slot set.
+        setProposals(slotProposals);
+      }
+
+      const validationError = validateSchedulingConfig(normalized, slotProposals);
+      if (validationError) {
+        setSchedulingError(validationError);
+        return;
+      }
+
+      schedulingConfig = normalized;
+      schedulingProposals = slotProposals
+        .filter((proposal) => proposal.active)
+        .map((proposal, index) => ({ ...proposal, position: index }));
+    }
 
     setIsSaving(true);
     try {
@@ -316,10 +664,13 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
         kind,
         phase: vote?.config.phase || "IDLE",
         isAnonymous,
-        allowFreeText: mode !== "COMPARATIVE_PRIORITIZATION" ? allowFreeText : undefined,
+        allowFreeText:
+          mode !== "COMPARATIVE_PRIORITIZATION" && mode !== "SCHEDULING"
+            ? allowFreeText
+            : undefined,
         requireObjectionComment: showObjectionComment ? requireObjectionComment : undefined,
         allowAudienceProposals:
-          kind === "consultation" && mode !== "ATTENDANCE"
+          kind === "consultation" && mode !== "ATTENDANCE" && mode !== "SCHEDULING"
             ? allowAudienceProposals
             : undefined,
         showResultsBeforeClose,
@@ -328,7 +679,8 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
           mode !== "POINTS" &&
           mode !== "CONSENT_LOOP" &&
           mode !== "COMPARATIVE_PRIORITIZATION" &&
-          mode !== "ATTENDANCE"
+          mode !== "ATTENDANCE" &&
+          mode !== "SCHEDULING"
             ? multipleChoiceVote
             : undefined,
         maxPointsPerUser: mode === "POINTS" ? maxPointsPerUser : undefined,
@@ -338,6 +690,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
         openAt: openAt ? new Date(openAt).toISOString() : undefined,
         closeAt: closeAt ? new Date(closeAt).toISOString() : undefined,
         attendance: attendanceConfig,
+        scheduling: schedulingConfig,
       };
 
       await onSave({
@@ -345,9 +698,19 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
         title: title.trim(),
         description: description.trim() || undefined,
         ownerId: vote?.ownerId || "me",
-        proposals: mode === "ATTENDANCE" ? [] : flushedProposals.filter((p) => p.active),
+        proposals:
+          mode === "ATTENDANCE"
+            ? []
+            : mode === "SCHEDULING"
+              ? schedulingProposals
+              : flushedProposals.filter((p) => p.active),
         config,
       });
+
+      if (mode === "SCHEDULING") {
+        setSchedulingError(null);
+        setSchedulingDirty(false);
+      }
 
       if (!inline) onOpenChange?.(false);
     } finally {
@@ -422,7 +785,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
             <Label>{t.labels.mode}</Label>
             <ModeSelector
               value={mode}
-              onChange={setMode}
+              onChange={handleModeChange}
               disabled={hasStarted || isFinalized}
             />
           </div>
@@ -501,7 +864,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
               />
             </div>
 
-            {mode !== "COMPARATIVE_PRIORITIZATION" && (
+            {mode !== "COMPARATIVE_PRIORITIZATION" && mode !== "SCHEDULING" && (
               <div className="flex items-center justify-between">
                 <Label className="text-sm">{t.labels.allowFreeText}</Label>
                 <Switch
@@ -541,7 +904,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
               />
             </div>
 
-            {mode !== "POINTS" && mode !== "CONSENT_LOOP" && mode !== "COMPARATIVE_PRIORITIZATION" && mode !== "ATTENDANCE" && (
+            {mode !== "POINTS" && mode !== "CONSENT_LOOP" && mode !== "COMPARATIVE_PRIORITIZATION" && mode !== "ATTENDANCE" && mode !== "SCHEDULING" && (
               <div className="flex items-center justify-between">
                 <Label className="text-sm">{t.labels.multipleChoiceVote}</Label>
                 <Switch
@@ -942,6 +1305,434 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
                         </div>
                       </div>
                     ))
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : mode === "SCHEDULING" ? (
+            <div className="space-y-4">
+              <div className="border rounded-md p-3 bg-gray-50">
+                <p className="text-sm text-gray-600">{t.modeDescriptions.SCHEDULING}</p>
+              </div>
+
+              <div className="space-y-4 border rounded-md p-3">
+                <Label className="text-base font-medium">
+                  {t.schedulingEditor.sectionTitle}
+                </Label>
+
+                <div className="space-y-1">
+                  <Label className="text-sm" htmlFor="scheduling-timezone">
+                    {t.schedulingEditor.timezone}
+                  </Label>
+                  <select
+                    id="scheduling-timezone"
+                    value={schedulingTimeZone}
+                    onChange={(e) => {
+                      setSchedulingTimeZone(e.target.value);
+                      markSchedulingDirty();
+                    }}
+                    disabled={schedulingLocked}
+                    className="text-sm border rounded px-2 py-1 bg-white w-full"
+                  >
+                    {schedulingTimeZoneOptions.map((zone) => (
+                      <option key={zone} value={zone}>
+                        {zone}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500">{t.schedulingEditor.timezoneHelp}</p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-sm">{t.schedulingEditor.askFor}</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={schedulingUnit === "time" ? "default" : "outline"}
+                      onClick={() => {
+                        setSchedulingUnit("time");
+                        markSchedulingDirty();
+                      }}
+                      disabled={schedulingLocked}
+                    >
+                      {t.schedulingEditor.unitTime}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={schedulingUnit === "day" ? "default" : "outline"}
+                      onClick={() => {
+                        setSchedulingUnit("day");
+                        markSchedulingDirty();
+                      }}
+                      disabled={schedulingLocked}
+                    >
+                      {t.schedulingEditor.unitDay}
+                    </Button>
+                  </div>
+                  {schedulingUnit === "day" && (
+                    <p className="text-xs text-gray-500">
+                      {t.schedulingEditor.dayModeHelp}
+                    </p>
+                  )}
+                </div>
+
+                {schedulingUnit === "time" && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-sm" htmlFor="scheduling-day-start">
+                        {t.schedulingEditor.dailyStart}
+                      </Label>
+                      <Input
+                        id="scheduling-day-start"
+                        type="time"
+                        value={schedulingDayStart}
+                        onChange={(e) => {
+                          setSchedulingDayStart(e.target.value);
+                          markSchedulingDirty();
+                        }}
+                        disabled={schedulingLocked}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-sm" htmlFor="scheduling-day-end">
+                        {t.schedulingEditor.dailyEnd}
+                      </Label>
+                      <Input
+                        id="scheduling-day-end"
+                        type="time"
+                        value={schedulingDayEnd}
+                        onChange={(e) => {
+                          setSchedulingDayEnd(e.target.value);
+                          markSchedulingDirty();
+                        }}
+                        disabled={schedulingLocked}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div
+                  className={cn(
+                    "grid gap-3",
+                    schedulingUnit === "time" ? "grid-cols-3" : "grid-cols-1",
+                  )}
+                >
+                  {schedulingUnit === "time" && (
+                    <>
+                      <div className="space-y-1">
+                        <Label className="text-sm" htmlFor="scheduling-granularity">
+                          {t.schedulingEditor.granularity}
+                        </Label>
+                        <select
+                          id="scheduling-granularity"
+                          value={schedulingGranularity}
+                          onChange={(e) => {
+                            const granularity = normalizeSchedulingGranularity(
+                              Number(e.target.value),
+                            );
+                            setSchedulingGranularity(granularity);
+                            const rounded = roundSchedulingDuration(
+                              schedulingDuration,
+                              granularity,
+                              MAX_DAY_MINUTES,
+                            );
+                            setSchedulingDuration(rounded);
+                            setSchedulingDurationInput(String(rounded));
+                            markSchedulingDirty();
+                          }}
+                          disabled={schedulingLocked}
+                          className="text-sm border rounded px-2 py-1 bg-white w-full"
+                        >
+                          <option value={15}>{t.schedulingEditor.fifteenMinutes}</option>
+                          <option value={30}>{t.schedulingEditor.thirtyMinutes}</option>
+                          <option value={60}>{t.schedulingEditor.sixtyMinutes}</option>
+                        </select>
+                        <p className="text-xs text-gray-500">
+                          {t.schedulingEditor.granularityHelp}
+                        </p>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-sm" htmlFor="scheduling-duration">
+                          {t.schedulingEditor.duration}
+                        </Label>
+                        <div className="flex items-center gap-1">
+                          <Input
+                            id="scheduling-duration"
+                            type="number"
+                            min={schedulingGranularity}
+                            max={MAX_DAY_MINUTES}
+                            step={schedulingGranularity}
+                            value={schedulingDurationInput}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              setSchedulingDurationInput(raw);
+                              // Keep the committed value in step with what the
+                              // moderator is typing without rounding it yet:
+                              // rounding here rewrites "9" to "30" before the
+                              // "0" that makes "90" can be typed.
+                              const parsed = parseInt(raw, 10);
+                              if (Number.isFinite(parsed)) {
+                                setSchedulingDuration(parsed);
+                              }
+                              markSchedulingDirty();
+                            }}
+                            onBlur={() => {
+                              const rounded = roundSchedulingDuration(
+                                schedulingDuration,
+                                schedulingGranularity,
+                                MAX_DAY_MINUTES,
+                              );
+                              setSchedulingDuration(rounded);
+                              setSchedulingDurationInput(String(rounded));
+                            }}
+                            disabled={schedulingLocked}
+                          />
+                          <span className="text-xs text-gray-500">
+                            {t.schedulingEditor.minutesUnit}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500">{t.schedulingEditor.durationHelp}</p>
+                      </div>
+                    </>
+                  )}
+                  <div className="space-y-1">
+                    <Label className="text-sm" htmlFor="scheduling-max-slots">
+                      {t.schedulingEditor.maxSlots}
+                    </Label>
+                    <Input
+                      id="scheduling-max-slots"
+                      type="number"
+                      min={1}
+                      max={MAX_SCHEDULING_SLOTS}
+                      value={schedulingMaxSlots}
+                      onChange={(e) => {
+                        const next = parseInt(e.target.value, 10);
+                        setSchedulingMaxSlots(
+                          Math.min(
+                            Math.max(Number.isFinite(next) ? next : 1, 1),
+                            MAX_SCHEDULING_SLOTS,
+                          ),
+                        );
+                        markSchedulingDirty();
+                      }}
+                      disabled={schedulingLocked}
+                    />
+                    <p className="text-xs text-gray-500">{t.schedulingEditor.maxSlotsHelp}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm">{t.schedulingEditor.allowIfNeeded}</Label>
+                  <Switch
+                    checked={schedulingAllowIfNeeded}
+                    onCheckedChange={(checked) => {
+                      setSchedulingAllowIfNeeded(checked);
+                      markSchedulingDirty();
+                    }}
+                    disabled={schedulingLocked}
+                  />
+                </div>
+
+                <div className="space-y-3 border-t pt-3">
+                  <div className="space-y-1">
+                    <Label className="text-sm">{t.schedulingEditor.dates}</Label>
+                    <p className="text-xs text-gray-500">{t.schedulingEditor.datesHelp}</p>
+                  </div>
+
+                  <div className="rounded-md border bg-white p-1">
+                    <Calendar
+                      mode="multiple"
+                      selected={schedulingDates
+                        .map(schedulingDateToLocalDate)
+                        .filter((date): date is Date => Boolean(date))}
+                      onSelect={(dates) => {
+                        const keys = (dates ?? [])
+                          .map(localDateToSchedulingKey)
+                          .sort();
+                        setSchedulingDates(keys.slice(0, SCHEDULING_MAX_DATES));
+                        markSchedulingDirty();
+                      }}
+                      disabled={schedulingLocked}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs text-gray-600">
+                      {t.schedulingEditor.dateRange}
+                    </Label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs" htmlFor="scheduling-range-start">
+                          {t.schedulingEditor.startDate}
+                        </Label>
+                        <Input
+                          id="scheduling-range-start"
+                          type="date"
+                          value={schedulingRangeStart}
+                          onChange={(e) => setSchedulingRangeStart(e.target.value)}
+                          disabled={schedulingLocked}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs" htmlFor="scheduling-range-end">
+                          {t.schedulingEditor.endDate}
+                        </Label>
+                        <Input
+                          id="scheduling-range-end"
+                          type="date"
+                          value={schedulingRangeEnd}
+                          onChange={(e) => setSchedulingRangeEnd(e.target.value)}
+                          disabled={schedulingLocked}
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">{t.schedulingEditor.weekdays}</Label>
+                      <div className="flex flex-wrap gap-3">
+                        {SCHEDULING_WEEKDAYS.map((day) => (
+                          <label
+                            key={day}
+                            className="flex items-center gap-1 text-xs text-gray-700"
+                          >
+                            <Checkbox
+                              checked={schedulingRangeWeekdays.includes(day)}
+                              onCheckedChange={() => handleToggleSchedulingWeekday(day)}
+                              disabled={schedulingLocked}
+                            />
+                            {SCHEDULING_WEEKDAY_LABELS[day]}
+                          </label>
+                        ))}
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        {t.schedulingEditor.weekdaysHelp}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleApplySchedulingRange}
+                      disabled={
+                        schedulingLocked || !schedulingRangeStart || !schedulingRangeEnd
+                      }
+                    >
+                      {t.schedulingEditor.applyRange}
+                    </Button>
+                  </div>
+
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1 space-y-1">
+                      <Label className="text-xs" htmlFor="scheduling-single-date">
+                        {t.schedulingEditor.addDate}
+                      </Label>
+                      <Input
+                        id="scheduling-single-date"
+                        type="date"
+                        value={schedulingSingleDate}
+                        onChange={(e) => setSchedulingSingleDate(e.target.value)}
+                        disabled={schedulingLocked}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleAddSchedulingDate}
+                      disabled={schedulingLocked || !schedulingSingleDate}
+                    >
+                      {t.schedulingEditor.addDate}
+                    </Button>
+                  </div>
+
+                  {schedulingDates.length === 0 ? (
+                    <p className="text-xs text-gray-500">{t.schedulingEditor.noSlots}</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {schedulingDates.map((date) => (
+                        <span
+                          key={date}
+                          className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
+                        >
+                          {date}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveSchedulingDate(date)}
+                            disabled={schedulingLocked}
+                            title={t.schedulingEditor.removeDate}
+                            aria-label={t.schedulingEditor.removeDate}
+                            className="text-gray-500 hover:text-gray-900 disabled:opacity-50"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2 border-t pt-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleGenerateSchedulingSlots}
+                      disabled={schedulingLocked}
+                    >
+                      {t.schedulingEditor.generateSlots}
+                    </Button>
+                    <span className="text-xs text-gray-500">
+                      {t.schedulingEditor.slotCount.replace(
+                        "{{count}}",
+                        String(schedulingSlotProposals.length),
+                      )}
+                    </span>
+                  </div>
+
+                  {schedulingError && (
+                    <p className="text-xs text-red-600">{schedulingError}</p>
+                  )}
+
+                  {schedulingSlotProposals.length === 0 ? (
+                    <p className="text-xs text-gray-500">{t.schedulingEditor.noSlots}</p>
+                  ) : (
+                    <div className="space-y-1">
+                      <Label className="text-xs text-gray-500">
+                        {t.schedulingEditor.preview}
+                      </Label>
+                      <ul className="space-y-1">
+                        {schedulingSlotProposals.slice(0, 12).map((slot) => (
+                          <li
+                            key={slot.id}
+                            className="flex items-center justify-between gap-2 rounded border px-2 py-1 text-xs"
+                          >
+                            <span>
+                              {schedulingUnit === "day"
+                                ? formatSchedulingDay(
+                                    slot.timeSlot?.startAt ?? "",
+                                    schedulingTimeZone,
+                                  )
+                                : formatSchedulingRange(
+                                    slot.timeSlot?.startAt ?? "",
+                                    slot.timeSlot?.endAt ?? "",
+                                    schedulingTimeZone,
+                                  )}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveSchedulingSlot(slot)}
+                              disabled={schedulingLocked}
+                              title={t.schedulingEditor.removeSlot}
+                              aria-label={t.schedulingEditor.removeSlot}
+                              className="text-gray-500 hover:text-gray-900 disabled:opacity-50"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                 </div>
               </div>

@@ -37,6 +37,7 @@ const latest = (a: string | null, b: string | null): string | null => {
  */
 export const VoteParticipationPanel: React.FC<VoteParticipationPanelProps> = ({ vote, moderatorToken }) => {
   const { t: tt } = useTranslation();
+  const isAnonymous = vote.config.isAnonymous ?? true;
   const { responses: submitted } = useVoteResults(vote.id, true, false, moderatorToken);
   // In-progress selections come from the moderator-authenticated channel and
   // only while the vote is open, so a draft from a dead tab never leaks into a
@@ -61,6 +62,7 @@ export const VoteParticipationPanel: React.FC<VoteParticipationPanelProps> = ({ 
         voterToken: string;
         submittedCount: number;
         draftCount: number;
+        displayName: string | null;
         submittedAt: string | null;
         draftUpdatedAt: string | null;
         lastSeenAt: string | null;
@@ -73,6 +75,7 @@ export const VoteParticipationPanel: React.FC<VoteParticipationPanelProps> = ({ 
         voterToken: identity,
         submittedCount: 0,
         draftCount: 0,
+        displayName: null,
         submittedAt: null,
         draftUpdatedAt: null,
         lastSeenAt: null,
@@ -93,17 +96,25 @@ export const VoteParticipationPanel: React.FC<VoteParticipationPanelProps> = ({ 
       row.submittedCount += 1;
       row.submittedAt = latest(row.submittedAt, response.submittedAt);
       row.lastSeenAt = latest(row.lastSeenAt, response.submittedAt);
+      if (!row.displayName && !isAnonymous) {
+        row.displayName = response.attendeeData?.displayName ?? null;
+      }
     }
     for (const draft of drafts) {
       const row = ensure(draft.participantId ?? draft.voterToken);
       row.draftCount += 1;
       row.draftUpdatedAt = latest(row.draftUpdatedAt, draft.submittedAt);
       row.lastSeenAt = latest(row.lastSeenAt, draft.submittedAt);
+      // A draft carries the name only for non-anonymous scheduling votes; it is
+      // read through the moderator capability, never published publicly.
+      if (!row.displayName && !isAnonymous) {
+        row.displayName = draft.attendeeData?.displayName ?? null;
+      }
     }
 
     const stats: BallotParticipationStat[] = Array.from(byToken.values()).map((row) => ({
       voterToken: row.voterToken,
-      displayName: null,
+      displayName: row.displayName,
       hasDraft: row.draftCount > 0,
       hasSubmitted: row.submittedCount > 0,
       // Non-comparative modes have no coverage/confidence. Report full coverage
@@ -121,9 +132,9 @@ export const VoteParticipationPanel: React.FC<VoteParticipationPanelProps> = ({ 
     return deriveBallotParticipationFromStats(
       vote.id,
       stats,
-      vote.config.isAnonymous ?? true,
+      isAnonymous,
     );
-  }, [vote.id, vote.config.isAnonymous, presence, submitted, drafts]);
+  }, [vote.id, isAnonymous, presence, submitted, drafts]);
 
   if (summary.ballots.length === 0) {
     return <p className="text-sm text-gray-400">{tt('voting.comparative.noParticipation')}</p>;

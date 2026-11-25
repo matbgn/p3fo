@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildEventIcs, escapeIcsText } from './ics';
+import { buildAllDayEventIcs, buildEventIcs, escapeIcsText } from './ics';
 
 describe('buildEventIcs', () => {
   it('builds a VCALENDAR with UTC start and end stamps', () => {
@@ -65,5 +65,44 @@ describe('escapeIcsText', () => {
   it('escapes backslashes, separators and newlines', () => {
     expect(escapeIcsText('a,b;c\\d\ne')).toBe('a\\,b\\;c\\\\d\\ne');
     expect(escapeIcsText('first\r\nsecond')).toBe('first\\nsecond');
+  });
+});
+
+describe('buildAllDayEventIcs', () => {
+  it('emits DATE-valued DTSTART and the next day as DTEND', () => {
+    const ics = buildAllDayEventIcs({
+      title: 'Offsite, day one',
+      description: 'Bring; notes\\and a pen',
+      dateKey: '2026-06-01',
+      url: 'https://example.com/offsite',
+    });
+
+    expect(ics).toContain('BEGIN:VCALENDAR');
+    expect(ics).toContain('VERSION:2.0');
+    expect(ics).toContain('BEGIN:VEVENT');
+    expect(ics).toContain('DTSTART;VALUE=DATE:20260601');
+    expect(ics).toContain('DTEND;VALUE=DATE:20260602');
+    expect(ics).toContain('SUMMARY:Offsite\\, day one');
+    expect(ics).toContain('DESCRIPTION:Bring\\; notes\\\\and a pen');
+    expect(ics).toContain('URL:https://example.com/offsite');
+    expect(ics).toMatch(/^UID:.+@p3fo$/m);
+    expect(ics).toMatch(/^DTSTAMP:\d{8}T\d{6}Z$/m);
+    expect(ics).toMatch(/^PRODID:/m);
+    expect(ics.trim().endsWith('END:VCALENDAR')).toBe(true);
+  });
+
+  it('advances across a year boundary', () => {
+    const ics = buildAllDayEventIcs({
+      title: 'New Year',
+      dateKey: '2026-12-31',
+    });
+    expect(ics).toContain('DTSTART;VALUE=DATE:20261231');
+    expect(ics).toContain('DTEND;VALUE=DATE:20270101');
+    expect(ics).toContain('DESCRIPTION:');
+  });
+
+  it('rejects a missing title or an invalid date', () => {
+    expect(() => buildAllDayEventIcs({ title: '  ', dateKey: '2026-06-01' })).toThrow();
+    expect(() => buildAllDayEventIcs({ title: 'Event', dateKey: 'not-a-date' })).toThrow();
   });
 });

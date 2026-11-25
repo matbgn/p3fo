@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { DbClient, SprintWellbeingRecord, applyTaskTemporalMirror } from './index.js';
+import { DbClient, SprintWellbeingRecord, VoteResponseUpsert, applyTaskTemporalMirror } from './index.js';
 import type { SprintStateEntity } from '../../src/lib/sprint-types.js';
 import type {
   TaskEntity,
@@ -26,6 +26,7 @@ import type {
   PomodoroSession
 } from '../../src/lib/persistence-types.js';
 import type { BallotParticipationStat } from '../../src/lib/vote-ranking.js';
+import { mergeAttendeeDisplayName } from '../../src/lib/attendance.js';
 
 // Raw database row types (SQLite stores booleans as 0/1 integers and JSON as strings)
 interface TaskDbRow {
@@ -2656,6 +2657,132 @@ class SqliteClient implements DbClient {
       .prepare(`DELETE FROM "voteResponses" WHERE ${predicate}`)
       .run({ voteId, voterToken, proposalId, loopId });
     return rows.map((row) => row.id);
+  }
+
+  async replaceVoteResponsesForVoter(
+    voteId: string,
+    voterToken: string,
+    upserts: VoteResponseUpsert[],
+    scopeProposalIds: string[],
+  ): Promise<{ responses: VoteResponseEntity[]; removedIds: string[] }> {
+    // Prepare once, then reuse inside the transaction instead of re-preparing
+    // the upsert for every selected slot.
+    const insertStmt = this.db.prepare(`
+      INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt", "attendeeData")
+      VALUES(@id, @voteId, @proposalId, @loopId, @userId, @voterToken, @value, @comment, @submittedAt, @attendeeData)
+      ON CONFLICT("voteId", "voterToken", COALESCE("proposalId", ''), COALESCE("loopId", '')) DO UPDATE SET
+        "proposalId" = excluded."proposalId",
+        "loopId" = excluded."loopId",
+        "userId" = excluded."userId",
+        "value" = excluded."value",
+        "comment" = excluded."comment",
+        "submittedAt" = excluded."submittedAt",
+        "attendeeData" = excluded."attendeeData"
+      RETURNING *
+    `);
+    // The delete set is derived inside the transaction: every in-scope row for
+    // this voter that is not a canonical (loopId = null) row for a kept slot.
+    // `json_each` keeps the statement to two bound values no matter how many
+    // slots are in scope.
+    const predicate = `
+      "voteId" = @voteId
+        AND "voterToken" = @voterToken
+        AND "proposalId" IN (SELECT value FROM json_each(@scope))
+        AND NOT ("loopId" IS NULL AND "proposalId" IN (SELECT value FROM json_each(@keep)))
+    `;
+    const selectStmt = this.db.prepare(`SELECT "id" FROM "voteResponses" WHERE ${predicate}`);
+    const deleteStmt = this.db.prepare(`DELETE FROM "voteResponses" WHERE ${predicate}`);
+
+    this.db.exec('BEGIN');
+    try {
+      const responses: VoteResponseEntity[] = [];
+      const submittedAt = new Date().toISOString();
+      for (const upsert of upserts) {
+        const persisted = insertStmt.get({
+          id: crypto.randomUUID(),
+          voteId,
+          proposalId: upsert.proposalId,
+          loopId: null,
+          userId: null,
+          voterToken,
+          value: upsert.value,
+          comment: null,
+          submittedAt,
+          attendeeData: upsert.attendeeData ? JSON.stringify(upsert.attendeeData) : null,
+        }) as unknown as VoteResponseDbRow | undefined;
+        if (persisted) responses.push(this.mapVoteResponseDbRowToEntity(persisted));
+      }
+      let removedIds: string[] = [];
+      if (scopeProposalIds.length > 0) {
+        const params = {
+          voteId,
+          voterToken,
+          scope: JSON.stringify(scopeProposalIds),
+          keep: JSON.stringify(upserts.map((upsert) => upsert.proposalId)),
+        };
+        const rows = selectStmt.all(params) as unknown as Array<{ id: string }>;
+        deleteStmt.run(params);
+        removedIds = rows.map((row) => row.id);
+      }
+      this.db.exec('COMMIT');
+      return { responses, removedIds };
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  async renameVoteResponsesForVoter(
+    voteId: string,
+    voterToken: string,
+    displayName: string,
+    options: { proposalId: string | null; visibility: 'hidden' | 'auto' },
+  ): Promise<VoteResponseEntity[]> {
+    // Read and update inside one transaction: SQLite serializes writers, so an
+    // availability replace cannot interleave between the read and the write and
+    // resurrect a deleted slot from a stale snapshot.
+    const proposalClause =
+      options.proposalId === null
+        ? ''
+        : ' AND "proposalId" = @proposalId';
+    const selectStmt = this.db.prepare(`
+      SELECT * FROM "voteResponses"
+      WHERE "voteId" = @voteId
+        AND "voterToken" = @voterToken
+        AND "loopId" IS NULL
+        AND "proposalId" IS NOT NULL${proposalClause}
+      ORDER BY "submittedAt" ASC
+    `);
+    const updateStmt = this.db.prepare(
+      'UPDATE "voteResponses" SET "attendeeData" = @attendeeData WHERE "id" = @id RETURNING *',
+    );
+    this.db.exec('BEGIN');
+    try {
+      const params =
+        options.proposalId === null
+          ? { voteId, voterToken }
+          : { voteId, voterToken, proposalId: options.proposalId };
+      const rows = selectStmt.all(params) as unknown as VoteResponseDbRow[];
+      const updated: VoteResponseEntity[] = [];
+      for (const raw of rows) {
+        const row = this.mapVoteResponseDbRowToEntity(raw);
+        const attendeeData = mergeAttendeeDisplayName(
+          row.attendeeData,
+          displayName,
+          options.visibility,
+        );
+        const persisted = updateStmt.get({
+          id: row.id,
+          attendeeData: JSON.stringify(attendeeData),
+        }) as unknown as VoteResponseDbRow | undefined;
+        if (persisted) updated.push(this.mapVoteResponseDbRowToEntity(persisted));
+      }
+      this.db.exec('COMMIT');
+      return updated;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   async importVoteResponses(items: VoteResponseEntity[]): Promise<void> {

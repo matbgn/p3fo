@@ -960,7 +960,8 @@
       "attendance": "Présence",
       "points": "Budget de points",
       "majorityJudgment": "Jugement Majoritaire",
-      "consentLoop": "Boucle de consentement"
+      "consentLoop": "Boucle de consentement",
+      "scheduling": "Planification"
     },
     "comparative": {
       "title": "Priorisation comparative",

@@ -504,5 +504,16 @@ describe('shared vote response projection', () => {
       );
       expect(safe.attendeeData).toEqual({ partySize: 4, visibility: 'hidden' });
     });
+
+    it('does not publish a hidden scheduling name into the shared document', () => {
+      // A moderator fetch now returns hidden scheduling names; a client that
+      // re-publishes that payload through shareVoteResponse must not leak them.
+      const shared = shareVoteResponse(
+        'vote-1',
+        attendeeResponse({ displayName: 'Alice', partySize: 2, visibility: 'hidden' }),
+      );
+      expect(shared.attendeeData).toEqual({ partySize: 2, visibility: 'hidden' });
+      expect(JSON.stringify(shared)).not.toContain('Alice');
+    });
   });
 });

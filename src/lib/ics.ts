@@ -1,9 +1,19 @@
+import { Temporal } from '@js-temporal/polyfill';
+
 export interface EventIcsOptions {
   title: string;
   description?: string;
   startAt: string | Date;
   endAt?: string | Date;
   location?: string;
+  url?: string;
+}
+
+export interface AllDayEventIcsOptions {
+  title: string;
+  description?: string;
+  /** Local calendar date (YYYY-MM-DD) the all-day event covers. */
+  dateKey: string;
   url?: string;
 }
 
@@ -74,6 +84,59 @@ function stableUid(title: string, start: Date): string {
   return `${(hash >>> 0).toString(16).padStart(8, '0')}@p3fo`;
 }
 
+/** RFC 5545 DATE value, e.g. 20260501. */
+function toDateStamp(date: Temporal.PlainDate): string {
+  return [
+    String(date.year).padStart(4, '0'),
+    String(date.month).padStart(2, '0'),
+    String(date.day).padStart(2, '0'),
+  ].join('');
+}
+
+interface CalendarEnvelope {
+  /** Precomputed stable UID, including the `@p3fo` suffix. */
+  uid: string;
+  /** Precomputed DTSTART line (UTC stamp or all-day DATE value). */
+  dtStartLine: string;
+  /** Precomputed DTEND line (UTC stamp or all-day DATE value). */
+  dtEndLine: string;
+  title: string;
+  description?: string;
+  /** Emit LOCATION when provided; `''` keeps the empty LOCATION line. */
+  location?: string;
+  url?: string;
+}
+
+/**
+ * Shared RFC 5545 envelope for single and all-day events. Only the UID seed and
+ * the DTSTART/DTEND representation differ between the two builders, so a change
+ * to a header, property or folding rule applies to both calendar paths.
+ */
+function buildCalendarFile(envelope: CalendarEnvelope): string {
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    `PRODID:${PRODID}`,
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    `UID:${envelope.uid}`,
+    `DTSTAMP:${toUtcStamp(new Date())}`,
+    envelope.dtStartLine,
+    envelope.dtEndLine,
+    `SUMMARY:${escapeIcsText(envelope.title)}`,
+    `DESCRIPTION:${escapeIcsText(envelope.description ?? '')}`,
+  ];
+  if (envelope.location !== undefined) {
+    lines.push(`LOCATION:${escapeIcsText(envelope.location)}`);
+  }
+  const url = safeHttpUrl(envelope.url);
+  if (url) lines.push(`URL:${url}`);
+  lines.push('END:VEVENT', 'END:VCALENDAR');
+
+  return `${lines.map(foldLine).join('\r\n')}\r\n`;
+}
+
 /**
  * Build a single-event calendar file. `endAt` is optional: an invalid or
  * missing end falls back to one hour after the start so DTEND is always valid.
@@ -91,26 +154,41 @@ export function buildEventIcs(options: EventIcsOptions): string {
       ? parsedEnd
       : new Date(start.getTime() + DEFAULT_DURATION_MS);
 
-  const lines = [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    `PRODID:${PRODID}`,
-    'CALSCALE:GREGORIAN',
-    'METHOD:PUBLISH',
-    'BEGIN:VEVENT',
-    `UID:${stableUid(title, start)}`,
-    `DTSTAMP:${toUtcStamp(new Date())}`,
-    `DTSTART:${toUtcStamp(start)}`,
-    `DTEND:${toUtcStamp(end)}`,
-    `SUMMARY:${escapeIcsText(title)}`,
-    `DESCRIPTION:${escapeIcsText(options.description ?? '')}`,
-    `LOCATION:${escapeIcsText(options.location ?? '')}`,
-  ];
-  const url = safeHttpUrl(options.url);
-  if (url) lines.push(`URL:${url}`);
-  lines.push('END:VEVENT', 'END:VCALENDAR');
+  return buildCalendarFile({
+    uid: stableUid(title, start),
+    dtStartLine: `DTSTART:${toUtcStamp(start)}`,
+    dtEndLine: `DTEND:${toUtcStamp(end)}`,
+    title,
+    description: options.description,
+    location: options.location ?? '',
+    url: options.url,
+  });
+}
 
-  return `${lines.map(foldLine).join('\r\n')}\r\n`;
+/**
+ * Build a calendar file for a whole-day event. DTSTART and DTEND are DATE
+ * values, and DTEND is the next calendar day (exclusive, per RFC 5545).
+ */
+export function buildAllDayEventIcs(options: AllDayEventIcsOptions): string {
+  const title = options.title?.trim();
+  if (!title) throw new Error('An event title is required');
+
+  let start: Temporal.PlainDate;
+  try {
+    start = Temporal.PlainDate.from(options.dateKey);
+  } catch {
+    throw new Error('A valid date is required');
+  }
+  const end = start.add({ days: 1 });
+
+  return buildCalendarFile({
+    uid: stableUid(title, new Date(`${start.toString()}T00:00:00Z`)),
+    dtStartLine: `DTSTART;VALUE=DATE:${toDateStamp(start)}`,
+    dtEndLine: `DTEND;VALUE=DATE:${toDateStamp(end)}`,
+    title,
+    description: options.description,
+    url: options.url,
+  });
 }
 
 /** Trigger a browser download for an ICS payload. */

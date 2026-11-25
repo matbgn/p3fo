@@ -11,11 +11,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { VoteEntity, VoteProposal } from "@/lib/persistence-types";
+import { VoteEntity, VoteMode, VoteProposal } from "@/lib/persistence-types";
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { useTranslation } from "react-i18next";
 import { ModeSelector } from "./ModeSelector";
 import { ProposalEditor } from "./ProposalEditor";
+
+// This dialog has no scheduling setup and submits content proposals without
+// time slots, so the server rejects a SCHEDULING create and a browser-local
+// poll would have no dates or slots to vote on.
+const LINKED_VOTE_EXCLUDED_MODES: VoteMode[] = ["SCHEDULING"];
 
 interface CreateLinkedVoteDialogProps {
   open: boolean;
@@ -107,7 +112,11 @@ export const CreateLinkedVoteDialog: React.FC<CreateLinkedVoteDialogProps> = ({
 
           <div className="flex flex-col gap-2">
             <Label>{t.labels.votingMode}</Label>
-            <ModeSelector value={mode} onChange={setMode} />
+            <ModeSelector
+              value={mode}
+              onChange={setMode}
+              excludeModes={LINKED_VOTE_EXCLUDED_MODES}
+            />
           </div>
 
           <div className="flex flex-col gap-2">

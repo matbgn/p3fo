@@ -1,5 +1,5 @@
 import { Pool, PoolClient } from 'pg';
-import { DbClient, SprintWellbeingRecord, applyTaskTemporalMirror } from './index.js';
+import { DbClient, SprintWellbeingRecord, VoteResponseUpsert, applyTaskTemporalMirror } from './index.js';
 import type { SprintStateEntity } from '../../src/lib/sprint-types.js';
 import type {
   TaskEntity,
@@ -27,6 +27,7 @@ import type {
   PomodoroSession
 } from '../../src/lib/persistence-types.js';
 import type { BallotParticipationStat } from '../../src/lib/vote-ranking.js';
+import { mergeAttendeeDisplayName } from '../../src/lib/attendance.js';
 
 // Raw database row types for pg (JSONB is already parsed, booleans are booleans)
 interface TaskDbRow {
@@ -2332,9 +2333,8 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
   }
 
   // Vote responses
-  async getVoteResponses(voteId: string): Promise<VoteResponseEntity[]> {
-    const result = await this.pool.query('SELECT * FROM "voteResponses" WHERE "voteId" = $1 ORDER BY "submittedAt" ASC', [voteId]);
-    return result.rows.map((row: Record<string, unknown>) => ({
+  private mapVoteResponseRow(row: Record<string, unknown>): VoteResponseEntity {
+    return {
       id: row.id as string,
       voteId: row.voteId as string,
       proposalId: row.proposalId as string | null,
@@ -2343,9 +2343,17 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       voterToken: row.voterToken as string,
       value: row.value as number,
       comment: (row.comment as string | null) ?? undefined,
-      submittedAt: row.submittedAt as string,
+      // `pg` parses TIMESTAMPTZ into a `Date`. Rows from this mapper feed the
+      // shared Yjs map, where lib0 encodes a `Date` as `{}`, so they must carry
+      // an ISO string exactly like `createVoteResponse` does.
+      submittedAt: this.toIsoString(row.submittedAt) ?? '',
       attendeeData: this.parseJsonb(row.attendeeData),
-    }));
+    };
+  }
+
+  async getVoteResponses(voteId: string): Promise<VoteResponseEntity[]> {
+    const result = await this.pool.query('SELECT * FROM "voteResponses" WHERE "voteId" = $1 ORDER BY "submittedAt" ASC', [voteId]);
+    return result.rows.map((row: Record<string, unknown>) => this.mapVoteResponseRow(row));
   }
 
   async createVoteResponse(voteId: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity> {
@@ -2428,6 +2436,156 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       [voteId, voterToken, proposalId, loopId],
     );
     return (result.rows as Array<{ id: string }>).map((row) => row.id);
+  }
+
+  async replaceVoteResponsesForVoter(
+    voteId: string,
+    voterToken: string,
+    upserts: VoteResponseUpsert[],
+    scopeProposalIds: string[],
+  ): Promise<{ responses: VoteResponseEntity[]; removedIds: string[] }> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Serialize this voter's replacements across app instances. The
+      // process-local write lock only covers one process; a rolling deploy or
+      // two tabs landing on different instances would otherwise interleave a
+      // read-modify-write of the same matrix. The lock releases at COMMIT/ROLLBACK.
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [
+        `voteResponse:${voteId}:${voterToken}`,
+      ]);
+      const submittedAt = new Date().toISOString();
+      const responses: VoteResponseEntity[] = [];
+      if (upserts.length > 0) {
+        // One multi-row upsert instead of one INSERT per selected slot: a
+        // 500-slot batch must not cost 500 sequential round trips while the
+        // write lock is held. `RETURNING *` still yields the persisted ids so
+        // an upsert replaces the voter's live Yjs entry rather than duplicating it.
+        const inserted = await client.query(
+          `INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt", "attendeeData")
+           SELECT entry."id", $1, entry."proposalId", NULL, entry."userId", $2, entry."value", entry."comment", entry."submittedAt"::timestamptz, entry."attendeeData"
+           FROM unnest($3::text[], $4::text[], $5::int[], $6::text[], $7::text[], $8::text[], $9::jsonb[])
+             AS entry("id", "proposalId", "value", "userId", "comment", "submittedAt", "attendeeData")
+           ON CONFLICT ("voteId", "voterToken", (COALESCE("proposalId", '')), (COALESCE("loopId", '')))
+             DO UPDATE SET
+               "userId" = EXCLUDED."userId",
+               "value" = EXCLUDED."value",
+               "comment" = EXCLUDED."comment",
+               "submittedAt" = EXCLUDED."submittedAt",
+               "attendeeData" = EXCLUDED."attendeeData"
+           RETURNING *`,
+          [
+            voteId,
+            voterToken,
+            upserts.map(() => crypto.randomUUID()),
+            upserts.map((upsert) => upsert.proposalId),
+            upserts.map((upsert) => upsert.value),
+            upserts.map(() => null),
+            upserts.map(() => null),
+            upserts.map(() => submittedAt),
+            upserts.map((upsert) =>
+              upsert.attendeeData ? JSON.stringify(upsert.attendeeData) : null,
+            ),
+          ],
+        );
+        for (const row of inserted.rows as Array<Record<string, unknown>>) {
+          responses.push(this.mapVoteResponseRow(row));
+        }
+      }
+      let removedIds: string[] = [];
+      if (scopeProposalIds.length > 0) {
+        // Derive the delete set inside the transaction from the same snapshot
+        // that holds the upserts: every in-scope row for this voter that is not
+        // a canonical (loopId = null) row for a kept slot. The old code derived
+        // it from a pre-BEGIN read, which let a concurrent request re-insert a
+        // slot this one had cleared.
+        const deleted = await client.query(
+          `DELETE FROM "voteResponses"
+           WHERE "voteId" = $1
+             AND "voterToken" = $2
+             AND "proposalId" = ANY($3::text[])
+             AND NOT ("loopId" IS NULL AND "proposalId" = ANY($4::text[]))
+           RETURNING "id"`,
+          [voteId, voterToken, scopeProposalIds, upserts.map((upsert) => upsert.proposalId)],
+        );
+        removedIds = (deleted.rows as Array<{ id: string }>).map((row) => row.id);
+      }
+      await client.query('COMMIT');
+      return { responses, removedIds };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async renameVoteResponsesForVoter(
+    voteId: string,
+    voterToken: string,
+    displayName: string,
+    options: { proposalId: string | null; visibility: 'hidden' | 'auto' },
+  ): Promise<VoteResponseEntity[]> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Same per-voter lock as `replaceVoteResponsesForVoter`: the row set is
+      // read under the lock, so an availability batch cannot delete a slot
+      // between this read and the update, and the stale row cannot be re-added.
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [
+        `voteResponse:${voteId}:${voterToken}`,
+      ]);
+      const selected = await client.query(
+        `SELECT * FROM "voteResponses"
+         WHERE "voteId" = $1
+           AND "voterToken" = $2
+           AND "loopId" IS NULL
+           AND "proposalId" IS NOT NULL
+           AND ($3::text IS NULL OR "proposalId" = $3)
+         ORDER BY "submittedAt" ASC`,
+        [voteId, voterToken, options.proposalId],
+      );
+      // Merge the new name into each row's stored attendeeData in memory, then
+      // write every row with one UPDATE instead of one round trip per row: a
+      // scheduling voter can own up to `maxSlots` (1000) slot rows, and this
+      // runs inside the per-voter advisory lock and a pooled connection.
+      const rowsToUpdate = (
+        selected.rows as Array<Record<string, unknown>>
+      ).map((raw) => {
+        const row = this.mapVoteResponseRow(raw);
+        const attendeeData = mergeAttendeeDisplayName(
+          row.attendeeData,
+          displayName,
+          options.visibility,
+        );
+        return { id: row.id, attendeeData: JSON.stringify(attendeeData) };
+      });
+      const updated: VoteResponseEntity[] = [];
+      if (rowsToUpdate.length > 0) {
+        const persisted = await client.query(
+          `UPDATE "voteResponses" AS r
+           SET "attendeeData" = update_row."attendeeData"::jsonb
+           FROM unnest($1::text[], $2::text[])
+             AS update_row("id", "attendeeData")
+           WHERE r."id" = update_row."id"
+           RETURNING r.*`,
+          [
+            rowsToUpdate.map((row) => row.id),
+            rowsToUpdate.map((row) => row.attendeeData),
+          ],
+        );
+        for (const raw of persisted.rows as Array<Record<string, unknown>>) {
+          updated.push(this.mapVoteResponseRow(raw));
+        }
+      }
+      await client.query('COMMIT');
+      return updated;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async importVoteResponses(items: VoteResponseEntity[]): Promise<void> {
