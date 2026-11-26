@@ -31,23 +31,8 @@ if (typeof crypto.randomUUID !== 'function') {
 
 export type TriageStatus = "Backlog" | "Ready" | "WIP" | "Blocked" | "Done" | "Dropped" | "Archived";
 
-export type Category =
-  | "Marketing"
-  | "Documentation"
-  | "Consulting"
-  | "Testing"
-  | "Funerals"
-  | "Negotiated overtime"
-  | "Sickness"
-  | "Finances"
-  | "HR"
-  | "Training"
-  | "Support"
-  | "UX/UI"
-  | "Admin"
-  | "Development"
-  | "System Operations"
-  | "Private";
+/** Categories are workspace settings; any non-empty name is valid. */
+export type Category = string;
 
 export type Task = {
   id: string;
@@ -388,20 +373,58 @@ loadTasks();
 
 
 
-async function createTask(title: string, parentId: string | null, userId?: string) {
+/**
+ * Optional taxonomy fields written with the task on creation, so a quick add
+ * is one persistence write instead of a create followed by patch updates.
+ */
+type CreateTaskOverrides = {
+  category?: Category;
+  color?: TaskColor;
+};
+
+/** One task in a batch create; each may carry its own assignee from `@trigram`. */
+export type CreateTaskBatchInput = CreateTaskOverrides & {
+  title: string;
+  userId?: string;
+};
+
+/** A parent resolved once for a whole batch create. */
+type BuildTaskParentContext = {
+  parentTask: Task | null;
+  childDepth: number;
+};
+
+/**
+ * Builds a new task in memory. `siblingOffset` lets a batch reserve priorities
+ * for the tasks created before it without mutating the parent between builds.
+ * `parentContext` lets a batch resolve the parent once instead of searching
+ * the whole task list (and rebuilding its id map) for every item.
+ */
+function buildTask(
+  title: string,
+  parentId: string | null,
+  userId?: string,
+  overrides?: CreateTaskOverrides,
+  siblingOffset = 0,
+  parentContext?: BuildTaskParentContext,
+): Task {
   // Look up parent for metadata inheritance
-  const parentTask = parentId ? tasks.find(t => t.id === parentId) : null;
+  const parentTask = parentContext
+    ? parentContext.parentTask
+    : parentId ? tasks.find(t => t.id === parentId) : null;
 
   // Compute dot-notation priority so new children sort last among siblings.
   // Roots get integer priorities; children get parentPriority + (childCount+1) * 10^(-2*depth).
-  const childCount = parentTask?.children?.length ?? 0;
+  const childCount = (parentTask?.children?.length ?? 0) + siblingOffset;
   const parentPriority = parentTask?.priority ?? 0;
-  const childDepth = parentTask ? getDepth(parentTask, tasks) + 1 : 0;
+  const childDepth = parentContext
+    ? parentContext.childDepth
+    : parentTask ? getDepth(parentTask, tasks) + 1 : 0;
   const newPriority = parentTask
     ? computeChildPriority(parentPriority, childCount, childDepth)
     : 0;
 
-  const t: Task = {
+  return {
     id: crypto.randomUUID(),
     title: title.trim(),
     createdAt: Date.now(),
@@ -415,7 +438,7 @@ async function createTask(title: string, parentId: string | null, userId?: strin
     sprintTarget: parentTask?.sprintTarget ?? false,
     difficulty: parentTask?.difficulty ?? 1,
     timer: [],
-    category: parentTask?.category ?? undefined,
+    category: overrides?.category ?? parentTask?.category ?? undefined,
     terminationDate: undefined,
     dueDate: undefined,
     dueTime: undefined,
@@ -427,12 +450,59 @@ async function createTask(title: string, parentId: string | null, userId?: strin
     plannedDate: parentTask?.plannedDate ?? null,
     plannedTime: null,
     plannedPosition: null,
-    color: parentTask?.color ?? 'none',
+    color: overrides?.color ?? parentTask?.color ?? 'none',
     recurrence: null,
     seriesId: null,
     occurrenceDate: null,
     deletedAt: undefined,
   };
+}
+
+/**
+ * Links new children to a parent and moves a running parent timer to the
+ * first child. Shared by the single- and batch-create paths so the hierarchy
+ * and timer-transfer invariants cannot drift apart.
+ */
+function linkChildrenToParent(
+  parent: Task,
+  childIds: string[],
+): { parent: Task; transferredTimer: Task['timer'] | null } {
+  const transferredTimer = parent.timer && parent.timer.length > 0 ? parent.timer : null;
+  const linkedParent: Task = {
+    ...parent,
+    children: Array.from(new Set([...(parent.children || []), ...childIds])),
+    ...(transferredTimer ? { timer: [] } : {}),
+  };
+
+  return { parent: linkedParent, transferredTimer };
+}
+
+/**
+ * Merges patches into the given tasks by id, bumping `updatedAt` once per
+ * batch. Shared by the single- and batch-update paths so the per-task
+ * bookkeeping stays identical.
+ */
+function applyTaskPatches(
+  currentTasks: Task[],
+  patches: Array<{ id: string; patch: Partial<Task> }>,
+): Map<string, Task> {
+  const byId = new Map<string, Task>();
+  // Index the list once: a per-patch `find` makes a batch of P patches
+  // O(P × tasks), which the diff import turns into a main-thread stall.
+  const currentById = new Map(currentTasks.map((task) => [task.id, task]));
+  const now = Date.now();
+
+  for (const { id, patch } of patches) {
+    const task = byId.get(id) ?? currentById.get(id);
+    if (!task) continue;
+    byId.set(id, { ...task, ...patch, updatedAt: now });
+  }
+
+  return byId;
+}
+
+async function createTask(title: string, parentId: string | null, userId?: string, overrides?: CreateTaskOverrides) {
+  const t = buildTask(title, parentId, userId, overrides);
 
   try {
     const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
@@ -454,31 +524,29 @@ async function createTask(title: string, parentId: string | null, userId?: strin
     let timerTransferred = false;
 
     if (parentId) {
+      const parent = tasks.find(currentTask => currentTask.id === parentId);
 
-      tasks = tasks.map(currentTask => {
-        if (currentTask.id === parentId) {
-          const updatedParent = {
-            ...currentTask,
-            children: Array.from(new Set([...(currentTask.children || []), t.id]))
-          };
-          if (updatedParent.timer && updatedParent.timer.length > 0) {
-            t.timer = updatedParent.timer;
-            updatedParent.timer = [];
-            timerTransferred = true;
-            syncTaskToYjs(t.id, t);
-          }
-          syncTaskToYjs(updatedParent.id, updatedParent);
-          return updatedParent;
+      if (parent) {
+        const linked = linkChildrenToParent(parent, [t.id]);
+        if (linked.transferredTimer) {
+          t.timer = linked.transferredTimer;
+          timerTransferred = true;
         }
-        return currentTask;
-      });
 
-      // Replace the child task in the array with a fresh object reference
-      // so React.memo detects the prop change and re-renders the timer pill.
-      if (timerTransferred) {
         tasks = tasks.map(currentTask =>
-          currentTask.id === t.id ? { ...t } : currentTask
+          currentTask.id === parentId ? linked.parent : currentTask
         );
+
+        // Replace the child task in the array with a fresh object reference
+        // so React.memo detects the prop change and re-renders the timer pill.
+        if (timerTransferred) {
+          tasks = tasks.map(currentTask =>
+            currentTask.id === t.id ? { ...t } : currentTask
+          );
+          syncTaskToYjs(t.id, t);
+        }
+
+        syncTaskToYjs(linked.parent.id, linked.parent);
       }
 
       // Persist timer transfer to DB (both child and parent)
@@ -511,31 +579,29 @@ async function createTask(title: string, parentId: string | null, userId?: strin
     tasks = [...tasks, t];
     let timerTransferred = false;
     if (parentId) {
+      const parent = tasks.find(currentTask => currentTask.id === parentId);
 
-      tasks = tasks.map(currentTask => {
-        if (currentTask.id === parentId) {
-          const updatedParent = {
-            ...currentTask,
-            children: Array.from(new Set([...(currentTask.children || []), t.id]))
-          };
-          if (updatedParent.timer && updatedParent.timer.length > 0) {
-            t.timer = updatedParent.timer;
-            updatedParent.timer = [];
-            timerTransferred = true;
-            syncTaskToYjs(t.id, t);
-          }
-          syncTaskToYjs(updatedParent.id, updatedParent);
-          return updatedParent;
+      if (parent) {
+        const linked = linkChildrenToParent(parent, [t.id]);
+        if (linked.transferredTimer) {
+          t.timer = linked.transferredTimer;
+          timerTransferred = true;
         }
-        return currentTask;
-      });
 
-      // Replace the child task in the array with a fresh object reference
-      // so React.memo detects the prop change and re-renders the timer pill.
-      if (timerTransferred) {
         tasks = tasks.map(currentTask =>
-          currentTask.id === t.id ? { ...t } : currentTask
+          currentTask.id === parentId ? linked.parent : currentTask
         );
+
+        // Replace the child task in the array with a fresh object reference
+        // so React.memo detects the prop change and re-renders the timer pill.
+        if (timerTransferred) {
+          tasks = tasks.map(currentTask =>
+            currentTask.id === t.id ? { ...t } : currentTask
+          );
+          syncTaskToYjs(t.id, t);
+        }
+
+        syncTaskToYjs(linked.parent.id, linked.parent);
       }
 
       // Persist timer transfer to DB even in fallback path
@@ -561,6 +627,96 @@ async function createTask(title: string, parentId: string | null, userId?: strin
   }
 
   return t.id;
+};
+
+/**
+ * Creates several tasks with one persistence write. The browser adapter
+ * rewrites the whole task list per write, so a per-item loop is O(N × list)
+ * and concurrent per-item writes lose data; `createTasks` is the batch path.
+ * Parent linkage and timer transfer are applied once for the whole batch.
+ */
+async function createTasksBatch(
+  inputs: CreateTaskBatchInput[],
+  parentId: string | null,
+  defaultUserId?: string,
+): Promise<Array<{ id: string; title: string }>> {
+  // Resolve the parent once for the whole batch: every item shares it, so a
+  // per-item lookup and depth walk would be O(batch × task-list).
+  const parentTask = parentId ? tasks.find(t => t.id === parentId) : null;
+  const parentContext: BuildTaskParentContext = {
+    parentTask,
+    childDepth: parentTask ? getDepth(parentTask, tasks) + 1 : 0,
+  };
+
+  const created = inputs.map((input, index) =>
+    buildTask(
+      input.title,
+      parentId,
+      input.userId ?? defaultUserId,
+      { category: input.category, color: input.color },
+      index,
+      parentContext,
+    ),
+  );
+
+  if (created.length === 0) return [];
+
+  let updatedParent: Task | null = null;
+  let timerTransferred = false;
+
+  if (parentTask) {
+    const linked = linkChildrenToParent(parentTask, created.map(task => task.id));
+    updatedParent = linked.parent;
+
+    // The first new child inherits the parent's running timer, as the single
+    // create path does; the rest of the batch is persisted together with it.
+    if (linked.transferredTimer) {
+      created[0] = { ...created[0], timer: linked.transferredTimer };
+      timerTransferred = true;
+    }
+  }
+
+  try {
+    const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+    const adapter = await persistence;
+
+    await adapter.createTasks(created.map(taskToEntity));
+
+    if (updatedParent) {
+      await adapter.bulkUpdateTasks([
+        taskToEntity(updatedParent),
+        ...(timerTransferred ? [taskToEntity(created[0])] : []),
+      ]);
+    }
+  } catch (error) {
+    console.error('Error creating tasks batch:', error);
+  }
+
+  // Merge by id so a Yjs/server broadcast that already delivered one of the
+  // new tasks does not create a duplicate row.
+  const known = new Set(tasks.map(task => task.id));
+  tasks = [...tasks, ...created.filter(task => !known.has(task.id))];
+  if (updatedParent) {
+    tasks = tasks.map(task => (task.id === updatedParent!.id ? updatedParent! : task));
+  }
+
+  doc.transact(() => {
+    for (const task of created) {
+      syncTaskToYjs(task.id, task);
+    }
+    if (updatedParent) syncTaskToYjs(updatedParent.id, updatedParent);
+  });
+
+  if (parentId) {
+    checkParentTaskCompletion(parentId);
+  }
+
+  eventBus.publish('tasksChanged');
+  if (timerTransferred) {
+    eventBus.publish('timerToggled', created[0].id);
+  }
+
+  return created.map(task => ({ id: task.id, title: task.title }));
 };
 
 const reparent = async (taskId: string, newParentId: string | null) => {
@@ -1892,6 +2048,7 @@ export function useTasks(options?: { subscribe?: boolean; includeRecurring?: boo
     plannedDate: string;
     plannedTime?: string | null;
     color?: TaskColor;
+    category?: Category;
     dueDate?: number | null;
     dueTime?: string | null;
     durationInMinutes?: number | null;
@@ -1901,7 +2058,11 @@ export function useTasks(options?: { subscribe?: boolean; includeRecurring?: boo
     const title = input.title.trim();
     if (!title) return null;
 
-    const id = await createTask(title, input.parentId ?? null, input.userId);
+    // Category goes into the create so the task is not written once for the
+    // create and again for a category patch.
+    const id = await createTask(title, input.parentId ?? null, input.userId, {
+      category: input.category,
+    });
     if (!id) return null;
 
     const dayTasks = tasks
@@ -2120,10 +2281,9 @@ export function useTasks(options?: { subscribe?: boolean; includeRecurring?: boo
   }, []);
 
   const updateTaskFields = React.useCallback(async (taskId: string, patch: Partial<Task>): Promise<Task | null> => {
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task) return null;
+    const updated = applyTaskPatches(tasks, [{ id: taskId, patch }]).get(taskId);
+    if (!updated) return null;
 
-    const updated: Task = { ...task, ...patch, updatedAt: Date.now() };
     tasks = tasks.map((t) => (t.id === taskId ? updated : t));
     syncTaskToYjs(taskId, updated);
 
@@ -2137,6 +2297,37 @@ export function useTasks(options?: { subscribe?: boolean; includeRecurring?: boo
 
     eventBus.publish('tasksChanged');
     return updated;
+  }, []);
+
+  /**
+   * Applies several task patches with one persistence write, for imports that
+   * would otherwise rewrite the whole task list once per line.
+   */
+  const updateTasksBatch = React.useCallback(async (
+    patches: Array<{ id: string; patch: Partial<Task> }>,
+  ): Promise<void> => {
+    if (patches.length === 0) return;
+
+    const byId = applyTaskPatches(tasks, patches);
+    if (byId.size === 0) return;
+
+    tasks = tasks.map((task) => byId.get(task.id) ?? task);
+
+    doc.transact(() => {
+      for (const task of byId.values()) {
+        syncTaskToYjs(task.id, task);
+      }
+    });
+
+    try {
+      const persistence = await import('@/lib/persistence-factory').then(m => m.getPersistenceAdapter());
+      const adapter = await persistence;
+      await adapter.bulkUpdateTasks(Array.from(byId.values()).map(taskToEntity));
+    } catch (error) {
+      console.error('Error updating tasks batch:', error);
+    }
+
+    eventBus.publish('tasksChanged');
   }, []);
 
   // Single-write schedulers used by calendar drag/drop so one drop does not
@@ -2348,6 +2539,7 @@ export function useTasks(options?: { subscribe?: boolean; includeRecurring?: boo
     allTasks: visibleTasks,
     tasks: visibleTasks,
     createTask,
+    createTasksBatch,
     createPlannedTask,
     updatePlannedDate,
     updatePlannedTime,
@@ -2360,6 +2552,7 @@ export function useTasks(options?: { subscribe?: boolean; includeRecurring?: boo
     bulkCarryOverPlannedTasks,
     restoreTaskSnapshots,
     updateTaskFields,
+    updateTasksBatch,
     createTaskRecord,
     setRecurrence,
     stopRecurrence,

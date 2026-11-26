@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
-import { DbClient, SprintWellbeingRecord, applyTaskTemporalMirror } from './index.js';
+import { DbClient, SprintWellbeingRecord, VoteResponseUpsert, applyTaskTemporalMirror } from './index.js';
 import type { SprintStateEntity } from '../../src/lib/sprint-types.js';
+import { restoreVoteResponseTokens } from '../../src/lib/vote-response-restore.js';
 import type {
   TaskEntity,
   UserSettingsEntity,
@@ -26,6 +27,8 @@ import type {
   PomodoroSession
 } from '../../src/lib/persistence-types.js';
 import type { BallotParticipationStat } from '../../src/lib/vote-ranking.js';
+import { mergeAttendeeDisplayName } from '../../src/lib/attendance.js';
+import { DEFAULT_CATEGORIES, sanitizeAppSettingsTaxonomy, sanitizeCategories, sanitizeColorLabels } from '../../src/lib/workspace-taxonomy.js';
 
 // Raw database row types (SQLite stores booleans as 0/1 integers and JSON as strings)
 interface TaskDbRow {
@@ -84,6 +87,8 @@ interface UserSettingsDbRow {
 
 interface AppSettingsDbRow {
   id: number;
+  categories: string | null;
+  colorLabels: string | null;
   splitTime: number;
   userWorkloadPercentage: number;
   weeksComputation: number;
@@ -178,6 +183,7 @@ interface VoteResponseDbRow {
   value: number;
   comment: string | null;
   submittedAt: string;
+  attendeeData: string | null;
 }
 
 interface VoteRankingSubmissionDbRow {
@@ -292,6 +298,8 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
     destination: '',
     enabled: true,
   },
+  categories: [...DEFAULT_CATEGORIES],
+  colorLabels: {},
 };
 
 
@@ -387,7 +395,9 @@ class SqliteClient implements DbClient {
         "cardAgingBaseDays" REAL DEFAULT 30,
         "timezone" TEXT DEFAULT 'Europe/Zurich',
         "country" TEXT DEFAULT 'CH',
-        "region" TEXT DEFAULT 'BE'
+        "region" TEXT DEFAULT 'BE',
+        "categories" TEXT,
+        "colorLabels" TEXT
       )
     `);
 
@@ -397,8 +407,8 @@ class SqliteClient implements DbClient {
       this.db.prepare(`
         INSERT INTO "appSettings"("id", "splitTime", "userWorkloadPercentage", "weeksComputation",
           "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal", "hoursToBeDoneByDay",
-          "vacationLimitMultiplier", "hourlyBalanceLimitUpper", "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region")
-        VALUES(1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          "vacationLimitMultiplier", "hourlyBalanceLimitUpper", "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region", "categories", "colorLabels")
+        VALUES(1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         DEFAULT_APP_SETTINGS.splitTime,
         DEFAULT_APP_SETTINGS.userWorkloadPercentage,
@@ -414,7 +424,9 @@ class SqliteClient implements DbClient {
         DEFAULT_APP_SETTINGS.cardAgingBaseDays ?? 30,
         DEFAULT_APP_SETTINGS.timezone ?? 'Europe/Zurich',
         DEFAULT_APP_SETTINGS.country ?? 'CH',
-        DEFAULT_APP_SETTINGS.region ?? 'BE'
+        DEFAULT_APP_SETTINGS.region ?? 'BE',
+        JSON.stringify(DEFAULT_APP_SETTINGS.categories ?? []),
+        JSON.stringify(DEFAULT_APP_SETTINGS.colorLabels ?? {})
       );
     }
 
@@ -565,7 +577,8 @@ class SqliteClient implements DbClient {
         "voterToken" TEXT NOT NULL,
         "value" REAL NOT NULL,
         "comment" TEXT,
-        "submittedAt" TEXT NOT NULL
+        "submittedAt" TEXT NOT NULL,
+        "attendeeData" TEXT
       )
     `);
     // Replace legacy single-response-per-voter constraint with one that allows
@@ -802,6 +815,8 @@ class SqliteClient implements DbClient {
     addColumn('appSettings', 'focusModeConfig', 'TEXT');
     addColumn('appSettings', 'travelerConfig', 'TEXT');
     addColumn('appSettings', 'wipLimitPerUser', 'INTEGER DEFAULT 5');
+    addColumn('appSettings', 'categories', 'TEXT');
+    addColumn('appSettings', 'colorLabels', 'TEXT');
 
     // QolSurvey columns
     runMigration('qolSurvey', 'user_id', 'userId');
@@ -896,6 +911,9 @@ class SqliteClient implements DbClient {
 
     // VoteLoops proposalId column (per-proposal loops)
     addColumn('voteLoops', 'proposalId', 'TEXT NOT NULL DEFAULT \'\'');
+
+    // Event RSVP metadata for ATTENDANCE votes (JSON-encoded)
+    addColumn('voteResponses', 'attendeeData', 'TEXT');
 
     // Reminders i18n columns (system-generated reminders store a translation
     // key + params instead of baked-in text, so they re-localize on language
@@ -1613,6 +1631,8 @@ class SqliteClient implements DbClient {
       country: row.country ?? 'CH',
       region: row.region ?? 'BE',
       disabledModules: row.disabledModules ? JSON.parse(row.disabledModules) : [],
+      categories: row.categories ? sanitizeCategories(JSON.parse(row.categories)) : [...DEFAULT_CATEGORIES],
+      colorLabels: row.colorLabels ? sanitizeColorLabels(JSON.parse(row.colorLabels)) : {},
       pomodoroConfig: row.pomodoroConfig ? JSON.parse(row.pomodoroConfig) : DEFAULT_APP_SETTINGS.pomodoroConfig,
       focusModeConfig: row.focusModeConfig ? JSON.parse(row.focusModeConfig) : DEFAULT_APP_SETTINGS.focusModeConfig,
       travelerConfig: row.travelerConfig ? JSON.parse(row.travelerConfig) : DEFAULT_APP_SETTINGS.travelerConfig,
@@ -1622,7 +1642,7 @@ class SqliteClient implements DbClient {
 
   async updateAppSettings(patch: Partial<AppSettingsEntity>): Promise<AppSettingsEntity> {
     const current = await this.getAppSettings();
-    const updated = { ...current, ...patch };
+    const updated = { ...current, ...sanitizeAppSettingsTaxonomy(patch) };
 
     const params = {
       ...updated,
@@ -1631,12 +1651,14 @@ class SqliteClient implements DbClient {
       pomodoroConfig: JSON.stringify(updated.pomodoroConfig ?? DEFAULT_APP_SETTINGS.pomodoroConfig),
       focusModeConfig: JSON.stringify(updated.focusModeConfig ?? DEFAULT_APP_SETTINGS.focusModeConfig),
       travelerConfig: JSON.stringify(updated.travelerConfig ?? DEFAULT_APP_SETTINGS.travelerConfig),
+      categories: JSON.stringify(updated.categories ?? DEFAULT_APP_SETTINGS.categories ?? []),
+      colorLabels: JSON.stringify(updated.colorLabels ?? {}),
       wipLimitPerUser: updated.wipLimitPerUser ?? 5,
     };
 
     this.db.prepare(`
-      INSERT INTO "appSettings"("id", "splitTime", "userWorkloadPercentage", "weeksComputation", "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal", "hoursToBeDoneByDay", "vacationLimitMultiplier", "hourlyBalanceLimitUpper", "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region", "disabledModules", "pomodoroConfig", "focusModeConfig", "travelerConfig", "wipLimitPerUser")
-      VALUES(@id, @splitTime, @userWorkloadPercentage, @weeksComputation, @highImpactTaskGoal, @failureRateGoal, @qliGoal, @newCapabilitiesGoal, @hoursToBeDoneByDay, @vacationLimitMultiplier, @hourlyBalanceLimitUpper, @hourlyBalanceLimitLower, @cardAgingBaseDays, @timezone, @country, @region, @disabledModules, @pomodoroConfig, @focusModeConfig, @travelerConfig, @wipLimitPerUser)
+      INSERT INTO "appSettings"("id", "splitTime", "userWorkloadPercentage", "weeksComputation", "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal", "hoursToBeDoneByDay", "vacationLimitMultiplier", "hourlyBalanceLimitUpper", "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region", "disabledModules", "pomodoroConfig", "focusModeConfig", "travelerConfig", "categories", "colorLabels", "wipLimitPerUser")
+      VALUES(@id, @splitTime, @userWorkloadPercentage, @weeksComputation, @highImpactTaskGoal, @failureRateGoal, @qliGoal, @newCapabilitiesGoal, @hoursToBeDoneByDay, @vacationLimitMultiplier, @hourlyBalanceLimitUpper, @hourlyBalanceLimitLower, @cardAgingBaseDays, @timezone, @country, @region, @disabledModules, @pomodoroConfig, @focusModeConfig, @travelerConfig, @categories, @colorLabels, @wipLimitPerUser)
       ON CONFLICT("id") DO UPDATE SET
         "splitTime" = excluded."splitTime",
         "userWorkloadPercentage" = excluded."userWorkloadPercentage",
@@ -1657,6 +1679,8 @@ class SqliteClient implements DbClient {
         "pomodoroConfig" = excluded."pomodoroConfig",
         "focusModeConfig" = excluded."focusModeConfig",
         "travelerConfig" = excluded."travelerConfig",
+        "categories" = excluded."categories",
+        "colorLabels" = excluded."colorLabels",
         "wipLimitPerUser" = excluded."wipLimitPerUser"
     `).run(params);
 
@@ -2583,6 +2607,16 @@ class SqliteClient implements DbClient {
     return rows.map(row => this.mapVoteResponseDbRowToEntity(row));
   }
 
+  async getVoteResponsesForVoter(
+    voteId: string,
+    voterToken: string,
+  ): Promise<VoteResponseEntity[]> {
+    const rows = this.db.prepare(
+      'SELECT * FROM "voteResponses" WHERE "voteId" = ? AND "voterToken" = ? ORDER BY "submittedAt" ASC'
+    ).all(voteId, voterToken) as unknown as VoteResponseDbRow[];
+    return rows.map(row => this.mapVoteResponseDbRowToEntity(row));
+  }
+
   async createVoteResponse(voteId: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity> {
     const newResponse: VoteResponseEntity = {
       id: response.id || crypto.randomUUID(),
@@ -2594,6 +2628,7 @@ class SqliteClient implements DbClient {
       value: response.value ?? 0,
       comment: response.comment,
       submittedAt: response.submittedAt || new Date().toISOString(),
+      attendeeData: response.attendeeData,
     };
 
     // `RETURNING *` is required: on conflict the upsert keeps the existing row
@@ -2602,15 +2637,16 @@ class SqliteClient implements DbClient {
     // must both use the persisted id so an upsert replaces a voter's live entry
     // instead of duplicating it.
     const persisted = this.db.prepare(`
-      INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt")
-      VALUES(@id, @voteId, @proposalId, @loopId, @userId, @voterToken, @value, @comment, @submittedAt)
+      INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt", "attendeeData")
+      VALUES(@id, @voteId, @proposalId, @loopId, @userId, @voterToken, @value, @comment, @submittedAt, @attendeeData)
       ON CONFLICT("voteId", "voterToken", COALESCE("proposalId", ''), COALESCE("loopId", '')) DO UPDATE SET
         "proposalId" = excluded."proposalId",
         "loopId" = excluded."loopId",
         "userId" = excluded."userId",
         "value" = excluded."value",
         "comment" = excluded."comment",
-        "submittedAt" = excluded."submittedAt"
+        "submittedAt" = excluded."submittedAt",
+        "attendeeData" = excluded."attendeeData"
       RETURNING *
     `).get({
       id: newResponse.id,
@@ -2622,9 +2658,22 @@ class SqliteClient implements DbClient {
       value: newResponse.value,
       comment: newResponse.comment ?? null,
       submittedAt: newResponse.submittedAt,
+      attendeeData: newResponse.attendeeData ? JSON.stringify(newResponse.attendeeData) : null,
     }) as unknown as VoteResponseDbRow | undefined;
 
     return persisted ? this.mapVoteResponseDbRowToEntity(persisted) : newResponse;
+  }
+
+  async deleteVoteResponsesForVoter(
+    voteId: string,
+    voterToken: string,
+  ): Promise<string[]> {
+    const rows = this.db.prepare(`
+      DELETE FROM "voteResponses"
+      WHERE "voteId" = ? AND "voterToken" = ?
+      RETURNING "id"
+    `).all(voteId, voterToken) as unknown as Array<{ id: string }>;
+    return rows.map((row) => row.id);
   }
 
   async deleteVoteResponse(
@@ -2650,20 +2699,169 @@ class SqliteClient implements DbClient {
     return rows.map((row) => row.id);
   }
 
-  async importVoteResponses(items: VoteResponseEntity[]): Promise<void> {
+  async replaceVoteResponsesForVoter(
+    voteId: string,
+    voterToken: string,
+    upserts: VoteResponseUpsert[],
+    scopeProposalIds: string[],
+  ): Promise<{ responses: VoteResponseEntity[]; removedIds: string[] }> {
+    // Prepare once, then reuse inside the transaction instead of re-preparing
+    // the upsert for every selected slot.
     const insertStmt = this.db.prepare(`
-      INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt")
-      VALUES(@id, @voteId, @proposalId, @loopId, @userId, @voterToken, @value, @comment, @submittedAt)
+      INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt", "attendeeData")
+      VALUES(@id, @voteId, @proposalId, @loopId, @userId, @voterToken, @value, @comment, @submittedAt, @attendeeData)
+      ON CONFLICT("voteId", "voterToken", COALESCE("proposalId", ''), COALESCE("loopId", '')) DO UPDATE SET
+        "proposalId" = excluded."proposalId",
+        "loopId" = excluded."loopId",
+        "userId" = excluded."userId",
+        "value" = excluded."value",
+        "comment" = excluded."comment",
+        "submittedAt" = excluded."submittedAt",
+        "attendeeData" = excluded."attendeeData"
+      RETURNING *
+    `);
+    // The delete set is derived inside the transaction: every in-scope row for
+    // this voter that is not a canonical (loopId = null) row for a kept slot.
+    // `json_each` keeps the statement to two bound values no matter how many
+    // slots are in scope.
+    const predicate = `
+      "voteId" = @voteId
+        AND "voterToken" = @voterToken
+        AND "proposalId" IN (SELECT value FROM json_each(@scope))
+        AND NOT ("loopId" IS NULL AND "proposalId" IN (SELECT value FROM json_each(@keep)))
+    `;
+    const selectStmt = this.db.prepare(`SELECT "id" FROM "voteResponses" WHERE ${predicate}`);
+    const deleteStmt = this.db.prepare(`DELETE FROM "voteResponses" WHERE ${predicate}`);
+
+    this.db.exec('BEGIN');
+    try {
+      const responses: VoteResponseEntity[] = [];
+      const submittedAt = new Date().toISOString();
+      for (const upsert of upserts) {
+        const persisted = insertStmt.get({
+          id: crypto.randomUUID(),
+          voteId,
+          proposalId: upsert.proposalId,
+          loopId: null,
+          userId: null,
+          voterToken,
+          value: upsert.value,
+          comment: upsert.comment ?? null,
+          submittedAt,
+          attendeeData: upsert.attendeeData ? JSON.stringify(upsert.attendeeData) : null,
+        }) as unknown as VoteResponseDbRow | undefined;
+        if (persisted) responses.push(this.mapVoteResponseDbRowToEntity(persisted));
+      }
+      let removedIds: string[] = [];
+      if (scopeProposalIds.length > 0) {
+        const params = {
+          voteId,
+          voterToken,
+          scope: JSON.stringify(scopeProposalIds),
+          keep: JSON.stringify(upserts.map((upsert) => upsert.proposalId)),
+        };
+        const rows = selectStmt.all(params) as unknown as Array<{ id: string }>;
+        deleteStmt.run(params);
+        removedIds = rows.map((row) => row.id);
+      }
+      this.db.exec('COMMIT');
+      return { responses, removedIds };
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  async updateVoteResponsesComment(
+    voteId: string,
+    voterToken: string,
+    comment: string | null,
+  ): Promise<VoteResponseEntity[]> {
+    const rows = this.db.prepare(`
+      UPDATE "voteResponses"
+      SET "comment" = ?
+      WHERE "voteId" = ? AND "voterToken" = ?
+      RETURNING *
+    `).all(comment, voteId, voterToken) as unknown as VoteResponseDbRow[];
+    return rows.map(row => this.mapVoteResponseDbRowToEntity(row));
+  }
+
+  async renameVoteResponsesForVoter(
+    voteId: string,
+    voterToken: string,
+    displayName: string,
+    options: { proposalId: string | null; visibility: 'hidden' | 'auto' },
+  ): Promise<VoteResponseEntity[]> {
+    // Read and update inside one transaction: SQLite serializes writers, so an
+    // availability replace cannot interleave between the read and the write and
+    // resurrect a deleted slot from a stale snapshot.
+    const proposalClause =
+      options.proposalId === null
+        ? ''
+        : ' AND "proposalId" = @proposalId';
+    const selectStmt = this.db.prepare(`
+      SELECT * FROM "voteResponses"
+      WHERE "voteId" = @voteId
+        AND "voterToken" = @voterToken
+        AND "loopId" IS NULL
+        AND "proposalId" IS NOT NULL${proposalClause}
+      ORDER BY "submittedAt" ASC
+    `);
+    const updateStmt = this.db.prepare(
+      'UPDATE "voteResponses" SET "attendeeData" = @attendeeData WHERE "id" = @id RETURNING *',
+    );
+    this.db.exec('BEGIN');
+    try {
+      const params =
+        options.proposalId === null
+          ? { voteId, voterToken }
+          : { voteId, voterToken, proposalId: options.proposalId };
+      const rows = selectStmt.all(params) as unknown as VoteResponseDbRow[];
+      const updated: VoteResponseEntity[] = [];
+      for (const raw of rows) {
+        const row = this.mapVoteResponseDbRowToEntity(raw);
+        const attendeeData = mergeAttendeeDisplayName(
+          row.attendeeData,
+          displayName,
+          options.visibility,
+        );
+        const persisted = updateStmt.get({
+          id: row.id,
+          attendeeData: JSON.stringify(attendeeData),
+        }) as unknown as VoteResponseDbRow | undefined;
+        if (persisted) updated.push(this.mapVoteResponseDbRowToEntity(persisted));
+      }
+      this.db.exec('COMMIT');
+      return updated;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  async importVoteResponses(items: VoteResponseEntity[]): Promise<void> {
+    const restored = restoreVoteResponseTokens(items);
+    const voteIds = Array.from(new Set(restored.map((item) => item.voteId)));
+    const insertStmt = this.db.prepare(`
+      INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt", "attendeeData")
+      VALUES(@id, @voteId, @proposalId, @loopId, @userId, @voterToken, @value, @comment, @submittedAt, @attendeeData)
       ON CONFLICT("voteId", "voterToken", COALESCE("proposalId", ''), COALESCE("loopId", '')) DO UPDATE SET
         "proposalId" = excluded."proposalId",
         "value" = excluded."value",
         "comment" = excluded."comment",
-        "submittedAt" = excluded."submittedAt"
+        "submittedAt" = excluded."submittedAt",
+        "attendeeData" = excluded."attendeeData"
     `);
+    const deleteStmt = this.db.prepare(
+      'DELETE FROM "voteResponses" WHERE "voteId" = ?',
+    );
 
     this.db.exec('BEGIN');
     try {
-      for (const item of items) {
+      // A backup is a full snapshot for the votes it contains. Replace their
+      // existing responses so a re-import does not duplicate restored rows.
+      for (const voteId of voteIds) deleteStmt.run(voteId);
+      for (const item of restored) {
         insertStmt.run({
           id: item.id,
           voteId: item.voteId,
@@ -2674,6 +2872,7 @@ class SqliteClient implements DbClient {
           value: item.value,
           comment: item.comment ?? null,
           submittedAt: item.submittedAt,
+          attendeeData: item.attendeeData ? JSON.stringify(item.attendeeData) : null,
         });
       }
       this.db.exec('COMMIT');
@@ -3047,6 +3246,7 @@ class SqliteClient implements DbClient {
       value: row.value,
       comment: row.comment ?? undefined,
       submittedAt: row.submittedAt,
+      attendeeData: row.attendeeData ? JSON.parse(row.attendeeData) : undefined,
     };
   }
 

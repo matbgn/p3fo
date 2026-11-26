@@ -1,5 +1,24 @@
 import { VoteResponseEntity, VoteLoop } from "./persistence-types";
-import { MJ_SCALE } from "@/components/planView/constants";
+import { MJ_SCALE } from "../components/planView/constants.js";
+
+export const EVENT_RSVP_PROPOSAL_ID = "__event_rsvp__";
+
+export interface EventRsvpTally {
+  going: number;
+  maybe: number;
+  notGoing: number;
+  total: number;
+}
+
+export function tallyEventRsvp(responses: VoteResponseEntity[]): EventRsvpTally {
+  const filtered = responses.filter((r) => r.proposalId === EVENT_RSVP_PROPOSAL_ID);
+  return {
+    going: filtered.filter((r) => r.value === 1).length,
+    maybe: filtered.filter((r) => r.value === 0).length,
+    notGoing: filtered.filter((r) => r.value === -1).length,
+    total: filtered.length,
+  };
+}
 
 export interface ThumbsUpTally {
   count: number;

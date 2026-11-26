@@ -56,6 +56,8 @@ const DataExporter: React.FC = () => {
         cardAgingBaseDays: appSettings.cardAgingBaseDays?.toString(),
         disabledModules: appSettings.disabledModules,
         wipLimitPerUser: appSettings.wipLimitPerUser,
+        categories: appSettings.categories,
+        colorLabels: appSettings.colorLabels,
       };
 
       // Fetch Fertilization Board state
@@ -92,18 +94,22 @@ const DataExporter: React.FC = () => {
       const allVoteRankingSubmissions: VoteRankingSubmission[] = [];
       // The bulk ballot read withholds a hidden (OPEN) vote's ballots from
       // non-moderators, so a backup must present a moderator token or it would
-      // silently omit those ballots. Reuse the active moderator tokens that are
-      // already part of the export to keep the backup complete.
+      // silently omit those ballots. The same capability unlocks the
+      // organizer-only RSVP fields (email, custom answers) that the public
+      // results projection now strips; without it a restore would overwrite the
+      // live values with the redacted copy. Reuse the active moderator tokens
+      // that are already part of the export to keep the backup complete.
       const moderatorTokenByVote = new Map<string, string>();
       for (const vote of allVotes) {
-        const responses = await adapter.listVoteResponses(vote.id);
-        allVoteResponses.push(...responses);
         const loops = await adapter.listVoteLoops(vote.id);
         allVoteLoops.push(...loops);
         const moderators = await adapter.listVoteModerators(vote.id);
         allVoteModerators.push(...moderators);
         const activeModerator = moderators.find(moderator => moderator.active && moderator.token);
-        if (activeModerator) moderatorTokenByVote.set(vote.id, activeModerator.token);
+        const moderatorToken = activeModerator?.token;
+        if (moderatorToken) moderatorTokenByVote.set(vote.id, moderatorToken);
+        const responses = await adapter.listVoteResponses(vote.id, moderatorToken);
+        allVoteResponses.push(...responses);
       }
 
       // Fetch ballots for every vote, not only those currently in

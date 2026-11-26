@@ -7,6 +7,8 @@ import { getVotingStrings } from '@/lib/voting-i18n';
 import { areRankingResultsVisible } from '@/lib/vote-ranking';
 import { ComparativeVoteBallot } from '@/components/voting/ComparativeVoteBallot';
 import { PartialRankingResults } from '@/components/voting/PartialRankingResults';
+import { ProposalContentDisplay } from '@/components/voting/ProposalContentDisplay';
+import { isRichTextEmpty } from '@/lib/rich-text';
 import { VoteOutcomeBanner } from '@/components/voting/VoteResults';
 
 interface ComparativeVotePageProps {
@@ -60,7 +62,12 @@ export const ComparativeVotePage: React.FC<ComparativeVotePageProps> = ({
             </Badge>
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">{vote.title}</h1>
-          {vote.description && <p className="text-gray-600 mb-4">{vote.description}</p>}
+          {!isRichTextEmpty(vote.description) && (
+            <ProposalContentDisplay
+              content={vote.description}
+              className="text-gray-600 mb-4"
+            />
+          )}
           <div className="flex items-center gap-4 text-sm text-gray-400">
             {vote.config.closeAt && (
               <span className="flex items-center gap-1">

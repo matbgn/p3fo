@@ -17,23 +17,11 @@ export { DEFAULT_TRAVELER_CONFIG } from './traveler-types';
 
 export type TriageStatus = "Backlog" | "Ready" | "WIP" | "Blocked" | "Done" | "Dropped";
 
-export type Category =
-  | "Marketing"
-  | "Documentation"
-  | "Consulting"
-  | "Testing"
-  | "Funerals"
-  | "Negotiated overtime"
-  | "Sickness"
-  | "Finances"
-  | "HR"
-  | "Training"
-  | "Support"
-  | "UX/UI"
-  | "Admin"
-  | "Development"
-  | "System Operations"
-  | "Private";
+/**
+ * Task categories are workspace settings (see `workspace-taxonomy.ts`), so
+ * any non-empty name is valid here. `DEFAULT_CATEGORIES` seeds a workspace.
+ */
+export type Category = string;
 
 export interface TaskTimer {
   startTime: number | null;
@@ -159,6 +147,17 @@ export interface AppSettingsEntity {
   pomodoroConfig?: PomodoroConfig;
   focusModeConfig?: FocusModeConfig;
   travelerConfig?: TravelerConfig;
+  /**
+   * The workspace's editable task categories, seeded from
+   * `DEFAULT_CATEGORIES`. Absent on workspaces created before categories
+   * became editable (readers fall back to the defaults).
+   */
+  categories?: string[];
+  /**
+   * Optional color associated with a category, keyed by preset color id or
+   * free `#rrggbb`. A color without an entry keeps its default name.
+   */
+  colorLabels?: Record<string, string>;
 }
 
 export interface UserSettingsEntity {
@@ -406,10 +405,20 @@ export type TimeFrame = '3mo' | '6mo' | '1y' | '2y' | '4y';
 export type VotingMode = 'THUMBS_UP' | 'THUMBS_UD_NEUTRAL' | 'POINTS' | 'MAJORITY_JUDGMENT';
 export type VotingPhase = 'IDLE' | 'VOTING' | 'REVEALED';
 
-export type VoteMode = VotingMode | 'CONSENT_LOOP' | 'COMPARATIVE_PRIORITIZATION';
+export type VoteMode =
+  | VotingMode
+  | 'ATTENDANCE'
+  | 'CONSENT_LOOP'
+  | 'COMPARATIVE_PRIORITIZATION'
+  | 'SCHEDULING';
 export type RankingEngine = 'bt-k2' | 'bt-k4';
 export type VoteKind = 'consultation' | 'decision';
 export type VotePhase = 'IDLE' | 'OPEN' | 'CLOSED' | 'FINALIZED';
+
+export interface SchedulingTimeSlot {
+  startAt: string;
+  endAt: string;
+}
 
 export interface VoteProposal {
   id: string;
@@ -418,6 +427,66 @@ export interface VoteProposal {
   infoUrl?: string;
   position: number;
   active: boolean;
+  /** Candidate slot for SCHEDULING votes. */
+  timeSlot?: SchedulingTimeSlot;
+}
+
+export interface AttendanceQuestion {
+  id: string;
+  prompt: string;
+  type: 'text' | 'choice';
+  options?: string[];
+  required?: boolean;
+}
+
+export interface AttendanceConfig {
+  /** ISO timestamp for the event start. */
+  eventStartAt?: string;
+  /** ISO timestamp for the event end. */
+  eventEndAt?: string;
+  location?: string;
+  coverImageUrl?: string;
+  infoUrl?: string;
+  /** Show the "choose a display name" welcome modal on non-anonymous votes. */
+  welcomeModal?: boolean;
+  askEmail?: boolean;
+  allowPartySize?: boolean;
+  maxPartySize?: number;
+  allowHiddenAttendance?: boolean;
+  /** Maximum total party size for "going" RSVPs; 0/undefined = unlimited. */
+  maxAttendees?: number;
+  customQuestions?: AttendanceQuestion[];
+}
+
+export interface AttendanceResponseData {
+  displayName?: string;
+  email?: string;
+  partySize?: number;
+  visibility?: 'public' | 'hidden';
+  /** Server-generated token for the private RSVP removal link. */
+  removalToken?: string;
+  answers?: Record<string, string>;
+}
+
+export interface SchedulingConfig {
+  /** Whether participants pick time slots within a day or whole days. Default: 'time'. */
+  unit?: 'time' | 'day';
+  /** IANA time zone the candidate slots are generated in. */
+  timeZone: string;
+  /** Slot granularity in minutes. One of 15, 30 or 60. */
+  granularityMinutes: number;
+  /** Meeting length in minutes; a multiple of the granularity. */
+  durationMinutes: number;
+  /** Local calendar dates (YYYY-MM-DD). */
+  dates: string[];
+  /** Earliest local time of a candidate slot (HH:mm). */
+  dayStart: string;
+  /** Latest local time a candidate slot may end (HH:mm). */
+  dayEnd: string;
+  /** Let voters answer "if needed" (value 0). */
+  allowIfNeeded?: boolean;
+  /** Hard cap on generated candidate slots. */
+  maxSlots?: number;
 }
 
 export interface VoteConfig {
@@ -441,6 +510,10 @@ export interface VoteConfig {
   rankingEngine?: RankingEngine;
   /** Preserve collective ties instead of requiring a moderator tie-break. Default: true. */
   allowTies?: boolean;
+  /** Event RSVP settings for ATTENDANCE votes. */
+  attendance?: AttendanceConfig;
+  /** Candidate slot settings for SCHEDULING votes. */
+  scheduling?: SchedulingConfig;
 }
 
 export interface VoteRankingComparison {
@@ -464,6 +537,11 @@ export interface VoteRankingBallot {
   stopReason: string | null;
   engine: RankingEngine;
   engineVersion: string;
+  /**
+   * Optional free-text comment from the voter, when the vote allows it.
+   * Stored inside the ballot payload so no separate column is needed.
+   */
+  comment?: string | null;
 }
 
 export interface VoteRankingGroup {
@@ -542,6 +620,8 @@ export interface VoteResponseEntity {
   value: number;
   comment?: string;
   submittedAt: string;
+  /** Event RSVP metadata for ATTENDANCE votes. */
+  attendeeData?: AttendanceResponseData;
 }
 
 export interface VoteDraftEntity {
@@ -556,6 +636,13 @@ export interface VoteDraftEntity {
   participantId?: string;
   /** Local selections keyed by proposal id. */
   values: Record<string, number>;
+  /**
+   * Display name the participant chose for a non-anonymous vote, carried on the
+   * moderator-only draft channel so the live participant matrix can name someone
+   * who has not submitted yet. Never public: drafts are read only through the
+   * moderator capability.
+   */
+  displayName?: string;
   updatedAt: string;
   /** Per-tab writer id so one tab cannot delete another tab's draft. */
   publisherId?: string;
@@ -571,6 +658,13 @@ export interface VotePresenceEntity {
    * participant can brute-force into a collision.
    */
   participantId?: string;
+  /**
+   * Display name for a non-anonymous vote, carried only on the
+   * moderator-authenticated presence channel so a participant who opened the
+   * page but has not submitted yet is named instead of shown as their alias.
+   * Never present for anonymous votes.
+   */
+  displayName?: string;
   joinedAt: string;
   lastSeenAt: string;
 }

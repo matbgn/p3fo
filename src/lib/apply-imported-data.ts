@@ -19,6 +19,7 @@ import {
 import { useReminderStore } from '@/hooks/useReminders';
 import { tasksToEntities, convertEntitiesToTasks } from '@/lib/task-conversions';
 import type { Task } from '@/hooks/useTasks';
+import { sanitizeCategories, sanitizeColorLabels } from '@/lib/workspace-taxonomy';
 
 export const CURRENT_SCHEMA_VERSION = 6;
 
@@ -257,6 +258,16 @@ export async function applyImportedData(
       cardAgingBaseDays: importedData.settings.cardAgingBaseDays ? Number(importedData.settings.cardAgingBaseDays) : undefined,
       disabledModules: importedData.settings.disabledModules || undefined,
       wipLimitPerUser: importedData.settings.wipLimitPerUser !== undefined ? Number(importedData.settings.wipLimitPerUser) : undefined,
+      // Omit the keys entirely when the backup predates workspace taxonomy:
+      // every adapter treats a present `categories`/`colorLabels` key as an
+      // explicit "replace", and an explicit `undefined` sanitizes to an empty
+      // list, which would wipe the workspace's saved taxonomy on restore.
+      ...(importedData.settings.categories !== undefined
+        ? { categories: sanitizeCategories(importedData.settings.categories) }
+        : {}),
+      ...(importedData.settings.colorLabels !== undefined
+        ? { colorLabels: sanitizeColorLabels(importedData.settings.colorLabels) }
+        : {}),
     };
     await adapter.updateAppSettings(appSettings);
     if (isCollaborationEnabled()) {

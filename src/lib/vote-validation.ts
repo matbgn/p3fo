@@ -26,6 +26,18 @@ export function validateVoteResponseValue(
       return [-1, 0, 1].includes(value)
         ? null
         : 'THUMBS_UD_NEUTRAL votes must be -1, 0, or 1';
+    case 'ATTENDANCE':
+      return [-1, 0, 1].includes(value)
+        ? null
+        : 'ATTENDANCE votes must be -1, 0, or 1';
+    case 'SCHEDULING':
+      if (value === 1 || value === -1) return null;
+      if (value === 0) {
+        return vote.config.scheduling?.allowIfNeeded === true
+          ? null
+          : 'SCHEDULING votes only allow 0 when "if needed" is enabled';
+      }
+      return 'SCHEDULING votes must be -1, 0, or 1';
     case 'POINTS': {
       const maxPts = vote.config.maxPointsPerUser ?? 10;
       return Number.isInteger(value) && value >= 0 && value <= maxPts

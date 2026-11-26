@@ -16,11 +16,54 @@ import { VoteEntity, VoteLoop } from "@/lib/persistence-types";
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { useTranslation } from "react-i18next";
 import { useVoteLoops } from "@/hooks/useVoteLoops";
-import { tallyConsentLoop, getBestConsentRound } from "@/lib/vote-tally";
+import { tallyConsentLoop, getBestConsentRound, tallyEventRsvp } from "@/lib/vote-tally";
 import { useVoteResults } from "@/hooks/useVotes";
 import { useVoteRankingResults } from "@/hooks/useVoteRanking";
 import { proposalDisplayTitle, resolveFinalizedWinner, voteAllowsTies } from "@/lib/vote-ranking";
 import { MJ_SCALE } from "@/components/planView/constants";
+import {
+  formatNormalizedSchedulingRunLabel,
+  normalizeSchedulingConfig,
+  schedulingRunHasAvailability,
+  tallyScheduling,
+  type SchedulingRunTally,
+} from "@/lib/scheduling";
+
+/**
+ * The finalizable-run radio list is memoized: `tallyScheduling` emits one run
+ * per contiguous slot window (up to `maxSlots`), and the dialog's signature and
+ * summary inputs are controlled state, so without this every keystroke would
+ * reconcile the whole list. Props are stable (memoized runs/labels, stable
+ * setter), so typing no longer touches the rows.
+ */
+const SchedulingRunList: React.FC<{
+  runs: SchedulingRunTally[];
+  labels: Map<string, string>;
+  value: string;
+  onSelect: (value: string) => void;
+}> = React.memo(function SchedulingRunList({ runs, labels, value, onSelect }) {
+  const t = getVotingStrings();
+  return (
+    <div className="max-h-64 overflow-y-auto">
+      <RadioGroup value={value} onValueChange={onSelect}>
+        {runs.map((run) => (
+          <div key={run.startAt} className="flex items-center gap-2 py-0.5">
+            <RadioGroupItem value={run.startAt} id={`run-${run.startAt}`} />
+            <Label htmlFor={`run-${run.startAt}`} className="text-sm font-normal">
+              {labels.get(run.startAt)}
+              <span className="ml-2 text-xs text-gray-500">
+                {t.scheduling.available}: {run.available} ·{" "}
+                {t.scheduling.ifNeeded}: {run.ifNeeded} ·{" "}
+                {t.scheduling.unavailable}: {run.unavailable} ·{" "}
+                {t.scheduling.coverage}: {run.coverage}
+              </span>
+            </Label>
+          </div>
+        ))}
+      </RadioGroup>
+    </div>
+  );
+});
 
 interface FinalizeDialogProps {
   open: boolean;
@@ -39,6 +82,7 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
 }) => {
   const [winningProposalId, setWinningProposalId] = React.useState<string | null>(null);
   const [winningLoopId, setWinningLoopId] = React.useState<string | null>(null);
+  const [schedulingRunKey, setSchedulingRunKey] = React.useState<string | null>(null);
   const [signature, setSignature] = React.useState("");
   const [isSaving, setIsSaving] = React.useState(false);
   const [summary, setSummary] = React.useState("");
@@ -48,14 +92,26 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
 
   const isConsentLoop = vote.config.mode === "CONSENT_LOOP";
   const isComparative = vote.config.mode === "COMPARATIVE_PRIORITIZATION";
+  const isAttendance = vote.config.mode === "ATTENDANCE";
+  const isScheduling = vote.config.mode === "SCHEDULING";
   const {
     data: rankingData,
     isLoading: rankingLoading,
     error: rankingError,
     refresh: refreshRanking,
   } = useVoteRankingResults(vote.slug, open && isComparative, undefined, vote.id);
-  const { loops, isLoading: loopsLoading } = useVoteLoops(vote.id, !isComparative);
-  const { responses, isLoading: responsesLoading } = useVoteResults(vote.id, !isComparative);
+  // Both feeds only feed the dialog body and the finalize handler, so poll them
+  // only while it is open. VotingPage mounts this dialog permanently, and an
+  // always-on subscription would refetch every 5-15s (and re-run the scheduling
+  // tally and per-run labels) behind a closed dialog.
+  const { loops, isLoading: loopsLoading } = useVoteLoops(
+    vote.id,
+    open && !isComparative,
+  );
+  const { responses, isLoading: responsesLoading } = useVoteResults(
+    vote.id,
+    open && !isComparative,
+  );
   const consentDataLoading = loopsLoading || responsesLoading;
 
   const consentTally = React.useMemo(
@@ -65,10 +121,65 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
     [isConsentLoop, loops, responses, vote.proposals]
   );
 
+  const rsvpTally = React.useMemo(
+    () => (isAttendance ? tallyEventRsvp(responses) : null),
+    [isAttendance, responses],
+  );
+
+  const schedulingConfig = React.useMemo(
+    () => normalizeSchedulingConfig(vote.config.scheduling),
+    [vote.config.scheduling],
+  );
+  const schedulingTally = React.useMemo(
+    () =>
+      isScheduling
+        ? tallyScheduling(responses, vote.proposals, schedulingConfig)
+        : null,
+    [isScheduling, responses, vote.proposals, schedulingConfig],
+  );
+  const schedulingRuns = React.useMemo(
+    () => (isScheduling ? schedulingTally?.runs ?? [] : []),
+    [isScheduling, schedulingTally],
+  );
+  // A run where every participant is unavailable (or did not answer) has no
+  // positive signal; `topSchedulingRuns` already treats such a tally as "no
+  // common time". Offer and default to only the runs somebody can attend so
+  // the dialog cannot announce a time the summary says is impossible.
+  const finalizableSchedulingRuns = React.useMemo(
+    () => schedulingRuns.filter(schedulingRunHasAvailability),
+    [schedulingRuns],
+  );
+  // `tallyScheduling` emits one run per contiguous slot window (up to
+  // `maxSlots`). Build the labels once per tally from the already-normalized
+  // config so typing in the signature or summary field does not re-parse every
+  // configured date for every run.
+  const schedulingRunLabels = React.useMemo(() => {
+    const labels = new Map<string, string>();
+    for (const run of finalizableSchedulingRuns) {
+      labels.set(
+        run.startAt,
+        formatNormalizedSchedulingRunLabel(run, schedulingConfig),
+      );
+    }
+    return labels;
+  }, [finalizableSchedulingRuns, schedulingConfig]);
+  const hasSchedulingBallots = (schedulingTally?.totalVoters ?? 0) > 0;
+  // Defaults to the best run (runs are sorted best-first) until the moderator
+  // picks another one.
+  const selectedSchedulingRun = React.useMemo(() => {
+    const chosen = schedulingRunKey
+      ? finalizableSchedulingRuns.find(
+          (run) => run.startAt === schedulingRunKey,
+        )
+      : undefined;
+    return chosen ?? finalizableSchedulingRuns[0] ?? null;
+  }, [finalizableSchedulingRuns, schedulingRunKey]);
+
   React.useEffect(() => {
     if (open) {
       setWinningProposalId(null);
       setWinningLoopId(null);
+      setSchedulingRunKey(null);
       setSignature("");
       setSummary("");
       setFinalizeError(null);
@@ -98,6 +209,11 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
   };
 
   const handleFinalize = async () => {
+    // The dialog only subscribes to results/rounds while it is open, so the
+    // first frames after opening hold an empty `responses` array. Deriving the
+    // auto summary then would persist a "No votes yet." attendance summary even
+    // though RSVPs exist. Wait for the initial fetch instead.
+    if (consentDataLoading) return;
     setIsSaving(true);
     setFinalizeError(null);
     try {
@@ -146,16 +262,45 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
         }
       }
 
+      if (isScheduling) {
+        if (!hasSchedulingBallots) {
+          setFinalizeError(t.messages.noVotesYet);
+          return;
+        }
+        // Every run has zero availability/if-needed answers: there is no
+        // common time to announce. The server enforces the same rule.
+        if (!selectedSchedulingRun) {
+          setFinalizeError(t.scheduling.noCommonTime);
+          return;
+        }
+        // A scheduling decision names the first slot of the chosen run; the
+        // server resolves that start slot back to the same run and stores it.
+        effectiveWinner = selectedSchedulingRun.slotIds[0] ?? null;
+      }
+
       const winningProposal = effectiveWinner
         ? activeProposals.find((p) => p.id === effectiveWinner)
         : null;
+      const attendanceSummaryText = rsvpTally && rsvpTally.total > 0
+        ? `${t.attendanceOptions.going}: ${rsvpTally.going}, ${t.attendanceOptions.maybe}: ${rsvpTally.maybe}, ${t.attendanceOptions.notGoing}: ${rsvpTally.notGoing}`
+        : t.messages.noVotesYet;
       const finalSummary =
         summary.trim() ||
-        (effectiveWinner
-          ? winningProposal
-            ? tt("voting.finalizeSummaryProposal", { n: winningProposal.position + 1 })
-            : tt("voting.finalizeSummaryGeneric")
-          : tt("voting.finalizeSummaryTie"));
+        (isScheduling
+          ? selectedSchedulingRun
+            ? schedulingRunLabels.get(selectedSchedulingRun.startAt) ??
+              formatNormalizedSchedulingRunLabel(
+                selectedSchedulingRun,
+                schedulingConfig,
+              )
+            : t.scheduling.noWinningTime
+          : isAttendance
+            ? attendanceSummaryText
+            : effectiveWinner
+              ? winningProposal
+                ? tt("voting.finalizeSummaryProposal", { n: winningProposal.position + 1 })
+                : tt("voting.finalizeSummaryGeneric")
+              : tt("voting.finalizeSummaryTie"));
 
       const finalized = await onFinalize({
         winningProposalId: effectiveWinner,
@@ -187,7 +332,11 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
           <DialogDescription>
             {isComparative
               ? tt("voting.comparative.finalizeDescription")
-              : t.messages.selectWinningProposal}
+              : isAttendance
+                ? t.modeDescriptions.ATTENDANCE
+                : isScheduling
+                  ? t.modeDescriptions.SCHEDULING
+                  : t.messages.selectWinningProposal}
           </DialogDescription>
         </DialogHeader>
 
@@ -263,7 +412,59 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
             </div>
           )}
 
-          {!isComparative && (
+          {isAttendance && (
+            <div className="space-y-2 rounded-md border border-blue-200 bg-blue-50 p-3">
+              <Label className="text-sm font-medium">{t.labels.results}</Label>
+              {responsesLoading ? (
+                <p className="text-sm text-gray-500">{t.messages.loadingResults}</p>
+              ) : rsvpTally && rsvpTally.total > 0 ? (
+                <div className="space-y-1 text-sm">
+                  <p className="text-green-700">
+                    {t.attendanceOptions.going}: {rsvpTally.going}
+                  </p>
+                  <p className="text-yellow-700">
+                    {t.attendanceOptions.maybe}: {rsvpTally.maybe}
+                  </p>
+                  <p className="text-red-700">
+                    {t.attendanceOptions.notGoing}: {rsvpTally.notGoing}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {rsvpTally.total} {rsvpTally.total !== 1 ? t.labels.voters : t.labels.voter}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">{t.messages.noVotesYet}</p>
+              )}
+            </div>
+          )}
+
+          {isScheduling && (
+            <div className="space-y-2 rounded-md border border-blue-200 bg-blue-50 p-3">
+              <Label className="text-sm font-medium">
+                {t.scheduling.winningTime}
+              </Label>
+              {responsesLoading ? (
+                <p className="text-sm text-gray-500">
+                  {t.messages.loadingResults}
+                </p>
+              ) : finalizableSchedulingRuns.length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  {hasSchedulingBallots
+                    ? t.scheduling.noCommonTime
+                    : t.messages.noVotesYet}
+                </p>
+              ) : (
+                <SchedulingRunList
+                  runs={finalizableSchedulingRuns}
+                  labels={schedulingRunLabels}
+                  value={selectedSchedulingRun?.startAt ?? ""}
+                  onSelect={setSchedulingRunKey}
+                />
+              )}
+            </div>
+          )}
+
+          {!isComparative && !isAttendance && !isScheduling && (
           <div className="space-y-2">
             <Label className="text-sm font-medium">{t.labels.winningProposal}</Label>
             <RadioGroup
@@ -400,10 +601,20 @@ export const FinalizeDialog: React.FC<FinalizeDialogProps> = ({
             disabled={
               isSaving ||
               isModerator ||
+              // Results/rounds are fetched only while the dialog is open, so the
+              // attendance/scheduling/consent tallies are empty until the first
+              // fetch resolves; finalizing then would persist a "No votes yet."
+              // summary. Keep the button disabled until that data is present.
+              consentDataLoading ||
               // A comparative vote can only be finalized once its ranking is
               // visible (the server rejects hidden results); with no result
               // there are no submitted ballots to finalize either.
               (isComparative && (!rankingData?.result || rankingData?.hidden)) ||
+              // A run where every answer is "unavailable" is not finalizable, so
+              // the button must key off the same candidate list the dialog and
+              // handler use; otherwise the click can only produce noCommonTime.
+              (isScheduling &&
+                (finalizableSchedulingRuns.length === 0 || !hasSchedulingBallots)) ||
               needsTieSelection
             }
             className="bg-blue-600 hover:bg-blue-700"

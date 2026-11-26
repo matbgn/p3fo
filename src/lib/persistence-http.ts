@@ -567,11 +567,15 @@ export class HttpApiPersistence implements PersistenceAdapter {
     proposalId: string | null,
     loopId: string | null = null,
   ): Promise<void> {
-    const params = new URLSearchParams({ voterToken });
+    const params = new URLSearchParams();
     if (proposalId) params.set('proposalId', proposalId);
     if (loopId) params.set('loopId', loopId);
-    await this.makeRequest(`/api/votes/${voteId}/responses?${params.toString()}`, {
+    const query = params.toString();
+    // The voter token is a bearer credential: send it as a header so it never
+    // lands in access/proxy logs or browser history.
+    await this.makeRequest(`/api/votes/${voteId}/responses${query ? `?${query}` : ''}`, {
       method: 'DELETE',
+      headers: { 'X-Voter-Token': voterToken },
     });
   }
 
@@ -616,10 +620,15 @@ export class HttpApiPersistence implements PersistenceAdapter {
       ? localStorage.getItem('p3fo_user_id')
       : null);
     if (resolvedOwnerId) params.set('ownerId', resolvedOwnerId);
-    if (moderatorToken) params.set('moderatorToken', moderatorToken);
+    // The facilitator credential is a bearer capability: send it as a header so
+    // it never lands in access/proxy logs or browser history. Only the public
+    // ownerId stays in the query.
+    const headers: Record<string, string> = {};
+    if (moderatorToken) headers['X-Moderator-Token'] = moderatorToken;
     const query = params.toString();
     const response = await this.makeRequest(
       `/api/votes/${voteId}/ranking-submissions${query ? `?${query}` : ''}`,
+      { headers },
     ) as { submissions?: VoteRankingSubmission[] };
     return response.submissions || [];
   }

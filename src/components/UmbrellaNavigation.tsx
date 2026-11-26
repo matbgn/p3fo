@@ -4,6 +4,9 @@ import { useViewNavigation } from '@/hooks/useView';
 import { useAllTasks } from '@/hooks/useAllTasks';
 import { useTasks } from '@/hooks/useTasks';
 import { useUserSettings } from '@/hooks/useUserSettings';
+import { useWorkspaceTaxonomy } from '@/hooks/useWorkspaceTaxonomy';
+import { useUsersContext } from '@/context/UsersContext';
+import { parseTaskInput } from '@/lib/planner/task-input';
 import { aStarTextSearch } from '@/lib/a-star-search';
 import { cn } from '@/lib/utils';
 import type { ViewType } from '@/context/ViewContextDefinition';
@@ -187,14 +190,28 @@ export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, on
 
   // Scratch search bar
   const { tasks } = useAllTasks();
-  const { createTask } = useTasks();
+  const { createTask, updateCategory, updateColor } = useTasks();
   const { userId: currentUserId } = useUserSettings();
+  const { categories, colorLabels } = useWorkspaceTaxonomy();
+  const { users } = useUsersContext();
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // `@trigram` and `#category` are quick commands: search and compare the
+  // title without them, then apply them to the created task.
+  const taxonomy = useMemo(
+    () => ({ categories, colorLabels, users }),
+    [categories, colorLabels, users],
+  );
+  const parsedQuery = useMemo(
+    () => parseTaskInput(query, taxonomy, { parseTime: false }),
+    [query, taxonomy],
+  );
+  const searchQuery = parsedQuery.text.trim();
+
   const searchResults = useMemo(() => {
-    const q = query.trim();
+    const q = searchQuery;
     if (!q) return [];
     return aStarTextSearch(q, tasks.map(t => ({ id: t.id, title: t.title })))
       .slice(0, 6)
@@ -208,9 +225,11 @@ export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, on
         const bArchived = b.task.triageStatus === 'Archived' ? 1 : 0;
         return aArchived - bArchived;
       });
-  }, [query, tasks]);
+  }, [searchQuery, tasks]);
 
-  const canCreate = query.trim().length > 0 && searchResults.every(r => r.task.title.toLowerCase() !== query.trim().toLowerCase());
+  const canCreate =
+    searchQuery.length > 0 &&
+    searchResults.every(r => r.task.title.toLowerCase() !== searchQuery.toLowerCase());
 
   const handleSearchSubmit = useCallback(async () => {
     if (searchResults.length > 0 && activeIndex >= 0 && activeIndex < searchResults.length) {
@@ -226,12 +245,20 @@ export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, on
       return;
     }
     if (canCreate) {
-      await createTask(query.trim(), null, currentUserId || undefined);
+      const id = await createTask(
+        parsedQuery.text,
+        null,
+        parsedQuery.assigneeId ?? currentUserId ?? undefined,
+      );
+      if (id) {
+        if (parsedQuery.category) await updateCategory(id, parsedQuery.category);
+        if (parsedQuery.color) await updateColor(id, parsedQuery.color);
+      }
       onClose();
       setQuery('');
       setActiveIndex(0);
     }
-  }, [searchResults, activeIndex, canCreate, query, createTask, currentUserId, onFocusOnTask, navigateTo, onClose]);
+  }, [searchResults, activeIndex, canCreate, parsedQuery, createTask, updateCategory, updateColor, currentUserId, onFocusOnTask, navigateTo, onClose]);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
@@ -388,7 +415,7 @@ export const UmbrellaNavigation: React.FC<UmbrellaNavigationProps> = ({ open, on
                     )}
                   >
                     <Plus className="w-3 h-3 shrink-0 text-primary" />
-                    <span className="flex-1 truncate font-medium">{t('nav.createTask')}: "{query.trim()}"</span>
+                    <span className="flex-1 truncate font-medium">{t('nav.createTask')}: "{searchQuery}"</span>
                   </button>
                 </div>
               )}

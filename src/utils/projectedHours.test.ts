@@ -30,6 +30,8 @@ const mockSettings: CombinedSettings = {
     pomodoroConfig: DEFAULT_POMODORO_CONFIG,
     focusModeConfig: DEFAULT_FOCUS_MODE_CONFIG,
     travelerConfig: DEFAULT_TRAVELER_CONFIG,
+    categories: ['General'],
+    colorLabels: {},
     nonActionPeriodHours: 5,
 };
 

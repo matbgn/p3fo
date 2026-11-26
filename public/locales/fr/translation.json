@@ -211,6 +211,23 @@
         "label": "Techniques de focus",
         "description": "Techniques de minuteur (Pomodoro, Voyageur) dans le QuickTimer de l'en-tête"
       }
+    },
+    "labels": {
+      "title": "Libellés et catégories",
+      "description": "Les catégories sont les libellés saisissables après #. Chacune est modifiable et peut avoir une couleur ; une couleur sans catégorie garde son nom par défaut. Tout est partagé avec l’espace de travail.",
+      "addLabel": "Ajouter une catégorie",
+      "add": "Ajouter",
+      "nameLabel": "Nom de la catégorie",
+      "namePlaceholder": "ex. Travail profond",
+      "remove": "Supprimer {name}",
+      "errorTooLong": "Utilisez au maximum {max} caractères.",
+      "errorReserved": "« {name} » est réservé.",
+      "errorInvalidName": "Utilisez un nom contenant au moins une lettre ou un chiffre.",
+      "errorDuplicate": "« {name} » existe déjà.",
+      "errorTooMany": "Vous pouvez avoir au maximum {max} catégories.",
+      "footnote": "Renommer ou supprimer une catégorie ne modifie pas les tâches existantes ; elles gardent leur ancien nom. Saisir #nom dans une nouvelle tâche définit la catégorie et, si elle en a une, sa couleur. Une couleur n’appartient qu’à une seule catégorie : l’attribuer ailleurs la déplace.",
+      "resetAll": "Rétablir les valeurs par défaut",
+      "resetAllHint": "Restaure les catégories par défaut et efface toutes les associations de couleur."
     }
   },
   "metrics": {
@@ -378,12 +395,6 @@
       "sprintTarget": "Cible du sprint"
     },
     "difficulty8Hint": "~1 jour, envisagez de diviser",
-    "editCommentTitle": "Modifier le commentaire - {{title}}",
-    "editCommentDescription": "Modifier le commentaire pour la tâche : {{title}}",
-    "commentLabel": "Commentaire",
-    "commentFieldLabel": "Commentaire",
-    "commentPlaceholder": "Ajouter un commentaire...",
-    "saveComment": "Enregistrer le commentaire",
     "timeSheetTitle": "Feuille de temps - {{title}}",
     "timeSheetDescription": "Visualiser et modifier les entrées de temps pour la tâche : {{title}}",
     "addTimeEntry": "Ajouter une entrée",
@@ -957,9 +968,11 @@
     "mode": {
       "thumbsUp": "Pouce levé",
       "thumbsUdNeutral": "Pour / Contre / Pas contre",
+      "attendance": "Présence",
       "points": "Budget de points",
       "majorityJudgment": "Jugement Majoritaire",
-      "consentLoop": "Boucle de consentement"
+      "consentLoop": "Boucle de consentement",
+      "scheduling": "Planification"
     },
     "comparative": {
       "title": "Priorisation comparative",
@@ -1018,7 +1031,12 @@
       "finalizeNeedsVisibleResults": "Les résultats restent masqués jusqu’à la clôture du vote, donc aucune proposition de tête ne peut être choisie. Attendez la clôture ou activez les résultats anticipés.",
       "noBallotsToFinalize": "Aucun bulletin envoyé à finaliser.",
       "finalizeFailed": "Le vote n’a pas pu être finalisé. Vérifiez les bulletins et réessayez."
-    }
+    },
+    "commentHint": "Enregistré lors de l’envoi de votre vote.",
+    "saveComment": "Enregistrer le commentaire",
+    "savingComment": "Enregistrement...",
+    "commentSaved": "Commentaire enregistré",
+    "commentSaveError": "Impossible d’enregistrer le commentaire."
   },
   "rankingExport": {
     "export": "Exporter",
@@ -1961,7 +1979,7 @@
       "budgetName": "Mois type",
       "systemLabel": "Système de salaire du Acme Theatre"
     },
-  "fertilization": {
+    "fertilization": {
       "fact1": "Complet pour la première de la Symphonie de la Culbute (320 places).",
       "fact2": "14 séances d'affilée sans la moindre panne de projection.",
       "fact3": "Fréquentation mensuelle : 2 140 spectateurs (meilleur mois depuis la réouverture).",
@@ -2197,6 +2215,19 @@
     "dayTaskCount_one": "{{count}} tâche",
     "dayTaskCount_other": "{{count}} tâches",
     "dayTotalDuration": "{{minutes}} min planifiées",
-    "noTasksPlanned": "Aucune tâche planifiée"
+    "noTasksPlanned": "Aucune tâche planifiée",
+    "color": {
+      "none": "Aucune couleur",
+      "pink": "Rose",
+      "yellow": "Jaune",
+      "black": "Noir",
+      "grey": "Gris",
+      "cornflower": "Bleuet",
+      "mango": "Mangue",
+      "green": "Vert",
+      "lilac": "Lilas"
+    },
+    "customColor": "Couleur personnalisée",
+    "labelSuggestions": "Catégories"
   }
 }

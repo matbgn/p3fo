@@ -407,4 +407,113 @@ describe('shared vote response projection', () => {
     expect(shared.userId).toBeNull();
     expect(shared.voterToken).toBe('');
   });
+
+  describe('attendee data redaction', () => {
+    const attendeeResponse = (attendeeData: VoteResponseEntity['attendeeData']): VoteResponseEntity => ({
+      ...response,
+      attendeeData,
+    });
+
+    it('keeps a public name but strips private RSVP fields for non-anonymous votes', () => {
+      const safe = redactVoteResponseForVote(
+        vote,
+        attendeeResponse({
+          displayName: 'Alice',
+          email: 'alice@example.com',
+          answers: { diet: 'vegan' },
+          removalToken: 'private-removal-token',
+          partySize: 3,
+          visibility: 'public',
+        }),
+      );
+      expect(safe.attendeeData).toEqual({
+        displayName: 'Alice',
+        partySize: 3,
+        visibility: 'public',
+      });
+      expect(JSON.stringify(safe.attendeeData)).not.toContain('alice@example.com');
+      expect(JSON.stringify(safe.attendeeData)).not.toContain('private-removal-token');
+      expect(JSON.stringify(safe.attendeeData)).not.toContain('vegan');
+    });
+
+    it('keeps organizer fields for a moderator but still strips the removal token', () => {
+      const safe = redactVoteResponseForVote(
+        vote,
+        attendeeResponse({
+          displayName: 'Alice',
+          email: 'alice@example.com',
+          answers: { diet: 'vegan' },
+          removalToken: 'private-removal-token',
+          partySize: 3,
+          visibility: 'public',
+        }),
+        { keepAttendeePrivateFields: true },
+      );
+      expect(safe.attendeeData).toEqual({
+        displayName: 'Alice',
+        email: 'alice@example.com',
+        answers: { diet: 'vegan' },
+        partySize: 3,
+        visibility: 'public',
+      });
+      expect(JSON.stringify(safe.attendeeData)).not.toContain('private-removal-token');
+    });
+
+    it('never publishes private RSVP fields to the shared document', () => {
+      // A moderator client syncs the authenticated results payload into Yjs.
+      // The shared projection must drop the organizer-only fields even though
+      // the moderator itself is allowed to see them.
+      const shared = shareVoteResponse(
+        'vote-1',
+        attendeeResponse({
+          displayName: 'Alice',
+          email: 'alice@example.com',
+          answers: { diet: 'vegan' },
+          removalToken: 'private-removal-token',
+          partySize: 3,
+          visibility: 'public',
+        }),
+      );
+      expect(shared.attendeeData).toEqual({
+        displayName: 'Alice',
+        partySize: 3,
+        visibility: 'public',
+      });
+      const serialized = JSON.stringify(shared);
+      expect(serialized).not.toContain('alice@example.com');
+      expect(serialized).not.toContain('vegan');
+      expect(serialized).not.toContain('private-removal-token');
+    });
+
+    it('strips the display name for anonymous votes', () => {
+      const anonymousVote = {
+        id: 'vote-1',
+        config: { ...vote.config, isAnonymous: true },
+      } as unknown as VoteEntity;
+      const safe = redactVoteResponseForVote(
+        anonymousVote,
+        attendeeResponse({ displayName: 'Alice', partySize: 2, visibility: 'public' }),
+      );
+      expect(safe.attendeeData).toEqual({ partySize: 2, visibility: 'public' });
+    });
+
+    it('strips the display name for hidden RSVPs but keeps size and visibility', () => {
+      const safe = redactVoteResponseForVote(
+        vote,
+        attendeeResponse({ displayName: 'Alice', partySize: 4, visibility: 'hidden' }),
+      );
+      expect(safe.attendeeData).toEqual({ partySize: 4, visibility: 'hidden' });
+    });
+
+    it('does not publish a hidden scheduling name into the shared document', () => {
+      // A moderator fetch now returns hidden scheduling names; a client that
+      // re-publishes that payload through shareVoteResponse must not leak them.
+      const shared = shareVoteResponse(
+        'vote-1',
+        attendeeResponse({ displayName: 'Alice', partySize: 2, visibility: 'hidden' }),
+      );
+      expect(shared.attendeeData).toEqual({ partySize: 2, visibility: 'hidden' });
+      expect(JSON.stringify(shared)).not.toContain('Alice');
+    });
+  });
 });

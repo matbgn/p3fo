@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { TriageStatus, Category } from "@/hooks/useTasks";
-import { CATEGORIES } from "@/data/categories";
+import { useWorkspaceTaxonomy } from "@/hooks/useWorkspaceTaxonomy";
 import { saveFiltersToSessionStorage, clearFiltersFromSessionStorage } from "@/lib/filter-storage";
 import { getDefaultFilters } from "@/lib/filter-merge";
 import { UserFilterSelector } from "@/components/UserFilterSelector";
@@ -39,6 +39,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
   defaultFilters
 }) => {
   const { t } = useTranslation();
+  const { options: categoryOptions } = useWorkspaceTaxonomy();
   // Update state and persist to session storage
   const updateAndPersistFilters = (newFilters: Filters) => {
     setFilters(newFilters);
@@ -172,7 +173,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
         <MultiSelect
           options={[
             { value: "Uncategorized", label: t('filters.uncategorized') },
-            ...CATEGORIES.map(c => ({ value: c, label: c }))
+            ...categoryOptions.map(c => ({ value: c, label: c }))
           ]}
           selected={filters.category || []}
           onChange={(selected) => updateAndPersistFilters({ ...filters, category: (selected as Category[]) || [] })}

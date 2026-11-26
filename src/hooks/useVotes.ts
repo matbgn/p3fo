@@ -85,6 +85,16 @@ const draftToResponseEntities = (draft: VoteDraftEntity): VoteResponseEntity[] =
     participantId: draft.participantId,
     value,
     submittedAt: draft.updatedAt,
+    // The moderator draft channel carries the participant's chosen name for a
+    // non-anonymous vote so the live matrix can name someone before submission.
+    ...(draft.displayName
+      ? {
+          attendeeData: {
+            displayName: draft.displayName,
+            visibility: 'hidden' as const,
+          },
+        }
+      : {}),
   }));
 
 /**
@@ -121,10 +131,41 @@ export const mergeDraftResponses = (
   if (drafts.length === 0) return responses;
   const aliasOf = (response: VoteResponseEntity): string =>
     responseVoterAlias(voteId, response);
-  const sameParticipant = (a: VoteResponseEntity, b: VoteResponseEntity): boolean =>
-    a.participantId && b.participantId
-      ? a.participantId === b.participantId
-      : aliasOf(a) === aliasOf(b);
+  // The single participant-matching rule, used by both draft enrichment and
+  // superseding: compare the moderator-only digest when both sides carry one,
+  // otherwise fall back to the public alias. `buildIdentityIndex` compiles a set
+  // of participants into O(1) lookups for exactly this rule, so the two
+  // directions cannot drift into splitting or merging a participant
+  // inconsistently.
+  type ParticipantIdentity = { digest: string | undefined; alias: string };
+  const identityOf = (response: VoteResponseEntity): ParticipantIdentity => ({
+    digest: response.participantId,
+    alias: aliasOf(response),
+  });
+  const buildIdentityIndex = (members: VoteResponseEntity[]) => {
+    const digests = new Set<string>();
+    const aliases = new Set<string>();
+    const aliasOnlyAliases = new Set<string>();
+    for (const member of members) {
+      const identity = identityOf(member);
+      aliases.add(identity.alias);
+      if (identity.digest) digests.add(identity.digest);
+      else aliasOnlyAliases.add(identity.alias);
+    }
+    return { digests, aliases, aliasOnlyAliases };
+  };
+  const matchesAnyIdentity = (
+    index: ReturnType<typeof buildIdentityIndex>,
+    identity: ParticipantIdentity,
+  ): boolean => {
+    if (identity.digest) {
+      return (
+        index.digests.has(identity.digest) ||
+        index.aliasOnlyAliases.has(identity.alias)
+      );
+    }
+    return index.aliases.has(identity.alias);
+  };
   // A draft only supersedes a submission when it was written after it. A draft
   // left behind by a failed cleanup DELETE, or by a second tab that is still
   // editing, must not replace votes the participant has since submitted; this is
@@ -156,23 +197,47 @@ export const mergeDraftResponses = (
     isDraftNewer(true, draft.submittedAt ?? null, latestSubmissionFor(draft)),
   );
   if (freshDrafts.length === 0) return responses;
-  // Draft rows are identity-less by construction. Carry over the identity and
-  // comment of the submitted row for the same proposal so an editing
-  // participant is not shown as anonymous and does not lose their comment in
-  // the (non-anonymous) moderator view.
+  // Draft rows are identity-less by construction. Carry over the identity,
+  // comment and attendee details of the submitted row for the same proposal so
+  // an editing participant is not shown as anonymous, does not lose their
+  // comment, and keeps the name the moderator matrix displays (scheduling
+  // names live in `attendeeData` and are only ever present in the
+  // moderator-authenticated projection, so this stays inside this view).
+  // Index submitted rows by proposal so enrichment only compares a draft with
+  // the participants who answered that same proposal. A scheduling poll expands
+  // to one row per slot, so scanning the whole matrix once per draft made this
+  // quadratic in participants x slots on every moderator refresh.
+  const responsesByProposal = new Map<string | null, VoteResponseEntity[]>();
+  for (const response of responses) {
+    const bucket = responsesByProposal.get(response.proposalId);
+    if (bucket) bucket.push(response);
+    else responsesByProposal.set(response.proposalId, [response]);
+  }
   const enrichedDrafts = freshDrafts.map((draft) => {
-    const previous = responses.find(
-      (response) =>
-        response.proposalId === draft.proposalId && sameParticipant(draft, response),
-    );
-    return previous
-      ? { ...draft, userId: previous.userId, comment: previous.comment }
-      : draft;
+    const draftIdentityIndex = buildIdentityIndex([draft]);
+    const previous = responsesByProposal
+      .get(draft.proposalId)
+      ?.find((response) =>
+        matchesAnyIdentity(draftIdentityIndex, identityOf(response)),
+      );
+    if (!previous) return draft;
+    const attendeeData = previous.attendeeData ?? draft.attendeeData;
+    return {
+      ...draft,
+      userId: previous.userId,
+      comment: previous.comment,
+      ...(attendeeData ? { attendeeData } : {}),
+    };
   });
+  // Precompute the participants a fresh draft supersedes once, instead of
+  // rescanning every draft for every submitted row. The match rule is the same
+  // `matchesAnyIdentity`: digest comparison when both sides carry one, alias
+  // fallback otherwise.
+  const draftIdentityIndex = buildIdentityIndex(freshDrafts);
+  const isSuperseded = (response: VoteResponseEntity): boolean =>
+    matchesAnyIdentity(draftIdentityIndex, identityOf(response));
   return [
-    ...responses.filter(
-      (response) => !freshDrafts.some((draft) => sameParticipant(draft, response)),
-    ),
+    ...responses.filter((response) => !isSuperseded(response)),
     ...enrichedDrafts,
   ];
 };
@@ -670,6 +735,14 @@ export const useVoteResults = (
 ) => {
   const [responses, setResponses] = React.useState<VoteResponseEntity[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  // Mirror of the committed response list, so the Yjs observer can tell
+  // whether a broadcast row is one it already holds an authenticated digest
+  // for without reading stale state inside the updater.
+  const responsesRef = React.useRef<VoteResponseEntity[]>(responses);
+  React.useEffect(() => {
+    responsesRef.current = responses;
+  }, [responses]);
+  const authoritativeRefetchAtRef = React.useRef(0);
   const drafts = useVoteResponseDrafts(voteId, enabled && includeDrafts, moderatorToken);
   const mergedResponses = React.useMemo(
     () => (includeDrafts ? mergeDraftResponses(voteId, responses, drafts) : responses),
@@ -728,10 +801,35 @@ export const useVoteResults = (
         .map(v => parseYjsResponseValue(v))
         .filter((v): v is VoteResponseEntity => v !== null);
       const voteResponses = allResponses.filter(r => r.voteId === voteId);
-      // The shared projection intentionally omits the moderator-only digest.
-      // Re-attach it from the authenticated copy this client already holds, so a
-      // remote update does not split a participant (draft digest) from their
-      // submission (alias only) in the provisional tally and participation table.
+      // A batch submit mints fresh row ids for newly selected slots, so the
+      // live projection can carry rows this client has no digest for. Do not
+      // re-attach one by alias: a participant can brute-force a colliding
+      // public alias, and merging on it would fold them into their victim —
+      // exactly what the moderator-only digest prevents. Fetch the
+      // authenticated copy instead; it carries the digest for every row and
+      // heals the transient tally split without trusting the alias. Throttled
+      // so the burst of updates from one batch issues a single request and
+      // only after the authenticated baseline is loaded.
+      if (moderatorToken && responsesRef.current.length > 0) {
+        const knownIds = new Set(responsesRef.current.map((row) => row.id));
+        const hasUnknownDigest = voteResponses.some(
+          (row) => !row.participantId && !knownIds.has(row.id),
+        );
+        const now = Date.now();
+        if (
+          hasUnknownDigest &&
+          now - authoritativeRefetchAtRef.current >= 1000
+        ) {
+          authoritativeRefetchAtRef.current = now;
+          void fetchResults();
+        }
+      }
+      // The shared projection intentionally omits the moderator-only digest and
+      // the private RSVP contact fields. Re-attach them from the authenticated
+      // copy this client already holds, so a remote update does not split a
+      // participant (draft digest) from their submission (alias only) in the
+      // provisional tally, nor blank the organizer's attendee details until the
+      // next authenticated refetch.
       setResponses((previous) => {
         if (!moderatorToken) return voteResponses;
         const digestById = new Map(
@@ -739,11 +837,36 @@ export const useVoteResults = (
             .filter((row) => row.participantId)
             .map((row) => [row.id, row.participantId as string]),
         );
-        return voteResponses.map((row) =>
-          row.participantId
-            ? row
-            : { ...row, participantId: digestById.get(row.id) },
+        const attendeeById = new Map(
+          previous
+            .filter((row) => row.attendeeData)
+            .map((row) => [row.id, row.attendeeData]),
         );
+        return voteResponses.map((row) => {
+          const privateAttendee = attendeeById.get(row.id);
+          // The shared projection drops a hidden display name, but the
+          // moderator's authenticated copy still has it. Re-attach it locally
+          // (this state is never published back to Yjs verbatim) so the
+          // scheduling participant matrix keeps its names between polls.
+          const attendeeData = row.attendeeData && privateAttendee
+            ? {
+                ...row.attendeeData,
+                email: privateAttendee.email,
+                answers: privateAttendee.answers,
+                ...(privateAttendee.displayName !== undefined
+                  ? { displayName: privateAttendee.displayName }
+                  : {}),
+                ...(privateAttendee.visibility !== undefined
+                  ? { visibility: privateAttendee.visibility }
+                  : {}),
+              }
+            : row.attendeeData;
+          return {
+            ...row,
+            ...(row.participantId ? {} : { participantId: digestById.get(row.id) }),
+            ...(attendeeData ? { attendeeData } : {}),
+          };
+        });
       });
     };
 

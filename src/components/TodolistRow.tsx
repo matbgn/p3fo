@@ -16,13 +16,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import {
   Folder,
   Play,
   Pause,
@@ -42,7 +35,6 @@ import { Task, Category, TriageStatus } from "@/hooks/useTasks";
 import { TaskStatusSelect } from "./TaskStatusSelect";
 import { CategorySelect } from "./CategorySelect";
 import { UserSelector } from "./UserSelector";
-import { RichTextField } from "./RichTextField";
 import { cn } from "@/lib/utils";
 import { formatDuration } from "@/lib/format-utils";
 import { format } from "date-fns";
@@ -195,11 +187,6 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
   const [subtaskDraft, setSubtaskDraft] = React.useState('');
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
   const [isTimeSheetOpen, setIsTimeSheetOpen] = React.useState(false);
-  const [isCommentModalOpen, setIsCommentModalOpen] = React.useState(false);
-  const [commentText, setCommentText] = React.useState(task.comment || "");
-  React.useEffect(() => {
-    setCommentText(task.comment || "");
-  }, [task.comment]);
   const [durationValue, setDurationValue] = React.useState(task.durationInMinutes || "");
   const [offsetMinutes, setOffsetMinutes] = React.useState(-1);
   const [timePickerOpen, setTimePickerOpen] = React.useState(false);
@@ -252,10 +239,6 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
   React.useLayoutEffect(() => {
     onEditModalOpenChange?.(task.id, isEditModalOpen);
   }, [isEditModalOpen, task.id, onEditModalOpenChange]);
-
-  React.useEffect(() => {
-    setCommentText(task.comment || "");
-  }, [task.comment]);
 
   React.useEffect(() => {
     setDurationValue(task.durationInMinutes ?? "");
@@ -461,7 +444,7 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
             className="h-6 w-6 p-0"
             onClick={(e) => {
               e.stopPropagation();
-              setIsCommentModalOpen(true);
+              setIsEditModalOpen(true);
             }}
           >
             <FileText className={`h-3.5 w-3.5 ${task.comment ? "text-blue-500" : "text-gray-400"}`} />
@@ -667,6 +650,7 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
           task={task}
           tasks={effectiveModalTasks}
           isOpen={isEditModalOpen}
+          defaultTab="details"
           onClose={() => setIsEditModalOpen(false)}
           updateTitle={updateTitle}
           updateComment={updateComment}
@@ -683,42 +667,6 @@ export const TodolistRow: React.FC<TodolistRowProps> = React.memo(({
           onToggleTimer={toggleTimer}
           currentUserId={currentUserId}
         />
-      )}
-
-      {isCommentModalOpen && (
-        <Dialog open={isCommentModalOpen} onOpenChange={setIsCommentModalOpen}>
-          <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden" aria-describedby={undefined}>
-            <DialogHeader>
-              <DialogTitle>{t('task.editCommentTitle', { title: task.title })}</DialogTitle>
-              <DialogDescription className="sr-only">
-                {t('task.editCommentDescription', { title: task.title })}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4 flex-1 min-h-0 overflow-y-auto">
-              <div className="grid gap-2">
-                <label htmlFor="todolist-comment" className="sr-only">{t('task.commentLabel')}</label>
-                <RichTextField
-                  value={commentText}
-                  onChange={(json) => setCommentText(json)}
-                  label={t('task.commentFieldLabel')}
-                  placeholder={t('task.commentPlaceholder')}
-                  className="min-h-[200px]"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end shrink-0">
-              <Button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  updateComment(task.id, commentText);
-                  setIsCommentModalOpen(false);
-                }}
-              >
-                {t('task.saveComment')}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
       )}
 
       {canHaveTimer && (

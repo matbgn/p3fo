@@ -30,6 +30,7 @@ const store = createVoteEphemeralStore<StoredVoteDraft, VoteDraftEntity>({
     voterAlias: draft.voterAlias,
     participantId: draft.participantId,
     values: { ...draft.values },
+    displayName: draft.displayName,
     updatedAt: draft.updatedAt,
     publisherId: draft.publisherId,
   }),
@@ -44,6 +45,8 @@ export function upsertVoteDraft(input: {
   voteId: string;
   voterAlias: string;
   values: Record<string, number>;
+  /** Non-anonymous display name, shown only on the moderator draft channel. */
+  displayName?: string;
   publisherId?: string;
   /**
    * Store key for this participant. Defaults to `voterAlias` for callers that
@@ -64,6 +67,7 @@ export function upsertVoteDraft(input: {
     voterAlias: input.voterAlias,
     participantId: input.participantKey ?? input.voterAlias,
     values,
+    displayName: input.displayName,
     updatedAt: new Date(now).toISOString(),
     publisherId: input.publisherId,
     expiresAt: now + VOTE_DRAFT_TTL_MS,

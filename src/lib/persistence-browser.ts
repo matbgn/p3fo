@@ -12,6 +12,7 @@ import {
 } from './sprint-types';
 import { DEFAULT_POMODORO_CONFIG, DEFAULT_FOCUS_MODE_CONFIG } from './pomodoro-types';
 import { DEFAULT_TRAVELER_CONFIG } from './traveler-types';
+import { DEFAULT_CATEGORIES, sanitizeAppSettingsTaxonomy } from './workspace-taxonomy';
 
 // Storage keys
 const TASKS_STORAGE_KEY = 'dyad_task_board_v1';
@@ -62,6 +63,8 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
   pomodoroConfig: DEFAULT_POMODORO_CONFIG,
   focusModeConfig: DEFAULT_FOCUS_MODE_CONFIG,
   travelerConfig: DEFAULT_TRAVELER_CONFIG,
+  categories: [...DEFAULT_CATEGORIES],
+  colorLabels: {},
 };
 
 export class BrowserJsonPersistence implements PersistenceAdapter {
@@ -430,7 +433,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
 
     try {
       const current = await this.getAppSettings();
-      const updated = { ...current, ...patch };
+      const updated = { ...current, ...sanitizeAppSettingsTaxonomy(patch) };
       localStorage.setItem(APP_SETTINGS_STORAGE_KEY, JSON.stringify(updated));
       return updated;
     } catch (error) {
@@ -1316,6 +1319,7 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
       value: response.value ?? 0,
       comment: response.comment,
       submittedAt: response.submittedAt || new Date().toISOString(),
+      attendeeData: response.attendeeData,
     };
     const stored = localStorage.getItem(VOTE_RESPONSES_STORAGE_KEY);
     const all: VoteResponseEntity[] = stored ? JSON.parse(stored) : [];

@@ -211,6 +211,23 @@
         "label": "Focus techniques",
         "description": "Timer techniques (Pomodoro, Traveler) in the header quick timer"
       }
+    },
+    "labels": {
+      "title": "Labels & categories",
+      "description": "Categories are the labels you can type after #. Each one is editable and may carry a color; colors without a category keep their default name. Everything here is shared with the workspace.",
+      "addLabel": "Add a category",
+      "add": "Add",
+      "nameLabel": "Category name",
+      "namePlaceholder": "e.g. Deep work",
+      "remove": "Remove {name}",
+      "errorTooLong": "Use at most {max} characters.",
+      "errorReserved": "“{name}” is reserved.",
+      "errorInvalidName": "Use a name with at least one letter or number.",
+      "errorDuplicate": "“{name}” already exists.",
+      "errorTooMany": "You can have at most {max} categories.",
+      "footnote": "Renaming or removing a category never changes existing tasks; they keep the name they had. Typing #name in a new task sets the category and, when it has one, its color. A color belongs to a single category: assigning it to another moves it.",
+      "resetAll": "Reset defaults",
+      "resetAllHint": "Restore the default categories and clear every color association."
     }
   },
   "metrics": {
@@ -378,12 +395,6 @@
       "sprintTarget": "Sprint Target"
     },
     "difficulty8Hint": "~1 day, consider splitting",
-    "editCommentTitle": "Edit Comment - {{title}}",
-    "editCommentDescription": "Edit comment for task: {{title}}",
-    "commentLabel": "Comment",
-    "commentFieldLabel": "Comment",
-    "commentPlaceholder": "Add a comment...",
-    "saveComment": "Save Comment",
     "timeSheetTitle": "Time Sheet - {{title}}",
     "timeSheetDescription": "View and edit time entries for task: {{title}}",
     "addTimeEntry": "Add a new entry",
@@ -957,9 +968,11 @@
     "mode": {
       "thumbsUp": "Thumbs Up",
       "thumbsUdNeutral": "Up / Down / Neutral",
+      "attendance": "Attendance",
       "points": "Points Budget",
       "majorityJudgment": "Majority Judgment",
-      "consentLoop": "Consent Loop"
+      "consentLoop": "Consent Loop",
+      "scheduling": "Scheduling"
     },
     "comparative": {
       "title": "Comparative Prioritization",
@@ -1018,7 +1031,12 @@
       "finalizeNeedsVisibleResults": "Results are hidden until the vote closes, so a top proposal cannot be selected. Wait until the vote closes or enable early results.",
       "noBallotsToFinalize": "No submitted ballots to finalize.",
       "finalizeFailed": "The vote could not be finalized. Check the ballots and try again."
-    }
+    },
+    "commentHint": "Saved when you submit your vote.",
+    "saveComment": "Save comment",
+    "savingComment": "Saving...",
+    "commentSaved": "Comment saved",
+    "commentSaveError": "Could not save the comment."
   },
   "rankingExport": {
     "export": "Export",
@@ -2197,6 +2215,19 @@
     "dayTaskCount_one": "{{count}} task",
     "dayTaskCount_other": "{{count}} tasks",
     "dayTotalDuration": "{{minutes}} min planned",
-    "noTasksPlanned": "No tasks planned"
+    "noTasksPlanned": "No tasks planned",
+    "color": {
+      "none": "No colour",
+      "pink": "Pink",
+      "yellow": "Yellow",
+      "black": "Black",
+      "grey": "Grey",
+      "cornflower": "Cornflower",
+      "mango": "Mango",
+      "green": "Green",
+      "lilac": "Lilac"
+    },
+    "customColor": "Custom color",
+    "labelSuggestions": "Categories"
   }
 }

@@ -18,6 +18,37 @@ describe('validateVoteResponseValue', () => {
     expect(validateVoteResponseValue(vote, 2)).toBeTruthy();
   });
 
+  it('accepts -1, 0 and 1 for ATTENDANCE', () => {
+    const vote = voteFor('ATTENDANCE');
+    for (const value of [-1, 0, 1]) expect(validateVoteResponseValue(vote, value)).toBeNull();
+    expect(validateVoteResponseValue(vote, 2)).toBeTruthy();
+    expect(validateVoteResponseValue(vote, -2)).toBeTruthy();
+  });
+
+  it('accepts -1 and 1 for SCHEDULING and gates 0 on allowIfNeeded', () => {
+    const strict = voteFor('SCHEDULING');
+    expect(validateVoteResponseValue(strict, 1)).toBeNull();
+    expect(validateVoteResponseValue(strict, -1)).toBeNull();
+    expect(validateVoteResponseValue(strict, 0)).toMatch(/if needed/i);
+    expect(validateVoteResponseValue(strict, 2)).toBeTruthy();
+
+    const flexible = voteFor('SCHEDULING', {
+      scheduling: {
+        timeZone: 'UTC',
+        granularityMinutes: 30,
+        durationMinutes: 60,
+        dates: ['2026-01-01'],
+        dayStart: '09:00',
+        dayEnd: '17:00',
+        allowIfNeeded: true,
+      },
+    });
+    expect(validateVoteResponseValue(flexible, 0)).toBeNull();
+    expect(validateVoteResponseValue(flexible, 1)).toBeNull();
+    expect(validateVoteResponseValue(flexible, -1)).toBeNull();
+    expect(validateVoteResponseValue(flexible, 2)).toBeTruthy();
+  });
+
   it('bounds POINTS by the configured budget', () => {
     const vote = voteFor('POINTS', { maxPointsPerUser: 5 });
     expect(validateVoteResponseValue(vote, 5)).toBeNull();

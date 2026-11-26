@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.44.0 (2026-11-26)
+
+### Features
+
+- **voting:** add moderator matrix repair tools (f95a3b6)
+- **voting:** add voter comments across vote modes (f8d6584)
+- **voting:** add rich text vote descriptions (135e8c9)
+- **planner:** add editable categories and colors (fd04bf7)
+
+### Bug Fixes
+
+- **planner:** support quick-add syntax in scratch search (6564fa2)
+- **voting:** improve scheduling coverage heatmap (d912ddb)
+- **voting:** name presence-only participants (32453f7)
+
+---
+
+## v0.43.0 (2026-11-25)
+
+### Features
+
+- **voting:** add scheduling vote mode (452e931)
+- **voting:** add event attendance RSVP mode (73ee059)
+
+---
+
 ## v0.42.0 (2026-11-24)
 
 ### Features
@@ -102,28 +128,5 @@
 - **timetable:** align edit row with table columns (d083e30)
 - **resources:** allow empty preferred working days (1ae0cd8)
 - **mood spotlight:** exclude blocked cards from callout (7bb179e)
-
----
-
-## v0.35.0 (2026-09-02)
-
-### Features
-
-- **MCP:** add task search and active filter (9170450)
-
-### Bug Fixes
-
-- **voting:** align results view with public vote page (018310a)
-- **common:** re-prompt example data after workspace wipe (4a7dd58)
-
----
-
-## v0.34.1 (2026-08-28)
-
-### Bug Fixes
-
-- **common:** render properly module groups to bulk-disable views and timers (b7a8b46)
-- **common:** gate example data modal on full workspace scan (49c2b34)
-- **layout:** keep active view mounted (817a06c)
 
 ---

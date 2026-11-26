@@ -425,11 +425,11 @@ describe('bulk updates', () => {
   it('blocks writes when a patch is invalid and stopOnError is true', async () => {
     const { client, calls } = fakeClient();
     const result = await applyBulkUpdates(client, tasks, [
-      { id: 'a', patch: { category: 'NotARealCategory' } },
+      { id: 'a', patch: { triageStatus: 'NotAStatus' } },
     ], { dryRun: false });
 
     assert.equal(result.applied, 0);
-    assert.match(result.results[0].error ?? '', /not a known P3FO category/);
+    assert.match(result.results[0].error ?? '', /triageStatus/);
     assert.equal(calls.update, 0);
   });
 
@@ -544,13 +544,16 @@ describe('task import validation', () => {
     assert.ok(prepared.warnings.some((warning) => /priority is 0/.test(warning)));
   });
 
-  it('rejects unknown categories and warns on General', () => {
+  it('warns on unknown and General categories but accepts them', () => {
     const prepared = prepareTaskImport([
-      { title: 'Bad category', category: 'Nope' },
+      { title: 'Custom category', category: 'Nope' },
       { title: 'General category', category: 'General' },
     ], existing);
 
-    assert.ok(prepared.errors.some((error) => /not a known P3FO category/.test(error)));
+    assert.equal(prepared.errors.length, 0);
+    assert.ok(
+      prepared.warnings.some((warning) => /not one of the default categories/.test(warning)),
+    );
     assert.ok(prepared.warnings.some((warning) => /General/.test(warning)));
   });
 

@@ -3,7 +3,7 @@ import { VoteEntity, VoteProposal, VoteLoop, VoteResponseEntity } from "@/lib/pe
 import { VOTING_MODES_LABELS, MJ_SCALE } from "@/components/planView/constants";
 import { useVoteParticipation, useVoteResults, responseVoterAlias } from "@/hooks/useVotes";
 import { useVoteLoops } from "@/hooks/useVoteLoops";
-import { tallyThumbsUp, tallyUDNeutral, tallyPoints, tallyMajorityJudgment, tallyConsentLoop, getBestConsentRound } from "@/lib/vote-tally";
+import { tallyThumbsUp, tallyUDNeutral, tallyPoints, tallyMajorityJudgment, tallyConsentLoop, getBestConsentRound, EVENT_RSVP_PROPOSAL_ID } from "@/lib/vote-tally";
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,11 @@ import { BarChart3, Users, MessageSquare, Trophy, ArrowUpDown, ArrowDownWideNarr
 import { LoopRoundProposalTooltip } from "./LoopRoundProposalTooltip";
 import { ProposalContentDisplay } from "./ProposalContentDisplay";
 import { PartialRankingResults } from "./PartialRankingResults";
+import { AttendanceRsvpSummary } from "./AttendanceRsvpSummary";
+import { SchedulingSummary } from "./SchedulingSummary";
+import { VoteComments, type VoteCommentEntry } from "./VoteComments";
+import { attendancePartySize, summarizeAttendance } from "@/lib/attendance";
+import { normalizeSchedulingConfig, tallyScheduling } from "@/lib/scheduling";
 
 interface VoteResultsProps {
   vote: VoteEntity;
@@ -210,10 +215,71 @@ export const VoteOutcomeBanner: React.FC<{ vote: VoteEntity }> = ({ vote }) => {
   );
 };
 
+/**
+ * Shared results header: phase/mode/kind badges, the outcome banner and the
+ * voter/joined/comments counters. Both the generic and the scheduling branch
+ * render it, so a counter or the draft hint cannot silently disappear from one
+ * mode's results.
+ */
+const VoteResultsHeader: React.FC<{
+  vote: VoteEntity;
+  voters: number;
+  joinedCount: number;
+  commentsCount: number;
+  hasDrafts: boolean;
+  draftCount: number;
+}> = ({ vote, voters, joinedCount, commentsCount, hasDrafts, draftCount }) => {
+  const t = getVotingStrings();
+  const { t: tt } = useTranslation();
+  return (
+    <>
+      <div className="flex items-center gap-3 flex-wrap">
+        <Badge variant={PHASE_VARIANTS[vote.config.phase] || "secondary"}>
+          {t.phases[vote.config.phase] || vote.config.phase}
+        </Badge>
+        <Badge variant="outline">{VOTING_MODES_LABELS[vote.config.mode]}</Badge>
+        <Badge variant="outline">{vote.config.kind === "decision" ? t.kinds.decision : t.kinds.consultation}</Badge>
+        {hasDrafts && (
+          <Badge variant="secondary">{tt("voting.draftResults")}</Badge>
+        )}
+      </div>
+
+      {vote.outcome && (
+        <VoteOutcomeBanner vote={vote} />
+      )}
+
+      <div className="flex gap-4 text-sm text-gray-500">
+        <span className="flex items-center gap-1">
+          <Users className="w-4 h-4" />
+          {voters} {voters !== 1 ? t.labels.voters : t.labels.voter}
+        </span>
+        {joinedCount > voters && (
+          <span className="flex items-center gap-1 text-blue-700">
+            <Users className="w-4 h-4" />
+            {tt("voting.joinedCount", { count: joinedCount })}
+          </span>
+        )}
+        {commentsCount > 0 && (
+          <span className="flex items-center gap-1">
+            <MessageSquare className="w-4 h-4" />
+            {commentsCount} {commentsCount !== 1 ? t.labels.comments : t.labels.comment}
+          </span>
+        )}
+      </div>
+
+      {hasDrafts && (
+        <p className="text-xs text-amber-700">
+          {tt("voting.draftIncludedHint", { count: draftCount })}
+        </p>
+      )}
+    </>
+  );
+};
+
 export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, moderatorView = false }) => {
   const t = getVotingStrings();
   const { t: tt } = useTranslation();
-  const { responses, isLoading, hasDrafts, draftCount } = useVoteResults(
+  const { responses, isLoading, hasDrafts, draftCount, refetch } = useVoteResults(
     vote.id,
     // Comparative votes never store vote responses; polling the response
     // endpoint for them is pure waste.
@@ -252,11 +318,60 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
   );
   const isAnonymous = vote.config.isAnonymous ?? true;
 
+  // One deduplicated comment list for every mode. A scheduling batch repeats
+  // the same comment on every availability row, and a multi-proposal submit
+  // repeats it on every proposal response, so key on identity + text.
+  const commentEntries = React.useMemo<VoteCommentEntry[]>(() => {
+    const seen = new Set<string>();
+    const entries: VoteCommentEntry[] = [];
+    for (const response of responses) {
+      const comment = response.comment?.trim();
+      if (!comment) continue;
+      const name = isAnonymous
+        ? null
+        : response.attendeeData?.displayName?.trim() || response.userId || null;
+      const key = `${name ?? ''}\u0000${comment}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      entries.push({ comment, name });
+    }
+    return entries;
+  }, [responses, isAnonymous]);
+
   const [resultsSortMetric, setResultsSortMetric] = React.useState<"original" | "median" | "average">("original");
   const [resultsSortDir, setResultsSortDir] = React.useState<"asc" | "desc">("desc");
 
+  // One memoized RSVP projection shared by the header count and the summary
+  // body, so a polling refresh scans the response list once instead of twice
+  // and an unrelated re-render (e.g. a dialog keystroke) does not scan it at all.
+  const attendanceSummary = React.useMemo(
+    () =>
+      vote.config.mode === "ATTENDANCE"
+        ? summarizeAttendance(responses, {
+            isAnonymous,
+            includeComments: vote.config.allowFreeText === true,
+          })
+        : null,
+    [vote.config.mode, vote.config.allowFreeText, responses, isAnonymous],
+  );
+
+  // Scheduling results are aggregate-only for the public page but include the
+  // participant × slot matrix in the moderator view. One projection is shared
+  // by the header count and the summary body.
+  const schedulingConfig = React.useMemo(
+    () => normalizeSchedulingConfig(vote.config.scheduling),
+    [vote.config.scheduling],
+  );
+  const schedulingTally = React.useMemo(
+    () =>
+      vote.config.mode === "SCHEDULING"
+        ? tallyScheduling(responses, vote.proposals, schedulingConfig)
+        : null,
+    [vote.config.mode, vote.proposals, responses, schedulingConfig],
+  );
+
   const totalVoters = new Set(responses.map(identityOfResponse)).size;
-  const commentsCount = responses.filter((r) => r.comment).length;
+  const commentsCount = commentEntries.length;
 
   if (vote.config.mode === "COMPARATIVE_PRIORITIZATION") {
     return (
@@ -301,51 +416,142 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
         </div>
 
         <ConsentLoopResults vote={vote} />
+        <VoteComments comments={commentEntries} />
+      </div>
+    );
+  }
+
+  if (vote.config.mode === "ATTENDANCE") {
+    const tally = attendanceSummary?.tally;
+    const questions = vote.config.attendance?.customQuestions ?? [];
+    // Organizers asked for emails / custom answers; show them only in the
+    // moderator view. The public projection never carries these fields.
+    const moderatorAttendees = moderatorView
+      ? responses.filter(
+          (response) =>
+            response.proposalId === EVENT_RSVP_PROPOSAL_ID && response.value === 1,
+        )
+      : [];
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Badge variant={PHASE_VARIANTS[vote.config.phase] || "secondary"}>
+            {t.phases[vote.config.phase] || vote.config.phase}
+          </Badge>
+          <Badge variant="outline">{VOTING_MODES_LABELS[vote.config.mode]}</Badge>
+          <Badge variant="outline">
+            {vote.config.kind === "decision" ? t.kinds.decision : t.kinds.consultation}
+          </Badge>
+        </div>
+
+        {vote.outcome && <VoteOutcomeBanner vote={vote} />}
+
+        <div className="flex gap-4 text-sm text-gray-500">
+          <span className="flex items-center gap-1">
+            <Users className="w-4 h-4" />
+            {tally?.total ?? 0} {tally?.total !== 1 ? t.labels.voters : t.labels.voter}
+          </span>
+        </div>
+
+        {isLoading ? (
+          <p className="text-sm text-gray-400">{t.messages.loadingResults}</p>
+        ) : (
+          <div className="border rounded-lg p-3">
+            <AttendanceRsvpSummary
+              responses={responses}
+              isAnonymous={isAnonymous}
+              showComments={false}
+              summary={attendanceSummary ?? undefined}
+            />
+          </div>
+        )}
+
+        {moderatorView && moderatorAttendees.length > 0 && (
+          <div className="border rounded-lg p-3 space-y-2">
+            <h4 className="text-xs font-medium text-gray-400 uppercase">
+              {t.attendance.attendees}
+            </h4>
+            <ul className="space-y-2">
+              {moderatorAttendees.map((response) => {
+                const data = response.attendeeData;
+                return (
+                  <li key={response.id} className="text-sm">
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <span className="font-medium text-gray-900">
+                        {data?.displayName ?? tt("voting.anonymous")}
+                      </span>
+                      <span className="text-xs text-gray-400">× {attendancePartySize(data)}</span>
+                    </div>
+                    {data?.email && (
+                      <div className="text-xs text-gray-500">
+                        {t.attendance.email}: {data.email}
+                      </div>
+                    )}
+                    {questions.map((question) => {
+                      const answer = data?.answers?.[question.id];
+                      if (!answer) return null;
+                      return (
+                        <div key={question.id} className="text-xs text-gray-500">
+                          {question.prompt}: {answer}
+                        </div>
+                      );
+                    })}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        <VoteComments comments={commentEntries} />
+      </div>
+    );
+  }
+
+  if (vote.config.mode === "SCHEDULING") {
+    const tally = schedulingTally;
+    return (
+      <div className="space-y-4">
+        <VoteResultsHeader
+          vote={vote}
+          voters={tally?.totalVoters ?? 0}
+          joinedCount={joinedCount}
+          commentsCount={commentsCount}
+          hasDrafts={hasDrafts}
+          draftCount={draftCount}
+        />
+
+        {isLoading ? (
+          <p className="text-sm text-gray-400">{t.messages.loadingResults}</p>
+        ) : responses.length === 0 || !tally || tally.totalVoters === 0 ? (
+          <p className="text-sm text-gray-400">{t.messages.noVotesYet}</p>
+        ) : (
+          <div className="space-y-3">
+            <SchedulingSummary
+              vote={vote}
+              responses={responses}
+              tally={tally}
+              moderatorView={moderatorView}
+              moderatorToken={moderatorToken}
+              onChanged={refetch}
+            />
+            <VoteComments comments={commentEntries} />
+          </div>
+        )}
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3 flex-wrap">
-        <Badge variant={PHASE_VARIANTS[vote.config.phase] || "secondary"}>
-          {t.phases[vote.config.phase] || vote.config.phase}
-        </Badge>
-        <Badge variant="outline">{VOTING_MODES_LABELS[vote.config.mode]}</Badge>
-        <Badge variant="outline">{vote.config.kind === "decision" ? t.kinds.decision : t.kinds.consultation}</Badge>
-        {hasDrafts && (
-          <Badge variant="secondary">{tt("voting.draftResults")}</Badge>
-        )}
-      </div>
-
-      {vote.outcome && (
-        <VoteOutcomeBanner vote={vote} />
-      )}
-
-      <div className="flex gap-4 text-sm text-gray-500">
-        <span className="flex items-center gap-1">
-          <Users className="w-4 h-4" />
-          {totalVoters} {totalVoters !== 1 ? t.labels.voters : t.labels.voter}
-        </span>
-        {joinedCount > totalVoters && (
-          <span className="flex items-center gap-1 text-blue-700">
-            <Users className="w-4 h-4" />
-            {tt("voting.joinedCount", { count: joinedCount })}
-          </span>
-        )}
-        {commentsCount > 0 && (
-          <span className="flex items-center gap-1">
-            <MessageSquare className="w-4 h-4" />
-            {commentsCount} {commentsCount !== 1 ? t.labels.comments : t.labels.comment}
-          </span>
-        )}
-      </div>
-
-      {hasDrafts && (
-        <p className="text-xs text-amber-700">
-          {tt("voting.draftIncludedHint", { count: draftCount })}
-        </p>
-      )}
+      <VoteResultsHeader
+        vote={vote}
+        voters={totalVoters}
+        joinedCount={joinedCount}
+        commentsCount={commentsCount}
+        hasDrafts={hasDrafts}
+        draftCount={draftCount}
+      />
 
       {isLoading ? (
         <p className="text-sm text-gray-400">{t.messages.loadingResults}</p>
@@ -507,9 +713,6 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
                       {voterRows.map((r) => (
                         <div key={r.id} className="flex items-center gap-2 text-xs text-gray-500">
                           <span>{r.userId || tt("voting.anonymous")}</span>
-                          {r.comment && (
-                            <span className="italic text-gray-400">— {r.comment}</span>
-                          )}
                         </div>
                       ))}
                     </div>
@@ -521,6 +724,7 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
           </>
             );
           })()}
+          <VoteComments comments={commentEntries} />
         </div>
       )}
     </div>

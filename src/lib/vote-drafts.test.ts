@@ -39,6 +39,14 @@ describe('vote draft store', () => {
     expect(drafts[0].values).toEqual({ p1: 1 });
   });
 
+  it('keeps the non-anonymous display name on the moderator draft channel', () => {
+    upsertVoteDraft({ ...base, displayName: 'Alice Example', now: 1000 });
+
+    const drafts = listVoteDrafts('vote-1', 1000);
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0].displayName).toBe('Alice Example');
+  });
+
   it('keeps drafts scoped per vote', () => {
     upsertVoteDraft({ ...base, now: 1000 });
     upsertVoteDraft({ ...base, voteId: 'vote-2', voterAlias: 'P-def', now: 1000 });

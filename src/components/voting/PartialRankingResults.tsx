@@ -7,6 +7,7 @@ import type { VoteEntity, VoteRankingResult } from '@/lib/persistence-types';
 import { proposalDisplayTitle } from '@/lib/vote-ranking';
 import { useVoteRankingResults } from '@/hooks/useVoteRanking';
 import { RankingExportMenu } from '@/components/RankingExportMenu';
+import { VoteComments } from './VoteComments';
 
 interface PartialRankingResultsProps {
   vote: VoteEntity;
@@ -30,7 +31,9 @@ export const PartialRankingResults: React.FC<PartialRankingResultsProps> = ({
   const hasStoredResult = Boolean(vote.outcome?.ranking);
   const { data, isLoading, error, liveState } = useVoteRankingResults(
     vote.slug,
-    !hasStoredResult,
+    // Even a finalized vote refetches when it accepts comments: the stored
+    // outcome carries the ranking, not the voters' comments.
+    !hasStoredResult || vote.config.allowFreeText === true,
     moderatorToken,
     vote.id,
     moderatorView,
@@ -46,6 +49,7 @@ export const PartialRankingResults: React.FC<PartialRankingResultsProps> = ({
   const isDraft = !officialResult && Boolean(draftResult);
   const hidden = hasStoredResult ? false : data?.hidden ?? false;
   const participantCount = data?.participantCount ?? result?.participantCount ?? 0;
+  const comments = data?.comments ?? [];
   const proposalById = new Map(vote.proposals.map((proposal) => [proposal.id, proposal]));
 
   if (isLoading && !result) {
@@ -222,6 +226,7 @@ export const PartialRankingResults: React.FC<PartialRankingResultsProps> = ({
           );
         })}
       </div>
+      <VoteComments comments={comments} />
     </div>
   );
 };

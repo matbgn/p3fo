@@ -6,7 +6,7 @@ import { TableRow, TableCell } from "@/components/ui/table";
 import { Trash2, Pencil, ArrowRight, Play, Pause, AlertTriangle } from "lucide-react";
 import { TaskTag } from "./TaskTag";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { CATEGORIES } from "../data/categories";
+import { useWorkspaceTaxonomy } from "@/hooks/useWorkspaceTaxonomy";
 import { Category } from "@/hooks/useTasks";
 
 import { formatTimeWithTemporal, formatTimeCompact, formatDuration, timestampToInstant, plainDateTimeToTimestamp, instantToPlainDateTime } from "@/lib/format-utils";
@@ -77,6 +77,7 @@ export const EditableTimeEntry: React.FC<{
   };
 }> = ({ entry, taskMap, onUpdateTimeEntry, onUpdateTaskCategory, onUpdateUser, onDelete, onJumpToTask, onToggleTimer, children, overlapInfo }) => {
   const [isEditing, setIsEditing] = useState(false);
+  const { options: categoryOptions } = useWorkspaceTaxonomy();
   const { settings } = useSettingsContext();
   const weekStartsOn = settings.weekStartDay as 0 | 1;
   const timezone = settings.timezone || 'Europe/Zurich';
@@ -171,7 +172,7 @@ export const EditableTimeEntry: React.FC<{
               <SelectValue placeholder="Category" />
             </SelectTrigger>
             <SelectContent>
-              {CATEGORIES.map((category) => (
+              {categoryOptions.map((category) => (
                 <SelectItem key={category} value={category}>{category}</SelectItem>
               ))}
               <SelectItem value="Uncategorized">Uncategorized</SelectItem>

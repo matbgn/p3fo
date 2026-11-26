@@ -35,6 +35,13 @@ describe('vote presence store', () => {
     expect(presence.lastSeenAt).toBe(new Date(31_000).toISOString());
   });
 
+  it('carries the display name for a non-anonymous heartbeat', () => {
+    touchVotePresence({ ...base, displayName: 'Alice', now: 1000 });
+
+    const [presence] = listVotePresence('vote-1', 1000);
+    expect(presence.displayName).toBe('Alice');
+  });
+
   it('resets joinedAt after the entry expired', () => {
     touchVotePresence({ ...base, now: 1000 });
     const later = 1000 + VOTE_PRESENCE_TTL_MS + 1;
