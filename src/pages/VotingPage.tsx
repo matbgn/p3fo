@@ -8,6 +8,7 @@ import { useVoteModerators } from "@/hooks/useVoteModerators";
 import { getPersistenceAdapter } from "@/lib/persistence-factory";
 import { eventBus } from "@/lib/events";
 import { getVotingStrings } from "@/lib/voting-i18n";
+import { richTextToPlainText } from "@/lib/rich-text";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { VoteEntity, VoteKind } from "@/lib/persistence-types";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -57,6 +58,7 @@ const VoteCard: React.FC<{
   const phaseLabel = t.phases[vote.config.phase] || vote.config.phase;
   const phaseColor = PHASE_COLORS[vote.config.phase] || "bg-gray-100 text-gray-700";
   const modeLabel = t.modes[vote.config.mode] ?? vote.config.mode;
+  const descriptionText = richTextToPlainText(vote.description);
 
   return (
     <div
@@ -66,8 +68,10 @@ const VoteCard: React.FC<{
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
           <h3 className="font-medium text-gray-900 truncate">{vote.title}</h3>
-          {vote.description && (
-            <p className="text-sm text-gray-500 mt-1 line-clamp-2">{vote.description}</p>
+          {descriptionText && (
+            <p className="text-sm text-gray-500 mt-1 line-clamp-2 whitespace-pre-line">
+              {descriptionText}
+            </p>
           )}
         </div>
         <div className="flex items-center gap-1 ml-2">

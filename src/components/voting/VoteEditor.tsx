@@ -54,6 +54,11 @@ import { useTranslation } from "react-i18next";
 import { KindSelector } from "./KindSelector";
 import { ModeSelector } from "./ModeSelector";
 import { ProposalEditor, ProposalEditorHandle } from "./ProposalEditor";
+import {
+  BlockNoteProposalEditor,
+  type BlockNoteProposalEditorHandle,
+} from "./BlockNoteProposalEditor";
+import { isRichTextEmpty } from "@/lib/rich-text";
 import { useSettingsContext } from "@/context/SettingsContext";
 import { instantToPlainDateTime, plainDateTimeToTimestamp } from "@/lib/format-utils";
 
@@ -152,6 +157,8 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
   const t = getVotingStrings();
   const { t: tt } = useTranslation();
   const proposalEditorRef = React.useRef<ProposalEditorHandle>(null);
+  const descriptionEditorRef =
+    React.useRef<BlockNoteProposalEditorHandle>(null);
 
   const [title, setTitle] = React.useState("");
   const [description, setDescription] = React.useState("");
@@ -568,6 +575,8 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
     // Flush any pending BlockNote editor content into the proposals state
     // before reading it for the save payload.
     const flushedProposals = proposalEditorRef.current?.flush() ?? proposals;
+    const flushedDescription =
+      descriptionEditorRef.current?.flush() ?? description;
 
     let schedulingConfig: SchedulingConfig | undefined;
     let schedulingProposals: VoteProposal[] = [];
@@ -696,7 +705,9 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
       await onSave({
         id: vote?.id,
         title: title.trim(),
-        description: description.trim() || undefined,
+        description: isRichTextEmpty(flushedDescription)
+          ? undefined
+          : flushedDescription.trim(),
         ownerId: vote?.ownerId || "me",
         proposals:
           mode === "ATTENDANCE"
@@ -759,14 +770,13 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="vote-description">{t.labels.description}</Label>
-            <Textarea
-              id="vote-description"
+            <Label>{t.labels.description}</Label>
+            <BlockNoteProposalEditor
+              ref={descriptionEditorRef}
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={setDescription}
               placeholder={t.placeholders.description}
-              rows={2}
-              disabled={isFinalized}
+              readOnly={isFinalized}
             />
           </div>
 

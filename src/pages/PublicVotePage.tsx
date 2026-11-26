@@ -16,6 +16,7 @@ import {
   sanitizeAttendanceData,
 } from "@/lib/attendance";
 import { AttendanceRsvpSummary } from "@/components/voting/AttendanceRsvpSummary";
+import { isRichTextEmpty, richTextToPlainText } from "@/lib/rich-text";
 import { getVotingStrings, type VotingStrings } from "@/lib/voting-i18n";
 import {
   getOrCreateVoterName,
@@ -468,8 +469,11 @@ const PublicVoteHeading: React.FC<{
     </div>
 
     <h1 className="text-2xl font-bold text-gray-900 mb-2">{vote.title}</h1>
-    {vote.description && (
-      <p className="text-gray-600 mb-4">{vote.description}</p>
+    {!isRichTextEmpty(vote.description) && (
+      <ProposalContentDisplay
+        content={vote.description}
+        className="text-gray-600 mb-4"
+      />
     )}
   </>
 );
@@ -1210,7 +1214,7 @@ const PublicVotePage: React.FC = () => {
     try {
       const content = buildEventIcs({
         title: vote.title,
-        description: vote.description,
+        description: richTextToPlainText(vote.description),
         startAt,
         endAt: vote.config.attendance?.eventEndAt,
         location: vote.config.attendance?.location,

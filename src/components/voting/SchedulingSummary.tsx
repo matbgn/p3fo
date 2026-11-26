@@ -21,6 +21,7 @@ import {
   downloadEventIcs,
 } from "@/lib/ics";
 import { getVotingStrings } from "@/lib/voting-i18n";
+import { richTextToPlainText } from "@/lib/rich-text";
 import { Button } from "@/components/ui/button";
 import { SchedulingCalendar } from "./SchedulingCalendar";
 import { SchedulingMonthCalendar } from "./SchedulingMonthCalendar";
@@ -187,12 +188,12 @@ export const SchedulingSummary: React.FC<SchedulingSummaryProps> = ({
       const content = isDayMode
         ? buildAllDayEventIcs({
             title: vote.title,
-            description: vote.description,
+            description: richTextToPlainText(vote.description),
             dateKey,
           })
-        : buildEventIcs({
+          : buildEventIcs({
             title: vote.title,
-            description: vote.description,
+            description: richTextToPlainText(vote.description),
             startAt: run.startAt,
             endAt: run.endAt,
           });
