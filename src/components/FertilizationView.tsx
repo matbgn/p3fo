@@ -855,13 +855,13 @@ export const FertilizationView: React.FC<FertilizationViewProps> = ({ onClose, o
         const container = boardContainerRef.current;
         if (!container) return;
         const onScroll = () => recomputeLinkLines();
-        container.addEventListener('scroll', onScroll, { passive: true });
+        container.addEventListener('scroll', onScroll, { passive: true, capture: true });
         const ro = new ResizeObserver(() => recomputeLinkLines());
         ro.observe(container);
         const onResize = () => recomputeLinkLines();
         window.addEventListener('resize', onResize);
         return () => {
-            container.removeEventListener('scroll', onScroll);
+            container.removeEventListener('scroll', onScroll, true);
             ro.disconnect();
             window.removeEventListener('resize', onResize);
         };
