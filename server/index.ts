@@ -2261,6 +2261,13 @@ function validateRankingBallot(
     return { error: `This vote uses ${engine}` };
   }
 
+  // A comment travels inside the ballot payload. Only accept it when the vote
+  // allows free text, and bound it like the other public text fields.
+  const comment =
+    vote.config.allowFreeText === true && typeof body.comment === 'string'
+      ? body.comment.trim().slice(0, 2000) || null
+      : null;
+
   // Coverage must be measured against the server-known active proposal set, not
   // the client-supplied itemIds, otherwise a ballot can inflate its reported
   // coverage by declaring a tiny denominator. Reuse `activeProposalIds` so this
@@ -2279,6 +2286,7 @@ function validateRankingBallot(
       stopReason: typeof body.stopReason === 'string' ? body.stopReason : null,
       engine,
       engineVersion: typeof body.engineVersion === 'string' ? body.engineVersion : 'unknown',
+      comment,
     },
   };
 }
@@ -2487,7 +2495,26 @@ app.get('/api/votes/:idOrSlug/ranking-results', async (req: Request, res: Respon
     }
     const submittedCount = submissions.length;
     const result = getVoteRankingResult(vote, submissions);
-    res.json({ hidden: false, participantCount: submittedCount, result, draftResult });
+    // Comments live inside the submitted ballot payload. Deduplicate so a
+    // comment is not repeated per ballot revision, and never expose them when
+    // the results themselves are hidden (the early return above covers that).
+    const anonymous = isVoteAnonymous(vote.config);
+    const comments =
+      vote.config.allowFreeText === true
+        ? Array.from(
+            new Map(
+              submissions.flatMap((submission) => {
+                const comment = submission.submitted?.comment?.trim();
+                if (!comment) return [];
+                const name = anonymous
+                  ? null
+                  : submission.displayName ?? submission.userId ?? null;
+                return [[`${name ?? ''}\u0000${comment}`, { comment, name }] as const];
+              }),
+            ).values(),
+          )
+        : [];
+    res.json({ hidden: false, participantCount: submittedCount, result, draftResult, comments });
   } catch (error: unknown) {
     console.error('Error computing ranking results:', error);
     const message = error instanceof Error ? error.message : String(error);
@@ -2625,6 +2652,97 @@ app.post('/api/vote-ranking-submissions/import', express.json({ limit: '10mb' })
 });
 
 // Vote responses (public)
+// Read back the caller's own comment, so a reload shows what they wrote.
+app.get('/api/votes/:idOrSlug/comment', async (req: Request, res: Response) => {
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) return res.status(404).json({ error: 'Vote not found' });
+    res.setHeader('Cache-Control', 'no-store');
+    const voterToken = requestToken(req, 'x-voter-token');
+    if (!isValidVoterToken(voterToken)) {
+      return res.status(400).json({ error: 'voterToken is required' });
+    }
+    if (vote.config.allowFreeText !== true) {
+      return res.json({ comment: null });
+    }
+    let comment: string | null = null;
+    if (vote.config.mode === 'COMPARATIVE_PRIORITIZATION') {
+      const submission = await db.getVoteRankingSubmission(vote.id, voterToken);
+      comment = submission?.submitted?.comment ?? submission?.draft?.comment ?? null;
+    } else {
+      const responses = await db.getVoteResponsesForVoter(vote.id, voterToken);
+      comment = responses.find((response) => response.comment)?.comment ?? null;
+    }
+    res.json({ comment });
+  } catch (error: unknown) {
+    console.error('Error reading vote comment:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to read comment', details: message });
+  }
+});
+
+// Update (or clear) the voter's free-text comment without resubmitting votes.
+// Every mode funnels here: response-based modes update the voter's rows, and a
+// comparative vote updates the comment inside their stored ballot. This is what
+// lets someone add a comment after they already voted.
+app.post('/api/votes/:idOrSlug/comment', async (req: Request, res: Response) => {
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) return res.status(404).json({ error: 'Vote not found' });
+    if (vote.config.phase !== 'OPEN') {
+      return res.status(400).json({ error: 'Vote is not open for comments' });
+    }
+    if (vote.config.allowFreeText !== true) {
+      return res.status(400).json({ error: 'Comments are disabled for this vote' });
+    }
+    const voterToken = req.body?.voterToken;
+    if (!isValidVoterToken(voterToken)) {
+      return res.status(400).json({ error: 'voterToken is required' });
+    }
+    const rawComment = req.body?.comment;
+    if (rawComment !== null && rawComment !== undefined && typeof rawComment !== 'string') {
+      return res.status(400).json({ error: 'comment must be a string' });
+    }
+    const comment =
+      typeof rawComment === 'string' ? rawComment.trim().slice(0, 2000) || null : null;
+
+    if (vote.config.mode === 'COMPARATIVE_PRIORITIZATION') {
+      const existing = await db.getVoteRankingSubmission(vote.id, voterToken);
+      if (!existing || (!existing.draft && !existing.submitted)) {
+        return res.status(409).json({ error: 'Submit a ballot before commenting' });
+      }
+      if (existing.submitted && vote.config.allowVoteChangeUntilClose === false) {
+        return res.status(409).json({ error: 'This ballot is locked' });
+      }
+      const now = new Date().toISOString();
+      const withComment = (ballot: typeof existing.draft) =>
+        ballot ? { ...ballot, comment } : ballot;
+      await db.upsertVoteRankingSubmission(vote.id, {
+        voterToken,
+        draft: withComment(existing.draft),
+        submitted: existing.submitted ? withComment(existing.submitted) : undefined,
+        draftUpdatedAt: existing.draft ? now : undefined,
+        lastSeenAt: existing.lastSeenAt,
+      });
+      scheduleRankingLiveBroadcast(vote, { resultsChanged: false });
+      return res.status(204).end();
+    }
+
+    const responses = await db.updateVoteResponsesComment(vote.id, voterToken, comment);
+    if (responses.length === 0) {
+      return res.status(409).json({ error: 'Vote before commenting' });
+    }
+    for (const response of responses) {
+      broadcastVoteResponseToYjs(vote, response);
+    }
+    res.status(204).end();
+  } catch (error: unknown) {
+    console.error('Error updating vote comment:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to save comment', details: message });
+  }
+});
+
 app.post('/api/votes/:idOrSlug/responses', async (req: Request, res: Response) => {
   try {
     const { idOrSlug } = req.params;
@@ -2817,6 +2935,13 @@ app.post('/api/votes/:idOrSlug/responses/batch', async (req: Request, res: Respo
 
     const attendeeData = schedulingAttendeeDisplayName(vote, req.body);
 
+    // One comment per voter, repeated on every availability row: the batch
+    // replaces the voter's whole matrix, so the comment belongs to the batch.
+    const comment =
+      vote.config.allowFreeText === true && typeof req.body?.comment === 'string'
+        ? req.body.comment.trim().slice(0, 2000) || null
+        : null;
+
     // No process-local vote lock here: the read-modify-write is now atomic in
     // the DB (one transaction plus a per-voter advisory lock), so holding a
     // per-vote JS lock would needlessly serialize every other voter's batch.
@@ -2827,6 +2952,7 @@ app.post('/api/votes/:idOrSlug/responses/batch', async (req: Request, res: Respo
         proposalId: entry.proposalId,
         value: entry.value,
         attendeeData,
+        comment,
       })),
       [...activeSlots.keys()],
     );

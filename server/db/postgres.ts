@@ -2375,6 +2375,17 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     return result.rows.map((row: Record<string, unknown>) => this.mapVoteResponseRow(row));
   }
 
+  async getVoteResponsesForVoter(
+    voteId: string,
+    voterToken: string,
+  ): Promise<VoteResponseEntity[]> {
+    const result = await this.pool.query(
+      'SELECT * FROM "voteResponses" WHERE "voteId" = $1 AND "voterToken" = $2 ORDER BY "submittedAt" ASC',
+      [voteId, voterToken],
+    );
+    return result.rows.map((row: Record<string, unknown>) => this.mapVoteResponseRow(row));
+  }
+
   async createVoteResponse(voteId: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity> {
     const newResponse: VoteResponseEntity = {
       id: response.id || crypto.randomUUID(),
@@ -2500,7 +2511,7 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
             upserts.map((upsert) => upsert.proposalId),
             upserts.map((upsert) => upsert.value),
             upserts.map(() => null),
-            upserts.map(() => null),
+            upserts.map((upsert) => upsert.comment ?? null),
             upserts.map(() => submittedAt),
             upserts.map((upsert) =>
               upsert.attendeeData ? JSON.stringify(upsert.attendeeData) : null,
@@ -2537,6 +2548,21 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     } finally {
       client.release();
     }
+  }
+
+  async updateVoteResponsesComment(
+    voteId: string,
+    voterToken: string,
+    comment: string | null,
+  ): Promise<VoteResponseEntity[]> {
+    const result = await this.pool.query(
+      `UPDATE "voteResponses"
+       SET "comment" = $1
+       WHERE "voteId" = $2 AND "voterToken" = $3
+       RETURNING *`,
+      [comment, voteId, voterToken],
+    );
+    return result.rows.map((row: Record<string, unknown>) => this.mapVoteResponseRow(row));
   }
 
   async renameVoteResponsesForVoter(

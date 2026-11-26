@@ -1031,7 +1031,12 @@
       "finalizeNeedsVisibleResults": "Die Ergebnisse bleiben bis zum Ende der Abstimmung verborgen, daher kann kein Spitzenvorschlag gewählt werden. Warte auf das Ende der Abstimmung oder aktiviere frühe Ergebnisse.",
       "noBallotsToFinalize": "Keine abgegebenen Stimmzettel zum Finalisieren.",
       "finalizeFailed": "Die Abstimmung konnte nicht finalisiert werden. Prüfe die Stimmzettel und versuche es erneut."
-    }
+    },
+    "commentHint": "Wird beim Absenden Ihrer Stimme gespeichert.",
+    "saveComment": "Kommentar speichern",
+    "savingComment": "Wird gespeichert...",
+    "commentSaved": "Kommentar gespeichert",
+    "commentSaveError": "Der Kommentar konnte nicht gespeichert werden."
   },
   "rankingExport": {
     "export": "Exportieren",

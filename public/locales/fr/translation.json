@@ -1031,7 +1031,12 @@
       "finalizeNeedsVisibleResults": "Les résultats restent masqués jusqu’à la clôture du vote, donc aucune proposition de tête ne peut être choisie. Attendez la clôture ou activez les résultats anticipés.",
       "noBallotsToFinalize": "Aucun bulletin envoyé à finaliser.",
       "finalizeFailed": "Le vote n’a pas pu être finalisé. Vérifiez les bulletins et réessayez."
-    }
+    },
+    "commentHint": "Enregistré lors de l’envoi de votre vote.",
+    "saveComment": "Enregistrer le commentaire",
+    "savingComment": "Enregistrement...",
+    "commentSaved": "Commentaire enregistré",
+    "commentSaveError": "Impossible d’enregistrer le commentaire."
   },
   "rankingExport": {
     "export": "Exporter",

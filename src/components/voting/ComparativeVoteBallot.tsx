@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle2, Flag, ListOrdered } from 'lucide-react';
+import { CommentField } from './CommentField';
+import { CheckCircle2, Flag, ListOrdered  } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ProposalContentDisplay } from './ProposalContentDisplay';
@@ -173,6 +174,7 @@ export const ComparativeVoteBallot: React.FC<ComparativeVoteBallotProps> = ({
     withdraw,
   } = useMyVoteRankingSubmission(slug, voterToken);
 
+
   const [engineState, setEngineState] = React.useState<PrioritizationState | null>(null);
   const [currentBatch, setCurrentBatch] = React.useState<ComparisonBatch | null>(null);
   const [comparisons, setComparisons] = React.useState<VoteRankingComparison[]>([]);
@@ -184,6 +186,36 @@ export const ComparativeVoteBallot: React.FC<ComparativeVoteBallotProps> = ({
   // Background-save failures must not replace the ballot with a fatal error:
   // keep the comparison UI interactive and surface the save problem inline.
   const [saveError, setSaveError] = React.useState<string | null>(null);
+  const [comment, setComment] = React.useState('');
+  const [commentSaving, setCommentSaving] = React.useState(false);
+  const [commentSaved, setCommentSaved] = React.useState(false);
+  const [commentSaveError, setCommentSaveError] = React.useState<string | null>(null);
+  const saveCommentOnly = React.useCallback(async () => {
+    setCommentSaving(true);
+    setCommentSaved(false);
+    setCommentSaveError(null);
+    try {
+      const response = await fetch(`/api/votes/${slug}/comment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voterToken, comment }),
+      });
+      if (response.status !== 204) {
+        const body = await response.json().catch(() => null);
+        setCommentSaveError(
+          body && typeof body.error === 'string'
+            ? body.error
+            : tt('voting.commentSaveError'),
+        );
+        return;
+      }
+      setCommentSaved(true);
+    } catch {
+      setCommentSaveError(tt('voting.commentSaveError'));
+    } finally {
+      setCommentSaving(false);
+    }
+  }, [slug, voterToken, comment, tt]);
   // Advances only when the voter makes a real comparison. The debounced save
   // must not be keyed on `vote`/`buildBallot`, because the public page polls
   // every few seconds and re-creates the vote object, which would re-upload the
@@ -227,8 +259,9 @@ export const ComparativeVoteBallot: React.FC<ComparativeVoteBallotProps> = ({
       stopReason: state?.stopReason ?? null,
       engine,
       engineVersion: RANKING_ENGINE_VERSION,
+      comment: vote.config.allowFreeText === true ? comment.trim() || null : null,
     }),
-    [tasks, comparisons, batchCount, engine, coverage],
+    [tasks, comparisons, batchCount, engine, coverage, comment, vote.config.allowFreeText],
   );
 
   const engineStateRef = React.useRef(engineState);
@@ -259,6 +292,7 @@ export const ComparativeVoteBallot: React.FC<ComparativeVoteBallotProps> = ({
       setEngineState(hydrated);
       setComparisons(source.comparisons);
       setBatchCount(source.batchCount);
+      setComment(source.comment ?? '');
       const draftIsNewer = isDraftNewer(
         submission?.draft != null,
         submission?.draftUpdatedAt ?? null,
@@ -540,6 +574,23 @@ export const ComparativeVoteBallot: React.FC<ComparativeVoteBallotProps> = ({
               </Button>
             </div>
           )}
+          {localSubmitted && !locked && vote.config.allowFreeText === true && (
+            <div className="mt-4">
+              <CommentField
+                id="comparative-post-comment"
+                value={comment}
+                onChange={(value) => {
+                  setComment(value);
+                  setCommentSaved(false);
+                  setCommentSaveError(null);
+                }}
+                onSave={saveCommentOnly}
+                saving={commentSaving}
+                saved={commentSaved}
+                saveError={commentSaveError}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -621,9 +672,28 @@ export const ComparativeVoteBallot: React.FC<ComparativeVoteBallotProps> = ({
               })}
             </ol>
           )}
-          <Button onClick={() => void submit()} disabled={isSaving || comparisons.length === 0}>
-            {isSaving ? tt('voting.comparative.saving') : tt('voting.comparative.submitBallot')}
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            {vote.config.allowFreeText === true && (
+              <CommentField
+                id="comparative-comment"
+                value={comment}
+                onChange={(value) => {
+                  setComment(value);
+                  setCommentSaved(false);
+                  setCommentSaveError(null);
+                  if (!localSubmitted) setSaveSeq((seq) => seq + 1);
+                }}
+                onSave={saveCommentOnly}
+                saving={commentSaving}
+                saved={commentSaved}
+                saveError={commentSaveError}
+                className="flex-1"
+              />
+            )}
+            <Button onClick={() => void submit()} disabled={isSaving || comparisons.length === 0}>
+              {isSaving ? tt('voting.comparative.saving') : tt('voting.comparative.submitBallot')}
+            </Button>
+          </div>
         </div>
       )}
     </div>

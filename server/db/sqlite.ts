@@ -2607,6 +2607,16 @@ class SqliteClient implements DbClient {
     return rows.map(row => this.mapVoteResponseDbRowToEntity(row));
   }
 
+  async getVoteResponsesForVoter(
+    voteId: string,
+    voterToken: string,
+  ): Promise<VoteResponseEntity[]> {
+    const rows = this.db.prepare(
+      'SELECT * FROM "voteResponses" WHERE "voteId" = ? AND "voterToken" = ? ORDER BY "submittedAt" ASC'
+    ).all(voteId, voterToken) as unknown as VoteResponseDbRow[];
+    return rows.map(row => this.mapVoteResponseDbRowToEntity(row));
+  }
+
   async createVoteResponse(voteId: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity> {
     const newResponse: VoteResponseEntity = {
       id: response.id || crypto.randomUUID(),
@@ -2724,7 +2734,7 @@ class SqliteClient implements DbClient {
           userId: null,
           voterToken,
           value: upsert.value,
-          comment: null,
+          comment: upsert.comment ?? null,
           submittedAt,
           attendeeData: upsert.attendeeData ? JSON.stringify(upsert.attendeeData) : null,
         }) as unknown as VoteResponseDbRow | undefined;
@@ -2748,6 +2758,20 @@ class SqliteClient implements DbClient {
       this.db.exec('ROLLBACK');
       throw error;
     }
+  }
+
+  async updateVoteResponsesComment(
+    voteId: string,
+    voterToken: string,
+    comment: string | null,
+  ): Promise<VoteResponseEntity[]> {
+    const rows = this.db.prepare(`
+      UPDATE "voteResponses"
+      SET "comment" = ?
+      WHERE "voteId" = ? AND "voterToken" = ?
+      RETURNING *
+    `).all(comment, voteId, voterToken) as unknown as VoteResponseDbRow[];
+    return rows.map(row => this.mapVoteResponseDbRowToEntity(row));
   }
 
   async renameVoteResponsesForVoter(

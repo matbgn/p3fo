@@ -13,6 +13,7 @@ import { ProposalContentDisplay } from "./ProposalContentDisplay";
 import { PartialRankingResults } from "./PartialRankingResults";
 import { AttendanceRsvpSummary } from "./AttendanceRsvpSummary";
 import { SchedulingSummary } from "./SchedulingSummary";
+import { VoteComments, type VoteCommentEntry } from "./VoteComments";
 import { attendancePartySize, summarizeAttendance } from "@/lib/attendance";
 import { normalizeSchedulingConfig, tallyScheduling } from "@/lib/scheduling";
 
@@ -317,6 +318,26 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
   );
   const isAnonymous = vote.config.isAnonymous ?? true;
 
+  // One deduplicated comment list for every mode. A scheduling batch repeats
+  // the same comment on every availability row, and a multi-proposal submit
+  // repeats it on every proposal response, so key on identity + text.
+  const commentEntries = React.useMemo<VoteCommentEntry[]>(() => {
+    const seen = new Set<string>();
+    const entries: VoteCommentEntry[] = [];
+    for (const response of responses) {
+      const comment = response.comment?.trim();
+      if (!comment) continue;
+      const name = isAnonymous
+        ? null
+        : response.attendeeData?.displayName?.trim() || response.userId || null;
+      const key = `${name ?? ''}\u0000${comment}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      entries.push({ comment, name });
+    }
+    return entries;
+  }, [responses, isAnonymous]);
+
   const [resultsSortMetric, setResultsSortMetric] = React.useState<"original" | "median" | "average">("original");
   const [resultsSortDir, setResultsSortDir] = React.useState<"asc" | "desc">("desc");
 
@@ -350,7 +371,7 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
   );
 
   const totalVoters = new Set(responses.map(identityOfResponse)).size;
-  const commentsCount = responses.filter((r) => r.comment).length;
+  const commentsCount = commentEntries.length;
 
   if (vote.config.mode === "COMPARATIVE_PRIORITIZATION") {
     return (
@@ -395,6 +416,7 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
         </div>
 
         <ConsentLoopResults vote={vote} />
+        <VoteComments comments={commentEntries} />
       </div>
     );
   }
@@ -438,7 +460,7 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
             <AttendanceRsvpSummary
               responses={responses}
               isAnonymous={isAnonymous}
-              showComments={vote.config.allowFreeText === true}
+              showComments={false}
               summary={attendanceSummary ?? undefined}
             />
           </div>
@@ -480,6 +502,8 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
             </ul>
           </div>
         )}
+
+        <VoteComments comments={commentEntries} />
       </div>
     );
   }
@@ -502,12 +526,15 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
         ) : responses.length === 0 || !tally || tally.totalVoters === 0 ? (
           <p className="text-sm text-gray-400">{t.messages.noVotesYet}</p>
         ) : (
-          <SchedulingSummary
-            vote={vote}
-            responses={responses}
-            tally={tally}
-            moderatorView={moderatorView}
-          />
+          <div className="space-y-3">
+            <SchedulingSummary
+              vote={vote}
+              responses={responses}
+              tally={tally}
+              moderatorView={moderatorView}
+            />
+            <VoteComments comments={commentEntries} />
+          </div>
         )}
       </div>
     );
@@ -684,9 +711,6 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
                       {voterRows.map((r) => (
                         <div key={r.id} className="flex items-center gap-2 text-xs text-gray-500">
                           <span>{r.userId || tt("voting.anonymous")}</span>
-                          {r.comment && (
-                            <span className="italic text-gray-400">— {r.comment}</span>
-                          )}
                         </div>
                       ))}
                     </div>
@@ -698,6 +722,7 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
           </>
             );
           })()}
+          <VoteComments comments={commentEntries} />
         </div>
       )}
     </div>

@@ -107,6 +107,8 @@ interface RankingResultsResponse {
   result: VoteRankingResult | null;
   /** Provisional ranking from in-progress drafts; facilitator views only. */
   draftResult?: VoteRankingResult | null;
+  /** Free-text comments, with a name only when the vote is not anonymous. */
+  comments?: Array<{ comment: string; name: string | null }>;
 }
 
 /** The POST response echoes canonical metadata, never the ballot payload the

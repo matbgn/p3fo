@@ -47,6 +47,8 @@ export interface VoteResponseUpsert {
   proposalId: string;
   value: number;
   attendeeData?: VoteResponseEntity['attendeeData'];
+  /** One free-text comment, repeated on each row of a scheduling batch. */
+  comment?: string | null;
 }
 
 // Define the database client interface
@@ -164,6 +166,8 @@ export interface DbClient {
 
   // Vote responses
   getVoteResponses(voteId: string): Promise<VoteResponseEntity[]>;
+  /** One voter's own responses, used to read back their comment. */
+  getVoteResponsesForVoter(voteId: string, voterToken: string): Promise<VoteResponseEntity[]>;
   createVoteResponse(voteId: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity>;
   /**
    * Delete the matching response rows and return their ids, so the live Yjs
@@ -188,6 +192,16 @@ export interface DbClient {
     upserts: VoteResponseUpsert[],
     scopeProposalIds: string[],
   ): Promise<{ responses: VoteResponseEntity[]; removedIds: string[] }>;
+  /**
+   * Set (or clear) the free-text comment on every response row this voter
+   * owns, without touching their votes. Returns the updated rows so the live
+   * Yjs channel can publish them.
+   */
+  updateVoteResponsesComment(
+    voteId: string,
+    voterToken: string,
+    comment: string | null,
+  ): Promise<VoteResponseEntity[]>;
   /**
    * Rename the voter's existing canonical rows without touching availability.
    * The target rows are selected inside the same transaction and per-voter lock

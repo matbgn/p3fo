@@ -673,10 +673,10 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
         kind,
         phase: vote?.config.phase || "IDLE",
         isAnonymous,
-        allowFreeText:
-          mode !== "COMPARATIVE_PRIORITIZATION" && mode !== "SCHEDULING"
-            ? allowFreeText
-            : undefined,
+        // Every mode can carry a voter comment: generic modes attach it to the
+        // vote response, attendance to the RSVP, scheduling to the availability
+        // batch, and comparative prioritization inside the ranking ballot.
+        allowFreeText,
         requireObjectionComment: showObjectionComment ? requireObjectionComment : undefined,
         allowAudienceProposals:
           kind === "consultation" && mode !== "ATTENDANCE" && mode !== "SCHEDULING"
@@ -874,16 +874,14 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
               />
             </div>
 
-            {mode !== "COMPARATIVE_PRIORITIZATION" && mode !== "SCHEDULING" && (
-              <div className="flex items-center justify-between">
-                <Label className="text-sm">{t.labels.allowFreeText}</Label>
-                <Switch
-                  checked={allowFreeText}
-                  onCheckedChange={setAllowFreeText}
-                  disabled={isFinalized}
-                />
-              </div>
-            )}
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">{t.labels.allowFreeText}</Label>
+              <Switch
+                checked={allowFreeText}
+                onCheckedChange={setAllowFreeText}
+                disabled={isFinalized}
+              />
+            </div>
 
             {showObjectionComment && (
               <div className="flex items-center justify-between">

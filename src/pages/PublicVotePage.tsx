@@ -2,6 +2,8 @@ import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { ComparativeVotePage } from './ComparativeVotePage';
 import { VoteOutcomeBanner } from '@/components/voting/VoteResults';
+import { VoteComments } from '@/components/voting/VoteComments';
+import { CommentField } from '@/components/voting/CommentField';
 import { useParams } from "react-router-dom";
 import { VoteEntity, VoteResponseEntity, VoteProposal, VoteLoop, AttendanceResponseData } from "@/lib/persistence-types";
 import { MJ_SCALE } from "@/components/planView/constants";
@@ -170,6 +172,7 @@ async function submitSchedulingAvailability(
     voterToken: string;
     values: Record<string, number>;
     attendeeData?: AttendanceResponseData;
+    comment?: string | null;
   },
 ): Promise<{ error: string | null }> {
   try {
@@ -548,6 +551,9 @@ const PublicVotePage: React.FC = () => {
   const [error, setError] = React.useState<string | null>(null);
   const [voterValues, setVoterValues] = React.useState<Record<string, number>>({});
   const [comment, setComment] = React.useState("");
+  const [commentSaving, setCommentSaving] = React.useState(false);
+  const [commentSaved, setCommentSaved] = React.useState(false);
+  const [commentSaveError, setCommentSaveError] = React.useState<string | null>(null);
   const [hasSubmitted, setHasSubmitted] = React.useState(false);
   const [justVoted, setJustVoted] = React.useState(false);
   const [submittedVoterValues, setSubmittedVoterValues] = React.useState<Record<string, number>>({});
@@ -613,6 +619,33 @@ const PublicVotePage: React.FC = () => {
   voteRef.current = vote;
 
   const voterToken = slug ? ensureVoterToken(slug) : "";
+
+  // Load the caller's own comment so a reload shows what they wrote.
+  React.useEffect(() => {
+    if (!slug || !voterToken) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const response = await fetch(`/api/votes/${slug}/comment`, {
+          headers: { 'X-Voter-Token': voterToken },
+        });
+        if (!response.ok) return;
+        const data = (await response.json().catch(() => null)) as
+          | { comment?: string | null }
+          | null;
+        if (cancelled || !data || typeof data.comment !== "string") return;
+        setComment(data.comment);
+      } catch {
+        // Reading the comment back is best effort; the field stays empty.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, voterToken]);
 
   const myRsvpAlias = vote ? voterAlias(vote.id, voterToken) : "";
   const ownRsvp = React.useMemo(
@@ -913,7 +946,8 @@ const PublicVotePage: React.FC = () => {
     const isSchedulingVote = vote.config.mode === "SCHEDULING";
     const isAnonymousVote = vote.config.isAnonymous ?? true;
     // Scheduling keeps a display name on the ballot for the moderator matrix;
-    // anonymous votes never send one, and scheduling never sends a comment.
+    // anonymous votes never send one. Free-text comments are opt-in like the
+    // other modes and ride along with the availability batch.
     const schedulingDisplayName = schedulingParticipantName(
       vote.id,
       storedName,
@@ -939,6 +973,10 @@ const PublicVotePage: React.FC = () => {
         voterToken,
         values,
         attendeeData,
+        comment:
+          vote.config.allowFreeText && comment.trim()
+            ? comment.trim()
+            : undefined,
       });
       if (error) {
         setSchedulingSubmitError(
@@ -989,9 +1027,63 @@ const PublicVotePage: React.FC = () => {
     }
   };
 
+  const handleCommentChange = (value: string) => {
+    setComment(value);
+    setCommentSaved(false);
+    setCommentSaveError(null);
+  };
+
+  const saveComment = async () => {
+    if (!slug || !vote) return;
+    setCommentSaving(true);
+    setCommentSaveError(null);
+    setCommentSaved(false);
+    try {
+      const res = await fetch(`/api/votes/${slug}/comment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ voterToken, comment }),
+      });
+      if (res.status !== 204) {
+        const body = await res.json().catch(() => null);
+        setCommentSaveError(
+          body && typeof body.error === "string"
+            ? body.error
+            : tt("voting.commentSaveError"),
+        );
+        return;
+      }
+      setCommentSaved(true);
+      refreshData();
+    } catch {
+      setCommentSaveError(tt("voting.commentSaveError"));
+    } finally {
+      setCommentSaving(false);
+    }
+  };
+
   const isActive = vote?.config.phase === "OPEN";
   const isFinalized = vote?.config.phase === "FINALIZED";
   const isAnonymous = vote?.config.isAnonymous ?? true;
+
+  // Shared comment list for the public results: a scheduling batch repeats the
+  // voter's comment on every slot, so deduplicate by identity + text.
+  const publicCommentEntries = React.useMemo(() => {
+    const seen = new Set<string>();
+    const entries: Array<{ comment: string; name: string | null }> = [];
+    for (const response of responses) {
+      const comment = response.comment?.trim();
+      if (!comment) continue;
+      const name = isAnonymous
+        ? null
+        : response.attendeeData?.displayName?.trim() || response.userId || null;
+      const key = `${name ?? ''}\u0000${comment}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      entries.push({ comment, name });
+    }
+    return entries;
+  }, [responses, isAnonymous]);
 
   const mode = vote?.config.mode;
   const isAttendance = mode === "ATTENDANCE";
@@ -2084,8 +2176,11 @@ const PublicVotePage: React.FC = () => {
                 <AttendanceRsvpSummary
                   responses={responses}
                   isAnonymous={isAnonymous}
-                  showComments={vote.config.allowFreeText === true}
+                  showComments={false}
                 />
+                <div className="mt-4">
+                  <VoteComments comments={publicCommentEntries} />
+                </div>
               </div>
             )}
             {(removalToken || ownRsvp) && (
@@ -2243,6 +2338,19 @@ const PublicVotePage: React.FC = () => {
             {schedulingSubmitError && (
               <p className="mt-3 text-sm text-red-600">{schedulingSubmitError}</p>
             )}
+            {isActive && vote.config.allowFreeText && (
+              <CommentField
+                id="scheduling-comment"
+                value={comment}
+                onChange={handleCommentChange}
+                disabled={votedAndLocked}
+                className="mt-4"
+                onSave={saveComment}
+                saving={commentSaving}
+                saved={commentSaved}
+                saveError={commentSaveError}
+                  />
+            )}
             {isActive && hasPendingVotes && (
               <div className="flex justify-center mt-4">
                 <Button onClick={handleSubmitAllVotes}>
@@ -2263,6 +2371,9 @@ const PublicVotePage: React.FC = () => {
               responses={responses}
               tally={schedulingTally}
             />
+            <div className="mt-4">
+              <VoteComments comments={publicCommentEntries} />
+            </div>
           </div>
         )}
 
@@ -2574,9 +2685,37 @@ const PublicVotePage: React.FC = () => {
                     })()}
                   </div>
                 )}
+                {isSingleProposal && isActive && vote.config.allowFreeText && (
+                  <CommentField
+                    id="single-comment"
+                    value={comment}
+                    onChange={handleCommentChange}
+                    disabled={votedAndLocked}
+                    nudge={showObjectionNudge && isNegativeVote}
+                    className="mt-3"
+                    onSave={saveComment}
+                    saving={commentSaving}
+                    saved={commentSaved}
+                    saveError={commentSaveError}
+                  />
+                )}
               </div>
             ))}
           </div>
+          {!isSingleProposal && isActive && vote.config.allowFreeText && (
+            <CommentField
+              id="vote-comment"
+              value={comment}
+              onChange={handleCommentChange}
+              disabled={votedAndLocked}
+              nudge={showObjectionNudge && isNegativeVote}
+              className="mt-4"
+              onSave={saveComment}
+              saving={commentSaving}
+              saved={commentSaved}
+              saveError={commentSaveError}
+                  />
+          )}
           {!isSingleProposal && isActive && hasPendingVotes && (
             <div className="flex justify-center mt-2">
               <Button onClick={handleSubmitAllVotes}>
@@ -2877,43 +3016,48 @@ const PublicVotePage: React.FC = () => {
                   </>
                 );
               })()}
+            {isActive && vote.config.allowFreeText && (
+              <CommentField
+                id="loop-comment"
+                value={comment}
+                onChange={handleCommentChange}
+                disabled={votedAndLocked}
+                onSave={saveComment}
+                saving={commentSaving}
+                saved={commentSaved}
+                saveError={commentSaveError}
+                  />
+            )}
             </div>
           );
         })()}
 
         {mode === "POINTS" && isActive && (
           <div className="bg-white rounded-lg shadow-sm border p-5 mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium">{ts.buttons.submitPoints}</h3>
+            <h3 className="text-sm font-medium mb-3">{ts.buttons.submitPoints}</h3>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              {vote.config.allowFreeText ? (
+                <CommentField
+                  id="points-comment"
+                  value={comment}
+                  onChange={handleCommentChange}
+                  disabled={votedAndLocked}
+                  className="flex-1"
+                  onSave={saveComment}
+                  saving={commentSaving}
+                  saved={commentSaved}
+                  saveError={commentSaveError}
+                  />
+              ) : (
+                <div className="flex-1" />
+              )}
               <Button size="sm" onClick={handleSubmitAllVotes} disabled={votedAndLocked}>
                 {ts.buttons.submit}
               </Button>
             </div>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-400 mt-2">
               {ts.messages.allocatePointsBudget} {tt("voting.totalBudget")} {vote.config.maxPointsPerUser || 10} {ts.labels.points}.
             </p>
-          </div>
-        )}
-
-        {isActive && vote.config.allowFreeText && mode !== "ATTENDANCE" && mode !== "SCHEDULING" && (
-          <div className="bg-white rounded-lg shadow-sm border p-5 mb-6">
-            <label className="text-sm font-medium text-gray-700 flex items-center gap-1 mb-2">
-              <MessageSquare className="w-4 h-4" />
-              {ts.labels.comment}
-            </label>
-            {showObjectionNudge && isNegativeVote && (
-              <p className="text-xs text-amber-600 flex items-center gap-1 mb-2">
-                <AlertTriangle className="w-3 h-3" />
-                {ts.messages.negativeCommentNudge}
-              </p>
-            )}
-            <Textarea
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder={ts.placeholders.comment}
-              rows={2}
-              disabled={votedAndLocked}
-            />
           </div>
         )}
 
@@ -2951,11 +3095,16 @@ const PublicVotePage: React.FC = () => {
               {ts.labels.finalResults}
             </h3>
             {isAttendance ? (
-              <AttendanceRsvpSummary
-                responses={responses}
-                isAnonymous={isAnonymous}
-                showComments={vote.config.allowFreeText === true}
-              />
+              <>
+                <AttendanceRsvpSummary
+                  responses={responses}
+                  isAnonymous={isAnonymous}
+                  showComments={false}
+                />
+                <div className="mt-4">
+                  <VoteComments comments={publicCommentEntries} />
+                </div>
+              </>
             ) : mode !== "CONSENT_LOOP" && (
               <div className="space-y-3">
                 {canSortResults && (
@@ -3238,16 +3387,14 @@ const PublicVotePage: React.FC = () => {
                       className="flex items-center gap-2 text-xs text-gray-500"
                     >
                       <span>{r.userId || tt("voting.anonymous")}</span>
-                      {r.comment && (
-                        <span className="italic text-gray-400">
-                          &mdash; {r.comment}
-                        </span>
-                      )}
                     </div>
                   ))}
                 </div>
               </div>
             )}
+            <div className="mt-4">
+              <VoteComments comments={publicCommentEntries} />
+            </div>
           </div>
         )}
 

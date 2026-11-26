@@ -537,6 +537,11 @@ export interface VoteRankingBallot {
   stopReason: string | null;
   engine: RankingEngine;
   engineVersion: string;
+  /**
+   * Optional free-text comment from the voter, when the vote allows it.
+   * Stored inside the ballot payload so no separate column is needed.
+   */
+  comment?: string | null;
 }
 
 export interface VoteRankingGroup {

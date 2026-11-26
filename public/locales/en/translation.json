@@ -1031,7 +1031,12 @@
       "finalizeNeedsVisibleResults": "Results are hidden until the vote closes, so a top proposal cannot be selected. Wait until the vote closes or enable early results.",
       "noBallotsToFinalize": "No submitted ballots to finalize.",
       "finalizeFailed": "The vote could not be finalized. Check the ballots and try again."
-    }
+    },
+    "commentHint": "Saved when you submit your vote.",
+    "saveComment": "Save comment",
+    "savingComment": "Saving...",
+    "commentSaved": "Comment saved",
+    "commentSaveError": "Could not save the comment."
   },
   "rankingExport": {
     "export": "Export",
