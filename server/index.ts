@@ -3124,10 +3124,17 @@ app.post('/api/votes/:idOrSlug/presence', async (req: Request, res: Response) =>
     if (typeof voterToken !== 'string' || voterToken.length === 0) {
       return res.status(400).json({ error: 'voterToken is required' });
     }
+    // Only a non-anonymous vote may name a presence entry. The moderator-only
+    // channel can then list a participant who opened the page before casting a
+    // ballot by their chosen name instead of the opaque public alias.
+    const displayName = isVoteAnonymous(vote.config)
+      ? undefined
+      : normalizeVoterDisplayName(req.body?.displayName) || undefined;
     touchVotePresence({
       voteId: vote.id,
       voterAlias: voterAlias(vote.id, voterToken),
       participantKey: voteParticipantKey(vote.id, voterToken),
+      displayName,
     });
     broadcastVotePresenceRevision(vote.id);
     res.status(204).send();

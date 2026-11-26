@@ -654,6 +654,13 @@ export interface VotePresenceEntity {
    * participant can brute-force into a collision.
    */
   participantId?: string;
+  /**
+   * Display name for a non-anonymous vote, carried only on the
+   * moderator-authenticated presence channel so a participant who opened the
+   * page but has not submitted yet is named instead of shown as their alias.
+   * Never present for anonymous votes.
+   */
+  displayName?: string;
   joinedAt: string;
   lastSeenAt: string;
 }

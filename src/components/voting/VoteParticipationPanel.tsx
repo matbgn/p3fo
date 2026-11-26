@@ -87,6 +87,13 @@ export const VoteParticipationPanel: React.FC<VoteParticipationPanelProps> = ({ 
     for (const participant of presence) {
       const row = ensure(participant.participantId ?? participant.voterAlias);
       row.lastSeenAt = latest(row.lastSeenAt, participant.lastSeenAt);
+      // Presence is served only through the moderator capability, and the
+      // heartbeat carries a name only for a non-anonymous vote. Use it so a
+      // participant who joined but has not drafted or submitted yet is shown by
+      // name instead of the opaque alias.
+      if (!row.displayName && !isAnonymous) {
+        row.displayName = participant.displayName ?? null;
+      }
     }
     for (const response of submitted) {
       // Join on the moderator-only participant digest when present; the public

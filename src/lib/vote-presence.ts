@@ -30,6 +30,7 @@ const store = createVoteEphemeralStore<StoredPresence, VotePresenceEntity>({
     voteId: presence.voteId,
     voterAlias: presence.voterAlias,
     participantId: presence.participantId,
+    displayName: presence.displayName,
     joinedAt: presence.joinedAt,
     lastSeenAt: presence.lastSeenAt,
   }),
@@ -50,6 +51,12 @@ export function touchVotePresence(input: {
    * another participant's presence.
    */
   participantKey?: string;
+  /**
+   * Chosen display name for a non-anonymous vote. The presence channel is read
+   * only through the moderator capability, so carrying it here lets the
+   * participation view name someone who joined but has not cast a ballot yet.
+   */
+  displayName?: string;
   now?: number;
 }): VotePresenceEntity {
   const now = input.now ?? Date.now();
@@ -63,6 +70,7 @@ export function touchVotePresence(input: {
     voteId: input.voteId,
     voterAlias: input.voterAlias,
     participantId: participantKey,
+    displayName: input.displayName,
     joinedAt,
     lastSeenAt: new Date(now).toISOString(),
     expiresAt: now + VOTE_PRESENCE_TTL_MS,

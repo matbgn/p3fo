@@ -325,7 +325,12 @@ async function deleteVoteDraft(
 /** Presence heartbeat: "this participant has the page open", selection-free. */
 async function publishVotePresence(
   slug: string,
-  body: { voterToken: string },
+  body: {
+    voterToken: string;
+    /** Non-anonymous votes only: lets the moderator participation view name a
+     * participant who joined before casting a ballot. */
+    displayName?: string;
+  },
 ): Promise<void> {
   try {
     const res = await fetch(`/api/votes/${slug}/presence`, {
@@ -405,6 +410,24 @@ function schedulingParticipantName(
   isAnonymous: boolean,
 ): string | undefined {
   if (mode !== "SCHEDULING" || isAnonymous) return undefined;
+  return storedName || getStoredVoterName(voteId) || getOrCreateVoterName(voteId);
+}
+
+/**
+ * The name a presence heartbeat may carry. Presence is read only through the
+ * moderator capability, so a non-anonymous participant who opened the page but
+ * has not submitted yet can be listed by their name instead of the opaque
+ * public alias. Attendance and scheduling both collect a display name for the
+ * vote, so reuse the same stored/generated name their responses would carry.
+ */
+function presenceParticipantName(
+  voteId: string,
+  storedName: string,
+  mode: string | undefined,
+  isAnonymous: boolean,
+): string | undefined {
+  if (isAnonymous) return undefined;
+  if (mode !== "ATTENDANCE" && mode !== "SCHEDULING") return undefined;
   return storedName || getStoredVoterName(voteId) || getOrCreateVoterName(voteId);
 }
 
@@ -1378,7 +1401,9 @@ const PublicVotePage: React.FC = () => {
   // Presence is independent of selections: a participant who only opened the
   // page still appears in the moderator's participation view, before touching a
   // ballot. The channel is moderator-authenticated, so an anonymous/hidden
-  // vote can report "someone is here" without exposing who to other clients.
+  // vote can report "someone is here" without exposing who to other clients;
+  // a non-anonymous vote also carries the participant's display name so the
+  // participation table does not fall back to the opaque public alias.
   // Comparative votes use the server-side ranking participation panel instead.
   React.useEffect(() => {
     if (!slug || !draftVoteId || !voterToken) return;
@@ -1387,7 +1412,15 @@ const PublicVotePage: React.FC = () => {
     let cancelled = false;
     const publish = () => {
       if (cancelled) return;
-      void publishVotePresence(slug, { voterToken });
+      void publishVotePresence(slug, {
+        voterToken,
+        displayName: presenceParticipantName(
+          draftVoteId,
+          storedName,
+          mode,
+          isAnonymous,
+        ),
+      });
     };
     publish();
     const timer = window.setInterval(publish, 30000);
@@ -1395,7 +1428,7 @@ const PublicVotePage: React.FC = () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [slug, draftVoteId, draftVotePhase, voterToken, mode]);
+  }, [slug, draftVoteId, draftVotePhase, voterToken, mode, storedName, isAnonymous]);
 
   // Load the attendee identity and removal token once per vote.
   React.useEffect(() => {
