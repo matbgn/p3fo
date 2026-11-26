@@ -1,6 +1,7 @@
 import { Pool, PoolClient } from 'pg';
 import { DbClient, SprintWellbeingRecord, VoteResponseUpsert, applyTaskTemporalMirror } from './index.js';
 import type { SprintStateEntity } from '../../src/lib/sprint-types.js';
+import { restoreVoteResponseTokens } from '../../src/lib/vote-response-restore.js';
 import type {
   TaskEntity,
   UserSettingsEntity,
@@ -2607,10 +2608,20 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
   }
 
   async importVoteResponses(items: VoteResponseEntity[]): Promise<void> {
+    const restored = restoreVoteResponseTokens(items);
+    const voteIds = Array.from(new Set(restored.map((item) => item.voteId)));
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      for (const item of items) {
+      // A backup is a full snapshot for the votes it contains. Replace their
+      // existing responses so a re-import does not duplicate restored rows.
+      if (voteIds.length > 0) {
+        await client.query(
+          'DELETE FROM "voteResponses" WHERE "voteId" = ANY($1)',
+          [voteIds],
+        );
+      }
+      for (const item of restored) {
         await client.query(`
           INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt", "attendeeData")
           VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)

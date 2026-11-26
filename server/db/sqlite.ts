@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { DbClient, SprintWellbeingRecord, VoteResponseUpsert, applyTaskTemporalMirror } from './index.js';
 import type { SprintStateEntity } from '../../src/lib/sprint-types.js';
+import { restoreVoteResponseTokens } from '../../src/lib/vote-response-restore.js';
 import type {
   TaskEntity,
   UserSettingsEntity,
@@ -2803,6 +2804,8 @@ class SqliteClient implements DbClient {
   }
 
   async importVoteResponses(items: VoteResponseEntity[]): Promise<void> {
+    const restored = restoreVoteResponseTokens(items);
+    const voteIds = Array.from(new Set(restored.map((item) => item.voteId)));
     const insertStmt = this.db.prepare(`
       INSERT INTO "voteResponses"("id", "voteId", "proposalId", "loopId", "userId", "voterToken", "value", "comment", "submittedAt", "attendeeData")
       VALUES(@id, @voteId, @proposalId, @loopId, @userId, @voterToken, @value, @comment, @submittedAt, @attendeeData)
@@ -2813,10 +2816,16 @@ class SqliteClient implements DbClient {
         "submittedAt" = excluded."submittedAt",
         "attendeeData" = excluded."attendeeData"
     `);
+    const deleteStmt = this.db.prepare(
+      'DELETE FROM "voteResponses" WHERE "voteId" = ?',
+    );
 
     this.db.exec('BEGIN');
     try {
-      for (const item of items) {
+      // A backup is a full snapshot for the votes it contains. Replace their
+      // existing responses so a re-import does not duplicate restored rows.
+      for (const voteId of voteIds) deleteStmt.run(voteId);
+      for (const item of restored) {
         insertStmt.run({
           id: item.id,
           voteId: item.voteId,

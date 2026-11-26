@@ -54,7 +54,8 @@ const SchedulingRunList: React.FC<{
               <span className="ml-2 text-xs text-gray-500">
                 {t.scheduling.available}: {run.available} ·{" "}
                 {t.scheduling.ifNeeded}: {run.ifNeeded} ·{" "}
-                {t.scheduling.unavailable}: {run.unavailable}
+                {t.scheduling.unavailable}: {run.unavailable} ·{" "}
+                {t.scheduling.coverage}: {run.coverage}
               </span>
             </Label>
           </div>

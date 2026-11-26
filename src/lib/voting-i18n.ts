@@ -99,6 +99,10 @@ type VotingStrings = {
     available: string;
     ifNeeded: string;
     unavailable: string;
+    unavailableNoAnswer: string;
+    coverage: string;
+    everyoneAvailable: string;
+    everyoneCanAttendIfNeeded: string;
     selectAllAvailable: string;
     clearAll: string;
     bestTimes: string;
@@ -474,6 +478,10 @@ const en: VotingStrings = {
     available: "Available",
     ifNeeded: "If needed",
     unavailable: "Unavailable",
+    unavailableNoAnswer: "Unavailable / no answer",
+    coverage: "Coverage",
+    everyoneAvailable: "Everyone is available",
+    everyoneCanAttendIfNeeded: "Everyone can attend if needed",
     selectAllAvailable: "Select all available",
     clearAll: "Clear all",
     bestTimes: "Best times",
@@ -857,6 +865,10 @@ const fr: VotingStrings = {
     available: "Disponible",
     ifNeeded: "Si n\u00e9cessaire",
     unavailable: "Indisponible",
+    unavailableNoAnswer: "Indisponible / sans r\u00e9ponse",
+    coverage: "Couverture",
+    everyoneAvailable: "Tout le monde est disponible",
+    everyoneCanAttendIfNeeded: "Tout le monde peut venir si n\u00e9cessaire",
     selectAllAvailable: "Tout marquer disponible",
     clearAll: "Tout effacer",
     bestTimes: "Meilleurs moments",
@@ -1240,6 +1252,10 @@ const de: VotingStrings = {
     available: "Verf\u00fcgbar",
     ifNeeded: "Falls n\u00f6tig",
     unavailable: "Nicht verf\u00fcgbar",
+    unavailableNoAnswer: "Nicht verf\u00fcgbar / keine Antwort",
+    coverage: "Abdeckung",
+    everyoneAvailable: "Alle sind verf\u00fcgbar",
+    everyoneCanAttendIfNeeded: "Alle k\u00f6nnen bei Bedarf teilnehmen",
     selectAllAvailable: "Alle als verf\u00fcgbar markieren",
     clearAll: "Alle leeren",
     bestTimes: "Beste Zeiten",

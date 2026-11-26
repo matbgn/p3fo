@@ -695,6 +695,7 @@ export interface SchedulingSlotTally {
   available: number;
   ifNeeded: number;
   unavailable: number;
+  coverage: number;
 }
 
 export interface SchedulingRunTally {
@@ -704,6 +705,7 @@ export interface SchedulingRunTally {
   available: number;
   ifNeeded: number;
   unavailable: number;
+  coverage: number;
 }
 
 export interface SchedulingParticipantTally {
@@ -730,6 +732,7 @@ export interface SchedulingHeatmapCell {
   available: number;
   ifNeeded: number;
   unavailable: number;
+  coverage: number;
 }
 
 export interface SchedulingHeatmap {
@@ -866,9 +869,25 @@ export function buildSchedulingHeatmap(
       available: slot.available,
       ifNeeded: slot.ifNeeded,
       unavailable: slot.unavailable,
+      coverage: slot.coverage,
     });
   }
   return { bySlot, totalVoters: tally.totalVoters };
+}
+
+/**
+ * Run order for the scheduling results. Fully available participants are the
+ * primary preference; coverage is displayed as a separate signal and must not
+ * silently reorder runs that are tied on availability.
+ */
+export function compareSchedulingRuns(
+  a: SchedulingRunTally,
+  b: SchedulingRunTally,
+): number {
+  return (
+    b.available - a.available ||
+    Date.parse(a.startAt) - Date.parse(b.startAt)
+  );
 }
 
 export function tallyScheduling(
@@ -909,20 +928,22 @@ export function tallyScheduling(
   const slots: SchedulingSlotTally[] = activeSlots.map((proposal) => {
     let available = 0;
     let ifNeeded = 0;
-    let unavailable = 0;
     for (const participant of participants) {
       const value = participant.values[proposal.id];
       if (value === 1) available += 1;
       else if (value === 0) ifNeeded += 1;
-      else if (value === -1) unavailable += 1;
     }
+    const coverage = available + ifNeeded;
     return {
       proposalId: proposal.id,
       startAt: proposal.timeSlot?.startAt ?? '',
       endAt: proposal.timeSlot?.endAt ?? '',
       available,
       ifNeeded,
-      unavailable,
+      // A participant who did not answer this slot cannot attend it; fold the
+      // missing answer into unavailable so the heatmap and run tally agree.
+      unavailable: participants.length - coverage,
+      coverage,
     };
   });
 
@@ -976,16 +997,11 @@ export function tallyScheduling(
       available,
       ifNeeded,
       unavailable,
+      coverage: available + ifNeeded,
     });
   }
 
-  runs.sort(
-    (a, b) =>
-      b.available - a.available ||
-      b.ifNeeded - a.ifNeeded ||
-      a.unavailable - b.unavailable ||
-      Date.parse(a.startAt) - Date.parse(b.startAt),
-  );
+  runs.sort(compareSchedulingRuns);
 
   return {
     slots,
@@ -1002,15 +1018,21 @@ export function tallyScheduling(
  * change cannot make one offer a run another rejects.
  */
 export function schedulingRunHasAvailability(
-  run: Pick<SchedulingRunTally, 'available' | 'ifNeeded'>,
+  run: Pick<SchedulingRunTally, 'coverage'>,
 ): boolean {
-  return run.available > 0 || run.ifNeeded > 0;
+  return run.coverage > 0;
 }
 
 /**
- * The runs that actually share the best availability. Timeful highlights every
- * slot at the maximum, not an arbitrary top-N. If nobody is fully available,
- * fall back to the best "if needed" runs; with no positive signal, return none.
+ * Best-run candidates in two tiers.
+ *
+ * 1. The fully-available tier: every finalizable run at `maxAvailable`.
+ * 2. The coverage tier: every finalizable run at `maxCoverage` that is not
+ *    already in the first tier (`available < maxAvailable`).
+ *
+ * Coverage is displayed, not used to reorder the first tier. The second tier
+ * follows the first so a day where everyone can attend only if needed remains
+ * visible as an alternative. `limit` applies per tier.
  */
 export function topSchedulingRuns(
   tally: SchedulingTally,
@@ -1019,16 +1041,19 @@ export function topSchedulingRuns(
   const finalizable = tally.runs.filter(schedulingRunHasAvailability);
   if (finalizable.length === 0) return [];
   const maxAvailable = Math.max(...finalizable.map((run) => run.available));
-  let pool: SchedulingRunTally[];
-  if (maxAvailable > 0) {
-    pool = finalizable.filter((run) => run.available === maxAvailable);
-  } else {
-    const maxIfNeeded = Math.max(...finalizable.map((run) => run.ifNeeded));
-    pool = finalizable.filter(
-      (run) => run.available === 0 && run.ifNeeded === maxIfNeeded,
-    );
-  }
-  return pool.slice(0, Math.max(0, limit));
+  const maxCoverage = Math.max(...finalizable.map((run) => run.coverage));
+  const perTierLimit = Math.max(0, limit);
+  const availableTier = finalizable
+    .filter((run) => run.available === maxAvailable)
+    .sort(compareSchedulingRuns)
+    .slice(0, perTierLimit);
+  const coverageTier = finalizable
+    .filter(
+      (run) => run.available < maxAvailable && run.coverage === maxCoverage,
+    )
+    .sort(compareSchedulingRuns)
+    .slice(0, perTierLimit);
+  return [...availableTier, ...coverageTier];
 }
 
 export function schedulingBestSlotIds(tally: SchedulingTally): string[] {

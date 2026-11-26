@@ -8,6 +8,7 @@ import type {
 import {
   DEFAULT_MAX_SLOTS,
   MAX_SCHEDULING_SLOTS,
+  compareSchedulingRuns,
   findActiveSchedulingSlot,
   formatSchedulingDateKey,
   formatSchedulingDay,
@@ -22,6 +23,7 @@ import {
   schedulingSlotIdentity,
   tallyScheduling,
   topSchedulingRuns,
+  type SchedulingRunTally,
   validateSchedulingConfig,
 } from './scheduling';
 
@@ -391,9 +393,24 @@ describe('tallyScheduling', () => {
       's3',
       's4',
     ]);
-    expect(tally.slots[0]).toMatchObject({ available: 2, ifNeeded: 0, unavailable: 0 });
-    expect(tally.slots[1]).toMatchObject({ available: 2, ifNeeded: 1, unavailable: 0 });
-    expect(tally.slots[3]).toMatchObject({ available: 2, ifNeeded: 0, unavailable: 1 });
+    expect(tally.slots[0]).toMatchObject({
+      available: 2,
+      ifNeeded: 0,
+      unavailable: 1,
+      coverage: 2,
+    });
+    expect(tally.slots[1]).toMatchObject({
+      available: 2,
+      ifNeeded: 1,
+      unavailable: 0,
+      coverage: 3,
+    });
+    expect(tally.slots[3]).toMatchObject({
+      available: 2,
+      ifNeeded: 0,
+      unavailable: 1,
+      coverage: 2,
+    });
     expect(tally.participants.map((participant) => participant.alias)).toEqual([
       'alice',
       'bob',
@@ -437,6 +454,7 @@ describe('tallyScheduling', () => {
       available: 2,
       ifNeeded: 1,
       unavailable: 0,
+      coverage: 3,
     });
   });
 
@@ -631,6 +649,7 @@ describe('tallyScheduling in day mode', () => {
       available: 2,
       ifNeeded: 0,
       unavailable: 1,
+      coverage: 2,
     });
     expect(tally.runs[0]?.startAt).toBe('2026-05-31T22:00:00Z');
   });
@@ -693,7 +712,7 @@ describe('topSchedulingRuns', () => {
     expect(schedulingBestSlotIds(tally)).toEqual([first.id, third.id]);
   });
 
-  it('falls back to the best if-needed runs when nobody is fully available', () => {
+  it('shows every finalizable run when nobody is fully available', () => {
     const tally = tallyScheduling(
       [
         response('r1', first.id, 'a', 0),
@@ -708,7 +727,82 @@ describe('topSchedulingRuns', () => {
     );
     expect(topSchedulingRuns(tally).map((run) => run.startAt)).toEqual([
       first.timeSlot?.startAt,
+      second.timeSlot?.startAt,
+      third.timeSlot?.startAt,
     ]);
+    expect(topSchedulingRuns(tally).map((run) => run.coverage)).toEqual([
+      2, 1, 1,
+    ]);
+  });
+
+  it('keeps the available tier first and appends coverage-tier alternatives', () => {
+    const tally = tallyScheduling(
+      [
+        response('r1', first.id, 'a', 1),
+        response('r2', second.id, 'a', 1),
+        response('r3', third.id, 'a', 1),
+        response('r4', first.id, 'b', 1),
+        response('r5', second.id, 'b', 0),
+        response('r6', third.id, 'b', -1),
+      ],
+      proposals,
+      config,
+    );
+    const best = topSchedulingRuns(tally);
+    expect(best.map((run) => run.startAt)).toEqual([
+      first.timeSlot?.startAt,
+      second.timeSlot?.startAt,
+    ]);
+    // The 1-available + 1-if-needed run has the same coverage as the
+    // 2-available run, but it stays after the available tier.
+    expect(best.map((run) => run.available)).toEqual([2, 1]);
+    expect(best.map((run) => run.coverage)).toEqual([2, 2]);
+  });
+
+  it('applies the limit per tier so coverage alternatives stay visible', () => {
+    const tally = tallyScheduling(
+      [
+        response('r1', first.id, 'a', 1),
+        response('r2', second.id, 'a', 1),
+        response('r3', third.id, 'a', 1),
+        response('r4', first.id, 'b', 1),
+        response('r5', second.id, 'b', 1),
+        response('r6', third.id, 'b', 0),
+        response('r7', third.id, 'c', 0),
+      ],
+      proposals,
+      config,
+    );
+    const best = topSchedulingRuns(tally, 1);
+    expect(best.map((run) => run.startAt)).toEqual([
+      first.timeSlot?.startAt,
+      third.timeSlot?.startAt,
+    ]);
+    expect(best.map((run) => run.coverage)).toEqual([2, 3]);
+  });
+
+  it('shows runs tied on maximum availability without reordering by coverage', () => {
+    const tally = tallyScheduling(
+      [
+        response('r1', first.id, 'a', 1),
+        response('r2', second.id, 'a', 1),
+        response('r3', third.id, 'a', 1),
+        response('r4', first.id, 'b', -1),
+        response('r5', second.id, 'b', 0),
+        response('r6', third.id, 'b', -1),
+      ],
+      proposals,
+      config,
+    );
+    const best = topSchedulingRuns(tally);
+    expect(best.map((run) => run.startAt)).toEqual([
+      first.timeSlot?.startAt,
+      second.timeSlot?.startAt,
+      third.timeSlot?.startAt,
+    ]);
+    // Coverage is exposed to the UI, but does not move the higher-coverage
+    // second run ahead of the chronological order.
+    expect(best.map((run) => run.coverage)).toEqual([1, 2, 1]);
   });
 
   it('returns no best runs when every run has an unavailable participant', () => {
@@ -727,10 +821,39 @@ describe('topSchedulingRuns', () => {
 });
 
 describe('schedulingRunHasAvailability', () => {
-  it('accepts runs with an available or if-needed answer and rejects the rest', () => {
-    expect(schedulingRunHasAvailability({ available: 1, ifNeeded: 0 })).toBe(true);
-    expect(schedulingRunHasAvailability({ available: 0, ifNeeded: 1 })).toBe(true);
-    expect(schedulingRunHasAvailability({ available: 0, ifNeeded: 0 })).toBe(false);
+  it('accepts runs with coverage and rejects runs without it', () => {
+    expect(schedulingRunHasAvailability({ coverage: 1 })).toBe(true);
+    expect(schedulingRunHasAvailability({ coverage: 0 })).toBe(false);
+  });
+});
+
+describe('compareSchedulingRuns', () => {
+  const run = (
+    startAt: string,
+    available: number,
+    ifNeeded: number,
+  ): SchedulingRunTally => ({
+    startAt,
+    endAt: startAt,
+    slotIds: [startAt],
+    available,
+    ifNeeded,
+    unavailable: 2 - available - ifNeeded,
+    coverage: available + ifNeeded,
+  });
+
+  it('orders by fully available participants first', () => {
+    const high = run('2026-01-01T10:00:00Z', 2, 0);
+    const low = run('2026-01-01T09:00:00Z', 1, 1);
+    expect([low, high].sort(compareSchedulingRuns)).toEqual([high, low]);
+  });
+
+  it('orders tied availability by start time, never by coverage', () => {
+    const earlyLowCoverage = run('2026-01-01T09:00:00Z', 1, 0);
+    const lateHighCoverage = run('2026-01-01T10:00:00Z', 1, 1);
+    expect(
+      [lateHighCoverage, earlyLowCoverage].sort(compareSchedulingRuns),
+    ).toEqual([earlyLowCoverage, lateHighCoverage]);
   });
 });
 

@@ -14,6 +14,7 @@ import { SchedulingLegend } from "./SchedulingLegend";
 import {
   schedulingAnswerDotClass,
   schedulingHeatmapBackground,
+  schedulingHeatmapCountLabel,
   schedulingHeatmapTitle,
   schedulingStatusClass,
   schedulingStatusLabel,
@@ -197,31 +198,34 @@ export const SchedulingMonthCalendar: React.FC<
                 const dayLabel = dayLabels.get(key) ?? "";
 
                 if (heatmap) {
-                  const availableCount = cell?.available ?? 0;
                   return (
                     <div
                       key={key}
                       role="img"
-                      aria-label={`${dayLabel} \u2014 ${ts.scheduling.available}: ${cell?.available ?? 0}`}
+                      aria-label={schedulingHeatmapTitle(
+                        dayLabel,
+                        ts.scheduling,
+                        cell,
+                      )}
                       title={schedulingHeatmapTitle(
                         dayLabel,
                         ts.scheduling,
                         cell,
                       )}
                       className={cn(
-                        "relative flex aspect-square min-h-10 items-center justify-center rounded border border-green-700/10 text-sm font-medium text-green-950",
+                        "relative flex aspect-square min-h-10 items-center justify-center rounded border border-gray-200 text-sm font-medium text-gray-900",
                         isBest && "ring-2 ring-blue-600 ring-inset",
                       )}
                       style={{
-                        backgroundColor: schedulingHeatmapBackground(
-                          availableCount,
+                        background: schedulingHeatmapBackground(
+                          cell,
                           heatmap.totalVoters,
                         ),
                       }}
                     >
                       {date.day}
                       <span className="absolute bottom-0.5 text-[10px] leading-none opacity-70">
-                        {cell?.available ?? 0}
+                        {schedulingHeatmapCountLabel(cell)}
                       </span>
                       {value !== undefined && (
                         <span
@@ -243,6 +247,7 @@ export const SchedulingMonthCalendar: React.FC<
       </div>
       <SchedulingLegend
         showBest={best.size > 0}
+        mode={heatmap ? "heatmap" : "selection"}
         helpText={interactive ? ts.scheduling.selectDaysHelp : undefined}
       />
     </div>

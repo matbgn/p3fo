@@ -45,7 +45,7 @@ interface SchedulingSummaryProps {
   moderatorView?: boolean;
   /** A tally the parent already computed from the same response list. */
   tally?: SchedulingTally | null;
-  /** How many best-run cards to render. Defaults to 5. */
+  /** How many best-run cards to render per tier. Defaults to 5. */
   maxRuns?: number;
 }
 
@@ -270,6 +270,18 @@ export const SchedulingSummary: React.FC<SchedulingSummaryProps> = ({
                   <span className="text-red-600">
                     {ts.scheduling.unavailable}: {run.unavailable}
                   </span>
+                  <span className="text-gray-600">
+                    {ts.scheduling.coverage}: {run.coverage}/{total}
+                  </span>
+                  {run.available === total ? (
+                    <span className="rounded-full bg-green-100 px-2 py-0.5 font-medium text-green-800">
+                      {ts.scheduling.everyoneAvailable}
+                    </span>
+                  ) : run.coverage === total ? (
+                    <span className="rounded-full bg-yellow-100 px-2 py-0.5 font-medium text-yellow-800">
+                      {ts.scheduling.everyoneCanAttendIfNeeded}
+                    </span>
+                  ) : null}
                 </p>
               </div>
               <Button

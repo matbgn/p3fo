@@ -16,6 +16,7 @@ import { SchedulingLegend } from "./SchedulingLegend";
 import {
   schedulingAnswerDotClass,
   schedulingHeatmapBackground,
+  schedulingHeatmapCountLabel,
   schedulingHeatmapTitle,
   schedulingStatusClass,
   schedulingStatusLabel,
@@ -187,7 +188,11 @@ export const SchedulingCalendar: React.FC<SchedulingCalendarProps> = ({
                     ts.scheduling.available
                   }`;
                   if (heatmap) {
-                    const availableCount = cell?.available ?? 0;
+                    const heatmapLabel = schedulingHeatmapTitle(
+                      label,
+                      ts.scheduling,
+                      cell,
+                    );
                     return (
                       <td
                         key={`${date.key}|${time}`}
@@ -195,24 +200,24 @@ export const SchedulingCalendar: React.FC<SchedulingCalendarProps> = ({
                       >
                         <div
                           role="img"
-                          aria-label={`${label} — ${ts.scheduling.available}: ${cell?.available ?? 0}`}
+                          aria-label={heatmapLabel}
                           title={schedulingHeatmapTitle(
                             rangeBySlot.get(slot.id) ?? "",
                             ts.scheduling,
                             cell,
                           )}
                           className={cn(
-                            "relative flex h-8 min-w-[2.75rem] items-center justify-center rounded border border-green-700/10 text-[11px] font-medium text-green-950",
+                            "relative flex h-8 min-w-[2.75rem] items-center justify-center rounded border border-gray-200 text-[11px] font-medium text-gray-900",
                             isBest && "ring-2 ring-blue-600 ring-inset",
                           )}
                           style={{
-                            backgroundColor: schedulingHeatmapBackground(
-                              availableCount,
+                            background: schedulingHeatmapBackground(
+                              cell,
                               heatmap.totalVoters,
                             ),
                           }}
                         >
-                          {cell?.available ?? 0}
+                          {schedulingHeatmapCountLabel(cell)}
                           {value !== undefined && (
                             <span
                               className={cn(
@@ -292,6 +297,7 @@ export const SchedulingCalendar: React.FC<SchedulingCalendarProps> = ({
       )}
       <SchedulingLegend
         showBest={best.size > 0}
+        mode={heatmap ? "heatmap" : "selection"}
         helpText={readOnly ? undefined : ts.scheduling.selectSlotsHelp}
       />
     </div>

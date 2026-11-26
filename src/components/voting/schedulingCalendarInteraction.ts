@@ -79,18 +79,60 @@ export function schedulingHeatmapTitle(
 }
 
 /**
- * Fill for one heatmap cell: the shared green intensity ramp for slots with
- * availability and the neutral gray for empty cells. Kept in one place so the
- * time and month calendars cannot render the same heatmap differently.
+ * Compact count shown inside a heatmap cell. Fully-available voters stay the
+ * primary number; if-needed voters are shown in parentheses so a cell with no
+ * hard availability is not misread as empty (for example `(1)`).
+ */
+export function schedulingHeatmapCountLabel(
+  cell: SchedulingHeatmapCell | undefined,
+): string {
+  const available = cell?.available ?? 0;
+  const ifNeeded = cell?.ifNeeded ?? 0;
+  if (available > 0) {
+    return ifNeeded > 0 ? `${available} (${ifNeeded})` : `${available}`;
+  }
+  return ifNeeded > 0 ? `(${ifNeeded})` : "0";
+}
+
+/**
+ * Segment widths for one heatmap cell. The heatmap shows the full answer
+ * distribution, not only hard availability: green is fully available, yellow
+ * is if-needed, and the remainder is unavailable / no answer.
+ */
+export function schedulingHeatmapSegments(
+  cell: SchedulingHeatmapCell | undefined,
+  totalVoters: number,
+): { greenPct: number; yellowPct: number; neutralPct: number } {
+  if (!cell || totalVoters <= 0) {
+    return { greenPct: 0, yellowPct: 0, neutralPct: 100 };
+  }
+  const greenPct = Math.max(
+    0,
+    Math.min(100, (cell.available / totalVoters) * 100),
+  );
+  const yellowPct = Math.max(
+    0,
+    Math.min(100 - greenPct, (cell.ifNeeded / totalVoters) * 100),
+  );
+  return { greenPct, yellowPct, neutralPct: 100 - greenPct - yellowPct };
+}
+
+/**
+ * Fill for one heatmap cell. The green segment keeps the existing availability
+ * intensity ramp; the yellow segment represents if-needed coverage. Kept in one
+ * place so the time and month calendars cannot render the same heatmap
+ * differently.
  */
 export function schedulingHeatmapBackground(
-  available: number,
+  cell: SchedulingHeatmapCell | undefined,
   totalVoters: number,
 ): string {
-  if (available <= 0) return "rgba(156, 163, 175, 0.10)";
-  const opacity =
-    totalVoters <= 0 ? 0 : 0.08 + 0.72 * (available / totalVoters);
-  return `rgba(34, 197, 94, ${opacity.toFixed(3)})`;
+  const { greenPct, yellowPct } = schedulingHeatmapSegments(cell, totalVoters);
+  const greenOpacity = 0.08 + 0.72 * (greenPct / 100);
+  const yellowOpacity = 0.15 + 0.6 * (yellowPct / 100);
+  const green = `rgba(34, 197, 94, ${greenOpacity.toFixed(3)})`;
+  const yellow = `rgba(234, 179, 8, ${yellowOpacity.toFixed(3)})`;
+  return `linear-gradient(90deg, ${green} 0 ${greenPct.toFixed(3)}%, ${yellow} ${greenPct.toFixed(3)}% ${(greenPct + yellowPct).toFixed(3)}%, rgba(156, 163, 175, 0.10) ${(greenPct + yellowPct).toFixed(3)}% 100%)`;
 }
 
 interface UseSchedulingPaintOptions {

@@ -7,6 +7,11 @@ interface SchedulingLegendProps {
   showBest: boolean;
   /** Flow-specific hint; `undefined` hides it (read-only calendar). */
   helpText?: string;
+  /**
+   * The heatmap renders the third bucket as unavailable / no answer in a
+   * neutral gray; the selection palette keeps the explicit red unavailable.
+   */
+  mode?: "selection" | "heatmap";
 }
 
 /**
@@ -16,8 +21,15 @@ interface SchedulingLegendProps {
 export const SchedulingLegend: React.FC<SchedulingLegendProps> = ({
   showBest,
   helpText,
+  mode = "selection",
 }) => {
   const ts = getVotingStrings();
+  const unavailableSwatch =
+    mode === "heatmap" ? "bg-gray-300" : SCHEDULING_STATUS_SWATCH_CLASS[-1];
+  const unavailableLabel =
+    mode === "heatmap"
+      ? ts.scheduling.unavailableNoAnswer
+      : ts.scheduling.unavailable;
   return (
     <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-500">
       <span className="inline-flex items-center gap-1">
@@ -34,9 +46,9 @@ export const SchedulingLegend: React.FC<SchedulingLegendProps> = ({
       </span>
       <span className="inline-flex items-center gap-1">
         <span
-          className={`h-2.5 w-2.5 rounded-sm ${SCHEDULING_STATUS_SWATCH_CLASS[-1]}`}
+          className={`h-2.5 w-2.5 rounded-sm ${unavailableSwatch}`}
         />
-        {ts.scheduling.unavailable}
+        {unavailableLabel}
       </span>
       {showBest && (
         <span className="inline-flex items-center gap-1">
