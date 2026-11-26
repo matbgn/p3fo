@@ -24,6 +24,7 @@ import PomodoroSettings from '@/components/PomodoroSettings';
 import TravelerSettings from '@/components/TravelerSettings';
 import FocusModeSettings from '@/components/FocusModeSettings';
 import { TemplateManager } from '@/components/TemplateManager';
+import { WorkspaceLabelsSettings } from '@/components/settings/WorkspaceLabelsSettings';
 
 const ALL_MODULES: { id: ModuleId; isTopLevel: boolean }[] = [
   { id: 'celebration', isTopLevel: true },
@@ -588,6 +589,10 @@ const SettingsPage: React.FC = () => {
                   </p>
                 </div>
               </div>
+            </div>
+
+            <div className="pt-6 border-t">
+              <WorkspaceLabelsSettings />
             </div>
 
             <div className="pt-6 border-t">

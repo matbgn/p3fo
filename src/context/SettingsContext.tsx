@@ -5,6 +5,7 @@ import { usePersistence } from "@/hooks/usePersistence";
 import { AppSettingsEntity } from '@/lib/persistence-types';
 import { DEFAULT_POMODORO_CONFIG, DEFAULT_FOCUS_MODE_CONFIG, PomodoroConfig, FocusModeConfig } from '@/lib/pomodoro-types';
 import { DEFAULT_TRAVELER_CONFIG, TravelerConfig } from '@/lib/traveler-types';
+import { DEFAULT_CATEGORIES, type ColorLabels } from '@/lib/workspace-taxonomy';
 import { normalizePreferredDays } from '@/utils/scheduler-utils';
 import { yAppSettings, isCollaborationEnabled, doc } from '@/lib/collaboration';
 import { eventBus } from '@/lib/events';
@@ -38,6 +39,10 @@ export interface CombinedSettings {
     pomodoroConfig: PomodoroConfig;
     focusModeConfig: FocusModeConfig;
     travelerConfig: TravelerConfig;
+    /** Editable workspace task categories (labels base). */
+    categories: string[];
+    /** Optional color associated with a category, keyed by color. */
+    colorLabels: ColorLabels;
     nonActionPeriodHours: number;
 }
 
@@ -79,7 +84,9 @@ const defaultCombinedSettings: CombinedSettings = {
     pomodoroConfig: DEFAULT_POMODORO_CONFIG,
     focusModeConfig: DEFAULT_FOCUS_MODE_CONFIG,
     travelerConfig: DEFAULT_TRAVELER_CONFIG,
-                nonActionPeriodHours: 5,
+    categories: [...DEFAULT_CATEGORIES],
+    colorLabels: {},
+    nonActionPeriodHours: 5,
 };
 
 interface SettingsContextType {
@@ -135,6 +142,8 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 pomodoroConfig: appSettings.pomodoroConfig ?? DEFAULT_POMODORO_CONFIG,
                 focusModeConfig: appSettings.focusModeConfig ?? DEFAULT_FOCUS_MODE_CONFIG,
                 travelerConfig: appSettings.travelerConfig ?? DEFAULT_TRAVELER_CONFIG,
+                categories: appSettings.categories ?? [...DEFAULT_CATEGORIES],
+                colorLabels: appSettings.colorLabels ?? {},
                 nonActionPeriodHours: (userSettings?.nonActionPeriodHours as number | undefined) ?? 5,
             };
 
@@ -315,6 +324,8 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
                 pomodoroConfig: appSettings.pomodoroConfig ?? DEFAULT_POMODORO_CONFIG,
                 focusModeConfig: appSettings.focusModeConfig ?? DEFAULT_FOCUS_MODE_CONFIG,
                 travelerConfig: appSettings.travelerConfig ?? DEFAULT_TRAVELER_CONFIG,
+                categories: appSettings.categories ?? [...DEFAULT_CATEGORIES],
+                colorLabels: appSettings.colorLabels ?? {},
     nonActionPeriodHours: 5,
             };
 
@@ -480,6 +491,12 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
             if (updates.travelerConfig !== undefined) {
                 if (userSettings) addToUser('travelerConfig', updates.travelerConfig);
                 else addToApp('travelerConfig', updates.travelerConfig);
+            }
+            if (updates.categories !== undefined) {
+                addToApp('categories', updates.categories);
+            }
+            if (updates.colorLabels !== undefined) {
+                addToApp('colorLabels', updates.colorLabels);
             }
 
             if (Object.keys(userUpdates).length > 0 && userSettings) {

@@ -1,8 +1,11 @@
 /**
- * Task categories known to the P3FO application.
+ * The default task categories of a new P3FO workspace.
  *
- * Keep in sync with `src/data/categories.ts`. The MCP server is a standalone
- * package and cannot import from the app source tree at build time.
+ * Workspaces may add, rename or remove categories in Settings › Labels &
+ * categories, so an unknown name is only a warning, never an error. The MCP
+ * server is a standalone package and cannot import from the app source tree
+ * at build time; keep this in sync with `DEFAULT_CATEGORIES` in
+ * `src/lib/workspace-taxonomy.ts`.
  */
 export const CATEGORIES = [
   'Marketing',

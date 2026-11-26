@@ -122,7 +122,9 @@ export function prepareTaskImport(
         `${label}.category is "${GENERAL_CATEGORY}" (server default, not in the known category list)`,
       );
     } else if (!isKnownCategory(category)) {
-      taskErrors.push(`${label}.category "${category}" is not a known P3FO category`);
+      taskWarnings.push(
+        `${label}.category "${category}" is not one of the default categories; custom workspace categories are allowed`,
+      );
     }
 
     let priority: number | null = existing?.priority ?? null;

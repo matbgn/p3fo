@@ -81,7 +81,9 @@ describe('createTask - subtask metadata inheritance', () => {
     const source = fs.readFileSync(USE_TASKS_PATH, 'utf-8')
     const lines = source.split('\n')
 
-    const funcStart = lines.findIndex(l => l.includes('async function createTask'))
+    // The task object is built by buildTask so the single and batch create
+    // paths share the inheritance rules.
+    const funcStart = lines.findIndex(l => l.includes('function buildTask'))
     expect(funcStart).toBeGreaterThanOrEqual(0)
 
     const funcBody = lines.slice(funcStart, funcStart + 30).join('\n')
@@ -95,8 +97,8 @@ describe('createTask - subtask metadata inheritance', () => {
     const source = fs.readFileSync(USE_TASKS_PATH, 'utf-8')
     const lines = source.split('\n')
 
-    const funcStart = lines.findIndex(l => l.includes('async function createTask'))
-    const funcBody = lines.slice(funcStart, funcStart + 40).join('\n')
+    const funcStart = lines.findIndex(l => l.includes('function buildTask'))
+    const funcBody = lines.slice(funcStart, funcStart + 60).join('\n')
 
     // Each inherited field should use parentTask?.field ?? default
     expect(funcBody).toMatch(/parentTask\?\.category/)
@@ -112,8 +114,8 @@ describe('createTask - subtask metadata inheritance', () => {
     const source = fs.readFileSync(USE_TASKS_PATH, 'utf-8')
     const lines = source.split('\n')
 
-    const funcStart = lines.findIndex(l => l.includes('async function createTask'))
-    const funcBody = lines.slice(funcStart, funcStart + 40).join('\n')
+    const funcStart = lines.findIndex(l => l.includes('function buildTask'))
+    const funcBody = lines.slice(funcStart, funcStart + 60).join('\n')
 
     // userId should use caller override first, then parent fallback
     expect(funcBody).toMatch(/userId\s*[:=].*userId.*parentTask\?\.userId/)

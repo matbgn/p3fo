@@ -21,7 +21,6 @@ import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, CircleDot, Flam
 import type { Filters } from './FilterControls';
 import { loadFiltersFromSessionStorage, subscribeToFilterChanges } from '@/lib/filter-storage';
 import { addDays, addDaysToKey, addWeeks, combineDateKeyAndTime, isoWeekNumber, normalizeDueTimestamp, parseDateKey, startOfDay, startOfWeek, toDateKey } from '@/lib/planner/dates';
-import { parseSmartTime } from '@/lib/planner/smart-time';
 import { isModuleEffectivelyDisabled } from '@/lib/persistence-types';
 import { dueOffsetForSeries, expandSeriesForRange, isOccurrence, isSeriesTemplate } from '@/lib/recurrence/engine';
 import { formatDateRangeTitle, formatMonthTitle, formatWeekNumber, formatWeekSpan } from '@/lib/planner/format';
@@ -623,14 +622,12 @@ const ProgramView: React.FC<ProgramViewProps> = ({ focusHeaderRightContent }) =>
   };
 
   const handleCreateTask = async (input: QuickAddTaskInput) => {
-    const parsed = parseSmartTime(input.title);
     const slotDate = newTaskSlotDate;
     const plannedDate = input.plannedDate ?? (slotDate ? toDateKey(slotDate) : null);
     if (!plannedDate) return;
 
     const slotHasTime = Boolean(slotDate && (slotDate.getHours() !== 0 || slotDate.getMinutes() !== 0));
     const plannedTime = input.plannedTime
-      ?? parsed.time
       ?? (slotDate && slotHasTime
         ? `${String(slotDate.getHours()).padStart(2, '0')}:${String(slotDate.getMinutes()).padStart(2, '0')}`
         : null);
@@ -642,14 +639,15 @@ const ProgramView: React.FC<ProgramViewProps> = ({ focusHeaderRightContent }) =>
         : undefined;
 
     const id = await createPlannedTask({
-      title: parsed.text,
+      title: input.title,
       plannedDate,
       plannedTime,
       color: input.color,
       dueDate,
       dueTime: input.dueTime,
       durationInMinutes: input.durationInMinutes ?? DEFAULT_DURATION_MIN,
-      userId: currentUserId,
+      userId: input.assigneeId ?? currentUserId,
+      category: input.category ?? undefined,
     });
     if (id && input.recurrence) await setRecurrence(id, input.recurrence);
     setNewTaskSlotDate(null);

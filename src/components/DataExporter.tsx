@@ -56,6 +56,8 @@ const DataExporter: React.FC = () => {
         cardAgingBaseDays: appSettings.cardAgingBaseDays?.toString(),
         disabledModules: appSettings.disabledModules,
         wipLimitPerUser: appSettings.wipLimitPerUser,
+        categories: appSettings.categories,
+        colorLabels: appSettings.colorLabels,
       };
 
       // Fetch Fertilization Board state

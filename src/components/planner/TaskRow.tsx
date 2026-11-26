@@ -6,7 +6,7 @@ import { AlertTriangle, CircleDot, Flag, GripVertical, Repeat } from 'lucide-rea
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { TASK_COLOR_STYLES } from '@/lib/planner/colors';
+import { resolveTaskColorStyle } from '@/lib/planner/colors';
 import type { Task } from '@/hooks/useTasks';
 import type { UserWithTrigram } from '@/context/UsersContext';
 import { effectiveDueDate } from '@/lib/task-conversions';
@@ -48,7 +48,7 @@ export const TaskRow = React.forwardRef<HTMLDivElement, TaskRowProps>(function T
   };
 
   const user = task.userId ? users.find((candidate) => candidate.userId === task.userId) : undefined;
-  const color = TASK_COLOR_STYLES[task.color ?? 'none'];
+  const color = resolveTaskColorStyle(task.color);
   const done = task.triageStatus === 'Done';
 
   const titleRef = React.useRef<HTMLButtonElement>(null);
@@ -108,7 +108,7 @@ export const TaskRow = React.forwardRef<HTMLDivElement, TaskRowProps>(function T
       />
 
       {task.color && task.color !== 'none' && (
-        <span className={cn('h-4 w-1 shrink-0 rounded-full', color.swatch)} aria-hidden />
+        <span className={cn('h-4 w-1 shrink-0 rounded-full', color.swatchClass)} style={color.swatchStyle} aria-hidden />
       )}
 
       {task.plannedTime && (

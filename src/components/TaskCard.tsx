@@ -12,14 +12,6 @@ import { eventBus } from "@/lib/events";
 import { LinkedVoteButton } from "@/components/voting/LinkedVoteButton";
 import { CreateLinkedVoteDialog } from "@/components/voting/CreateLinkedVoteDialog";
 import { createVote, loadVotes, useLinkedVotes } from "@/hooks/useVotes";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogDescription,
-} from "@/components/ui/dialog";
 import { TimeSheetDialog } from "./TimeSheetDialog";
 import { Timer } from "@/features/timer/components/Timer";
 import {
@@ -39,7 +31,6 @@ import { canUserToggleTaskTimer } from "@/utils/task-timer-ownership";
 import { useReminderStore } from "@/hooks/useReminders";
 import { useShallow } from "zustand/react/shallow";
 import { UserSelector } from "./UserSelector";
-import { RichTextField } from "./RichTextField";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { Calendar } from "@/components/ui/calendar";
 import { TimePickerDialog } from "@/components/ui/time-picker-dialog";
@@ -258,11 +249,6 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
     };
   }, []);
   const [isTimeSheetOpen, setIsTimeSheetOpen] = React.useState(false);
-  const [isCommentModalOpen, setIsCommentModalOpen] = React.useState(false);
-  const [commentText, setCommentText] = React.useState(task.comment || "");
-  React.useEffect(() => {
-    setCommentText(task.comment || "");
-  }, [task.comment]);
   const [durationValue, setDurationValue] = React.useState(task.durationInMinutes || "");
   const [isDatePickerOpen, setIsDatePickerOpen] = React.useState(false);
   const [offsetMinutes, setOffsetMinutes] = React.useState(-1); // Default to -1 (No reminder)
@@ -323,10 +309,6 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
       ref.current = node;
     }
   }, [ref]);
-
-  React.useEffect(() => {
-    setCommentText(task.comment || "");
-  }, [task.comment]);
 
   React.useEffect(() => {
     setDurationValue(task.durationInMinutes ?? "");
@@ -835,7 +817,7 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
                 className="h-6 w-6 p-0 shrink-0"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setIsCommentModalOpen(true);
+                  setIsEditModalOpen(true);
                 }}
               >
                 <FileText className={`h-4 w-4 ${task.comment ? "text-blue-500" : "text-gray-400"}`} />
@@ -849,7 +831,7 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
             className="h-6 w-6 p-0 shrink-0"
             onClick={(e) => {
               e.stopPropagation();
-              setIsCommentModalOpen(true);
+              setIsEditModalOpen(true);
             }}
           >
             <FileText className={`h-4 w-4 ${task.comment ? "text-blue-500" : "text-gray-400"}`} />
@@ -1123,6 +1105,7 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
           task={task}
           tasks={effectiveModalTasks}
           isOpen={isEditModalOpen}
+          defaultTab="details"
           onClose={handleCloseEditModal}
           updateTitle={updateTitle}
           updateComment={updateComment}
@@ -1158,42 +1141,6 @@ const TaskCardInner = React.forwardRef<HTMLDivElement, TaskCardProps>((
           return newVote;
         }}
       />
-      {/* Comment Modal */}
-      {isCommentModalOpen && (
-        <Dialog open={isCommentModalOpen} onOpenChange={setIsCommentModalOpen}>
-          <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden" aria-describedby={undefined}>
-            <DialogHeader>
-              <DialogTitle>{t('task.editCommentTitle', { title: task.title })}</DialogTitle>
-              <DialogDescription className="sr-only">
-                {t('task.editCommentDescription', { title: task.title })}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4 flex-1 min-h-0 overflow-y-auto">
-              <div className="grid gap-2">
-                <label htmlFor="comment" className="sr-only">{t('task.commentLabel')}</label>
-                <RichTextField
-                  value={commentText}
-                  onChange={(json) => setCommentText(json)}
-                  label={t('task.commentFieldLabel')}
-                  placeholder={t('task.commentPlaceholder')}
-                  className="min-h-[200px]"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end shrink-0">
-              <Button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  updateComment(task.id, commentText);
-                  setIsCommentModalOpen(false);
-                }}
-              >
-                {t('task.saveComment')}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
       {/* TimeSheet Dialog */}
       {!hasSubtasks && (
         <TimeSheetDialog

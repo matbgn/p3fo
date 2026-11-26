@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CATEGORIES as APP_CATEGORIES } from '@/data/categories';
+import { DEFAULT_CATEGORIES as APP_CATEGORIES } from '@/lib/workspace-taxonomy';
 import { CATEGORIES as MCP_CATEGORIES } from '../../mcp-server/src/categories';
 
 describe('MCP category list parity', () => {

@@ -12,6 +12,9 @@ import { useAllTasks } from '@/hooks/useAllTasks';
 import { useToast } from '@/hooks/use-toast';
 import DiffImportDialog, { type DiffImportResult } from './DiffImportDialog';
 import { cn } from '@/lib/utils';
+import { useWorkspaceTaxonomy } from '@/hooks/useWorkspaceTaxonomy';
+import { useUsersContext } from '@/context/UsersContext';
+import { parseTaskInput } from '@/lib/planner/task-input';
 
 interface QuickAddTaskProps {
   placeholder?: string;
@@ -43,7 +46,9 @@ export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
   autoFocus = false,
 }) => {
   const { t } = useTranslation();
-  const { createTask, updateTitle } = useTasks();
+  const { createTask, createTasksBatch, updateTasksBatch } = useTasks();
+  const { categories, colorLabels } = useWorkspaceTaxonomy();
+  const { users } = useUsersContext();
   const { tasks: allTasks } = useAllTasks();
   const { toast } = useToast();
   const [input, setInput] = useState('');
@@ -67,14 +72,53 @@ export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
   const userTemplates = templates.filter(t => t.scope === 'user');
   const hasTemplates = templates.length > 0;
 
+  const taxonomy = useMemo(
+    () => ({ categories, colorLabels, users }),
+    [categories, colorLabels, users],
+  );
+
+  /**
+   * Reads the quick commands (`#category`, `@trigram`, a leading time) once
+   * so the single add, the batch import and the diff import parse identically.
+   */
+  const parseInput = useCallback(
+    (raw: string) => parseTaskInput(raw, taxonomy, { parseTime: false }),
+    [taxonomy],
+  );
+
+  const toCreateInput = useCallback((raw: string) => {
+    const parsed = parseInput(raw);
+
+    return {
+      title: parsed.text,
+      category: parsed.category ?? undefined,
+      color: parsed.color ?? undefined,
+      userId: parsed.assigneeId ?? userId,
+    };
+  }, [parseInput, userId]);
+
+  const createParsedTask = useCallback(async (raw: string): Promise<{ id: string; title: string }> => {
+    const input = toCreateInput(raw);
+    // Category/color go into the created entity so the whole task is one
+    // persistence write instead of a create followed by patch updates.
+    const id = await createTask(input.title, parentId, input.userId, {
+      category: input.category,
+      color: input.color,
+    });
+
+    return { id, title: input.title };
+  }, [toCreateInput, createTask, parentId]);
+
   const handleAdd = useCallback(async () => {
     const v = input.trim();
     if (!v) return;
-    const id = await createTask(v, parentId, userId);
+
+    const created = await createParsedTask(v);
+
     setInput('');
     onValueChange?.('');
-    onAdd?.(id, v);
-  }, [input, createTask, parentId, userId, onAdd, onValueChange]);
+    onAdd?.(created.id, created.title);
+  }, [input, createParsedTask, onAdd, onValueChange]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -98,7 +142,7 @@ export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
     }
   }, [createTask, parentId, userId, onCreatedFromTemplate]);
 
-  const handleBatchImportInternal = useCallback(() => {
+  const handleBatchImportInternal = useCallback(async () => {
     if (onBatchImport) {
       onBatchImport();
       return;
@@ -117,7 +161,9 @@ export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
     }
     setIsBatchImporting(true);
     try {
-      titles.forEach((title) => createTask(title, parentId, userId));
+      // One batch write for the whole paste instead of a whole-task-list
+      // rewrite per line.
+      await createTasksBatch(titles.map(toCreateInput), parentId);
       toast({
         title: t('quickadd.batchCompleteTitle'),
         description: t('quickadd.batchCompleteDescription', { n: titles.length }),
@@ -134,12 +180,28 @@ export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
     } finally {
       setIsBatchImporting(false);
     }
-  }, [onBatchImport, batchImportText, toast, createTask, parentId, userId, t]);
+  }, [onBatchImport, batchImportText, toast, createTasksBatch, toCreateInput, parentId, t]);
 
-  const handleDiffApply = useCallback((result: DiffImportResult) => {
+  const handleDiffApply = useCallback(async (result: DiffImportResult) => {
     try {
-      result.create.forEach((title) => createTask(title, parentId, userId));
-      result.update.forEach((u) => updateTitle(u.id, u.title));
+      // Both sides of the diff are applied with one write each, rather than
+      // rewriting the whole task list per changed line.
+      const updates = result.update.map((update) => {
+        const parsed = parseInput(update.title);
+
+        return {
+          id: update.id,
+          patch: {
+            title: parsed.text,
+            ...(parsed.category ? { category: parsed.category } : {}),
+            ...(parsed.color ? { color: parsed.color } : {}),
+            ...(parsed.assigneeId ? { userId: parsed.assigneeId } : {}),
+          },
+        };
+      });
+
+      await createTasksBatch(result.create.map(toCreateInput), parentId);
+      await updateTasksBatch(updates);
       const total = result.create.length + result.update.length;
       toast({
         title: t('quickadd.diffAppliedTitle'),
@@ -155,7 +217,7 @@ export const QuickAddTask: React.FC<QuickAddTaskProps> = ({
         description: t('quickadd.diffErrorDescription'),
       });
     }
-  }, [createTask, updateTitle, parentId, userId, toast, t]);
+  }, [createTasksBatch, updateTasksBatch, parseInput, toCreateInput, parentId, toast, t]);
 
   return (
     <>

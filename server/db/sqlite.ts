@@ -27,6 +27,7 @@ import type {
 } from '../../src/lib/persistence-types.js';
 import type { BallotParticipationStat } from '../../src/lib/vote-ranking.js';
 import { mergeAttendeeDisplayName } from '../../src/lib/attendance.js';
+import { DEFAULT_CATEGORIES, sanitizeAppSettingsTaxonomy, sanitizeCategories, sanitizeColorLabels } from '../../src/lib/workspace-taxonomy.js';
 
 // Raw database row types (SQLite stores booleans as 0/1 integers and JSON as strings)
 interface TaskDbRow {
@@ -85,6 +86,8 @@ interface UserSettingsDbRow {
 
 interface AppSettingsDbRow {
   id: number;
+  categories: string | null;
+  colorLabels: string | null;
   splitTime: number;
   userWorkloadPercentage: number;
   weeksComputation: number;
@@ -294,6 +297,8 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
     destination: '',
     enabled: true,
   },
+  categories: [...DEFAULT_CATEGORIES],
+  colorLabels: {},
 };
 
 
@@ -389,7 +394,9 @@ class SqliteClient implements DbClient {
         "cardAgingBaseDays" REAL DEFAULT 30,
         "timezone" TEXT DEFAULT 'Europe/Zurich',
         "country" TEXT DEFAULT 'CH',
-        "region" TEXT DEFAULT 'BE'
+        "region" TEXT DEFAULT 'BE',
+        "categories" TEXT,
+        "colorLabels" TEXT
       )
     `);
 
@@ -399,8 +406,8 @@ class SqliteClient implements DbClient {
       this.db.prepare(`
         INSERT INTO "appSettings"("id", "splitTime", "userWorkloadPercentage", "weeksComputation",
           "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal", "hoursToBeDoneByDay",
-          "vacationLimitMultiplier", "hourlyBalanceLimitUpper", "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region")
-        VALUES(1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          "vacationLimitMultiplier", "hourlyBalanceLimitUpper", "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region", "categories", "colorLabels")
+        VALUES(1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         DEFAULT_APP_SETTINGS.splitTime,
         DEFAULT_APP_SETTINGS.userWorkloadPercentage,
@@ -416,7 +423,9 @@ class SqliteClient implements DbClient {
         DEFAULT_APP_SETTINGS.cardAgingBaseDays ?? 30,
         DEFAULT_APP_SETTINGS.timezone ?? 'Europe/Zurich',
         DEFAULT_APP_SETTINGS.country ?? 'CH',
-        DEFAULT_APP_SETTINGS.region ?? 'BE'
+        DEFAULT_APP_SETTINGS.region ?? 'BE',
+        JSON.stringify(DEFAULT_APP_SETTINGS.categories ?? []),
+        JSON.stringify(DEFAULT_APP_SETTINGS.colorLabels ?? {})
       );
     }
 
@@ -805,6 +814,8 @@ class SqliteClient implements DbClient {
     addColumn('appSettings', 'focusModeConfig', 'TEXT');
     addColumn('appSettings', 'travelerConfig', 'TEXT');
     addColumn('appSettings', 'wipLimitPerUser', 'INTEGER DEFAULT 5');
+    addColumn('appSettings', 'categories', 'TEXT');
+    addColumn('appSettings', 'colorLabels', 'TEXT');
 
     // QolSurvey columns
     runMigration('qolSurvey', 'user_id', 'userId');
@@ -1619,6 +1630,8 @@ class SqliteClient implements DbClient {
       country: row.country ?? 'CH',
       region: row.region ?? 'BE',
       disabledModules: row.disabledModules ? JSON.parse(row.disabledModules) : [],
+      categories: row.categories ? sanitizeCategories(JSON.parse(row.categories)) : [...DEFAULT_CATEGORIES],
+      colorLabels: row.colorLabels ? sanitizeColorLabels(JSON.parse(row.colorLabels)) : {},
       pomodoroConfig: row.pomodoroConfig ? JSON.parse(row.pomodoroConfig) : DEFAULT_APP_SETTINGS.pomodoroConfig,
       focusModeConfig: row.focusModeConfig ? JSON.parse(row.focusModeConfig) : DEFAULT_APP_SETTINGS.focusModeConfig,
       travelerConfig: row.travelerConfig ? JSON.parse(row.travelerConfig) : DEFAULT_APP_SETTINGS.travelerConfig,
@@ -1628,7 +1641,7 @@ class SqliteClient implements DbClient {
 
   async updateAppSettings(patch: Partial<AppSettingsEntity>): Promise<AppSettingsEntity> {
     const current = await this.getAppSettings();
-    const updated = { ...current, ...patch };
+    const updated = { ...current, ...sanitizeAppSettingsTaxonomy(patch) };
 
     const params = {
       ...updated,
@@ -1637,12 +1650,14 @@ class SqliteClient implements DbClient {
       pomodoroConfig: JSON.stringify(updated.pomodoroConfig ?? DEFAULT_APP_SETTINGS.pomodoroConfig),
       focusModeConfig: JSON.stringify(updated.focusModeConfig ?? DEFAULT_APP_SETTINGS.focusModeConfig),
       travelerConfig: JSON.stringify(updated.travelerConfig ?? DEFAULT_APP_SETTINGS.travelerConfig),
+      categories: JSON.stringify(updated.categories ?? DEFAULT_APP_SETTINGS.categories ?? []),
+      colorLabels: JSON.stringify(updated.colorLabels ?? {}),
       wipLimitPerUser: updated.wipLimitPerUser ?? 5,
     };
 
     this.db.prepare(`
-      INSERT INTO "appSettings"("id", "splitTime", "userWorkloadPercentage", "weeksComputation", "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal", "hoursToBeDoneByDay", "vacationLimitMultiplier", "hourlyBalanceLimitUpper", "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region", "disabledModules", "pomodoroConfig", "focusModeConfig", "travelerConfig", "wipLimitPerUser")
-      VALUES(@id, @splitTime, @userWorkloadPercentage, @weeksComputation, @highImpactTaskGoal, @failureRateGoal, @qliGoal, @newCapabilitiesGoal, @hoursToBeDoneByDay, @vacationLimitMultiplier, @hourlyBalanceLimitUpper, @hourlyBalanceLimitLower, @cardAgingBaseDays, @timezone, @country, @region, @disabledModules, @pomodoroConfig, @focusModeConfig, @travelerConfig, @wipLimitPerUser)
+      INSERT INTO "appSettings"("id", "splitTime", "userWorkloadPercentage", "weeksComputation", "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal", "hoursToBeDoneByDay", "vacationLimitMultiplier", "hourlyBalanceLimitUpper", "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region", "disabledModules", "pomodoroConfig", "focusModeConfig", "travelerConfig", "categories", "colorLabels", "wipLimitPerUser")
+      VALUES(@id, @splitTime, @userWorkloadPercentage, @weeksComputation, @highImpactTaskGoal, @failureRateGoal, @qliGoal, @newCapabilitiesGoal, @hoursToBeDoneByDay, @vacationLimitMultiplier, @hourlyBalanceLimitUpper, @hourlyBalanceLimitLower, @cardAgingBaseDays, @timezone, @country, @region, @disabledModules, @pomodoroConfig, @focusModeConfig, @travelerConfig, @categories, @colorLabels, @wipLimitPerUser)
       ON CONFLICT("id") DO UPDATE SET
         "splitTime" = excluded."splitTime",
         "userWorkloadPercentage" = excluded."userWorkloadPercentage",
@@ -1663,6 +1678,8 @@ class SqliteClient implements DbClient {
         "pomodoroConfig" = excluded."pomodoroConfig",
         "focusModeConfig" = excluded."focusModeConfig",
         "travelerConfig" = excluded."travelerConfig",
+        "categories" = excluded."categories",
+        "colorLabels" = excluded."colorLabels",
         "wipLimitPerUser" = excluded."wipLimitPerUser"
     `).run(params);
 

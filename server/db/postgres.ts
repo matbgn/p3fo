@@ -27,6 +27,7 @@ import type {
   PomodoroSession
 } from '../../src/lib/persistence-types.js';
 import type { BallotParticipationStat } from '../../src/lib/vote-ranking.js';
+import { DEFAULT_CATEGORIES, sanitizeAppSettingsTaxonomy, sanitizeCategories, sanitizeColorLabels } from '../../src/lib/workspace-taxonomy.js';
 import { mergeAttendeeDisplayName } from '../../src/lib/attendance.js';
 
 // Raw database row types for pg (JSONB is already parsed, booleans are booleans)
@@ -197,7 +198,8 @@ const DEFAULT_APP_SETTINGS: AppSettingsEntity = {
     destination: '',
     enabled: true,
   },
-  wipLimitPerUser: 5,
+  wipLimitPerUser: 5,  categories: [...DEFAULT_CATEGORIES],
+  colorLabels: {},
 };
 export async function createPostgresClient(connectionString?: string): Promise<DbClient> {
   // Use connection string from parameter or environment variable
@@ -301,7 +303,9 @@ class PostgresClient implements DbClient {
         "cardAgingBaseDays" REAL DEFAULT 30,
         "timezone" TEXT DEFAULT 'Europe/Zurich',
         "country" TEXT DEFAULT 'CH',
-        "region" TEXT DEFAULT 'BE'
+        "region" TEXT DEFAULT 'BE',
+        "categories" JSONB,
+        "colorLabels" JSONB
       )
     `);
 
@@ -311,8 +315,8 @@ class PostgresClient implements DbClient {
       await this.pool.query(`
         INSERT INTO "appSettings" ("id", "splitTime", "userWorkloadPercentage", "weeksComputation", 
                                   "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal", "hoursToBeDoneByDay",
-                                  "vacationLimitMultiplier", "hourlyBalanceLimitUpper", "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region") 
-        VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                                  "vacationLimitMultiplier", "hourlyBalanceLimitUpper", "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region", "categories", "colorLabels") 
+        VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       `, [
         DEFAULT_APP_SETTINGS.splitTime,
         DEFAULT_APP_SETTINGS.userWorkloadPercentage,
@@ -328,7 +332,9 @@ class PostgresClient implements DbClient {
         DEFAULT_APP_SETTINGS.cardAgingBaseDays ?? 30,
         DEFAULT_APP_SETTINGS.timezone ?? 'Europe/Zurich',
         DEFAULT_APP_SETTINGS.country ?? 'CH',
-        DEFAULT_APP_SETTINGS.region ?? 'BE'
+        DEFAULT_APP_SETTINGS.region ?? 'BE',
+        JSON.stringify(DEFAULT_APP_SETTINGS.categories ?? []),
+        JSON.stringify(DEFAULT_APP_SETTINGS.colorLabels ?? {})
       ]);
     }
 
@@ -765,6 +771,8 @@ await addColumn('appSettings', 'pomodoroConfig', 'JSONB');
 await addColumn('appSettings', 'focusModeConfig', 'JSONB');
 await addColumn('appSettings', 'travelerConfig', 'JSONB');
     await addColumn('appSettings', 'wipLimitPerUser', 'INTEGER DEFAULT 5');
+    await addColumn('appSettings', 'categories', 'JSONB');
+    await addColumn('appSettings', 'colorLabels', 'JSONB');
 
     // QolSurvey columns
     await runMigration('qolSurvey', 'user_id', 'userId');
@@ -1409,6 +1417,12 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
         country: row.country ?? 'CH',
         region: row.region ?? 'BE',
         disabledModules: typeof row.disabledModules === 'string' ? JSON.parse(row.disabledModules) : (row.disabledModules ?? []),
+        categories: row.categories == null
+          ? [...DEFAULT_CATEGORIES]
+          : sanitizeCategories(typeof row.categories === 'string' ? JSON.parse(row.categories) : row.categories),
+        colorLabels: row.colorLabels == null
+          ? {}
+          : sanitizeColorLabels(typeof row.colorLabels === 'string' ? JSON.parse(row.colorLabels) : row.colorLabels),
         pomodoroConfig: typeof row.pomodoroConfig === 'string' ? JSON.parse(row.pomodoroConfig) : (row.pomodoroConfig ?? DEFAULT_APP_SETTINGS.pomodoroConfig),
         focusModeConfig: typeof row.focusModeConfig === 'string' ? JSON.parse(row.focusModeConfig) : (row.focusModeConfig ?? DEFAULT_APP_SETTINGS.focusModeConfig),
         travelerConfig: typeof row.travelerConfig === 'string' ? JSON.parse(row.travelerConfig) : (row.travelerConfig ?? DEFAULT_APP_SETTINGS.travelerConfig),
@@ -1420,14 +1434,14 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
 
   async updateAppSettings(data: Partial<AppSettingsEntity>): Promise<AppSettingsEntity> {
     const current = await this.getAppSettings();
-    const updated = { ...current, ...data };
+    const updated = { ...current, ...sanitizeAppSettingsTaxonomy(data) };
 
     await this.pool.query(`
       INSERT INTO "appSettings" ("id", "splitTime", "userWorkloadPercentage", "weeksComputation", 
                                 "highImpactTaskGoal", "failureRateGoal", "qliGoal", "newCapabilitiesGoal",
                                 "hoursToBeDoneByDay", "vacationLimitMultiplier", "hourlyBalanceLimitUpper",
-                                "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region", "disabledModules", "pomodoroConfig", "focusModeConfig", "travelerConfig", "wipLimitPerUser")
-      VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+                                "hourlyBalanceLimitLower", "cardAgingBaseDays", "timezone", "country", "region", "disabledModules", "pomodoroConfig", "focusModeConfig", "travelerConfig", "categories", "colorLabels", "wipLimitPerUser")
+      VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
       ON CONFLICT ("id") DO UPDATE SET
         "splitTime" = EXCLUDED."splitTime",
         "userWorkloadPercentage" = EXCLUDED."userWorkloadPercentage",
@@ -1448,6 +1462,8 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
         "pomodoroConfig" = EXCLUDED."pomodoroConfig",
         "focusModeConfig" = EXCLUDED."focusModeConfig",
         "travelerConfig" = EXCLUDED."travelerConfig",
+        "categories" = EXCLUDED."categories",
+        "colorLabels" = EXCLUDED."colorLabels",
         "wipLimitPerUser" = EXCLUDED."wipLimitPerUser"
     `, [
       updated.splitTime,
@@ -1469,6 +1485,8 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       JSON.stringify(updated.pomodoroConfig ?? DEFAULT_APP_SETTINGS.pomodoroConfig),
       JSON.stringify(updated.focusModeConfig ?? DEFAULT_APP_SETTINGS.focusModeConfig),
       JSON.stringify(updated.travelerConfig ?? DEFAULT_APP_SETTINGS.travelerConfig),
+      JSON.stringify(updated.categories ?? DEFAULT_APP_SETTINGS.categories ?? []),
+      JSON.stringify(updated.colorLabels ?? {}),
       updated.wipLimitPerUser ?? DEFAULT_APP_SETTINGS.wipLimitPerUser,
     ]);
 

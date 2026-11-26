@@ -82,7 +82,9 @@ function validatePatch(patch: BulkPatch): { errors: string[]; warnings: string[]
     if (isGeneralCategory(patch.category)) {
       warnings.push(`category "${GENERAL_CATEGORY}" is the server default and is not in the known category list`);
     } else if (!isKnownCategory(patch.category)) {
-      errors.push(`category "${patch.category}" is not a known P3FO category`);
+      warnings.push(
+        `category "${patch.category}" is not one of the default categories; custom workspace categories are allowed`,
+      );
     }
   }
 

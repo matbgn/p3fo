@@ -17,23 +17,11 @@ export { DEFAULT_TRAVELER_CONFIG } from './traveler-types';
 
 export type TriageStatus = "Backlog" | "Ready" | "WIP" | "Blocked" | "Done" | "Dropped";
 
-export type Category =
-  | "Marketing"
-  | "Documentation"
-  | "Consulting"
-  | "Testing"
-  | "Funerals"
-  | "Negotiated overtime"
-  | "Sickness"
-  | "Finances"
-  | "HR"
-  | "Training"
-  | "Support"
-  | "UX/UI"
-  | "Admin"
-  | "Development"
-  | "System Operations"
-  | "Private";
+/**
+ * Task categories are workspace settings (see `workspace-taxonomy.ts`), so
+ * any non-empty name is valid here. `DEFAULT_CATEGORIES` seeds a workspace.
+ */
+export type Category = string;
 
 export interface TaskTimer {
   startTime: number | null;
@@ -159,6 +147,17 @@ export interface AppSettingsEntity {
   pomodoroConfig?: PomodoroConfig;
   focusModeConfig?: FocusModeConfig;
   travelerConfig?: TravelerConfig;
+  /**
+   * The workspace's editable task categories, seeded from
+   * `DEFAULT_CATEGORIES`. Absent on workspaces created before categories
+   * became editable (readers fall back to the defaults).
+   */
+  categories?: string[];
+  /**
+   * Optional color associated with a category, keyed by preset color id or
+   * free `#rrggbb`. A color without an entry keeps its default name.
+   */
+  colorLabels?: Record<string, string>;
 }
 
 export interface UserSettingsEntity {

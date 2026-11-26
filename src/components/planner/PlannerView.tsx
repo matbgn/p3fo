@@ -31,9 +31,8 @@ import { PlannerHeader } from './PlannerHeader';
 import { TaskEditorDialog } from './TaskEditorDialog';
 import { RecurringStrip } from './RecurringStrip';
 import { QuickAddTaskDialog, type QuickAddTaskInput } from './QuickAddTaskDialog';
-import { TASK_COLORS, TASK_COLOR_STYLES } from '@/lib/planner/colors';
-import { parseSmartTime } from '@/lib/planner/smart-time';
-import type { TaskColor } from '@/lib/planner/types';
+import { TaskColorPalette } from './TaskColorPalette';
+import { useWorkspaceTaxonomy } from '@/hooks/useWorkspaceTaxonomy';
 import { expandSeriesForRange, isOccurrence, isSeriesTemplate } from '@/lib/recurrence/engine';
 import type { Filters } from '@/components/FilterControls';
 import { getDefaultFilters, mergeViewFilters, taskMatchesFilters, validateFilters } from '@/lib/filter-merge';
@@ -110,6 +109,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
   headerActions,
 }) => {
   const { t } = useTranslation();
+  const { colorLabels } = useWorkspaceTaxonomy();
   const { tasks: allTasks } = useAllTasks({ includeRecurring: true });
   const {
     createPlannedTask,
@@ -342,16 +342,16 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
     const plannedDate = input.plannedDate ?? newTaskDate;
     if (!plannedDate) return;
 
-    const parsed = parseSmartTime(input.title);
     const id = await createPlannedTask({
-      title: parsed.text,
+      title: input.title,
       plannedDate,
-      plannedTime: input.plannedTime ?? parsed.time,
+      plannedTime: input.plannedTime,
       color: input.color,
       dueDate: input.dueDate ? combineDateKeyAndTime(input.dueDate, input.dueTime) : null,
       dueTime: input.dueTime,
       durationInMinutes: input.durationInMinutes,
-      userId: currentUserId,
+      userId: input.assigneeId ?? currentUserId,
+      category: input.category ?? undefined,
     });
     if (id && input.recurrence) await setRecurrence(id, input.recurrence);
     setNewTaskDate(null);
@@ -569,23 +569,16 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
             style={{ left: context.x, top: context.y }}
             role="menu"
           >
-            <div className="flex flex-wrap gap-1 border-b px-1.5 py-1.5">
-              {TASK_COLORS.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  className={cn(
-                    'h-5 w-5 rounded-full border',
-                    TASK_COLOR_STYLES[color].swatch,
-                    (context.task.color ?? 'none') === color && 'ring-2 ring-primary ring-offset-1',
-                  )}
-                  aria-label={TASK_COLOR_STYLES[color].label}
-                  onClick={() => {
-                    void withResolvedId(context.task, (id) => updateColor(id, color as TaskColor));
-                    closeContext();
-                  }}
-                />
-              ))}
+            <div className="border-b px-1.5 py-1.5">
+              <TaskColorPalette
+                value={context.task.color ?? 'none'}
+                colorLabels={colorLabels}
+                size="sm"
+                onChange={(color) => {
+                  void withResolvedId(context.task, (id) => updateColor(id, color));
+                  closeContext();
+                }}
+              />
             </div>
             <button
               type="button"

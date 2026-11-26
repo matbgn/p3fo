@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useTranslation } from 'react-i18next';
 import { useTasks, Category, TriageStatus } from "@/hooks/useTasks";
 import { useAllTasks } from "@/hooks/useAllTasks";
-import { CATEGORIES } from "@/data/categories";
+import { useWorkspaceTaxonomy } from "@/hooks/useWorkspaceTaxonomy";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { AddTimeEntryDialog } from "./AddTimeEntryDialog";
@@ -42,6 +42,7 @@ const TimetableInner: React.FC<{
   onJumpToTask?: (taskId: string) => void;
 }> = ({ onJumpToTask }) => {
   const { t } = useTranslation();
+  const { options: categoryOptions } = useWorkspaceTaxonomy();
   const navigate = useNavigate();
   const { tasks: allTasks, loading: tasksLoading } = useAllTasks();
   const { updateTimeEntry, deleteTimeEntry, updateCategory, updateUser, toggleTimer, addTimeEntry } = useTasks();
@@ -804,7 +805,7 @@ const TimetableInner: React.FC<{
           <MultiSelect
             options={[
               { value: "Uncategorized", label: t('timetable.uncategorized') },
-              ...CATEGORIES.map(c => ({ value: c, label: c }))
+              ...categoryOptions.map(c => ({ value: c, label: c }))
             ]}
             selected={selectedCategories}
             onChange={(selected) => setSelectedCategories(selected as Category[])}

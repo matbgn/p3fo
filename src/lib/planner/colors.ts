@@ -1,7 +1,8 @@
-import { TASK_COLORS, type TaskColor } from './types';
+import type { CSSProperties } from 'react';
+import { TASK_COLORS, type FreeTaskColor, type PresetTaskColor, type TaskColor } from './types.js';
 
 export { TASK_COLORS };
-export type { TaskColor };
+export type { FreeTaskColor, PresetTaskColor, TaskColor } from './types.js';
 
 type ColorStyle = {
   label: string;
@@ -10,7 +11,8 @@ type ColorStyle = {
   bar: string | null;
 };
 
-export const TASK_COLOR_STYLES: Record<TaskColor, ColorStyle> = {
+/** Styles for the built-in colors only; free colors are resolved at runtime. */
+export const TASK_COLOR_STYLES: Record<PresetTaskColor, ColorStyle> = {
   none: {
     label: 'No colour',
     swatch: 'border border-border bg-background',
@@ -58,11 +60,96 @@ export const TASK_COLOR_STYLES: Record<TaskColor, ColorStyle> = {
   },
 };
 
-export function isTaskColor(value: unknown): value is TaskColor {
+const HEX6 = /^#[0-9a-f]{6}$/i;
+const HEX3 = /^#[0-9a-f]{3}$/i;
+
+/**
+ * Normalizes a user-picked color to `#rrggbb` (lowercase), expanding the
+ * shorthand `#rgb` form. Returns null for anything that is not a color.
+ */
+export function normalizeFreeColor(value: unknown): FreeTaskColor | null {
+  if (typeof value !== 'string') return null;
+
+  const raw = value.trim().toLowerCase();
+
+  if (HEX6.test(raw)) return raw as FreeTaskColor;
+
+  if (HEX3.test(raw)) {
+    const [red, green, blue] = raw.slice(1).split('');
+    return `#${red}${red}${green}${green}${blue}${blue}` as FreeTaskColor;
+  }
+
+  return null;
+}
+
+export function isPresetTaskColor(value: unknown): value is PresetTaskColor {
   return typeof value === 'string' && (TASK_COLORS as readonly string[]).includes(value);
+}
+
+export function isFreeTaskColor(value: unknown): value is FreeTaskColor {
+  return normalizeFreeColor(value) !== null;
+}
+
+export function isTaskColor(value: unknown): value is TaskColor {
+  return isPresetTaskColor(value) || isFreeTaskColor(value);
+}
+
+/** The stable settings key of a color: the preset id or the normalized hex. */
+export function taskColorKey(color: TaskColor): string {
+  if (isPresetTaskColor(color)) return color;
+
+  return normalizeFreeColor(color) ?? color;
+}
+
+/**
+ * The color to store for an incoming value, or null when it is not a color.
+ * Free colors are normalized so the same color always has the same key.
+ */
+export function normalizeTaskColor(value: unknown): TaskColor | null {
+  if (isPresetTaskColor(value)) return value;
+
+  return normalizeFreeColor(value);
+}
+
+export type ResolvedTaskColorStyle = {
+  /** Default display name (preset label, or the hex itself for a free color). */
+  label: string;
+  /** Tailwind classes for a swatch; free colors use `swatchStyle` instead. */
+  swatchClass: string;
+  /** Inline background for a free color. */
+  swatchStyle?: CSSProperties;
+  /** CSS color for a vertical accent bar; null for `none`. */
+  bar: string | null;
+};
+
+/** Resolves the presentation of any task color, preset or free. */
+export function resolveTaskColorStyle(
+  color: TaskColor | null | undefined,
+): ResolvedTaskColorStyle {
+  const value = color ?? 'none';
+
+  if (isPresetTaskColor(value)) {
+    const style = TASK_COLOR_STYLES[value];
+
+    return {
+      label: style.label,
+      swatchClass: style.swatch,
+      bar: style.bar,
+    };
+  }
+
+  const hex = normalizeFreeColor(value) ?? '#000000';
+
+  return {
+    label: hex,
+    swatchClass: 'border border-border',
+    swatchStyle: { backgroundColor: hex },
+    bar: hex,
+  };
 }
 
 export function taskColorBar(color: TaskColor | undefined): string | undefined {
   if (!color || color === 'none') return undefined;
-  return TASK_COLOR_STYLES[color].bar ?? undefined;
+
+  return resolveTaskColorStyle(color).bar ?? undefined;
 }

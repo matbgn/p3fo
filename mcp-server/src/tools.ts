@@ -17,6 +17,7 @@ import { ALLOWED_TRIAGE_STATUSES, applyBulkUpdates, type BulkItem } from './bulk
 import { prepareTaskImport, type ImportTaskInput } from './import-tasks.js';
 import { adjustRecurrenceForAnchorMove, validateRecurrenceAnchor } from './task-recurrence.js';
 import { DATE_KEY_PATTERN, TIME_OF_DAY_PATTERN, existingDueDateFor, normalizeTaskDateFields } from './task-dates.js';
+import { normalizeTaskColorValue } from './colors.js';
 
 const stringOrUndefined = z.string().optional();
 const recordSchema = z.record(z.string(), z.unknown()).optional();
@@ -111,9 +112,20 @@ function makeCursor(offset: number): string {
 // Fractional-index keys start with an A-Z/a-z head and use base-62 digits.
 // The planner additionally tolerates legacy malformed keys at read time.
 const FRACTIONAL_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9]*$/;
-const TASK_COLOR_VALUES = [
-  'none', 'pink', 'yellow', 'black', 'grey', 'cornflower', 'mango', 'green', 'lilac',
-] as const;
+/** A preset color id or a free `#rgb`/`#rrggbb` value, stored canonically. */
+const taskColorSchema = z.string().transform((value, ctx) => {
+  const color = normalizeTaskColorValue(value);
+
+  if (color === null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'color must be a preset id or a #rgb / #rrggbb value',
+    });
+    return z.NEVER;
+  }
+
+  return color;
+});
 const MAX_RECURRENCE_EVERY_DAYS = 365;
 const recurrenceSchema = z.string().refine((value) => {
   try {
@@ -187,7 +199,7 @@ const taskSchema = z.object({
   plannedDate: z.string().regex(DATE_KEY_PATTERN, 'Expected YYYY-MM-DD').nullable().optional(),
   plannedTime: z.string().regex(TIME_OF_DAY_PATTERN, 'Expected HH:MM').nullable().optional(),
   plannedPosition: z.string().regex(FRACTIONAL_KEY_PATTERN, 'Expected a fractional index key').nullable().optional(),
-  color: z.enum(TASK_COLOR_VALUES).nullable().optional(),
+  color: taskColorSchema.nullable().optional(),
   recurrence: recurrenceSchema.nullable().optional(),
   seriesId: z.string().nullable().optional(),
   occurrenceDate: z.string().nullable().optional(),

@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { ClockIcon } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -8,12 +9,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 import { toDateKey } from '@/lib/planner/dates';
-import type { TaskColor } from '@/lib/planner/colors';
+import { resolveTaskColorStyle, type TaskColor } from '@/lib/planner/colors';
+import { completeTag, parseTaskInput, suggestLabels } from '@/lib/planner/task-input';
 import type { Recurrence } from '@/lib/recurrence/types';
 import { normalizeRecurrence } from '@/lib/recurrence/engine';
+import { useWorkspaceTaxonomy } from '@/hooks/useWorkspaceTaxonomy';
+import { useUsersContext } from '@/context/UsersContext';
 import { CardScheduleFields } from './CardScheduleFields';
 import { RepeatPicker } from './RepeatPicker';
 import { TaskColorPicker } from './TaskColorPicker';
@@ -26,6 +32,9 @@ export type QuickAddTaskInput = {
   dueTime: string | null;
   durationInMinutes: number | null;
   color: TaskColor;
+  category: string | null;
+  /** A user mentioned with `@trigram`, if any. */
+  assigneeId: string | null;
   recurrence: Recurrence | null;
 };
 
@@ -56,6 +65,8 @@ export const QuickAddTaskDialog: React.FC<QuickAddTaskDialogProps> = ({
   onCreate,
 }) => {
   const { t } = useTranslation();
+  const { categories, colorLabels, labelForColor } = useWorkspaceTaxonomy();
+  const { users } = useUsersContext();
   const [title, setTitle] = React.useState('');
   const [plannedDate, setPlannedDate] = React.useState('');
   const [plannedTime, setPlannedTime] = React.useState('');
@@ -66,6 +77,32 @@ export const QuickAddTaskDialog: React.FC<QuickAddTaskDialogProps> = ({
   const [recurrence, setRecurrence] = React.useState<Recurrence | null>(null);
   const [recurrenceError, setRecurrenceError] = React.useState<string | null>(null);
   const [isCreating, setIsCreating] = React.useState(false);
+  const [dismissedAt, setDismissedAt] = React.useState<number | null>(null);
+  const [activeSuggestion, setActiveSuggestion] = React.useState(0);
+  const titleRef = React.useRef<HTMLInputElement>(null);
+
+  const taxonomy = React.useMemo(
+    () => ({ categories, colorLabels, users }),
+    [categories, colorLabels, users],
+  );
+  const parsed = React.useMemo(() => parseTaskInput(title, taxonomy), [title, taxonomy]);
+  const suggestions = React.useMemo(
+    () => (parsed.tag ? suggestLabels(parsed.tag.query, taxonomy) : []),
+    [parsed.tag, taxonomy],
+  );
+  const suggestionsOpen =
+    parsed.tag !== null &&
+    suggestions.length > 0 &&
+    dismissedAt !== parsed.tag.start;
+  // A label recognized in the title drives the picker until the user changes it.
+  React.useEffect(() => {
+    if (parsed.color) setColor(parsed.color);
+  }, [parsed.color]);
+  // A time typed in the title drives the time field, so the previewed time is
+  // the one persisted instead of being silently replaced by the slot default.
+  React.useEffect(() => {
+    if (parsed.time) setPlannedTime(parsed.time);
+  }, [parsed.time]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -80,10 +117,12 @@ export const QuickAddTaskDialog: React.FC<QuickAddTaskDialogProps> = ({
     setRecurrence(null);
     setRecurrenceError(null);
     setIsCreating(false);
+    setDismissedAt(null);
+    setActiveSuggestion(0);
   }, [open, scheduledFor]);
 
   const submit = async () => {
-    const nextTitle = title.trim();
+    const nextTitle = parsed.text.trim();
     if (!nextTitle || isCreating) return;
 
     // The repeat rule was normalized against the date that was selected when
@@ -111,11 +150,13 @@ export const QuickAddTaskDialog: React.FC<QuickAddTaskDialogProps> = ({
       await onCreate({
         title: nextTitle,
         plannedDate: plannedDate || null,
-        plannedTime: plannedTime || null,
+        plannedTime: plannedTime || parsed.time || null,
         dueDate: dueDate || null,
         dueTime: dueTime || null,
         durationInMinutes: duration ? Number(duration) : null,
         color,
+        category: parsed.category,
+        assigneeId: parsed.assigneeId,
         recurrence: nextRecurrence,
       });
       onOpenChange(false);
@@ -123,6 +164,56 @@ export const QuickAddTaskDialog: React.FC<QuickAddTaskDialogProps> = ({
       setIsCreating(false);
     }
   };
+
+  const pickSuggestion = (index: number) => {
+    const suggestion = suggestions[index];
+    if (!suggestion || !parsed.tag) return;
+
+    const completed = completeTag(title, parsed.tag, suggestion.name);
+    setTitle(completed.value);
+    setDismissedAt(null);
+    setActiveSuggestion(0);
+    titleRef.current?.focus();
+  };
+
+  const handleTitleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing) return;
+
+    if (suggestionsOpen) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        const step = event.key === 'ArrowDown' ? 1 : -1;
+        setActiveSuggestion(
+          (current) => (current + step + suggestions.length) % suggestions.length,
+        );
+        return;
+      }
+
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        event.preventDefault();
+        pickSuggestion(Math.min(activeSuggestion, suggestions.length - 1));
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setDismissedAt(parsed.tag?.start ?? null);
+        return;
+      }
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      void submit();
+    }
+  };
+
+  // A directly typed category wins; otherwise show the label of the color.
+  const labelName = parsed.category ?? labelForColor(parsed.color);
+  const labelStyle = parsed.color ? resolveTaskColorStyle(parsed.color) : null;
+  const assignee = parsed.assigneeId
+    ? users.find((user) => user.userId === parsed.assigneeId) ?? null
+    : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -133,19 +224,97 @@ export const QuickAddTaskDialog: React.FC<QuickAddTaskDialogProps> = ({
         </DialogHeader>
 
         <div className="space-y-4">
-          <Input
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder={t('program.taskTitlePlaceholder')}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                void submit();
-              }
-            }}
-            className="h-10 border-0 px-0 text-lg font-semibold shadow-none focus-visible:ring-0"
-            autoFocus
-          />
+          <div className="relative">
+            <Input
+              ref={titleRef}
+              value={title}
+              onChange={(event) => {
+                setTitle(event.target.value);
+                setDismissedAt(null);
+                setActiveSuggestion(0);
+              }}
+              placeholder={t('program.taskTitlePlaceholder')}
+              onKeyDown={handleTitleKeyDown}
+              className="h-10 border-0 px-0 text-lg font-semibold shadow-none focus-visible:ring-0"
+              autoFocus
+              autoComplete="off"
+              aria-autocomplete="list"
+              aria-expanded={suggestionsOpen}
+            />
+
+            {(parsed.time || labelName || assignee) && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {parsed.time && (
+                  <Badge variant="outline" className="h-6 gap-1.5 bg-background shadow-sm">
+                    <ClockIcon className="h-3 w-3" />
+                    {parsed.time}
+                  </Badge>
+                )}
+                {labelName && (
+                  <Badge variant="outline" className="h-6 gap-1.5 bg-background shadow-sm">
+                    {labelStyle && (
+                      <span
+                        className={cn('h-2.5 w-2.5 rounded-full', labelStyle.swatchClass)}
+                        style={labelStyle.swatchStyle}
+                        aria-hidden
+                      />
+                    )}
+                    {labelName}
+                  </Badge>
+                )}
+                {assignee && (
+                  <Badge
+                    variant="outline"
+                    className="h-6 gap-1.5 bg-background shadow-sm"
+                    title={assignee.username}
+                  >
+                    @{assignee.trigram || assignee.username.slice(0, 3).toUpperCase()}
+                  </Badge>
+                )}
+              </div>
+            )}
+
+            {suggestionsOpen && (
+              <div
+                className="absolute inset-x-0 top-full z-20 mt-1 overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+                role="listbox"
+                aria-label={t('planner.labelSuggestions')}
+                onMouseDown={(event) => event.preventDefault()}
+              >
+                {suggestions.map((suggestion, index) => {
+                  const style = suggestion.color
+                    ? resolveTaskColorStyle(suggestion.color)
+                    : null;
+
+                  return (
+                    <button
+                      key={suggestion.name}
+                      type="button"
+                      role="option"
+                      aria-selected={index === activeSuggestion}
+                      className={cn(
+                        'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm',
+                        index === activeSuggestion && 'bg-accent',
+                      )}
+                      onMouseEnter={() => setActiveSuggestion(index)}
+                      onClick={() => pickSuggestion(index)}
+                    >
+                      {style ? (
+                        <span
+                          className={cn('h-2.5 w-2.5 shrink-0 rounded-full', style.swatchClass)}
+                          style={style.swatchStyle}
+                          aria-hidden
+                        />
+                      ) : (
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full border border-dashed border-muted-foreground/60" aria-hidden />
+                      )}
+                      <span className="truncate">{suggestion.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           <CardScheduleFields
             plannedDate={plannedDate}
@@ -187,7 +356,7 @@ export const QuickAddTaskDialog: React.FC<QuickAddTaskDialogProps> = ({
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
             {t('common.cancel')}
           </Button>
-          <Button onClick={() => void submit()} disabled={!title.trim() || isCreating}>
+          <Button onClick={() => void submit()} disabled={!parsed.text.trim() || isCreating}>
             {t('program.create')}
           </Button>
         </DialogFooter>

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Repeat, StopCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { TASK_COLOR_STYLES } from '@/lib/planner/colors';
+import { resolveTaskColorStyle } from '@/lib/planner/colors';
 import { nextOccurrenceDate, ruleSummary } from '@/lib/recurrence/engine';
 import { useToday } from '@/hooks/useToday';
 import type { Task } from '@/hooks/useTasks';
@@ -38,9 +38,12 @@ export const RecurringStrip: React.FC<RecurringStripProps> = ({ series, onOpen, 
               key={item.id}
               className="group flex w-64 shrink-0 items-center gap-2 rounded-md border bg-card px-2 py-1.5 text-sm"
             >
-              {item.color && item.color !== 'none' && (
-                <span className={cn('h-4 w-1 shrink-0 rounded-full', TASK_COLOR_STYLES[item.color].swatch)} aria-hidden />
-              )}
+              {item.color && item.color !== 'none' && (() => {
+                const color = resolveTaskColorStyle(item.color);
+                return (
+                  <span className={cn('h-4 w-1 shrink-0 rounded-full', color.swatchClass)} style={color.swatchStyle} aria-hidden />
+                );
+              })()}
               <button
                 type="button"
                 className="min-w-0 flex-1 text-left"

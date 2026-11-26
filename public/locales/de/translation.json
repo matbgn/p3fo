@@ -211,6 +211,23 @@
         "label": "Fokus-Techniken",
         "description": "Timer-Techniken (Pomodoro, Traveler) im QuickTimer der Kopfzeile"
       }
+    },
+    "labels": {
+      "title": "Labels & Kategorien",
+      "description": "Kategorien sind die Labels, die nach # eingegeben werden können. Jede ist bearbeitbar und kann eine Farbe tragen; Farben ohne Kategorie behalten ihren Standardnamen. Alles wird im Workspace geteilt.",
+      "addLabel": "Kategorie hinzufügen",
+      "add": "Hinzufügen",
+      "nameLabel": "Kategoriename",
+      "namePlaceholder": "z. B. Fokusarbeit",
+      "remove": "{name} entfernen",
+      "errorTooLong": "Höchstens {max} Zeichen.",
+      "errorReserved": "„{name}“ ist reserviert.",
+      "errorInvalidName": "Der Name muss mindestens einen Buchstaben oder eine Zahl enthalten.",
+      "errorDuplicate": "„{name}“ existiert bereits.",
+      "errorTooMany": "Du kannst höchstens {max} Kategorien haben.",
+      "footnote": "Umbenennen oder Entfernen ändert bestehende Aufgaben nicht; sie behalten ihren bisherigen Namen. #name in einer neuen Aufgabe setzt die Kategorie und, falls vorhanden, ihre Farbe. Eine Farbe gehört zu genau einer Kategorie: Eine andere Zuordnung verschiebt sie.",
+      "resetAll": "Standard wiederherstellen",
+      "resetAllHint": "Stellt die Standardkategorien wieder her und löscht alle Farbzuordnungen."
     }
   },
   "metrics": {
@@ -378,12 +395,6 @@
       "sprintTarget": "Sprint-Ziel"
     },
     "difficulty8Hint": "~1 Tag, erwägen Sie Aufteilung",
-    "editCommentTitle": "Kommentar bearbeiten - {{title}}",
-    "editCommentDescription": "Kommentar für Aufgabe bearbeiten: {{title}}",
-    "commentLabel": "Kommentar",
-    "commentFieldLabel": "Kommentar",
-    "commentPlaceholder": "Kommentar hinzufügen...",
-    "saveComment": "Kommentar speichern",
     "timeSheetTitle": "Stundenblatt - {{title}}",
     "timeSheetDescription": "Zeiteinträge für Aufgabe ansehen und bearbeiten: {{title}}",
     "addTimeEntry": "Eintrag hinzufügen",
@@ -2199,6 +2210,19 @@
     "dayTaskCount_one": "{{count}} Aufgabe",
     "dayTaskCount_other": "{{count}} Aufgaben",
     "dayTotalDuration": "{{minutes}} Min. geplant",
-    "noTasksPlanned": "Keine Aufgaben geplant"
+    "noTasksPlanned": "Keine Aufgaben geplant",
+    "color": {
+      "none": "Keine Farbe",
+      "pink": "Rosa",
+      "yellow": "Gelb",
+      "black": "Schwarz",
+      "grey": "Grau",
+      "cornflower": "Kornblume",
+      "mango": "Mango",
+      "green": "Grün",
+      "lilac": "Flieder"
+    },
+    "customColor": "Eigene Farbe",
+    "labelSuggestions": "Kategorien"
   }
 }
