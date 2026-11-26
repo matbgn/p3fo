@@ -2450,6 +2450,19 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     };
   }
 
+  async deleteVoteResponsesForVoter(
+    voteId: string,
+    voterToken: string,
+  ): Promise<string[]> {
+    const result = await this.pool.query(
+      `DELETE FROM "voteResponses"
+       WHERE "voteId" = $1 AND "voterToken" = $2
+       RETURNING "id"`,
+      [voteId, voterToken],
+    );
+    return (result.rows as Array<{ id: string }>).map((row) => row.id);
+  }
+
   async deleteVoteResponse(
     voteId: string,
     voterToken: string,

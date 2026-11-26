@@ -2664,6 +2664,18 @@ class SqliteClient implements DbClient {
     return persisted ? this.mapVoteResponseDbRowToEntity(persisted) : newResponse;
   }
 
+  async deleteVoteResponsesForVoter(
+    voteId: string,
+    voterToken: string,
+  ): Promise<string[]> {
+    const rows = this.db.prepare(`
+      DELETE FROM "voteResponses"
+      WHERE "voteId" = ? AND "voterToken" = ?
+      RETURNING "id"
+    `).all(voteId, voterToken) as unknown as Array<{ id: string }>;
+    return rows.map((row) => row.id);
+  }
+
   async deleteVoteResponse(
     voteId: string,
     voterToken: string,

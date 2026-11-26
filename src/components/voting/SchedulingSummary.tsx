@@ -1,5 +1,5 @@
 import * as React from "react";
-import { CalendarPlus, ChevronLeft, ChevronRight, Users } from "lucide-react";
+import { CalendarPlus, ChevronLeft, ChevronRight, Trash2, Users } from "lucide-react";
 import type { VoteEntity, VoteResponseEntity } from "@/lib/persistence-types";
 import {
   buildSchedulingHeatmap,
@@ -21,6 +21,7 @@ import {
   downloadEventIcs,
 } from "@/lib/ics";
 import { getVotingStrings } from "@/lib/voting-i18n";
+import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
 import { richTextToPlainText } from "@/lib/rich-text";
 import { Button } from "@/components/ui/button";
 import { SchedulingCalendar } from "./SchedulingCalendar";
@@ -48,7 +49,13 @@ interface SchedulingSummaryProps {
   tally?: SchedulingTally | null;
   /** How many best-run cards to render per tier. Defaults to 5. */
   maxRuns?: number;
+  /** Moderator capability: enables row deletion and cell editing. */
+  moderatorToken?: string;
+  /** Called after a moderator repair so the parent refetches the matrix. */
+  onChanged?: () => void;
 }
+
+const apiPath = (path: string) => `${PERSISTENCE_CONFIG.API_URL}${path}`;
 
 function groupSlotsByDate(
   slots: SchedulingSlotTally[],
@@ -92,14 +99,45 @@ function cellClass(value: number | undefined): string {
  * differently, but the value→label/colour/title mapping must stay identical in
  * both, so it lives here instead of being copy-pasted per layout.
  */
-const ParticipantCell: React.FC<{ value: number | undefined }> = ({ value }) => {
+const ParticipantCell: React.FC<{
+  value: number | undefined;
+  editable?: boolean;
+  disabled?: boolean;
+  allowIfNeeded?: boolean;
+  onChange?: (value: number | null) => void;
+}> = ({ value, editable = false, disabled = false, allowIfNeeded = false, onChange }) => {
   const ts = getVotingStrings();
+
+  if (!editable || !onChange) {
+    return (
+      <td
+        className={`px-2 py-1 text-center border-l ${cellClass(value)}`}
+        title={schedulingStatusLabel(value, ts.scheduling)}
+      >
+        {cellLabel(value)}
+      </td>
+    );
+  }
+
   return (
-    <td
-      className={`px-2 py-1 text-center border-l ${cellClass(value)}`}
-      title={schedulingStatusLabel(value, ts.scheduling)}
-    >
-      {cellLabel(value)}
+    <td className={`px-1 py-1 text-center border-l ${cellClass(value)}`}>
+      <select
+        value={value === undefined ? "" : String(value)}
+        onChange={(event) =>
+          onChange(event.target.value === "" ? null : Number(event.target.value))
+        }
+        disabled={disabled}
+        title={ts.scheduling.editCell}
+        aria-label={ts.scheduling.editCell}
+        className="w-12 cursor-pointer bg-transparent text-center text-xs focus:outline-none disabled:cursor-wait"
+      >
+        <option value="" title={ts.scheduling.unavailableNoAnswer}>–</option>
+        <option value="1" title={ts.scheduling.available}>{cellLabel(1)}</option>
+        {(allowIfNeeded || value === 0) && (
+          <option value="0" title={ts.scheduling.ifNeeded}>{cellLabel(0)}</option>
+        )}
+        <option value="-1" title={ts.scheduling.unavailable}>{cellLabel(-1)}</option>
+      </select>
     </td>
   );
 };
@@ -115,8 +153,70 @@ export const SchedulingSummary: React.FC<SchedulingSummaryProps> = ({
   moderatorView = false,
   tally: sharedTally,
   maxRuns = 5,
+  moderatorToken,
+  onChanged,
 }) => {
   const ts = getVotingStrings();
+  const [savingKey, setSavingKey] = React.useState<string | null>(null);
+  const [actionError, setActionError] = React.useState<string | null>(null);
+  const canEdit = moderatorView && Boolean(moderatorToken);
+
+  const updateCell = React.useCallback(
+    async (participantId: string, proposalId: string, value: number | null) => {
+      if (!moderatorToken) return;
+      const key = `cell:${participantId}:${proposalId}`;
+      setSavingKey(key);
+      setActionError(null);
+      try {
+        const response = await fetch(apiPath(`/api/votes/${vote.slug}/scheduling-cell`), {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Moderator-Token": moderatorToken,
+          },
+          body: JSON.stringify({ participantId, proposalId, value }),
+        });
+        if (!response.ok) throw new Error("save failed");
+        onChanged?.();
+      } catch {
+        setActionError(ts.scheduling.cellSaveError);
+      } finally {
+        setSavingKey(null);
+      }
+    },
+    [moderatorToken, onChanged, ts.scheduling.cellSaveError, vote.slug],
+  );
+
+  const removeParticipant = React.useCallback(
+    async (participantId: string, name: string) => {
+      if (!moderatorToken) return;
+      const confirmed = window.confirm(
+        ts.scheduling.removeParticipantConfirm.replace("{{name}}", name),
+      );
+      if (!confirmed) return;
+      setSavingKey(`remove:${participantId}`);
+      setActionError(null);
+      try {
+        const response = await fetch(
+          apiPath(
+            `/api/votes/${vote.slug}/scheduling-participants/${encodeURIComponent(participantId)}`,
+          ),
+          {
+            method: "DELETE",
+            headers: { "X-Moderator-Token": moderatorToken },
+          },
+        );
+        if (!response.ok) throw new Error("delete failed");
+        onChanged?.();
+      } catch {
+        setActionError(ts.scheduling.cellSaveError);
+      } finally {
+        setSavingKey(null);
+      }
+    },
+    [moderatorToken, onChanged, ts.scheduling, vote.slug],
+  );
+
   const config = React.useMemo(
     () => normalizeSchedulingConfig(vote.config.scheduling),
     [vote.config.scheduling],
@@ -299,6 +399,10 @@ export const SchedulingSummary: React.FC<SchedulingSummaryProps> = ({
       )}
 
       {moderatorView && tally.participants.length > 0 && (
+        <>
+          {actionError && (
+            <p className="mb-2 text-xs text-red-600">{actionError}</p>
+          )}
         <div className="space-y-2">
           <h4 className="text-xs font-medium text-gray-400 uppercase">
             {ts.scheduling.participants}
@@ -329,7 +433,28 @@ export const SchedulingSummary: React.FC<SchedulingSummaryProps> = ({
                   {visibleParticipants.map((participant) => (
                     <tr key={participant.key}>
                       <td className="sticky left-0 bg-white text-left py-1 pr-3 text-gray-700 whitespace-nowrap">
-                        {participant.displayName || participant.alias}
+                        <div className="flex items-center gap-1">
+                          <span className="truncate">{participant.displayName || participant.alias}</span>
+                          {canEdit && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                              title={ts.scheduling.removeParticipant}
+                              aria-label={ts.scheduling.removeParticipant}
+                              disabled={savingKey !== null}
+                              onClick={() =>
+                                void removeParticipant(
+                                  participant.key,
+                                  participant.displayName || participant.alias,
+                                )
+                              }
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
                       </td>
                       {groups.map((group) => {
                         const slot = group.slots[0];
@@ -340,6 +465,12 @@ export const SchedulingSummary: React.FC<SchedulingSummaryProps> = ({
                           <ParticipantCell
                             key={`${participant.key}-${group.key}`}
                             value={value}
+                            editable={canEdit}
+                            disabled={savingKey !== null}
+                            allowIfNeeded={config.allowIfNeeded}
+                            onChange={(next) =>
+                              slot && void updateCell(participant.key, slot.proposalId, next)
+                            }
                           />
                         );
                       })}
@@ -388,7 +519,28 @@ export const SchedulingSummary: React.FC<SchedulingSummaryProps> = ({
                   {visibleParticipants.map((participant) => (
                     <tr key={participant.key}>
                       <td className="sticky left-0 bg-white text-left py-1 pr-3 text-gray-700 whitespace-nowrap">
-                        {participant.displayName || participant.alias}
+                        <div className="flex items-center gap-1">
+                          <span className="truncate">{participant.displayName || participant.alias}</span>
+                          {canEdit && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                              title={ts.scheduling.removeParticipant}
+                              aria-label={ts.scheduling.removeParticipant}
+                              disabled={savingKey !== null}
+                              onClick={() =>
+                                void removeParticipant(
+                                  participant.key,
+                                  participant.displayName || participant.alias,
+                                )
+                              }
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
                       </td>
                       {groups.flatMap((group) =>
                         group.slots.map((slot) => {
@@ -397,6 +549,12 @@ export const SchedulingSummary: React.FC<SchedulingSummaryProps> = ({
                             <ParticipantCell
                               key={`${participant.key}-${slot.proposalId}`}
                               value={value}
+                              editable={canEdit}
+                              disabled={savingKey !== null}
+                              allowIfNeeded={config.allowIfNeeded}
+                              onChange={(next) =>
+                                void updateCell(participant.key, slot.proposalId, next)
+                              }
                             />
                           );
                         }),
@@ -435,6 +593,7 @@ export const SchedulingSummary: React.FC<SchedulingSummaryProps> = ({
             </div>
           )}
         </div>
+        </>
       )}
     </div>
   );

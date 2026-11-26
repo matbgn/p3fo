@@ -122,6 +122,10 @@ type VotingStrings = {
     submitError: string;
     namePrompt: string;
     namePromptHelp: string;
+    removeParticipant: string;
+    removeParticipantConfirm: string;
+    editCell: string;
+    cellSaveError: string;
   };
   schedulingEditor: {
     sectionTitle: string;
@@ -501,6 +505,10 @@ const en: VotingStrings = {
     submitError: "Could not save your availability. Please try again.",
     namePrompt: "What name should others see?",
     namePromptHelp: "Your name is only shown to the organizer and moderators.",
+    removeParticipant: "Remove this participant",
+    removeParticipantConfirm: "Delete all availability for {{name}}? This cannot be undone.",
+    editCell: "Edit this availability",
+    cellSaveError: "Could not save this change.",
   },
   schedulingEditor: {
     sectionTitle: "Scheduling settings",
@@ -888,6 +896,10 @@ const fr: VotingStrings = {
     submitError: "Impossible d'enregistrer vos disponibilit\u00e9s. Veuillez r\u00e9essayer.",
     namePrompt: "Quel nom les autres doivent-ils voir ?",
     namePromptHelp: "Votre nom n'est visible que par l'organisateur et les mod\u00e9rateurs.",
+    removeParticipant: "Supprimer ce participant",
+    removeParticipantConfirm: "Supprimer toutes les disponibilit\u00e9s de {{name}} ? Cette action est irr\u00e9versible.",
+    editCell: "Modifier cette disponibilit\u00e9",
+    cellSaveError: "Impossible d'enregistrer cette modification.",
   },
   schedulingEditor: {
     sectionTitle: "Param\u00e8tres de planification",
@@ -1275,6 +1287,10 @@ const de: VotingStrings = {
     submitError: "Ihre Verf\u00fcgbarkeit konnte nicht gespeichert werden. Bitte versuchen Sie es erneut.",
     namePrompt: "Welchen Namen sollen andere sehen?",
     namePromptHelp: "Ihr Name ist nur f\u00fcr die Organisation und Moderierende sichtbar.",
+    removeParticipant: "Teilnehmende Person entfernen",
+    removeParticipantConfirm: "Alle Verf\u00fcgbarkeiten von {{name}} l\u00f6schen? Dies kann nicht r\u00fcckg\u00e4ngig gemacht werden.",
+    editCell: "Diese Verf\u00fcgbarkeit bearbeiten",
+    cellSaveError: "Diese \u00c4nderung konnte nicht gespeichert werden.",
   },
   schedulingEditor: {
     sectionTitle: "Terminplanungs-Einstellungen",

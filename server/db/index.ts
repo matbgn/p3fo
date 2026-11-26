@@ -175,6 +175,8 @@ export interface DbClient {
    * vote.
    */
   deleteVoteResponse(voteId: string, voterToken: string, proposalId: string | null, loopId?: string | null): Promise<string[]>;
+  /** Delete every response row a voter owns (a whole scheduling row). */
+  deleteVoteResponsesForVoter(voteId: string, voterToken: string): Promise<string[]>;
   /**
    * Atomically replace one voter's rows for `scopeProposalIds`: upsert every
    * supplied row and delete every in-scope row that is not one of those

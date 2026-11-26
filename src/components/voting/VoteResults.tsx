@@ -279,7 +279,7 @@ const VoteResultsHeader: React.FC<{
 export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, moderatorView = false }) => {
   const t = getVotingStrings();
   const { t: tt } = useTranslation();
-  const { responses, isLoading, hasDrafts, draftCount } = useVoteResults(
+  const { responses, isLoading, hasDrafts, draftCount, refetch } = useVoteResults(
     vote.id,
     // Comparative votes never store vote responses; polling the response
     // endpoint for them is pure waste.
@@ -532,6 +532,8 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
               responses={responses}
               tally={tally}
               moderatorView={moderatorView}
+              moderatorToken={moderatorToken}
+              onChanged={refetch}
             />
             <VoteComments comments={commentEntries} />
           </div>

@@ -3021,6 +3021,109 @@ app.post('/api/votes/:idOrSlug/identity', async (req: Request, res: Response) =>
   }
 });
 
+// Moderator repair tools for a scheduling matrix. Participants are addressed
+// by the moderator-only digest already present in the authenticated results
+// projection, so no voter credential ever reaches the client.
+app.patch('/api/votes/:idOrSlug/scheduling-cell', express.json(), async (req: Request, res: Response) => {
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) return res.status(404).json({ error: 'Vote not found' });
+    if (!(await canModerateVote(req, vote))) {
+      return res.status(403).json({ error: 'Moderator access required' });
+    }
+    if (vote.config.mode !== 'SCHEDULING') {
+      return res.status(400).json({ error: 'Not a scheduling vote' });
+    }
+    if (vote.config.phase === 'FINALIZED') {
+      return res.status(400).json({ error: 'This vote is finalized' });
+    }
+    const participantId = req.body?.participantId;
+    const proposalId = req.body?.proposalId;
+    if (typeof participantId !== 'string' || participantId.trim() === '') {
+      return res.status(400).json({ error: 'participantId is required' });
+    }
+    if (
+      typeof proposalId !== 'string' ||
+      !activeSchedulingSlots(vote.proposals).some((slot) => slot.id === proposalId)
+    ) {
+      return res.status(400).json({ error: 'Unknown scheduling slot' });
+    }
+
+    const responses = await db.getVoteResponses(vote.id);
+    const target = responses.find(
+      (response) => voteParticipantKey(vote.id, response.voterToken) === participantId,
+    );
+    if (!target) return res.status(404).json({ error: 'Participant not found' });
+
+    const voterToken = target.voterToken;
+    const existing =
+      responses.find(
+        (response) =>
+          response.voterToken === voterToken && response.proposalId === proposalId,
+      ) ?? null;
+
+    // A null value clears the cell (no answer), which the matrix shows as "–".
+    if (req.body?.value === null || req.body?.value === undefined) {
+      if (!existing) return res.status(204).end();
+      const removedIds = await db.deleteVoteResponse(vote.id, voterToken, proposalId);
+      broadcastVoteResponsesRemovedFromYjs(removedIds);
+      return res.status(204).end();
+    }
+
+    const value = Number(req.body.value);
+    const valueError = validateVoteResponseValue(vote, value);
+    if (valueError) return res.status(400).json({ error: valueError });
+
+    const response = await db.createVoteResponse(vote.id, {
+      voterToken,
+      proposalId,
+      loopId: null,
+      userId: existing?.userId ?? null,
+      value,
+      comment: existing?.comment,
+      attendeeData: existing?.attendeeData,
+    });
+    broadcastVoteResponseToYjs(vote, response);
+    res.json({ response });
+  } catch (error: unknown) {
+    console.error('Error editing scheduling cell:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to edit availability', details: message });
+  }
+});
+
+app.delete('/api/votes/:idOrSlug/scheduling-participants/:participantId', async (req: Request, res: Response) => {
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) return res.status(404).json({ error: 'Vote not found' });
+    if (!(await canModerateVote(req, vote))) {
+      return res.status(403).json({ error: 'Moderator access required' });
+    }
+    if (vote.config.mode !== 'SCHEDULING') {
+      return res.status(400).json({ error: 'Not a scheduling vote' });
+    }
+    if (vote.config.phase === 'FINALIZED') {
+      return res.status(400).json({ error: 'This vote is finalized' });
+    }
+    const participantId = req.params.participantId;
+    const responses = await db.getVoteResponses(vote.id);
+    const target = responses.find(
+      (response) => voteParticipantKey(vote.id, response.voterToken) === participantId,
+    );
+    if (!target) return res.status(404).json({ error: 'Participant not found' });
+
+    const removedIds = await db.deleteVoteResponsesForVoter(vote.id, target.voterToken);
+    if (removedIds.length > 0) {
+      broadcastVoteResponsesRemovedFromYjs(removedIds);
+    }
+    res.status(204).end();
+  } catch (error: unknown) {
+    console.error('Error deleting scheduling participant:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to delete participant', details: message });
+  }
+});
+
 app.delete('/api/votes/:idOrSlug/responses', async (req: Request, res: Response) => {
   try {
     const { idOrSlug } = req.params;
