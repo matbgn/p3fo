@@ -231,25 +231,35 @@ describe('attendanceCapacityError', () => {
 
 describe('publicAttendanceRows', () => {
   const responses = [
-    rsvp({ voterToken: 'a', attendeeData: { displayName: 'Alice', partySize: 2 } }),
+    rsvp({
+      voterToken: 'a',
+      voterAlias: 'P-A',
+      attendeeData: { displayName: 'Alice', partySize: 2 },
+    }),
     rsvp({
       voterToken: 'b',
+      voterAlias: 'P-B',
       attendeeData: { displayName: 'Bob', partySize: 3, visibility: 'hidden' },
     }),
-    rsvp({ voterToken: 'c', value: 0, attendeeData: { displayName: 'Cara', partySize: 4 } }),
+    rsvp({
+      voterToken: 'c',
+      voterAlias: 'P-C',
+      value: 0,
+      attendeeData: { displayName: 'Cara', partySize: 4 },
+    }),
   ];
 
   it('lists going RSVPs and hides names for hidden rows', () => {
     expect(publicAttendanceRows(responses, false)).toEqual([
-      { displayName: 'Alice', partySize: 2, visibility: 'public' },
-      { displayName: undefined, partySize: 3, visibility: 'hidden' },
+      { displayName: 'Alice', alias: 'P-A', partySize: 2, visibility: 'public' },
+      { displayName: undefined, alias: 'P-B', partySize: 3, visibility: 'hidden' },
     ]);
   });
 
-  it('never reveals names for anonymous votes', () => {
+  it('shows the stable alias instead of names for anonymous votes', () => {
     expect(publicAttendanceRows(responses, true)).toEqual([
-      { displayName: undefined, partySize: 2, visibility: 'public' },
-      { displayName: undefined, partySize: 3, visibility: 'hidden' },
+      { displayName: undefined, alias: 'P-A', partySize: 2, visibility: 'public' },
+      { displayName: undefined, alias: 'P-B', partySize: 3, visibility: 'hidden' },
     ]);
   });
 });

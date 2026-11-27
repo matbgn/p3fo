@@ -1,5 +1,5 @@
 import { Pool, PoolClient } from 'pg';
-import { DbClient, SprintWellbeingRecord, VoteResponseUpsert, applyTaskTemporalMirror } from './index.js';
+import { DbClient, SprintWellbeingRecord, VoteResponseUpsert, VoteResetGuard, VotePokerWriteGuard, POKER_BLIND_WARMUP_DAYS, voteResetGuardMatches, votePokerWriteGuardMatches, applyTaskTemporalMirror } from './index.js';
 import type { SprintStateEntity } from '../../src/lib/sprint-types.js';
 import { restoreVoteResponseTokens } from '../../src/lib/vote-response-restore.js';
 import type {
@@ -612,6 +612,14 @@ class PostgresClient implements DbClient {
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_votes_slug" ON "votes"("slug")`);
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_votes_ownerId" ON "votes"("ownerId")`);
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_votes_linkedTaskId" ON "votes"("linkedTaskId")`);
+    // Startup poker recovery must find the handful of armed rounds without
+    // scanning every historical vote. The partial index matches the predicate
+    // of `getPokerVotesAwaitingReveal`.
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_votes_poker_armed" ON "votes"(("config"->'poker'->>'revealAt')) WHERE "config"->>'mode' = 'POKER_PLANNING' AND "config"->>'phase' = 'OPEN'`);
+    // The startup blind-reveal warm must not full-scan the votes table; this
+    // partial, expression index matches the predicate of
+    // `getUnrevealedPokerVoteStates` exactly.
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_votes_poker_unrevealed" ON "votes"(("config"->'poker'->>'revealedAt')) WHERE jsonb_typeof("config"->'poker') = 'object' AND "config"->'poker'->>'revealedAt' IS NULL`);
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_voteResponses_voteId" ON "voteResponses"("voteId")`);
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_voteResponses_loopId" ON "voteResponses"("loopId")`);
     await this.pool.query(`CREATE INDEX IF NOT EXISTS "idx_voteLoops_voteId" ON "voteLoops"("voteId")`);
@@ -2157,6 +2165,57 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     return result.rows.map((row: VoteDbRow) => this.mapVoteDbRowToEntity(row));
   }
 
+  async getVotesByIds(ids: string[]): Promise<VoteEntity[]> {
+    if (ids.length === 0) return [];
+    // `= ANY` keeps this one query regardless of payload size, so an import
+    // costs work proportional to the ids it names instead of a full scan.
+    const result = await this.pool.query(
+      'SELECT * FROM "votes" WHERE "id" = ANY($1::text[])',
+      [Array.from(new Set(ids))],
+    );
+    return result.rows.map((row: VoteDbRow) => this.mapVoteDbRowToEntity(row));
+  }
+
+  async getPokerVotesAwaitingReveal(): Promise<VoteEntity[]> {
+    const result = await this.pool.query(`
+      SELECT * FROM "votes"
+      WHERE "config"->>'mode' = 'POKER_PLANNING'
+        AND "config"->>'phase' = 'OPEN'
+        AND "config"->'poker'->>'revealAt' IS NOT NULL
+        AND "config"->'poker'->>'revealedAt' IS NULL
+    `);
+    return result.rows.map((row: VoteDbRow) => this.mapVoteDbRowToEntity(row));
+  }
+
+  async getUnrevealedPokerVoteStates(): Promise<Array<Pick<VoteEntity, 'id' | 'config'>>> {
+    // Only votes that still carry a response can leak an estimate into the
+    // shared document, so the warm set is bounded to those instead of every
+    // hidden poker vote ever created. The partial `idx_votes_poker_unrevealed`
+    // index serves the predicate; the EXISTS probe uses idx_voteResponses_voteId.
+    // Open rounds can still receive estimates, so they are always warmed.
+    // Closed/finalized rounds only need the scrub as defense in depth for
+    // clients that reconnect after a restart; bounding them to a recent window
+    // keeps the startup scan from growing with the entire vote history.
+    const result = await this.pool.query(
+      `
+      SELECT v."id", v."config" FROM "votes" v
+      WHERE jsonb_typeof(v."config"->'poker') = 'object'
+        AND v."config"->'poker'->>'revealedAt' IS NULL
+        AND EXISTS (SELECT 1 FROM "voteResponses" r WHERE r."voteId" = v."id")
+        AND (
+          v."config"->>'phase' = 'OPEN'
+          OR v."updatedAt" >= NOW() - make_interval(days => $1::int)
+        )
+    `,
+      [POKER_BLIND_WARMUP_DAYS],
+    );
+    return result.rows.map((row: { id: string; config: unknown }) => ({
+      id: row.id,
+      config:
+        typeof row.config === 'string' ? JSON.parse(row.config) : row.config,
+    })) as Array<Pick<VoteEntity, 'id' | 'config'>>;
+  }
+
   async getVoteById(id: string): Promise<VoteEntity | null> {
     const result = await this.pool.query('SELECT * FROM "votes" WHERE "id" = $1', [id]);
     if (result.rows.length === 0) return null;
@@ -2243,6 +2302,57 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     return updated;
   }
 
+  async updateVotePokerConfig(
+    id: string,
+    patch: Partial<NonNullable<VoteEntity['config']['poker']>>,
+    guard: VotePokerWriteGuard,
+  ): Promise<VoteEntity | null> {
+    // The server-owned arm/cancel/reveal writes must not go through
+    // `updateVote`: its config patch is merged over a caller-read snapshot, so a
+    // close/finalize or a competing reveal that lands between the read and the
+    // write is silently overwritten (re-opening the vote or un-revealing a
+    // round). Lock and re-check the row inside the transaction, then merge only
+    // the poker fields so `phase` and every other key stay authoritative.
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const locked = await client.query(
+        'SELECT "config" FROM "votes" WHERE "id" = $1 FOR UPDATE',
+        [id],
+      );
+      if (locked.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      const rowConfig = locked.rows[0].config;
+      const current =
+        typeof rowConfig === 'string' ? JSON.parse(rowConfig) : rowConfig;
+      if (!votePokerWriteGuardMatches(current, guard)) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      const nextConfig = {
+        ...current,
+        poker: { ...(current?.poker ?? {}), ...patch },
+      };
+      const result = await client.query(
+        `UPDATE "votes" SET "config" = $1, "updatedAt" = $2 WHERE "id" = $3 RETURNING *`,
+        [JSON.stringify(nextConfig), new Date().toISOString(), id],
+      );
+      if (result.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      await client.query('COMMIT');
+      return this.mapVoteDbRowToEntity(result.rows[0]);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async finalizeVote(id: string, outcome: VoteEntity['outcome']): Promise<VoteEntity | null> {
     const current = await this.getVoteById(id);
     if (!current) return null;
@@ -2271,16 +2381,66 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
   }
 
   async resetVote(id: string): Promise<VoteEntity | null> {
-    await this.pool.query('DELETE FROM "voteResponses" WHERE "voteId" = $1', [id]);
-    await this.pool.query('DELETE FROM "voteRankingSubmissions" WHERE "voteId" = $1', [id]);
-    await this.pool.query('DELETE FROM "voteLoops" WHERE "voteId" = $1', [id]);
+    // Delegate so the child-table list and outcome reset live in one place; a
+    // table added to resetVoteWithConfig is cleared here automatically. The
+    // patch is applied inside the transaction, so this does not need a config
+    // snapshot read here that a concurrent update could make stale.
+    return this.resetVoteWithConfig(id, { phase: 'IDLE' });
+  }
 
-    const result = await this.pool.query(
-      `UPDATE "votes" SET "config" = jsonb_set("config", '{phase}', '"IDLE"'), "outcome" = NULL, "updatedAt" = $1 WHERE "id" = $2 RETURNING *`,
-      [new Date().toISOString(), id],
-    );
-    if (result.rows.length === 0) return null;
-    return this.mapVoteDbRowToEntity(result.rows[0]);
+  async resetVoteWithConfig(
+    id: string,
+    configPatch: Partial<VoteEntity['config']>,
+    guard?: VoteResetGuard,
+  ): Promise<VoteEntity | null> {
+    // The destructive reset and the config change share one transaction so a
+    // poker round rollover cannot delete the responses and then fail to advance
+    // the round (which would strand the vote with no way to retry).
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Always lock and re-read the row: the patch is merged onto the current
+      // config inside the transaction, so an update to an unrelated key (or a
+      // competing reset/rollover) that landed since the caller read the vote is
+      // preserved instead of being reverted by a stale full-config snapshot.
+      const locked = await client.query(
+        'SELECT "config" FROM "votes" WHERE "id" = $1 FOR UPDATE',
+        [id],
+      );
+      if (locked.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      const rowConfig = locked.rows[0].config;
+      const current =
+        typeof rowConfig === 'string' ? JSON.parse(rowConfig) : rowConfig;
+      if (guard && !voteResetGuardMatches(current, guard)) {
+        // Re-check inside the lock: without this, two concurrent rollovers of
+        // the same revealed round both pass their pre-read check, and the
+        // second deletes the estimates already submitted for the new round.
+        await client.query('ROLLBACK');
+        return null;
+      }
+      const nextConfig = { ...(current ?? {}), ...configPatch };
+      await client.query('DELETE FROM "voteResponses" WHERE "voteId" = $1', [id]);
+      await client.query('DELETE FROM "voteRankingSubmissions" WHERE "voteId" = $1', [id]);
+      await client.query('DELETE FROM "voteLoops" WHERE "voteId" = $1', [id]);
+      const result = await client.query(
+        `UPDATE "votes" SET "config" = $1, "outcome" = NULL, "updatedAt" = $2 WHERE "id" = $3 RETURNING *`,
+        [JSON.stringify(nextConfig), new Date().toISOString(), id],
+      );
+      if (result.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      await client.query('COMMIT');
+      return this.mapVoteDbRowToEntity(result.rows[0]);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async importVotes(items: VoteEntity[]): Promise<void> {
@@ -2373,6 +2533,19 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
   async getVoteResponses(voteId: string): Promise<VoteResponseEntity[]> {
     const result = await this.pool.query('SELECT * FROM "voteResponses" WHERE "voteId" = $1 ORDER BY "submittedAt" ASC', [voteId]);
     return result.rows.map((row: Record<string, unknown>) => this.mapVoteResponseRow(row));
+  }
+
+  async getVoteParticipantCoverage(
+    voteId: string,
+  ): Promise<Array<{ voterToken: string; proposalId: string | null }>> {
+    const result = await this.pool.query(
+      'SELECT "voterToken", "proposalId" FROM "voteResponses" WHERE "voteId" = $1',
+      [voteId],
+    );
+    return result.rows.map((row: Record<string, unknown>) => ({
+      voterToken: row.voterToken as string,
+      proposalId: (row.proposalId as string | null) ?? null,
+    }));
   }
 
   async getVoteResponsesForVoter(
@@ -2593,11 +2766,13 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       await client.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [
         `voteResponse:${voteId}:${voterToken}`,
       ]);
+      // Loop-scoped rows are included: a CONSENT_LOOP participant's identity is
+      // per voter across rounds, so filtering on `loopId IS NULL` made a rename
+      // silently match nothing and return success.
       const selected = await client.query(
         `SELECT * FROM "voteResponses"
          WHERE "voteId" = $1
            AND "voterToken" = $2
-           AND "loopId" IS NULL
            AND "proposalId" IS NOT NULL
            AND ($3::text IS NULL OR "proposalId" = $3)
          ORDER BY "submittedAt" ASC`,
@@ -2794,6 +2969,20 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       'DELETE FROM "voteRankingSubmissions" WHERE "voteId" = $1 AND "voterToken" = $2',
       [voteId, voterToken],
     );
+  }
+
+  async renameVoteRankingSubmissionForVoter(
+    voteId: string,
+    voterToken: string,
+    displayName: string,
+  ): Promise<boolean> {
+    // One column, one row: no need to read/re-serialize the (potentially huge)
+    // ballot payloads just to rename the participant.
+    const result = await this.pool.query(
+      'UPDATE "voteRankingSubmissions" SET "displayName" = $1 WHERE "voteId" = $2 AND "voterToken" = $3',
+      [displayName, voteId, voterToken],
+    );
+    return (result.rowCount ?? 0) > 0;
   }
 
   async getVoteRankingSubmittedBallots(voteId: string): Promise<VoteRankingSubmission[]> {

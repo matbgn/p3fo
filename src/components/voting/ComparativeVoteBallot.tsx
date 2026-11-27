@@ -42,6 +42,7 @@ interface ComparativeVoteBallotProps {
   vote: VoteEntity;
   slug: string;
   voterToken: string;
+  displayName?: string;
   onSubmitted?: () => void;
 }
 
@@ -130,6 +131,7 @@ export const ComparativeVoteBallot: React.FC<ComparativeVoteBallotProps> = ({
   vote,
   slug,
   voterToken,
+  displayName,
   onSubmitted,
 }) => {
   const { t: tt } = useTranslation();
@@ -278,7 +280,9 @@ export const ComparativeVoteBallot: React.FC<ComparativeVoteBallotProps> = ({
   });
   saveMetaRef.current = {
     userId: userContext?.userId ?? null,
-    displayName: isAnonymous ? null : userContext?.userSettings?.username ?? null,
+    displayName: isAnonymous
+      ? null
+      : displayName ?? userContext?.userSettings?.username ?? null,
   };
 
   React.useEffect(() => {
@@ -404,10 +408,7 @@ export const ComparativeVoteBallot: React.FC<ComparativeVoteBallotProps> = ({
       if (inFlightSaveRef.current) {
         await inFlightSaveRef.current;
       }
-      await save(buildBallot(engineState), 'submitted', {
-        userId: userContext?.userId ?? null,
-        displayName: isAnonymous ? null : userContext?.userSettings?.username ?? null,
-      });
+      await save(buildBallot(engineState), 'submitted', saveMetaRef.current);
       setSaveError(null);
       setLocalSubmitted(true);
       onSubmitted?.();
@@ -417,7 +418,7 @@ export const ComparativeVoteBallot: React.FC<ComparativeVoteBallotProps> = ({
       submittingRef.current = false;
       setIsSaving(false);
     }
-  }, [engineState, buildBallot, save, userContext, isAnonymous, onSubmitted]);
+  }, [engineState, buildBallot, save, onSubmitted]);
 
   const handleWithdraw = async () => {
     try {

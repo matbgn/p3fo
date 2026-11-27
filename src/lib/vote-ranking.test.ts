@@ -9,6 +9,9 @@ import {
   buildVoteRankingResult,
   computeBallotCoverage,
   deriveBallotParticipation,
+  hidePokerValueForVote,
+  pokerProposalIsRevealed,
+  pokerValuesAreHidden,
   proposalDisplayTitle,
   proposalHasContent,
   redactVoteResponseForVote,
@@ -515,5 +518,135 @@ describe('shared vote response projection', () => {
       expect(shared.attendeeData).toEqual({ partySize: 2, visibility: 'hidden' });
       expect(JSON.stringify(shared)).not.toContain('Alice');
     });
+  });
+});
+
+describe('planning-poker value hiding', () => {
+  const response: VoteResponseEntity = {
+    id: 'r1',
+    voteId: 'vote-1',
+    proposalId: 'p1',
+    userId: null,
+    voterToken: 'secret-withdrawal-token',
+    voterAlias: 'P-AAAAAA',
+    value: 8,
+    submittedAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  const pokerVote = (config: Record<string, unknown>) =>
+    ({
+      id: 'vote-1',
+      config: {
+        mode: 'POKER_PLANNING',
+        kind: 'decision',
+        phase: 'OPEN',
+        isAnonymous: false,
+        ...config,
+      },
+    }) as unknown as VoteEntity;
+
+  it('hides estimates while the round is open and unrevealed', () => {
+    const vote = pokerVote({ poker: { scale: 'fibonacci' } });
+    expect(pokerValuesAreHidden(vote)).toBe(true);
+    const hidden = hidePokerValueForVote(vote, response);
+    expect('value' in hidden).toBe(false);
+    // Everything else still projects so the row can overwrite a stale copy.
+    expect(hidden.id).toBe('r1');
+    expect(hidden.voterAlias).toBe('P-AAAAAA');
+  });
+
+  it('reveals estimates once the round is stamped revealed', () => {
+    const vote = pokerVote({
+      poker: { scale: 'fibonacci', revealedAt: '2026-01-01T00:01:00.000Z' },
+    });
+    expect(pokerValuesAreHidden(vote)).toBe(false);
+    expect(hidePokerValueForVote(vote, response)).toBe(response);
+  });
+
+  it('never hides a non-poker vote', () => {
+    const vote = pokerVote({ mode: 'THUMBS_UP' });
+    expect(pokerValuesAreHidden(vote)).toBe(false);
+    expect(hidePokerValueForVote(vote, response)).toBe(response);
+  });
+
+  it('ignores showResultsBeforeClose so a client-written flag cannot reveal a round', () => {
+    // The vote-update route is reachable with the public link, and this flag is
+    // part of that payload. Only the server-owned reveal may unblind a round.
+    const vote = pokerVote({
+      poker: { scale: 'fibonacci' },
+      showResultsBeforeClose: true,
+    });
+    expect(pokerValuesAreHidden(vote)).toBe(true);
+    expect('value' in hidePokerValueForVote(vote, response)).toBe(false);
+  });
+
+  it('keeps hiding a closed but unrevealed round because phase is client-writable', () => {
+    // `phase` travels through the unauthenticated vote-update route, so a
+    // caller could set CLOSED to defeat a phase-keyed visibility rule. Only the
+    // server-owned `revealedAt` may end the blind phase.
+    const vote = pokerVote({ poker: { scale: 'fibonacci' }, phase: 'CLOSED' });
+    expect(pokerValuesAreHidden(vote)).toBe(true);
+    expect('value' in hidePokerValueForVote(vote, response)).toBe(false);
+  });
+
+  it('reveals a closed round once it is stamped revealed', () => {
+    const vote = pokerVote({
+      poker: { scale: 'fibonacci', revealedAt: '2026-01-01T00:01:00.000Z' },
+      phase: 'CLOSED',
+    });
+    expect(pokerValuesAreHidden(vote)).toBe(false);
+  });
+
+  it('keeps hiding a started round when the mode was tampered with', () => {
+    const vote = pokerVote({
+      mode: null,
+      poker: { scale: 'fibonacci', round: 2 },
+    });
+    expect(pokerValuesAreHidden(vote)).toBe(true);
+    expect('value' in hidePokerValueForVote(vote, response)).toBe(false);
+  });
+
+  it('treats any persisted unrevealed deck as a blind round', () => {
+    // The update/create routes clear a deck for every non-poker mode, so a deck
+    // that survives is a round that has not been revealed yet.
+    const vote = pokerVote({ mode: 'THUMBS_UP', poker: { scale: 'fibonacci' } });
+    expect(pokerValuesAreHidden(vote)).toBe(true);
+  });
+
+  it('reveals only the individually revealed proposal', () => {
+    const vote = pokerVote({
+      poker: { scale: 'fibonacci', revealedProposalIds: ['p1'] },
+    });
+    expect(pokerValuesAreHidden(vote)).toBe(true);
+    expect(pokerProposalIsRevealed(vote, 'p1')).toBe(true);
+    expect(pokerProposalIsRevealed(vote, 'p2')).toBe(false);
+    // The revealed proposal's row keeps its value…
+    expect(hidePokerValueForVote(vote, response)).toBe(response);
+    // …while a sibling proposal stays stripped on the same projection.
+    const sibling: VoteResponseEntity = {
+      ...response,
+      id: 'r2',
+      proposalId: 'p2',
+    };
+    expect('value' in hidePokerValueForVote(vote, sibling)).toBe(false);
+  });
+
+  it('treats revealedAt as a round-wide reveal even with an id list', () => {
+    const vote = pokerVote({
+      poker: {
+        scale: 'fibonacci',
+        revealedAt: '2026-01-01T00:01:00.000Z',
+        revealedProposalIds: ['p2'],
+      },
+    });
+    expect(pokerProposalIsRevealed(vote, 'p1')).toBe(true);
+    expect(pokerProposalIsRevealed(vote, 'not-in-list')).toBe(true);
+    expect(hidePokerValueForVote(vote, response)).toBe(response);
+  });
+
+  it('does not reveal a proposal before any individual reveal', () => {
+    const vote = pokerVote({ poker: { scale: 'fibonacci' } });
+    expect(pokerProposalIsRevealed(vote, 'p1')).toBe(false);
+    expect(pokerProposalIsRevealed(vote, null)).toBe(false);
   });
 });

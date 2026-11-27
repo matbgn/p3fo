@@ -5,7 +5,7 @@ import type { PersistenceAdapter } from "@/lib/persistence-types";
 import { getPersistenceAdapter } from "@/lib/persistence-factory";
 import { yVoteProposals, yVoteResponses, yVoteDraftRevisions, yVotePresenceRevisions, initializeCollaboration, isCollaborationEnabled, doc } from "@/lib/collaboration";
 import { VOTE_SCOPED_YJS_MAPS } from "@/lib/vote-yjs-maps";
-import { isDraftNewer, shareVoteResponse, voterAlias } from "@/lib/vote-ranking";
+import { isDraftNewer, pokerResponseValueIsHidden, responseVoterAlias, responseVoterDisplayName, shareVoteResponse, stripPokerValue } from "@/lib/vote-ranking";
 import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
 
 let votes: VoteEntity[] = [];
@@ -98,19 +98,11 @@ const draftToResponseEntities = (draft: VoteDraftEntity): VoteResponseEntity[] =
   }));
 
 /**
- * The pseudonym a response row contributes to the live "who joined" union.
- * Merged draft rows already carry the alias; submitted rows carry the raw token
- * and must be hashed the same way the public page hashes its own writes.
+ * Response-identity helpers live in `vote-ranking` so pure modules (comment and
+ * result projections) can share them without importing this hooks module. They
+ * are re-exported here for the existing import sites.
  */
-export const responseVoterAlias = (voteId: string, response: VoteResponseEntity): string => {
-  // Rows published in the shared document carry the alias explicitly and blank
-  // the credential; rows fetched from the server carry the raw token. Drafts
-  // already use the alias as their `voterToken`.
-  if (response.voterAlias) return response.voterAlias;
-  return response.id.startsWith('draft:')
-    ? response.voterToken
-    : voterAlias(voteId, response.voterToken);
-};
+export { responseVoterAlias, responseVoterDisplayName };
 
 /**
  * A draft is the participant's complete local selection for the vote. Merge it
@@ -387,6 +379,7 @@ export const syncResponsesToYjs = (
   voteId: string,
   responses: VoteResponseEntity[],
   fetchStartedAt = 0,
+  hidePokerValue: boolean | ((response: VoteResponseEntity) => boolean) = false,
 ) => {
   if (!isCollaborationEnabled()) return;
   // Upsert only. A fetch that started before a concurrent submit can resolve
@@ -403,7 +396,23 @@ export const syncResponsesToYjs = (
   doc.transact(() => {
     for (const response of responses) {
       if (wasDeletedAfter(response.id, fetchStartedAt)) continue;
-      const shared = shareVoteResponse(voteId, response);
+      // A planning-poker estimate must not reach the shared document before the
+      // round (or that proposal) is revealed. When a row's value is hidden,
+      // publish the row without it so it also overwrites any value-bearing copy
+      // a stale client left behind; for every other vote/proposal, never publish
+      // a partial row over a value-bearing copy another client already holds
+      // (the organizer's live tally).
+      let projected: VoteResponseEntity = response;
+      const rowIsHidden =
+        typeof hidePokerValue === "function"
+          ? hidePokerValue(response)
+          : hidePokerValue;
+      if (rowIsHidden) {
+        projected = stripPokerValue(response);
+      } else if (typeof response.value !== "number") {
+        continue;
+      }
+      const shared = shareVoteResponse(voteId, projected);
       const existing = yVoteResponses.get(response.id);
       if (existing && JSON.stringify(existing) === JSON.stringify(shared)) continue;
       yVoteResponses.set(response.id, shared);
@@ -749,21 +758,48 @@ export const useVoteResults = (
     [voteId, responses, drafts, includeDrafts],
   );
 
+  // One loader for the initial read and every poll/refresh: it fetches the
+  // combined projection, resolves the blind-reveal rule from the persisted vote
+  // the server returned, and publishes the rows to Yjs. Keeping the hide decision
+  // in a single place means it cannot be applied to one fetch path and missed on
+  // the other. The persisted vote is authoritative because the Yjs `voteProposals`
+  // map is unauthenticated and a forged `config.poker.revealedAt` must not make a
+  // moderator client publish unrevealed estimates.
+  const loadResults = React.useCallback(async () => {
+    // Capture the request start so a response row deleted while this fetch is
+    // in flight is not re-published by the upsert-only sync when it resolves.
+    const startedAt = Date.now();
+    const adapter = await getPersistenceAdapter();
+    // The moderator projection adds the collision-resistant participant digest
+    // used to merge drafts; the public view never receives it.
+    const result = adapter.getVoteResults
+      ? await adapter.getVoteResults(voteId, moderatorToken)
+      : { vote: null, responses: await adapter.listVoteResponses(voteId, moderatorToken) };
+    // Without the persisted vote the blind-reveal rule cannot be decided. Publish
+    // nothing rather than guess: a wrong `false` would expose an unrevealed
+    // estimate to every connected peer.
+    if (result.vote) {
+      // Per-proposal blind reveal: strip only the proposals that are still
+      // hidden, so a force-revealed proposition is published to every peer.
+      const resultVote = result.vote;
+      syncResponsesToYjs(
+        voteId,
+        result.responses,
+        startedAt,
+        (response) => pokerResponseValueIsHidden(resultVote, response),
+      );
+    }
+    return result.responses;
+  }, [voteId, moderatorToken]);
+
   const fetchResults = React.useCallback(async () => {
     try {
-      // Capture the request start so a response row deleted while this fetch is
-      // in flight is not re-published by the upsert-only sync when it resolves.
-      const startedAt = Date.now();
-      const adapter = await getPersistenceAdapter();
-      // The moderator projection adds the collision-resistant participant digest
-      // used to merge drafts; the public view never receives it.
-      const result = await adapter.listVoteResponses(voteId, moderatorToken);
-      setResponses(result);
-      syncResponsesToYjs(voteId, result, startedAt);
+      const nextResponses = await loadResults();
+      setResponses(nextResponses);
     } catch (error) {
       console.error("Error loading vote results:", error);
     }
-  }, [voteId, moderatorToken]);
+  }, [loadResults]);
 
   React.useEffect(() => {
     if (!enabled) {
@@ -775,14 +811,11 @@ export const useVoteResults = (
     const initialFetch = async () => {
       setIsLoading(true);
       try {
-        const startedAt = Date.now();
-        const adapter = await getPersistenceAdapter();
-        const result = await adapter.listVoteResponses(voteId, moderatorToken);
+        const nextResponses = await loadResults();
         if (mounted) {
-          setResponses(result);
+          setResponses(nextResponses);
           setIsLoading(false);
         }
-        syncResponsesToYjs(voteId, result, startedAt);
       } catch (error) {
         console.error("Error loading vote results:", error);
         if (mounted) setIsLoading(false);
@@ -842,6 +875,15 @@ export const useVoteResults = (
             .filter((row) => row.attendeeData)
             .map((row) => [row.id, row.attendeeData]),
         );
+        // A planning-poker broadcast omits the estimate until the round is
+        // revealed. The moderator's authenticated copy already holds it, so
+        // re-attach it locally (never published back to Yjs) instead of letting
+        // a hidden Yjs row blank the organizer's live tally.
+        const valueById = new Map(
+          previous
+            .filter((row) => typeof row.value === "number")
+            .map((row) => [row.id, row.value as number]),
+        );
         return voteResponses.map((row) => {
           const privateAttendee = attendeeById.get(row.id);
           // The shared projection drops a hidden display name, but the
@@ -863,6 +905,9 @@ export const useVoteResults = (
             : row.attendeeData;
           return {
             ...row,
+            ...(typeof row.value === "number" || !valueById.has(row.id)
+              ? {}
+              : { value: valueById.get(row.id) as number }),
             ...(row.participantId ? {} : { participantId: digestById.get(row.id) }),
             ...(attendeeData ? { attendeeData } : {}),
           };
@@ -898,7 +943,7 @@ export const useVoteResults = (
       eventBus.unsubscribe("voteResponsesChanged", eventHandler);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [voteId, enabled, moderatorToken]);
+  }, [voteId, enabled, moderatorToken, loadResults]);
 
   return {
     responses: mergedResponses,

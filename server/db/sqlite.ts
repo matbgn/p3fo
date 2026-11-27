@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { DbClient, SprintWellbeingRecord, VoteResponseUpsert, applyTaskTemporalMirror } from './index.js';
+import { DbClient, SprintWellbeingRecord, VoteResponseUpsert, VoteResetGuard, VotePokerWriteGuard, POKER_BLIND_WARMUP_DAYS, voteResetGuardMatches, votePokerWriteGuardMatches, applyTaskTemporalMirror } from './index.js';
 import type { SprintStateEntity } from '../../src/lib/sprint-types.js';
 import { restoreVoteResponseTokens } from '../../src/lib/vote-response-restore.js';
 import type {
@@ -677,6 +677,14 @@ class SqliteClient implements DbClient {
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_votes_slug" ON "votes"("slug")`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_votes_ownerId" ON "votes"("ownerId")`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_votes_linkedTaskId" ON "votes"("linkedTaskId")`);
+    // Startup poker recovery must find the handful of armed rounds without
+    // scanning every historical vote. The partial index matches the predicate
+    // of `getPokerVotesAwaitingReveal`.
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_votes_poker_armed" ON "votes"(json_extract("config", '$.poker.revealAt')) WHERE json_extract("config", '$.mode') = 'POKER_PLANNING' AND json_extract("config", '$.phase') = 'OPEN'`);
+    // The startup blind-reveal warm must not full-scan the votes table; this
+    // partial, expression index matches the predicate of
+    // `getUnrevealedPokerVoteStates` exactly.
+    this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_votes_poker_unrevealed" ON "votes"(json_extract("config", '$.poker.revealedAt')) WHERE json_type("config", '$.poker') = 'object' AND json_extract("config", '$.poker.revealedAt') IS NULL`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_voteResponses_voteId" ON "voteResponses"("voteId")`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_voteResponses_loopId" ON "voteResponses"("loopId")`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS "idx_voteLoops_voteId" ON "voteLoops"("voteId")`);
@@ -2401,6 +2409,51 @@ class SqliteClient implements DbClient {
     return rows.map(row => this.mapVoteDbRowToEntity(row));
   }
 
+  async getVotesByIds(ids: string[]): Promise<VoteEntity[]> {
+    if (ids.length === 0) return [];
+    // `json_each` keeps the statement to one bound value no matter how many ids
+    // the import names, so the read stays proportional to the payload.
+    const rows = this.db.prepare(`
+      SELECT * FROM "votes" WHERE "id" IN (SELECT value FROM json_each(?))
+    `).all(JSON.stringify(Array.from(new Set(ids)))) as unknown as VoteDbRow[];
+    return rows.map((row) => this.mapVoteDbRowToEntity(row));
+  }
+
+  async getPokerVotesAwaitingReveal(): Promise<VoteEntity[]> {
+    const rows = this.db.prepare(`
+      SELECT * FROM "votes"
+      WHERE json_extract("config", '$.mode') = 'POKER_PLANNING'
+        AND json_extract("config", '$.phase') = 'OPEN'
+        AND json_extract("config", '$.poker.revealAt') IS NOT NULL
+        AND json_extract("config", '$.poker.revealedAt') IS NULL
+    `).all() as unknown as VoteDbRow[];
+    return rows.map(row => this.mapVoteDbRowToEntity(row));
+  }
+
+  async getUnrevealedPokerVoteStates(): Promise<Array<Pick<VoteEntity, 'id' | 'config'>>> {
+    // Only votes that still carry a response can leak an estimate into the
+    // shared document, so the warm set is bounded to those instead of every
+    // hidden poker vote ever created. The partial `idx_votes_poker_unrevealed`
+    // index serves the predicate; the EXISTS probe uses idx_voteResponses_voteId.
+    // Keep this predicate in step with the Postgres adapter: open rounds are
+    // always warmed; closed/finalized rounds are bounded to a recent window so
+    // the startup scan does not grow with the entire vote history.
+    const rows = this.db.prepare(`
+      SELECT v."id", v."config" FROM "votes" v
+      WHERE json_type(v."config", '$.poker') = 'object'
+        AND json_extract(v."config", '$.poker.revealedAt') IS NULL
+        AND EXISTS (SELECT 1 FROM "voteResponses" r WHERE r."voteId" = v."id")
+        AND (
+          json_extract(v."config", '$.phase') = 'OPEN'
+          OR datetime(v."updatedAt") >= datetime('now', ?)
+        )
+    `).all(`-${POKER_BLIND_WARMUP_DAYS} days`) as unknown as Array<{ id: string; config: string }>;
+    return rows.map((row) => ({
+      id: row.id,
+      config: JSON.parse(row.config || '{}'),
+    }));
+  }
+
   async getVoteById(id: string): Promise<VoteEntity | null> {
     const row = this.db.prepare('SELECT * FROM "votes" WHERE "id" = ?').get(id) as unknown as VoteDbRow | undefined;
     if (!row) return null;
@@ -2493,6 +2546,51 @@ class SqliteClient implements DbClient {
     return updated;
   }
 
+  async updateVotePokerConfig(
+    id: string,
+    patch: Partial<NonNullable<VoteEntity['config']['poker']>>,
+    guard: VotePokerWriteGuard,
+  ): Promise<VoteEntity | null> {
+    // The server-owned arm/cancel/reveal writes must not go through
+    // `updateVote`: its config patch is merged over a caller-read snapshot, so a
+    // close/finalize or a competing reveal that lands between the read and the
+    // write is silently overwritten (re-opening the vote or un-revealing a
+    // round). Re-check the row inside the transaction, then merge only the poker
+    // fields so `phase` and every other key stay authoritative. Node's SQLite
+    // driver is synchronous, so no other write can interleave inside this block.
+    this.db.exec('BEGIN');
+    try {
+      const currentRow = this.db
+        .prepare('SELECT "config" FROM "votes" WHERE "id" = ?')
+        .get(id) as unknown as { config: string } | undefined;
+      if (!currentRow) {
+        this.db.exec('ROLLBACK');
+        return null;
+      }
+      const current = JSON.parse(currentRow.config || '{}');
+      if (!votePokerWriteGuardMatches(current, guard)) {
+        this.db.exec('ROLLBACK');
+        return null;
+      }
+      const nextConfig = {
+        ...current,
+        poker: { ...(current?.poker ?? {}), ...patch },
+      };
+      const row = this.db.prepare(`
+        UPDATE "votes" SET "config" = ?, "updatedAt" = ? WHERE "id" = ? RETURNING *
+      `).get(JSON.stringify(nextConfig), new Date().toISOString(), id) as unknown as VoteDbRow | undefined;
+      if (!row) {
+        this.db.exec('ROLLBACK');
+        return null;
+      }
+      this.db.exec('COMMIT');
+      return this.mapVoteDbRowToEntity(row);
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
   async finalizeVote(id: string, outcome: VoteEntity['outcome']): Promise<VoteEntity | null> {
     const current = await this.getVoteById(id);
     if (!current) return null;
@@ -2525,15 +2623,58 @@ class SqliteClient implements DbClient {
   }
 
   async resetVote(id: string): Promise<VoteEntity | null> {
-    this.db.prepare('DELETE FROM "voteResponses" WHERE "voteId" = ?').run(id);
-    this.db.prepare('DELETE FROM "voteRankingSubmissions" WHERE "voteId" = ?').run(id);
-    this.db.prepare('DELETE FROM "voteLoops" WHERE "voteId" = ?').run(id);
+    // Delegate so the child-table list and outcome reset live in one place; a
+    // table added to resetVoteWithConfig is cleared here automatically. The
+    // patch is applied inside the transaction, so no stale config snapshot is
+    // read here.
+    return this.resetVoteWithConfig(id, { phase: 'IDLE' });
+  }
 
-    const row = this.db.prepare(`
-      UPDATE "votes" SET "config" = json_set("config", '$.phase', 'IDLE'), "outcome" = NULL, "updatedAt" = ? WHERE "id" = ? RETURNING *
-    `).get(new Date().toISOString(), id) as unknown as VoteDbRow | undefined;
-    if (!row) return null;
-    return this.mapVoteDbRowToEntity(row);
+  async resetVoteWithConfig(
+    id: string,
+    configPatch: Partial<VoteEntity['config']>,
+    guard?: VoteResetGuard,
+  ): Promise<VoteEntity | null> {
+    // Wrap the destructive reset and the config change in one transaction.
+    // Callers use this when the two writes must not be observed apart (a poker
+    // round rollover), so SQLite either applies both or rolls both back.
+    this.db.exec('BEGIN');
+    try {
+      // Always re-read inside the transaction so the patch merges onto the
+      // current config; a snapshot the caller read before BEGIN could otherwise
+      // revert a concurrent update to an unrelated key. Node's SQLite driver is
+      // synchronous, so no other write can interleave here.
+      const currentRow = this.db
+        .prepare('SELECT "config" FROM "votes" WHERE "id" = ?')
+        .get(id) as unknown as { config: string } | undefined;
+      if (!currentRow) {
+        this.db.exec('ROLLBACK');
+        return null;
+      }
+      const current = JSON.parse(currentRow.config || '{}');
+      if (guard && !voteResetGuardMatches(current, guard)) {
+        // Abandon the reset if the round a concurrent request already advanced
+        // no longer matches.
+        this.db.exec('ROLLBACK');
+        return null;
+      }
+      const nextConfig = { ...(current ?? {}), ...configPatch };
+      this.db.prepare('DELETE FROM "voteResponses" WHERE "voteId" = ?').run(id);
+      this.db.prepare('DELETE FROM "voteRankingSubmissions" WHERE "voteId" = ?').run(id);
+      this.db.prepare('DELETE FROM "voteLoops" WHERE "voteId" = ?').run(id);
+      const row = this.db.prepare(`
+        UPDATE "votes" SET "config" = ?, "outcome" = NULL, "updatedAt" = ? WHERE "id" = ? RETURNING *
+      `).get(JSON.stringify(nextConfig), new Date().toISOString(), id) as unknown as VoteDbRow | undefined;
+      if (!row) {
+        this.db.exec('ROLLBACK');
+        return null;
+      }
+      this.db.exec('COMMIT');
+      return this.mapVoteDbRowToEntity(row);
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   async importVotes(items: VoteEntity[]): Promise<void> {
@@ -2605,6 +2746,18 @@ class SqliteClient implements DbClient {
   async getVoteResponses(voteId: string): Promise<VoteResponseEntity[]> {
     const rows = this.db.prepare('SELECT * FROM "voteResponses" WHERE "voteId" = ? ORDER BY "submittedAt" ASC').all(voteId) as unknown as VoteResponseDbRow[];
     return rows.map(row => this.mapVoteResponseDbRowToEntity(row));
+  }
+
+  async getVoteParticipantCoverage(
+    voteId: string,
+  ): Promise<Array<{ voterToken: string; proposalId: string | null }>> {
+    const rows = this.db
+      .prepare('SELECT "voterToken", "proposalId" FROM "voteResponses" WHERE "voteId" = ?')
+      .all(voteId) as Array<{ voterToken: string; proposalId: string | null }>;
+    return rows.map((row) => ({
+      voterToken: row.voterToken,
+      proposalId: row.proposalId ?? null,
+    }));
   }
 
   async getVoteResponsesForVoter(
@@ -2795,6 +2948,9 @@ class SqliteClient implements DbClient {
     // Read and update inside one transaction: SQLite serializes writers, so an
     // availability replace cannot interleave between the read and the write and
     // resurrect a deleted slot from a stale snapshot.
+    // Loop-scoped rows are included: a CONSENT_LOOP participant's identity is
+    // per voter across rounds, so filtering on `loopId IS NULL` made a rename
+    // silently match nothing and return success.
     const proposalClause =
       options.proposalId === null
         ? ''
@@ -2803,7 +2959,6 @@ class SqliteClient implements DbClient {
       SELECT * FROM "voteResponses"
       WHERE "voteId" = @voteId
         AND "voterToken" = @voterToken
-        AND "loopId" IS NULL
         AND "proposalId" IS NOT NULL${proposalClause}
       ORDER BY "submittedAt" ASC
     `);
@@ -2951,6 +3106,19 @@ class SqliteClient implements DbClient {
     this.db.prepare(
       'DELETE FROM "voteRankingSubmissions" WHERE "voteId" = ? AND "voterToken" = ?'
     ).run(voteId, voterToken);
+  }
+
+  async renameVoteRankingSubmissionForVoter(
+    voteId: string,
+    voterToken: string,
+    displayName: string,
+  ): Promise<boolean> {
+    // One column, one row: no need to read/re-serialize the (potentially huge)
+    // ballot payloads just to rename the participant.
+    const result = this.db.prepare(
+      'UPDATE "voteRankingSubmissions" SET "displayName" = ? WHERE "voteId" = ? AND "voterToken" = ?',
+    ).run(displayName, voteId, voterToken);
+    return Number(result.changes) > 0;
   }
 
   async getVoteRankingSubmittedBallots(voteId: string): Promise<VoteRankingSubmission[]> {

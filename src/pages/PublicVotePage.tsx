@@ -3,11 +3,21 @@ import { useTranslation } from "react-i18next";
 import { ComparativeVotePage } from './ComparativeVotePage';
 import { VoteOutcomeBanner } from '@/components/voting/VoteResults';
 import { VoteComments } from '@/components/voting/VoteComments';
+import { buildVoteCommentEntries } from '@/lib/vote-comments';
 import { CommentField } from '@/components/voting/CommentField';
 import { useParams } from "react-router-dom";
 import { VoteEntity, VoteResponseEntity, VoteProposal, VoteLoop, AttendanceResponseData } from "@/lib/persistence-types";
 import { MJ_SCALE } from "@/components/planView/constants";
-import { tallyThumbsUp as tallyThumbsUpShared, tallyUDNeutral as tallyUDNeutralShared, tallyPoints as tallyPointsShared, tallyMajorityJudgment as tallyMJShared, tallyConsentLoop as tallyConsentLoopShared, getBestConsentRound, EVENT_RSVP_PROPOSAL_ID } from "@/lib/vote-tally";
+import {
+  getPokerScale,
+  pokerBallotCoversEveryProposal,
+  pokerCardDescription,
+} from "@/lib/poker";
+import { tallyThumbsUp as tallyThumbsUpShared, tallyUDNeutral as tallyUDNeutralShared, tallyPoints as tallyPointsShared, tallyMajorityJudgment as tallyMJShared, tallyPoker as tallyPokerShared, voteResultsSortMetric, voteResultsSupportsMedian, tallyConsentLoop as tallyConsentLoopShared, getBestConsentRound, EVENT_RSVP_PROPOSAL_ID } from "@/lib/vote-tally";
+import { PokerTallyDisplay } from "@/components/voting/PokerTallyDisplay";
+import { PokerReadyPanel } from "@/components/voting/PokerReadyPanel";
+import { usePokerState } from "@/hooks/usePokerState";
+import { useVoterWelcome } from "@/hooks/useVoterWelcome";
 import {
   attendanceCapacityErrorFromTotal,
   attendancePartySize,
@@ -19,7 +29,7 @@ import {
 } from "@/lib/attendance";
 import { AttendanceRsvpSummary } from "@/components/voting/AttendanceRsvpSummary";
 import { isRichTextEmpty, richTextToPlainText } from "@/lib/rich-text";
-import { getVotingStrings, type VotingStrings } from "@/lib/voting-i18n";
+import { getVotingStrings, pokerTallyLabels, type VotingStrings } from "@/lib/voting-i18n";
 import {
   getOrCreateVoterName,
   getStoredRemovalToken,
@@ -27,6 +37,7 @@ import {
   setStoredRemovalToken,
   setStoredVoterName,
   clearStoredRemovalToken,
+  updateVoterIdentity,
 } from "@/lib/voter-identity";
 import { buildEventIcs, downloadEventIcs, safeHttpUrl } from "@/lib/ics";
 import {
@@ -44,7 +55,7 @@ import { SchedulingCalendar } from "@/components/voting/SchedulingCalendar";
 import { SchedulingMonthCalendar } from "@/components/voting/SchedulingMonthCalendar";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { VoterIdentityBar } from "@/components/voting/VoterIdentityBar";
-import { getRandomUsername } from "@/lib/username-generator";
+import { VoterWelcomeDialog } from "@/components/voting/VoterWelcomeDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -59,8 +70,8 @@ import { LoopRoundDiffDialog } from "@/components/voting/LoopRoundDiffDialog";
 import { ProposalContentDisplay } from "@/components/voting/ProposalContentDisplay";
 import { doc, yVoteProposals, yVoteLoops, yVoteResponses, isCollaborationEnabled, initializeCollaboration } from "@/lib/collaboration";
 import { PERSISTENCE_CONFIG } from "@/lib/persistence-config";
-import { responseVoterAlias, noteVoteResponseDeletions, syncResponsesToYjs } from "@/hooks/useVotes";
-import { voterAlias } from "@/lib/vote-ranking";
+import { responseVoterAlias, responseVoterDisplayName, noteVoteResponseDeletions, syncResponsesToYjs } from "@/hooks/useVotes";
+import { activeProposalIds, pokerProposalIsRevealed, pokerResponseValueIsHidden, voterAlias, voteResponseCarriesDisplayName } from "@/lib/vote-ranking";
 import {
   Vote,
   Clock,
@@ -121,12 +132,19 @@ async function fetchVote(slug: string): Promise<VoteEntity | null> {
   }
 }
 
-async function fetchResults(slug: string): Promise<{
+async function fetchResults(
+  slug: string,
+  voterToken?: string,
+): Promise<{
   responses: VoteResponseEntity[];
   totalVotes: number;
 } | null> {
   try {
-    const res = await fetch(`/api/votes/${slug}/results`);
+    const res = await fetch(`/api/votes/${slug}/results`, {
+      // The caller's own estimate is the only one the server returns before a
+      // planning-poker reveal; it lets a reload restore their selected cards.
+      headers: voterToken ? { "X-Voter-Token": voterToken } : undefined,
+    });
     if (!res.ok) return null;
     return await res.json();
   } catch {
@@ -143,6 +161,8 @@ async function submitResponse(
     comment?: string;
     loopId?: string;
     attendeeData?: AttendanceResponseData;
+    /** POKER_PLANNING only: mark the participant ready after this response. */
+    markReady?: boolean;
   }
 ): Promise<{ response: VoteResponseEntity | null; error: string | null }> {
   try {
@@ -200,31 +220,6 @@ async function submitSchedulingAvailability(
     // A network error or aborted request must not look like a successful save,
     // or the voter is shown as submitted with nothing persisted and no retry.
     return { error: "__network_error__" };
-  }
-}
-
-/** Update the voter's claimed display name on every existing response. */
-async function updateVoterIdentity(
-  slug: string,
-  voterToken: string,
-  displayName: string,
-): Promise<boolean> {
-  try {
-    const res = await fetch(`/api/votes/${slug}/identity`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ voterToken, displayName }),
-    });
-    // Same strict check as the batch submit: a 200 HTML catch-all response
-    // must not be mistaken for a persisted rename.
-    if (res.status !== 204) {
-      const err = await res.json().catch(() => null);
-      console.error("Identity update error:", err);
-      return false;
-    }
-    return true;
-  } catch {
-    return false;
   }
 }
 
@@ -402,37 +397,48 @@ function ensureVoterToken(slug: string): string {
 }
 
 /**
- * The display name a scheduling participant's ballot and live draft share.
- * Anonymous votes never name the participant; both the submit path and the
- * moderator draft channel use this one rule, so the moderator's live view
- * cannot disagree with the name stored on the final ballot.
+ * The display name attached to a non-anonymous participant's presence,
+ * drafts, and responses. Anonymous votes never carry one, so no identity can
+ * leak through those channels.
  */
-function schedulingParticipantName(
+function participantDisplayName(
   voteId: string,
   storedName: string,
-  mode: string | undefined,
   isAnonymous: boolean,
 ): string | undefined {
-  if (mode !== "SCHEDULING" || isAnonymous) return undefined;
+  if (isAnonymous) return undefined;
   return storedName || getStoredVoterName(voteId) || getOrCreateVoterName(voteId);
 }
 
 /**
- * The name a presence heartbeat may carry. Presence is read only through the
- * moderator capability, so a non-anonymous participant who opened the page but
- * has not submitted yet can be listed by their name instead of the opaque
- * public alias. Attendance and scheduling both collect a display name for the
- * vote, so reuse the same stored/generated name their responses would carry.
+ * The hidden display-name payload attached to a submitted response. Both submit
+ * paths build it through this helper so the ATTENDANCE exclusion (an RSVP name
+ * travels on the attendance payload instead) cannot be applied in one path and
+ * forgotten in the other.
  */
-function presenceParticipantName(
-  voteId: string,
-  storedName: string,
-  mode: string | undefined,
-  isAnonymous: boolean,
-): string | undefined {
-  if (isAnonymous) return undefined;
-  if (mode !== "ATTENDANCE" && mode !== "SCHEDULING") return undefined;
-  return storedName || getStoredVoterName(voteId) || getOrCreateVoterName(voteId);
+function submittedAttendeeDataFor(
+  vote: VoteEntity,
+  voterDisplayName: string | undefined,
+): AttendanceResponseData | undefined {
+  if (!voteResponseCarriesDisplayName(vote.config) || !voterDisplayName) {
+    return undefined;
+  }
+  return { displayName: voterDisplayName, visibility: "hidden" };
+}
+
+/**
+ * Whether every active proposal has an estimate. The per-card submit path, the
+ * batch submit path and the "ready" affordance all ask this same question, so a
+ * mode that reveals only once everyone estimated cannot be satisfied by a
+ * partial ballot through one path and blocked through another. The rule itself
+ * lives in `pokerBallotCoversEveryProposal` so this page and the server-side
+ * `poker/ready` gate share one definition of a complete ballot.
+ */
+function pokerAllProposalsEstimated(
+  proposalIds: string[],
+  values: Record<string, number>,
+): boolean {
+  return pokerBallotCoversEveryProposal(proposalIds, (id) => id in values);
 }
 
 /**
@@ -555,6 +561,7 @@ const PublicVotePage: React.FC = () => {
   const [commentSaved, setCommentSaved] = React.useState(false);
   const [commentSaveError, setCommentSaveError] = React.useState<string | null>(null);
   const [hasSubmitted, setHasSubmitted] = React.useState(false);
+  const [pokerSubmitting, setPokerSubmitting] = React.useState(false);
   const [justVoted, setJustVoted] = React.useState(false);
   const [submittedVoterValues, setSubmittedVoterValues] = React.useState<Record<string, number>>({});
   const [schedulingSubmitError, setSchedulingSubmitError] = React.useState<string | null>(null);
@@ -565,16 +572,25 @@ const PublicVotePage: React.FC = () => {
   const showResultsBeforeClose = vote ? (vote.config.showResultsBeforeClose ?? false) : false;
   const isClosed = vote?.config.phase === "CLOSED" || vote?.config.phase === "FINALIZED";
   const isSingleProposal = vote
-    ? vote.config.mode === "SCHEDULING"
+    ? vote.config.mode === "SCHEDULING" ||
+      vote.config.mode === "POKER_PLANNING"
       ? false
       : !(vote.config.multipleChoiceVote ?? true) ||
         vote.config.mode === "ATTENDANCE"
     : false;
-  const showResults = vote ? (isClosed || showResultsBeforeClose) : false;
   const isSchedulingMode = vote?.config.mode === "SCHEDULING";
+  // A deselect in poker removes the card from `voterValues` but leaves the
+  // persisted estimate in place until the batch withdraws it. Without this the
+  // empty-selection case would look like "nothing pending" and the stale server
+  // row would survive the submit.
+  const hasWithdrawnPokerSelections =
+    vote?.config.mode === "POKER_PLANNING" &&
+    Object.keys(submittedVoterValues).some((id) => !(id in voterValues));
   const hasPendingVotes =
     !isSingleProposal &&
-    (Object.keys(voterValues).length > 0 || (isSchedulingMode && hasSubmitted)) &&
+    (Object.keys(voterValues).length > 0 ||
+      (isSchedulingMode && hasSubmitted) ||
+      hasWithdrawnPokerSelections) &&
     (!hasSubmitted || JSON.stringify(voterValues) !== JSON.stringify(submittedVoterValues));
   const [pointsBudget, setPointsBudget] = React.useState<Record<string, number>>({});
   const [audienceProposalText, setAudienceProposalText] = React.useState("");
@@ -598,14 +614,11 @@ const PublicVotePage: React.FC = () => {
   const [rsvpError, setRsvpError] = React.useState<string | null>(null);
   const [rsvpSubmitting, setRsvpSubmitting] = React.useState(false);
   const [storedName, setStoredName] = React.useState("");
-  const [welcomeOpen, setWelcomeOpen] = React.useState(false);
-  const [welcomeName, setWelcomeName] = React.useState("");
   const [removalToken, setRemovalToken] = React.useState<string | null>(null);
   const [pendingRemoval, setPendingRemoval] = React.useState<string | null>(null);
   const [removalNotice, setRemovalNotice] = React.useState<string | null>(null);
   const [removalBusy, setRemovalBusy] = React.useState(false);
   const [removalCopied, setRemovalCopied] = React.useState(false);
-  const welcomeShownRef = React.useRef<string | null>(null);
   const processedRemovalRef = React.useRef<string | null>(null);
   const activeVoteId = vote?.id;
 
@@ -619,6 +632,71 @@ const PublicVotePage: React.FC = () => {
   voteRef.current = vote;
 
   const voterToken = slug ? ensureVoterToken(slug) : "";
+
+  const pokerState = usePokerState(
+    slug,
+    voterToken,
+    vote?.config.mode === "POKER_PLANNING" && vote?.config.phase === "OPEN",
+    // Once the round is revealed the aggregate cannot change until the next
+    // round starts, so polling only burns requests. The hook still performs a
+    // single fetch, which a freshly loaded page needs to render the revealed
+    // panel (and its participant-gated "Next round" control). `refreshData`
+    // updates the vote after a next-round and re-enables polling.
+    vote?.config.mode === "POKER_PLANNING" &&
+      vote?.config.phase === "OPEN" &&
+      !vote?.config.poker?.revealedAt,
+  );
+
+  const pokerRevealed =
+    vote?.config.mode === "POKER_PLANNING" &&
+    (!!vote?.config.poker?.revealedAt || !!pokerState.state?.revealedAt);
+
+  // A moderator may reveal individual propositions before the round-wide
+  // reveal. The vote projection carries the persisted ids, so the page can
+  // show those tallies without waiting for `revealedAt`.
+  const pokerRevealedProposalKey =
+    vote?.config.mode === "POKER_PLANNING" &&
+    Array.isArray(vote.config.poker?.revealedProposalIds)
+      ? [...vote.config.poker.revealedProposalIds].sort().join(",")
+      : "";
+  const pokerAnyProposalRevealed =
+    vote?.config.mode === "POKER_PLANNING" &&
+    (pokerRevealed || pokerRevealedProposalKey.length > 0);
+
+  const showResults = vote
+    ? isClosed ||
+      pokerRevealed ||
+      // On a poker vote this flag would publish every unrevealed estimate; the
+      // server never stores it for the mode and only the reveal ends the blind
+      // phase, so the page must not treat it as a visibility switch either.
+      (vote.config.mode !== "POKER_PLANNING" && showResultsBeforeClose)
+    : false;
+
+  // Starting a new round (or a moderator reset) deletes every response on the
+  // server, so every participant must reconcile or they stay on the previous
+  // round's selections while "mark ready" is rejected against an empty round.
+  // The key includes the phase because a moderator reset rewinds the round to 0
+  // and rewrites the phase to IDLE: keying on `round` alone would miss a reset
+  // performed during round 0. This is the only reset path, so the "next round"
+  // handler no longer duplicates it.
+  const pokerResetKeyRef = React.useRef<string | null>(null);
+  const pokerPhase = vote?.config.mode === "POKER_PLANNING" ? vote.config.phase : null;
+  const pokerServerRound = vote?.config.poker?.round;
+  React.useEffect(() => {
+    if (pokerPhase === null) return;
+    const round = pokerState.state?.round ?? pokerServerRound ?? 0;
+    const key = `${pokerPhase}:${round}`;
+    if (pokerResetKeyRef.current === null) {
+      pokerResetKeyRef.current = key;
+      return;
+    }
+    if (pokerResetKeyRef.current === key) return;
+    pokerResetKeyRef.current = key;
+    setVoterValues({});
+    setSubmittedVoterValues({});
+    setHasSubmitted(false);
+    setJustVoted(false);
+  }, [pokerPhase, pokerServerRound, pokerState.state?.round]);
 
   // Load the caller's own comment so a reload shows what they wrote.
   React.useEffect(() => {
@@ -673,11 +751,19 @@ const PublicVotePage: React.FC = () => {
   const refreshData = React.useCallback(async () => {
     if (!slug || !vote) return;
     const resultsStartedAt = Date.now();
-    const [r, v] = await Promise.all([fetchResults(slug), fetchVote(slug)]);
+    const [r, v] = await Promise.all([
+      fetchResults(slug, voterToken),
+      fetchVote(slug),
+    ]);
     if (r) {
       setResponses(r.responses);
       if (isCollaborationEnabled() && v) {
-        syncResponsesToYjs(v.id, r.responses, resultsStartedAt);
+        syncResponsesToYjs(
+          v.id,
+          r.responses,
+          resultsStartedAt,
+          (response) => pokerResponseValueIsHidden(v, response),
+        );
       }
     }
     if (v) {
@@ -693,7 +779,56 @@ const PublicVotePage: React.FC = () => {
         loopData.forEach(l => yVoteLoops.set(l.id, l));
       }
     }
-  }, [slug, vote]);
+  }, [slug, vote, voterToken]);
+
+  // The reveal transition flips the server's results projection from "own
+  // estimate only" to full values, but the responses already held here are the
+  // pre-reveal, redacted set. Refetch once per reveal so the public tally is
+  // computed from the real estimates (and, in collaboration mode, re-publishes
+  // them to the shared document now that they are public).
+  //
+  // The identity is round *and* `revealedAt`, not the round counter alone: a
+  // moderator reset rewinds the round to 0, so a second reveal of round 0 would
+  // otherwise look like the one already refetched and leave the tally empty.
+  const pokerRevealIdentity = pokerAnyProposalRevealed
+    ? `${pokerState.state?.round ?? vote?.config.poker?.round ?? 0}:${pokerState.state?.revealedAt ?? vote?.config.poker?.revealedAt ?? ""}:${pokerRevealedProposalKey}`
+    : null;
+  const revealedIdentityRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!pokerRevealIdentity) return;
+    if (revealedIdentityRef.current === pokerRevealIdentity) return;
+    revealedIdentityRef.current = pokerRevealIdentity;
+    void refreshData();
+  }, [pokerRevealIdentity, refreshData]);
+
+  // The response set held at the instant the reveal arrives is still the
+  // pre-reveal projection: only the viewer's own estimate carries a value and
+  // every other row was stripped by the results endpoint. Tallying it would
+  // render that single card as the round verdict until the refetch lands (and
+  // forever if it fails). Mark the tally ready only when a fresh response set
+  // arrives after the reveal — any successful refetch, poll or collaboration
+  // broadcast qualifies — so a redacted set is never tallied as the result.
+  const lastTallyResponsesRef = React.useRef(responses);
+  const [revealedResponsesIdentity, setRevealedResponsesIdentity] =
+    React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (responses === lastTallyResponsesRef.current) return;
+    lastTallyResponsesRef.current = responses;
+    if (pokerRevealIdentity) setRevealedResponsesIdentity(pokerRevealIdentity);
+  }, [responses, pokerRevealIdentity]);
+  // A reset (or next round) clears every reveal, so the memoized identity must
+  // not survive it. A moderator reset rewinds the round to 0 with no
+  // `revealedAt`, so re-revealing the same proposal would otherwise reproduce
+  // the pre-reset identity and skip both the authoritative refetch and the
+  // loading gate, tallying the stale pre-reveal response set.
+  React.useEffect(() => {
+    if (pokerRevealIdentity) return;
+    revealedIdentityRef.current = null;
+    setRevealedResponsesIdentity(null);
+  }, [pokerRevealIdentity]);
+  const pokerResultsReady =
+    pokerRevealIdentity === null ||
+    revealedResponsesIdentity === pokerRevealIdentity;
 
   const voteNotFoundMsg = ts.messages.voteNotFound;
 
@@ -715,12 +850,17 @@ const PublicVotePage: React.FC = () => {
       }
 
       const resultsStartedAt = Date.now();
-      const r = v.config.mode === "COMPARATIVE_PRIORITIZATION" ? null : await fetchResults(slug);
+      const r = v.config.mode === "COMPARATIVE_PRIORITIZATION" ? null : await fetchResults(slug, voterToken);
       if (!mounted) return;
       if (r) {
         setResponses(r.responses);
         if (isCollaborationEnabled()) {
-          syncResponsesToYjs(v.id, r.responses, resultsStartedAt);
+          syncResponsesToYjs(
+            v.id,
+            r.responses,
+            resultsStartedAt,
+            (response) => pokerResponseValueIsHidden(v, response),
+          );
         }
         const myToken = getVoterToken(slug);
         if (myToken) {
@@ -814,7 +954,7 @@ const PublicVotePage: React.FC = () => {
           voteRef.current?.config.mode === "COMPARATIVE_PRIORITIZATION";
         const [v, r] = await Promise.all([
           fetchVote(slug!),
-          skipResponses ? Promise.resolve(null) : fetchResults(slug!),
+          skipResponses ? Promise.resolve(null) : fetchResults(slug!, voterToken),
         ]);
         if (!mounted) return;
         if (r) setResponses(r.responses);
@@ -836,7 +976,7 @@ const PublicVotePage: React.FC = () => {
       yVoteResponses.unobserve(yjsResponseHandler);
       yVoteLoops.unobserve(yjsLoopHandler);
     };
-  }, [slug, voteNotFoundMsg]);
+  }, [slug, voteNotFoundMsg, voterToken]);
 
   const handleToggleVoteLocal = (proposalId: string, value: number) => {
     setVoterValues((prev) => {
@@ -851,6 +991,55 @@ const PublicVotePage: React.FC = () => {
 
   const handleSubmitVote = async (proposalId: string, value: number, loopId?: string) => {
     if (!slug || !vote) return;
+
+    const isAnonymousVote = vote.config.isAnonymous ?? true;
+    const voterDisplayName = participantDisplayName(
+      vote.id,
+      storedName,
+      isAnonymousVote,
+    );
+    const submittedAttendeeData = submittedAttendeeDataFor(
+      vote,
+      voterDisplayName,
+    );
+
+    // Reuse the component's single lock decision (`canChangeVote`) so the
+    // immediate-persist branch and the card enable/disable UI cannot disagree.
+    const pokerLocked =
+      vote.config.mode === "POKER_PLANNING" && !canChangeVote;
+    if (pokerLocked) {
+      const activeIds = activeProposalIds(vote);
+      const nextSubmitted = { ...submittedVoterValues, [proposalId]: value };
+      const isLast = pokerAllProposalsEstimated(activeIds, nextSubmitted);
+      setPokerSubmitting(true);
+      try {
+        const { response } = await submitResponse(slug, {
+          proposalId,
+          value,
+          voterToken,
+          comment: comment || undefined,
+          attendeeData: submittedAttendeeData,
+          markReady: isLast,
+        });
+        if (!response) return;
+        setVoterValues((prev) => ({ ...prev, [proposalId]: value }));
+        setSubmittedVoterValues(nextSubmitted);
+        setHasSubmitted(true);
+        setJustVoted(true);
+        // Local state already reflects this card, and only the card that
+        // completes the ballot can change the participant set or arm the reveal
+        // (markReady is sent with isLast). The poker state and results are
+        // polled anyway, so refreshing after every intermediate card only adds
+        // redundant /poker + /results + /vote requests per card.
+        if (isLast) {
+          await pokerState.refresh();
+          refreshData();
+        }
+      } finally {
+        setPokerSubmitting(false);
+      }
+      return;
+    }
 
     if (!isSingleProposal && mode !== "CONSENT_LOOP") {
       handleToggleVoteLocal(proposalId, value);
@@ -878,6 +1067,7 @@ const PublicVotePage: React.FC = () => {
       voterToken,
       comment: comment || undefined,
       loopId,
+      attendeeData: submittedAttendeeData,
     });
     if (result) {
       setHasSubmitted(true);
@@ -941,23 +1131,19 @@ const PublicVotePage: React.FC = () => {
     }
   };
 
-  const handleSubmitAllVotes = async () => {
-    if (!slug || !vote) return;
+  const handleSubmitAllVotes = async (): Promise<boolean> => {
+    if (!slug || !vote) return false;
     const isSchedulingVote = vote.config.mode === "SCHEDULING";
     const isAnonymousVote = vote.config.isAnonymous ?? true;
-    // Scheduling keeps a display name on the ballot for the moderator matrix;
-    // anonymous votes never send one. Free-text comments are opt-in like the
-    // other modes and ride along with the availability batch.
-    const schedulingDisplayName = schedulingParticipantName(
+    // Every non-anonymous mode carries the welcome name on the ballot for the
+    // moderator view; anonymous votes never send one. Free-text comments are
+    // opt-in like the other modes and ride along with the availability batch.
+    const voterDisplayName = participantDisplayName(
       vote.id,
       storedName,
-      vote.config.mode,
       isAnonymousVote,
     );
-    const attendeeData =
-      schedulingDisplayName !== undefined
-        ? { displayName: schedulingDisplayName, visibility: "hidden" as const }
-        : undefined;
+    const attendeeData = submittedAttendeeDataFor(vote, voterDisplayName);
 
     if (isSchedulingVote) {
       setSchedulingSubmitError(null);
@@ -982,23 +1168,82 @@ const PublicVotePage: React.FC = () => {
         setSchedulingSubmitError(
           error === "__network_error__" ? ts.scheduling.submitError : error,
         );
-        return;
+        return false;
       }
+      setHasSubmitted(true);
+      setJustVoted(true);
+      setSubmittedVoterValues({ ...voterValues });
     } else {
+      // A poker card that was submitted earlier and is no longer selected must
+      // be withdrawn explicitly: the batch below only upserts the current
+      // selection, so otherwise the server keeps an estimate the voter can no
+      // longer see, and it would reappear on reload or in the reveal.
+      if (vote.config.mode === "POKER_PLANNING") {
+        const deselected = Object.keys(submittedVoterValues).filter(
+          (proposalId) => !(proposalId in voterValues),
+        );
+        for (const proposalId of deselected) {
+          const withdrawn = await deleteResponse(slug, { voterToken, proposalId });
+          if (!withdrawn) return false;
+        }
+      }
       const entries = Object.entries(voterValues);
-      for (const [proposalId, value] of entries) {
-        await submitResponse(slug, {
+      // Only the last request can carry `markReady`, and only when the ballot
+      // is complete. The per-card path already gates on the same predicate; the
+      // batch path must not mark a participant ready with proposals still blank.
+      const pokerComplete =
+        vote.config.mode === "POKER_PLANNING" &&
+        pokerAllProposalsEstimated(
+          activeProposalIds(vote),
+          voterValues,
+        );
+      for (let index = 0; index < entries.length; index += 1) {
+        const [proposalId, value] = entries[index];
+        const { response } = await submitResponse(slug, {
           proposalId,
           value,
           voterToken,
           comment: comment || undefined,
+          ...(attendeeData ? { attendeeData } : {}),
+          ...(vote.config.mode === "POKER_PLANNING"
+            ? { markReady: pokerComplete && index === entries.length - 1 }
+            : {}),
         });
+        if (!response) return false;
       }
+      // The batch may have only withdrawn every previously submitted card, in
+      // which case the server now holds nothing. Mirror that empty state instead
+      // of flipping the page into "you have voted" with zero stored responses.
+      const submittedAny = entries.length > 0;
+      setHasSubmitted(submittedAny);
+      setJustVoted(submittedAny);
+      setSubmittedVoterValues(submittedAny ? { ...voterValues } : {});
     }
-    setHasSubmitted(true);
-    setJustVoted(true);
-    setSubmittedVoterValues({ ...voterValues });
     refreshData();
+    return true;
+  };
+
+  const handlePokerSubmitAction = async () => {
+    setPokerSubmitting(true);
+    try {
+      if (hasPendingVotes) {
+        const submitted = await handleSubmitAllVotes();
+        if (!submitted) return;
+        await pokerState.refresh();
+        return;
+      }
+      if (!vote) return;
+      // "Mark ready" is only valid once every active proposal has an estimate;
+      // a partial ballot would let an incomplete round arm and reveal. The
+      // server enforces the same coverage before accepting readiness.
+      const activeIds = activeProposalIds(vote);
+      if (!pokerAllProposalsEstimated(activeIds, submittedVoterValues)) {
+        return;
+      }
+      await pokerState.markReady();
+    } finally {
+      setPokerSubmitting(false);
+    }
   };
 
   const handlePointsChange = (proposalId: string, delta: number) => {
@@ -1066,29 +1311,44 @@ const PublicVotePage: React.FC = () => {
   const isFinalized = vote?.config.phase === "FINALIZED";
   const isAnonymous = vote?.config.isAnonymous ?? true;
 
-  // Shared comment list for the public results: a scheduling batch repeats the
-  // voter's comment on every slot, so deduplicate by identity + text.
-  const publicCommentEntries = React.useMemo(() => {
-    const seen = new Set<string>();
-    const entries: Array<{ comment: string; name: string | null }> = [];
-    for (const response of responses) {
-      const comment = response.comment?.trim();
-      if (!comment) continue;
-      const name = isAnonymous
-        ? null
-        : response.attendeeData?.displayName?.trim() || response.userId || null;
-      const key = `${name ?? ''}\u0000${comment}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      entries.push({ comment, name });
-    }
-    return entries;
-  }, [responses, isAnonymous]);
+  // The stored-name/welcome-dialog bootstrap is shared with ComparativeVotePage;
+  // only the server-rename rule is page-specific: a response-based vote renames
+  // rows it already holds and refreshes so the moderator view follows.
+  const welcome = useVoterWelcome({
+    voteId: activeVoteId,
+    isAnonymous,
+    welcomeDisabled:
+      vote?.config.mode === "ATTENDANCE" &&
+      vote.config.attendance?.welcomeModal === false,
+    name: storedName,
+    onNameChange: setStoredName,
+    onRename: (name) => {
+      setRsvpName(name);
+      if (slug && vote?.config.isAnonymous === false && hasOwnResponses) {
+        void updateVoterIdentity(slug, voterToken, name).then((ok) => {
+          if (ok) refreshData();
+        });
+      }
+    },
+  });
+
+  // Shared comment list for the public results. The same helper backs the
+  // moderator panel, so the dedupe key and name rule cannot drift between views.
+  const publicCommentEntries = React.useMemo(
+    () => buildVoteCommentEntries(activeVoteId ?? "", responses, isAnonymous),
+    [responses, isAnonymous, activeVoteId],
+  );
 
   const mode = vote?.config.mode;
   const isAttendance = mode === "ATTENDANCE";
   const isScheduling = mode === "SCHEDULING";
   const attendance = vote?.config.attendance;
+  const pokerScale = getPokerScale(vote?.config.poker?.scale);
+  // Reuse the shared i18n mapping instead of rebuilding the same fields here.
+  const pokerDescriptions = pokerTallyLabels(ts);
+  const pokerArmed =
+    mode === "POKER_PLANNING" &&
+    (!!vote?.config.poker?.revealAt || !!pokerState.state?.revealAt);
 
   const attendanceMaxPartySize = resolveMaxPartySize(attendance);
   const attendanceMaxAttendees = Number(attendance?.maxAttendees);
@@ -1183,29 +1443,6 @@ const PublicVotePage: React.FC = () => {
     setRsvpComment(existing?.comment ?? "");
     setRsvpError(null);
     setRsvpDialogValue(value);
-  };
-
-  const handleSaveWelcomeName = () => {
-    if (!vote) return;
-    const name = welcomeName.trim();
-    if (!name) return;
-    const previousName = storedName;
-    setStoredVoterName(vote.id, name);
-    setStoredName(name);
-    setRsvpName(name);
-    setWelcomeOpen(false);
-    if (
-      slug &&
-      previousName !== name &&
-      vote.config.isAnonymous === false &&
-      (vote.config.mode === "ATTENDANCE" ||
-        vote.config.mode === "SCHEDULING") &&
-      hasOwnResponses
-    ) {
-      void updateVoterIdentity(slug, voterToken, name).then((ok) => {
-        if (ok) refreshData();
-      });
-    }
   };
 
   const handleSubmitRsvpDialog = async () => {
@@ -1451,14 +1688,12 @@ const PublicVotePage: React.FC = () => {
         voterToken,
         values: { ...voterValues },
         publisherId: draftPublisherId.current,
-        // Scheduling keeps a display name for the moderator matrix; the draft
-        // is read only through the moderator capability, so an in-progress
-        // participant is named instead of shown as their alias. Anonymous votes
-        // never carry a name.
-        displayName: schedulingParticipantName(
+        // The draft channel is read only through the moderator capability, so
+        // an in-progress participant is named instead of shown as their alias.
+        // Anonymous votes never carry a name.
+        displayName: participantDisplayName(
           draftVoteId,
           storedName,
-          mode,
           isAnonymous,
         ),
       });
@@ -1510,10 +1745,9 @@ const PublicVotePage: React.FC = () => {
       if (cancelled) return;
       void publishVotePresence(slug, {
         voterToken,
-        displayName: presenceParticipantName(
+        displayName: participantDisplayName(
           draftVoteId,
           storedName,
-          mode,
           isAnonymous,
         ),
       });
@@ -1532,43 +1766,6 @@ const PublicVotePage: React.FC = () => {
     setStoredName(getStoredVoterName(activeVoteId) ?? "");
     setRemovalToken(getStoredRemovalToken(activeVoteId));
   }, [activeVoteId]);
-
-  // Welcome dialog: non-anonymous attendance and scheduling votes, and only
-  // until this browser has a stored display name for the vote.
-  React.useEffect(() => {
-    if (!activeVoteId || !vote) return;
-    const voteMode = vote.config.mode;
-    if (voteMode !== "ATTENDANCE" && voteMode !== "SCHEDULING") return;
-    if (isAnonymous) return;
-    // Scheduling always asks non-anonymous voters for a name; attendance keeps
-    // its explicit moderator toggle.
-    const welcomeDisabled =
-      voteMode === "ATTENDANCE"
-        ? vote.config.attendance?.welcomeModal === false
-        : false;
-    if (welcomeDisabled) {
-      // The bar must still show the name silently attached to responses when
-      // the moderator opted out of the dialog.
-      if (!getStoredVoterName(activeVoteId)) {
-        const generated = getOrCreateVoterName(activeVoteId);
-        setStoredName(generated);
-        setWelcomeName(generated);
-      }
-      return;
-    }
-    if (welcomeShownRef.current === activeVoteId) return;
-    welcomeShownRef.current = activeVoteId;
-
-    const existing = getStoredVoterName(activeVoteId);
-    if (existing) {
-      setStoredName(existing);
-      return;
-    }
-    const generated = getOrCreateVoterName(activeVoteId);
-    setStoredName(generated);
-    setWelcomeName(generated);
-    setWelcomeOpen(true);
-  }, [activeVoteId, vote, isAnonymous]);
 
   // Private removal links: read the token from the fragment (never sent to the
   // server), strip it from the address bar, and ask the visitor to confirm.
@@ -1624,27 +1821,19 @@ const PublicVotePage: React.FC = () => {
     if (!vote || mode === "CONSENT_LOOP" || mode === "ATTENDANCE") return [];
     const active = vote.proposals.filter((p) => p.active);
     if (resultsSortMetric === "original" || active.length <= 1) return active;
-    const metricFor = (p: VoteProposal): number => {
-      if (mode === "THUMBS_UP") return tallyThumbsUpShared(responses, p.id).count;
-      if (mode === "THUMBS_UD_NEUTRAL") {
-        const t = tallyUDNeutralShared(responses, p.id);
-        return t.up - t.down;
-      }
-      if (mode === "POINTS") return tallyPointsShared(responses, p.id).total;
-      if (mode === "MAJORITY_JUDGMENT") {
-        const t = tallyMJShared(responses, p.id);
-        if (resultsSortMetric === "average") {
-          const total = MJ_SCALE.reduce((sum, g) => sum + (t.distribution[g.value] || 0) * g.value, 0);
-          const count = MJ_SCALE.reduce((sum, g) => sum + (t.distribution[g.value] || 0), 0);
-          return count > 0 ? total / count : 0;
-        }
-        return t.median;
-      }
-      return 0;
-    };
+    const metric =
+      resultsSortMetric === "average" ? "average" : "median";
+    const metricFor = (p: VoteProposal): number =>
+      voteResultsSortMetric(
+        vote.config.mode,
+        responses,
+        p.id,
+        metric,
+        pokerScale.id,
+      );
     const sorted = [...active].sort((a, b) => metricFor(a) - metricFor(b));
     return resultsSortDir === "desc" ? sorted.reverse() : sorted;
-  }, [vote, mode, responses, resultsSortMetric, resultsSortDir]);
+  }, [vote, mode, responses, resultsSortMetric, resultsSortDir, pokerScale]);
 
   const schedulingConfig = React.useMemo(
     () => normalizeSchedulingConfig(vote?.config.scheduling),
@@ -1719,6 +1908,14 @@ const PublicVotePage: React.FC = () => {
       setSchedulingPaintMode(1);
     }
   }, [schedulingConfig.allowIfNeeded, schedulingPaintMode]);
+
+  const handlePokerNextRound = React.useCallback(async () => {
+    const next = await pokerState.nextRound();
+    if (!next) return;
+    // The round-change effect owns the local card reset, so this handler must
+    // not keep a second copy of it.
+    await refreshData();
+  }, [pokerState, refreshData]);
 
   if (isLoading) {
     return (
@@ -1810,19 +2007,40 @@ const PublicVotePage: React.FC = () => {
   const tallyMJResult = (proposalId: string) =>
     tallyMJShared(responses, proposalId);
 
+  const tallyPokerResult = (proposalId: string) =>
+    tallyPokerShared(responses, proposalId, pokerScale.id);
+
   const canSortResults = mode !== "CONSENT_LOOP" && activeProposals.length > 1;
+  const pokerAllProposalsSubmitted =
+    mode === "POKER_PLANNING" &&
+    pokerAllProposalsEstimated(
+      activeProposals.map((proposal) => proposal.id),
+      submittedVoterValues,
+    );
+  const pokerNeedsAction =
+    mode === "POKER_PLANNING" &&
+    isActive &&
+    !pokerArmed &&
+    !pokerRevealed &&
+    !pokerSubmitting &&
+    (canChangeVote
+      ? hasPendingVotes ||
+        (hasSubmitted && pokerAllProposalsSubmitted && !pokerState.state?.youAreReady)
+      : pokerAllProposalsSubmitted &&
+        hasSubmitted &&
+        !pokerState.state?.youAreReady);
+  const showSubmitAction =
+    pokerNeedsAction ||
+    (!isSingleProposal && isActive && hasPendingVotes && !pokerArmed && !pokerRevealed);
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto px-4 py-8">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-          {(isAttendance || isScheduling) && !isAnonymous && storedName ? (
+          {!isAnonymous && storedName ? (
             <VoterIdentityBar
               displayName={storedName}
-              onEdit={() => {
-                setWelcomeName(storedName);
-                setWelcomeOpen(true);
-              }}
+              onEdit={welcome.edit}
               editDisabled={isClosed}
             />
           ) : (
@@ -2030,6 +2248,18 @@ const PublicVotePage: React.FC = () => {
               linkedTaskId={vote.linkedTaskId}
               className="flex items-center gap-4 text-sm text-gray-400"
               closeAtFirst
+            />
+          </div>
+        )}
+
+        {mode === "POKER_PLANNING" && !isClosed && (
+          <div className="mb-6">
+            <PokerReadyPanel
+              state={pokerState.state}
+              hasSubmitted={hasSubmitted}
+              onCancel={pokerState.cancelReveal}
+              onRevealNow={pokerState.revealNow}
+              onNextRound={handlePokerNextRound}
             />
           </div>
         )}
@@ -2581,10 +2811,69 @@ const PublicVotePage: React.FC = () => {
                         ))}
                       </div>
                      )}
+
+                    {mode === "POKER_PLANNING" && !pokerRevealed && (
+                      <div className="flex flex-wrap gap-2.5">
+                        {pokerScale.cards.map((card) => {
+                          const selected =
+                            voterValues[proposal.id] === card.value;
+                          const cardLocked =
+                            !canChangeVote &&
+                            submittedVoterValues[proposal.id] !== undefined;
+                          const cardDisabled =
+                            cardLocked || pokerArmed || pokerSubmitting;
+                          const description = pokerCardDescription(
+                            card,
+                            pokerDescriptions,
+                          );
+                          return (
+                            <button
+                              key={card.value}
+                              type="button"
+                              title={description}
+                              aria-label={description ?? card.label}
+                              onClick={() =>
+                                handleSubmitVote(proposal.id, card.value)
+                              }
+                              disabled={cardDisabled}
+                              className={`flex min-h-[4rem] min-w-[4rem] flex-col items-center justify-center rounded-lg border px-3 py-2 transition-colors ${
+                                pokerScale.emoji ? "sm:min-w-[4.5rem]" : ""
+                              } ${
+                                selected
+                                  ? `${card.color} text-white ring-2 ring-offset-1 ring-gray-400`
+                                  : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                              } ${cardDisabled ? "opacity-50 cursor-not-allowed" : ""}`}
+                            >
+                              <span
+                                className={
+                                  pokerScale.emoji
+                                    ? "text-3xl leading-none"
+                                    : "text-lg font-semibold"
+                                }
+                              >
+                                {card.label}
+                              </span>
+                              {description && pokerScale.emoji && (
+                                <span
+                                  className={`mt-1 text-[10px] font-normal ${
+                                    selected ? "text-white/80" : "text-gray-500"
+                                  }`}
+                                >
+                                  {description}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                    </div>
                  )}
 
-                {showResults && !isClosed && (
+                {(showResults ||
+                  (mode === "POKER_PLANNING" &&
+                    pokerProposalIsRevealed(vote, proposal.id))) &&
+                  !isClosed && (
                   <div className="mt-4 pt-3 border-t">
                      <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
                        {ts.labels.results}
@@ -2683,6 +2972,19 @@ const PublicVotePage: React.FC = () => {
                         </div>
                       );
                     })()}
+
+                    {mode === "POKER_PLANNING" && (
+                      pokerResultsReady ? (
+                        <PokerTallyDisplay
+                          tally={tallyPokerResult(proposal.id)}
+                          labels={pokerTallyLabels(ts)}
+                        />
+                      ) : (
+                        <p className="text-sm text-gray-400">
+                          {ts.messages.loadingResults}
+                        </p>
+                      )
+                    )}
                   </div>
                 )}
                 {isSingleProposal && isActive && vote.config.allowFreeText && (
@@ -2716,10 +3018,20 @@ const PublicVotePage: React.FC = () => {
               saveError={commentSaveError}
                   />
           )}
-          {!isSingleProposal && isActive && hasPendingVotes && (
+          {showSubmitAction && (
             <div className="flex justify-center mt-2">
-              <Button onClick={handleSubmitAllVotes}>
-                {ts.buttons.submitAllVotes}
+              <Button
+                onClick={
+                  mode === "POKER_PLANNING"
+                    ? handlePokerSubmitAction
+                    : handleSubmitAllVotes
+                }
+              >
+                {mode === "POKER_PLANNING"
+                  ? hasPendingVotes
+                    ? ts.poker.submitAndReady
+                    : ts.poker.markReady
+                  : ts.buttons.submitAllVotes}
               </Button>
             </div>
           )}
@@ -3119,7 +3431,7 @@ const PublicVotePage: React.FC = () => {
                       className="text-xs border rounded px-2 py-1 bg-white"
                     >
                       <option value="original">{ts.labels.sortByOriginal}</option>
-                      {(mode === "MAJORITY_JUDGMENT") && (
+                      {voteResultsSupportsMedian(mode) && (
                         <option value="median">{ts.labels.sortByMedian}</option>
                       )}
                       <option value="average">{ts.labels.sortByAverage}</option>
@@ -3233,6 +3545,30 @@ const PublicVotePage: React.FC = () => {
                         </div>
                       );
                     })()}
+                    {mode === "POKER_PLANNING" && (
+                      pokerProposalIsRevealed(vote, proposal.id) ? (
+                        pokerResultsReady ? (
+                          <PokerTallyDisplay
+                            tally={tallyPokerResult(proposal.id)}
+                            labels={pokerTallyLabels(ts)}
+                          />
+                        ) : (
+                          // The reveal just landed but the responses are still
+                          // the redacted pre-reveal set; wait for the refetch
+                          // instead of presenting one card as the result.
+                          <p className="text-sm text-gray-400">
+                            {ts.messages.loadingResults}
+                          </p>
+                        )
+                      ) : (
+                        // An unrevealed proposal keeps showing its blind
+                        // placeholder; a sibling's force reveal must not
+                        // expose its estimates.
+                        <p className="text-sm text-gray-500 italic">
+                          {ts.poker.notRevealed}
+                        </p>
+                      )
+                    )}
                   </div>
                 ))}
               </div>
@@ -3375,7 +3711,7 @@ const PublicVotePage: React.FC = () => {
                 </div>
               );
             })()}
-            {!isAnonymous && responses.length > 0 && mode !== "ATTENDANCE" && (
+            {responses.length > 0 && mode !== "ATTENDANCE" && (
               <div className="mt-4 pt-3 border-t">
                 <h4 className="text-xs font-medium text-gray-400 uppercase mb-2">
                   {ts.labels.voters}
@@ -3386,7 +3722,9 @@ const PublicVotePage: React.FC = () => {
                       key={r.id}
                       className="flex items-center gap-2 text-xs text-gray-500"
                     >
-                      <span>{r.userId || tt("voting.anonymous")}</span>
+                      <span>
+                        {responseVoterDisplayName(vote.id, r, isAnonymous)}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -3409,56 +3747,28 @@ const PublicVotePage: React.FC = () => {
         </p>
       </div>
 
-      {(isAttendance || isScheduling) && !isAnonymous && (
-        <Dialog open={welcomeOpen} onOpenChange={setWelcomeOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>
-                {isScheduling
-                  ? ts.scheduling.namePrompt
-                  : ts.attendance.welcomeTitle}
-              </DialogTitle>
-              <DialogDescription>
-                {isScheduling
-                  ? ts.scheduling.namePromptHelp
-                  : ts.attendance.welcomeDescription}
-              </DialogDescription>
-              <p className="text-xs text-gray-500">
-                {ts.attendance.nameAttachedNote}
-              </p>
-            </DialogHeader>
-            <div className="space-y-2">
-              <Label htmlFor="welcome-display-name">
-                {ts.attendance.displayName}
-              </Label>
-              <Input
-                id="welcome-display-name"
-                value={welcomeName}
-                onChange={(event) => setWelcomeName(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") handleSaveWelcomeName();
-                }}
-              />
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className="px-0 text-blue-600 hover:bg-transparent hover:text-blue-700"
-                onClick={() => setWelcomeName(getRandomUsername())}
-              >
-                {ts.attendance.useRandomName}
-              </Button>
-            </div>
-            <DialogFooter>
-              <Button
-                onClick={handleSaveWelcomeName}
-                disabled={!welcomeName.trim()}
-              >
-                {ts.attendance.saveName}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+      {!isAnonymous && (
+        <VoterWelcomeDialog
+          open={welcome.open}
+          onOpenChange={welcome.setOpen}
+          title={
+            isScheduling
+              ? ts.scheduling.namePrompt
+              : isAttendance
+                ? ts.attendance.welcomeTitle
+                : ts.nameWelcomeTitle
+          }
+          description={
+            isScheduling
+              ? ts.scheduling.namePromptHelp
+              : isAttendance
+                ? ts.attendance.welcomeDescription
+                : ts.nameWelcomeDescription
+          }
+          name={welcome.promptName}
+          onNameChange={welcome.setPromptName}
+          onSave={welcome.save}
+        />
       )}
 
       {isAttendance && (

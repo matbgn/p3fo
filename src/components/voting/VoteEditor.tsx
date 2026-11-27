@@ -30,9 +30,16 @@ import {
   AttendanceConfig,
   AttendanceQuestion,
   SchedulingConfig,
+  votingModeSupportsMultipleChoice,
 } from "@/lib/persistence-types";
 import { DEFAULT_RANKING_ENGINE, voteAllowsTies } from "@/lib/vote-ranking";
 import { DEFAULT_MAX_PARTY_SIZE } from "@/lib/attendance";
+import {
+  DEFAULT_POKER_SCALE,
+  POKER_SCALES,
+  getPokerScale,
+  type PokerScaleId,
+} from "@/lib/poker";
 import {
   DEFAULT_SCHEDULING_CONFIG,
   MAX_SCHEDULING_SLOTS,
@@ -173,6 +180,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
   const [allowVoteChangeUntilClose, setAllowVoteChangeUntilClose] = React.useState(true);
   const [multipleChoiceVote, setMultipleChoiceVote] = React.useState(true);
   const [maxPointsPerUser, setMaxPointsPerUser] = React.useState(10);
+  const [pokerScale, setPokerScale] = React.useState<PokerScaleId>(DEFAULT_POKER_SCALE);
   const [rankingEngine, setRankingEngine] = React.useState<"bt-k2" | "bt-k4">(DEFAULT_RANKING_ENGINE);
   const [allowTies, setAllowTies] = React.useState(true);
   const [allowMultiple, setAllowMultiple] = React.useState(false);
@@ -307,6 +315,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
       setAllowVoteChangeUntilClose(source.config.allowVoteChangeUntilClose ?? true);
       setMultipleChoiceVote(source.config.multipleChoiceVote ?? true);
       setMaxPointsPerUser(source.config.maxPointsPerUser ?? 10);
+      setPokerScale(getPokerScale(source.config.poker?.scale).id);
       setRankingEngine(source.config.rankingEngine ?? DEFAULT_RANKING_ENGINE);
       setAllowTies(voteAllowsTies(source.config));
       setAllowMultiple(source.config.allowMultiple ?? false);
@@ -355,6 +364,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
       setAllowVoteChangeUntilClose(true);
       setMultipleChoiceVote(true);
       setMaxPointsPerUser(10);
+      setPokerScale(DEFAULT_POKER_SCALE);
       setRankingEngine(DEFAULT_RANKING_ENGINE);
       setAllowTies(true);
       setAllowMultiple(false);
@@ -684,14 +694,9 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
             : undefined,
         showResultsBeforeClose,
         allowVoteChangeUntilClose,
-        multipleChoiceVote:
-          mode !== "POINTS" &&
-          mode !== "CONSENT_LOOP" &&
-          mode !== "COMPARATIVE_PRIORITIZATION" &&
-          mode !== "ATTENDANCE" &&
-          mode !== "SCHEDULING"
-            ? multipleChoiceVote
-            : undefined,
+        multipleChoiceVote: votingModeSupportsMultipleChoice(mode)
+          ? multipleChoiceVote
+          : undefined,
         maxPointsPerUser: mode === "POINTS" ? maxPointsPerUser : undefined,
         rankingEngine: mode === "COMPARATIVE_PRIORITIZATION" ? rankingEngine : undefined,
         allowTies: mode === "COMPARATIVE_PRIORITIZATION" ? allowTies : undefined,
@@ -700,6 +705,10 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
         closeAt: closeAt ? new Date(closeAt).toISOString() : undefined,
         attendance: attendanceConfig,
         scheduling: schedulingConfig,
+        poker:
+          mode === "POKER_PLANNING"
+            ? { ...(vote?.config.poker ?? {}), scale: pokerScale }
+            : undefined,
       };
 
       await onSave({
@@ -824,6 +833,28 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
             </div>
           )}
 
+          {mode === "POKER_PLANNING" && (
+            <div className="space-y-2 border rounded-md p-3 bg-gray-50">
+              <Label className="text-sm" htmlFor="poker-scale">
+                {t.poker.scale}
+              </Label>
+              <select
+                id="poker-scale"
+                value={pokerScale}
+                onChange={(event) => setPokerScale(event.target.value as PokerScaleId)}
+                disabled={hasStarted || isFinalized}
+                className="text-sm border rounded px-2 py-1 bg-white"
+              >
+                {POKER_SCALES.map((scale) => (
+                  <option key={scale.id} value={scale.id}>
+                    {t.poker.scales[scale.id]}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500">{t.poker.readyHint}</p>
+            </div>
+          )}
+
           {mode === "CONSENT_LOOP" && (
             <div className="border rounded-md p-3 bg-gray-50">
               <p className="text-xs text-gray-500">
@@ -894,14 +925,16 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
               </div>
             )}
 
-            <div className="flex items-center justify-between">
-              <Label className="text-sm">{t.labels.showResultsBeforeClose}</Label>
-              <Switch
-                checked={showResultsBeforeClose}
-                onCheckedChange={setShowResultsBeforeClose}
-                disabled={isFinalized}
-              />
-            </div>
+            {mode !== "POKER_PLANNING" && (
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">{t.labels.showResultsBeforeClose}</Label>
+                <Switch
+                  checked={showResultsBeforeClose}
+                  onCheckedChange={setShowResultsBeforeClose}
+                  disabled={isFinalized}
+                />
+              </div>
+            )}
 
             <div className="flex items-center justify-between">
               <Label className="text-sm">{t.labels.allowVoteChangeUntilClose}</Label>
@@ -912,7 +945,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
               />
             </div>
 
-            {mode !== "POINTS" && mode !== "CONSENT_LOOP" && mode !== "COMPARATIVE_PRIORITIZATION" && mode !== "ATTENDANCE" && mode !== "SCHEDULING" && (
+            {votingModeSupportsMultipleChoice(mode) && (
               <div className="flex items-center justify-between">
                 <Label className="text-sm">{t.labels.multipleChoiceVote}</Label>
                 <Switch

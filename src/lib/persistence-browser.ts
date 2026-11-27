@@ -1308,6 +1308,17 @@ export class BrowserJsonPersistence implements PersistenceAdapter {
     }
   }
 
+  async getVoteResults(voteId: string): Promise<{
+    vote: VoteEntity | null;
+    responses: VoteResponseEntity[];
+  }> {
+    const [vote, responses] = await Promise.all([
+      this.getVoteById(voteId),
+      this.listVoteResponses(voteId),
+    ]);
+    return { vote, responses };
+  }
+
   async createVoteResponse(voteId: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity> {
     const newResponse: VoteResponseEntity = {
       id: response.id || crypto.randomUUID(),

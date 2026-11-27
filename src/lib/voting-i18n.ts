@@ -6,6 +6,42 @@ type VotingStrings = {
   kindDescriptions: Record<string, string>;
   modes: Record<string, string>;
   modeDescriptions: Record<string, string>;
+  poker: {
+    scale: string;
+    scales: Record<string, string>;
+    animals: {
+      mouse: string;
+      cat: string;
+      dog: string;
+      sheep: string;
+      cow: string;
+      elephant: string;
+    };
+    verdict: string;
+    average: string;
+    standardDeviation: string;
+    unknown: string;
+    coffee: string;
+    ready: string;
+    readyDone: string;
+    readyHint: string;
+    submitAndReady: string;
+    markReady: string;
+    waitingForOthers: string;
+    submitFirst: string;
+    revealingIn: string;
+    cancelReveal: string;
+    revealed: string;
+    nextRound: string;
+    round: string;
+    noVotesYet: string;
+    notRevealed: string;
+    forceReveal: string;
+    forceRevealing: string;
+    forceRevealFailed: string;
+  };
+  nameWelcomeTitle: string;
+  nameWelcomeDescription: string;
   attendanceOptions: {
     going: string;
     maybe: string;
@@ -378,6 +414,7 @@ const en: VotingStrings = {
     CONSENT_LOOP: "Consent Loop",
     COMPARATIVE_PRIORITIZATION: "Comparative Prioritization",
     SCHEDULING: "Scheduling",
+    POKER_PLANNING: "Poker Planning",
   },
   modeDescriptions: {
     THUMBS_UP: "Simple yes vote per proposal",
@@ -388,7 +425,49 @@ const en: VotingStrings = {
     CONSENT_LOOP: "Iterative rounds until adopted or blocked",
     COMPARATIVE_PRIORITIZATION: "Rank proposals through adaptive pairwise comparisons",
     SCHEDULING: "Find the best time in candidate slots",
+    POKER_PLANNING: "Estimate each proposal with planning-poker cards",
   },
+  poker: {
+    scale: "Card deck",
+    scales: {
+      fibonacci: "Fibonacci",
+      tshirt: "T-shirt sizes",
+      powersof2: "Powers of 2",
+      animals: "Animals",
+    },
+    animals: {
+      mouse: "Mouse",
+      cat: "Cat",
+      dog: "Dog",
+      sheep: "Sheep",
+      cow: "Cow",
+      elephant: "Elephant",
+    },
+    verdict: "Verdict",
+    average: "Average",
+    standardDeviation: "Std. deviation",
+    unknown: "Unsure",
+    coffee: "Coffee break",
+    ready: "Ready",
+    readyDone: "Ready",
+    readyHint: "Submitting your estimates also marks you ready.",
+    submitAndReady: "Submit & mark ready",
+    markReady: "Mark ready",
+    waitingForOthers: "Waiting for the other voters…",
+    submitFirst: "Submit your estimates to mark ready.",
+    revealingIn: "Revealing in",
+    cancelReveal: "Cancel reveal",
+    revealed: "Cards revealed",
+    nextRound: "Next round",
+    round: "Round",
+    noVotesYet: "No estimates yet.",
+    notRevealed: "This round was closed without a reveal. The estimates stay hidden.",
+    forceReveal: "Force reveal",
+    forceRevealing: "Revealing…",
+    forceRevealFailed: "Could not reveal this proposal.",
+  },
+  nameWelcomeTitle: "Welcome!",
+  nameWelcomeDescription: "Choose the name attached to your votes.",
   attendanceOptions: {
     going: "Going",
     maybe: "Maybe",
@@ -769,6 +848,7 @@ const fr: VotingStrings = {
     CONSENT_LOOP: "Boucle de consentement",
     COMPARATIVE_PRIORITIZATION: "Priorisation comparative",
     SCHEDULING: "Planification",
+    POKER_PLANNING: "Poker planning",
   },
   modeDescriptions: {
     THUMBS_UP: "Vote simple par proposition",
@@ -779,7 +859,49 @@ const fr: VotingStrings = {
     CONSENT_LOOP: "Tours it\u00e9ratifs jusqu'\u00e0 adoption ou blocage",
     COMPARATIVE_PRIORITIZATION: "Classer les propositions par comparaisons par paires adaptatives",
     SCHEDULING: "Trouver le meilleur cr\u00e9neau parmi les disponibilit\u00e9s",
+    POKER_PLANNING: "Estimer chaque proposition avec des cartes de poker planning",
   },
+  poker: {
+    scale: "Jeu de cartes",
+    scales: {
+      fibonacci: "Fibonacci",
+      tshirt: "Tailles de t-shirt",
+      powersof2: "Puissances de 2",
+      animals: "Animaux",
+    },
+    animals: {
+      mouse: "Souris",
+      cat: "Chat",
+      dog: "Chien",
+      sheep: "Mouton",
+      cow: "Vache",
+      elephant: "Éléphant",
+    },
+    verdict: "Verdict",
+    average: "Moyenne",
+    standardDeviation: "Écart-type",
+    unknown: "Incertain",
+    coffee: "Pause café",
+    ready: "Prêt",
+    readyDone: "Prêt",
+    readyHint: "Soumettre vos estimations vous marque aussi prêt.",
+    submitAndReady: "Envoyer et me marquer prêt",
+    markReady: "Me marquer prêt",
+    waitingForOthers: "En attente des autres votants…",
+    submitFirst: "Soumettez vos estimations pour vous marquer prêt.",
+    revealingIn: "Révélation dans",
+    cancelReveal: "Annuler la révélation",
+    revealed: "Cartes révélées",
+    nextRound: "Manche suivante",
+    round: "Manche",
+    noVotesYet: "Aucune estimation pour le moment.",
+    notRevealed: "Cette manche a été clôturée sans révélation. Les estimations restent masquées.",
+    forceReveal: "Forcer la révélation",
+    forceRevealing: "Révélation…",
+    forceRevealFailed: "Impossible de révéler cette proposition.",
+  },
+  nameWelcomeTitle: "Bienvenue !",
+  nameWelcomeDescription: "Choisissez le nom associé à vos votes.",
   attendanceOptions: {
     going: "Pr\u00e9sent",
     maybe: "Peut-\u00eatre",
@@ -1160,6 +1282,7 @@ const de: VotingStrings = {
     CONSENT_LOOP: "Zustimmungs-Schleife",
     COMPARATIVE_PRIORITIZATION: "Vergleichende Priorisierung",
     SCHEDULING: "Terminplanung",
+    POKER_PLANNING: "Poker Planning",
   },
   modeDescriptions: {
     THUMBS_UP: "Einfache Ja-Stimme pro Vorschlag",
@@ -1170,7 +1293,49 @@ const de: VotingStrings = {
     CONSENT_LOOP: "Iterative Runden bis angenommen oder blockiert",
     COMPARATIVE_PRIORITIZATION: "Vorschläge durch adaptive Paarvergleiche ordnen",
     SCHEDULING: "Die beste Zeit aus Kandidaten-Slots finden",
+    POKER_PLANNING: "Jeden Vorschlag mit Poker-Planning-Karten schätzen",
   },
+  poker: {
+    scale: "Kartensatz",
+    scales: {
+      fibonacci: "Fibonacci",
+      tshirt: "T-Shirt-Größen",
+      powersof2: "Zweierpotenzen",
+      animals: "Tiere",
+    },
+    animals: {
+      mouse: "Maus",
+      cat: "Katze",
+      dog: "Hund",
+      sheep: "Schaf",
+      cow: "Kuh",
+      elephant: "Elefant",
+    },
+    verdict: "Ergebnis",
+    average: "Durchschnitt",
+    standardDeviation: "Standardabweichung",
+    unknown: "Unklar",
+    coffee: "Kaffeepause",
+    ready: "Bereit",
+    readyDone: "Bereit",
+    readyHint: "Beim Absenden deiner Schätzungen wirst du auch als bereit markiert.",
+    submitAndReady: "Absenden & bereit markieren",
+    markReady: "Als bereit markieren",
+    waitingForOthers: "Warte auf die anderen Abstimmenden…",
+    submitFirst: "Sende deine Schätzungen ab, um dich bereit zu markieren.",
+    revealingIn: "Auflösung in",
+    cancelReveal: "Auflösung abbrechen",
+    revealed: "Karten aufgedeckt",
+    nextRound: "Nächste Runde",
+    round: "Runde",
+    noVotesYet: "Noch keine Schätzungen.",
+    notRevealed: "Diese Runde wurde ohne Auflösung geschlossen. Die Schätzungen bleiben verborgen.",
+    forceReveal: "Aufdeckung erzwingen",
+    forceRevealing: "Wird aufgedeckt…",
+    forceRevealFailed: "Dieser Vorschlag konnte nicht aufgedeckt werden.",
+  },
+  nameWelcomeTitle: "Willkommen!",
+  nameWelcomeDescription: "Wähle den Namen, der an deinen Stimmen erscheint.",
   attendanceOptions: {
     going: "Dabei",
     maybe: "Vielleicht",
@@ -1574,6 +1739,35 @@ export function getVotingStrings(locale?: Locale): VotingStrings {
 
 export function useVotingLocale(): Locale {
   return detectLocale();
+}
+
+/**
+ * The display labels consumed by `PokerTallyDisplay`. Both the public results
+ * page and the moderator results panel render that component; deriving the
+ * labels here keeps one mapping instead of a copy per renderer.
+ */
+export interface PokerTallyLabels {
+  verdict: string;
+  average: string;
+  standardDeviation: string;
+  voters: string;
+  voter: string;
+  unknown: string;
+  coffee: string;
+  animals: Record<string, string>;
+}
+
+export function pokerTallyLabels(t: VotingStrings): PokerTallyLabels {
+  return {
+    verdict: t.poker.verdict,
+    average: t.poker.average,
+    standardDeviation: t.poker.standardDeviation,
+    voters: t.labels.voters,
+    voter: t.labels.voter,
+    unknown: t.poker.unknown,
+    coffee: t.poker.coffee,
+    animals: t.poker.animals,
+  };
 }
 
 export type { VotingStrings, Locale };
