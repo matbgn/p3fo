@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.45.0 (2026-11-28)
+
+### Features
+
+- **voting:** add monopoly budget variation (dcca632)
+- **voting:** add poker planning vote mode (f9babdb)
+
+### Bug Fixes
+
+- **boards:** track nested scroll for link lines (eba7f0c)
+
+---
+
 ## v0.44.0 (2026-11-26)
 
 ### Features
@@ -110,23 +123,5 @@
 ### Bug Fixes
 
 - **metrics:** keep workload on month rollover (06dddbb)
-
----
-
-## v0.36.0 (2026-11-03)
-
-### Features
-
-- **timesheet:** add quick 1s time entry (853fef6)
-- **timetable:** add nested subproject headers (536889e)
-- **pomodoro:** add x2/x3 boost for work rounds (d0b9d90)
-
-### Bug Fixes
-
-- **storyboard:** sort blocked cards after ready work (02bf388)
-- **common:** recover from stale chunk load errors (58e399f)
-- **timetable:** align edit row with table columns (d083e30)
-- **resources:** allow empty preferred working days (1ae0cd8)
-- **mood spotlight:** exclude blocked cards from callout (7bb179e)
 
 ---
