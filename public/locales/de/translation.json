@@ -972,7 +972,8 @@
       "points": "Punkte-Budget",
       "majorityJudgment": "Major Judgment",
       "consentLoop": "Zustimmungs-Schleife",
-      "scheduling": "Terminplanung"
+      "scheduling": "Terminplanung",
+      "pokerPlanning": "Poker Planning"
     },
     "comparative": {
       "title": "Vergleichende Priorisierung",

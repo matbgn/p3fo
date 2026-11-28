@@ -267,6 +267,8 @@ export function attendanceCapacityErrorFromTotal(
 
 export interface PublicAttendanceRow {
   displayName?: string;
+  /** Stable pseudonym shown when the vote is anonymous or the name is hidden. */
+  alias?: string;
   partySize: number;
   visibility: 'public' | 'hidden';
 }
@@ -329,6 +331,7 @@ export function publicAttendanceRows(
       const data = response.attendeeData;
       return {
         displayName: attendanceDisplayName(data, isAnonymous),
+        alias: response.voterAlias,
         partySize: attendancePartySize(data),
         visibility: attendanceVisibility(data),
       };
@@ -369,7 +372,9 @@ export function summarizeAttendance(
         )
         .map((response) => ({
           id: response.id,
-          author: attendanceDisplayName(response.attendeeData, options.isAnonymous),
+          author:
+            attendanceDisplayName(response.attendeeData, options.isAnonymous) ??
+            response.voterAlias,
           body: response.comment!.trim(),
           submittedAt: response.submittedAt,
         }))

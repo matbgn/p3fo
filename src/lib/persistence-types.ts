@@ -1,19 +1,24 @@
 // Types for the persistence layer
 // Matches the existing structures in useTasks, useUserSettings, useSettings, filter-storage, QoLIndexSurveyPage
 
-import { PomodoroConfig, FocusModeConfig, PomodoroSession } from './pomodoro-types';
-import { TravelerConfig } from './traveler-types';
-import type { SprintStateEntity, SprintWellbeingAggregate, SprintOutcome } from './sprint-types';
-export type { SprintStateEntity } from './sprint-types';
+// This module is reachable from the compiled server, which ships as ESM (Node
+// resolves relative specifiers only with an explicit extension), so keep the
+// `.js` suffix even though the sources are TypeScript.
+import { PomodoroConfig, FocusModeConfig, PomodoroSession } from './pomodoro-types.js';
+import { TravelerConfig } from './traveler-types.js';
+import type { PokerConfig } from './poker.js';
+import type { BudgetConfig } from './budget.js';
+import type { SprintStateEntity, SprintWellbeingAggregate, SprintOutcome } from './sprint-types.js';
+export type { SprintStateEntity } from './sprint-types.js';
 
 export interface SprintWellbeingStatus {
   answered: boolean;
   aggregate: SprintWellbeingAggregate | null;
 }
-export type { PomodoroConfig, FocusModeConfig, PomodoroSession } from './pomodoro-types';
-export { DEFAULT_POMODORO_CONFIG, DEFAULT_FOCUS_MODE_CONFIG } from './pomodoro-types';
-export type { TravelerConfig } from './traveler-types';
-export { DEFAULT_TRAVELER_CONFIG } from './traveler-types';
+export type { PomodoroConfig, FocusModeConfig, PomodoroSession } from './pomodoro-types.js';
+export { DEFAULT_POMODORO_CONFIG, DEFAULT_FOCUS_MODE_CONFIG } from './pomodoro-types.js';
+export type { TravelerConfig } from './traveler-types.js';
+export { DEFAULT_TRAVELER_CONFIG } from './traveler-types.js';
 
 export type TriageStatus = "Backlog" | "Ready" | "WIP" | "Blocked" | "Done" | "Dropped";
 
@@ -312,6 +317,16 @@ export interface PersistenceAdapter {
 
   // Vote responses
   listVoteResponses(voteId: string, moderatorToken?: string): Promise<VoteResponseEntity[]>;
+  /**
+   * Responses plus the persisted vote they belong to, in one round-trip. The
+   * unauthenticated Yjs `voteProposals` map is client-writable, so a security
+   * decision (e.g. whether a poker round is still blind) must read the vote from
+   * this authoritative copy, not from the shared projection.
+   */
+  getVoteResults?(voteId: string, moderatorToken?: string): Promise<{
+    vote: VoteEntity | null;
+    responses: VoteResponseEntity[];
+  }>;
   createVoteResponse?(voteId: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity>;
   deleteVoteResponse?(voteId: string, voterToken: string, proposalId: string | null, loopId?: string | null): Promise<void>;
   importVoteResponses(items: VoteResponseEntity[]): Promise<void>;
@@ -410,7 +425,46 @@ export type VoteMode =
   | 'ATTENDANCE'
   | 'CONSENT_LOOP'
   | 'COMPARATIVE_PRIORITIZATION'
-  | 'SCHEDULING';
+  | 'SCHEDULING'
+  | 'POKER_PLANNING';
+
+/**
+ * The runtime list of `VoteMode` values. It lives beside the type so adding a
+ * mode means touching one place: server validation (`isVoteMode`) and the mode
+ * selector both read this list, so a UI mode the server rejects cannot slip in.
+ */
+export const VOTE_MODES: readonly VoteMode[] = [
+  'THUMBS_UP',
+  'THUMBS_UD_NEUTRAL',
+  'POINTS',
+  'MAJORITY_JUDGMENT',
+  'ATTENDANCE',
+  'CONSENT_LOOP',
+  'COMPARATIVE_PRIORITIZATION',
+  'SCHEDULING',
+  'POKER_PLANNING',
+];
+
+/**
+ * Modes whose ballot is not a per-proposal multi-select, so `multipleChoiceVote`
+ * must not be persisted for them. The editor's save path and the toggle
+ * visibility both read this predicate; keeping the list here stops a mode from
+ * being added to one copy and not the other (which would persist a flag the UI
+ * hides, or hide a flag the vote actually uses).
+ */
+const MODES_WITHOUT_MULTIPLE_CHOICE: ReadonlySet<VoteMode> = new Set<VoteMode>([
+  'POINTS',
+  'CONSENT_LOOP',
+  'COMPARATIVE_PRIORITIZATION',
+  'ATTENDANCE',
+  'SCHEDULING',
+  'POKER_PLANNING',
+]);
+
+export function votingModeSupportsMultipleChoice(mode: VoteMode): boolean {
+  return !MODES_WITHOUT_MULTIPLE_CHOICE.has(mode);
+}
+
 export type RankingEngine = 'bt-k2' | 'bt-k4';
 export type VoteKind = 'consultation' | 'decision';
 export type VotePhase = 'IDLE' | 'OPEN' | 'CLOSED' | 'FINALIZED';
@@ -495,6 +549,8 @@ export interface VoteConfig {
   phase: VotePhase;
   allowMultiple?: boolean;
   maxPointsPerUser?: number;
+  /** Spending variation for POINTS votes: flexible points or fixed notes. */
+  budget?: BudgetConfig;
   mjLabels?: Record<number, string>;
   isAnonymous?: boolean;
   allowFreeText?: boolean;
@@ -514,6 +570,8 @@ export interface VoteConfig {
   attendance?: AttendanceConfig;
   /** Candidate slot settings for SCHEDULING votes. */
   scheduling?: SchedulingConfig;
+  /** Card deck and reveal state for POKER_PLANNING votes. */
+  poker?: PokerConfig;
 }
 
 export interface VoteRankingComparison {

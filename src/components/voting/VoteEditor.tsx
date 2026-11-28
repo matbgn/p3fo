@@ -30,9 +30,33 @@ import {
   AttendanceConfig,
   AttendanceQuestion,
   SchedulingConfig,
+  votingModeSupportsMultipleChoice,
 } from "@/lib/persistence-types";
 import { DEFAULT_RANKING_ENGINE, voteAllowsTies } from "@/lib/vote-ranking";
 import { DEFAULT_MAX_PARTY_SIZE } from "@/lib/attendance";
+import {
+  DEFAULT_POKER_SCALE,
+  POKER_SCALES,
+  getPokerScale,
+  type PokerScaleId,
+} from "@/lib/poker";
+import {
+  BUDGET_PRESETS,
+  DEFAULT_BUDGET_PRESET,
+  DEFAULT_CUSTOM_BUDGET_NOTES,
+  DEFAULT_FLEXIBLE_BUDGET,
+  MAX_BUDGET_DENOMINATIONS,
+  budgetAllowsMultiple,
+  budgetFromPreset,
+  budgetPresetNotes,
+  budgetTotal,
+  formatBudgetAmount,
+  formatBudgetNotes,
+  normalizeBudgetConfig,
+  normalizeBudgetNotes,
+  type BudgetNote,
+  type BudgetPresetId,
+} from "@/lib/budget";
 import {
   DEFAULT_SCHEDULING_CONFIG,
   MAX_SCHEDULING_SLOTS,
@@ -172,7 +196,13 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
   const [showResultsBeforeClose, setShowResultsBeforeClose] = React.useState(false);
   const [allowVoteChangeUntilClose, setAllowVoteChangeUntilClose] = React.useState(true);
   const [multipleChoiceVote, setMultipleChoiceVote] = React.useState(true);
-  const [maxPointsPerUser, setMaxPointsPerUser] = React.useState(10);
+  const [maxPointsPerUser, setMaxPointsPerUser] = React.useState(DEFAULT_FLEXIBLE_BUDGET);
+  const [budgetPreset, setBudgetPreset] = React.useState<BudgetPresetId>(DEFAULT_BUDGET_PRESET);
+  const [budgetNotes, setBudgetNotes] = React.useState<BudgetNote[]>(() =>
+    DEFAULT_CUSTOM_BUDGET_NOTES.map((note) => ({ ...note })),
+  );
+  const [budgetError, setBudgetError] = React.useState<string | null>(null);
+  const [pokerScale, setPokerScale] = React.useState<PokerScaleId>(DEFAULT_POKER_SCALE);
   const [rankingEngine, setRankingEngine] = React.useState<"bt-k2" | "bt-k4">(DEFAULT_RANKING_ENGINE);
   const [allowTies, setAllowTies] = React.useState(true);
   const [allowMultiple, setAllowMultiple] = React.useState(false);
@@ -306,7 +336,16 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
       setShowResultsBeforeClose(source.config.showResultsBeforeClose ?? false);
       setAllowVoteChangeUntilClose(source.config.allowVoteChangeUntilClose ?? true);
       setMultipleChoiceVote(source.config.multipleChoiceVote ?? true);
-      setMaxPointsPerUser(source.config.maxPointsPerUser ?? 10);
+      setMaxPointsPerUser(source.config.maxPointsPerUser ?? DEFAULT_FLEXIBLE_BUDGET);
+      const storedBudget = normalizeBudgetConfig(source.config.budget);
+      setBudgetPreset(storedBudget.preset);
+      setBudgetNotes(
+        (storedBudget.notes ?? DEFAULT_CUSTOM_BUDGET_NOTES).map((note) => ({
+          ...note,
+        })),
+      );
+      setBudgetError(null);
+      setPokerScale(getPokerScale(source.config.poker?.scale).id);
       setRankingEngine(source.config.rankingEngine ?? DEFAULT_RANKING_ENGINE);
       setAllowTies(voteAllowsTies(source.config));
       setAllowMultiple(source.config.allowMultiple ?? false);
@@ -354,7 +393,11 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
       setShowResultsBeforeClose(false);
       setAllowVoteChangeUntilClose(true);
       setMultipleChoiceVote(true);
-      setMaxPointsPerUser(10);
+      setMaxPointsPerUser(DEFAULT_FLEXIBLE_BUDGET);
+      setBudgetPreset(DEFAULT_BUDGET_PRESET);
+      setBudgetNotes(DEFAULT_CUSTOM_BUDGET_NOTES.map((note) => ({ ...note })));
+      setBudgetError(null);
+      setPokerScale(DEFAULT_POKER_SCALE);
       setRankingEngine(DEFAULT_RANKING_ENGINE);
       setAllowTies(true);
       setAllowMultiple(false);
@@ -629,6 +672,35 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
 
     setIsSaving(true);
     try {
+      let budgetConfig: VoteConfig["budget"];
+      let effectiveMaxPoints = maxPointsPerUser;
+      if (mode === "POINTS") {
+        if (
+          budgetPreset === "custom" &&
+          normalizeBudgetNotes(budgetNotes).length === 0
+        ) {
+          setBudgetError(t.budget.invalidNotes);
+          return;
+        }
+        // A built-in preset's stored note multiset is authoritative on the
+        // server, so round-trip whatever was loaded (or seeded when the preset
+        // changed). Omitting the notes would submit today's canonical deck and
+        // either overwrite a draft's stored notes or, once the vote is open, be
+        // rejected as a budget change on an ordinary title/description save.
+        // The same resolver feeds the preview below, so what the moderator sees
+        // is exactly the deck that gets stored.
+        budgetConfig = budgetFromPreset(budgetPreset, budgetNotes);
+        // Fixed-note presets derive their total from the notes; flexible votes
+        // keep the explicit per-voter point budget.
+        effectiveMaxPoints = budgetTotal({
+          budget: budgetConfig,
+          maxPointsPerUser,
+        });
+        setBudgetError(null);
+      } else {
+        budgetConfig = undefined;
+      }
+
       const cleanedQuestions: AttendanceQuestion[] = customQuestions
         .map((question) => {
           const prompt = question.prompt.trim();
@@ -684,22 +756,25 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
             : undefined,
         showResultsBeforeClose,
         allowVoteChangeUntilClose,
-        multipleChoiceVote:
-          mode !== "POINTS" &&
-          mode !== "CONSENT_LOOP" &&
-          mode !== "COMPARATIVE_PRIORITIZATION" &&
-          mode !== "ATTENDANCE" &&
-          mode !== "SCHEDULING"
-            ? multipleChoiceVote
-            : undefined,
-        maxPointsPerUser: mode === "POINTS" ? maxPointsPerUser : undefined,
+        multipleChoiceVote: votingModeSupportsMultipleChoice(mode)
+          ? multipleChoiceVote
+          : undefined,
+        maxPointsPerUser: mode === "POINTS" ? effectiveMaxPoints : undefined,
+        budget: mode === "POINTS" ? budgetConfig : undefined,
         rankingEngine: mode === "COMPARATIVE_PRIORITIZATION" ? rankingEngine : undefined,
         allowTies: mode === "COMPARATIVE_PRIORITIZATION" ? allowTies : undefined,
-        allowMultiple: mode === "POINTS" ? allowMultiple : undefined,
+        allowMultiple:
+          mode === "POINTS" && budgetAllowsMultiple({ budget: budgetConfig })
+            ? allowMultiple
+            : undefined,
         openAt: openAt ? new Date(openAt).toISOString() : undefined,
         closeAt: closeAt ? new Date(closeAt).toISOString() : undefined,
         attendance: attendanceConfig,
         scheduling: schedulingConfig,
+        poker:
+          mode === "POKER_PLANNING"
+            ? { ...(vote?.config.poker ?? {}), scale: pokerScale }
+            : undefined,
       };
 
       await onSave({
@@ -802,25 +877,204 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
 
           {mode === "POINTS" && (
             <div className="space-y-3 border rounded-md p-3 bg-gray-50">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm">{t.labels.allowMultiple}</Label>
-                <Switch
-                  checked={allowMultiple}
-                  onCheckedChange={setAllowMultiple}
-                  disabled={isFinalized}
-                />
-              </div>
               <div className="space-y-1">
-                <Label className="text-sm">{t.labels.maxPointsPerUser}</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={maxPointsPerUser}
-                  onChange={(e) => setMaxPointsPerUser(parseInt(e.target.value, 10) || 10)}
-                  disabled={isFinalized}
-                  className="w-24"
-                />
+                <Label className="text-sm" htmlFor="budget-preset">
+                  {t.budget.variation}
+                </Label>
+                <select
+                  id="budget-preset"
+                  value={budgetPreset}
+                  onChange={(event) => {
+                    const next = event.target.value as BudgetPresetId;
+                    setBudgetPreset(next);
+                    const presetNotes = budgetPresetNotes(next);
+                    if (presetNotes) {
+                      setBudgetNotes(
+                        presetNotes.map((note) => ({ ...note })),
+                      );
+                    }
+                    setBudgetError(null);
+                  }}
+                  disabled={hasStarted || isFinalized}
+                  className="text-sm border rounded px-2 py-1 bg-white"
+                >
+                  {BUDGET_PRESETS.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {t.budget.presets[preset.id]}
+                      {preset.notes && preset.notes.length > 0
+                        ? ` (${formatBudgetNotes(preset.notes)})`
+                        : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
+
+              {budgetPreset === "flexible" ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm">{t.labels.allowMultiple}</Label>
+                    <Switch
+                      checked={allowMultiple}
+                      onCheckedChange={setAllowMultiple}
+                      disabled={hasStarted || isFinalized}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-sm">{t.labels.maxPointsPerUser}</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={maxPointsPerUser}
+                      onChange={(e) =>
+                        setMaxPointsPerUser(parseInt(e.target.value, 10) || DEFAULT_FLEXIBLE_BUDGET)
+                      }
+                      disabled={hasStarted || isFinalized}
+                      className="w-24"
+                    />
+                  </div>
+                </>
+              ) : (
+                (() => {
+                  // Resolve through the same helper the save path uses: a
+                  // built-in preset must preview against its stored multiset,
+                  // not today's canonical constant.
+                  const preview = budgetFromPreset(budgetPreset, budgetNotes);
+                  const previewTotal = budgetTotal({
+                    budget: preview,
+                    maxPointsPerUser,
+                  });
+                  return (
+                    <div className="space-y-2">
+                      <p className="text-xs text-gray-500">
+                        {t.budget.total}:{" "}
+                        <span className="font-medium">
+                          {formatBudgetAmount(previewTotal)}
+                        </span>
+                        {preview.notes && preview.notes.length > 0
+                          ? ` \u00b7 ${formatBudgetNotes(preview.notes)}`
+                          : ""}
+                      </p>
+
+                      {budgetPreset === "custom" && (
+                        <div className="space-y-2">
+                          {budgetNotes.map((note, index) => (
+                            <div
+                              key={index}
+                              className="flex items-center gap-2"
+                            >
+                              <Input
+                                type="number"
+                                min={1}
+                                value={note.value}
+                                aria-label={t.budget.noteValue}
+                                onChange={(event) => {
+                                  const value =
+                                    parseInt(event.target.value, 10) || 0;
+                                  setBudgetNotes((previous) =>
+                                    previous.map((entry, entryIndex) =>
+                                      entryIndex === index
+                                        ? { ...entry, value }
+                                        : entry,
+                                    ),
+                                  );
+                                }}
+                                disabled={hasStarted || isFinalized}
+                                className="w-20"
+                              />
+                              <span className="text-xs text-gray-500">×</span>
+                              <Input
+                                type="number"
+                                min={1}
+                                value={note.count}
+                                aria-label={t.budget.noteCount}
+                                onChange={(event) => {
+                                  const count =
+                                    parseInt(event.target.value, 10) || 0;
+                                  setBudgetNotes((previous) =>
+                                    previous.map((entry, entryIndex) =>
+                                      entryIndex === index
+                                        ? { ...entry, count }
+                                        : entry,
+                                    ),
+                                  );
+                                }}
+                                disabled={hasStarted || isFinalized}
+                                className="w-20"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  setBudgetNotes((previous) =>
+                                    previous.filter(
+                                      (_, entryIndex) => entryIndex !== index,
+                                    ),
+                                  )
+                                }
+                                disabled={
+                                  hasStarted ||
+                                  isFinalized ||
+                                  budgetNotes.length <= 1
+                                }
+                              >
+                                {t.budget.removeDenomination}
+                              </Button>
+                            </div>
+                          ))}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setBudgetNotes((previous) => [
+                                ...previous,
+                                { value: 1, count: 1 },
+                              ])
+                            }
+                            disabled={
+                              hasStarted ||
+                              isFinalized ||
+                              budgetNotes.length >= MAX_BUDGET_DENOMINATIONS
+                            }
+                          >
+                            + {t.budget.addDenomination}
+                          </Button>
+                          <p className="text-xs text-gray-500">
+                            {t.budget.customNotesHelp}
+                          </p>
+                        </div>
+                      )}
+
+                      {budgetError && (
+                        <p className="text-xs text-red-600">{budgetError}</p>
+                      )}
+                    </div>
+                  );
+                })()
+              )}
+            </div>
+          )}
+
+          {mode === "POKER_PLANNING" && (
+            <div className="space-y-2 border rounded-md p-3 bg-gray-50">
+              <Label className="text-sm" htmlFor="poker-scale">
+                {t.poker.scale}
+              </Label>
+              <select
+                id="poker-scale"
+                value={pokerScale}
+                onChange={(event) => setPokerScale(event.target.value as PokerScaleId)}
+                disabled={hasStarted || isFinalized}
+                className="text-sm border rounded px-2 py-1 bg-white"
+              >
+                {POKER_SCALES.map((scale) => (
+                  <option key={scale.id} value={scale.id}>
+                    {t.poker.scales[scale.id]}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500">{t.poker.readyHint}</p>
             </div>
           )}
 
@@ -894,14 +1148,16 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
               </div>
             )}
 
-            <div className="flex items-center justify-between">
-              <Label className="text-sm">{t.labels.showResultsBeforeClose}</Label>
-              <Switch
-                checked={showResultsBeforeClose}
-                onCheckedChange={setShowResultsBeforeClose}
-                disabled={isFinalized}
-              />
-            </div>
+            {mode !== "POKER_PLANNING" && (
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">{t.labels.showResultsBeforeClose}</Label>
+                <Switch
+                  checked={showResultsBeforeClose}
+                  onCheckedChange={setShowResultsBeforeClose}
+                  disabled={isFinalized}
+                />
+              </div>
+            )}
 
             <div className="flex items-center justify-between">
               <Label className="text-sm">{t.labels.allowVoteChangeUntilClose}</Label>
@@ -912,7 +1168,7 @@ export const VoteEditor: React.FC<VoteEditorProps> = ({
               />
             </div>
 
-            {mode !== "POINTS" && mode !== "CONSENT_LOOP" && mode !== "COMPARATIVE_PRIORITIZATION" && mode !== "ATTENDANCE" && mode !== "SCHEDULING" && (
+            {votingModeSupportsMultipleChoice(mode) && (
               <div className="flex items-center justify-between">
                 <Label className="text-sm">{t.labels.multipleChoiceVote}</Label>
                 <Switch

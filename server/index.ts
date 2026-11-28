@@ -5,17 +5,24 @@ import cors from 'cors';
 import crypto from 'node:crypto';
 import { createDbClient } from './db/index.js';
 import { DbClient } from './db/index.js';
+import { pokerRevealedProposalIdsSignature } from './db/index.js';
 import { VoteKind, VoteLoop, VoteModerator, VoteResponseEntity, VoteRankingSubmission, PomodoroSession } from '../src/lib/persistence-types.js';
 import type { TaskEntity, VoteRankingBallot, VoteEntity, VoteRankingResult } from '../src/lib/persistence-types.js';
 import type { SprintStateEntity } from '../src/lib/sprint-types.js';
 import {
   hasPrivateAttendeeFields,
+  hidePokerValueForVote,
   isVoteAnonymous,
+  pokerProposalIdIsRevealed,
+  pokerProposalIsRevealed,
+  pokerValuesAreHidden,
   redactRankingSubmissionForBackup,
   redactVoteResponseForVote,
   redactVoteResponsesForVote,
   shareVoteResponse,
+  stripPokerValue,
   voterAlias,
+  voteResponseCarriesDisplayName,
 } from '../src/lib/vote-ranking.js';
 import {
   WHO5_QUESTIONS,
@@ -50,7 +57,30 @@ import {
 import { VOTE_SCOPED_YJS_MAPS } from '../src/lib/vote-yjs-maps.js';
 import { clearVoteDrafts, deleteVoteDraft, listVoteDrafts, sweepExpiredVoteDrafts, upsertVoteDraft } from '../src/lib/vote-drafts.js';
 import { clearVotePresence, listVotePresence, sweepExpiredVotePresence, touchVotePresence } from '../src/lib/vote-presence.js';
-import { validateVoteResponseValue } from '../src/lib/vote-validation.js';
+import {
+  clearPokerReady,
+  clearPokerReadyForParticipant,
+  listPokerReady,
+  markPokerReady,
+  sweepExpiredPokerReady,
+} from '../src/lib/poker-ready.js';
+import {
+  normalizePokerConfig,
+  normalizeRevealedProposalIds,
+  pokerBallotCoversEveryProposal,
+  type PokerConfig,
+  type PokerState,
+} from '../src/lib/poker.js';
+import { isVoteMode, validateVoteResponseValue } from '../src/lib/vote-validation.js';
+import {
+  applyResolvedBudgetConfig,
+  budgetTotal,
+  clearBudgetConfig,
+  normalizeBudgetConfig,
+  parseBudgetSubmission,
+  resolveBudgetConfig,
+  validateBudgetDraftValues,
+} from '../src/lib/budget.js';
 import {
   MAX_SCHEDULING_SLOTS,
   activeSchedulingSlots,
@@ -173,7 +203,7 @@ function broadcastVoteResponsesToYjs(vote: VoteEntity, responses: VoteResponseEn
       for (const response of responses) {
         const safeResponse = shareVoteResponse(
           vote.id,
-          redactVoteResponseForVote(vote, response),
+          hidePokerValueForVote(vote, redactVoteResponseForVote(vote, response)),
         );
         map.set(safeResponse.id, safeResponse);
       }
@@ -286,6 +316,80 @@ function broadcastVoteResponsesRemovedFromYjs(responseIds: string[]) {
 }
 
 /**
+ * Persisted poker config per blind vote. Membership marks a vote whose round is
+ * still blind; the stored config decides which proposals a moderator revealed.
+ *
+ * The shared Yjs document is unauthenticated: any connected peer can write both
+ * `voteProposals` (where the browser reads `config.poker.revealedAt`) and
+ * `voteResponses`. Deriving the blind-reveal rule from that projection therefore
+ * lets a peer claim a round is revealed and make an authorized client publish
+ * every estimate. This map is derived only from the persisted vote, refreshed on
+ * every server write and warmed at startup, so the response scrub below can strip
+ * a value without trusting anything a client authored.
+ *
+ * A moderator can reveal one proposition before the round-wide `revealedAt`.
+ * The shared-document scrub must publish that proposal's estimates while still
+ * stripping every other proposal, so this map carries the persisted config.
+ * Storing the config (not a pre-computed allow-list) lets the scrub evaluate the
+ * same `pokerProposalIdIsRevealed` rule as the results projection, so a reveal
+ * exception added there cannot drift here.
+ */
+const pokerHiddenConfigByVote = new Map<
+  string,
+  NonNullable<VoteEntity['config']['poker']>
+>();
+
+function trackPokerValueVisibility(
+  vote: Pick<VoteEntity, 'id' | 'config'> | null | undefined,
+): void {
+  if (!vote) return;
+  const hidden = pokerValuesAreHidden(vote);
+  const poker = vote.config.poker;
+  if (hidden && poker) {
+    pokerHiddenConfigByVote.set(vote.id, {
+      ...poker,
+      revealedProposalIds: poker.revealedProposalIds
+        ? [...poker.revealedProposalIds]
+        : [],
+    });
+  } else {
+    pokerHiddenConfigByVote.delete(vote.id);
+  }
+}
+
+/**
+ * Whether a shared-document row for this vote must lose its value. A vote that
+ * is not blind reveals everything; a blind vote reveals only the proposals its
+ * cached config marks revealed. No proposal id on a blind vote cannot be
+ * matched against the allow-list, so it stays hidden.
+ */
+function isPokerValueHiddenForSharedRow(
+  voteId: unknown,
+  proposalId: unknown,
+): boolean {
+  if (typeof voteId !== 'string') return false;
+  const poker = pokerHiddenConfigByVote.get(voteId);
+  if (!poker) return false;
+  if (typeof proposalId !== 'string' || proposalId.length === 0) return true;
+  return !pokerProposalIdIsRevealed(poker, proposalId);
+}
+
+/**
+ * Once the round-wide reveal stamps `revealedAt`, every estimate is public and
+ * the round is frozen for response changes. Both the create and withdraw
+ * response routes gate on this, so it lives in one place to keep the two
+ * endpoints from disagreeing about when an estimate may still change.
+ */
+function pokerEstimateChangesAreFrozen(
+  vote: Pick<VoteEntity, 'config'>,
+): boolean {
+  return (
+    vote.config.mode === 'POKER_PLANNING' &&
+    Boolean(vote.config.poker?.revealedAt)
+  );
+}
+
+/**
  * Older clients published responses verbatim into the shared document, and a
  * stale bundle can keep doing so during a rollout. The server now normalises the
  * `/ws/<room>` name, so those clients join the same room as the redacting
@@ -296,6 +400,12 @@ function broadcastVoteResponsesRemovedFromYjs(responseIds: string[]) {
  * client version produced it. A moderator client that fetched the organizer
  * projection and re-published it through `syncResponsesToYjs` is the path this
  * guards against.
+ *
+ * It also strips a poker estimate for any vote whose persisted round is still
+ * blind, unless a moderator force-revealed that exact proposal. Both sets are
+ * derived from persisted state, so a forged
+ * `voteProposals.config.poker.revealedAt` cannot make a value-bearing row
+ * survive the rewrite.
  */
 function scrubLegacyVoteResponseTokensFromYjs() {
   try {
@@ -308,14 +418,27 @@ function scrubLegacyVoteResponseTokensFromYjs() {
         if (!parsed) continue;
         const hasRawToken =
           typeof parsed.voterToken === 'string' && parsed.voterToken.length > 0;
-        if (hasRawToken || hasPrivateAttendeeFields(parsed.attendeeData)) {
+        const leaksPokerValue =
+          typeof parsed.value === 'number' &&
+          isPokerValueHiddenForSharedRow(parsed.voteId, parsed.proposalId);
+        if (
+          hasRawToken ||
+          hasPrivateAttendeeFields(parsed.attendeeData) ||
+          leaksPokerValue
+        ) {
           stale.push([key, parsed]);
         }
       }
       if (stale.length === 0) return;
       doc.transact(() => {
         for (const [key, parsed] of stale) {
-          map.set(key, shareVoteResponse(parsed.voteId, parsed));
+          const projected = isPokerValueHiddenForSharedRow(
+            parsed.voteId,
+            parsed.proposalId,
+          )
+            ? stripPokerValue(parsed)
+            : parsed;
+          map.set(key, shareVoteResponse(projected.voteId, projected));
         }
       });
     };
@@ -1624,6 +1747,43 @@ app.get('/api/votes', async (req: Request, res: Response) => {
 
 app.post('/api/votes', async (req: Request, res: Response) => {
   try {
+    const createConfig: Record<string, unknown> | null =
+      req.body?.config && typeof req.body.config === 'object'
+        ? (req.body.config as Record<string, unknown>)
+        : null;
+    if (createConfig && 'mode' in createConfig && !isVoteMode(createConfig.mode)) {
+      return res.status(400).json({ error: 'Invalid vote mode' });
+    }
+    if (createConfig?.mode === 'POKER_PLANNING') {
+      // Creation starts an unarmed, unrevealed round: the reveal is server-owned
+      // and a caller must not be able to seed a round that is already visible (or
+      // permanently closed to new estimates).
+      createConfig.showResultsBeforeClose = false;
+      createConfig.poker = clearedPokerRound(
+        createConfig.poker as Partial<PokerConfig> | null,
+        0,
+      );
+    } else if (createConfig) {
+      createConfig.poker = undefined;
+    }
+    if (createConfig?.mode === 'POINTS') {
+      // A POINTS vote's spending variation is server-normalised: built-in
+      // presets are canonical, custom notes are sanitized, and the effective
+      // total is pinned on `maxPointsPerUser` so every reader sees the same
+      // budget. Reject a malformed block instead of silently falling back.
+      const resolved = resolveBudgetConfig({
+        requestedBudget: createConfig.budget,
+        budgetProvided: 'budget' in createConfig,
+        requestedMaxPointsPerUser: createConfig.maxPointsPerUser,
+        maxProvided: 'maxPointsPerUser' in createConfig,
+      });
+      if (resolved.error) {
+        return res.status(400).json({ error: resolved.error });
+      }
+      applyResolvedBudgetConfig(createConfig, resolved);
+    } else if (createConfig) {
+      clearBudgetConfig(createConfig);
+    }
     if (req.body?.config?.mode === 'SCHEDULING') {
       const schedulingError = validateSchedulingConfig(
         req.body.config.scheduling,
@@ -1651,6 +1811,7 @@ app.post('/api/votes', async (req: Request, res: Response) => {
       }
     }
     const vote = await db.createVote(req.body);
+    trackPokerValueVisibility(vote);
     res.status(201).json(vote);
   } catch (error: unknown) {
     console.error('Error creating vote:', error);
@@ -1690,6 +1851,13 @@ app.put('/api/votes/:id', async (req: Request, res: Response) => {
       req.body?.config && typeof req.body.config === 'object'
         ? (req.body.config as Record<string, unknown>)
         : {};
+    // `config` is shallow-merged and persisted as sent. Reject a present but
+    // unknown mode (notably `null`): `??` below would keep the stored mode for
+    // the guard checks while `null` is written to the row, silently disabling
+    // every mode-keyed rule including the poker blind reveal.
+    if ('mode' in requestedConfig && !isVoteMode(requestedConfig.mode)) {
+      return res.status(400).json({ error: 'Invalid vote mode' });
+    }
     const effectiveScheduling = (
       'scheduling' in requestedConfig
         ? requestedConfig.scheduling
@@ -1722,6 +1890,153 @@ app.put('/api/votes/:id', async (req: Request, res: Response) => {
         return res.status(400).json({
           error: 'Vote mode is locked once the vote is open',
         });
+      }
+      // A live poker round's phase and mode are server-owned. The mode lock
+      // above only applies while the vote is not a draft, so rewinding the
+      // phase to IDLE would re-enable the switch — and a mode change stops
+      // `pokerValuesAreHidden` recognising the round, exposing every unrevealed
+      // estimate. The dedicated reset route is the only way to reopen a round.
+      if (
+        existing.config.mode === 'POKER_PLANNING' &&
+        existing.config.phase !== 'IDLE' &&
+        effectivePhase === 'IDLE'
+      ) {
+        return res.status(400).json({
+          error: 'A poker round cannot be rewound to the draft phase',
+        });
+      }
+      // A POINTS vote's spending variation changes what every stored value
+      // means. Rewinding to IDLE would re-enable a budget change on a vote that
+      // already has responses, so use the dedicated reset route (which clears
+      // them) instead of a two-step phase rewind.
+      if (
+        existing.config.mode === 'POINTS' &&
+        existing.config.phase !== 'IDLE' &&
+        effectivePhase === 'IDLE'
+      ) {
+        return res.status(400).json({
+          error: 'A points vote cannot be rewound to the draft phase',
+        });
+      }
+      // A round whose state predates the guard above (or was restored from a
+      // backup) must still not be reinterpreted as another mode. Round markers
+      // are server-owned; persisted estimates prove the round collected votes
+      // even when it was already rewound to IDLE without a marker.
+      if (
+        existing.config.mode === 'POKER_PLANNING' &&
+        effectiveMode !== 'POKER_PLANNING' &&
+        existing.config.phase === 'IDLE'
+      ) {
+        const storedPoker = normalizePokerConfig(existing.config.poker);
+        const hasRoundState = Boolean(
+          storedPoker.round > 0 ||
+            storedPoker.armedAt ||
+            storedPoker.revealAt ||
+            storedPoker.revealedAt,
+        );
+        const hasEstimates =
+          !hasRoundState && (await db.getVoteResponses(existing.id)).length > 0;
+        if (hasRoundState || hasEstimates) {
+          return res.status(400).json({
+            error: 'Vote mode is locked once a poker round has started',
+          });
+        }
+      }
+      if (effectiveMode === 'POKER_PLANNING') {
+        // A poker round is blind until the server-owned reveal. The editor hides
+        // this toggle for the mode, and the projection ignores the flag anyway,
+        // but never persist it: a later mode-independent read should not inherit
+        // a setting that means "publish every unrevealed estimate".
+        requestedConfig.showResultsBeforeClose = false;
+        if (existing.config.mode !== 'POKER_PLANNING') {
+          // Switching into the mode (or saving a draft that was never poker)
+          // starts a fresh round. Only the deck choice is caller-owned: seeding
+          // `revealedAt`/`revealAt`/`armedAt`/`round` here would create an
+          // already-revealed round that hides nothing and rejects every estimate.
+          const requestedScale = normalizePokerConfig(
+            'poker' in requestedConfig
+              ? (requestedConfig.poker as Partial<PokerConfig> | null)
+              : existing.config.poker,
+          ).scale;
+          requestedConfig.poker = clearedPokerRound({ scale: requestedScale }, 0);
+        } else if ('poker' in requestedConfig) {
+          const requestedPoker = requestedConfig.poker;
+          const requestedScale = normalizePokerConfig(
+            requestedPoker as Partial<PokerConfig> | null,
+          ).scale;
+          const existingScale = normalizePokerConfig(existing.config.poker).scale;
+          if (
+            requestedPoker == null ||
+            typeof requestedPoker !== 'object' ||
+            (existing.config.phase !== 'IDLE' && requestedScale !== existingScale)
+          ) {
+            return res.status(400).json({
+              error: 'Poker deck is locked once the vote is open',
+            });
+          }
+          // The round/reveal state is always server-owned. A draft save may pick
+          // the deck, but no caller of this unauthenticated route may set
+          // `revealedAt`, `revealAt`, `armedAt` or rewind `round` — either
+          // directly or by first rewinding the phase to IDLE, which would let any
+          // holder of the public link unblind a live round.
+          requestedConfig.poker = {
+            ...existing.config.poker,
+            ...(existing.config.phase === 'IDLE' ? { scale: requestedScale } : {}),
+          };
+        }
+      } else {
+        // A non-poker vote has no round state. Clearing the block on every save
+        // (not only when the caller sent one) removes a deck left behind by a
+        // mode switch, so `pokerValuesAreHidden` can treat any persisted deck as
+        // a real round without mistaking a former poker draft for a blind vote.
+        requestedConfig.poker = undefined;
+      }
+      if (effectiveMode === 'POINTS') {
+        const requestedBudgetProvided = 'budget' in requestedConfig;
+        const requestedMaxProvided = 'maxPointsPerUser' in requestedConfig;
+        const resolved = resolveBudgetConfig({
+          requestedBudget: requestedConfig.budget,
+          budgetProvided: requestedBudgetProvided,
+          requestedMaxPointsPerUser: requestedConfig.maxPointsPerUser,
+          maxProvided: requestedMaxProvided,
+          fallbackBudget: existing.config.budget,
+          fallbackMaxPointsPerUser: existing.config.maxPointsPerUser,
+        });
+        if (resolved.error) {
+          return res.status(400).json({ error: resolved.error });
+        }
+        const effectiveBudget = resolved.budget;
+        const effectiveMax = resolved.maxPointsPerUser;
+        // The spending variation changes what a stored value means, so freeze
+        // it once the vote leaves draft just like the scheduling slot set and
+        // the poker deck.
+        if (existing.config.phase !== 'IDLE') {
+          const budgetChanged =
+            requestedBudgetProvided &&
+            JSON.stringify(effectiveBudget) !==
+              JSON.stringify(normalizeBudgetConfig(existing.config.budget));
+          const maxChanged =
+            requestedMaxProvided &&
+            effectiveMax !== budgetTotal(existing.config);
+          const allowMultipleChanged =
+            'allowMultiple' in requestedConfig &&
+            // Absent and explicit `false` are the same behaviour: older votes
+            // (and linked-vote creation) may not store the key at all, so a raw
+            // comparison would lock every save of an already-started vote.
+            (requestedConfig.allowMultiple ?? false) !==
+              (existing.config.allowMultiple ?? false);
+          if (budgetChanged || maxChanged || allowMultipleChanged) {
+            return res.status(400).json({
+              error: 'Budget settings are locked once the vote is open',
+            });
+          }
+        }
+        applyResolvedBudgetConfig(requestedConfig, resolved);
+      } else {
+        // Leaving POINTS (or saving another mode over a former draft) must not
+        // leave a budget block behind that a later mode-independent read would
+        // mistake for a real points vote.
+        clearBudgetConfig(requestedConfig);
       }
       // Opening a scheduling poll freezes its slot set, so validate the set that
       // will actually be stored: a pruned grid (or a dropped config) can never
@@ -1781,10 +2096,16 @@ app.put('/api/votes/:id', async (req: Request, res: Response) => {
         });
       }
     }
-    const vote = await db.updateVote(req.params.id, req.body);
+    let vote = await db.updateVote(req.params.id, req.body);
     if (!vote) {
       return res.status(404).json({ error: 'Vote not found' });
     }
+    // Closing the vote during the arming window must tear the reveal down, not
+    // leave a persisted deadline the reveal timer can never honour.
+    vote = await settlePokerRevealForPhase(vote);
+    // A save can clear the poker deck (mode switch) or start a new round; the
+    // shared-document blind-reveal rule must follow the persisted state.
+    trackPokerValueVisibility(vote);
     // Turning anonymity on must also scrub identities captured while the vote
     // was non-anonymous. The decision is state-based, not transition-based, and
     // runs only after the anonymity change is persisted, so a failed update can
@@ -1931,7 +2252,12 @@ app.post('/api/votes/:id/finalize', async (req: Request, res: Response) => {
       outcome = { ...req.body, winningProposalId: chosenRun.slotIds[0] };
     }
 
-    const finalized = await db.finalizeVote(req.params.id, outcome);
+    let finalized = await db.finalizeVote(req.params.id, outcome);
+    // Finalizing directly from OPEN (a decision vote may) can land inside the
+    // arming window; the same teardown applies so the round is not left armed.
+    if (finalized) {
+      finalized = await settlePokerRevealForPhase(finalized);
+    }
     res.json(finalized);
   } catch (error: unknown) {
     console.error('Error finalizing vote:', error);
@@ -1943,9 +2269,7 @@ app.post('/api/votes/:id/finalize', async (req: Request, res: Response) => {
 app.delete('/api/votes/:id', async (req: Request, res: Response) => {
   try {
     await db.deleteVote(req.params.id);
-    clearVoteFromYjs(req.params.id);
-    clearVoteDrafts(req.params.id);
-    clearVotePresence(req.params.id);
+    teardownVoteLiveState(req.params.id);
     res.status(204).send();
   } catch (error: unknown) {
     console.error('Error deleting vote:', error);
@@ -1956,14 +2280,30 @@ app.delete('/api/votes/:id', async (req: Request, res: Response) => {
 
 app.post('/api/votes/:id/reset', async (req: Request, res: Response) => {
   try {
-    const reset = await db.resetVote(req.params.id);
+    const existing = await db.getVoteById(req.params.id);
+    if (!existing) {
+      res.status(404).json({ error: 'Vote not found' });
+      return;
+    }
+    // A poker reset must clear the persisted reveal state with the responses it
+    // described, in the same transaction: otherwise reopening the vote keeps
+    // `revealedAt`, rejects every new estimate, and has no responses left to
+    // form a next round from.
+    const reset =
+      existing.config.mode === 'POKER_PLANNING'
+        ? await db.resetVoteWithConfig(existing.id, {
+            phase: 'IDLE',
+            poker: clearedPokerRound(existing.config.poker, 0),
+          })
+        : await db.resetVote(existing.id);
     if (!reset) {
       res.status(404).json({ error: 'Vote not found' });
       return;
     }
-    clearVoteFromYjs(reset.id);
-    clearVoteDrafts(reset.id);
-    clearVotePresence(reset.id);
+    teardownVoteLiveState(reset.id);
+    if (reset.config.mode === 'POKER_PLANNING') {
+      broadcastVoteToYjs(reset);
+    }
     if (reset.config.mode === 'COMPARATIVE_PRIORITIZATION') {
       scheduleRankingLiveBroadcast(reset, { resultsChanged: true });
     }
@@ -2005,6 +2345,502 @@ async function canModerateVote(req: Request, vote: { id: string }): Promise<bool
   // itself should count as the link being "used".
   const resolved = await db.verifyVoteModeratorToken(moderatorToken);
   return Boolean(resolved && resolved.vote.id === vote.id);
+}
+
+const POKER_REVEAL_DELAY_MS = 5000;
+const pokerRevealTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const pokerRevealInFlight = new Set<string>();
+
+function broadcastVoteToYjs(vote: VoteEntity): void {
+  // Keep the persisted blind-reveal state in step with the projection before any
+  // client can react to it. The scrub uses this, not the client-visible vote.
+  trackPokerValueVisibility(vote);
+  try {
+    const doc = getYDoc(YJS_ROOM) as Y.Doc;
+    doc.getMap('voteProposals').set(vote.id, vote);
+  } catch {
+    // Yjs doc may not exist yet — safe to skip
+  }
+}
+
+function clearPokerRevealTimer(voteId: string): void {
+  const timer = pokerRevealTimers.get(voteId);
+  if (timer) clearTimeout(timer);
+  pokerRevealTimers.delete(voteId);
+}
+
+/**
+ * Arm (or re-arm) the single reveal timer for a vote. The callback must never
+ * surface an unhandled rejection: one transient DB error during a reveal would
+ * otherwise terminate the process and drop every active vote room. The reveal is
+ * idempotent, so the next poll or timer re-attempts it. Both the ready gate and
+ * the startup recovery schedule through here so their error handling cannot
+ * drift.
+ */
+function schedulePokerRevealTimer(
+  voteId: string,
+  delayMs: number,
+  logLabel: string,
+): void {
+  clearPokerRevealTimer(voteId);
+  pokerRevealTimers.set(
+    voteId,
+    setTimeout(() => {
+      pokerRevealTimers.delete(voteId);
+      void revealPokerIfDue(voteId).catch((error: unknown) => {
+        console.error(`${logLabel} failed:`, error);
+      });
+    }, delayMs),
+  );
+}
+
+/**
+ * The reset literal shared by the moderator reset and the poker next-round
+ * paths. They differ only in the new round number; every other reveal field
+ * must be cleared or a reopened/advanced round inherits stale reveal state.
+ */
+function clearedPokerRound(
+  poker: Partial<PokerConfig> | null | undefined,
+  round: number,
+): PokerConfig {
+  return {
+    ...normalizePokerConfig(poker),
+    round,
+    armedAt: null,
+    revealAt: null,
+    revealedAt: null,
+    revealedProposalIds: [],
+  };
+}
+
+/**
+ * Clear every ephemeral, vote-scoped store a vote owns. Delete, moderator reset
+ * and poker next-round all tear the same live state down; keeping the list in
+ * one place stops a store added later from surviving one of those paths.
+ */
+function teardownVoteLiveState(voteId: string): void {
+  pokerHiddenConfigByVote.delete(voteId);
+  clearVoteFromYjs(voteId);
+  clearVoteDrafts(voteId);
+  clearVotePresence(voteId);
+  clearPokerReady(voteId);
+  clearPokerRevealTimer(voteId);
+  invalidatePokerParticipantCache(voteId);
+}
+
+/**
+ * The participant set is a DISTINCT projection of the vote's responses, and the
+ * 2-second poker poll asks for it on every tick from every participant. Cache it
+ * for a short window so a burst of polls costs one row scan instead of one per
+ * viewer. The window is longer than the poll interval so one viewer's
+ * consecutive ticks hit it; submissions and withdrawals invalidate explicitly,
+ * so readiness is never decided from a set that predates them, and the TTL only
+ * bounds the cost of an invalidation the server did not observe (e.g. a direct
+ * DB edit).
+ */
+const POKER_PARTICIPANT_CACHE_TTL_MS = 3000;
+const pokerParticipantCache = new Map<
+  string,
+  { keys: Set<string>; expiresAt: number }
+>();
+
+function invalidatePokerParticipantCache(voteId: string): void {
+  pokerParticipantCache.delete(voteId);
+}
+
+/**
+ * Drop cache entries whose TTL has elapsed. The TTL is already honoured on
+ * read, so this only bounds memory: without it every poker vote ever polled
+ * would keep its participant set until the process restarts.
+ */
+function sweepPokerParticipantCache(now = Date.now()): void {
+  for (const [voteId, entry] of pokerParticipantCache) {
+    if (entry.expiresAt <= now) pokerParticipantCache.delete(voteId);
+  }
+}
+
+/**
+ * The voters who have submitted a complete ballot: an estimate for every active
+ * proposal. Readiness is gated on that same coverage rule, so only these voters
+ * can ever satisfy the all-ready gate. Counting a voter who has filled in part
+ * of a deck would put them in the readiness denominator with no way to become
+ * ready, so `allReady` could never turn true and the round could only escape by
+ * a destructive reset.
+ */
+function completePokerKeysFromCoverage(
+  vote: VoteEntity,
+  rows: Array<{ voterToken: string; proposalId: string | null }>,
+): Set<string> {
+  const activeIds = activeProposalIds(vote);
+  const coveredByVoter = new Map<string, Set<string>>();
+  for (const row of rows) {
+    if (!row.proposalId) continue;
+    const key = voteParticipantKey(vote.id, row.voterToken);
+    const covered = coveredByVoter.get(key);
+    if (covered) {
+      covered.add(row.proposalId);
+    } else {
+      coveredByVoter.set(key, new Set([row.proposalId]));
+    }
+  }
+  const keys = new Set<string>();
+  for (const [key, covered] of coveredByVoter) {
+    if (pokerBallotCoversEveryProposal(activeIds, (id) => covered.has(id))) {
+      keys.add(key);
+    }
+  }
+  return keys;
+}
+
+function pokerCompleteParticipantKeys(
+  vote: VoteEntity,
+  responses: VoteResponseEntity[],
+): Set<string> {
+  return completePokerKeysFromCoverage(
+    vote,
+    responses.map((response) => ({
+      voterToken: response.voterToken,
+      proposalId: response.proposalId,
+    })),
+  );
+}
+
+async function pokerCachedCompleteParticipantKeys(
+  vote: VoteEntity,
+): Promise<Set<string>> {
+  const cached = pokerParticipantCache.get(vote.id);
+  if (cached && cached.expiresAt > Date.now()) return cached.keys;
+  // Read only the coverage columns: the 2-second poll runs for every viewer, and
+  // the full response row (value, attendeeData JSON) is never needed to decide
+  // which ballots are complete.
+  const coverage = await db.getVoteParticipantCoverage(vote.id);
+  const keys = completePokerKeysFromCoverage(vote, coverage);
+  pokerParticipantCache.set(vote.id, {
+    keys,
+    expiresAt: Date.now() + POKER_PARTICIPANT_CACHE_TTL_MS,
+  });
+  return keys;
+}
+
+async function computePokerState(
+  vote: VoteEntity,
+  voterToken?: string,
+  // A caller that already resolved the participant set passes it in, so one
+  // request never runs the same response scan two or three times.
+  knownParticipants?: Set<string>,
+): Promise<PokerState> {
+  // The readiness denominator is the set of complete ballots, the same set the
+  // ready gate accepts. A partial ballot is excluded because it could never
+  // become ready and would therefore keep `allReady` false forever. Live
+  // presence is deliberately excluded too: it is an unauthenticated heartbeat
+  // keyed by a client-minted token, so counting it let any viewer (or a token
+  // flood) add an unreadyable participant and block the reveal indefinitely.
+  const participants =
+    knownParticipants ?? (await pokerCachedCompleteParticipantKeys(vote));
+  const readyKeys = new Set(listPokerReady(vote.id).map((entry) => entry.participantId));
+  const readyCount = [...participants].filter((key) => readyKeys.has(key)).length;
+  const poker = normalizePokerConfig(vote.config.poker);
+  const voterKey = voterToken ? voteParticipantKey(vote.id, voterToken) : null;
+  const youAreParticipant = Boolean(voterKey && participants.has(voterKey));
+  return {
+    participantCount: participants.size,
+    readyCount,
+    allReady: participants.size > 0 && readyCount === participants.size,
+    youAreParticipant,
+    youAreReady: Boolean(
+      youAreParticipant && voterKey && readyKeys.has(voterKey),
+    ),
+    armedAt: poker.armedAt ?? null,
+    revealAt: poker.revealAt ?? null,
+    revealedAt: poker.revealedAt ?? null,
+    round: poker.round ?? 0,
+    scale: poker.scale,
+  };
+}
+
+/**
+ * Whether a persisted reveal arm is stale and must be cancelled.
+ *
+ * A `revealAt` is only written once every participant was ready, and any later
+ * response change disarms it. Readiness is process-local, though, so a restart
+ * empties it while the deadline survives: an entirely empty ready set is that
+ * recovery case, and the deadline must be allowed to reveal it. Only a ready
+ * set that is present but incomplete is the anomaly the disarm is for.
+ *
+ * The poker poll and the reveal timer both act on this rule, so they must agree
+ * on it. Whether cancelling also clears participants' ready flags is a
+ * call-site decision (the poll preserves readiness; the reveal timer resets it),
+ * but the predicate itself lives here so the two paths cannot drift.
+ */
+function pokerArmIsStale(state: PokerState): boolean {
+  return Boolean(state.revealAt) && !state.allReady && state.readyCount > 0;
+}
+
+async function armPokerRevealIfReady(
+  vote: VoteEntity,
+  knownParticipants?: Set<string>,
+): Promise<VoteEntity> {
+  if (vote.config.mode !== 'POKER_PLANNING' || vote.config.phase !== 'OPEN') {
+    return vote;
+  }
+  const poker = normalizePokerConfig(vote.config.poker);
+  if (poker.revealedAt || poker.revealAt) return vote;
+
+  const state = await computePokerState(vote, undefined, knownParticipants);
+  if (!state.allReady) return vote;
+
+  // `updateVote` shallow-merges the patch over the row it re-reads, so writing
+  // this snapshot's config would put a stale `phase` (and every other key) back
+  // over a concurrent change — reopening a vote a moderator just closed, or
+  // rewinding one that was finalized while this request ran. Re-read inside the
+  // write path, re-check the guards the snapshot may have missed, and base the
+  // patch on that fresh row so only the poker fields change.
+  const fresh = await db.getVoteById(vote.id);
+  if (
+    !fresh ||
+    fresh.config.mode !== 'POKER_PLANNING' ||
+    fresh.config.phase !== 'OPEN'
+  ) {
+    return fresh ?? vote;
+  }
+  const freshPoker = normalizePokerConfig(fresh.config.poker);
+  if (freshPoker.revealedAt || freshPoker.revealAt) return fresh;
+
+  const now = Date.now();
+  // The arm is a guarded, poker-only write: the DB re-checks (and locks) the
+  // row and aborts if a reveal or a close landed after the snapshot read, so a
+  // stale `phase`/`revealedAt` from this request cannot reopen the vote or
+  // un-reveal a round.
+  const updated = await db.updateVotePokerConfig(
+    vote.id,
+    {
+      armedAt: new Date(now).toISOString(),
+      revealAt: new Date(now + POKER_REVEAL_DELAY_MS).toISOString(),
+      revealedAt: null,
+    },
+    {
+      phase: 'OPEN',
+      pokerRevealedAt: freshPoker.revealedAt ?? null,
+      pokerRevealAt: freshPoker.revealAt ?? null,
+      pokerRevealedProposalIds: pokerRevealedProposalIdsSignature(
+        freshPoker.revealedProposalIds,
+      ),
+    },
+  );
+  if (!updated) return (await db.getVoteById(vote.id)) ?? fresh;
+
+  broadcastVoteToYjs(updated);
+  schedulePokerRevealTimer(vote.id, POKER_REVEAL_DELAY_MS, 'Poker reveal timer');
+  return updated;
+}
+
+async function cancelPokerReveal(
+  vote: VoteEntity,
+  options: { clearReady: boolean },
+): Promise<VoteEntity> {
+  clearPokerRevealTimer(vote.id);
+  if (options.clearReady) clearPokerReady(vote.id);
+  if (vote.config.mode !== 'POKER_PLANNING') return vote;
+
+  // Re-read inside the write path: basing the patch on a fresh row means a
+  // cancel that races a moderator close/finalize cannot rewrite `phase` or any
+  // other config key from this request's older snapshot.
+  const fresh = await db.getVoteById(vote.id);
+  if (!fresh || fresh.config.mode !== 'POKER_PLANNING') return fresh ?? vote;
+  const poker = normalizePokerConfig(fresh.config.poker);
+  if (!poker.armedAt && !poker.revealAt) return fresh;
+
+  // Cancel only clears the arm. The guarded write aborts if a reveal landed
+  // after this snapshot, so it can never un-reveal a round that just revealed.
+  const updated = await db.updateVotePokerConfig(
+    vote.id,
+    { armedAt: null, revealAt: null },
+    {
+      phase: fresh.config.phase,
+      pokerRevealedAt: poker.revealedAt ?? null,
+      pokerRevealAt: poker.revealAt ?? null,
+      pokerRevealedProposalIds: pokerRevealedProposalIdsSignature(
+        poker.revealedProposalIds,
+      ),
+    },
+  );
+  if (!updated) return (await db.getVoteById(vote.id)) ?? fresh;
+  broadcastVoteToYjs(updated);
+  return updated;
+}
+
+/**
+ * A poker reveal only means something while the vote is OPEN. If a save or a
+ * finalize moves the phase off OPEN while the reveal is armed (all participants
+ * just consented), the persisted `armedAt`/`revealAt` would outlive the round:
+ * `revealPokerIfDue` ignores a non-OPEN phase, so its timer fires with no
+ * reveal and the stale deadline makes a later reopen reveal instantly from
+ * readiness the participants never re-confirmed. Drop the arm and the ephemeral
+ * readiness whenever the phase leaves OPEN.
+ */
+async function settlePokerRevealForPhase(vote: VoteEntity): Promise<VoteEntity> {
+  if (vote.config.mode !== 'POKER_PLANNING' || vote.config.phase === 'OPEN') {
+    return vote;
+  }
+  return cancelPokerReveal(vote, { clearReady: true });
+}
+
+async function revealPokerIfDue(voteId: string): Promise<VoteEntity | null> {
+  if (pokerRevealInFlight.has(voteId)) return null;
+  pokerRevealInFlight.add(voteId);
+  try {
+    const vote = await db.getVoteById(voteId);
+    if (
+      !vote ||
+      vote.config.mode !== 'POKER_PLANNING' ||
+      vote.config.phase !== 'OPEN'
+    ) {
+      return null;
+    }
+    const poker = normalizePokerConfig(vote.config.poker);
+    if (!poker.revealAt || poker.revealedAt) return null;
+    const dueAt = Date.parse(poker.revealAt);
+    if (!Number.isFinite(dueAt) || dueAt > Date.now()) return null;
+    // The deadline this call is honouring. A cancel followed by a re-arm
+    // replaces `revealAt` with a new deadline; the fresh read below must match
+    // this value, otherwise an arm that started after this call began would be
+    // revealed instantly instead of after its own delay.
+    const observedRevealAt = poker.revealAt;
+
+    const state = await computePokerState(vote);
+    if (pokerArmIsStale(state)) {
+      // At the deadline an inconsistent ready set is abandoned: clear the flags
+      // so the next attempt starts a fresh readiness cycle.
+      await cancelPokerReveal(vote, { clearReady: true });
+      return null;
+    }
+
+    // Re-read inside the write path: `vote` may be stale after the state scan,
+    // and a full config from it would revive an old phase over a concurrent
+    // close. Re-checking here also means a reveal cancelled between the due
+    // check and this write is not resurrected.
+    const fresh = await db.getVoteById(vote.id);
+    if (
+      !fresh ||
+      fresh.config.mode !== 'POKER_PLANNING' ||
+      fresh.config.phase !== 'OPEN'
+    ) {
+      return null;
+    }
+    const freshPoker = normalizePokerConfig(fresh.config.poker);
+    if (!freshPoker.revealAt || freshPoker.revealedAt) return null;
+    // Only reveal the arm this call observed. A cancel+re-arm during the state
+    // scan leaves a different (future) deadline; revealing it now would skip
+    // the new round's 5s window. Its own timer will fire instead.
+    if (freshPoker.revealAt !== observedRevealAt) return null;
+    const freshDueAt = Date.parse(freshPoker.revealAt);
+    if (!Number.isFinite(freshDueAt) || freshDueAt > Date.now()) return null;
+
+    // Reveal is a guarded, poker-only write: the DB re-checks the row and
+    // aborts if a close landed after the snapshot, if a competing reveal that
+    // already stamped `revealedAt` wins, or if a participant cancelled the arm
+    // (clearing `revealAt`) between this read and the write. Only the reveal
+    // fields change, so `phase` stays authoritative.
+    const updated = await db.updateVotePokerConfig(
+      vote.id,
+      {
+        armedAt: null,
+        revealAt: null,
+        revealedAt: new Date().toISOString(),
+        revealedProposalIds: [],
+      },
+      {
+        phase: 'OPEN',
+        pokerRevealedAt: freshPoker.revealedAt ?? null,
+        pokerRevealAt: freshPoker.revealAt ?? null,
+        pokerRevealedProposalIds: pokerRevealedProposalIdsSignature(
+          freshPoker.revealedProposalIds,
+        ),
+      },
+    );
+    // A rejected write means this call did not reveal: a cancel or a competing
+    // reveal already tore the arm down. Clearing the ready flags here would
+    // wipe a round that has since re-armed and delete its fresh timer, so only
+    // the call that actually stamped `revealedAt` clears the live state.
+    if (!updated) return null;
+    clearPokerRevealTimer(vote.id);
+    clearPokerReady(vote.id);
+    broadcastVoteToYjs(updated);
+    return updated;
+  } finally {
+    pokerRevealInFlight.delete(voteId);
+  }
+}
+
+/**
+ * Re-arm poker reveal deadlines after a restart.
+ *
+ * The reveal timer and the ready store are process-local, but an armed
+ * `revealAt` is persisted. A redeploy therefore drops both timers and
+ * readiness while the deadline survives, and without re-arming, the next poll
+ * would cancel the round. Re-arming (or firing an already-overdue deadline)
+ * makes the persisted arm authoritative again; a response change still
+ * disarms it through `handlePokerResponseChange`.
+ *
+ * Only armed poker votes are loaded: this runs before `app.listen`, so it must
+ * not pull the whole vote history into memory and delay startup.
+ */
+async function recoverPokerReveals(): Promise<void> {
+  let votes: VoteEntity[];
+  try {
+    votes = await db.getPokerVotesAwaitingReveal();
+  } catch (error: unknown) {
+    console.error('Failed to scan votes for pending poker reveals:', error);
+    return;
+  }
+  const now = Date.now();
+  for (const vote of votes) {
+    if (vote.config.mode !== 'POKER_PLANNING' || vote.config.phase !== 'OPEN') {
+      continue;
+    }
+    const poker = normalizePokerConfig(vote.config.poker);
+    if (!poker.revealAt || poker.revealedAt) continue;
+    const dueAt = Date.parse(poker.revealAt);
+    if (!Number.isFinite(dueAt)) continue;
+    schedulePokerRevealTimer(
+      vote.id,
+      Math.max(0, dueAt - now),
+      'Poker reveal recovery timer',
+    );
+  }
+}
+
+async function handlePokerResponseChange(
+  vote: VoteEntity,
+  voterToken: string,
+): Promise<VoteEntity> {
+  if (vote.config.mode !== 'POKER_PLANNING') return vote;
+  // A submission or withdrawal just changed the participant set; the next
+  // readiness read must not reuse the set cached before it.
+  invalidatePokerParticipantCache(vote.id);
+  let current = (await db.getVoteById(vote.id)) ?? vote;
+  // The startup warm only includes rounds that already had a response, so a
+  // round that was empty when the process started would never enter the
+  // blind-reveal scrub set once estimates begin to arrive. Track it from the
+  // persisted vote on every response change (submission, batch or withdrawal)
+  // before any row can be republished by a stale client.
+  trackPokerValueVisibility(current);
+  const participantKey = voteParticipantKey(current.id, voterToken);
+  clearPokerReadyForParticipant(current.id, participantKey);
+  const poker = normalizePokerConfig(current.config.poker);
+  if (poker.armedAt || poker.revealAt) {
+    // Disarm only when the change came from a complete participant. Readiness is
+    // derived from complete ballots, so a partial estimate from a non-participant
+    // alters nothing in the gate; letting it cancel the arm would let any visitor
+    // who knows the public link hold the round open forever by alternating one
+    // partial submit/withdraw. This check runs only while an arm is pending, so
+    // the extra response scan is confined to the short reveal window.
+    const participants = await pokerCachedCompleteParticipantKeys(current);
+    if (participants.has(participantKey)) {
+      current = await cancelPokerReveal(current, { clearReady: false });
+    }
+  }
+  return current;
 }
 
 const RANKING_RESULT_CACHE_LIMIT = 32;
@@ -2374,9 +3210,12 @@ app.post('/api/votes/:idOrSlug/ranking-submissions', async (req: Request, res: R
       voterToken: req.body.voterToken,
       // Anonymous votes must not persist who cast the ballot.
       userId: isAnonymous ? null : (typeof req.body.userId === 'string' ? req.body.userId : null),
+      // Same shared rule as the response paths: never trust the raw length, so a
+      // public ballot cannot store an arbitrarily long name in the participation
+      // view. An empty normalized value becomes null instead of an empty string.
       displayName: isAnonymous
         ? null
-        : (typeof req.body.displayName === 'string' ? req.body.displayName : null),
+        : normalizeVoterDisplayName(req.body.displayName) || null,
       draft: validation.ballot,
       draftUpdatedAt: now,
       submitted: validation.status === 'submitted' ? validation.ballot : undefined,
@@ -2756,6 +3595,23 @@ app.post('/api/votes/:idOrSlug/responses', async (req: Request, res: Response) =
     if (vote.config.phase !== 'OPEN') {
       return res.status(400).json({ error: 'Vote is not open for responses' });
     }
+    if (vote.config.mode === 'POINTS') {
+      // A points ballot is a whole allocation, not independent rows: its total
+      // budget and post-close lock can only be enforced against the complete
+      // ballot. This per-row route writes one proposal at a time, so it cannot
+      // enforce either invariant safely (a direct or concurrently retried call
+      // could over-spend or change a locked ballot). Every points write must go
+      // through the atomic /responses/budget endpoint; a client bundle cached
+      // before that route existed must reload to pick up the new one.
+      return res.status(400).json({
+        error: 'Points ballots are submitted together; reload to continue voting',
+      });
+    }
+    if (pokerEstimateChangesAreFrozen(vote)) {
+      return res.status(400).json({
+        error: 'This poker round has already been revealed',
+      });
+    }
 
     const { value } = req.body;
     const valueError = validateVoteResponseValue(vote, value);
@@ -2868,9 +3724,50 @@ app.post('/api/votes/:idOrSlug/responses', async (req: Request, res: Response) =
         attendeeData,
       });
     } else {
-      response = await db.createVoteResponse(vote.id, req.body);
+      // Only consent-loop rows are scoped to a round. For every other mode a
+      // client-supplied `loopId` would mint a second row for the same
+      // (voter, proposal), and the poker tally counts rows, so one voter could
+      // stuff the revealed estimate. Drop it unless the mode actually uses loops.
+      const loopId =
+        vote.config.mode === 'CONSENT_LOOP' &&
+        typeof req.body?.loopId === 'string'
+          ? req.body.loopId
+          : null;
+      // Never persist a client-supplied `attendeeData` verbatim. The welcome-name
+      // flow attaches a hidden display name to every non-anonymous ballot, but a
+      // public caller could otherwise store a name on an anonymous vote or an
+      // arbitrarily long one. Rebuild it with the scheduling rule, which already
+      // encodes the anonymity check and the display-name length cap, so this path
+      // cannot bypass either.
+      const attendeeData = schedulingAttendeeDisplayName(vote, req.body);
+      response = await db.createVoteResponse(vote.id, {
+        ...req.body,
+        loopId,
+        attendeeData,
+      });
     }
     broadcastVoteResponseToYjs(vote, response);
+    const currentVote = await handlePokerResponseChange(
+      vote,
+      response.voterToken,
+    );
+    if (vote.config.mode === 'POKER_PLANNING' && req.body?.markReady === true) {
+      // The estimate is persisted above, so a fresh read includes it. Only a
+      // ballot that covers every active proposal may mark the participant ready;
+      // otherwise an incomplete round could arm a reveal with blank cards.
+      const pokerResponses = await db.getVoteResponses(vote.id);
+      // The denominator is exactly the set of complete ballots, so membership in
+      // it is the single readiness rule. Reusing it for the arm decision also
+      // avoids scanning every response twice in one request.
+      const completeKeys = pokerCompleteParticipantKeys(vote, pokerResponses);
+      if (completeKeys.has(voteParticipantKey(vote.id, response.voterToken))) {
+        markPokerReady({
+          voteId: vote.id,
+          participantId: voteParticipantKey(vote.id, response.voterToken),
+        });
+        await armPokerRevealIfReady(currentVote, completeKeys);
+      }
+    }
     res.status(201).json(response);
   } catch (error: unknown) {
     console.error('Error creating vote response:', error);
@@ -2972,6 +3869,89 @@ app.post('/api/votes/:idOrSlug/responses/batch', async (req: Request, res: Respo
   }
 });
 
+// POINTS sends one allocation for the whole vote. The batch replaces the
+// voter's budget rows atomically, so a race between two tabs cannot spend the
+// same note twice, and the server validates the total (and, for fixed-note
+// variations, the exact note counts) instead of trusting per-row values.
+app.post('/api/votes/:idOrSlug/responses/budget', async (req: Request, res: Response) => {
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) {
+      return res.status(404).json({ error: 'Vote not found' });
+    }
+    if (vote.config.mode !== 'POINTS') {
+      return res.status(400).json({ error: 'Budget submissions are only available for points votes' });
+    }
+    if (vote.config.phase !== 'OPEN') {
+      return res.status(400).json({ error: 'Vote is not open for responses' });
+    }
+    const voterToken = req.body?.voterToken;
+    if (!isValidVoterToken(voterToken)) {
+      return res.status(400).json({ error: 'voterToken is required' });
+    }
+    // The atomic endpoint replaces the whole ballot, so it honours the ballot
+    // lock the same way the comparative and comment paths do. The check is
+    // evaluated inside the replacement transaction (see
+    // `replaceVoteResponsesForVoter`) so two concurrent first submissions
+    // cannot both pass a stale pre-read. It is scoped to active proposals,
+    // matching the ballot the voter can actually see: a row left on a proposal
+    // deactivated after voting does not strand an otherwise-empty ballot.
+    const activeIds = activeProposalIds(vote);
+    const parsed = parseBudgetSubmission(
+      vote.config,
+      activeIds,
+      req.body ?? {},
+    );
+    if (parsed.error) {
+      return res.status(400).json({ error: parsed.error });
+    }
+
+    const attendeeData = schedulingAttendeeDisplayName(vote, req.body);
+    // A budget ballot is one comment per voter, repeated on every row: the
+    // batch replaces the whole allocation, so the comment belongs to the batch.
+    const comment =
+      vote.config.allowFreeText === true && typeof req.body?.comment === 'string'
+        ? req.body.comment.trim().slice(0, 2000) || null
+        : null;
+    // The comment rides on a response row, so an empty allocation would delete
+    // every row and silently drop it while still returning success. Reject the
+    // combination so the voter is told instead of losing their comment.
+    if (comment && Object.keys(parsed.values).length === 0) {
+      return res.status(400).json({
+        error: 'Add at least one allocation before submitting a comment',
+      });
+    }
+
+    // Atomic read-modify-write in the DB (one transaction plus a per-voter
+    // advisory lock in Postgres); no process-local vote lock is needed and
+    // holding one would only serialize unrelated voters.
+    const result = await db.replaceVoteResponsesForVoter(
+      vote.id,
+      voterToken,
+      Object.entries(parsed.values).map(([proposalId, value]) => ({
+        proposalId,
+        value,
+        attendeeData,
+        comment,
+      })),
+      activeIds,
+      { rejectIfExisting: vote.config.allowVoteChangeUntilClose === false },
+    );
+    if (result.rejected === 'locked') {
+      return res.status(409).json({ error: 'This ballot is locked' });
+    }
+    if (result.removedIds.length > 0) {
+      broadcastVoteResponsesRemovedFromYjs(result.removedIds);
+    }
+    broadcastVoteResponsesToYjs(vote, result.responses);
+    res.status(204).end();
+  } catch (error: unknown) {
+    console.error('Error submitting budget allocation:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to submit allocation', details: message });
+  }
+});
+
 // Rename the voter's claimed display name without touching availability,
 // RSVP metadata, the removal token, or the original submittedAt. The voter's
 // own rows are selected by the withdrawal credential.
@@ -2980,11 +3960,6 @@ app.post('/api/votes/:idOrSlug/identity', async (req: Request, res: Response) =>
     const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
     if (!vote) {
       return res.status(404).json({ error: 'Vote not found' });
-    }
-    if (vote.config.mode !== 'ATTENDANCE' && vote.config.mode !== 'SCHEDULING') {
-      return res.status(400).json({
-        error: 'Identity editing is only available for attendance and scheduling votes',
-      });
     }
     if (vote.config.phase !== 'OPEN') {
       return res.status(400).json({ error: 'Vote is not open' });
@@ -3008,9 +3983,23 @@ app.post('/api/votes/:idOrSlug/identity', async (req: Request, res: Response) =>
         // on every slot row. `auto` keeps an RSVP that was already hidden hidden.
         proposalId:
           vote.config.mode === 'ATTENDANCE' ? EVENT_RSVP_PROPOSAL_ID : null,
-        visibility: vote.config.mode === 'SCHEDULING' ? 'hidden' : 'auto',
+        visibility: vote.config.mode === 'ATTENDANCE' ? 'auto' : 'hidden',
       }),
     );
+
+    // A comparative ballot's name lives on the ranking submission, not on
+    // `voteResponses`, so the rename above matches nothing there. Update the
+    // submission directly (and notify the facilitator panel) so a rename after
+    // Submit is reflected in the participation view even when the vote locks
+    // changes and the voter cannot re-save the ballot.
+    if (vote.config.mode === 'COMPARATIVE_PRIORITIZATION') {
+      const renamed = await db.renameVoteRankingSubmissionForVoter(
+        vote.id,
+        voterToken,
+        displayName,
+      );
+      if (renamed) scheduleRankingLiveBroadcast(vote, { resultsChanged: false });
+    }
 
     broadcastVoteResponsesToYjs(vote, updated);
     res.status(204).send();
@@ -3143,6 +4132,11 @@ app.delete('/api/votes/:idOrSlug/responses', async (req: Request, res: Response)
     if (vote.config.phase !== 'OPEN') {
       return res.status(400).json({ error: 'Vote is not open for responses' });
     }
+    if (pokerEstimateChangesAreFrozen(vote)) {
+      return res.status(400).json({
+        error: 'This poker round has already been revealed',
+      });
+    }
     // A participant holding the private RSVP link can withdraw without the
     // withdrawal credential. Only the sentinel row carrying the matching
     // server-issued token may be removed.
@@ -3173,6 +4167,25 @@ app.delete('/api/votes/:idOrSlug/responses', async (req: Request, res: Response)
     if (typeof voterToken !== 'string') {
       return res.status(400).json({ error: 'voterToken is required' });
     }
+    // A locked points ballot cannot be withdrawn either: the submit route
+    // refuses a replacement once an active row exists, so allowing the delete
+    // would let a voter clear the ballot and submit again. Scope the check to
+    // active proposals so a row left on a proposal deactivated after voting
+    // (which the submit route no longer counts) does not block cleanup.
+    if (
+      vote.config.mode === 'POINTS' &&
+      vote.config.allowVoteChangeUntilClose === false
+    ) {
+      const existing = await db.getVoteResponsesForVoter(vote.id, voterToken);
+      const activeIds = new Set(activeProposalIds(vote));
+      if (
+        existing.some(
+          (row) => row.proposalId !== null && activeIds.has(row.proposalId),
+        )
+      ) {
+        return res.status(409).json({ error: 'This ballot is locked' });
+      }
+    }
     const isAttendance = vote.config.mode === 'ATTENDANCE';
     const deletedProposalId = isAttendance
       ? EVENT_RSVP_PROPOSAL_ID
@@ -3187,6 +4200,13 @@ app.delete('/api/votes/:idOrSlug/responses', async (req: Request, res: Response)
       deletedLoopId,
     );
     broadcastVoteResponsesRemovedFromYjs(deletedResponseIds);
+    // Only a withdrawal that actually removed a row proves this caller owned a
+    // response. A no-op delete with an arbitrary token must not reach the poker
+    // state: `handlePokerResponseChange` would otherwise disarm a reveal for a
+    // non-participant who merely knows the public vote link.
+    if (deletedResponseIds.length > 0) {
+      await handlePokerResponseChange(vote, voterToken);
+    }
     res.status(204).send();
   } catch (error: unknown) {
     console.error('Error deleting vote response:', error);
@@ -3245,21 +4265,28 @@ app.post('/api/votes/:idOrSlug/drafts', async (req: Request, res: Response) => {
       cleanValues[proposalId] = value as number;
     }
 
+    if (vote.config.mode === 'POINTS') {
+      // The draft channel carries totals only. Reject the ones the budget
+      // submit route would refuse so the live moderator matrix never shows an
+      // allocation that cannot be saved.
+      const draftError = validateBudgetDraftValues(vote.config, cleanValues);
+      if (draftError) {
+        return res.status(400).json({ error: draftError });
+      }
+    }
+
     upsertVoteDraft({
       voteId: vote.id,
       voterAlias: voterAlias(vote.id, voterToken),
       participantKey: voteParticipantKey(vote.id, voterToken),
       values: cleanValues,
-      // Only a non-anonymous scheduling poll carries a name on the draft, and
-      // the draft channel is moderator-only, so this never reaches a public
-      // projection. It lets the live participant matrix name someone before
-      // they submit.
-      displayName:
-        vote.config.mode === 'SCHEDULING' && !isVoteAnonymous(vote.config)
-          ? normalizeVoterDisplayName(
-              (req.body as { displayName?: unknown } | undefined)?.displayName,
-            ) || undefined
-          : undefined,
+      // The draft channel is moderator-only, so a non-anonymous vote can carry
+      // the welcome name here before the participant submits.
+      displayName: voteResponseCarriesDisplayName(vote.config)
+        ? normalizeVoterDisplayName(
+            (req.body as { displayName?: unknown } | undefined)?.displayName,
+          ) || undefined
+        : undefined,
       publisherId: typeof publisherId === 'string' ? publisherId : undefined,
     });
     broadcastVoteDraftRevision(vote.id);
@@ -3395,6 +4422,301 @@ app.get('/api/votes/:idOrSlug/presence', async (req: Request, res: Response) => 
   }
 });
 
+// Poker planning readiness/reveal. The ready signal is ephemeral and the
+// participant set is derived from the same submitted-response identities the
+// scheduling tally uses, so no separate participant/role model is introduced.
+app.get('/api/votes/:idOrSlug/poker', async (req: Request, res: Response) => {
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) return res.status(404).json({ error: 'Vote not found' });
+    if (vote.config.mode !== 'POKER_PLANNING') {
+      return res.status(400).json({ error: 'Not a poker planning vote' });
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Vary', 'X-Voter-Token');
+    let current = vote;
+    if (vote.config.poker?.revealAt) {
+      // `revealPokerIfDue` returns the updated vote only when it actually
+      // revealed. When the deadline has not arrived yet — the common case on
+      // this 2-second poll — nothing was written, so reuse the snapshot this
+      // route already loaded instead of re-reading the whole row (which
+      // includes proposals) a second and third time per tick.
+      current = (await revealPokerIfDue(vote.id)) ?? vote;
+    }
+    const voterToken = requestToken(req, 'x-voter-token');
+    // Resolve the participant set once for this request. The branches below can
+    // arm or cancel a reveal, but neither changes who submitted, so re-deriving
+    // it for the returned state would only add another response scan per poll.
+    const participants = await pokerCachedCompleteParticipantKeys(current);
+    let state = await computePokerState(current, voterToken, participants);
+    // Cancel a stale arm, but keep participants' ready flags (clearReady: false)
+    // so they do not have to re-ready and the round can re-arm as soon as the
+    // last estimate lands. The stale-vs-restart-recovery rule is in
+    // `pokerArmIsStale` so it cannot drift from the reveal timer's copy.
+    if (pokerArmIsStale(state)) {
+      current = await cancelPokerReveal(current, { clearReady: false });
+      state = { ...state, armedAt: null, revealAt: null };
+    }
+    if (state.allReady && !state.revealAt && !state.revealedAt) {
+      const armed = await armPokerRevealIfReady(current, participants);
+      if (armed !== current) {
+        const armedPoker = normalizePokerConfig(armed.config.poker);
+        state = {
+          ...state,
+          armedAt: armedPoker.armedAt ?? null,
+          revealAt: armedPoker.revealAt ?? null,
+          revealedAt: armedPoker.revealedAt ?? null,
+        };
+      }
+    }
+    res.json(state);
+  } catch (error: unknown) {
+    console.error('Error fetching poker state:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to fetch poker state', details: message });
+  }
+});
+
+app.post('/api/votes/:idOrSlug/poker/ready', async (req: Request, res: Response) => {
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) return res.status(404).json({ error: 'Vote not found' });
+    if (vote.config.mode !== 'POKER_PLANNING') {
+      return res.status(400).json({ error: 'Not a poker planning vote' });
+    }
+    if (vote.config.phase !== 'OPEN') {
+      return res.status(400).json({ error: 'Vote is not open' });
+    }
+    if (vote.config.poker?.revealedAt) {
+      return res.status(400).json({ error: 'This round has already been revealed' });
+    }
+    const voterToken = requestToken(req, 'x-voter-token');
+    if (!voterToken) {
+      return res.status(400).json({ error: 'voterToken is required' });
+    }
+    const responses = await db.getVoteResponses(vote.id);
+    const participantId = voteParticipantKey(vote.id, voterToken);
+    // The participant denominator is exactly the set of complete ballots, so
+    // membership in it is the readiness rule. That keeps the gate, the arm
+    // decision and the returned state on one source of truth, and it rejects a
+    // partial or empty ballot before it can arm a reveal with blank cards.
+    const participants = pokerCompleteParticipantKeys(vote, responses);
+    if (!participants.has(participantId)) {
+      return res.status(400).json({
+        error: 'Estimate every proposal before marking ready',
+      });
+    }
+    markPokerReady({ voteId: vote.id, participantId });
+    const armed = await armPokerRevealIfReady(vote, participants);
+    res.json(await computePokerState(armed, voterToken, participants));
+  } catch (error: unknown) {
+    console.error('Error marking poker ready:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to mark ready', details: message });
+  }
+});
+
+app.post('/api/votes/:idOrSlug/poker/cancel', async (req: Request, res: Response) => {
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) return res.status(404).json({ error: 'Vote not found' });
+    if (vote.config.mode !== 'POKER_PLANNING') {
+      return res.status(400).json({ error: 'Not a poker planning vote' });
+    }
+    if (vote.config.phase !== 'OPEN') {
+      return res.status(400).json({ error: 'Vote is not open' });
+    }
+    const voterToken = requestToken(req, 'x-voter-token');
+    if (!voterToken) {
+      return res.status(400).json({ error: 'voterToken is required' });
+    }
+    const participants = await pokerCachedCompleteParticipantKeys(vote);
+    if (!participants.has(voteParticipantKey(vote.id, voterToken))) {
+      return res.status(403).json({ error: 'Only participants can cancel a reveal' });
+    }
+    // Cancel is a participant withdrawing THEIR readiness during the arming
+    // window, not a group-wide reset. Clearing every participant's flag here
+    // let any single participant keep the round permanently unarmable, so only
+    // the caller is cleared and the now-incomplete set disarms the reveal.
+    clearPokerReadyForParticipant(
+      vote.id,
+      voteParticipantKey(vote.id, voterToken),
+    );
+    const updated = await cancelPokerReveal(vote, { clearReady: false });
+    res.json(await computePokerState(updated, voterToken, participants));
+  } catch (error: unknown) {
+    console.error('Error cancelling poker reveal:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to cancel reveal', details: message });
+  }
+});
+
+app.post('/api/votes/:idOrSlug/poker/reveal', async (req: Request, res: Response) => {
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) return res.status(404).json({ error: 'Vote not found' });
+    if (vote.config.mode !== 'POKER_PLANNING') {
+      return res.status(400).json({ error: 'Not a poker planning vote' });
+    }
+    await revealPokerIfDue(vote.id);
+    const current = (await db.getVoteById(vote.id)) ?? vote;
+    res.json(
+      await computePokerState(current, requestToken(req, 'x-voter-token')),
+    );
+  } catch (error: unknown) {
+    console.error('Error revealing poker round:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to reveal round', details: message });
+  }
+});
+
+app.post('/api/votes/:idOrSlug/poker/reveal-proposal', async (req: Request, res: Response) => {
+  // The response depends on the moderator capability and carries the new
+  // reveal state, so it must never be reused by a shared cache.
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Vary', 'X-Moderator-Token');
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) return res.status(404).json({ error: 'Vote not found' });
+    // Only a moderator capability may force an early reveal. Participant
+    // anonymity is unchanged: this reveals the estimates, not the voters.
+    if (!(await canModerateVote(req, vote))) {
+      return res.status(403).json({ error: 'Moderator capability required' });
+    }
+    if (vote.config.mode !== 'POKER_PLANNING') {
+      return res.status(400).json({ error: 'Not a poker planning vote' });
+    }
+    if (vote.config.phase === 'IDLE') {
+      return res.status(400).json({ error: 'Vote has not started' });
+    }
+    const poker = normalizePokerConfig(vote.config.poker);
+    if (poker.revealedAt) {
+      return res.status(409).json({ error: 'This round has already been fully revealed' });
+    }
+    const proposalId =
+      typeof req.body?.proposalId === 'string' ? req.body.proposalId : '';
+
+    // Re-read inside the write path so the active-proposal check, the merged
+    // list and the guard all describe the same row. A save or a competing
+    // reveal that lands after the first read must not be clobbered.
+    const fresh = await db.getVoteById(vote.id);
+    if (!fresh) return res.status(404).json({ error: 'Vote not found' });
+    if (fresh.config.mode !== 'POKER_PLANNING') {
+      return res.status(400).json({ error: 'Not a poker planning vote' });
+    }
+    if (fresh.config.phase === 'IDLE') {
+      return res.status(400).json({ error: 'Vote has not started' });
+    }
+    const freshPoker = normalizePokerConfig(fresh.config.poker);
+    if (freshPoker.revealedAt) {
+      return res.status(409).json({ error: 'This round has already been fully revealed' });
+    }
+    const proposal = fresh.proposals.find(
+      (candidate) => candidate.id === proposalId && candidate.active,
+    );
+    if (!proposal) {
+      return res.status(400).json({
+        error: 'proposalId must reference an active proposal',
+      });
+    }
+
+    const existingIds = freshPoker.revealedProposalIds ?? [];
+    if (existingIds.includes(proposalId)) {
+      // Idempotent: the proposition is already visible, and the caller still
+      // gets the current projection.
+      return res.json(fresh);
+    }
+    const nextIds =
+      normalizeRevealedProposalIds([...existingIds, proposalId]) ?? [];
+
+    const updated = await db.updateVotePokerConfig(
+      fresh.id,
+      { revealedProposalIds: nextIds },
+      {
+        phase: fresh.config.phase,
+        pokerRevealedAt: freshPoker.revealedAt ?? null,
+        pokerRevealAt: freshPoker.revealAt ?? null,
+        pokerRevealedProposalIds: pokerRevealedProposalIdsSignature(existingIds),
+      },
+    );
+    if (!updated) {
+      // A concurrent reveal, reset or phase change won the compare-and-swap.
+      return res.status(409).json({
+        error: 'This round has already changed; refresh and try again',
+      });
+    }
+    broadcastVoteToYjs(updated);
+    trackPokerValueVisibility(updated);
+    res.json(updated);
+  } catch (error: unknown) {
+    console.error('Error force-revealing poker proposal:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to reveal proposal', details: message });
+  }
+});
+
+app.post('/api/votes/:idOrSlug/poker/next-round', async (req: Request, res: Response) => {
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) return res.status(404).json({ error: 'Vote not found' });
+    if (vote.config.mode !== 'POKER_PLANNING') {
+      return res.status(400).json({ error: 'Not a poker planning vote' });
+    }
+    if (vote.config.phase !== 'OPEN') {
+      return res.status(400).json({ error: 'Vote is not open' });
+    }
+    if (!vote.config.poker?.revealedAt) {
+      return res.status(400).json({ error: 'Reveal the current round first' });
+    }
+    const voterToken = requestToken(req, 'x-voter-token');
+    if (!voterToken) {
+      return res.status(400).json({ error: 'voterToken is required' });
+    }
+    const participants = await pokerCachedCompleteParticipantKeys(vote);
+    if (!participants.has(voteParticipantKey(vote.id, voterToken))) {
+      return res.status(403).json({ error: 'Only participants can start the next round' });
+    }
+
+    const poker = normalizePokerConfig(vote.config.poker);
+    // Delete the round's responses and advance to the next round in one
+    // transaction. The guard makes that write a compare-and-swap against the
+    // round this request read: a duplicate "next round" (two participants both
+    // see the revealed round) or a concurrent close/finalize would otherwise
+    // delete the estimates already submitted for the new round and reopen a
+    // vote that changed underneath the request.
+    const updated = await db.resetVoteWithConfig(
+      vote.id,
+      {
+        phase: 'OPEN',
+        poker: clearedPokerRound(poker, (poker.round ?? 0) + 1),
+      },
+      {
+        phase: 'OPEN',
+        pokerRound: poker.round ?? 0,
+        pokerRevealedAt: poker.revealedAt ?? null,
+      },
+    );
+    if (!updated) {
+      const stillExists = await db.getVoteById(vote.id);
+      return stillExists
+        ? res.status(409).json({
+            error: 'This round has already changed; refresh and try again',
+          })
+        : res.status(404).json({ error: 'Vote not found' });
+    }
+
+    // The reset removed every response: the next round's participant set is
+    // empty, not the set resolved above, so the teardown must invalidate it.
+    teardownVoteLiveState(vote.id);
+    broadcastVoteToYjs(updated);
+    res.json(await computePokerState(updated, voterToken));
+  } catch (error: unknown) {
+    console.error('Error starting next poker round:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to start next round', details: message });
+  }
+});
+
 // Vote results (public)
 app.get('/api/votes/:idOrSlug/results', async (req: Request, res: Response) => {
   try {
@@ -3406,6 +4728,18 @@ app.get('/api/votes/:idOrSlug/results', async (req: Request, res: Response) => {
     if (!vote) {
       return res.status(404).json({ error: 'Vote not found' });
     }
+    // The body depends on the caller: `X-Moderator-Token` restores private
+    // attendee fields and the full tally, and `X-Voter-Token` restores that
+    // voter's own pre-reveal poker estimate. A shared cache keyed only on the
+    // URL must not reuse one caller's projection for another, so keep it
+    // private and keyed by both capabilities. `no-cache` (not `no-store`)
+    // still forces revalidation on every poll, letting this endpoint answer an
+    // unchanged 5-second poll with a bodiless 304 via its ETag.
+    res.setHeader('Cache-Control', 'private, no-cache');
+    // Append to the `Vary: Accept-Encoding` compression already set instead of
+    // replacing it.
+    res.vary('X-Voter-Token');
+    res.vary('X-Moderator-Token');
     const responses = await db.getVoteResponses(vote.id);
     const isModerator = await canModerateVote(req, vote);
     // Organizers need the emails and custom-question answers they asked voters
@@ -3427,13 +4761,13 @@ app.get('/api/votes/:idOrSlug/results', async (req: Request, res: Response) => {
           responses[index].voterToken,
         );
       }
-      // Scheduling names are hidden from the public projection, so only the
-      // moderator capability gets them back — and only on a non-anonymous vote.
-      // Turning anonymity on after names were submitted must not re-expose them,
-      // matching how `redactAttendeeDataForVote` drops the name on every other
-      // path. Merge by index to keep the raw name out of every other response
-      // path.
-      if (vote.config.mode === 'SCHEDULING' && !isVoteAnonymous(vote.config)) {
+      // Non-attendance names are hidden from the public projection, so only
+      // the moderator capability gets them back — and only on a non-anonymous
+      // vote. Turning anonymity on after names were submitted must not
+      // re-expose them, matching how `redactAttendeeDataForVote` drops the name
+      // on every other path. Merge by index to keep the raw name out of every
+      // other response path.
+      if (voteResponseCarriesDisplayName(vote.config)) {
         for (let index = 0; index < safeResponses.length; index++) {
           const displayName = responses[index]?.attendeeData?.displayName;
           if (!displayName) continue;
@@ -3443,6 +4777,23 @@ app.get('/api/votes/:idOrSlug/results', async (req: Request, res: Response) => {
             visibility: 'hidden',
           };
         }
+      }
+    }
+    // A planning-poker round is a blind simultaneous reveal: the page hides the
+    // tally until the round (or a proposition) is revealed, but the projection
+    // would otherwise still carry every estimate in the payload. Strip the
+    // values from the public read per proposal, keeping the caller's own
+    // estimate so a reload can restore their cards. `pokerProposalIsRevealed`
+    // is the same per-proposal rule the live Yjs broadcast applies, so the two
+    // projections cannot drift.
+    if (pokerValuesAreHidden(vote) && !isModerator) {
+      const viewerToken = requestToken(req, 'x-voter-token');
+      for (let index = 0; index < safeResponses.length; index++) {
+        if (viewerToken && responses[index]?.voterToken === viewerToken) continue;
+        // Per-proposal blind reveal: only the proposals a moderator force-
+        // revealed (or a round-wide reveal) keep their estimate.
+        if (pokerProposalIsRevealed(vote, responses[index]?.proposalId)) continue;
+        safeResponses[index] = stripPokerValue(safeResponses[index]);
       }
     }
     res.json({ vote, responses: safeResponses, totalVotes: responses.length });
@@ -3634,7 +4985,51 @@ app.post('/api/votes/import', express.json({ limit: '10mb' }), async (req: Reque
     if (!Array.isArray(items)) {
       return res.status(400).json({ error: 'Expected an array of votes' });
     }
-    await db.importVotes(items);
+    // An import upserts the entire config, so an imported vote could set
+    // `config.poker.revealedAt` (or drop the deck) and unblind a live round:
+    // every caller of the results projection then stops stripping estimates,
+    // and `trackPokerValueVisibility` would drop the id from the hidden set.
+    // The poker round is server-owned, so for an existing poker vote keep the
+    // persisted mode, phase, results flag and reveal state instead of the
+    // imported snapshot. A vote that does not exist yet is a plain restore and
+    // has no live estimates to expose.
+    // A restore payload can carry thousands of votes, so resolve the existing
+    // rows in one query instead of awaiting a lookup per item. Only the ids the
+    // payload names are read, so the cost follows the import size rather than
+    // the whole vote table.
+    const importIds = Array.from(
+      new Set(
+        (items as VoteEntity[])
+          .map((item) => (item && typeof item.id === 'string' ? item.id : null))
+          .filter((id): id is string => id !== null),
+      ),
+    );
+    const votesById = new Map(
+      (await db.getVotesByIds(importIds)).map((vote) => [vote.id, vote]),
+    );
+    const sanitized: VoteEntity[] = [];
+    for (const item of items as VoteEntity[]) {
+      const existing =
+        item && typeof item.id === 'string' ? votesById.get(item.id) : undefined;
+      if (existing && existing.config.mode === 'POKER_PLANNING') {
+        const itemConfig =
+          item?.config && typeof item.config === 'object' ? item.config : null;
+        sanitized.push({
+          ...item,
+          config: {
+            ...(itemConfig ?? existing.config),
+            mode: existing.config.mode,
+            phase: existing.config.phase,
+            showResultsBeforeClose: existing.config.showResultsBeforeClose,
+            poker: existing.config.poker,
+          },
+        });
+      } else {
+        sanitized.push(item);
+      }
+    }
+    await db.importVotes(sanitized);
+    for (const item of sanitized) trackPokerValueVisibility(item);
     res.json({ ok: true });
   } catch (error: unknown) {
     console.error('Failed to import votes:', error);
@@ -3894,10 +5289,77 @@ app.use('*', async (req: Request, res: Response) => {
     res.status(404).json({ error: 'Route not found' });
   }
 });
+// Live handles so a signal can stop accepting traffic and drain before the DB
+// pool is closed. They stay null until `startServer` reaches `listen`, which
+// also makes a signal during startup a no-op for the network side.
+const SHUTDOWN_TIMEOUT_MS = 10_000;
+let httpServer: ReturnType<typeof app.listen> | null = null;
+let wsServer: WebSocketServer | null = null;
+let shuttingDown = false;
+
+/**
+ * Stop accepting new HTTP connections and drain in-flight requests, but never
+ * wait longer than `SHUTDOWN_TIMEOUT_MS`. Idle keep-alive sockets are closed
+ * immediately so they cannot keep the listener open; only a request that is
+ * genuinely still running reaches the forced close.
+ */
+async function closeHttpServer(
+  server: ReturnType<typeof app.listen>,
+): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      server.closeAllConnections?.();
+      resolve();
+    }, SHUTDOWN_TIMEOUT_MS);
+    timer.unref?.();
+    server.close(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+    server.closeIdleConnections?.();
+  });
+}
+
+/** Terminate live WebSocket clients, then close the WS server, bounded. */
+async function closeWsServer(wss: WebSocketServer): Promise<void> {
+  for (const client of wss.clients) {
+    try {
+      client.terminate();
+    } catch {
+      // Already closing; nothing left to clean up.
+    }
+  }
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, SHUTDOWN_TIMEOUT_MS);
+    timer.unref?.();
+    wss.close(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
 // Initialize database and start server
 async function startServer() {
   try {
     await initializeDb();
+    // A poker reveal deadline persists on the vote, but its timer and readiness
+    // set do not, so re-arm any armed round before serving traffic.
+    await recoverPokerReveals();
+    // The shared Yjs response map is unauthenticated, so the blind-reveal scrub
+    // must know which persisted rounds are still hidden before it accepts rows.
+    // A failure here only disables that extra enforcement (logged), it does not
+    // prevent the server from serving traffic.
+    try {
+      for (const vote of await db.getUnrevealedPokerVoteStates()) {
+        // Seeds both the blind vote-id set and the per-proposal allow-list so a
+        // restart cannot make a force-revealed proposal's live tally stay
+        // hidden until the next write.
+        trackPokerValueVisibility(vote);
+      }
+    } catch (error: unknown) {
+      console.error('Failed to load poker blind-reveal state:', error);
+    }
     purgeLegacyVoteLiveMapsFromYjs();
     // Redact withdrawal tokens written by clients that predate this change (a
     // stale bundle keeps publishing raw tokens into the shared room).
@@ -3908,6 +5370,8 @@ async function startServer() {
     setInterval(() => {
       sweepExpiredVoteDrafts();
       sweepExpiredVotePresence();
+      sweepExpiredPokerReady();
+      sweepPokerParticipantCache();
     }, 5 * 60 * 1000);
     startSprintScheduler(db, broadcastTaskToYjs);
 
@@ -3926,9 +5390,11 @@ async function startServer() {
         console.log(`PostgreSQL URL: ${DB_URL.replace(/\/\/[^@]*@/, '//***@')}`); // Mask credentials
       }
     });
+    httpServer = server;
 
     // Attach WebSocket server
     const wss = new WebSocketServer({ noServer: true });
+    wsServer = wss;
 
     server.on('upgrade', (request, socket, head) => {
       // You can handle authentication here if needed
@@ -3955,13 +5421,41 @@ async function startServer() {
   }
 }
 
-// Graceful shutdown
-process.on('SIGINT', async () => {
-  console.log('Shutting down gracefully...');
-  if (db && db.close) {
-    await db.close();
+// Graceful shutdown for both interactive stops (SIGINT) and orchestrator
+// deploys (SIGTERM). The listener must stop accepting traffic and drain before
+// the pool is closed: closing the DB first cut in-flight requests off (the
+// SQLite client closes synchronously) or made them fail against an ended pool
+// (Postgres). A skipped handler leaves connections to be killed without
+// closing the DB.
+async function shutdown(signal: NodeJS.Signals): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`Received ${signal}, shutting down gracefully...`);
+  const server = httpServer;
+  const wss = wsServer;
+  try {
+    await Promise.all([
+      server ? closeHttpServer(server) : Promise.resolve(),
+      wss ? closeWsServer(wss) : Promise.resolve(),
+    ]);
+  } catch (error: unknown) {
+    console.error('Error while draining connections:', error);
+  }
+  try {
+    if (db && db.close) {
+      await db.close();
+    }
+  } catch (error: unknown) {
+    console.error('Error while closing the database:', error);
   }
   process.exit(0);
+}
+
+process.on('SIGINT', () => {
+  void shutdown('SIGINT');
+});
+process.on('SIGTERM', () => {
+  void shutdown('SIGTERM');
 });
 
 startServer();

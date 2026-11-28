@@ -1,9 +1,9 @@
 import * as React from "react";
-import { VoteMode } from "@/lib/persistence-types";
+import { VOTE_MODES, type VoteMode } from "@/lib/persistence-types";
 import { getSelectedMode } from "@/lib/persistence-factory";
 import { getVotingStrings } from "@/lib/voting-i18n";
 import { cn } from "@/lib/utils";
-import { ThumbsUp, Minus, Coins, Award, RotateCcw, ListOrdered, CalendarCheck, CalendarRange } from "lucide-react";
+import { ThumbsUp, Minus, Coins, Award, RotateCcw, ListOrdered, CalendarCheck, CalendarRange, Spade } from "lucide-react";
 
 interface ModeSelectorProps {
   value: VoteMode;
@@ -27,25 +27,33 @@ const MODE_ICONS: Record<VoteMode, React.ReactNode> = {
   CONSENT_LOOP: <RotateCcw className="w-4 h-4" />,
   COMPARATIVE_PRIORITIZATION: <ListOrdered className="w-4 h-4" />,
   SCHEDULING: <CalendarRange className="w-4 h-4" />,
+  POKER_PLANNING: <Spade className="w-4 h-4" />,
 };
 
-const ALL_MODES: VoteMode[] = ["THUMBS_UP", "THUMBS_UD_NEUTRAL", "ATTENDANCE", "POINTS", "MAJORITY_JUDGMENT", "CONSENT_LOOP", "COMPARATIVE_PRIORITIZATION", "SCHEDULING"];
+// Modes whose runtime depends on server-only endpoints. Comparative
+// prioritization's ballots/results/finalize and poker planning's readiness and
+// reveal all call `/api/...`; a browser-JSON/static deployment has no such
+// routes, so a vote created there could never finish.
+const SERVER_ONLY_MODES: readonly VoteMode[] = [
+  "COMPARATIVE_PRIORITIZATION",
+  "POKER_PLANNING",
+];
 
 export const ModeSelector: React.FC<ModeSelectorProps> = ({ value, onChange, disabled, excludeModes }) => {
   const t = getVotingStrings();
-  // Comparative prioritization is implemented only against the server API.
-  // Browser-JSON/static deployments have no /api routes, so offering the mode
-  // there would create a vote whose ballot, results and finalize all fail.
-  // Reuse the persistence factory's resolved mode instead of re-deriving it from
-  // `API_URL`: an empty API_URL means same-origin `/api` (dev proxy, Docker),
-  // which is still server mode, so `!API_URL` would hide the mode exactly where
-  // the ranking endpoints exist.
+  // Comparative prioritization and poker planning are implemented only against
+  // the server API. Browser-JSON/static deployments have no /api routes, so
+  // offering either mode there would create a vote whose ballot, results, reveal
+  // and finalize all fail. Reuse the persistence factory's resolved mode instead
+  // of re-deriving it from `API_URL`: an empty API_URL means same-origin `/api`
+  // (dev proxy, Docker), which is still server mode, so `!API_URL` would hide the
+  // modes exactly where the endpoints exist.
   const isBrowserOnly = getSelectedMode() === "browser-json";
-  const availableModes = ALL_MODES.filter(
+  const availableModes = VOTE_MODES.filter(
     (mode) =>
       // Keep the current selection visible even when it is filtered out.
       mode === value ||
-      ((!isBrowserOnly || mode !== "COMPARATIVE_PRIORITIZATION") &&
+      ((!isBrowserOnly || !SERVER_ONLY_MODES.includes(mode)) &&
         !excludeModes?.includes(mode)),
   );
   return (

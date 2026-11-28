@@ -78,3 +78,34 @@ export function clearStoredRemovalToken(voteId: string): void {
   if (!voteId) return;
   removeStored(`${REMOVAL_TOKEN_PREFIX}${voteId}`);
 }
+
+/**
+ * Persist a display-name change to the server for whatever rows this vote
+ * stores the name on: attendance/scheduling/other response modes keep it on
+ * `voteResponses`, comparative prioritization on the ranking submission. The
+ * server resolves the right store from the vote mode, so both pages share one
+ * call instead of one drifting copy each. A missing row is a harmless no-op.
+ */
+export async function updateVoterIdentity(
+  slug: string,
+  voterToken: string,
+  displayName: string,
+): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/votes/${slug}/identity`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ voterToken, displayName }),
+    });
+    // A 200 HTML catch-all response must not be mistaken for a persisted
+    // rename: success is the explicit 204.
+    if (res.status !== 204) {
+      const err = await res.json().catch(() => null);
+      console.error('Identity update error:', err);
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}

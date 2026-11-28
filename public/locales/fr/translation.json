@@ -972,7 +972,8 @@
       "points": "Budget de points",
       "majorityJudgment": "Jugement Majoritaire",
       "consentLoop": "Boucle de consentement",
-      "scheduling": "Planification"
+      "scheduling": "Planification",
+      "pokerPlanning": "Poker planning"
     },
     "comparative": {
       "title": "Priorisation comparative",

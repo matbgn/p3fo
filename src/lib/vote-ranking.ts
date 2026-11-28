@@ -48,6 +48,20 @@ export function isVoteAnonymous(
 }
 
 /**
+ * Whether a vote stores a participant display name on its `voteResponses` rows.
+ * Attendance is the exception: the RSVP name travels on the attendance payload,
+ * so its response rows stay nameless. An anonymous vote never carries a name on
+ * any channel. The submit paths, the moderator draft channel and the results
+ * restore all derive the rule here so one path cannot persist or publish a name
+ * the others drop.
+ */
+export function voteResponseCarriesDisplayName(
+  config: Pick<VoteConfig, 'mode' | 'isAnonymous'> | null | undefined,
+): boolean {
+  return config?.mode !== 'ATTENDANCE' && !isVoteAnonymous(config);
+}
+
+/**
  * The single list of RSVP fields that are private to the organizer or the
  * attendee: an email, the custom-question answers and the private removal
  * token. Kept in one place so the results projection and the shared-document
@@ -187,6 +201,92 @@ export function redactVoteResponsesForVote(
   options: RedactVoteResponseOptions = {},
 ): VoteResponseEntity[] {
   return responses.map((response) => redactVoteResponseForVote(vote, response, options));
+}
+
+/**
+ * Whether a planning-poker round's estimates must stay out of the shared,
+ * public projection. A blind simultaneous reveal is the point of the mode: until
+ * the server stamps `revealedAt`, an estimate belongs only to the voter who
+ * submitted it. Both the HTTP results projection and the live Yjs broadcast
+ * derive the rule from here so one path cannot reveal cards the other still
+ * hides.
+ *
+ * A persisted deck is the round marker: `mode`, `phase` and
+ * `showResultsBeforeClose` are all writable through the public vote-update
+ * route, so the rule must not fail open when the mode literal is missing or was
+ * tampered with. The creation/update routes reject unknown modes and clear any
+ * deck when the effective mode is not poker, so a non-poker vote cannot carry
+ * one; a vote that still holds a deck is a poker round until the server-owned
+ * reveal stamps `revealedAt`.
+ */
+export function pokerValuesAreHidden(
+  vote: Pick<VoteEntity, 'config'> | null | undefined,
+): boolean {
+  const poker = vote?.config.poker;
+  return Boolean(poker) && poker?.revealedAt == null;
+}
+
+/**
+ * Whether one proposal's estimates are visible for a given poker config. A
+ * round-wide `revealedAt` reveals every proposal; otherwise only the ids a
+ * moderator force-revealed are visible. This is the single per-proposal rule
+ * behind the HTTP results projection and the live Yjs broadcast/scrub.
+ */
+export function pokerProposalIdIsRevealed(
+  poker:
+    | { revealedAt?: string | null; revealedProposalIds?: string[] | null }
+    | null
+    | undefined,
+  proposalId: string | null | undefined,
+): boolean {
+  if (!poker) return false;
+  if (poker.revealedAt != null) return true;
+  if (!proposalId) return false;
+  return Array.isArray(poker.revealedProposalIds)
+    ? poker.revealedProposalIds.includes(proposalId)
+    : false;
+}
+
+export function pokerProposalIsRevealed(
+  vote: Pick<VoteEntity, 'config'> | null | undefined,
+  proposalId: string | null | undefined,
+): boolean {
+  return pokerProposalIdIsRevealed(vote?.config.poker, proposalId);
+}
+
+/**
+ * Boolean form of the poker projection rule for one response. Callers that
+ * publish rows to the shared document need the decision, not a stripped copy,
+ * so they share this instead of re-composing `pokerValuesAreHidden` and
+ * `pokerProposalIsRevealed` at every sync site.
+ */
+export function pokerResponseValueIsHidden(
+  vote: Pick<VoteEntity, 'config'> | null | undefined,
+  response: Pick<VoteResponseEntity, 'proposalId'> | null | undefined,
+): boolean {
+  return (
+    pokerValuesAreHidden(vote) &&
+    !pokerProposalIsRevealed(vote, response?.proposalId)
+  );
+}
+
+/**
+ * Remove the estimate from a projected poker row while preserving every other
+ * field, so the row can still be published (and overwrite a stale value-bearing
+ * copy) in the shared Yjs document.
+ */
+export function stripPokerValue(response: VoteResponseEntity): VoteResponseEntity {
+  if (typeof response.value !== 'number') return response;
+  const { value: _value, ...rest } = response;
+  return rest as VoteResponseEntity;
+}
+
+export function hidePokerValueForVote(
+  vote: Pick<VoteEntity, 'config'> | null | undefined,
+  response: VoteResponseEntity,
+): VoteResponseEntity {
+  if (!pokerResponseValueIsHidden(vote, response)) return response;
+  return stripPokerValue(response);
 }
 
 /**
@@ -523,6 +623,41 @@ function hashString(value: string): string {
 /** Stable anonymous label for a participant across vote modes. */
 export function voterAlias(voteId: string, voterToken: string): string {
   return `P-${hashString(`${voteId}:${voterToken}`)}`;
+}
+
+/**
+ * The pseudonym a response row contributes to a participant union. Merged draft
+ * rows already carry the alias; submitted rows carry the raw token and must be
+ * hashed the same way the public page hashes its own writes.
+ */
+export function responseVoterAlias(
+  voteId: string,
+  response: VoteResponseEntity,
+): string {
+  // Rows published in the shared document carry the alias explicitly and blank
+  // the credential; rows fetched from the server carry the raw token. Drafts
+  // already use the alias as their `voterToken`.
+  if (response.voterAlias) return response.voterAlias;
+  return response.id.startsWith('draft:')
+    ? response.voterToken
+    : voterAlias(voteId, response.voterToken);
+}
+
+/**
+ * The single display-name rule for a response row in a voter, comment or
+ * attendee list. Anonymity wins over every stored field; otherwise the
+ * submitted name, then the user id, then the public alias. Every row uses this
+ * so one participant is not labelled as their alias in the attendee list and
+ * as their user id in the voter list of the same results view.
+ */
+export function responseVoterDisplayName(
+  voteId: string,
+  response: VoteResponseEntity,
+  isAnonymous: boolean,
+): string {
+  const alias = responseVoterAlias(voteId, response);
+  if (isAnonymous) return alias;
+  return response.attendeeData?.displayName?.trim() || response.userId || alias;
 }
 
 /**

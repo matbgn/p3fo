@@ -65,7 +65,7 @@ export const AttendanceRsvpSummary: React.FC<{
           <>
             {visibleAttendees.map((row, index) => (
               <div key={index} className="flex items-center gap-2 text-xs text-gray-500">
-                <span>{row.displayName ?? tt("voting.anonymous")}</span>
+                <span>{row.displayName ?? row.alias ?? tt("voting.anonymous")}</span>
                 <span className="text-gray-400">× {row.partySize}</span>
               </div>
             ))}

@@ -1,12 +1,9 @@
 import * as React from 'react';
 import { MessageSquare } from 'lucide-react';
 import { getVotingStrings } from '@/lib/voting-i18n';
+import type { VoteCommentEntry } from '@/lib/vote-comments';
 
-export type VoteCommentEntry = {
-  comment: string;
-  /** Display name, or null when the vote is anonymous. */
-  name: string | null;
-};
+export type { VoteCommentEntry } from '@/lib/vote-comments';
 
 /**
  * One comments section for every vote mode, used by the moderator/owner results

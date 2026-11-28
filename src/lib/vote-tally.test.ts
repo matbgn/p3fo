@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest'
 import {
   tallyThumbsUp,
   tallyUDNeutral,
-  tallyPoints,
+  tallyBudget,
   tallyMajorityJudgment,
+  tallyPoker,
+  computePokerFromValues,
   computeMJFromValues,
   getMJMedianFromRecord,
   tallyConsentLoop,
@@ -89,26 +91,27 @@ describe('tallyUDNeutral', () => {
   })
 })
 
-describe('tallyPoints', () => {
-  it('sums point values for a proposal', () => {
+describe('tallyBudget', () => {
+  it('sums positive allocations and counts the backers', () => {
     const responses = [
       makeResponse({ proposalId: 'p1', value: 3 }),
       makeResponse({ proposalId: 'p1', value: 2, id: 'r2', voterToken: 't2' }),
-      makeResponse({ proposalId: 'p1', value: -1, id: 'r3', voterToken: 't3' }),
+      makeResponse({ proposalId: 'p1', value: 0, id: 'r3', voterToken: 't3' }),
+      makeResponse({ proposalId: 'p1', value: -1, id: 'r4', voterToken: 't4' }),
     ]
-    expect(tallyPoints(responses, 'p1')).toEqual({ total: 4 })
+    expect(tallyBudget(responses, 'p1')).toEqual({ total: 5, backers: 2 })
   })
 
-  it('returns 0 for empty responses', () => {
-    expect(tallyPoints([], 'p1')).toEqual({ total: 0 })
+  it('returns zero for empty responses', () => {
+    expect(tallyBudget([], 'p1')).toEqual({ total: 0, backers: 0 })
   })
 
-  it('handles negative points reducing total', () => {
+  it('ignores non-finite values', () => {
     const responses = [
       makeResponse({ proposalId: 'p1', value: 5 }),
-      makeResponse({ proposalId: 'p1', value: -3, id: 'r2', voterToken: 't2' }),
+      makeResponse({ proposalId: 'p1', value: Number.NaN, id: 'r2', voterToken: 't2' }),
     ]
-    expect(tallyPoints(responses, 'p1')).toEqual({ total: 2 })
+    expect(tallyBudget(responses, 'p1')).toEqual({ total: 5, backers: 1 })
   })
 })
 
@@ -380,6 +383,100 @@ describe('getBestConsentRound', () => {
     expect(best).not.toBeNull()
     expect(best!.roundNumber).toBe(2)
     expect(best!.adopted).toBe(false)
+  })
+})
+
+describe('tallyPoker', () => {
+  it('computes the median, average, deviation, verdict and distribution', () => {
+    const responses = [
+      makeResponse({ proposalId: 'p1', value: 3 }),
+      makeResponse({ proposalId: 'p1', value: 3, id: 'r2', voterToken: 't2' }),
+      makeResponse({ proposalId: 'p1', value: 5, id: 'r3', voterToken: 't3' }),
+      makeResponse({ proposalId: 'p2', value: 13, id: 'r4', voterToken: 't4' }),
+    ]
+
+    const tally = tallyPoker(responses, 'p1')
+    expect(tally.median).toBe(3)
+    expect(tally.average).toBeCloseTo(11 / 3, 5)
+    expect(tally.standardDeviation).toBeCloseTo(Math.sqrt(8 / 9), 5)
+    expect(tally.verdict).toBe('5')
+    expect(tally.distribution[3]).toBe(2)
+    expect(tally.distribution[5]).toBe(1)
+    expect(tally.distribution[13]).toBe(0)
+    expect(tally.estimable).toBe(3)
+    expect(tally.total).toBe(3)
+  })
+
+  it('ignores rows whose estimate was redacted from a pre-reveal projection', () => {
+    const redacted = { ...makeResponse({ proposalId: 'p1', value: 3 }), id: 'r2' }
+    delete (redacted as { value?: number }).value
+    const tally = tallyPoker([redacted, makeResponse({ proposalId: 'p1', value: 5 })], 'p1')
+    expect(tally.total).toBe(1)
+    expect(tally.estimable).toBe(1)
+    expect(tally.median).toBe(5)
+  })
+
+  it('returns a zero tally when nobody voted', () => {
+    expect(tallyPoker([], 'p1')).toEqual({
+      scaleId: 'fibonacci',
+      numeric: true,
+      median: null,
+      average: null,
+      standardDeviation: null,
+      verdict: '?',
+      distribution: {
+        0: 0,
+        1: 0,
+        2: 0,
+        3: 0,
+        5: 0,
+        8: 0,
+        13: 0,
+        21: 0,
+        34: 0,
+        55: 0,
+        89: 0,
+        100: 0,
+        1000: 0,
+      },
+      total: 0,
+      estimable: 0,
+      unknown: 0,
+      coffee: 0,
+    })
+  })
+
+  it('builds a distribution from raw card values', () => {
+    const tally = computePokerFromValues([1, 2, 2, 8])
+    expect(tally.median).toBe(2)
+    expect(tally.average).toBe(3.25)
+    expect(tally.verdict).toBe('5')
+    expect(tally.distribution[2]).toBe(2)
+    expect(tally.estimable).toBe(4)
+    expect(tally.total).toBe(4)
+  })
+
+  it('excludes ? and coffee cards from the numeric statistics', () => {
+    const tally = computePokerFromValues([3, 100, 1000])
+    expect(tally.estimable).toBe(1)
+    expect(tally.unknown).toBe(1)
+    expect(tally.coffee).toBe(1)
+    expect(tally.average).toBe(3)
+    expect(tally.standardDeviation).toBe(0)
+    expect(tally.verdict).toBe('3')
+  })
+
+  it('uses the special verdict when there are no estimates', () => {
+    expect(computePokerFromValues([100]).verdict).toBe('?')
+    expect(computePokerFromValues([100, 1000]).verdict).toBe('☕')
+  })
+
+  it('keeps ordinal scales non-numeric but still yields a verdict', () => {
+    const tally = computePokerFromValues([1, 2, 3], 'tshirt')
+    expect(tally.scaleId).toBe('tshirt')
+    expect(tally.numeric).toBe(false)
+    expect(tally.verdict).toBe('S')
+    expect(tally.average).toBe(2)
   })
 })
 

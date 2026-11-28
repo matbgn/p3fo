@@ -3,7 +3,7 @@ import type {
   SchedulingConfig,
   VoteProposal,
   VoteResponseEntity,
-} from './persistence-types';
+} from './persistence-types.js';
 
 export const DEFAULT_MAX_SLOTS = 500;
 

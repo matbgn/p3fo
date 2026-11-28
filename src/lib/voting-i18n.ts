@@ -6,6 +6,65 @@ type VotingStrings = {
   kindDescriptions: Record<string, string>;
   modes: Record<string, string>;
   modeDescriptions: Record<string, string>;
+  poker: {
+    scale: string;
+    scales: Record<string, string>;
+    animals: {
+      mouse: string;
+      cat: string;
+      dog: string;
+      sheep: string;
+      cow: string;
+      elephant: string;
+    };
+    verdict: string;
+    average: string;
+    standardDeviation: string;
+    unknown: string;
+    coffee: string;
+    ready: string;
+    readyDone: string;
+    readyHint: string;
+    submitAndReady: string;
+    markReady: string;
+    waitingForOthers: string;
+    submitFirst: string;
+    revealingIn: string;
+    cancelReveal: string;
+    revealed: string;
+    nextRound: string;
+    round: string;
+    noVotesYet: string;
+    notRevealed: string;
+    forceReveal: string;
+    forceRevealing: string;
+    forceRevealFailed: string;
+  };
+  budget: {
+    variation: string;
+    presets: Record<string, string>;
+    total: string;
+    spent: string;
+    remaining: string;
+    backers: string;
+    shareOfBudget: string;
+    noteValue: string;
+    noteCount: string;
+    addDenomination: string;
+    removeDenomination: string;
+    customNotesHelp: string;
+    invalidNotes: string;
+    submitAllocation: string;
+    allocateNotes: string;
+    yourAllocation: string;
+    noNotes: string;
+    submitError: string;
+    allocationUnavailable: string;
+    reloadToContinue: string;
+    resetAllocation: string;
+  };
+  nameWelcomeTitle: string;
+  nameWelcomeDescription: string;
   attendanceOptions: {
     going: string;
     maybe: string;
@@ -269,6 +328,7 @@ type VotingStrings = {
     sortByOriginal: string;
     sortByMedian: string;
     sortByAverage: string;
+    sortByTotal: string;
     sortAscending: string;
     sortDescending: string;
   };
@@ -378,17 +438,92 @@ const en: VotingStrings = {
     CONSENT_LOOP: "Consent Loop",
     COMPARATIVE_PRIORITIZATION: "Comparative Prioritization",
     SCHEDULING: "Scheduling",
+    POKER_PLANNING: "Poker Planning",
   },
   modeDescriptions: {
     THUMBS_UP: "Simple yes vote per proposal",
     THUMBS_UD_NEUTRAL: "Up, down, or neutral per proposal",
     ATTENDANCE: "Single RSVP for the whole event",
-    POINTS: "Distribute a budget of points",
+    POINTS: "Distribute a budget of points or fixed notes",
     MAJORITY_JUDGMENT: "Grade each proposal on a scale",
     CONSENT_LOOP: "Iterative rounds until adopted or blocked",
     COMPARATIVE_PRIORITIZATION: "Rank proposals through adaptive pairwise comparisons",
     SCHEDULING: "Find the best time in candidate slots",
+    POKER_PLANNING: "Estimate each proposal with planning-poker cards",
   },
+  poker: {
+    scale: "Card deck",
+    scales: {
+      fibonacci: "Fibonacci",
+      tshirt: "T-shirt sizes",
+      powersof2: "Powers of 2",
+      animals: "Animals",
+    },
+    animals: {
+      mouse: "Mouse",
+      cat: "Cat",
+      dog: "Dog",
+      sheep: "Sheep",
+      cow: "Cow",
+      elephant: "Elephant",
+    },
+    verdict: "Verdict",
+    average: "Average",
+    standardDeviation: "Std. deviation",
+    unknown: "Unsure",
+    coffee: "Coffee break",
+    ready: "Ready",
+    readyDone: "Ready",
+    readyHint: "Submitting your estimates also marks you ready.",
+    submitAndReady: "Submit & mark ready",
+    markReady: "Mark ready",
+    waitingForOthers: "Waiting for the other voters…",
+    submitFirst: "Submit your estimates to mark ready.",
+    revealingIn: "Revealing in",
+    cancelReveal: "Cancel reveal",
+    revealed: "Cards revealed",
+    nextRound: "Next round",
+    round: "Round",
+    noVotesYet: "No estimates yet.",
+    notRevealed: "This round was closed without a reveal. The estimates stay hidden.",
+    forceReveal: "Force reveal",
+    forceRevealing: "Revealing…",
+    forceRevealFailed: "Could not reveal this proposal.",
+  },
+  budget: {
+    variation: "Spending variation",
+    presets: {
+      flexible: "Flexible points",
+      monopoly: "Monopoly",
+      custom: "Custom notes",
+    },
+    total: "Total budget",
+    spent: "Spent",
+    remaining: "Remaining",
+    backers: "backers",
+    shareOfBudget: "of the group budget",
+    noteValue: "Note value",
+    noteCount: "Count",
+    addDenomination: "Add denomination",
+    removeDenomination: "Remove",
+    customNotesHelp:
+      "Give each voter a fixed set of notes. Each note can be spent once.",
+    invalidNotes:
+      "Add at least one note with a positive value and count.",
+    submitAllocation: "Submit allocation",
+    allocateNotes:
+      "Distribute your notes across the proposals. Unspent notes are allowed.",
+    yourAllocation: "Your allocation",
+    noNotes: "No notes left",
+    submitError: "Could not save your allocation. Please try again.",
+    allocationUnavailable:
+      "We couldn't rebuild your saved allocation.",
+    reloadToContinue:
+      "We couldn't reach the server. Reload the page and try again.",
+    resetAllocation: "Clear my allocation and start over",
+  },
+  nameWelcomeTitle: "Welcome!",
+  nameWelcomeDescription: "Choose the name attached to your votes.",
   attendanceOptions: {
     going: "Going",
     maybe: "Maybe",
@@ -660,6 +795,7 @@ const en: VotingStrings = {
     sortByOriginal: "Original order",
     sortByMedian: "Majority Mention (median)",
     sortByAverage: "Average",
+    sortByTotal: "Sort by total",
     sortAscending: "Ascending",
     sortDescending: "Descending",
   },
@@ -769,17 +905,93 @@ const fr: VotingStrings = {
     CONSENT_LOOP: "Boucle de consentement",
     COMPARATIVE_PRIORITIZATION: "Priorisation comparative",
     SCHEDULING: "Planification",
+    POKER_PLANNING: "Poker planning",
   },
   modeDescriptions: {
     THUMBS_UP: "Vote simple par proposition",
     THUMBS_UD_NEUTRAL: "Pour, contre ou neutre par proposition",
     ATTENDANCE: "Une seule r\u00e9ponse de pr\u00e9sence pour l'\u00e9v\u00e9nement",
-    POINTS: "R\u00e9partir un budget de points",
+    POINTS: "R\u00e9partir un budget de points ou de coupures fixes",
     MAJORITY_JUDGMENT: "Noter chaque proposition sur une \u00e9chelle",
     CONSENT_LOOP: "Tours it\u00e9ratifs jusqu'\u00e0 adoption ou blocage",
     COMPARATIVE_PRIORITIZATION: "Classer les propositions par comparaisons par paires adaptatives",
     SCHEDULING: "Trouver le meilleur cr\u00e9neau parmi les disponibilit\u00e9s",
+    POKER_PLANNING: "Estimer chaque proposition avec des cartes de poker planning",
   },
+  poker: {
+    scale: "Jeu de cartes",
+    scales: {
+      fibonacci: "Fibonacci",
+      tshirt: "Tailles de t-shirt",
+      powersof2: "Puissances de 2",
+      animals: "Animaux",
+    },
+    animals: {
+      mouse: "Souris",
+      cat: "Chat",
+      dog: "Chien",
+      sheep: "Mouton",
+      cow: "Vache",
+      elephant: "Éléphant",
+    },
+    verdict: "Verdict",
+    average: "Moyenne",
+    standardDeviation: "Écart-type",
+    unknown: "Incertain",
+    coffee: "Pause café",
+    ready: "Prêt",
+    readyDone: "Prêt",
+    readyHint: "Soumettre vos estimations vous marque aussi prêt.",
+    submitAndReady: "Envoyer et me marquer prêt",
+    markReady: "Me marquer prêt",
+    waitingForOthers: "En attente des autres votants…",
+    submitFirst: "Soumettez vos estimations pour vous marquer prêt.",
+    revealingIn: "Révélation dans",
+    cancelReveal: "Annuler la révélation",
+    revealed: "Cartes révélées",
+    nextRound: "Manche suivante",
+    round: "Manche",
+    noVotesYet: "Aucune estimation pour le moment.",
+    notRevealed: "Cette manche a été clôturée sans révélation. Les estimations restent masquées.",
+    forceReveal: "Forcer la révélation",
+    forceRevealing: "Révélation…",
+    forceRevealFailed: "Impossible de révéler cette proposition.",
+  },
+  budget: {
+    variation: "Variante de dépense",
+    presets: {
+      flexible: "Points flexibles",
+      monopoly: "Monopoly",
+      custom: "Coupures personnalisées",
+    },
+    total: "Budget total",
+    spent: "Dépensé",
+    remaining: "Restant",
+    backers: "soutiens",
+    shareOfBudget: "du budget du groupe",
+    noteValue: "Valeur",
+    noteCount: "Nombre",
+    addDenomination: "Ajouter une coupure",
+    removeDenomination: "Retirer",
+    customNotesHelp:
+      "Attribuez à chaque votant un ensemble fixe de coupures. Chaque coupure ne peut être utilisée qu'une fois.",
+    invalidNotes:
+      "Ajoutez au moins une coupure avec une valeur et un nombre positifs.",
+    submitAllocation: "Soumettre la répartition",
+    allocateNotes:
+      "Répartissez vos coupures entre les propositions. Vous pouvez laisser des coupures non dépensées.",
+    yourAllocation: "Votre répartition",
+    noNotes: "Plus de coupures",
+    submitError:
+      "Impossible d'enregistrer votre répartition. Veuillez réessayer.",
+    allocationUnavailable:
+      "Impossible de reconstruire votre répartition enregistrée.",
+    reloadToContinue:
+      "Impossible de joindre le serveur. Rechargez la page et réessayez.",
+    resetAllocation: "Effacer ma répartition et recommencer",
+  },
+  nameWelcomeTitle: "Bienvenue !",
+  nameWelcomeDescription: "Choisissez le nom associé à vos votes.",
   attendanceOptions: {
     going: "Pr\u00e9sent",
     maybe: "Peut-\u00eatre",
@@ -1051,6 +1263,7 @@ const fr: VotingStrings = {
     sortByOriginal: "Ordre original",
     sortByMedian: "Mention majoritaire (m\u00e9diane)",
     sortByAverage: "Moyenne",
+    sortByTotal: "Trier par total",
     sortAscending: "Croissant",
     sortDescending: "D\u00e9croissant",
   },
@@ -1160,17 +1373,93 @@ const de: VotingStrings = {
     CONSENT_LOOP: "Zustimmungs-Schleife",
     COMPARATIVE_PRIORITIZATION: "Vergleichende Priorisierung",
     SCHEDULING: "Terminplanung",
+    POKER_PLANNING: "Poker Planning",
   },
   modeDescriptions: {
     THUMBS_UP: "Einfache Ja-Stimme pro Vorschlag",
     THUMBS_UD_NEUTRAL: "Hoch, runter oder neutral pro Vorschlag",
     ATTENDANCE: "Eine einzige Zu- oder Absage für die Veranstaltung",
-    POINTS: "Ein Punktebudget verteilen",
+    POINTS: "Ein Punktebudget oder feste Scheine verteilen",
     MAJORITY_JUDGMENT: "Jeden Vorschlag auf einer Skala bewerten",
     CONSENT_LOOP: "Iterative Runden bis angenommen oder blockiert",
     COMPARATIVE_PRIORITIZATION: "Vorschläge durch adaptive Paarvergleiche ordnen",
     SCHEDULING: "Die beste Zeit aus Kandidaten-Slots finden",
+    POKER_PLANNING: "Jeden Vorschlag mit Poker-Planning-Karten schätzen",
   },
+  poker: {
+    scale: "Kartensatz",
+    scales: {
+      fibonacci: "Fibonacci",
+      tshirt: "T-Shirt-Größen",
+      powersof2: "Zweierpotenzen",
+      animals: "Tiere",
+    },
+    animals: {
+      mouse: "Maus",
+      cat: "Katze",
+      dog: "Hund",
+      sheep: "Schaf",
+      cow: "Kuh",
+      elephant: "Elefant",
+    },
+    verdict: "Ergebnis",
+    average: "Durchschnitt",
+    standardDeviation: "Standardabweichung",
+    unknown: "Unklar",
+    coffee: "Kaffeepause",
+    ready: "Bereit",
+    readyDone: "Bereit",
+    readyHint: "Beim Absenden deiner Schätzungen wirst du auch als bereit markiert.",
+    submitAndReady: "Absenden & bereit markieren",
+    markReady: "Als bereit markieren",
+    waitingForOthers: "Warte auf die anderen Abstimmenden…",
+    submitFirst: "Sende deine Schätzungen ab, um dich bereit zu markieren.",
+    revealingIn: "Auflösung in",
+    cancelReveal: "Auflösung abbrechen",
+    revealed: "Karten aufgedeckt",
+    nextRound: "Nächste Runde",
+    round: "Runde",
+    noVotesYet: "Noch keine Schätzungen.",
+    notRevealed: "Diese Runde wurde ohne Auflösung geschlossen. Die Schätzungen bleiben verborgen.",
+    forceReveal: "Aufdeckung erzwingen",
+    forceRevealing: "Wird aufgedeckt…",
+    forceRevealFailed: "Dieser Vorschlag konnte nicht aufgedeckt werden.",
+  },
+  budget: {
+    variation: "Ausgaben-Variante",
+    presets: {
+      flexible: "Flexible Punkte",
+      monopoly: "Monopoly",
+      custom: "Eigene Scheine",
+    },
+    total: "Gesamtbudget",
+    spent: "Ausgegeben",
+    remaining: "Verbleibend",
+    backers: "Unterstützer",
+    shareOfBudget: "des Gruppenbudgets",
+    noteValue: "Wert",
+    noteCount: "Anzahl",
+    addDenomination: "Schein hinzufügen",
+    removeDenomination: "Entfernen",
+    customNotesHelp:
+      "Gib jedem Wähler einen festen Satz Scheine. Jeder Schein kann einmal ausgegeben werden.",
+    invalidNotes:
+      "Füge mindestens einen Schein mit positivem Wert und positiver Anzahl hinzu.",
+    submitAllocation: "Aufteilung absenden",
+    allocateNotes:
+      "Verteile deine Scheine auf die Vorschläge. Nicht ausgegebene Scheine sind erlaubt.",
+    yourAllocation: "Deine Aufteilung",
+    noNotes: "Keine Scheine mehr",
+    submitError:
+      "Deine Aufteilung konnte nicht gespeichert werden. Bitte versuche es erneut.",
+    allocationUnavailable:
+      "Deine gespeicherte Aufteilung konnte nicht rekonstruiert werden.",
+    reloadToContinue:
+      "Der Server war nicht erreichbar. Lade die Seite neu und versuche es erneut.",
+    resetAllocation: "Aufteilung löschen und neu beginnen",
+  },
+  nameWelcomeTitle: "Willkommen!",
+  nameWelcomeDescription: "Wähle den Namen, der an deinen Stimmen erscheint.",
   attendanceOptions: {
     going: "Dabei",
     maybe: "Vielleicht",
@@ -1442,6 +1731,7 @@ const de: VotingStrings = {
     sortByOriginal: "Ursprüngliche Reihenfolge",
     sortByMedian: "Mehrheitsnennung (Median)",
     sortByAverage: "Durchschnitt",
+    sortByTotal: "Nach Summe sortieren",
     sortAscending: "Aufsteigend",
     sortDescending: "Absteigend",
   },
@@ -1574,6 +1864,35 @@ export function getVotingStrings(locale?: Locale): VotingStrings {
 
 export function useVotingLocale(): Locale {
   return detectLocale();
+}
+
+/**
+ * The display labels consumed by `PokerTallyDisplay`. Both the public results
+ * page and the moderator results panel render that component; deriving the
+ * labels here keeps one mapping instead of a copy per renderer.
+ */
+export interface PokerTallyLabels {
+  verdict: string;
+  average: string;
+  standardDeviation: string;
+  voters: string;
+  voter: string;
+  unknown: string;
+  coffee: string;
+  animals: Record<string, string>;
+}
+
+export function pokerTallyLabels(t: VotingStrings): PokerTallyLabels {
+  return {
+    verdict: t.poker.verdict,
+    average: t.poker.average,
+    standardDeviation: t.poker.standardDeviation,
+    voters: t.labels.voters,
+    voter: t.labels.voter,
+    unknown: t.poker.unknown,
+    coffee: t.poker.coffee,
+    animals: t.poker.animals,
+  };
 }
 
 export type { VotingStrings, Locale };

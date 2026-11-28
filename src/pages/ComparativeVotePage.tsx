@@ -8,6 +8,14 @@ import { areRankingResultsVisible } from '@/lib/vote-ranking';
 import { ComparativeVoteBallot } from '@/components/voting/ComparativeVoteBallot';
 import { PartialRankingResults } from '@/components/voting/PartialRankingResults';
 import { ProposalContentDisplay } from '@/components/voting/ProposalContentDisplay';
+import { VoterIdentityBar } from '@/components/voting/VoterIdentityBar';
+import { VoterWelcomeDialog } from '@/components/voting/VoterWelcomeDialog';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { useVoterWelcome } from '@/hooks/useVoterWelcome';
+import {
+  getStoredVoterName,
+  updateVoterIdentity,
+} from '@/lib/voter-identity';
 import { isRichTextEmpty } from '@/lib/rich-text';
 import { VoteOutcomeBanner } from '@/components/voting/VoteResults';
 
@@ -30,10 +38,43 @@ export const ComparativeVotePage: React.FC<ComparativeVotePageProps> = ({
   // Same rule the server uses to decide whether ranking results may be shown.
   const showResults = areRankingResultsVisible(vote);
   const [resultsRefreshKey, setResultsRefreshKey] = React.useState(0);
+  const isAnonymous = vote.config.isAnonymous ?? true;
+  const [displayName, setDisplayName] = React.useState(
+    () => getStoredVoterName(vote.id) ?? '',
+  );
+  const welcome = useVoterWelcome({
+    voteId: vote.id,
+    isAnonymous,
+    name: displayName,
+    onNameChange: setDisplayName,
+    onRename: (name) => {
+      // A comparative ballot's name is stored on the ranking submission, so a
+      // post-Submit rename would otherwise linger only in this browser and the
+      // facilitator's participation view would keep the old name. The server
+      // updates the submission directly (no ballot re-save, which a locked vote
+      // rejects).
+      if (isOpen) {
+        void updateVoterIdentity(slug, voterToken, name);
+      }
+    },
+  });
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto px-4 py-8">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          {!isAnonymous && displayName ? (
+            <VoterIdentityBar
+              displayName={displayName}
+              onEdit={welcome.edit}
+              editDisabled={isClosed}
+            />
+          ) : (
+            <span />
+          )}
+          <LanguageSwitcher />
+        </div>
+
         {isFinalized && vote.outcome && (
           <div className="mb-6">
             <VoteOutcomeBanner vote={vote} />
@@ -94,6 +135,7 @@ export const ComparativeVotePage: React.FC<ComparativeVotePageProps> = ({
             vote={vote}
             slug={slug}
             voterToken={voterToken}
+            displayName={displayName}
             onSubmitted={() => setResultsRefreshKey((value) => value + 1)}
           />
         )}
@@ -102,6 +144,18 @@ export const ComparativeVotePage: React.FC<ComparativeVotePageProps> = ({
           <div className="mt-6">
             <PartialRankingResults key={resultsRefreshKey} vote={vote} />
           </div>
+        )}
+
+        {!isAnonymous && (
+          <VoterWelcomeDialog
+            open={welcome.open}
+            onOpenChange={welcome.setOpen}
+            title={ts.nameWelcomeTitle}
+            description={ts.nameWelcomeDescription}
+            name={welcome.promptName}
+            onNameChange={welcome.setPromptName}
+            onSave={welcome.save}
+          />
         )}
       </div>
     </div>

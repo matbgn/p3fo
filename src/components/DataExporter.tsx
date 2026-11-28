@@ -8,8 +8,8 @@ import { getPersistenceAdapter, getSelectedMode } from '@/lib/persistence-factor
 import { convertEntitiesToTasks } from '@/lib/task-conversions';
 import { getAllTemplates } from '@/lib/task-templates';
 import { CURRENT_SCHEMA_VERSION } from '@/lib/apply-imported-data';
-import { areRankingResultsVisible, isVoteAnonymous, redactRankingSubmissionForBackup } from '@/lib/vote-ranking';
-import { VoteResponseEntity, VoteLoop, VoteModerator, VoteRankingSubmission } from '@/lib/persistence-types';
+import { areRankingResultsVisible, isVoteAnonymous, pokerResponseValueIsHidden, redactRankingSubmissionForBackup } from '@/lib/vote-ranking';
+import { VoteEntity, VoteResponseEntity, VoteLoop, VoteModerator, VoteRankingSubmission } from '@/lib/persistence-types';
 
 const DataExporter: React.FC = () => {
   const { t } = useTranslation();
@@ -100,6 +100,7 @@ const DataExporter: React.FC = () => {
       // live values with the redacted copy. Reuse the active moderator tokens
       // that are already part of the export to keep the backup complete.
       const moderatorTokenByVote = new Map<string, string>();
+      const unreadablePokerVotes: VoteEntity[] = [];
       for (const vote of allVotes) {
         const loops = await adapter.listVoteLoops(vote.id);
         allVoteLoops.push(...loops);
@@ -109,7 +110,26 @@ const DataExporter: React.FC = () => {
         const moderatorToken = activeModerator?.token;
         if (moderatorToken) moderatorTokenByVote.set(vote.id, moderatorToken);
         const responses = await adapter.listVoteResponses(vote.id, moderatorToken);
-        allVoteResponses.push(...responses);
+        // An unrevealed poker round's estimates are stripped from the
+        // non-moderator results projection. Importing those value-less rows would
+        // replace the live estimates (the response import replaces every row for
+        // a vote it contains), so leave such a vote out of the backup response
+        // set and surface it instead of silently producing a destructive backup.
+        // The browser adapter has no server-side strip, so this only applies to
+        // the server-backed deployment; the hidden-ballot warning below does the
+        // same gate.
+        // A force-revealed proposal is readable even while the round is still
+        // blind, so decide per response with the same rule the results
+        // projection uses instead of the round-level flag.
+        const pokerEstimatesUnreadable =
+          getSelectedMode() === 'server-sql' &&
+          !moderatorToken &&
+          responses.some(response => pokerResponseValueIsHidden(vote, response));
+        if (pokerEstimatesUnreadable) {
+          unreadablePokerVotes.push(vote);
+        } else {
+          allVoteResponses.push(...responses);
+        }
       }
 
       // Fetch ballots for every vote, not only those currently in
@@ -144,6 +164,15 @@ const DataExporter: React.FC = () => {
       if (unreadableRankingVotes.length > 0) {
         alert(
           `Warning: ${unreadableRankingVotes.length} open vote(s) with hidden results have no moderator token, so their ballots may be missing from this backup. Assign a vote moderator or close/expose the results, then export again.`,
+        );
+      }
+
+      // The unrevealed poker responses were intentionally left out of the file,
+      // so a restore will not delete the live estimates; tell the user the backup
+      // is incomplete instead of letting them assume it is a full snapshot.
+      if (unreadablePokerVotes.length > 0) {
+        alert(
+          `Warning: ${unreadablePokerVotes.length} unrevealed poker vote(s) have no moderator token, so their estimates are not included in this backup. Assign a vote moderator or reveal the round, then export again.`,
         );
       }
 

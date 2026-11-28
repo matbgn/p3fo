@@ -34,6 +34,31 @@ describe('voting i18n', () => {
     expect(strings.messages.attendancePrompt).toBeTruthy();
   });
 
+  it.each(LOCALES)('exposes the poker planning mode in %s', (locale) => {
+    const strings = getVotingStrings(locale);
+    expect(strings.modes.POKER_PLANNING).toBeTruthy();
+    expect(strings.modeDescriptions.POKER_PLANNING).toBeTruthy();
+    expect(strings.poker.animals.mouse).toBeTruthy();
+    expect(strings.poker.animals.elephant).toBeTruthy();
+  });
+
+  it.each(LOCALES)('exposes the points-budget variations in %s', (locale) => {
+    const strings = getVotingStrings(locale);
+    expect(strings.modes.POINTS).toBeTruthy();
+    expect(strings.modeDescriptions.POINTS).toBeTruthy();
+    for (const preset of ['flexible', 'monopoly', 'custom'] as const) {
+      expect(strings.budget.presets[preset]).toBeTruthy();
+    }
+    expect(strings.budget.total).toBeTruthy();
+    expect(strings.budget.submitAllocation).toBeTruthy();
+    expect(strings.labels.sortByTotal).toBeTruthy();
+  });
+
+  it('localizes animal card names', () => {
+    expect(getVotingStrings('fr').poker.animals.mouse).toBe('Souris');
+    expect(getVotingStrings('de').poker.animals.elephant).toBe('Elefant');
+  });
+
   it.each(LOCALES)('exposes the scheduling mode and editor in %s', (locale) => {
     const strings = getVotingStrings(locale);
     expect(strings.modes.SCHEDULING).toBeTruthy();

@@ -1,19 +1,26 @@
 import * as React from "react";
 import { VoteEntity, VoteProposal, VoteLoop, VoteResponseEntity } from "@/lib/persistence-types";
-import { VOTING_MODES_LABELS, MJ_SCALE } from "@/components/planView/constants";
-import { useVoteParticipation, useVoteResults, responseVoterAlias } from "@/hooks/useVotes";
+import { VOTING_MODES_LABELS, MJ_SCALE, mjGradeLabel } from "@/components/planView/constants";
+import { getPokerScale, pokerCardDescription } from "@/lib/poker";
+import { pokerProposalIsRevealed } from "@/lib/vote-ranking";
+import { forceRevealPokerProposal } from "@/hooks/usePokerState";
+import { useVoteParticipation, useVoteResults, responseVoterAlias, responseVoterDisplayName } from "@/hooks/useVotes";
 import { useVoteLoops } from "@/hooks/useVoteLoops";
-import { tallyThumbsUp, tallyUDNeutral, tallyPoints, tallyMajorityJudgment, tallyConsentLoop, getBestConsentRound, EVENT_RSVP_PROPOSAL_ID } from "@/lib/vote-tally";
-import { getVotingStrings } from "@/lib/voting-i18n";
+import { tallyThumbsUp, tallyUDNeutral, tallyBudget, tallyMajorityJudgment, tallyPoker, voteResultsSortMetric, voteResultsSupportsMedian, tallyConsentLoop, getBestConsentRound, EVENT_RSVP_PROPOSAL_ID } from "@/lib/vote-tally";
+import { budgetTallyPresentation } from "@/lib/budget";
+import { getVotingStrings, pokerTallyLabels } from "@/lib/voting-i18n";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { BarChart3, Users, MessageSquare, Trophy, ArrowUpDown, ArrowDownWideNarrow } from "lucide-react";
 import { LoopRoundProposalTooltip } from "./LoopRoundProposalTooltip";
 import { ProposalContentDisplay } from "./ProposalContentDisplay";
+import { PokerTallyDisplay } from "./PokerTallyDisplay";
+import { BudgetTallyDisplay } from "./BudgetTallyDisplay";
 import { PartialRankingResults } from "./PartialRankingResults";
 import { AttendanceRsvpSummary } from "./AttendanceRsvpSummary";
 import { SchedulingSummary } from "./SchedulingSummary";
 import { VoteComments, type VoteCommentEntry } from "./VoteComments";
+import { buildVoteCommentEntries } from "@/lib/vote-comments";
 import { attendancePartySize, summarizeAttendance } from "@/lib/attendance";
 import { normalizeSchedulingConfig, tallyScheduling } from "@/lib/scheduling";
 
@@ -318,28 +325,60 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
   );
   const isAnonymous = vote.config.isAnonymous ?? true;
 
-  // One deduplicated comment list for every mode. A scheduling batch repeats
-  // the same comment on every availability row, and a multi-proposal submit
-  // repeats it on every proposal response, so key on identity + text.
-  const commentEntries = React.useMemo<VoteCommentEntry[]>(() => {
-    const seen = new Set<string>();
-    const entries: VoteCommentEntry[] = [];
-    for (const response of responses) {
-      const comment = response.comment?.trim();
-      if (!comment) continue;
-      const name = isAnonymous
-        ? null
-        : response.attendeeData?.displayName?.trim() || response.userId || null;
-      const key = `${name ?? ''}\u0000${comment}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      entries.push({ comment, name });
-    }
-    return entries;
-  }, [responses, isAnonymous]);
+  // One deduplicated comment list for every mode, shared with the public page.
+  const commentEntries = React.useMemo<VoteCommentEntry[]>(
+    () => buildVoteCommentEntries(vote.id, responses, isAnonymous),
+    [responses, isAnonymous, vote.id],
+  );
 
   const [resultsSortMetric, setResultsSortMetric] = React.useState<"original" | "median" | "average">("original");
   const [resultsSortDir, setResultsSortDir] = React.useState<"asc" | "desc">("desc");
+  const [forcingRevealId, setForcingRevealId] = React.useState<string | null>(null);
+  const [forcedRevealIds, setForcedRevealIds] = React.useState<Set<string>>(
+    () => new Set(),
+  );
+  const [forceRevealError, setForceRevealError] = React.useState<string | null>(null);
+
+  // A new round resets the persisted allow-list, so the locally hidden buttons
+  // must come back too; otherwise the previous round's reveals would keep the
+  // button hidden for the same proposal id. A moderator reset rewinds to round
+  // 0, so the phase is part of the key: the reset moves the vote to IDLE and
+  // reopening moves it back to OPEN, clearing the stale local hides.
+  const pokerRound = vote.config.poker?.round ?? 0;
+  React.useEffect(() => {
+    setForcedRevealIds(new Set());
+    setForceRevealError(null);
+  }, [vote.id, pokerRound, vote.config.phase]);
+
+  const handleForceReveal = React.useCallback(
+    async (proposalId: string) => {
+      if (!moderatorToken) return;
+      setForcingRevealId(proposalId);
+      setForceRevealError(null);
+      try {
+        await forceRevealPokerProposal(
+          vote.slug || vote.id,
+          proposalId,
+          moderatorToken,
+        );
+        // Hide the button immediately; the moderator's vote poll/Yjs broadcast
+        // (and the refetch below) will carry the persisted id shortly.
+        setForcedRevealIds((previous) => {
+          const next = new Set(previous);
+          next.add(proposalId);
+          return next;
+        });
+        await refetch();
+      } catch (error) {
+        setForceRevealError(
+          error instanceof Error ? error.message : t.poker.forceRevealFailed,
+        );
+      } finally {
+        setForcingRevealId(null);
+      }
+    },
+    [moderatorToken, refetch, t.poker.forceRevealFailed, vote.id, vote.slug],
+  );
 
   // One memoized RSVP projection shared by the header count and the summary
   // body, so a polling refresh scans the response list once instead of twice
@@ -371,6 +410,17 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
   );
 
   const totalVoters = new Set(responses.map(identityOfResponse)).size;
+  // The budget share bar uses the same participant count as the voter badge:
+  // one source of truth for how many voters the group budget covers, and one
+  // shared derivation with the public results page.
+  const budgetPresentation = budgetTallyPresentation(
+    vote.config,
+    totalVoters,
+    t.labels.points,
+  );
+  const budgetAggregateTotal = budgetPresentation.aggregateTotal;
+  const budgetTallyFormat = budgetPresentation.formatAmount;
+  const budgetTallyIcon = budgetPresentation.icon;
   const commentsCount = commentEntries.length;
 
   if (vote.config.mode === "COMPARATIVE_PRIORITIZATION") {
@@ -474,11 +524,16 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
             <ul className="space-y-2">
               {moderatorAttendees.map((response) => {
                 const data = response.attendeeData;
+                const displayName = responseVoterDisplayName(
+                  vote.id,
+                  response,
+                  isAnonymous,
+                );
                 return (
                   <li key={response.id} className="text-sm">
                     <div className="flex flex-wrap items-baseline gap-2">
                       <span className="font-medium text-gray-900">
-                        {data?.displayName ?? tt("voting.anonymous")}
+                        {displayName}
                       </span>
                       <span className="text-xs text-gray-400">× {attendancePartySize(data)}</span>
                     </div>
@@ -553,6 +608,12 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
         draftCount={draftCount}
       />
 
+      {forceRevealError && (
+        <p className="text-sm text-red-600" role="alert">
+          {forceRevealError}
+        </p>
+      )}
+
       {isLoading ? (
         <p className="text-sm text-gray-400">{t.messages.loadingResults}</p>
       ) : responses.length === 0 ? (
@@ -563,24 +624,46 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
             const mode = vote.config.mode;
             const active = vote.proposals.filter((p) => p.active);
             const canSortResults = active.length > 1;
-            const metricFor = (p: VoteProposal): number => {
-              if (mode === "THUMBS_UP") return tallyThumbsUp(responses, p.id).count;
+            const pokerScale = getPokerScale(vote.config.poker?.scale);
+            // One mapping from i18n to poker card descriptions: `pokerTallyLabels`
+            // already exposes `unknown`, `coffee` and `animals`, so no renderer
+            // keeps its own copy that can drift when a key is added.
+            const pokerDescriptions = pokerTallyLabels(t);
+            const formatVoteValue = (value: number): string => {
+              if (mode === "THUMBS_UP") return tt("voting.yes");
               if (mode === "THUMBS_UD_NEUTRAL") {
-                const tally = tallyUDNeutral(responses, p.id);
-                return tally.up - tally.down;
+                if (value === 1) return tt("voting.yes");
+                if (value === -1) return tt("voting.no");
+                return tt("voting.neutral");
               }
-              if (mode === "POINTS") return tallyPoints(responses, p.id).total;
+              if (mode === "POINTS") {
+                return budgetTallyFormat(value);
+              }
               if (mode === "MAJORITY_JUDGMENT") {
-                const tally = tallyMajorityJudgment(responses, p.id);
-                if (resultsSortMetric === "average") {
-                  const total = MJ_SCALE.reduce((sum, g) => sum + (tally.distribution[g.value] || 0) * g.value, 0);
-                  const count = MJ_SCALE.reduce((sum, g) => sum + (tally.distribution[g.value] || 0), 0);
-                  return count > 0 ? total / count : 0;
-                }
-                return tally.median;
+                const grade = MJ_SCALE.find((g) => g.value === value);
+                if (!grade) return String(value);
+                return `${grade.icon} ${mjGradeLabel(tt, value)}`;
               }
-              return 0;
+              if (mode === "POKER_PLANNING") {
+                const card = pokerScale.cards.find((c) => c.value === value);
+                if (!card) return String(value);
+                const description = pokerCardDescription(card, pokerDescriptions);
+                return pokerScale.emoji && description
+                  ? `${card.label} ${description}`
+                  : card.label;
+              }
+              return String(value);
             };
+            const metric =
+              resultsSortMetric === "average" ? "average" : "median";
+            const metricFor = (p: VoteProposal): number =>
+              voteResultsSortMetric(
+                mode,
+                responses,
+                p.id,
+                metric,
+                pokerScale.id,
+              );
             let proposals: VoteProposal[] = active;
             if (resultsSortMetric !== "original" && active.length > 1) {
               const sorted = [...active].sort((a, b) => metricFor(a) - metricFor(b));
@@ -600,10 +683,14 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
                       className="text-xs border rounded px-2 py-1 bg-white"
                     >
                       <option value="original">{t.labels.sortByOriginal}</option>
-                      {mode === "MAJORITY_JUDGMENT" && (
+                      {voteResultsSupportsMedian(mode) ? (
                         <option value="median">{t.labels.sortByMedian}</option>
-                      )}
-                      <option value="average">{t.labels.sortByAverage}</option>
+                      ) : null}
+                      <option value="average">
+                        {mode === "POINTS"
+                          ? t.labels.sortByTotal
+                          : t.labels.sortByAverage}
+                      </option>
                     </select>
                     {resultsSortMetric !== "original" && (
                       <button
@@ -627,11 +714,28 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
                   isWinning ? "border-blue-500 bg-blue-50" : "bg-white"
                 }`}
               >
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-start justify-between gap-2 mb-2">
                   <h4 className="text-sm font-medium text-gray-900">
                     {isWinning && <Trophy className="w-4 h-4 text-blue-600 inline mr-1" />}
                     {proposal.description?.trim() || tt("voting.proposalN", { n: proposal.position + 1 })}
                   </h4>
+                  {mode === "POKER_PLANNING" &&
+                    moderatorView &&
+                    moderatorToken &&
+                    !vote.config.poker?.revealedAt &&
+                    !pokerProposalIsRevealed(vote, proposal.id) &&
+                    !forcedRevealIds.has(proposal.id) && (
+                      <button
+                        type="button"
+                        onClick={() => void handleForceReveal(proposal.id)}
+                        disabled={forcingRevealId === proposal.id}
+                        className="shrink-0 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {forcingRevealId === proposal.id
+                          ? t.poker.forceRevealing
+                          : t.poker.forceReveal}
+                      </button>
+                    )}
                 </div>
                 {proposal.content && <ProposalContentDisplay content={proposal.content} className="mb-2" />}
 
@@ -670,15 +774,15 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
                   );
                 })()}
 
-                {vote.config.mode === "POINTS" && (() => {
-                  const tally = tallyPoints(responses, proposal.id);
-                  return (
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">🪙</span>
-                      <span className="font-medium">{tally.total} {t.labels.points}</span>
-                    </div>
-                  );
-                })()}
+                {vote.config.mode === "POINTS" && (
+                  <BudgetTallyDisplay
+                    tally={tallyBudget(responses, proposal.id)}
+                    totalBudget={budgetAggregateTotal}
+                    labels={t.budget}
+                    formatAmount={budgetTallyFormat}
+                    icon={budgetTallyIcon}
+                  />
+                )}
 
                 {vote.config.mode === "MAJORITY_JUDGMENT" && (() => {
                   const tally = tallyMajorityJudgment(responses, proposal.id);
@@ -688,7 +792,7 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
                       <div className="flex items-center gap-2">
                         <span>{t.labels.medianColon}</span>
                         <span className={`px-2 py-0.5 rounded text-xs text-white ${medianGrade?.color || "bg-gray-500"}`}>
-                          {medianGrade?.icon} {medianGrade?.label}
+                          {medianGrade?.icon} {medianGrade ? mjGradeLabel(tt, tally.median) : ""}
                         </span>
                       </div>
                       <div className="flex h-3 rounded-full overflow-hidden">
@@ -697,7 +801,7 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
                             key={grade.value}
                             className={`${grade.color}`}
                             style={{ width: `${((tally.distribution[grade.value] || 0) / (responses.length || 1)) * 100}%` }}
-                            title={`${grade.label}: ${tally.distribution[grade.value] || 0}`}
+                            title={`${mjGradeLabel(tt, grade.value)}: ${tally.distribution[grade.value] || 0}`}
                           />
                         ))}
                       </div>
@@ -705,16 +809,41 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
                   );
                 })()}
 
-                {!isAnonymous && (() => {
+                {vote.config.mode === "POKER_PLANNING" && (() => {
+                  const tally = tallyPoker(responses, proposal.id, pokerScale.id);
+                  return (
+                    <PokerTallyDisplay
+                      tally={tally}
+                      labels={pokerTallyLabels(t)}
+                    />
+                  );
+                })()}
+
+                {(() => {
                   const voterRows = responses.filter((r) => r.proposalId === proposal.id);
                   if (voterRows.length === 0) return null;
                   return (
                     <div className="mt-2 space-y-1">
-                      {voterRows.map((r) => (
-                        <div key={r.id} className="flex items-center gap-2 text-xs text-gray-500">
-                          <span>{r.userId || tt("voting.anonymous")}</span>
-                        </div>
-                      ))}
+                      {voterRows.map((r) => {
+                        const displayName = responseVoterDisplayName(
+                          vote.id,
+                          r,
+                          isAnonymous,
+                        );
+                        return (
+                          <div
+                            key={r.id}
+                            className="flex items-center justify-between gap-2 text-xs text-gray-500"
+                          >
+                            <span>{displayName}</span>
+                            {typeof r.value === "number" && (
+                              <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-700">
+                                {formatVoteValue(r.value)}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   );
                 })()}

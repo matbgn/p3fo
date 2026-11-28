@@ -547,11 +547,29 @@ export class HttpApiPersistence implements PersistenceAdapter {
     // A moderator token selects the collision-resistant `participantId`
     // projection used to merge the draft channel; the public call stays
     // alias-only and never receives a per-participant digest.
+    const { responses } = await this.getVoteResults(voteId, moderatorToken);
+    return responses;
+  }
+
+  /**
+   * The results response also carries the persisted vote. Callers must base
+   * security-relevant projections (notably the poker blind reveal) on this
+   * server copy rather than on a vote read from the unauthenticated Yjs
+   * `voteProposals` map, which any peer can forge.
+   */
+  async getVoteResults(
+    voteId: string,
+    moderatorToken?: string,
+  ): Promise<{ vote: VoteEntity | null; responses: VoteResponseEntity[] }> {
     const headers: Record<string, string> = {};
     if (moderatorToken) headers['X-Moderator-Token'] = moderatorToken;
-    return this.makeRequest(`/api/votes/${voteId}/results`, { headers }).then(
-      (r: { responses: VoteResponseEntity[] }) => r.responses || [],
-    );
+    const result = (await this.makeRequest(`/api/votes/${voteId}/results`, {
+      headers,
+    })) as { vote?: VoteEntity | null; responses?: VoteResponseEntity[] } | null;
+    return {
+      vote: result?.vote ?? null,
+      responses: result?.responses ?? [],
+    };
   }
 
   async createVoteResponse(voteId: string, response: Partial<VoteResponseEntity>): Promise<VoteResponseEntity> {
