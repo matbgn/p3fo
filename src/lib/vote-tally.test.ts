@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   tallyThumbsUp,
   tallyUDNeutral,
-  tallyPoints,
+  tallyBudget,
   tallyMajorityJudgment,
   tallyPoker,
   computePokerFromValues,
@@ -91,26 +91,27 @@ describe('tallyUDNeutral', () => {
   })
 })
 
-describe('tallyPoints', () => {
-  it('sums point values for a proposal', () => {
+describe('tallyBudget', () => {
+  it('sums positive allocations and counts the backers', () => {
     const responses = [
       makeResponse({ proposalId: 'p1', value: 3 }),
       makeResponse({ proposalId: 'p1', value: 2, id: 'r2', voterToken: 't2' }),
-      makeResponse({ proposalId: 'p1', value: -1, id: 'r3', voterToken: 't3' }),
+      makeResponse({ proposalId: 'p1', value: 0, id: 'r3', voterToken: 't3' }),
+      makeResponse({ proposalId: 'p1', value: -1, id: 'r4', voterToken: 't4' }),
     ]
-    expect(tallyPoints(responses, 'p1')).toEqual({ total: 4 })
+    expect(tallyBudget(responses, 'p1')).toEqual({ total: 5, backers: 2 })
   })
 
-  it('returns 0 for empty responses', () => {
-    expect(tallyPoints([], 'p1')).toEqual({ total: 0 })
+  it('returns zero for empty responses', () => {
+    expect(tallyBudget([], 'p1')).toEqual({ total: 0, backers: 0 })
   })
 
-  it('handles negative points reducing total', () => {
+  it('ignores non-finite values', () => {
     const responses = [
       makeResponse({ proposalId: 'p1', value: 5 }),
-      makeResponse({ proposalId: 'p1', value: -3, id: 'r2', voterToken: 't2' }),
+      makeResponse({ proposalId: 'p1', value: Number.NaN, id: 'r2', voterToken: 't2' }),
     ]
-    expect(tallyPoints(responses, 'p1')).toEqual({ total: 2 })
+    expect(tallyBudget(responses, 'p1')).toEqual({ total: 5, backers: 1 })
   })
 })
 

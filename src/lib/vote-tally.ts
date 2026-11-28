@@ -1,6 +1,7 @@
 import type { VoteResponseEntity, VoteLoop, VoteMode } from "./persistence-types.js";
 import { MJ_SCALE } from "../components/planView/constants.js";
 import { computePokerStats, type PokerStats } from "./poker.js";
+import { tallyBudget as tallyBudgetShared, type BudgetTally } from "./budget.js";
 
 export const EVENT_RSVP_PROPOSAL_ID = "__event_rsvp__";
 
@@ -29,10 +30,6 @@ export interface UDNeutralTally {
   up: number;
   neutral: number;
   down: number;
-}
-
-export interface PointsTally {
-  total: number;
 }
 
 export type PokerTally = PokerStats;
@@ -108,12 +105,15 @@ export function tallyUDNeutral(
   };
 }
 
-export function tallyPoints(
+/**
+ * Budget tally with the extra signal the "$100 prioritisation" practice uses:
+ * how many distinct voters backed the proposal, not only how much it received.
+ */
+export function tallyBudget(
   responses: VoteResponseEntity[],
-  proposalId: string
-): PointsTally {
-  const filtered = responses.filter((r) => r.proposalId === proposalId);
-  return { total: filtered.reduce((sum, r) => sum + r.value, 0) };
+  proposalId: string,
+): BudgetTally {
+  return tallyBudgetShared(responses, proposalId);
 }
 
 export function tallyPoker(
@@ -183,7 +183,7 @@ export function voteResultsSortMetric(
     const tally = tallyUDNeutral(responses, proposalId);
     return tally.up - tally.down;
   }
-  if (mode === 'POINTS') return tallyPoints(responses, proposalId).total;
+  if (mode === 'POINTS') return tallyBudget(responses, proposalId).total;
   if (mode === 'POKER_PLANNING') {
     return pokerResultsSortMetric(responses, proposalId, pokerScaleId, metric);
   }

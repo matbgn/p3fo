@@ -73,6 +73,15 @@ import {
 } from '../src/lib/poker.js';
 import { isVoteMode, validateVoteResponseValue } from '../src/lib/vote-validation.js';
 import {
+  applyResolvedBudgetConfig,
+  budgetTotal,
+  clearBudgetConfig,
+  normalizeBudgetConfig,
+  parseBudgetSubmission,
+  resolveBudgetConfig,
+  validateBudgetDraftValues,
+} from '../src/lib/budget.js';
+import {
   MAX_SCHEDULING_SLOTS,
   activeSchedulingSlots,
   findActiveSchedulingSlot,
@@ -1757,6 +1766,24 @@ app.post('/api/votes', async (req: Request, res: Response) => {
     } else if (createConfig) {
       createConfig.poker = undefined;
     }
+    if (createConfig?.mode === 'POINTS') {
+      // A POINTS vote's spending variation is server-normalised: built-in
+      // presets are canonical, custom notes are sanitized, and the effective
+      // total is pinned on `maxPointsPerUser` so every reader sees the same
+      // budget. Reject a malformed block instead of silently falling back.
+      const resolved = resolveBudgetConfig({
+        requestedBudget: createConfig.budget,
+        budgetProvided: 'budget' in createConfig,
+        requestedMaxPointsPerUser: createConfig.maxPointsPerUser,
+        maxProvided: 'maxPointsPerUser' in createConfig,
+      });
+      if (resolved.error) {
+        return res.status(400).json({ error: resolved.error });
+      }
+      applyResolvedBudgetConfig(createConfig, resolved);
+    } else if (createConfig) {
+      clearBudgetConfig(createConfig);
+    }
     if (req.body?.config?.mode === 'SCHEDULING') {
       const schedulingError = validateSchedulingConfig(
         req.body.config.scheduling,
@@ -1878,6 +1905,19 @@ app.put('/api/votes/:id', async (req: Request, res: Response) => {
           error: 'A poker round cannot be rewound to the draft phase',
         });
       }
+      // A POINTS vote's spending variation changes what every stored value
+      // means. Rewinding to IDLE would re-enable a budget change on a vote that
+      // already has responses, so use the dedicated reset route (which clears
+      // them) instead of a two-step phase rewind.
+      if (
+        existing.config.mode === 'POINTS' &&
+        existing.config.phase !== 'IDLE' &&
+        effectivePhase === 'IDLE'
+      ) {
+        return res.status(400).json({
+          error: 'A points vote cannot be rewound to the draft phase',
+        });
+      }
       // A round whose state predates the guard above (or was restored from a
       // backup) must still not be reinterpreted as another mode. Round markers
       // are server-owned; persisted estimates prove the round collected votes
@@ -1950,6 +1990,53 @@ app.put('/api/votes/:id', async (req: Request, res: Response) => {
         // mode switch, so `pokerValuesAreHidden` can treat any persisted deck as
         // a real round without mistaking a former poker draft for a blind vote.
         requestedConfig.poker = undefined;
+      }
+      if (effectiveMode === 'POINTS') {
+        const requestedBudgetProvided = 'budget' in requestedConfig;
+        const requestedMaxProvided = 'maxPointsPerUser' in requestedConfig;
+        const resolved = resolveBudgetConfig({
+          requestedBudget: requestedConfig.budget,
+          budgetProvided: requestedBudgetProvided,
+          requestedMaxPointsPerUser: requestedConfig.maxPointsPerUser,
+          maxProvided: requestedMaxProvided,
+          fallbackBudget: existing.config.budget,
+          fallbackMaxPointsPerUser: existing.config.maxPointsPerUser,
+        });
+        if (resolved.error) {
+          return res.status(400).json({ error: resolved.error });
+        }
+        const effectiveBudget = resolved.budget;
+        const effectiveMax = resolved.maxPointsPerUser;
+        // The spending variation changes what a stored value means, so freeze
+        // it once the vote leaves draft just like the scheduling slot set and
+        // the poker deck.
+        if (existing.config.phase !== 'IDLE') {
+          const budgetChanged =
+            requestedBudgetProvided &&
+            JSON.stringify(effectiveBudget) !==
+              JSON.stringify(normalizeBudgetConfig(existing.config.budget));
+          const maxChanged =
+            requestedMaxProvided &&
+            effectiveMax !== budgetTotal(existing.config);
+          const allowMultipleChanged =
+            'allowMultiple' in requestedConfig &&
+            // Absent and explicit `false` are the same behaviour: older votes
+            // (and linked-vote creation) may not store the key at all, so a raw
+            // comparison would lock every save of an already-started vote.
+            (requestedConfig.allowMultiple ?? false) !==
+              (existing.config.allowMultiple ?? false);
+          if (budgetChanged || maxChanged || allowMultipleChanged) {
+            return res.status(400).json({
+              error: 'Budget settings are locked once the vote is open',
+            });
+          }
+        }
+        applyResolvedBudgetConfig(requestedConfig, resolved);
+      } else {
+        // Leaving POINTS (or saving another mode over a former draft) must not
+        // leave a budget block behind that a later mode-independent read would
+        // mistake for a real points vote.
+        clearBudgetConfig(requestedConfig);
       }
       // Opening a scheduling poll freezes its slot set, so validate the set that
       // will actually be stored: a pruned grid (or a dropped config) can never
@@ -3508,6 +3595,18 @@ app.post('/api/votes/:idOrSlug/responses', async (req: Request, res: Response) =
     if (vote.config.phase !== 'OPEN') {
       return res.status(400).json({ error: 'Vote is not open for responses' });
     }
+    if (vote.config.mode === 'POINTS') {
+      // A points ballot is a whole allocation, not independent rows: its total
+      // budget and post-close lock can only be enforced against the complete
+      // ballot. This per-row route writes one proposal at a time, so it cannot
+      // enforce either invariant safely (a direct or concurrently retried call
+      // could over-spend or change a locked ballot). Every points write must go
+      // through the atomic /responses/budget endpoint; a client bundle cached
+      // before that route existed must reload to pick up the new one.
+      return res.status(400).json({
+        error: 'Points ballots are submitted together; reload to continue voting',
+      });
+    }
     if (pokerEstimateChangesAreFrozen(vote)) {
       return res.status(400).json({
         error: 'This poker round has already been revealed',
@@ -3770,6 +3869,89 @@ app.post('/api/votes/:idOrSlug/responses/batch', async (req: Request, res: Respo
   }
 });
 
+// POINTS sends one allocation for the whole vote. The batch replaces the
+// voter's budget rows atomically, so a race between two tabs cannot spend the
+// same note twice, and the server validates the total (and, for fixed-note
+// variations, the exact note counts) instead of trusting per-row values.
+app.post('/api/votes/:idOrSlug/responses/budget', async (req: Request, res: Response) => {
+  try {
+    const vote = await findVoteByIdOrSlug(req.params.idOrSlug);
+    if (!vote) {
+      return res.status(404).json({ error: 'Vote not found' });
+    }
+    if (vote.config.mode !== 'POINTS') {
+      return res.status(400).json({ error: 'Budget submissions are only available for points votes' });
+    }
+    if (vote.config.phase !== 'OPEN') {
+      return res.status(400).json({ error: 'Vote is not open for responses' });
+    }
+    const voterToken = req.body?.voterToken;
+    if (!isValidVoterToken(voterToken)) {
+      return res.status(400).json({ error: 'voterToken is required' });
+    }
+    // The atomic endpoint replaces the whole ballot, so it honours the ballot
+    // lock the same way the comparative and comment paths do. The check is
+    // evaluated inside the replacement transaction (see
+    // `replaceVoteResponsesForVoter`) so two concurrent first submissions
+    // cannot both pass a stale pre-read. It is scoped to active proposals,
+    // matching the ballot the voter can actually see: a row left on a proposal
+    // deactivated after voting does not strand an otherwise-empty ballot.
+    const activeIds = activeProposalIds(vote);
+    const parsed = parseBudgetSubmission(
+      vote.config,
+      activeIds,
+      req.body ?? {},
+    );
+    if (parsed.error) {
+      return res.status(400).json({ error: parsed.error });
+    }
+
+    const attendeeData = schedulingAttendeeDisplayName(vote, req.body);
+    // A budget ballot is one comment per voter, repeated on every row: the
+    // batch replaces the whole allocation, so the comment belongs to the batch.
+    const comment =
+      vote.config.allowFreeText === true && typeof req.body?.comment === 'string'
+        ? req.body.comment.trim().slice(0, 2000) || null
+        : null;
+    // The comment rides on a response row, so an empty allocation would delete
+    // every row and silently drop it while still returning success. Reject the
+    // combination so the voter is told instead of losing their comment.
+    if (comment && Object.keys(parsed.values).length === 0) {
+      return res.status(400).json({
+        error: 'Add at least one allocation before submitting a comment',
+      });
+    }
+
+    // Atomic read-modify-write in the DB (one transaction plus a per-voter
+    // advisory lock in Postgres); no process-local vote lock is needed and
+    // holding one would only serialize unrelated voters.
+    const result = await db.replaceVoteResponsesForVoter(
+      vote.id,
+      voterToken,
+      Object.entries(parsed.values).map(([proposalId, value]) => ({
+        proposalId,
+        value,
+        attendeeData,
+        comment,
+      })),
+      activeIds,
+      { rejectIfExisting: vote.config.allowVoteChangeUntilClose === false },
+    );
+    if (result.rejected === 'locked') {
+      return res.status(409).json({ error: 'This ballot is locked' });
+    }
+    if (result.removedIds.length > 0) {
+      broadcastVoteResponsesRemovedFromYjs(result.removedIds);
+    }
+    broadcastVoteResponsesToYjs(vote, result.responses);
+    res.status(204).end();
+  } catch (error: unknown) {
+    console.error('Error submitting budget allocation:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Failed to submit allocation', details: message });
+  }
+});
+
 // Rename the voter's claimed display name without touching availability,
 // RSVP metadata, the removal token, or the original submittedAt. The voter's
 // own rows are selected by the withdrawal credential.
@@ -3985,6 +4167,25 @@ app.delete('/api/votes/:idOrSlug/responses', async (req: Request, res: Response)
     if (typeof voterToken !== 'string') {
       return res.status(400).json({ error: 'voterToken is required' });
     }
+    // A locked points ballot cannot be withdrawn either: the submit route
+    // refuses a replacement once an active row exists, so allowing the delete
+    // would let a voter clear the ballot and submit again. Scope the check to
+    // active proposals so a row left on a proposal deactivated after voting
+    // (which the submit route no longer counts) does not block cleanup.
+    if (
+      vote.config.mode === 'POINTS' &&
+      vote.config.allowVoteChangeUntilClose === false
+    ) {
+      const existing = await db.getVoteResponsesForVoter(vote.id, voterToken);
+      const activeIds = new Set(activeProposalIds(vote));
+      if (
+        existing.some(
+          (row) => row.proposalId !== null && activeIds.has(row.proposalId),
+        )
+      ) {
+        return res.status(409).json({ error: 'This ballot is locked' });
+      }
+    }
     const isAttendance = vote.config.mode === 'ATTENDANCE';
     const deletedProposalId = isAttendance
       ? EVENT_RSVP_PROPOSAL_ID
@@ -4062,6 +4263,16 @@ app.post('/api/votes/:idOrSlug/drafts', async (req: Request, res: Response) => {
         return res.status(400).json({ error: valueError });
       }
       cleanValues[proposalId] = value as number;
+    }
+
+    if (vote.config.mode === 'POINTS') {
+      // The draft channel carries totals only. Reject the ones the budget
+      // submit route would refuse so the live moderator matrix never shows an
+      // allocation that cannot be saved.
+      const draftError = validateBudgetDraftValues(vote.config, cleanValues);
+      if (draftError) {
+        return res.status(400).json({ error: draftError });
+      }
     }
 
     upsertVoteDraft({

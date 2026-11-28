@@ -2659,7 +2659,12 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
     voterToken: string,
     upserts: VoteResponseUpsert[],
     scopeProposalIds: string[],
-  ): Promise<{ responses: VoteResponseEntity[]; removedIds: string[] }> {
+    options?: { rejectIfExisting?: boolean },
+  ): Promise<{
+    responses: VoteResponseEntity[];
+    removedIds: string[];
+    rejected?: 'locked';
+  }> {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -2670,6 +2675,23 @@ await addColumn('appSettings', 'travelerConfig', 'JSONB');
       await client.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [
         `voteResponse:${voteId}:${voterToken}`,
       ]);
+      if (options?.rejectIfExisting && scopeProposalIds.length > 0) {
+        // The lock is evaluated under the same advisory lock as the write, so
+        // two concurrent first submissions cannot both pass a pre-read and
+        // overwrite one another on a ballot that is supposed to be final.
+        const existing = await client.query(
+          `SELECT 1 FROM "voteResponses"
+           WHERE "voteId" = $1
+             AND "voterToken" = $2
+             AND "proposalId" = ANY($3::text[])
+           LIMIT 1`,
+          [voteId, voterToken, scopeProposalIds],
+        );
+        if (existing.rows.length > 0) {
+          await client.query('ROLLBACK');
+          return { responses: [], removedIds: [], rejected: 'locked' };
+        }
+      }
       const submittedAt = new Date().toISOString();
       const responses: VoteResponseEntity[] = [];
       if (upserts.length > 0) {

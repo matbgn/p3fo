@@ -40,6 +40,29 @@ type VotingStrings = {
     forceRevealing: string;
     forceRevealFailed: string;
   };
+  budget: {
+    variation: string;
+    presets: Record<string, string>;
+    total: string;
+    spent: string;
+    remaining: string;
+    backers: string;
+    shareOfBudget: string;
+    noteValue: string;
+    noteCount: string;
+    addDenomination: string;
+    removeDenomination: string;
+    customNotesHelp: string;
+    invalidNotes: string;
+    submitAllocation: string;
+    allocateNotes: string;
+    yourAllocation: string;
+    noNotes: string;
+    submitError: string;
+    allocationUnavailable: string;
+    reloadToContinue: string;
+    resetAllocation: string;
+  };
   nameWelcomeTitle: string;
   nameWelcomeDescription: string;
   attendanceOptions: {
@@ -305,6 +328,7 @@ type VotingStrings = {
     sortByOriginal: string;
     sortByMedian: string;
     sortByAverage: string;
+    sortByTotal: string;
     sortAscending: string;
     sortDescending: string;
   };
@@ -420,7 +444,7 @@ const en: VotingStrings = {
     THUMBS_UP: "Simple yes vote per proposal",
     THUMBS_UD_NEUTRAL: "Up, down, or neutral per proposal",
     ATTENDANCE: "Single RSVP for the whole event",
-    POINTS: "Distribute a budget of points",
+    POINTS: "Distribute a budget of points or fixed notes",
     MAJORITY_JUDGMENT: "Grade each proposal on a scale",
     CONSENT_LOOP: "Iterative rounds until adopted or blocked",
     COMPARATIVE_PRIORITIZATION: "Rank proposals through adaptive pairwise comparisons",
@@ -465,6 +489,38 @@ const en: VotingStrings = {
     forceReveal: "Force reveal",
     forceRevealing: "Revealing…",
     forceRevealFailed: "Could not reveal this proposal.",
+  },
+  budget: {
+    variation: "Spending variation",
+    presets: {
+      flexible: "Flexible points",
+      monopoly: "Monopoly",
+      custom: "Custom notes",
+    },
+    total: "Total budget",
+    spent: "Spent",
+    remaining: "Remaining",
+    backers: "backers",
+    shareOfBudget: "of the group budget",
+    noteValue: "Note value",
+    noteCount: "Count",
+    addDenomination: "Add denomination",
+    removeDenomination: "Remove",
+    customNotesHelp:
+      "Give each voter a fixed set of notes. Each note can be spent once.",
+    invalidNotes:
+      "Add at least one note with a positive value and count.",
+    submitAllocation: "Submit allocation",
+    allocateNotes:
+      "Distribute your notes across the proposals. Unspent notes are allowed.",
+    yourAllocation: "Your allocation",
+    noNotes: "No notes left",
+    submitError: "Could not save your allocation. Please try again.",
+    allocationUnavailable:
+      "We couldn't rebuild your saved allocation.",
+    reloadToContinue:
+      "We couldn't reach the server. Reload the page and try again.",
+    resetAllocation: "Clear my allocation and start over",
   },
   nameWelcomeTitle: "Welcome!",
   nameWelcomeDescription: "Choose the name attached to your votes.",
@@ -739,6 +795,7 @@ const en: VotingStrings = {
     sortByOriginal: "Original order",
     sortByMedian: "Majority Mention (median)",
     sortByAverage: "Average",
+    sortByTotal: "Sort by total",
     sortAscending: "Ascending",
     sortDescending: "Descending",
   },
@@ -854,7 +911,7 @@ const fr: VotingStrings = {
     THUMBS_UP: "Vote simple par proposition",
     THUMBS_UD_NEUTRAL: "Pour, contre ou neutre par proposition",
     ATTENDANCE: "Une seule r\u00e9ponse de pr\u00e9sence pour l'\u00e9v\u00e9nement",
-    POINTS: "R\u00e9partir un budget de points",
+    POINTS: "R\u00e9partir un budget de points ou de coupures fixes",
     MAJORITY_JUDGMENT: "Noter chaque proposition sur une \u00e9chelle",
     CONSENT_LOOP: "Tours it\u00e9ratifs jusqu'\u00e0 adoption ou blocage",
     COMPARATIVE_PRIORITIZATION: "Classer les propositions par comparaisons par paires adaptatives",
@@ -899,6 +956,39 @@ const fr: VotingStrings = {
     forceReveal: "Forcer la révélation",
     forceRevealing: "Révélation…",
     forceRevealFailed: "Impossible de révéler cette proposition.",
+  },
+  budget: {
+    variation: "Variante de dépense",
+    presets: {
+      flexible: "Points flexibles",
+      monopoly: "Monopoly",
+      custom: "Coupures personnalisées",
+    },
+    total: "Budget total",
+    spent: "Dépensé",
+    remaining: "Restant",
+    backers: "soutiens",
+    shareOfBudget: "du budget du groupe",
+    noteValue: "Valeur",
+    noteCount: "Nombre",
+    addDenomination: "Ajouter une coupure",
+    removeDenomination: "Retirer",
+    customNotesHelp:
+      "Attribuez à chaque votant un ensemble fixe de coupures. Chaque coupure ne peut être utilisée qu'une fois.",
+    invalidNotes:
+      "Ajoutez au moins une coupure avec une valeur et un nombre positifs.",
+    submitAllocation: "Soumettre la répartition",
+    allocateNotes:
+      "Répartissez vos coupures entre les propositions. Vous pouvez laisser des coupures non dépensées.",
+    yourAllocation: "Votre répartition",
+    noNotes: "Plus de coupures",
+    submitError:
+      "Impossible d'enregistrer votre répartition. Veuillez réessayer.",
+    allocationUnavailable:
+      "Impossible de reconstruire votre répartition enregistrée.",
+    reloadToContinue:
+      "Impossible de joindre le serveur. Rechargez la page et réessayez.",
+    resetAllocation: "Effacer ma répartition et recommencer",
   },
   nameWelcomeTitle: "Bienvenue !",
   nameWelcomeDescription: "Choisissez le nom associé à vos votes.",
@@ -1173,6 +1263,7 @@ const fr: VotingStrings = {
     sortByOriginal: "Ordre original",
     sortByMedian: "Mention majoritaire (m\u00e9diane)",
     sortByAverage: "Moyenne",
+    sortByTotal: "Trier par total",
     sortAscending: "Croissant",
     sortDescending: "D\u00e9croissant",
   },
@@ -1288,7 +1379,7 @@ const de: VotingStrings = {
     THUMBS_UP: "Einfache Ja-Stimme pro Vorschlag",
     THUMBS_UD_NEUTRAL: "Hoch, runter oder neutral pro Vorschlag",
     ATTENDANCE: "Eine einzige Zu- oder Absage für die Veranstaltung",
-    POINTS: "Ein Punktebudget verteilen",
+    POINTS: "Ein Punktebudget oder feste Scheine verteilen",
     MAJORITY_JUDGMENT: "Jeden Vorschlag auf einer Skala bewerten",
     CONSENT_LOOP: "Iterative Runden bis angenommen oder blockiert",
     COMPARATIVE_PRIORITIZATION: "Vorschläge durch adaptive Paarvergleiche ordnen",
@@ -1333,6 +1424,39 @@ const de: VotingStrings = {
     forceReveal: "Aufdeckung erzwingen",
     forceRevealing: "Wird aufgedeckt…",
     forceRevealFailed: "Dieser Vorschlag konnte nicht aufgedeckt werden.",
+  },
+  budget: {
+    variation: "Ausgaben-Variante",
+    presets: {
+      flexible: "Flexible Punkte",
+      monopoly: "Monopoly",
+      custom: "Eigene Scheine",
+    },
+    total: "Gesamtbudget",
+    spent: "Ausgegeben",
+    remaining: "Verbleibend",
+    backers: "Unterstützer",
+    shareOfBudget: "des Gruppenbudgets",
+    noteValue: "Wert",
+    noteCount: "Anzahl",
+    addDenomination: "Schein hinzufügen",
+    removeDenomination: "Entfernen",
+    customNotesHelp:
+      "Gib jedem Wähler einen festen Satz Scheine. Jeder Schein kann einmal ausgegeben werden.",
+    invalidNotes:
+      "Füge mindestens einen Schein mit positivem Wert und positiver Anzahl hinzu.",
+    submitAllocation: "Aufteilung absenden",
+    allocateNotes:
+      "Verteile deine Scheine auf die Vorschläge. Nicht ausgegebene Scheine sind erlaubt.",
+    yourAllocation: "Deine Aufteilung",
+    noNotes: "Keine Scheine mehr",
+    submitError:
+      "Deine Aufteilung konnte nicht gespeichert werden. Bitte versuche es erneut.",
+    allocationUnavailable:
+      "Deine gespeicherte Aufteilung konnte nicht rekonstruiert werden.",
+    reloadToContinue:
+      "Der Server war nicht erreichbar. Lade die Seite neu und versuche es erneut.",
+    resetAllocation: "Aufteilung löschen und neu beginnen",
   },
   nameWelcomeTitle: "Willkommen!",
   nameWelcomeDescription: "Wähle den Namen, der an deinen Stimmen erscheint.",
@@ -1607,6 +1731,7 @@ const de: VotingStrings = {
     sortByOriginal: "Ursprüngliche Reihenfolge",
     sortByMedian: "Mehrheitsnennung (Median)",
     sortByAverage: "Durchschnitt",
+    sortByTotal: "Nach Summe sortieren",
     sortAscending: "Aufsteigend",
     sortDescending: "Absteigend",
   },

@@ -2857,7 +2857,12 @@ class SqliteClient implements DbClient {
     voterToken: string,
     upserts: VoteResponseUpsert[],
     scopeProposalIds: string[],
-  ): Promise<{ responses: VoteResponseEntity[]; removedIds: string[] }> {
+    options?: { rejectIfExisting?: boolean },
+  ): Promise<{
+    responses: VoteResponseEntity[];
+    removedIds: string[];
+    rejected?: 'locked';
+  }> {
     // Prepare once, then reuse inside the transaction instead of re-preparing
     // the upsert for every selected slot.
     const insertStmt = this.db.prepare(`
@@ -2888,6 +2893,27 @@ class SqliteClient implements DbClient {
 
     this.db.exec('BEGIN');
     try {
+      if (options?.rejectIfExisting && scopeProposalIds.length > 0) {
+        // Evaluated inside the transaction so a concurrent first submission
+        // cannot pass on a pre-read and replace a ballot that must stay final.
+        const existing = this.db
+          .prepare(
+            `SELECT 1 FROM "voteResponses"
+             WHERE "voteId" = @voteId
+               AND "voterToken" = @voterToken
+               AND "proposalId" IN (SELECT value FROM json_each(@scope))
+             LIMIT 1`,
+          )
+          .get({
+            voteId,
+            voterToken,
+            scope: JSON.stringify(scopeProposalIds),
+          });
+        if (existing) {
+          this.db.exec('ROLLBACK');
+          return { responses: [], removedIds: [], rejected: 'locked' };
+        }
+      }
       const responses: VoteResponseEntity[] = [];
       const submittedAt = new Date().toISOString();
       for (const upsert of upserts) {

@@ -347,13 +347,23 @@ export interface DbClient {
    * failure mid-way must not leave a half-replaced availability matrix
    * (withdrawn slots still counted). `scopeProposalIds` bounds the delete to
    * the vote's active slots so rows for removed candidates are left untouched.
+   *
+   * `options.rejectIfExisting` turns the same transaction into a ballot lock:
+   * when the voter already has an in-scope row, nothing is written and the
+   * result reports `rejected: 'locked'`. Because the read happens under the
+   * advisory lock, concurrent submissions cannot both observe an empty ballot.
    */
   replaceVoteResponsesForVoter(
     voteId: string,
     voterToken: string,
     upserts: VoteResponseUpsert[],
     scopeProposalIds: string[],
-  ): Promise<{ responses: VoteResponseEntity[]; removedIds: string[] }>;
+    options?: { rejectIfExisting?: boolean },
+  ): Promise<{
+    responses: VoteResponseEntity[];
+    removedIds: string[];
+    rejected?: 'locked';
+  }>;
   /**
    * Set (or clear) the free-text comment on every response row this voter
    * owns, without touching their votes. Returns the updated rows so the live

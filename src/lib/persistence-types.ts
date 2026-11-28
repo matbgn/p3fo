@@ -7,6 +7,7 @@
 import { PomodoroConfig, FocusModeConfig, PomodoroSession } from './pomodoro-types.js';
 import { TravelerConfig } from './traveler-types.js';
 import type { PokerConfig } from './poker.js';
+import type { BudgetConfig } from './budget.js';
 import type { SprintStateEntity, SprintWellbeingAggregate, SprintOutcome } from './sprint-types.js';
 export type { SprintStateEntity } from './sprint-types.js';
 
@@ -548,6 +549,8 @@ export interface VoteConfig {
   phase: VotePhase;
   allowMultiple?: boolean;
   maxPointsPerUser?: number;
+  /** Spending variation for POINTS votes: flexible points or fixed notes. */
+  budget?: BudgetConfig;
   mjLabels?: Record<number, string>;
   isAnonymous?: boolean;
   allowFreeText?: boolean;

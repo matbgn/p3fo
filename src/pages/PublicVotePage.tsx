@@ -13,8 +13,20 @@ import {
   pokerBallotCoversEveryProposal,
   pokerCardDescription,
 } from "@/lib/poker";
-import { tallyThumbsUp as tallyThumbsUpShared, tallyUDNeutral as tallyUDNeutralShared, tallyPoints as tallyPointsShared, tallyMajorityJudgment as tallyMJShared, tallyPoker as tallyPokerShared, voteResultsSortMetric, voteResultsSupportsMedian, tallyConsentLoop as tallyConsentLoopShared, getBestConsentRound, EVENT_RSVP_PROPOSAL_ID } from "@/lib/vote-tally";
+import { tallyThumbsUp as tallyThumbsUpShared, tallyUDNeutral as tallyUDNeutralShared, tallyBudget as tallyBudgetShared, tallyMajorityJudgment as tallyMJShared, tallyPoker as tallyPokerShared, voteResultsSortMetric, voteResultsSupportsMedian, tallyConsentLoop as tallyConsentLoopShared, getBestConsentRound, EVENT_RSVP_PROPOSAL_ID } from "@/lib/vote-tally";
 import { PokerTallyDisplay } from "@/components/voting/PokerTallyDisplay";
+import {
+  DEFAULT_FLEXIBLE_BUDGET,
+  allocationFromValues,
+  budgetNotes,
+  budgetTallyPresentation,
+  budgetTotal,
+  budgetUsedNoteCounts,
+  budgetUsesNotes,
+  formatBudgetAmount,
+  type BudgetAllocation,
+} from "@/lib/budget";
+import { BudgetTallyDisplay } from "@/components/voting/BudgetTallyDisplay";
 import { PokerReadyPanel } from "@/components/voting/PokerReadyPanel";
 import { usePokerState } from "@/hooks/usePokerState";
 import { useVoterWelcome } from "@/hooks/useVoterWelcome";
@@ -185,6 +197,44 @@ async function submitResponse(
   }
 }
 
+/**
+ * POST a whole-ballot replacement and require the route's 204 rather than any
+ * 2xx: the production catch-all serves index.html with 200 for an unmatched
+ * path, so a request routed to an instance that predates the route during a
+ * rolling deploy would otherwise be reported as saved while nothing persisted.
+ * The scheduling batch and the points allocation share this helper so the
+ * rollout guard, error extraction and network fallback cannot drift apart. A
+ * network error must not look like a successful save, or the voter is shown as
+ * submitted with nothing persisted and no retry.
+ */
+async function submitBallot204(
+  slug: string,
+  path: string,
+  body: unknown,
+  label: string,
+): Promise<{ error: string | null }> {
+  try {
+    const res = await fetch(`/api/votes/${slug}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (res.status !== 204) {
+      const err = await res.json().catch(() => null);
+      console.error(`${label} submission error:`, err);
+      return {
+        error:
+          err && typeof err.error === "string" ? err.error : "__network_error__",
+      };
+    }
+    // Success is 204: the server broadcasts the persisted rows over Yjs and the
+    // caller refreshes, so there is no body to read.
+    return { error: null };
+  } catch {
+    return { error: "__network_error__" };
+  }
+}
+
 /** Replace all of a voter's SCHEDULING availability in one request. */
 async function submitSchedulingAvailability(
   slug: string,
@@ -195,32 +245,21 @@ async function submitSchedulingAvailability(
     comment?: string | null;
   },
 ): Promise<{ error: string | null }> {
-  try {
-    const res = await fetch(`/api/votes/${slug}/responses/batch`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    // Require the route's 204 rather than any 2xx: the production catch-all
-    // serves index.html with 200 for an unmatched path, so a request routed to
-    // an instance that predates the batch route during a rolling deploy would
-    // otherwise be reported as saved while nothing was persisted.
-    if (res.status !== 204) {
-      const err = await res.json().catch(() => null);
-      console.error("Scheduling submission error:", err);
-      return {
-        error:
-          err && typeof err.error === "string" ? err.error : "__network_error__",
-      };
-    }
-    // Success is 204: the server broadcasts the persisted rows over Yjs and the
-    // caller refreshes the matrix, so there is no body to read.
-    return { error: null };
-  } catch {
-    // A network error or aborted request must not look like a successful save,
-    // or the voter is shown as submitted with nothing persisted and no retry.
-    return { error: "__network_error__" };
-  }
+  return submitBallot204(slug, "/responses/batch", body, "Scheduling");
+}
+
+/** Replace all of a voter's POINTS allocation in one atomic request. */
+async function submitBudgetAllocation(
+  slug: string,
+  body: {
+    voterToken: string;
+    values?: Record<string, number>;
+    allocation?: BudgetAllocation;
+    attendeeData?: AttendanceResponseData;
+    comment?: string | null;
+  },
+): Promise<{ error: string | null }> {
+  return submitBallot204(slug, "/responses/budget", body, "Budget");
 }
 
 /** Withdraw exactly the RSVP row identified by its private removal token. */
@@ -593,6 +632,62 @@ const PublicVotePage: React.FC = () => {
       hasWithdrawnPokerSelections) &&
     (!hasSubmitted || JSON.stringify(voterValues) !== JSON.stringify(submittedVoterValues));
   const [pointsBudget, setPointsBudget] = React.useState<Record<string, number>>({});
+  const [budgetAllocation, setBudgetAllocation] = React.useState<BudgetAllocation>({});
+  const [budgetSubmitError, setBudgetSubmitError] = React.useState<string | null>(null);
+  // Set when persisted totals cannot be turned back into a note breakdown. The
+  // ballot then stays read-only: showing every note as unspent would let spent
+  // notes be re-spent, and an unchanged submit would wipe the saved ballot.
+  const [budgetRebuildFailed, setBudgetRebuildFailed] = React.useState(false);
+  const isBudgetVote = vote?.config.mode === "POINTS";
+  const budgetActiveIds = React.useMemo(
+    () => new Set(vote ? activeProposalIds(vote) : []),
+    [vote],
+  );
+  const budgetUsesFixedNotes =
+    !!vote && isBudgetVote && budgetUsesNotes(vote.config);
+  const budgetNotesList = React.useMemo(
+    () =>
+      !vote || !budgetUsesFixedNotes ? [] : budgetNotes(vote.config) ?? [],
+    [vote, budgetUsesFixedNotes],
+  );
+  const budgetTotalValue = vote ? budgetTotal(vote.config) : DEFAULT_FLEXIBLE_BUDGET;
+  const budgetUsedNotes = React.useMemo(
+    () =>
+      budgetUsedNoteCounts(
+        Object.fromEntries(
+          Object.entries(budgetAllocation).filter(([proposalId]) =>
+            budgetActiveIds.has(proposalId),
+          ),
+        ),
+      ),
+    [budgetActiveIds, budgetAllocation],
+  );
+  // Fixed-note ballots derive the spent total from the same allocation the note
+  // tray and remaining counts read, so a failed rebuild (which leaves
+  // `voterValues` holding saved totals while the allocation is empty) cannot
+  // show a non-zero spend next to a full tray. Flexible ballots carry no
+  // allocation and keep summing their per-proposal values.
+  const budgetSpent = budgetUsesFixedNotes
+    ? Object.entries(budgetUsedNotes).reduce(
+        (sum, [value, count]) => sum + Number(value) * count,
+        0,
+      )
+    : Object.entries(voterValues)
+        .filter(([proposalId]) => !isBudgetVote || budgetActiveIds.has(proposalId))
+        .reduce(
+          (sum, [, value]) => sum + (typeof value === "number" ? value : 0),
+          0,
+        );
+  const budgetRemainingNotes = React.useMemo(
+    () =>
+      Object.fromEntries(
+        budgetNotesList.map((note) => [
+          note.value,
+          Math.max(0, note.count - (budgetUsedNotes[note.value] ?? 0)),
+        ]),
+      ) as Record<number, number>,
+    [budgetNotesList, budgetUsedNotes],
+  );
   const [audienceProposalText, setAudienceProposalText] = React.useState("");
   const [showPrevRounds, setShowPrevRounds] = React.useState(false);
 
@@ -881,6 +976,36 @@ const PublicVotePage: React.FC = () => {
             // Treat the loaded server values as the submitted baseline so an
             // untouched reload is not published as a "dirty" draft.
             setSubmittedVoterValues(vals);
+            if (v.config.mode === "POINTS") {
+              // A budget ballot only covers active proposals. Ignore stale rows
+              // left on a proposal that was deactivated after the voter saved,
+              // so they neither consume notes nor appear as spent budget.
+              const activeBudgetIds = new Set(activeProposalIds(v));
+              const budgetVals = Object.fromEntries(
+                Object.entries(vals).filter(([proposalId]) =>
+                  activeBudgetIds.has(proposalId),
+                ),
+              );
+              setVoterValues(budgetVals);
+              setSubmittedVoterValues(budgetVals);
+              setPointsBudget(budgetVals);
+              setHasSubmitted(Object.keys(budgetVals).length > 0);
+              if (budgetUsesNotes(v.config)) {
+                // The server stores only per-proposal totals. Rebuild a valid
+                // note breakdown so the note tray and per-proposal chips
+                // continue from where the voter left off. If the totals cannot
+                // be explained, do not pretend nothing was spent: flag the
+                // ballot and keep it read-only until a reload.
+                const rebuilt = allocationFromValues(
+                  budgetVals,
+                  budgetNotes(v.config) ?? [],
+                );
+                setBudgetAllocation(rebuilt ?? {});
+                setBudgetRebuildFailed(rebuilt === null);
+              } else {
+                setBudgetRebuildFailed(false);
+              }
+            }
           }
         }
       }
@@ -1145,6 +1270,47 @@ const PublicVotePage: React.FC = () => {
     );
     const attendeeData = submittedAttendeeDataFor(vote, voterDisplayName);
 
+    if (vote.config.mode === "POINTS") {
+      setBudgetSubmitError(null);
+      const activeIds = new Set(activeProposalIds(vote));
+      const values = Object.fromEntries(
+        Object.entries(voterValues).filter(([proposalId]) =>
+          activeIds.has(proposalId),
+        ),
+      );
+      const allocation = Object.fromEntries(
+        Object.entries(budgetAllocation).filter(([proposalId]) =>
+          activeIds.has(proposalId),
+        ),
+      ) as BudgetAllocation;
+      const { error } = await submitBudgetAllocation(slug, {
+        voterToken,
+        ...(budgetUsesFixedNotes ? { allocation } : { values }),
+        attendeeData,
+        comment:
+          vote.config.allowFreeText && comment.trim()
+            ? comment.trim()
+            : undefined,
+      });
+      if (error) {
+        // The atomic endpoint is the only points writer: a per-row fallback
+        // cannot enforce the whole-ballot total or the post-close lock. If the
+        // route is not reachable (a rolling deploy that still serves the previous
+        // bundle, or a dropped request), tell the voter to reload rather than
+        // retrying a write the server no longer accepts.
+        setBudgetSubmitError(
+          error === "__network_error__" ? ts.budget.reloadToContinue : error,
+        );
+        return false;
+      }
+      const submittedAny = Object.values(values).some((value) => value > 0);
+      setHasSubmitted(submittedAny);
+      setJustVoted(submittedAny);
+      setSubmittedVoterValues(submittedAny ? { ...values } : {});
+      refreshData();
+      return true;
+    }
+
     if (isSchedulingVote) {
       setSchedulingSubmitError(null);
       const activeSlotIds = new Set(
@@ -1223,6 +1389,34 @@ const PublicVotePage: React.FC = () => {
     return true;
   };
 
+  // Recovery for the rolling-deploy window where rows written by a pre-fixed
+  // bundle cannot be rebuilt into the configured notes. The atomic endpoint
+  // replaces the voter's whole ballot, so clearing it removes those unformable
+  // rows and lets the voter allocate again instead of being stuck read-only.
+  // The server still enforces the ballot lock, so this is only offered while
+  // the vote allows changes.
+  const handleResetBudgetAllocation = async () => {
+    if (!vote || !budgetUsesFixedNotes) return;
+    setBudgetSubmitError(null);
+    const { error } = await submitBudgetAllocation(slug, {
+      voterToken,
+      allocation: {},
+    });
+    if (error) {
+      setBudgetSubmitError(
+        error === "__network_error__" ? ts.budget.submitError : error,
+      );
+      return;
+    }
+    setBudgetAllocation({});
+    setVoterValues({});
+    setSubmittedVoterValues({});
+    setHasSubmitted(false);
+    setJustVoted(false);
+    setBudgetRebuildFailed(false);
+    refreshData();
+  };
+
   const handlePokerSubmitAction = async () => {
     setPokerSubmitting(true);
     try {
@@ -1248,7 +1442,7 @@ const PublicVotePage: React.FC = () => {
 
   const handlePointsChange = (proposalId: string, delta: number) => {
     if (!vote) return;
-    const maxBudget = vote.config.maxPointsPerUser || 10;
+    const maxBudget = budgetTotalValue;
     const allowMultiple = vote.config.allowMultiple ?? false;
     const perProposalCap = allowMultiple ? maxBudget : 1;
     const currentTotal = Object.entries(pointsBudget)
@@ -1260,7 +1454,46 @@ const PublicVotePage: React.FC = () => {
       Math.min(perProposalCap, Math.min(maxBudget - currentTotal, current + delta)),
     );
     setPointsBudget((prev) => ({ ...prev, [proposalId]: newVal }));
-    setVoterValues((prev) => ({ ...prev, [proposalId]: newVal }));
+    setVoterValues((prev) => {
+      const next = { ...prev };
+      if (newVal === 0) delete next[proposalId];
+      else next[proposalId] = newVal;
+      return next;
+    });
+  };
+
+  const handleBudgetNoteChange = (
+    proposalId: string,
+    noteValue: number,
+    delta: number,
+  ) => {
+    if (!vote) return;
+    if (budgetRebuildFailed) return;
+    const configured = (budgetNotes(vote.config) ?? []).find(
+      (note) => note.value === noteValue,
+    );
+    if (!configured) return;
+    const used = budgetUsedNotes;
+    if (delta > 0 && (used[noteValue] ?? 0) >= configured.count) return;
+    setBudgetAllocation((prev) => {
+      const next: BudgetAllocation = { ...prev };
+      const bucket = { ...(next[proposalId] ?? {}) };
+      const key = String(noteValue);
+      const current = bucket[key] ?? 0;
+      const updated = Math.max(0, current + delta);
+      if (updated === 0) delete bucket[key];
+      else bucket[key] = updated;
+      if (Object.keys(bucket).length === 0) delete next[proposalId];
+      else next[proposalId] = bucket;
+      return next;
+    });
+    setVoterValues((prev) => {
+      const next = { ...prev };
+      const updated = Math.max(0, (next[proposalId] ?? 0) + delta * noteValue);
+      if (updated === 0) delete next[proposalId];
+      else next[proposalId] = updated;
+      return next;
+    });
   };
 
   const handleAudienceProposal = async () => {
@@ -1953,6 +2186,18 @@ const PublicVotePage: React.FC = () => {
   const totalVoters = isScheduling
     ? schedulingVoterCount
     : rsvpProjection.totalVoters;
+  // One participant count feeds both the voter badge and the budget share bar;
+  // rsvpProjection already dedupes the same aliases, so there is no second scan.
+  // The formatter, icon and aggregate-budget derivation are shared with the
+  // moderator results panel so the two surfaces cannot drift.
+  const budgetPresentation = budgetTallyPresentation(
+    vote.config,
+    totalVoters,
+    ts.labels.points,
+  );
+  const budgetAggregateTotal = budgetPresentation.aggregateTotal;
+  const budgetTallyFormat = budgetPresentation.formatAmount;
+  const budgetTallyIcon = budgetPresentation.icon;
   const goingPartyTotal = rsvpProjection.goingPartyTotal;
 
   // Active scheduling slots in chronological order. The calendar groups them
@@ -2001,9 +2246,6 @@ const PublicVotePage: React.FC = () => {
   const tallyUDNResult = (proposalId: string) =>
     tallyUDNeutralShared(responses, proposalId);
 
-  const tallyPointsResult = (proposalId: string) =>
-    tallyPointsShared(responses, proposalId).total;
-
   const tallyMJResult = (proposalId: string) =>
     tallyMJShared(responses, proposalId);
 
@@ -2031,7 +2273,14 @@ const PublicVotePage: React.FC = () => {
         !pokerState.state?.youAreReady);
   const showSubmitAction =
     pokerNeedsAction ||
-    (!isSingleProposal && isActive && hasPendingVotes && !pokerArmed && !pokerRevealed);
+    (!isSingleProposal &&
+      isActive &&
+      hasPendingVotes &&
+      !pokerArmed &&
+      !pokerRevealed &&
+      // POINTS has its own submit block with the budget tray; a second generic
+      // button would be a duplicate action with no context.
+      mode !== "POINTS");
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -2754,7 +3003,78 @@ const PublicVotePage: React.FC = () => {
                     )}
 
                     {mode === "POINTS" && (() => {
-                      const maxBudget = vote.config.maxPointsPerUser || 10;
+                      if (budgetUsesFixedNotes) {
+                        const assigned = budgetAllocation[proposal.id] ?? {};
+                        const assignedTotal = Object.entries(assigned).reduce(
+                          (sum, [denom, count]) =>
+                            sum + Number(denom) * count,
+                          0,
+                        );
+                        return (
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap gap-1.5">
+                              {budgetNotesList.map((note) => {
+                                const remaining =
+                                  budgetRemainingNotes[note.value] ?? 0;
+                                return (
+                                  <Button
+                                    key={note.value}
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      handleBudgetNoteChange(
+                                        proposal.id,
+                                        note.value,
+                                        1,
+                                      )
+                                    }
+                                    disabled={votedAndLocked || remaining <= 0 || budgetRebuildFailed}
+                                    title={
+                                      remaining <= 0
+                                        ? ts.budget.noNotes
+                                        : `${remaining} × ${formatBudgetAmount(note.value)}`
+                                    }
+                                  >
+                                    +{formatBudgetAmount(note.value)}
+                                    <span className="ml-1 text-[10px] text-gray-400">
+                                      {remaining}
+                                    </span>
+                                  </Button>
+                                );
+                              })}
+                            </div>
+                            {assignedTotal > 0 && (
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {Object.entries(assigned)
+                                  .filter(([, count]) => count > 0)
+                                  .map(([denom, count]) => (
+                                    <button
+                                      key={denom}
+                                      type="button"
+                                      onClick={() =>
+                                        handleBudgetNoteChange(
+                                          proposal.id,
+                                          Number(denom),
+                                          -1,
+                                        )
+                                      }
+                                      disabled={votedAndLocked}
+                                      className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+                                    >
+                                      {count}× {formatBudgetAmount(Number(denom))}
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  ))}
+                                <span className="text-sm font-medium">
+                                  {formatBudgetAmount(assignedTotal)}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      const maxBudget = budgetTotalValue;
                       const allowMultiple = vote.config.allowMultiple ?? false;
                       const perProposalCap = allowMultiple ? maxBudget : 1;
                       const currentVal = pointsBudget[proposal.id] || 0;
@@ -2932,15 +3252,15 @@ const PublicVotePage: React.FC = () => {
                       );
                     })()}
  
-                    {mode === "POINTS" && (() => {
-                      const total = tallyPointsResult(proposal.id);
-                      return (
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg">&#x1FA99;</span>
-                          <span className="font-medium">{total} {ts.labels.points}</span>
-                        </div>
-                      );
-                    })()}
+                    {mode === "POINTS" && (
+                      <BudgetTallyDisplay
+                        tally={tallyBudgetShared(responses, proposal.id)}
+                        totalBudget={budgetAggregateTotal}
+                        labels={ts.budget}
+                        formatAmount={budgetTallyFormat}
+                        icon={budgetTallyIcon}
+                      />
+                    )}
 
                     {mode === "MAJORITY_JUDGMENT" && (() => {
                       const t = tallyMJResult(proposal.id);
@@ -3004,7 +3324,7 @@ const PublicVotePage: React.FC = () => {
               </div>
             ))}
           </div>
-          {!isSingleProposal && isActive && vote.config.allowFreeText && (
+          {!isSingleProposal && isActive && vote.config.allowFreeText && mode !== "POINTS" && (
             <CommentField
               id="vote-comment"
               value={comment}
@@ -3346,7 +3666,43 @@ const PublicVotePage: React.FC = () => {
 
         {mode === "POINTS" && isActive && (
           <div className="bg-white rounded-lg shadow-sm border p-5 mb-6">
-            <h3 className="text-sm font-medium mb-3">{ts.buttons.submitPoints}</h3>
+            <h3 className="text-sm font-medium mb-3">
+              {budgetUsesFixedNotes
+                ? ts.budget.yourAllocation
+                : ts.buttons.submitPoints}
+            </h3>
+            <div className="mb-3 space-y-1 text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-gray-600">{ts.budget.spent}</span>
+                <span className="font-medium">
+                  {budgetTallyFormat(budgetSpent)} /{" "}
+                  {budgetTallyFormat(budgetTotalValue)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2 text-xs text-gray-500">
+                <span>{ts.budget.remaining}</span>
+                <span>
+                  {budgetTallyFormat(Math.max(0, budgetTotalValue - budgetSpent))}
+                </span>
+              </div>
+              {budgetUsesFixedNotes && (
+                <div className="flex flex-wrap gap-2 pt-1 text-xs text-gray-500">
+                  {budgetNotesList.map((note) => (
+                    <span
+                      key={note.value}
+                      className={
+                        (budgetRemainingNotes[note.value] ?? 0) > 0
+                          ? ""
+                          : "text-gray-300"
+                      }
+                    >
+                      {formatBudgetAmount(note.value)} ×{" "}
+                      {budgetRemainingNotes[note.value] ?? 0}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
               {vote.config.allowFreeText ? (
                 <CommentField
@@ -3363,12 +3719,34 @@ const PublicVotePage: React.FC = () => {
               ) : (
                 <div className="flex-1" />
               )}
-              <Button size="sm" onClick={handleSubmitAllVotes} disabled={votedAndLocked}>
-                {ts.buttons.submit}
+              <Button size="sm" onClick={handleSubmitAllVotes} disabled={votedAndLocked || budgetRebuildFailed}>
+                {budgetUsesFixedNotes
+                  ? ts.budget.submitAllocation
+                  : ts.buttons.submit}
               </Button>
             </div>
+            {budgetRebuildFailed && (
+              <p className="text-xs text-amber-600 mt-2">
+                {ts.budget.allocationUnavailable}
+              </p>
+            )}
+            {budgetRebuildFailed && !votedAndLocked && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-2"
+                onClick={handleResetBudgetAllocation}
+              >
+                {ts.budget.resetAllocation}
+              </Button>
+            )}
+            {budgetSubmitError && (
+              <p className="text-xs text-red-600 mt-2">{budgetSubmitError}</p>
+            )}
             <p className="text-xs text-gray-400 mt-2">
-              {ts.messages.allocatePointsBudget} {tt("voting.totalBudget")} {vote.config.maxPointsPerUser || 10} {ts.labels.points}.
+              {budgetUsesFixedNotes
+                ? ts.budget.allocateNotes
+                : `${ts.messages.allocatePointsBudget} ${tt("voting.totalBudget")} ${budgetTotalValue} ${ts.labels.points}.`}
             </p>
           </div>
         )}
@@ -3434,7 +3812,11 @@ const PublicVotePage: React.FC = () => {
                       {voteResultsSupportsMedian(mode) && (
                         <option value="median">{ts.labels.sortByMedian}</option>
                       )}
-                      <option value="average">{ts.labels.sortByAverage}</option>
+                      <option value="average">
+                        {mode === "POINTS"
+                          ? ts.labels.sortByTotal
+                          : ts.labels.sortByAverage}
+                      </option>
                     </select>
                     {resultsSortMetric !== "original" && (
                       <button
@@ -3506,15 +3888,15 @@ const PublicVotePage: React.FC = () => {
                         </div>
                       );
                     })()}
-                    {mode === "POINTS" && (() => {
-                       const total = tallyPointsResult(proposal.id);
-                       return (
-                         <div className="flex items-center gap-2">
-                           <span className="text-lg">&#x1FA99;</span>
-                           <span className="font-medium">{total} {ts.labels.points}</span>
-                        </div>
-                      );
-                    })()}
+                    {mode === "POINTS" && (
+                      <BudgetTallyDisplay
+                        tally={tallyBudgetShared(responses, proposal.id)}
+                        totalBudget={budgetAggregateTotal}
+                        labels={ts.budget}
+                        formatAmount={budgetTallyFormat}
+                        icon={budgetTallyIcon}
+                      />
+                    )}
                     {mode === "MAJORITY_JUDGMENT" && (() => {
                       const t = tallyMJResult(proposal.id);
                       const medianGrade = MJ_SCALE.find(

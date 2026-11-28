@@ -3,6 +3,7 @@ import { VOTE_MODES, type VoteEntity, type VoteMode } from './persistence-types.
 // bucket from `MJ_SCALE`, so validation must accept exactly those values.
 import { MJ_SCALE } from '../components/planView/constants.js';
 import { getPokerScale } from './poker.js';
+import { budgetTotal } from './budget.js';
 
 const MIN_MJ = MJ_SCALE[0].value;
 const MAX_MJ = MJ_SCALE[MJ_SCALE.length - 1].value;
@@ -50,7 +51,12 @@ export function validateVoteResponseValue(
       }
       return 'SCHEDULING votes must be -1, 0, or 1';
     case 'POINTS': {
-      const maxPts = vote.config.maxPointsPerUser ?? 10;
+      // A fixed-note ballot is validated as a whole by the budget endpoint, not
+      // row by row. This bound only keeps drafts and legacy per-row callers
+      // inside the vote's overall face value. `budgetTotal` owns the
+      // flexible-cap fallback too, so validation cannot drift from the totals
+      // the editor and results surfaces display.
+      const maxPts = budgetTotal(vote.config);
       return Number.isInteger(value) && value >= 0 && value <= maxPts
         ? null
         : `POINTS votes must be an integer between 0 and ${maxPts}`;

@@ -6,7 +6,8 @@ import { pokerProposalIsRevealed } from "@/lib/vote-ranking";
 import { forceRevealPokerProposal } from "@/hooks/usePokerState";
 import { useVoteParticipation, useVoteResults, responseVoterAlias, responseVoterDisplayName } from "@/hooks/useVotes";
 import { useVoteLoops } from "@/hooks/useVoteLoops";
-import { tallyThumbsUp, tallyUDNeutral, tallyPoints, tallyMajorityJudgment, tallyPoker, voteResultsSortMetric, voteResultsSupportsMedian, tallyConsentLoop, getBestConsentRound, EVENT_RSVP_PROPOSAL_ID } from "@/lib/vote-tally";
+import { tallyThumbsUp, tallyUDNeutral, tallyBudget, tallyMajorityJudgment, tallyPoker, voteResultsSortMetric, voteResultsSupportsMedian, tallyConsentLoop, getBestConsentRound, EVENT_RSVP_PROPOSAL_ID } from "@/lib/vote-tally";
+import { budgetTallyPresentation } from "@/lib/budget";
 import { getVotingStrings, pokerTallyLabels } from "@/lib/voting-i18n";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +15,7 @@ import { BarChart3, Users, MessageSquare, Trophy, ArrowUpDown, ArrowDownWideNarr
 import { LoopRoundProposalTooltip } from "./LoopRoundProposalTooltip";
 import { ProposalContentDisplay } from "./ProposalContentDisplay";
 import { PokerTallyDisplay } from "./PokerTallyDisplay";
+import { BudgetTallyDisplay } from "./BudgetTallyDisplay";
 import { PartialRankingResults } from "./PartialRankingResults";
 import { AttendanceRsvpSummary } from "./AttendanceRsvpSummary";
 import { SchedulingSummary } from "./SchedulingSummary";
@@ -408,6 +410,17 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
   );
 
   const totalVoters = new Set(responses.map(identityOfResponse)).size;
+  // The budget share bar uses the same participant count as the voter badge:
+  // one source of truth for how many voters the group budget covers, and one
+  // shared derivation with the public results page.
+  const budgetPresentation = budgetTallyPresentation(
+    vote.config,
+    totalVoters,
+    t.labels.points,
+  );
+  const budgetAggregateTotal = budgetPresentation.aggregateTotal;
+  const budgetTallyFormat = budgetPresentation.formatAmount;
+  const budgetTallyIcon = budgetPresentation.icon;
   const commentsCount = commentEntries.length;
 
   if (vote.config.mode === "COMPARATIVE_PRIORITIZATION") {
@@ -624,7 +637,7 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
                 return tt("voting.neutral");
               }
               if (mode === "POINTS") {
-                return `${value} ${t.labels.points}`;
+                return budgetTallyFormat(value);
               }
               if (mode === "MAJORITY_JUDGMENT") {
                 const grade = MJ_SCALE.find((g) => g.value === value);
@@ -673,7 +686,11 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
                       {voteResultsSupportsMedian(mode) ? (
                         <option value="median">{t.labels.sortByMedian}</option>
                       ) : null}
-                      <option value="average">{t.labels.sortByAverage}</option>
+                      <option value="average">
+                        {mode === "POINTS"
+                          ? t.labels.sortByTotal
+                          : t.labels.sortByAverage}
+                      </option>
                     </select>
                     {resultsSortMetric !== "original" && (
                       <button
@@ -757,15 +774,15 @@ export const VoteResults: React.FC<VoteResultsProps> = ({ vote, moderatorToken, 
                   );
                 })()}
 
-                {vote.config.mode === "POINTS" && (() => {
-                  const tally = tallyPoints(responses, proposal.id);
-                  return (
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">🪙</span>
-                      <span className="font-medium">{tally.total} {t.labels.points}</span>
-                    </div>
-                  );
-                })()}
+                {vote.config.mode === "POINTS" && (
+                  <BudgetTallyDisplay
+                    tally={tallyBudget(responses, proposal.id)}
+                    totalBudget={budgetAggregateTotal}
+                    labels={t.budget}
+                    formatAmount={budgetTallyFormat}
+                    icon={budgetTallyIcon}
+                  />
+                )}
 
                 {vote.config.mode === "MAJORITY_JUDGMENT" && (() => {
                   const tally = tallyMajorityJudgment(responses, proposal.id);
