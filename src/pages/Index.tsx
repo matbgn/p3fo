@@ -163,6 +163,19 @@ const Index: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toggleUmbrella]);
 
+  // Touch devices have no Ctrl+K: a 3-finger tap opens the umbrella.
+  // The listener must be non-passive so preventDefault() also suppresses
+  // text selection / emulated mouse events after the gesture.
+  React.useEffect(() => {
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length < 3 || umbrellaOpen) return;
+      e.preventDefault();
+      setUmbrellaOpen(true);
+    };
+    window.addEventListener('touchstart', handleTouchStart, { passive: false });
+    return () => window.removeEventListener('touchstart', handleTouchStart);
+  }, [umbrellaOpen]);
+
   // Global F11 shortcut: toggles focus mode for the currently active view
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
